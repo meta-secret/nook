@@ -1,44 +1,5 @@
 # Quality and Release
 
-## Relationships
-
-- [Nook Agent Map (Table of Contents)](../AGENTS.md)
-  - Provides the entry map for repository architecture and workflows.
-  - Read when broader task routing is required.
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines the repository architecture and ownership boundaries.
-  - Read before changing a durable system boundary.
-- [Core Beliefs: Agent-First Operating Principles](../design-docs/core-beliefs.md)
-  - Provides the operating principles behind the quality system.
-  - Read when changing a foundational engineering decision.
-- [Reference: Application Logging](../references/logging.md)
-  - Provides the application and test logging reference.
-  - Read when collecting or changing diagnostic evidence.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide engineering rules.
-  - Apply throughout implementation and review.
-- [Coding Bro — Default Agent Workflow](coding-bro.md)
-  - Defines the delivery workflow that consumes these gates.
-  - Read before performing the complete agent workflow.
-- [Pull Request Workflow](pull-requests.md)
-  - Defines PR validation, readiness, and merge ownership.
-  - Read before delivering a pull request.
-- [GitHub-Hosted Remote Execution](remote-execution.md)
-  - Defines the focused and complete hosted execution surfaces.
-  - Read before selecting remote validation.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Quality and release policy](#quality-and-release-policy)
-  - Defines build, test, CI, cache, and release requirements.
-  - Read when changing or validating the engineering harness.
-- [Fix check findings — not silence them](#fix-check-findings--not-silence-them)
-  - Defines the required response to a failing quality gate.
-  - Use whenever a check reports an actionable finding.
-
 ## Overview
 
 Use this workflow for quality, CI, and deployment changes.
@@ -193,7 +154,6 @@ Use this workflow for quality, CI, and deployment changes.
 10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
-
     - `.github/workflows/pr.yml`, `.github/workflows/main.yml`, and `.github/workflows/release.yml` run on GitHub-hosted `ubuntu-latest`.
     - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
       instance selected with `docker buildx use` before Task runs.
@@ -202,12 +162,14 @@ Use this workflow for quality, CI, and deployment changes.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
     #### BuildKit cache (Zot)
-
     - Private Zot is the authoritative BuildKit cache.
     - The k0s Zot Pod reserves one CPU and 2 GiB of memory.
     - It may burst to four CPUs and 8 GiB during parallel cache transfers.
     - Raise that ceiling only after production telemetry proves Zot is the
       bottleneck.
+    - Host-network Traefik reserves 2 GiB for the public registry edge.
+    - A lower proxy ceiling can OOM-restart the edge during concurrent BuildKit
+      transfers and interrupt every registry client.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
@@ -343,7 +305,6 @@ Use this workflow for quality, CI, and deployment changes.
     scope after tests pass, and a fresh retry restores every stage as CACHED.
 
     #### SeaweedFS sccache
-
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.
     - They read/write compiler objects in `nook-sccache` and publish shared verified Zot refs.
     - Explicit collaborator-dispatched Remote jobs use a separate SeaweedFS identity.
@@ -355,7 +316,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow
-
     - Main serializes native → WASM → web publisher lanes.
     - Each lane verifies read-only first, then exports its already-solved graph from the same job-scoped builder.
     - WASM dependencies export alone with no hosted reimport and forced zstd compression.
@@ -365,7 +325,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-
     - PR runs native Rust and verified WASM on independent hosted producer runners.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
@@ -385,7 +344,6 @@ Use this workflow for quality, CI, and deployment changes.
       preflight Cargo task.
 
     #### Coverage reporting
-
     - Native coverage uses a run-stable artifact name consumed by a separate `needs: rust` report job.
     - That job downloads the current attempt directly.
     - When changed covered sources require a base comparison, it accepts an unexpired exact-commit artifact from an authenticated Main push.
@@ -397,14 +355,12 @@ Use this workflow for quality, CI, and deployment changes.
     - It validates the reused run-stable artifact before publication.
 
     #### Release workflow
-
     - Release checks out the requested source first.
     - It preserves the current workflow tooling in ignored `.nook/release-workflow`.
     - It initializes the safe builder from that side checkout so the cache fingerprint describes the exact release source without reviving historical setup logic.
     - Release performs immutable tag validation, main-equivalent verify/e2e, stable production deployment, and GitHub Release publication.
 
     #### Manual and scheduled jobs
-
     - Credentialed `sync-live` validation is manual through `e2e-pr.yml`.
     - Weekly: `rust-dependency-updates.yml` audits every direct dependency in each Rust root.
     - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
@@ -418,7 +374,6 @@ Use this workflow for quality, CI, and deployment changes.
     - `.github/workflows/runner-cleanup.yml` remains on `nook` for registered-host maintenance.
 
     #### Main failure incidents (Hive)
-
     - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident per failed SHA.
     - This includes `Web e2e`, `UI demos`, and `Extension e2e` failures.
     - Each rerun creates a fresh delivery generation with generation-specific publication records and no completed publication reuse.
@@ -428,7 +383,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Successful reruns retire active incidents; current-generation reconciliation is idempotent.
     - A single isolated dispatcher enqueues actionable incidents.
     - One logical Hive task owns the normal PR, checks, review loop, squash merge, and replacement Main verification.
-    - The scheduled implementation worker does not claim it.
+    - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
     - Main publishes shared verified Zot BuildKit layers.
@@ -447,14 +402,17 @@ Use this workflow for quality, CI, and deployment changes.
     checks before merge or handoff. After a complete-gate failure, fix, run Loom
     pre-push, commit, push, and validate the replacement head. Use focused hosted
     proof only when it shortens diagnosis.
-13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [rules.md §5 — Docker daemon](../rules.md#docker-daemon--never-kill-it).
+13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.
     - A multi-minute `task setup` / `task check` / `docker buildx bake` then shows **zero output** the entire time.
     - That looks indistinguishable from a hang. You lose all progress visibility and cannot tell "still compiling" from "stuck".
     - Filtering pipes are **never** a performance optimization. They only destroy live output.
     - **Correct:** run the command bare — `NOOK_ENV=dev task setup` — its full output streams live and is saved to the terminal file automatically; filter/inspect it _afterward_ by reading that file.
-    - **Also correct:** redirect to a log while it runs — `... > /tmp/build.log 2>&1` — then `grep`/read the file after it finishes (or `tail -f` the file from a _separate_ shell).
+    - **Also correct:** allocate a unique log with
+      `build_log="$(mktemp "${TMPDIR:-/tmp}/nook-build-log.XXXXXX")"`.
+      Redirect the command with `... > "$build_log" 2>&1`.
+      Read it after completion, or run `tail -f "$build_log"` separately.
     - **Forbidden while the command runs:** `task setup 2>&1 | grep -iE "DONE|error" | tail -40`, `gh run watch ... | tail`, `cargo ... | tail`, etc. If you catch yourself appending `| grep`/`| tail` to a build/test/CI command, STOP and run it bare instead.
 15. **Local web dev:** `task web:dev` — do not start host `vite`/`npm` or free `:5173` with blind `kill`.
 16. **Testing pyramid:**
@@ -463,7 +421,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Playwright (`task web:test:e2e:pr`) is a thin UI smoke layer.
     - New domain behavior requires new Rust tests in the same change.
     - **Below 90% line coverage, agents add tests before finishing.**
-    - See [rules.md §4](../rules.md#4-testing-requirements).
+    - See [testing-pyramid-and-regression.md](../dynamic-skills/testing-pyramid-and-regression.md).
 17. **Cortex + README hygiene:**
     - After learning something durable from tests, CI, or PR review, update `.cortex` per [core-beliefs.md §10](../design-docs/core-beliefs.md#10-grow-cortex-dynamically).
     - When the change is architectural or alters the public developer/product surface, also update the root [`README.md`](../../README.md) in the same PR ([AGENTS.md — Keep the root README current](../AGENTS.md#keep-the-root-readme-current)).
@@ -511,12 +469,12 @@ Quality gates exist to force remediation. When **Knip**, **jscpd**, or **any
 other** check in `task check` / `task ci:pr` / PR CI fails, agents **must fix the
 reported problems in the same task** and leave the gate green.
 
-| Gate | Typical findings | Correct fix |
-|------|------------------|-------------|
-| Knip (`bun run unused`) | unused files, exports, dependencies | delete dead code, wire it up, or export only what callers need |
-| jscpd (`bun run duplicates`) | copy/paste clones over threshold | extract a shared helper/module; do not duplicate again |
-| fmt / prettier / eslint / svelte-check / clippy / tsc | style, type, lint defects | correct the code |
-| vitest / Rust tests / coverage / e2e / preflight | failing or missing coverage | fix behavior and add the required tests |
+| Gate                                                  | Typical findings                    | Correct fix                                                    |
+| ----------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
+| Knip (`bun run unused`)                               | unused files, exports, dependencies | delete dead code, wire it up, or export only what callers need |
+| jscpd (`bun run duplicates`)                          | copy/paste clones over threshold    | extract a shared helper/module; do not duplicate again         |
+| fmt / prettier / eslint / svelte-check / clippy / tsc | style, type, lint defects           | correct the code                                               |
+| vitest / Rust tests / coverage / e2e / preflight      | failing or missing coverage         | fix behavior and add the required tests                        |
 
 **Do not** "resolve" a finding by:
 

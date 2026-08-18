@@ -1,32 +1,5 @@
 # Simple and Sentinel Application Isolation
 
-## Relationships
-
-- [Product Specifications Index](index.md)
-  - Catalogs the product specifications and their current status.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Password Manager Specification](password-manager.md)
-  - Defines the core vault product, user flows, storage formats, cryptography, and UI boundaries.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Implemented by epic #360.
-  - Read first to understand the scope and intent of Overview.
-- [Product Surfaces](#product-surfaces)
-  - Defines the product-to-origin isolation model.
-  - Read before changing or relying on Product Surfaces.
-- [Enforcement](#enforcement)
-  - VaultApplication in nook-core owns the compatibility matrix.
-  - Read before changing or relying on Enforcement.
-- [Deployment](#deployment)
-  - Defines deployment ownership for the isolated products.
-  - Read before changing or relying on Deployment.
-
 ## Overview
 
 Status: Implemented by epic #360.
@@ -36,12 +9,12 @@ building blocks. They are not selectable modes inside one production web app.
 
 ## Product Surfaces
 
-| Surface | Project | Production origin | Vault capability |
-|---|---|---|---|
-| Public site | `nook-web-app` | `https://nokey.sh` | Cannot open a vault session |
-| Everyday vault | `nook-vault-simple` | `https://simple.nokey.sh` | Simple only; extension pairing allowed |
-| Quorum safe | `nook-vault-sentinel` | `https://sentinel.nokey.sh` | Sentinel only; extension integration forbidden |
-| Browser companion | `nook-web-extension` | extension origin | Simple only |
+| Surface           | Project               | Production origin           | Vault capability                               |
+| ----------------- | --------------------- | --------------------------- | ---------------------------------------------- |
+| Public site       | `nook-web-app`        | `https://nokey.sh`          | Cannot open a vault session                    |
+| Everyday vault    | `nook-vault-simple`   | `https://simple.nokey.sh`   | Simple only; extension pairing allowed         |
+| Quorum safe       | `nook-vault-sentinel` | `https://sentinel.nokey.sh` | Sentinel only; extension integration forbidden |
+| Browser companion | `nook-web-extension`  | extension origin            | Simple only                                    |
 
 Main mirrors the same origin isolation at `dev.nokey.sh`,
 `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`. Pull requests use native

@@ -61,6 +61,10 @@ includes:
     taskfile: tasks/hive.yml
     dir: ..
     flatten: true
+  hive-queue:
+    taskfile: tasks/hive-queue.yml
+    dir: ..
+    flatten: true
   operations:
     taskfile: tasks/operations.yml
     dir: ..

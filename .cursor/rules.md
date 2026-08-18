@@ -2,12 +2,12 @@
 
 Before working on any task, load and follow the instructions in these files:
 
-1. `.cortex/AGENTS.md` — entry point and table of contents
-2. `.cortex/ARCHITECTURE.md` — project shape, packages, commands
-3. `.cortex/rules.md` — golden principles and hard constraints
-4. `.cortex/design-docs/index.md` — design docs and operating beliefs
-5. `.cortex/product-specs/index.md` — product requirements and specifications
-6. `.cortex/exec-plans/tech-debt-tracker.md` — execution plans and refactoring status
+1. `.cortex/knowledge-graph.md` — central knowledge graph and topic index
+2. `.cortex/AGENTS.md` — entry point and table of contents
+3. `.cortex/ARCHITECTURE.md` — project shape, packages, commands
+4. `.cortex/dynamic-skills/index.md` — canonical dynamic skill cards
+5. `.cortex/design-docs/index.md` — design docs and operating beliefs
+6. `.cortex/product-specs/index.md` — product requirements and specifications
 
 These files are the source of truth for how this project works.
 
@@ -37,10 +37,15 @@ These files are the source of truth for how this project works.
 - `NookVaultManager.connect(storage_mode, github_pat)` — two arguments only.
 - After changing `nook-wasm`, rebuild bindings: `task wasm:build` (or `task build`).
 
+### Product specifications
+- **Read specifications before implementation.** Search `.cortex/product-specs/` and `.cortex/knowledge-graph.md` before planning or editing code for user-facing features, item types, or UX workflows.
+- **Update specifications on new knowledge.** Capture user requirements from chat, task execution, and PR review iterations in the owning `.cortex/product-specs/` document in the same PR.
+- **Treat stale/missing specs as P1 defects.** Follow `.cortex/dynamic-skills/product-spec-lifecycle.md`.
+
 ### Tooling
 - Use `task` commands (via Docker) for build, check, format, and test. Do not run raw compiler commands unless debugging.
 - Keep changes minimal and scoped. Match existing naming, patterns, and file structure.
 
 ### Git
-- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/rules.md` §6.
+- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/workflows/pull-requests.md`.
 - **Squash merge only.** Every PR merged into `main` MUST use squash merge (`gh pr merge --squash` or GitHub **Squash and merge**). Never merge commit or rebase merge. See `.cortex/workflows/pull-requests.md`.

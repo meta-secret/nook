@@ -1,7 +1,0 @@
-dependencyPopularity:
-  includeRepositoryManifests: true
-  # Reject obscure packages. Tune per review when auditing a large workspace.
-  minNpmWeeklyDownloads: 10000
-  minGitHubStars: 100
-  minCratesIoDownloads: 50000
-  minCratesIoRecentDownloads: 1000

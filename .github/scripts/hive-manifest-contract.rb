@@ -104,9 +104,9 @@ unless worker_environment["HIVE_LEASE_SECONDS"] == "3600" &&
        worker_environment["HIVE_HEARTBEAT_SECONDS"] == "60"
   raise "Hive workers must renew a one-hour lease every minute"
 end
-unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6-terra" &&
-       worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "low"
-  raise "Hive workers must pin Codex GPT-5.6 with Light reasoning"
+unless worker_environment["HIVE_CODEX_MODEL"] == "gpt-5.6-sol" &&
+       worker_environment["HIVE_CODEX_REASONING_EFFORT"] == "medium"
+  raise "Hive workers must pin Codex GPT-5.6-sol with medium reasoning"
 end
 unless worker_environment["HIVE_CODEX_LINUX_SANDBOX_EXE"] ==
        "/usr/local/bin/hive-codex-linux-sandbox"
@@ -742,10 +742,12 @@ end
 
 unless infra_taskfile.include?("hive:queue:status:") &&
        infra_taskfile.include?("hive:queue:retry:") &&
+       infra_taskfile.include?("hive:queue:cancel:") &&
        infra_taskfile.include?("/usr/local/bin/hive queue status") &&
        infra_taskfile.include?("/usr/local/bin/hive queue retry-failed-main") &&
+       infra_taskfile.include?("/usr/local/bin/hive queue cancel") &&
        infra_taskfile.include?('--release-id "$release_id"')
-  raise "Hive queue inspection and bounded failed-task recovery must remain Taskfile-owned"
+  raise "Hive queue inspection, cancellation, and bounded failed-task recovery must remain Taskfile-owned"
 end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
 hive_sandbox_wrapper = File.read(

@@ -465,11 +465,13 @@ export async function refreshPasswordEntriesList(
 ): Promise<boolean> {
   if (!state.hasManager) return false;
   try {
-    if (!state.hasRemoteCredentials()) {
+    if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
       state.passwordEntries = [];
       return false;
     }
-    await state.ensureOAuthTokensFresh();
+    if (state.storageMode !== "local") {
+      await state.ensureOAuthTokensFresh();
+    }
     const raw = await state.enqueueStorage(() =>
       state
         .requireManager()

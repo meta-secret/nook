@@ -1,74 +1,5 @@
 # Hive Isolated Agent Platform
 
-## Relationships
-
-- [Workbench Issue Management](../workflows/issues.md)
-  - Defines Workbench planning, progress, and completion records.
-  - Read when turning this design into tracked work.
-- [Pull Request Workflow](../workflows/pull-requests.md)
-  - Defines PR sizing, validation, readiness, and merge ownership.
-  - Read before delivering an implementation of this design.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Implemented in the repository; deployment and live-state verification are performed through the infrastructure Taskfile.
-  - Read before changing or relying on Overview.
-- [1. Architectural boundaries](#1-architectural-boundaries)
-  - Kubernetes schedules isolated execution.
-  - Read before changing or relying on Architectural boundaries.
-- [2. Deployment topology](#2-deployment-topology)
-  - The initial cluster is deliberately single-node.
-  - Read before changing or relying on Deployment topology.
-- [3. Components and ownership](#3-components-and-ownership)
-  - Summarizes the structured entries, ownership, and status for Components and ownership.
-  - Read before changing or relying on Components and ownership.
-- [4. Task and graph model](#4-task-and-graph-model)
-  - Task definitions include a full 40-character source_commit.
-  - Read before changing or relying on Task and graph model.
-  - [Stored readiness invariant](#stored-readiness-invariant)
-    - BLOCKED means at least one direct dependency is not COMPLETED. READY means every direct dependency is COMPLETED. Completion.
-    - Apply when making or reviewing decisions about Stored readiness invariant.
-  - [Blocking dependencies](#blocking-dependencies)
-    - Codex may return a typed blocker instead of pretending the parent task is complete.
-    - Read before changing the Blocking dependencies flow or state transitions.
-  - [Durable results](#durable-results)
-    - Terminal summaries are bounded to 64 KiB.
-    - Read before changing or relying on Durable results.
-- [5. Worker execution lifecycle](#5-worker-execution-lifecycle)
-  - The worker creates a sentinel with create-once semantics before claiming.
-  - Read before changing the Worker execution lifecycle flow or state transitions.
-- [6. Main failure to completed repair](#6-main-failure-to-completed-repair)
-  - Main uses a single concurrency group with cancel-in-progress: false.
-  - Read when assessing the current state of Main failure to completed repair.
-  - [GitHub delivery recovery](#github-delivery-recovery)
-    - The base branch is deterministic: codex/hive-<task-id>.
-    - Read before changing the GitHub delivery recovery flow or state transitions.
-- [7. Isolation and credential design](#7-isolation-and-credential-design)
-  - Defines the concrete responsibilities and constraints for 7. Isolation and credential design.
-  - Read before changing or relying on Isolation and credential design.
-  - [Kata boundary](#kata-boundary)
-    - Every dispatcher and worker Pod selects kata-dragonball.
-    - Read before changing or relying on Kata boundary.
-  - [Credential ownership](#credential-ownership)
-    - Summarizes the structured entries, ownership, and status for Credential ownership.
-    - Read before changing or relying on Credential ownership.
-  - [Network boundary](#network-boundary)
-    - Both Hive namespaces default-deny ingress and egress.
-    - Read before changing or relying on Network boundary.
-- [8. Persistence and recovery](#8-persistence-and-recovery)
-  - The stateful boundary.
-  - Read before changing the Persistence and recovery flow or state transitions.
-- [9. Build verification and cache model](#9-build-verification-and-cache-model)
-  - The repository-owned Hive workflow is a valuable deployment-independent verification gate.
-  - Use before declaring Build verification and cache model complete.
-- [10. Taskfile operations](#10-taskfile-operations)
-  - All automated lifecycle, mutation, CI, SSH, Kubernetes, and deployment operations go through the root Taskfile command surface.
-  - Read before changing or relying on Taskfile operations.
-- [11. Source map](#11-source-map)
-  - Summarizes the structured entries, ownership, and status for Source map.
-  - Read before changing or relying on Source map.
-
 ## Overview
 
 Status: Implemented in the repository; deployment and live-state verification
@@ -96,8 +27,9 @@ Hive separates four responsibilities:
    store, attempt history, and artifact store.
 3. **Embedded Codex performs repository work.** Hive uses the in-process Codex
    core API. It does not spawn a Codex CLI process or parse CLI JSONL. Every
-   worker turn explicitly selects `gpt-5.6-terra` with `low` reasoning effort,
-   the non-UI representation of Codex Light. One worker runs one Codex thread.
+   worker turn starts with `gpt-5.6-sol` at `medium` reasoning effort.
+   If that run fails because Sol or usage quota is exhausted, Hive retries once
+   with `gpt-5.3-codex-spark` at `xhigh` effort. One worker runs one Codex thread.
    Nested subagents are disabled. Future multi-agent graphs materialize each
    reached node as a separate Hive task and disposable Pod.
 4. **Codex agents are trusted operators.** Main-repair agents receive a scoped
@@ -165,7 +97,9 @@ under [`infra/k0s/`](../../infra/k0s/).
 Before applying a new worker/coordinator, dispatcher, or observer revision:
 
 - The deployment task scales all three graph-client Deployments to zero.
-- It verifies their Pods are gone.
+- It verifies no running or pending graph-client Pod remains.
+- Terminal `Succeeded`, `Failed`, and `Evicted` Pod records do not block the
+  drain.
 - Their manifests use the Kubernetes `Recreate` strategy.
 
 A graph-schema rollout drains every older binary globally before any new revision
@@ -178,20 +112,25 @@ shutdown, the coordinator remains available until the worker records its
 terminal lifecycle marker or Kubernetes exhausts the Pod grace period. The
 rollout cannot strand a `RUNNING` lease under a removed Pod.
 
+After rollout, the deployment requires three consecutive samples with four
+non-terminating workers whose Hive containers are ready. A disposable worker
+may finish a task during verification. Its replacement must converge before
+sandbox and lifecycle checks continue.
+
 ## 3. Components and ownership
 
-| Component | Runs where | Owns | Must not own |
-| --- | --- | --- | --- |
-| Main failure handoff | GitHub Actions | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures | Agent execution, raw failure logs, deployment |
-| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
-| Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
-| Control Center observer | Dedicated runc Pod | Read-only, localized task/worker projection and the static operator dashboard | Task mutation, Codex auth, GitHub credentials, or raw agent output |
-| Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
-| Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration | Raw Neo4j access or Kubernetes administrative credentials |
-| Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
-| Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
-| Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies | Codex auth or task execution |
-| Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
+| Component               | Runs where                      | Owns                                                                                                                                                                     | Must not own                                                       |
+| ----------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Main failure handoff    | GitHub Actions                  | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures                    | Agent execution, raw failure logs, deployment                      |
+| Workbench dispatcher    | One Kata Pod                    | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth                               |
+| Neo4j                   | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations                                                                             | Codex or repository execution                                      |
+| Control Center observer | Dedicated runc Pod              | Read-only, localized task/worker projection and the static operator dashboard                                                                                            | Task mutation, Codex auth, GitHub credentials, or raw agent output |
+| Coordinator             | Worker Kata Pod                 | Neo4j credential and a typed Unix-socket task-store protocol                                                                                                             | Raw-query access for the worker                                    |
+| Worker                  | Worker Kata Pod                 | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration               | Raw Neo4j access or Kubernetes administrative credentials          |
+| Auth broker             | Worker Kata Pod                 | Codex credential source, refresh, and one established token channel                                                                                                      | Repository execution or GitHub publication                         |
+| Pod reaper              | Worker Kata Pod                 | Requests whole-Pod replacement with an opaque one-purpose credential                                                                                                     | Kubernetes API or auth persistence                                 |
+| Lifecycle controller    | Dedicated runc Pod              | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies                           | Codex auth or task execution                                       |
+| Kubernetes Deployment   | k0s                             | Four ready worker Pods and clean replacement                                                                                                                             | Durable task semantics                                             |
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
 independent long-lived worker processes sharing one filesystem.
@@ -202,6 +141,7 @@ The graph contains:
 
 ```text
 (:Task)-[:DEPENDS_ON]->(:Task)
+(:Task)-[:INCLUDES_ARTIFACT_FROM]->(:Task)
 (:Agent)-[:EXECUTED]->(:Attempt)-[:FOR_TASK]->(:Task)
 (:Attempt)-[:PRODUCED]->(:Artifact)
 (:TaskActivity)-[:FOR_TASK]->(:Task)
@@ -266,6 +206,22 @@ complete. Hive then:
 5. makes the parent `READY` immediately if the reused blocker was already
    complete, otherwise `BLOCKED`.
 
+#### Dependency depth boundary
+
+- Only a non-blocker task may create a dependency.
+- A blocker task is a dependency leaf.
+- It must use the authority and tools already supplied.
+- A dependency leaf may return an explicit failed terminal result.
+- Hive records that result as a failed attempt on the leaf.
+- Hive does not create a child task.
+- The bounded retry budget completes the leaf or fails its dependent chain.
+- Schema migration 9 converts completed-child edges to artifact lineage.
+- An active child keeps its scheduling edge until it reaches `COMPLETED`.
+- Completion atomically converts that final edge and readies the parent leaf.
+- Claims traverse that lineage in depth order so child patches apply first.
+- Scheduling and rearm traversal ignore artifact-lineage edges.
+- The leaf policy prevents active retained chains from growing while they drain.
+
 When the blocker completes, its Git patch becomes a dependency artifact. A
 replacement worker verifies the artifact digest, applies it to the same pinned
 revision, commits a dependency baseline, and gives the parent task both the
@@ -278,9 +234,6 @@ when all of the following hold:
 - Every active transitive non-blocker consumer is a Main-repair task.
 - Every one of those repairs is already squash-merged with a successful
   containing Main run.
-
-Intermediate blocker nodes belong to the same prerequisite chain. They are not
-independent consumers.
 
 **Claim and completion guards**
 
@@ -512,6 +465,15 @@ After repairing the platform, the explicit
 - refuses an active task; and
 - cannot repeat a recovery for the same image digest.
 
+Operators retire superseded or unsolvable work with
+`task infra:hive:queue:cancel HIVE_TASK_ID=... HIVE_CANCEL_REASON=...`.
+That command:
+
+- cancels the named root and exclusive descendants;
+- leaves shared blockers owned by another live root;
+- marks idle members `CANCELLED` immediately; and
+- marks a running member `CANCELLING` until the worker acknowledges.
+
 ### GitHub delivery recovery
 
 - **Branch generations:** Use deterministic base branch
@@ -597,13 +559,13 @@ TypeScript PR audit without Docker.
 
 ### Credential ownership
 
-| Credential | Mounted into | Exposed to worker/Codex |
-| --- | --- | --- |
-| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
-| Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
-| Repository-scoped GitHub token | Main-repair worker | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
-| Reaper controller credential | Pod reaper, Workbench dispatcher, and dedicated controller only | No |
-| Kubernetes auth-refresh token | Auth broker only | No |
+| Credential                          | Mounted into                                                    | Exposed to worker/Codex                                   |
+| ----------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- |
+| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access     | No password or raw graph connection                       |
+| Codex `auth.json`                   | Auth broker only                                                | Short-lived tokens on one pre-established private channel |
+| Repository-scoped GitHub token      | Main-repair worker                                              | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
+| Reaper controller credential        | Pod reaper, Workbench dispatcher, and dedicated controller only | No                                                        |
+| Kubernetes auth-refresh token       | Auth broker only                                                | No                                                        |
 
 - **Service-account tokens:** Disable automatic mounting.
   - The service account may patch only the Codex-auth Secret.
@@ -817,6 +779,7 @@ task infra:deploy
   - Kube-router masquerades cluster egress.
   - CoreDNS and allowlisted worker egress receive replies through the node.
   - Do not expose a control-plane port on the public interface.
+
 - **Installer rollback:** Use a temporary owned rule while k0s starts.
   - Restore previous live and persisted firewall state on error, exit, or
     termination.
@@ -875,16 +838,17 @@ global ruleset.
 
 ## 11. Source map
 
-| Concern | Source of truth |
-| --- | --- |
-| Rust platform implementation | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/) |
-| Worker image and cache stages | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile) |
-| Hive developer commands | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml) |
-| Infrastructure command composition | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |
-| Infrastructure operations and pins | [`infra/tasks/`](../../infra/tasks/) |
-| k0s, Kata, Neo4j, and Hive manifests | [`infra/k0s/`](../../infra/k0s/) |
-| Main failure handoff | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml) |
-| Hive verification workflow | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml) |
-| Main coalescing and delivery | [`.github/workflows/main.yml`](../../.github/workflows/main.yml) |
-| Workbench issue contract | [`workflows/issues.md`](../workflows/issues.md) |
-| Pull-request ownership contract | [`workflows/pull-requests.md`](../workflows/pull-requests.md) |
+| Concern                                | Source of truth                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rust platform implementation           | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/)                                                                |
+| Task dependencies and artifact lineage | [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs) |
+| Worker image and cache stages          | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile)                                                    |
+| Hive developer commands                | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml)                                                |
+| Infrastructure command composition     | [`infra/Taskfile.yml`](../../infra/Taskfile.yml)                                                                                |
+| Infrastructure operations and pins     | [`infra/tasks/`](../../infra/tasks/)                                                                                            |
+| k0s, Kata, Neo4j, and Hive manifests   | [`infra/k0s/`](../../infra/k0s/)                                                                                                |
+| Main failure handoff                   | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)                                |
+| Hive verification workflow             | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml)                                                                |
+| Main coalescing and delivery           | [`.github/workflows/main.yml`](../../.github/workflows/main.yml)                                                                |
+| Workbench issue contract               | [`workflows/issues.md`](../workflows/issues.md)                                                                                 |
+| Pull-request ownership contract        | [`workflows/pull-requests.md`](../workflows/pull-requests.md)                                                                   |

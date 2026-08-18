@@ -1,44 +1,5 @@
 # Dynamic Skill Authoring
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-- [Dynamic skill workflow](../workflows/dynamic-skills.md)
-  - Owns canonical card capture, executable wrappers, and host mirrors.
-  - Follow when publishing or invoking a dynamic skill.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Problem Pattern](#problem-pattern)
-  - Identifies the recurring rejected pattern and its warning signs.
-  - Read while locating or reviewing violations.
-- [Capture procedure](#capture-procedure)
-  - Orders inspection, durable capture, registration, and optional refactoring.
-  - Follow when recording reusable project guidance.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Examples](#examples)
-  - Contrasts rejected and preferred forms.
-  - Read when the rule needs a concrete illustration.
-- [Card requirements](#card-requirements)
-  - Defines the content and registration invariants for a durable card.
-  - Use while authoring and reviewing the card.
-- [Validation](#validation)
-  - Names the smallest relevant mechanical and semantic proof.
-  - Run before completing the task.
-
 ## Purpose
 
 Capture a user's concrete code feedback as durable project knowledge in the

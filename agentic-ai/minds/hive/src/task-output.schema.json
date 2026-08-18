@@ -6,7 +6,7 @@
   "properties": {
     "status": {
       "type": "string",
-      "enum": ["completed", "blocked"]
+      "enum": ["completed", "blocked", "failed"]
     },
     "summary": {
       "type": "string"
@@ -29,7 +29,7 @@
     },
     "blocker": {
       "type": "object",
-      "description": "Set present=true with non-empty details only for blocked status. For completed status, set present=false and all three detail strings to empty.",
+      "description": "Set present=true with non-empty details only for blocked status. For completed or failed status, set present=false and all three detail strings to empty.",
       "additionalProperties": false,
       "required": ["present", "id", "title", "prompt"],
       "properties": {

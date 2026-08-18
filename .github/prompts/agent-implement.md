@@ -26,7 +26,8 @@ PR.** Your required local action is host-applied formatting only. Do not run
 continuing task owner and posts a direct mention. That owner runs advisory local
 review after handoff. The owner may use `task remote` for focused execution,
 then runs `task pr:validate`. It immediately dispatches GitHub Actions and then
-requests exact-head Codex review. Review-request failure does not block those
+requests exact-head Cloud review. Codex is preferred. Cursor Bugbot is used when
+Codex reports a usage limit. Review-request failure does not block those
 checks. Use repository Task targets; do not replace them with
 hand-written `docker run` commands.
 
@@ -36,7 +37,7 @@ hand-written `docker run` commands.
    and acceptance evidence` scope. Treat the remaining PR sequence as feature
    context, not as authorization to implement later slices. Prefer the
    Workbench issue scope. Do not expand into unrelated refactors.
-2. Implement the change end-to-end in the working tree. Match existing conventions and package boundaries in `.cortex/ARCHITECTURE.md` / `.cortex/rules.md`.
+2. Implement the change end-to-end in the working tree. Match existing conventions and package boundaries in `.cortex/ARCHITECTURE.md` and `.cortex/dynamic-skills/`.
 3. **Always run `task format`** (host-applied) before finishing so the harness
    commits a formatted tree. When UI-facing paths change, pass the UI demo
    contract against the base ref when practical.
@@ -62,11 +63,11 @@ hand-written `docker run` commands.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
   opens the PR after you finish. It assigns and directly mentions the continuing
   task owner. That owner runs advisory local review on the committed head, then
-  dispatches complete validation and requests exact-head Codex Cloud review.
+  dispatches complete validation and requests exact-head Cloud review.
   The owner fixes failures/comments/conflicts, runs the exact-head readiness
   audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
-- Follow `.cortex/rules.md` (squash merge only; never kill Docker daemon — only stop containers).
+- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
 - Follow `.cortex/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.

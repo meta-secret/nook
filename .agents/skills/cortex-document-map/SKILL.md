@@ -1,9 +1,9 @@
 ---
 name: cortex-document-map
 description: >-
-  Require every Cortex Markdown document to expose standard relationship links
-  and a hierarchical internal document map as its first two H2 sections. Use
-  whenever creating, editing, or auditing .cortex documents.
+  Require Cortex document navigation and structural section maps to be
+  centralized in .cortex/knowledge-graph.md. Use whenever creating, editing, or
+  auditing .cortex documents.
 ---
 
 # Cortex Document Navigation

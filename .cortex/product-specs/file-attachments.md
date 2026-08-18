@@ -1,38 +1,5 @@
 # File Attachments
 
-## Relationships
-
-- [Product Specifications Index](index.md)
-  - Catalogs the product specifications and their current status.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Password Manager Specification](password-manager.md)
-  - Defines the core vault product, user flows, storage formats, cryptography, and UI boundaries.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Adds files as typed encrypted vault items.
-  - Read first to understand the scope and intent of Overview.
-- [Goals](#goals)
-  - Let users upload a file and store it as an encrypted vault secret.
-  - Read first to understand the scope and intent of Goals.
-- [Product model](#product-model)
-  - Wire tag: file-attachment.
-  - Read before changing or relying on Product model.
-- [UI and security](#ui-and-security)
-  - Type picker entry creates a form with optional title and a file input.
-  - Read before changing the security or key boundary described by UI and security.
-- [Out of scope (for now)](#out-of-scope-for-now)
-  - Importing provider attachments (1Password / Proton Pass still skip attachments).
-  - Read before expanding the product boundary beyond Out of scope (for now).
-- [Status](#status)
-  - Records the implemented attachment status.
-  - Read when assessing the current state of Status.
-
 ## Overview
 
 Add **file attachments** as a first-class vault item type alongside login, API

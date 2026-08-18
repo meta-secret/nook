@@ -1,56 +1,5 @@
 # Agent Workflow Orchestration
 
-## Relationships
-
-- [Subagent Delegation](../workflows/subagent-delegation.md)
-  - Defines safe parallel work and parent-agent ownership.
-  - Read when the design is audited or implemented by multiple agents.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Architecture decision with staged implementation.
-  - Read before changing or relying on Overview.
-- [Static graph decision](#static-graph-decision)
-  - Agent workflow topology is authored as TypeScript in Loom.
-  - Apply when making or reviewing decisions about Static graph decision.
-- [Responsibilities](#responsibilities)
-  - Defines the concrete responsibilities and constraints for Responsibilities.
-  - Read before changing or relying on Responsibilities.
-  - [Cortex Markdown](#cortex-markdown)
-    - .cortex owns the semantic contract.
-    - Read before changing or relying on Cortex Markdown.
-  - [Loom static workflow module](#loom-static-workflow-module)
-    - Agent workflows live in an isolated Loom.
-    - Read before changing the Loom static workflow module flow or state transitions.
-  - [Codex worker adapter](#codex-worker-adapter)
-    - The Codex SDK is the local worker adapter.
-    - Read before changing or relying on Codex worker adapter.
-  - [Local journal](#local-journal)
-    - A local Loom run writes an append-only event journal.
-    - Read before changing or relying on Local journal.
-  - [Hive](#hive)
-    - Hive owns durable distributed workflow authority.
-    - Read before changing or relying on Hive.
-  - [Delivery owner](#delivery-owner)
-    - Exactly one delivery owner remains outside the worker fan-out.
-    - Read before changing or relying on Delivery owner.
-- [First compiled workflow](#first-compiled-workflow)
-  - The first catalog entry is cortex-full-garbage-collection.
-  - Read before changing the First compiled workflow flow or state transitions.
-- [Reviewed catalog growth](#reviewed-catalog-growth)
-  - The catalog grows one reviewed workflow at a time.
-  - Read before changing or relying on Reviewed catalog growth.
-- [Adoption sequence](#adoption-sequence)
-  - Define the static graph domain in the isolated Loom module. Define cortex-full-garbage-collection in TypeScript. Add graph.
-  - Use while executing or reviewing Adoption sequence.
-- [Non-goals](#non-goals)
-  - make model output deterministic;replace Cortex policy with TypeScript;execute graphs supplied by YAML;generate graphs from.
-  - Read before expanding scope or revisiting excluded behavior.
-- [External evidence](#external-evidence)
-  - Codex subagents documents project-instruction-triggered delegation. Codex SDK documents programmatic local Codex threads for.
-  - Use before declaring External evidence complete.
-
 ## Overview
 
 Status: Architecture decision with staged implementation.

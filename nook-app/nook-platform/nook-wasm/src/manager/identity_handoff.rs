@@ -31,6 +31,7 @@ impl NookVaultManager {
                     &pending.enrollment,
                     PendingExtensionIdentityEnrollment::VaultCreation { .. }
                         | PendingExtensionIdentityEnrollment::PairedVault { .. }
+                        | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
                         | PendingExtensionIdentityEnrollment::ExistingVaultImport { .. }
                 )
             })
@@ -106,6 +107,51 @@ impl NookVaultManager {
             NookError::Database("Existing-vault handoff did not return committed keys.".to_owned())
         })?;
         self.adopt_existing_vault_handoff_keys(&vault_keys)?;
+        self.device.pending_extension_handoff = None;
+        Ok(())
+    }
+
+    pub(in crate::manager) async fn finalize_paired_vault_handoff(
+        &mut self,
+    ) -> Result<(), NookError> {
+        let Some(pending) = self.device.pending_extension_handoff.as_ref() else {
+            return Ok(());
+        };
+        let session_unlock = matches!(
+            pending.enrollment,
+            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. }
+        );
+        let store_id = match &pending.enrollment {
+            PendingExtensionIdentityEnrollment::PairedVault { store_id, .. }
+            | PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { store_id } => {
+                store_id.clone()
+            }
+            _ => return Ok(()),
+        };
+        if self.vault.store_id != store_id.as_str() {
+            return Err(NookError::Database(
+                "Paired-vault handoff connected a different vault.".to_owned(),
+            ));
+        }
+        if session_unlock {
+            self.device.pending_extension_handoff = None;
+            return Ok(());
+        }
+        let identity = self.device_identity()?;
+        let signing_seed = pending
+            .persist_signing_seed
+            .then_some(self.event_log.signing_seed.as_str());
+        crate::storage::identity_record::commit_authenticated_identity_handoff(
+            crate::storage::identity_record::IdentityHandoffCommit {
+                app_key: &identity,
+                signing_public_key: &pending.signing_public_key,
+                authorizer_signing: pending.authorizer_signing.as_ref(),
+                enrollment: &pending.enrollment,
+                signing_seed,
+                existing_vault: None,
+            },
+        )
+        .await?;
         self.device.pending_extension_handoff = None;
         Ok(())
     }

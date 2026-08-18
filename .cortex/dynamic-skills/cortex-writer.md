@@ -1,76 +1,46 @@
 # Cortex Writer — Low Cognitive Complexity
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines concise navigation summaries as part of every Cortex document.
-  - Apply whenever headings, relationships, or document maps change.
-- [Cortex structured articles](cortex-article-structure.md)
-  - Defines when prose, rules, procedures, and reference structures apply.
-  - Apply whenever sentence-level cleanup changes an article body.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires readable edits to remain current and non-contradictory.
-  - Apply whenever durable Cortex guidance changes.
-
-## Document map
-
-- [Priority](#priority)
-  - Establishes low-complexity prose as a P1 Cortex invariant.
-  - Read before authoring Cortex content.
-- [Purpose](#purpose)
-  - Explains the human and agent readability goal.
-  - Read when deciding how much detail one sentence should carry.
-- [Problem pattern](#problem-pattern)
-  - Lists warning signs for dense prose.
-  - Read while reviewing a Cortex diff.
-- [Preferred pattern](#preferred-pattern)
-  - Defines how to split facts, rules, and conditions.
-  - Apply while rewriting dense content.
-- [Mechanical lint](#mechanical-lint)
-  - Shows the Loom density-lint request and command.
-  - Read when running heuristic prose checks.
-- [Scope](#scope)
-  - Defines covered Cortex prose and narrow exclusions.
-  - Read when deciding whether the writing rule applies.
-- [Examples](#examples)
-  - Contrasts a dense cache-policy paragraph with readable facts.
-  - Read when a concrete rewrite pattern is useful.
-- [Application checklist](#application-checklist)
-  - Provides a short review checklist for every edit.
-  - Use before completing Cortex writing.
-- [Validation](#validation)
-  - Defines self-review, consistency, and focused checks.
-  - Run after editing Cortex prose.
-
 ## Priority
 
 This is a P1 documentation rule for every `.cortex` Markdown file.
 
-Dense prose that packs many facts into one sentence is a failed writing
-invariant.
+- Dense prose that packs many facts into one sentence is a failed writing
+  invariant.
+- Static directory trees in documentation are a failed documentation invariant.
+- ASCII art, ASCII box drawings, and text flowcharts are prohibited.
+- Tables in Markdown files are discouraged; use enclosed lists instead.
 
 ## Purpose
 
-Keep `.cortex` readable for agents and humans under scarce context.
+Keep `.cortex` readable, maintainable, and accurate for agents and humans.
 
-One sentence should carry one idea.
+Cortex is optimized for AI legibility and structure:
 
-Complex facts belong in short sentences, bullets, or lists.
+- One sentence should carry one idea.
+- Complex facts belong in short sentences, bullets, or lists.
+- Tables in Markdown files are not advisable; replace them with enclosed structured lists.
+- Project structure is dynamic; documents must not contain static directory trees.
+- ASCII graphics are hard for AI agents to parse; diagrams must use Mermaid (` ```mermaid `) or structured lists.
 
 ## Problem Pattern
 
 A writer packs many constraints, identities, failure modes, and commands into
-one long sentence or table cell.
+one long sentence, or uses multi-column tables that create horizontal clutter.
 
-Readers must hold too many clauses at once.
+Static directory trees and ASCII box diagrams are embedded into documentation.
+
+Readers must hold too many clauses at once, tables wrap poorly and cram complex facts, static trees quickly become
+stale, and ASCII graphics confuse AI agents.
 
 Warning signs:
 
 - multiple independent facts joined by semicolons or "and";
 - one sentence that names several actors with different credentials;
 - one sentence that states a requirement, a failure mode, and an escape hatch;
-- table cells that read like paragraphs;
-- nested conditions inside a single clause.
+- markdown tables used for multi-attribute inventories;
+- nested conditions inside a single clause;
+- ASCII directory trees (`├──`, `└──`) or nested file listings in Markdown;
+- ASCII box drawings (`+---+`, `| |`) or manual ASCII flowcharts.
 
 ## Preferred Pattern
 
@@ -80,10 +50,22 @@ Split the idea before writing the final prose.
 2. Write one short sentence per unit when the fact stands alone.
 3. Use a bullet list when several units share one topic.
 4. Use a nested list only when a parent item owns clear children.
-5. Keep table cells short. Move long detail under the table or into bullets.
+5. **Do not use tables in Markdown files.**
+   - Using tables is not advisable.
+   - Replace tables with enclosed structured lists.
+   - Enclose related properties under a bold primary item with nested child bullets.
+   - Enclosed lists are clean, wrap naturally, and are easily parsed and maintained by AI agents.
+6. **Never include project or directory trees in Cortex files.**
+   - Project structure is dynamic.
+   - Agents must investigate repository structure directly using tools (`list_dir`, `find_by_name`, `grep_search`).
+   - Having directory trees in docs is bad practice.
+   - Maximum allowed is a flat list when a directory represents an entire top-level subsystem (such as `infra`, `nook-app`, `agentic-ai`, `preflight`).
+7. **Never use ASCII graphics, ASCII boxes, or manual text diagrams.**
+   - Use Mermaid (` ```mermaid `) for flowcharts, sequence diagrams, and architecture maps.
+   - Use structured ordered or unordered lists for execution procedures.
 
 Use [Cortex structured articles](cortex-article-structure.md) to choose the body
-shape. This rule governs sentence complexity. The structured-article rule
+shape. This rule governs sentence complexity and content conciseness. The structured-article rule
 governs semantic hierarchy.
 
 Checklist for every new or edited `.cortex` sentence:
@@ -92,6 +74,8 @@ Checklist for every new or edited `.cortex` sentence:
 - [ ] Does the sentence state more than one independent rule?
 - [ ] Would a bullet list make the actors or steps clearer?
 - [ ] Can a failure mode stand as its own sentence?
+- [ ] Are project directory trees omitted in favor of dynamic exploration?
+- [ ] Are ASCII graphics and box drawings replaced with Mermaid diagrams or structured lists?
 
 ## Mechanical lint
 
@@ -156,7 +140,9 @@ Full rewritten example:
 - [ ] Scan new or edited `.cortex` prose for multi-clause sentences.
 - [ ] Split each independent fact into a short sentence or bullet.
 - [ ] Prefer lists for actors, credentials, commands, and failure modes.
-- [ ] Keep table cells short; move dense detail out of the cell.
+- [ ] Replace tables with enclosed structured lists with nested bullet attributes.
+- [ ] Remove project/directory trees and replace with dynamic inspection or flat subsystem lists.
+- [ ] Replace ASCII graphics with Mermaid diagrams or structured lists.
 - [ ] Apply the same rule to this skill card when updating it.
 
 ## Validation

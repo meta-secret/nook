@@ -1,86 +1,5 @@
 # Auth Providers, Sync, and Login UX
 
-## Relationships
-
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines system-wide component ownership and dependency boundaries.
-  - Read before changing a durable cross-component interface.
-- [Nook Password Manager Specification](../product-specs/password-manager.md)
-  - Defines the password-manager product behavior this design supports.
-  - Read when architecture choices affect user-visible vault behavior.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation and security constraints.
-  - Apply while turning this design into code.
-- [Identity, App Keys, Passkeys, and Vault DEKs](identity-vault-architecture.md)
-  - Separates identity, app-key, and vault-encryption responsibilities.
-  - Read when the design touches keys, authentication, or vault access.
-- [Secret Store Identity](secret-store-identity.md)
-  - Defines stable provider and secret-store identity across sessions.
-  - Read when the design handles provider labels or store identifiers.
-- [Unified Vault Architecture](unified-vault.md)
-  - Defines the local canonical vault and provider fan-out model.
-  - Read when changing vault storage or synchronization ownership.
-- [Vault Event Log](vault-event-log.md)
-  - Defines durable vault events, ordering, and concurrency behavior.
-  - Read when the design changes persistence or synchronization.
-- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
-  - Defines unlock sessions, lock semantics, and multi-vault state.
-  - Read when the design affects in-memory vault access.
-
-## Document map
-
-- [Overview](#overview)
-  - How Nook persists replication-provider credentials, the login gate, and how provider transports relate independently to.
-  - Read before changing or relying on Overview.
-- [1. Goals](#1-goals)
-  - Login when locked: Primary app is the secret vault after unlock; Lock clears the session and returns to the login gate. Remember.
-  - Read before changing or relying on Goals.
-- [2. IndexedDB layout (nook_auth)](#2-indexeddb-layout-nook_auth)
-  - Summarizes the structured entries, ownership, and status for IndexedDB layout (nookauth).
-  - Read before changing or relying on IndexedDB layout (nookauth).
-  - [Wire fields (StorageProvider, camelCase)](#wire-fields-storageprovider-camelcase)
-    - Summarizes the structured entries, ownership, and status for Wire fields (StorageProvider, camelCase).
-    - Read before changing or relying on Wire fields (StorageProvider, camelCase).
-  - [Wire fields (oauthFile)](#wire-fields-oauthfile)
-    - Summarizes the structured entries, ownership, and status for Wire fields (oauthFile).
-    - Read before changing or relying on Wire fields (oauthFile).
-  - [Ownership](#ownership)
-    - Persistence + credential crypto live in Rust/WASM (still current — not a legacy note).
-    - Read before changing or relying on Ownership.
-  - [Google Drive modes](#google-drive-modes)
-    - Provider setup offers private and shared independently of vault replication or membership.
-    - Read before changing or relying on Google Drive modes.
-  - [Shared-provider onboarding](#shared-provider-onboarding)
-    - This section documents the current vault-coupled enrollment wire.
-    - Read before changing the Shared-provider onboarding flow or state transitions.
-  - [iCloud modes](#icloud-modes)
-    - Private mode preserves the legacy default private CloudKit database behavior.
-    - Read before changing or relying on iCloud modes.
-  - [Local-folder provider availability](#local-folder-provider-availability)
-    - Local backup uses the browser File System Access directory API (showDirectoryPicker) and persisted structured-clone directory handles.
-    - Read before changing or relying on Local-folder provider availability.
-- [3. UI states](#3-ui-states)
-  - Shared components live under nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/.
-  - Read before changing or relying on UI states.
-  - [Lock](#lock)
-    - See vault-session-and-lock.md.
-    - Read before changing the Lock flow or state transitions.
-  - [Login gate (current)](#login-gate-current)
-    - Summarizes the structured entries, ownership, and status for Login gate (current).
-    - Read before changing or relying on Login gate (current).
-- [4. VaultState integration](#4-vaultstate-integration)
-  - VaultState discovers local vaults on init() without unsealing the device identity.
-  - Read before changing or relying on VaultState integration.
-- [5. Sync replication (status)](#5-sync-replication-status)
-  - Event-log sync is the live provider path — see vault-event-log.md.
-  - Read when assessing the current state of Sync replication (status).
-- [6. Security notes](#6-security-notes)
-  - Provider credentials (GitHub PAT, OAuth access/refresh tokens) are sealed with the device's age X25519 key (in Rust/WASM) before.
-  - Read before changing or relying on Security notes.
-- [7. OAuth origins and PR previews](#7-oauth-origins-and-pr-previews)
-  - Browser OAuth providers are origin-bound.
-  - Read before changing or relying on OAuth origins and PR previews.
-
 ## Overview
 
 How Nook persists **replication-provider** credentials, the **login gate**, and
@@ -177,17 +96,17 @@ and the load pipeline live in wasm; the web shim is adapters + i18n only.
 
 | Concern                                                                                                                                             | Home                                                                                               |
 | --------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`                                  |
-| Provider-save policy                                                                                                                                | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`                           |
-| Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                          |
-| `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                  |
-| Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)                                | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`                 |
+| Snapshot model + pure transforms (`normalize`, `migrate_provider_fields`, `ensure_local_provider_row`, `find_duplicate_sync_provider`, legacy-seed) | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/`                                   |
+| Provider-save policy                                                                                                                                | `nook-app/nook-platform/nook-core/src/sync/sync_provider_store/save.rs`                            |
+| Seal/open credential fields with device identity                                                                                                    | `nook-app/nook-platform/nook-core/src/sync/sync_provider_credentials.rs`                           |
+| `nook_auth` IndexedDB I/O (rexie), load pipeline, legacy `localStorage` read/clear                                                                  | `nook-app/nook-platform/nook-wasm/src/storage/auth_providers.rs`                                   |
+| Manager APIs (`load_auth_providers_snapshot`, `load_auth_providers_with_local_row`, `save_auth_providers_snapshot`)                                 | `NookVaultManager` methods in `nook-app/nook-platform/nook-wasm/src/vault_api.rs`                  |
 | Delete the auth-provider database with `delete_auth_providers_db`                                                                                   | WASM binding + thin TypeScript wrapper                                                             |
-| Find duplicate sync providers with `find_duplicate_sync_provider`                                                                                  | WASM binding + thin TypeScript wrapper                                                             |
-| Ensure the local provider row with `ensure_local_provider_row`                                                                                     | WASM binding + thin TypeScript wrapper                                                             |
-| Seal providers with `seal_auth_providers_for_device_public_key`                                                                                    | WASM binding + thin TypeScript wrapper                                                             |
+| Find duplicate sync providers with `find_duplicate_sync_provider`                                                                                   | WASM binding + thin TypeScript wrapper                                                             |
+| Ensure the local provider row with `ensure_local_provider_row`                                                                                      | WASM binding + thin TypeScript wrapper                                                             |
+| Seal providers with `seal_auth_providers_for_device_public_key`                                                                                     | WASM binding + thin TypeScript wrapper                                                             |
 | Bind provider storage modes                                                                                                                         | WASM bindings + thin TypeScript wrappers                                                           |
-| Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)          |
+| Enrollment typestates (`TypedEnrollmentProvider`, personal vs shared)                                                                               | `nook-app/nook-platform/nook-auth2/src/auth/enrollment.rs` (re-exported via `nook-core`)           |
 | Type re-exports, i18n presentation, wasm wrappers                                                                                                   | [`auth/providers.ts`](../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers.ts) |
 | Browser persistence and Svelte state                                                                                                                | `vault/providers.svelte.ts` under `nook-web-shared`                                                |
 
@@ -211,7 +130,7 @@ TypeScript owns browser integration:
   - Seal them inside `save_auth_providers` / `seal_provider_credentials` and
     unseal them inside the `load_auth_providers` pipeline.
   - Keep non-secret labels, repositories, and timestamps plaintext.
-  - Keep crypto out of TypeScript. See [rules.md §1](../rules.md).
+  - Keep crypto out of TypeScript. See [architecture/packages.md](../architecture/packages.md).
 - **Current storage mapping:** Existing code names the device key a “device
   identity.” Do not mint another key for provider storage.
   - Reuse this browser's **age X25519 device key**: `device_id` /

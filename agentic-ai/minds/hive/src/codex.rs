@@ -30,8 +30,10 @@ use progress::*;
 
 const OUTPUT_SCHEMA: &str = include_str!("planner-output.schema.json");
 const TASK_OUTPUT_SCHEMA: &str = include_str!("task-output.schema.json");
-pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-terra";
-pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "low";
+pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-sol";
+pub const DEFAULT_CODEX_REASONING_EFFORT: &str = "medium";
+pub const SOL_EXHAUSTED_CODEX_MODEL: &str = "gpt-5.3-codex-spark";
+pub const SOL_EXHAUSTED_CODEX_REASONING_EFFORT: &str = "xhigh";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CodexAccess {
@@ -103,7 +105,36 @@ impl InProcessCodexRunner {
     }
 
     async fn run_turn(&self, prompt: &str, kind: TurnKind) -> Result<String, CodexError> {
-        let config = new_config(&self.options)?;
+        let primary_result = self.attempt_turn(prompt, kind.clone(), &self.options).await;
+        if let Err(error) = primary_result {
+            if self.options.model != SOL_EXHAUSTED_CODEX_MODEL && is_sol_exhausted_error(&error) {
+                let mut fallback_options = self.options.clone();
+                fallback_options.model = SOL_EXHAUSTED_CODEX_MODEL.to_owned();
+                fallback_options.reasoning_effort = SOL_EXHAUSTED_CODEX_REASONING_EFFORT.to_owned();
+                let fallback_result = self
+                    .attempt_turn(prompt, kind, &fallback_options)
+                    .await
+                    .map_err(|fallback_error| CodexError::Run(format!(
+                        "primary model `{}` failed, fallback to `{}` with xhigh effort also failed: {}; {}",
+                        self.options.model,
+                        SOL_EXHAUSTED_CODEX_MODEL,
+                        error,
+                        fallback_error
+                    )))?;
+                return Ok(fallback_result);
+            }
+            return Err(error);
+        }
+        primary_result
+    }
+
+    async fn attempt_turn(
+        &self,
+        prompt: &str,
+        kind: TurnKind,
+        options: &CodexOptions,
+    ) -> Result<String, CodexError> {
+        let config = new_config(options)?;
         let state_db = init_state_db(&config).await;
         let auth_manager =
             AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false).await;
@@ -153,10 +184,10 @@ impl InProcessCodexRunner {
             .map_err(|error| CodexError::Run(error.to_string()))?;
 
         let execution_log = matches!(&kind, TurnKind::Task(_)).then(|| {
-            self.options
+            options
                 .repo_root
                 .parent()
-                .unwrap_or(&self.options.repo_root)
+                .unwrap_or(&options.repo_root)
                 .join(".hive-local-executions.jsonl")
         });
         let turn_result = submit_and_wait(
@@ -164,7 +195,7 @@ impl InProcessCodexRunner {
             prompt,
             kind,
             execution_log.as_deref(),
-            self.options.activity_sender.as_ref(),
+            options.activity_sender.as_ref(),
         )
         .await;
         let shutdown_result = thread.shutdown_and_wait().await;
@@ -181,6 +212,12 @@ impl InProcessCodexRunner {
     }
 }
 
+#[derive(Debug, Clone)]
+enum TurnKind {
+    Planning,
+    Task(String),
+}
+
 #[derive(Debug, Error)]
 pub enum CodexError {
     #[error("failed to configure the embedded Codex turn: {0}")]
@@ -191,6 +228,50 @@ pub enum CodexError {
     EmptyResponse,
     #[error("the embedded Codex output schema is invalid: {0}")]
     OutputSchema(#[source] serde_json::Error),
+}
+
+fn is_sol_exhausted_error(error: &CodexError) -> bool {
+    match error {
+        CodexError::Run(message) => is_sol_exhaustion_message(message),
+        _ => false,
+    }
+}
+
+fn is_sol_exhaustion_message(message: &str) -> bool {
+    let message = message.to_ascii_lowercase();
+
+    const SOL_EXHAUSTION_MARKERS: [&str; 8] = [
+        "sol exhausted",
+        "sol budget",
+        "sol limit",
+        "sol quota",
+        "out of sol",
+        "insufficient sol",
+        "no sol",
+        "usage limit",
+    ];
+    if SOL_EXHAUSTION_MARKERS
+        .iter()
+        .any(|marker| message.contains(marker))
+    {
+        return true;
+    }
+
+    if message.contains("quota")
+        && (message.contains("exceed")
+            || message.contains("exhaust")
+            || message.contains("depleted")
+            || message.contains("remaining"))
+    {
+        return true;
+    }
+
+    message.contains("rate limit")
+        || message.contains("too many requests")
+        || message.contains("not enough credits")
+        || message.contains("insufficient credits")
+        || message.contains("credits remaining")
+        || message.contains("429")
 }
 
 impl CodexRunner for InProcessCodexRunner {
@@ -372,12 +453,6 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
     Ok(config)
 }
 
-#[derive(Debug)]
-enum TurnKind {
-    Planning,
-    Task(String),
-}
-
 async fn submit_and_wait(
     thread: &CodexThread,
     prompt: &str,
@@ -520,13 +595,23 @@ mod tests {
     }
 
     #[test]
-    fn defaults_to_gpt_5_6_terra_with_light_reasoning() -> crate::HiveResult<()> {
+    fn defaults_to_gpt_5_6_sol_with_medium_reasoning() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned());
 
         assert_eq!(options.model, DEFAULT_CODEX_MODEL);
         assert_eq!(options.reasoning_effort, DEFAULT_CODEX_REASONING_EFFORT);
         Ok(())
+    }
+
+    #[test]
+    fn detects_usage_limit_as_sol_exhaustion() {
+        assert!(is_sol_exhaustion_message(
+            "embedded Codex execution failed: you've hit your usage limit. Visit the usage page"
+        ));
+        assert!(!is_sol_exhaustion_message(
+            "embedded Codex execution failed: unknown network timeout while reaching Codex"
+        ));
     }
 
     #[test]

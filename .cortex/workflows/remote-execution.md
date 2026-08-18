@@ -1,35 +1,5 @@
 # GitHub-Hosted Remote Execution
 
-## Relationships
-
-- [Quality and Release](quality.md)
-  - Defines which focused and complete validation gates apply.
-  - Read before selecting hosted checks for a change.
-- [Pull Request Workflow](pull-requests.md)
-  - Owns exact-head validation, readiness, and merge authorization.
-  - Read before advancing from remote checks to merge.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Two remote surfaces](#two-remote-surfaces)
-  - Distinguishes focused hosted tasks from complete PR validation.
-  - Read before selecting a remote execution surface.
-- [Focused remote tasks](#focused-remote-tasks)
-  - Defines the allowlisted path for narrow hosted checks.
-  - Use when a bounded task needs targeted validation.
-- [Explicit complete PR validation](#explicit-complete-pr-validation)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-- [Failure loop](#failure-loop)
-  - Explains failure modes and the supported recovery path.
-  - Read when the normal path fails.
-- [Merge boundary](#merge-boundary)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-
 ## Overview
 
 GitHub-hosted runners are the normal execution environment for agent builds, tests, linting, coverage, and browser suites. Agent machines remain responsive for editing, repository inspection, host-applied formatting, the UI demo contract, and interactive development servers.

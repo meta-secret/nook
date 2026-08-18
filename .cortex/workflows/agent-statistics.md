@@ -1,38 +1,5 @@
 # AI Agent PR Statistics
 
-## Relationships
-
-- [Reference: Loom tools and static agent workflows](../references/loom-tools.md)
-  - Provides the Reference: Loom tools and static agent workflows operational reference.
-  - Read when using its tools or commands.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Lifecycle](#lifecycle)
-  - Describes the ordered workflow and its decision points.
-  - Follow while carrying out this part of the task.
-- [Mechanical entrypoint — Loom](#mechanical-entrypoint--loom)
-  - Lists the supported commands and invocation contract.
-  - Read when operating the documented tooling.
-- [What to measure](#what-to-measure)
-  - Lists the execution, validation, and delivery metrics to record.
-  - Use while maintaining the scratch event log.
-- [Test inventory counting](#test-inventory-counting)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-- [YAML contract](#yaml-contract)
-  - Defines the supported data or configuration contract.
-  - Read before changing fields, values, or compatibility.
-- [Comparison and required action](#comparison-and-required-action)
-  - Defines regression thresholds and follow-up requirements.
-  - Read when evaluating the assembled statistics.
-- [Workbench publication contract](#workbench-publication-contract)
-  - Defines the post-merge validation and publication procedure.
-  - Follow before publishing a PR statistics record.
-
 ## Overview
 
 Every task-owning AI agent must measure the work required to land each normal
@@ -73,19 +40,37 @@ Assemble request:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
 ```bash
-task loom:agent-stats CONFIG=/tmp/assemble-request.yaml
+task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 ```
 
+### Agent-local path token
+
+- `scratchPath`, `outputPath`, and `statsFile` accept `{agentTempDir}`.
+- Loom resolves the token under the operating system's temporary directory.
+- The resolved directory contains the exact 40-character task-anchor commit.
+- That anchor is the branch-entry commit, or the worktree's initial commit for
+  a branch created with the worktree. Implementation commits do not move it.
+- The first task-branch entry remains authoritative after branch re-entry.
+- It also contains an opaque identifier derived from the canonical worktree.
+- Separate worktrees cannot collide when they use the same commit.
+- One worktree and commit resolve consistently across `assemble`, `validate`,
+  and `publish`.
+- `task loom:tools-list` returns the filled path in `resolvedExampleYaml`.
+- Loom provisions the resolved agent directory during token resolution.
+- Use that resolved path when creating the scratch JSON before `assemble`.
+- Ordinary absolute and relative paths remain supported.
+- The request file passed through `CONFIG` must also live in agent-owned
+  storage. Do not reuse a shared fixed `/tmp` request filename.
+
 - **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
-  with `statsFile: /tmp/123.yaml`.
-- **Examples:**
-  [`agentic-ai/loom/params/agent-stats/`](../../agentic-ai/loom/params/agent-stats/).
+  with `statsFile: "{agentTempDir}/123.yaml"`.
+- **Examples:** copy `exampleYaml` from `task loom:tools-list`.
 - **Protocol:** [Loom tools](../references/loom-tools.md).
 - **Loom owns:** PR metadata, Actions runs, optional test inventory, and summary
   derivations.
@@ -116,12 +101,12 @@ Measure on the merged implementation `head_sha`.
 
 Count individual test cases, not files or suites.
 
-| `by_type` key | What to count |
-|---|---|
-| `rust` | Nextest cases in core domain crates |
-| `preflight` | Nextest/cargo cases in `preflight` |
-| `web_unit` | Vitest cases under `nook-app/nook-web` |
-| `e2e` | Playwright cases under `nook-app/nook-web` |
+| `by_type` key | What to count                              |
+| ------------- | ------------------------------------------ |
+| `rust`        | Nextest cases in core domain crates        |
+| `preflight`   | Nextest/cargo cases in `preflight`         |
+| `web_unit`    | Vitest cases under `nook-app/nook-web`     |
+| `e2e`         | Playwright cases under `nook-app/nook-web` |
 
 `total` equals the sum of those four counts.
 

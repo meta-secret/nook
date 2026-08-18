@@ -1,68 +1,5 @@
 # Core Beliefs: Agent-First Operating Principles
 
-## Relationships
-
-- [Nook Agent Map (Table of Contents)](../AGENTS.md)
-  - Routes agents to the repository rules, architecture, and workflows.
-  - Read when locating the authority for a cross-cutting task.
-- [Cortex Consistency — Garbage Collector](../dynamic-skills/cortex-consistency.md)
-  - Requires this design to agree with related docs and code.
-  - Apply whenever the design or its implementation changes.
-- [Cortex Writer — Low Cognitive Complexity](../dynamic-skills/cortex-writer.md)
-  - Requires concise, low-complexity Cortex prose.
-  - Apply while maintaining this design document.
-- [Coding Bro — Default Agent Workflow](../workflows/coding-bro.md)
-  - Defines the default implementation and delivery pipeline.
-  - Follow when this design becomes repository work.
-- [Dynamic Skills Workflow](../workflows/dynamic-skills.md)
-  - Defines how project feedback becomes durable agent guidance.
-  - Read when the decision adds or changes an agent rule.
-- [Pull Request Workflow](../workflows/pull-requests.md)
-  - Defines PR sizing, validation, readiness, and merge ownership.
-  - Read before delivering an implementation of this design.
-- [Quality and Release](../workflows/quality.md)
-  - Defines the build, test, cache, and release gates.
-  - Read when the design changes engineering-harness behavior.
-- [Design Docs Index](index.md)
-  - Catalogs the design family and each document's current status.
-  - Read when locating adjacent or superseding architecture.
-
-## Document map
-
-- [Overview](#overview)
-  - These are the core engineering beliefs that guide the development of Nook.
-  - Read before changing or relying on Overview.
-- [1. Optimize for AI Legibility First](#1-optimize-for-ai-legibility-first)
-  - Context is scarce: Large, monolithic documentation files crowd out active code and task context. Repository documentation should.
-  - Read before changing or relying on Optimize for AI Legibility First.
-- [2. Enforce Invariants Mechanically, Don't Micromanage Implementations](#2-enforce-invariants-mechanically-dont-micromanage-implementations)
-  - System of Checks: We do not tell agents to "try harder" or rely on prose instructions to enforce rules. We write automated checks.
-  - Apply when deciding whether a repository invariant needs mechanical enforcement.
-- [3. Strict boundaries & Parse at the Boundary](#3-strict-boundaries--parse-at-the-boundary)
-  - No YOLO Data Probing: We avoid guessing data shapes or traversing weakly-typed objects. Data must be parsed and validated at the.
-  - Read before changing or relying on Strict boundaries & Parse at the Boundary.
-- [4. Centralize Tooling behind a Single Command Surface](#4-centralize-tooling-behind-a-single-command-surface)
-  - Task runner as the API: We use Taskfile as the single interface for all development tasks. Root Taskfile.yml is the repo.
-  - Read before changing or relying on Centralize Tooling behind a Single Command Surface.
-- [5. Pay Down Tech Debt Continuously](#5-pay-down-tech-debt-continuously)
-  - Technical Debt is High-Interest: Stale dependencies, unpinned versions, and deprecated configurations are treated as bugs. We pay.
-  - Read when assessing the current state of Pay Down Tech Debt Continuously.
-- [6. Maximize Reuse via Rust](#6-maximize-reuse-via-rust)
-  - Rust-First Domain Assets: Domain rules live in their portable Rust owner (nook-auth2 or nook-core). Cross-cutting assets such as.
-  - Read before changing or relying on Maximize Reuse via Rust.
-- [7. Close Every Task with a Duration Report](#7-close-every-task-with-a-duration-report)
-  - Measure wall-clock time from the start of the user's assignment until the final handoff message. Always include elapsed time when.
-  - Read before changing or relying on Close Every Task with a Duration Report.
-- [8. Default to the Coding Bro Pipeline](#8-default-to-the-coding-bro-pipeline)
-  - Every implementation task follows workflows/coding-bro.md. The delivery pipeline has these ordered steps: Fetch the.
-  - Read before changing or relying on Default to the Coding Bro Pipeline.
-- [9. Unit Tests Own Domain Correctness; E2e Is Smoke Only](#9-unit-tests-own-domain-correctness-e2e-is-smoke-only)
-  - ~99% of functional coverage belongs in Rust unit and integration tests. Crates: nook-replication, nook-event-log, nook-core, and.
-  - Use before declaring Unit Tests Own Domain Correctness; E2e Is Smoke Only complete.
-- [10. Grow Cortex Dynamically](#10-grow-cortex-dynamically)
-  - .cortex is a living knowledge base, not a frozen snapshot. Agents must update it when durable knowledge is gained. Sources include.
-  - Read before changing or relying on Grow Cortex Dynamically.
-
 ## Overview
 
 These are the core engineering beliefs that guide the development of Nook. Because this codebase is primarily managed and developed by AI agents, we optimize our structures, documentation, and tooling for agentic clarity and mechanical enforcement.
@@ -175,7 +112,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **`.cortex` is a living knowledge base**, not a frozen snapshot.
 - Agents must **update it when durable knowledge is gained**.
 - Sources include user prompts, design dialogues, test discoveries, CI/PR postmortems, and code archaeology.
-- **What to capture:** testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons.
+- **What to capture:** product requirements and constraints, testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons.
 - Write concise, actionable prose.
 - Link to source files.
 - **How to write it:** follow [`../dynamic-skills/cortex-writer.md`](../dynamic-skills/cortex-writer.md).
@@ -186,7 +123,8 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Agents garbage-collect obsolete cortex facts.
 - Docs must agree with each other and with the code.
 - Conflicts and stale claims are P1 documentation findings.
-- **Where to put it:** extend the relevant existing doc (`rules.md`, `design-docs/`, `workflows/`, `references/`).
+- **Where to put it:** extend the relevant existing doc (`product-specs/`, `dynamic-skills/`, `design-docs/`, `workflows/`, `references/`).
+- For user-facing requirements, item schemas, or UX flows, read and update the owning specification in `product-specs/` (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
 - For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills/) and follow [dynamic-skills.md](../workflows/dynamic-skills.md).
 - Add a new file only when the topic is substantial and has no natural home.
 - Update [design-docs/index.md](index.md) or [AGENTS.md](../AGENTS.md) links when adding docs.

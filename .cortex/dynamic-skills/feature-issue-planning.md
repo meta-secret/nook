@@ -1,38 +1,5 @@
 # Feature Workbench Planning
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-- [Issue workflow](../workflows/issues.md)
-  - Defines the canonical Workbench issue lifecycle and publication flow.
-  - Read when creating or updating feature issue records.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Preferred pattern](#preferred-pattern)
-  - Defines the required structure or behavior.
-  - Read before implementing a correction.
-- [Trigger](#trigger)
-  - Defines the conditions that activate this skill.
-  - Read while classifying the requested task.
-- [Application procedure](#application-procedure)
-  - Orders discovery, creation, lifecycle, and publication actions.
-  - Follow while organizing feature work.
-- [Safety](#safety)
-  - Defines security and operational boundaries for application.
-  - Read before making a risky or externally visible change.
-
 ## Purpose
 
 Organize a feature as durable, versioned context that agents can discover,

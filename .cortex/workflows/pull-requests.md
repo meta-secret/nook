@@ -1,119 +1,5 @@
 # Pull Request Workflow
 
-## Relationships
-
-- [Agent Feature Ownership](../dynamic-skills/agent-feature-ownership.md)
-  - Defines the Agent Feature Ownership context used by this document.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Code Review Comments](../dynamic-skills/code-review-comments.md)
-  - Defines the Code Review Comments context used by this document.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [GitHub-Hosted Execution and Validation](../dynamic-skills/github-actions-only-validation.md)
-  - Defines the boundary between local formatting and hosted validation.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Pre-Push Hygiene](../dynamic-skills/pre-push-hygiene.md)
-  - Defines formatting and UI-demo checks required before every push.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Reference: Application Logging](../references/logging.md)
-  - Defines application, test, and CI logging and troubleshooting evidence.
-  - Consult when the task needs this operational reference.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-- [AI Agent PR Statistics](agent-statistics.md)
-  - Defines the post-merge agent statistics record and publication workflow.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [CI / GitHub Actions Pipeline](ci-pipeline.md)
-  - Defines CI entry points, validation ownership, and hosted execution behavior.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Review Request Workflow](code-review.md)
-  - Defines the Review Request Workflow context used by this document.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Coding Bro — Default Agent Workflow](coding-bro.md)
-  - Defines the default end-to-end implementation and delivery workflow.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Workbench Issue Management](issues.md)
-  - Defines focused issue ownership and durable Workbench scope records.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Main Build Statistics](main-build-statistics.md)
-  - Defines the Main Build Statistics context used by this document.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Quality and Release](quality.md)
-  - Defines quality gates and the required response to check findings.
-  - Apply when implementation or delivery reaches this workflow boundary.
-
-## Document map
-
-- [Overview](#overview)
-  - Establishes the required path for every change that lands on `main`.
-  - Read before preparing or delivering a pull request.
-- [PR-first agent contract](#pr-first-agent-contract)
-  - Makes the task owner responsible for the complete PR lifecycle.
-  - Read before editing, validating, or handing off implementation work.
-- [Pull request size and modularity](#pull-request-size-and-modularity)
-  - Requires small, cohesive, ordered pull-request slices.
-  - Read before estimating or expanding implementation scope.
-  - [Size boundary](#size-boundary)
-    - Caps authored pull-request additions and deletions at 5,000 lines.
-    - Read when measuring or revising a proposed slice.
-  - [Required plan](#required-plan)
-    - Defines the size budget, module boundary, interfaces, and validation plan.
-    - Read when publishing the task-start Workbench plan.
-  - [Module-focused slices](#module-focused-slices)
-    - Keeps each PR within one cohesive architectural responsibility.
-    - Read when choosing slice boundaries or dependency order.
-  - [Multi-PR feature delivery](#multi-pr-feature-delivery)
-    - Requires a complete ordered Workbench sequence for large features.
-    - Read when one safe PR cannot deliver the full requirement.
-- [⛔ SQUASH MERGE ONLY](#-squash-merge-only)
-  - Requires every pull request to land as one squash commit.
-  - Apply at merge time.
-- [Agent pipeline](#agent-pipeline)
-  - Defines the exact implementation, validation, review, and merge pipeline.
-  - Use while delivering a pull request.
-  - [0. Fetch and branch](#0-fetch-and-branch)
-    - Starts an owned feature branch from current `origin/main`.
-    - Run before implementation edits and refresh before readiness.
-  - [1. Prepare the PR path](#1-prepare-the-pr-path)
-    - Publishes scope, ownership, and delivery context before editing.
-    - Use at task start.
-  - [2. Implement](#2-implement)
-    - Implements the planned slice with required tests and documentation.
-    - Use after the PR path and boundaries are established.
-  - [3. Push an exact remote-executable commit](#3-push-an-exact-remote-executable-commit)
-    - Formats, reviews, commits, and pushes one coherent revision.
-    - Use before each hosted validation cycle.
-  - [5. Hosted iteration and explicit validation](#5-hosted-iteration-and-explicit-validation)
-    - Runs focused tasks and complete exact-head validation on hosted workers.
-    - Use after every push that changes the PR head.
-  - [5.1. Main-fix browser validation](#51-main-fix-browser-validation)
-    - Requires dedicated hosted browser validation for fixes made directly from `main`.
-    - Read when the changed path affects browser behavior without normal PR e2e.
-  - [6. Monitor only Nook's applicable PR test checks until green](#6-monitor-only-nooks-applicable-pr-test-checks-until-green)
-    - Defines which repository-owned checks must finish for the changed paths.
-    - Read while monitoring validation and before readiness audit.
-  - [6.1. Address review comments](#61-address-review-comments)
-    - Requires every active human or automated review finding to be resolved.
-    - Read whenever review feedback appears.
-  - [7. Fix loop on failure](#7-fix-loop-on-failure)
-    - Defines evidence-led diagnosis, correction, and exact-head revalidation.
-    - Use after any hosted check fails.
-  - [8. Merge and finish](#8-merge-and-finish)
-    - Audits readiness, squash-merges, and verifies the resulting `main` commit.
-    - Use only after checks and review are complete.
-  - [9. Post-merge Workbench context and statistics](#9-post-merge-workbench-context-and-statistics)
-    - Publishes issue updates, a worklog, and PR delivery statistics.
-    - Use immediately after merge.
-  - [10. Task completion report](#10-task-completion-report)
-    - Defines the evidence and elapsed-time summary required at handoff.
-    - Read before reporting task completion.
-- [Standard flow (summary)](#standard-flow-summary)
-  - Condenses the PR lifecycle into one routing sequence.
-  - Read for orientation before using the detailed pipeline.
-- [CLI reference](#cli-reference)
-  - Provides canonical commands for branching, validation, review, and merge.
-  - Use when executing a pipeline step from the shell.
-
 ## Overview
 
 - Use this checklist for every change that lands on `main`.
@@ -167,11 +53,12 @@ ownership until merge or a concrete blocked handoff:
    - When the coherent head is ready, run one complete-validation command:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
-   - It dispatches checks and then requests exact-head Codex Cloud review.
+   - It dispatches checks and then requests exact-head Cloud review.
+   - Codex is preferred. Cursor Bugbot is the usage-limit fallback.
    - Review-request failure does not block those checks.
    - Fix every actionable finding that arrives while checks run.
    - If no feedback exists when checks finish, continue without waiting.
-   - Do not request or wait for other optional reviewers.
+   - Do not request Claude, CodeRabbit, or other optional reviewers.
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the
@@ -326,14 +213,14 @@ See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 
 ## ⛔ SQUASH MERGE ONLY
 
-**Every PR merged into `main` MUST be squash-merged.**
-
-| Allowed                         | Forbidden                                               |
-| ------------------------------- | ------------------------------------------------------- |
-| GitHub UI: **Squash and merge** | Create a merge commit                                   |
-| CLI: `gh pr merge <n> --squash` | `gh pr merge --merge`                                   |
-| One commit per PR on `main`     | `gh pr merge --rebase`                                  |
-|                                 | Fast-forward that keeps branch commit history on `main` |
+- **Allowed squash merge methods:**
+  - GitHub UI: **Squash and merge**
+  - CLI: `gh pr merge <n> --squash`
+  - Linear git history: exactly one squash commit per PR on `main`
+- **Forbidden merge methods:**
+  - Merge commits (`gh pr merge --merge`)
+  - Rebase merges (`gh pr merge --rebase`)
+  - Fast-forward merges that retain branch commit history on `main`
 
 `main` must stay linear: **one squash commit per PR**. Feature branches can have many commits; that history is discarded at merge time.
 
@@ -421,9 +308,10 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 - After each coherent push, inspect feedback already present.
 - Use focused remote tasks when they shorten diagnosis.
 - Trigger complete validation only when the head is ready for the final gate.
-  - It dispatches checks immediately and requests exact-head Codex review.
+  - It dispatches checks immediately and requests exact-head Cloud review.
 - After a complete-gate failure, validate the completed replacement head again.
-- Do not wait for Codex or request other external reviewers.
+- Do not wait for Codex or Cursor after checks finish.
+  - Cursor Bugbot is requested only when Codex reports a usage limit.
   - See [Code review](code-review.md).
 
 The feedback inspection and readiness audit replace any blind review-batching grace period.
@@ -460,13 +348,18 @@ task pr:validate PR=<number>
 task pr:validate PR=<number> FULL_E2E=1
 ```
 
-| When                       | Command                                          | Why                                             |
-| -------------------------- | ------------------------------------------------ | ----------------------------------------------- |
-| Before every push          | `task loom:pre-push`                             | Only required local product action              |
-| UI-facing path changes     | included in Loom pre-push                        | Cheap hygiene before hosted execution           |
-| Focused build/test feedback| `task remote TASK_NAMES=<a>,<b>`                | Reuse one hosted worker for selected tasks      |
-| Final validation boundary  | `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`     | Start the complete exact-head PR gate           |
-| After complete CI failure  | fix → Loom pre-push → commit → push → validate again | A push does not refresh `pr.yml`              |
+- **Before every push**
+  - Command: `task loom:pre-push`
+  - Purpose: Only required local product action; applies formatting and UI demo contract
+- **Focused build/test feedback**
+  - Command: `task remote TASK_NAMES=<a>,<b>`
+  - Purpose: Reuse one hosted worker for selected tasks
+- **Final validation boundary**
+  - Command: `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` or `task pr:validate PR=<number>`
+  - Purpose: Start the complete exact-head PR gate
+- **After complete CI failure**
+  - Command: Fix → `task loom:pre-push` → commit → push → trigger validation again
+  - Purpose: Pushing alone does not start `pr.yml`
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
 
@@ -531,9 +424,9 @@ task pr:preflight PR=<number>
   `task pr:ready` for read-only exact-head readiness.
   - The command never merges by itself.
   - Success tells the task owner to squash-merge immediately.
-- Codex review is not a readiness requirement.
+- Codex or Cursor review is not a readiness requirement.
   - Do not wait for it after repository checks finish.
-  - Do not request or wait for optional external reviews or checks.
+  - Do not request Claude, CodeRabbit, or other optional external reviews.
 - Repository-owned checks and exact-head deployment remain required when
   applicable.
 - Before merge, always verify the branch against latest `origin/main` even when
@@ -599,8 +492,8 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 - Track unthreaded submitted-review items in the checklist and handoff instead
   of creating comment spam.
 - Resolve all actionable threads and re-query immediately before merge.
-- Do not wait for Codex after repository checks finish or request optional
-  external status changes.
+- Do not wait for Codex or Cursor after repository checks finish.
+  - Do not request Claude, CodeRabbit, or other optional reviewers.
   - See [Code review](code-review.md).
 
 ### 7. Fix loop on failure
@@ -644,7 +537,8 @@ After merge, `main.yml` independently runs full local-provider and extension **e
 - Successful reruns retire existing incidents and stop active delivery.
 - The isolated Hive dispatcher enqueues actionable incidents once.
 - One logical task owns diagnosis, a normal exact-head PR, actionable review resolution, squash merge, and verification of the resulting Main run.
-- The scheduled `agent-implement.yml` worker does not claim Hive incidents.
+- An explicitly dispatched `agent-implement.yml` worker does not claim Hive
+  incidents.
 - Credentialed sync-live checks are available only through explicit manual validation.
 
 ### 9. Post-merge Workbench context and statistics
@@ -696,7 +590,7 @@ Rules:
 - If the task was blocked waiting on the user, exclude idle wait time and note `active time: …` vs `elapsed: …`.
 - For question-only turns with no implementation, a duration line is optional.
 
-**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
+**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 
 ## Standard flow (summary)
 
@@ -711,14 +605,15 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 7. Push and open or update the PR.
 8. Use focused `task remote` jobs only for faster isolated diagnosis.
 9. Run Loom or Task validation on the ready head.
-10. It dispatches checks and then requests exact-head Codex review.
-11. Do not wait for review after checks finish or request optional reviews.
-12. Address and resolve actionable comments.
-13. On failure, fix the issue and repeat pre-push hygiene.
-14. Push the fix and explicitly validate the replacement head.
-15. Squash-merge after the exact-head readiness audit succeeds.
-16. Publish the Workbench completion records.
-17. Report task duration.
+10. It dispatches checks and then requests exact-head Cloud review.
+11. Do not wait for review after checks finish.
+12. Do not request Claude, CodeRabbit, or other optional reviews.
+13. Address and resolve actionable comments.
+14. On failure, fix the issue and repeat pre-push hygiene.
+15. Push the fix and explicitly validate the replacement head.
+16. Squash-merge after the exact-head readiness audit succeeds.
+17. Publish the Workbench completion records.
+18. Report task duration.
 
 ## CLI reference
 
@@ -730,4 +625,4 @@ gh pr create --title "…" --body "…"
 gh pr merge <number> --squash
 ```
 
-See also [rules.md §6](../rules.md#6-git--pull-request-workflow).
+See also [coding-bro.md](coding-bro.md).

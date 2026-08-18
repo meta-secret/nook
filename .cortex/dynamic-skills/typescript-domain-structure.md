@@ -1,47 +1,5 @@
 # TypeScript Domain Structure
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-- [Rust coding](rust-coding.md)
-  - Defines the Rust-owned domain shapes that TypeScript must reuse.
-  - Read when a TypeScript structure belongs behind the WASM boundary.
-- [TypeScript single parameter](typescript-single-parameter.md)
-  - Defines the parameter-object contract used by structured APIs.
-  - Read when reshaping calls alongside domain types.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Forbidden Patterns](#forbidden-patterns)
-  - Lists concrete forms that the rule prohibits.
-  - Read while reviewing authored changes.
-- [Required Pattern](#required-pattern)
-  - Defines the pattern that compliant code must use.
-  - Read before implementing the affected boundary.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Examples](#examples)
-  - Contrasts rejected and preferred forms.
-  - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
-- [Validation](#validation)
-  - Names the smallest relevant mechanical and semantic proof.
-  - Run before completing the task.
-
 ## Purpose
 
 Keep TypeScript domain models nested and enum-driven. Treat raw-string field
@@ -53,7 +11,7 @@ Do not ship any of these:
 
 ```ts
 // Forbidden: raw-string field allow-list
-const ALLOWED = new Set(['stageHostUpdates', 'fetchOriginMain']);
+const ALLOWED = new Set(["stageHostUpdates", "fetchOriginMain"]);
 
 // Forbidden: generic Optional / Result clones
 type Result<T> = Ok<T> | Err;
@@ -61,9 +19,9 @@ type Maybe<T> = Present<T> | Absent;
 
 // Forbidden: flat same-prefix closed vocabularies
 enum RequestKind {
-  AgentStatsAssemble = 'agentStatsAssemble',
-  AgentStatsValidate = 'agentStatsValidate',
-  AgentStatsPublish = 'agentStatsPublish',
+  AgentStatsAssemble = "agentStatsAssemble",
+  AgentStatsValidate = "agentStatsValidate",
+  AgentStatsPublish = "agentStatsPublish",
 }
 ```
 
@@ -80,8 +38,8 @@ Same-prefix names almost always mean a separate object was flattened. Generic
   agentStats:
     assemble:
       prNumber: 123
-      scratchPath: /tmp/pr-123.json
-      outputPath: /tmp/123.yaml
+      scratchPath: "{agentTempDir}/pr-123-scratch.json"
+      outputPath: "{agentTempDir}/123.yaml"
       includeTestInventory: true
   ```
 

@@ -2,76 +2,6 @@ version: '3'
 
 # hive infrastructure operations.
 tasks:
-  hive:queue:status:
-    desc: Show bounded durable Hive task and latest-attempt state.
-    silent: true
-    cmds:
-      - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
-          --namespace hive-system \
-          --container dispatcher \
-          -- /usr/local/bin/hive queue status
-        REMOTE
-
-  hive:dashboard:
-    desc: Open the read-only Hive Control Center through an SSH tunnel.
-    silent: true
-    cmds:
-      - |
-        local_port="{{default "18080" .HIVE_DASHBOARD_PORT}}"
-        case "$local_port" in
-          *[!0-9]*|'')
-            echo "HIVE_DASHBOARD_PORT must be numeric" >&2
-            exit 1
-            ;;
-        esac
-        url="http://127.0.0.1:$local_port"
-        if command -v open >/dev/null 2>&1; then
-          (sleep 2; open "$url") &
-        fi
-        echo "Hive Control Center: $url"
-        exec ssh \
-          -o BatchMode=yes \
-          -L "$local_port:127.0.0.1:$local_port" \
-          "{{.INFRA_SSH_TARGET}}" \
-          "sudo -n k0s kubectl port-forward --namespace hive-system --address 127.0.0.1 service/hive-observer $local_port:8080"
-
-  hive:queue:retry:
-    desc: Rearm one failed Main-repair chain once per deployed Hive release.
-    silent: true
-    cmds:
-      - |
-        task_id="{{.HIVE_TASK_ID}}"
-        if test -z "$task_id" || test "$task_id" = "<no value>"; then
-          echo "HIVE_TASK_ID is required" >&2
-          exit 1
-        fi
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' -- "$task_id" <<'REMOTE'
-        set -euo pipefail
-        task_id="$1"
-        image="$(
-          sudo -n k0s kubectl get deployment hive \
-            --namespace hive-system \
-            -o jsonpath='{.spec.template.spec.containers[?(@.name=="hive")].image}'
-        )"
-        release_id="${image##*@}"
-        case "$release_id" in
-          sha256:????????????????????????????????????????????????????????????????) ;;
-          *)
-            echo "Hive deployment is not pinned to a sha256 release" >&2
-            exit 1
-            ;;
-        esac
-        sudo -n k0s kubectl exec deployment/hive-workbench-dispatcher \
-          --namespace hive-system \
-          --container dispatcher \
-          -- /usr/local/bin/hive queue retry-failed-main \
-            --task-id "$task_id" \
-            --release-id "$release_id"
-        REMOTE
-
   hive:image:
     desc: Build and publish the exact Hive source to registry.dev.nokey.sh.
     deps: [k0s:sync, registry:credential:ensure]
@@ -133,19 +63,16 @@ tasks:
         chmod 0640 "$remote_dir/hive-image"
         cat "$remote_dir/hive-image"
         REMOTE
-
   hive:auth:rotate:
     desc: Explicitly replace Hive Codex authentication from a local bootstrap file.
     cmds:
       - task: hive:auth:publish
         vars: { HIVE_AUTH_PUBLICATION_MODE: replace }
-
   hive:auth:bootstrap:
     internal: true
     cmds:
       - task: hive:auth:publish
         vars: { HIVE_AUTH_PUBLICATION_MODE: bootstrap }
-
   hive:auth:publish:
     internal: true
     silent: true
@@ -377,6 +304,42 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
+        # HIVE_DEPLOY_CONVERGENCE_HELPERS_BEGIN
+        hive_active_graph_client_pods() { kubectl get pods --namespace hive-system \
+            --selector "app.kubernetes.io/name=$1" --output json |
+            jq -r '.items[] | select(.status.phase != "Succeeded" and .status.phase != "Failed") | .metadata.name'
+        }
+        hive_wait_for_graph_client_drain() { deployment="$1" attempts="$2" delay_seconds="$3"
+          for attempt in $(seq 1 "$attempts"); do
+            active_pods="$(hive_active_graph_client_pods "$deployment")"
+            test -z "$active_pods" && return 0
+            test "$attempt" -ne "$attempts" || {
+              echo "Timed out draining active graph client deployment/$deployment: $active_pods" >&2
+              return 1
+            }
+            sleep "$delay_seconds"
+          done
+        }
+        hive_ready_worker_count() { kubectl get pods --namespace hive-system --selector "app.kubernetes.io/name=hive" --output json |
+          jq '[.items[] | select(.metadata.deletionTimestamp == null) | select(.status.phase == "Running") | select(any(.status.containerStatuses[]?; .name == "hive" and .ready == true))] | length'
+        }
+        hive_wait_for_ready_pool() { attempts="$1" delay_seconds="$2" stable_samples="$3" consecutive_ready=0 ready_replicas=0
+          for attempt in $(seq 1 "$attempts"); do
+            ready_replicas="$(hive_ready_worker_count)"
+            if test "$ready_replicas" = 4; then
+              consecutive_ready=$((consecutive_ready + 1))
+              test "$consecutive_ready" -ge "$stable_samples" && return 0
+            else
+              consecutive_ready=0
+            fi
+            test "$attempt" -ne "$attempts" || {
+              echo "Hive pool did not stabilize at four ready workers; last count: ${ready_replicas:-0}" >&2
+              return 1
+            }
+            sleep "$delay_seconds"
+          done
+        }
+        # HIVE_DEPLOY_CONVERGENCE_HELPERS_END
         # HIVE_DEPLOY_MUTATION_LOCK_BEGIN
         sudo -n install -d -m 0755 /run/lock/nook
         sudo -n touch /run/lock/nook/hive-mutation.lock
@@ -394,11 +357,8 @@ tasks:
           unset reaper_token
         fi
         image="$(cat "$remote_dir/hive-image")"
-        auth_data="$(
-          kubectl get secret hive-codex-auth \
-            --namespace hive-system \
-            -o jsonpath='{.data.auth\.json}'
-        )"
+        auth_data="$(kubectl get secret hive-codex-auth \
+          --namespace hive-system -o jsonpath='{.data.auth\.json}')"
         test -n "$auth_data"
         auth_checksum="$(
           printf '%s' "$auth_data" |
@@ -406,11 +366,8 @@ tasks:
             sha256sum |
             cut -d' ' -f1
         )"
-        github_data="$(
-          kubectl get secret hive-github-publication \
-            --namespace hive-system \
-            -o jsonpath='{.data.token}'
-        )"
+        github_data="$(kubectl get secret hive-github-publication \
+          --namespace hive-system -o jsonpath='{.data.token}')"
         test -n "$github_data"
         github_checksum="$(
           printf '%s' "$github_data" |
@@ -540,21 +497,7 @@ tasks:
             kubectl rollout status "deployment/$deployment" \
               --namespace hive-system \
               --timeout=5m
-            for attempt in $(seq 1 60); do
-              if [ -z "$(
-                kubectl get pods \
-                  --namespace hive-system \
-                  --selector "app.kubernetes.io/name=$deployment" \
-                  --output name
-              )" ]; then
-                break
-              fi
-              if [ "$attempt" -eq 60 ]; then
-                echo "Timed out draining graph client deployment/$deployment" >&2
-                exit 1
-              fi
-              sleep 2
-            done
+            hive_wait_for_graph_client_drain "$deployment" 60 2
           fi
         done
         kubectl apply -f "$remote_dir/infra/k0s/manifests/hive/lifecycle-rbac.yaml"
@@ -615,9 +558,7 @@ tasks:
           fi
           sleep 2
         done
-        test "$(kubectl get deployment hive \
-          --namespace hive-system \
-          -o jsonpath='{.status.readyReplicas}')" = 4
+        hive_wait_for_ready_pool 60 2 3
         test "$(kubectl get deployment hive \
           --namespace hive-system \
           -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-dragonball
@@ -709,9 +650,7 @@ tasks:
         kubectl rollout status deployment/hive \
           --namespace hive-system \
           --timeout=10m
-        test "$(kubectl get deployment hive \
-          --namespace hive-system \
-          -o jsonpath='{.status.readyReplicas}')" = 4
+        hive_wait_for_ready_pool 60 2 3
         if kubectl get pods \
           --namespace hive-system \
           -l app.kubernetes.io/name=hive \

@@ -3,63 +3,6 @@
 Every Cortex article exposes the semantic shape of its content instead of
 hiding rules and actions inside a wall of prose.
 
-## Relationships
-
-- [Cortex writer](cortex-writer.md)
-  - Keeps sentences and list items cognitively simple.
-  - Apply while writing any structured article body.
-- [Cortex document navigation](cortex-document-map.md)
-  - Keeps article headings synchronized with the document map.
-  - Apply whenever article hierarchy changes.
-- [Cortex consistency](cortex-consistency.md)
-  - Prevents a clearer structure from preserving stale or conflicting facts.
-  - Apply after restructuring durable guidance.
-
-## Document map
-
-- [Priority](#priority)
-  - Establishes transparent article structure as a P1 Cortex invariant.
-  - Read before creating or restructuring Cortex content.
-- [Purpose](#purpose)
-  - Defines the human and agent readability outcome.
-  - Read when choosing between prose, lists, and headings.
-- [Body grammar](#body-grammar)
-  - Defines the four semantic shapes used by Cortex articles.
-  - Apply to every substantive article body.
-  - [Explanation article](#explanation-article)
-    - Preserves rationale and tradeoffs as owned prose.
-    - Use when reasoning matters more than action order.
-  - [Rules article](#rules-article)
-    - Expresses parallel invariants as bullets and nested ownership.
-    - Use for requirements, choices, boundaries, and failure conditions.
-  - [Procedure article](#procedure-article)
-    - Expresses action order and branches as ordered steps.
-    - Use for workflows, runbooks, migrations, and delivery sequences.
-  - [Reference article](#reference-article)
-    - Expresses compact lookup data without narrative duplication.
-    - Use for catalogs, matrices, commands, and mappings.
-- [Hierarchy rules](#hierarchy-rules)
-  - Defines when headings and nested lists represent real containment.
-  - Apply while deciding how deeply to nest content.
-- [Standard action blocks](#standard-action-blocks)
-  - Names reusable inputs, outcome, failure, and validation blocks.
-  - Use when an action article needs operational completeness.
-- [Rejected patterns](#rejected-patterns)
-  - Identifies artificial or ambiguous structure.
-  - Read during review of a structural rewrite.
-- [Mechanical enforcement](#mechanical-enforcement)
-  - Defines the syntax-aware invariants owned by Loom.
-  - Read when changing the checker or interpreting a finding.
-- [Migration](#migration)
-  - Defines the shrinking exemption ledger for the bounded rollout.
-  - Read while any legacy Cortex document remains.
-- [Application checklist](#application-checklist)
-  - Provides the authoring sequence for structured Cortex content.
-  - Use before completing a Cortex edit.
-- [Validation](#validation)
-  - Names the focused mechanical and semantic checks.
-  - Run after changing article content or enforcement.
-
 ## Priority
 
 This is a P1 documentation rule for every `.cortex` Markdown file.

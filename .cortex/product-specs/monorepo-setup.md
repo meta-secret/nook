@@ -1,32 +1,5 @@
 # Product Spec: Monorepo & Toolchain Setup
 
-## Relationships
-
-- [Product Specifications Index](index.md)
-  - Catalogs the product specifications and their current status.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Password Manager Specification](password-manager.md)
-  - Defines the core vault product, user flows, storage formats, cryptography, and UI boundaries.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [1. Goal & Context](#1-goal--context)
-  - Defines the repository's containerized development environment.
-  - Read first to understand the scope and intent of 1. Goal & Context.
-- [2. Core Requirements](#2-core-requirements)
-  - Makes the root `Taskfile.yml` the command entrypoint.
-  - Read before changing the user-facing behavior in 2. Core Requirements.
-- [3. Toolchain & Runtime Specs](#3-toolchain--runtime-specs)
-  - Defines the sealed toolchain versions.
-  - Read before changing or relying on 3. Toolchain & Runtime Specs.
-- [4. Docker & CI caching](#4-docker--ci-caching)
-  - Source-in-image, no runtime bind mount on the common path.
-  - Read before changing or relying on 4. Docker & CI caching.
-
 ## 1. Goal & Context
 
 Nook is a development environment for crypto tools combining Rust logic with WebAssembly and a frontend web UI.
@@ -44,6 +17,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/product.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.52.0` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
+  GitHub Actions `go-task/setup-task` steps must pin this exact version.
+  Do not resolve `3.x` at workflow runtime.
 - **Wasm Pack**: `0.15.0` ([official init script](https://wasm-bindgen.github.io/wasm-pack/installer/); pinned with `VERSION`, not `cargo install`). Installs matching `wasm-bindgen-cli` automatically during `wasm-pack build`.
 - **wasm-bindgen** (crate + CLI): `0.2.127` in the Rust crates that export web-facing types (`nook-wasm`, and `nook-core` for simple shared DTOs/enums). CLI version is resolved by wasm-pack from the lockfile — no separate Docker install.
 

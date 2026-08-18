@@ -28,7 +28,7 @@ Before editing:
 4. State one concise design read before implementation:
 
    `Reading this as: <surface and mode> for <user and task>, preserving <Nook
-   pattern>, with <visual direction> and <interaction priority>.`
+pattern>, with <visual direction> and <interaction priority>.`
 
 Do not ask for aesthetic clarification when the existing product, brief, or
 reference makes the direction clear. Ask one focused question only when two
@@ -38,22 +38,22 @@ materially different directions remain plausible.
 
 Classify the surface mode and tune taste accordingly:
 
-| Surface | Mode | Default taste |
-|---|---|---|
-| Vault, settings, import, security, sync, extension | Operate | Fast scanning, explicit state, restrained motion, high trust |
-| Landing and product explanation | Persuade | Strong hierarchy, memorable composition, real product evidence |
-| Help, legal, logs, documentation | Read | Comprehension, navigation, readable measure, quiet chrome |
-| Research visualization or showcase | Experience | Artifact-led composition within explicit experimental scope |
+| Surface                                            | Mode       | Default taste                                                  |
+| -------------------------------------------------- | ---------- | -------------------------------------------------------------- |
+| Vault, settings, import, security, sync, extension | Operate    | Fast scanning, explicit state, restrained motion, high trust   |
+| Landing and product explanation                    | Persuade   | Strong hierarchy, memorable composition, real product evidence |
+| Help, legal, logs, documentation                   | Read       | Comprehension, navigation, readable measure, quiet chrome      |
+| Research visualization or showcase                 | Experience | Artifact-led composition within explicit experimental scope    |
 
 Suggested dials:
 
-| Surface | Variance | Motion | Density |
-|---|---:|---:|---:|
-| Vault product UI | 4 | 3 | 6 |
-| Authentication or recovery | 3 | 2 | 5 |
-| Browser-extension popup | 3 | 2 | 7 |
-| Landing page | 7 | 5 | 3 |
-| Help or legal | 4 | 2 | 4 |
+| Surface                    | Variance | Motion | Density |
+| -------------------------- | -------: | -----: | ------: |
+| Vault product UI           |        4 |      3 |       6 |
+| Authentication or recovery |        3 |      2 |       5 |
+| Browser-extension popup    |        3 |      2 |       7 |
+| Landing page               |        7 |      5 |       3 |
+| Help or legal              |        4 |      2 |       4 |
 
 Treat these as starting points. Existing product rhythm and the brief win.
 

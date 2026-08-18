@@ -1,42 +1,7 @@
 # Reference: Rust + WebAssembly (wasm-bindgen)
 
-## Relationships
-
-- [Typed Newtypes (Domain IDs & Wire Strings)](../design-docs/typed-newtypes.md)
-  - Provides the Typed Newtypes (Domain IDs & Wire Strings) architecture context.
-  - Read when changing the related design.
-- [Quality and Release](../workflows/quality.md)
-  - Defines the Quality and Release workflow referenced here.
-  - Read before performing that workflow.
-
-## Document map
-
-- [1. Wasm Bindgen Setup](#1-wasm-bindgen-setup)
-  - Defines the Rust-to-WASM binding setup.
-  - Read before exposing Rust behavior to the web layer.
-- [2. Compiling for the web](#2-compiling-for-the-web)
-  - Lists the supported web compilation path.
-  - Read when building or refreshing generated WASM artifacts.
-- [3. Session state (NookVaultManager)](#3-session-state-nookvaultmanager)
-  - Defines session-state ownership in `NookVaultManager`.
-  - Read before changing vault lifecycle state across WASM.
-- [3a. Browser API boundaries](#3a-browser-api-boundaries)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-- [4. Typed WASM boundary (nook-app/nook-platform/nook-wasm/src/types.rs)](#4-typed-wasm-boundary-nook-appnook-platformnook-wasmsrctypesrs)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-- [5. Vault secrets at the JS boundary](#5-vault-secrets-at-the-js-boundary)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-  - [Adding a new secret type](#adding-a-new-secret-type)
-    - Lists the required core, WASM, web, and test changes.
-    - Follow from the start of new vault-item implementation.
-- [6. Testing](#6-testing)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-
 ## 1. Wasm Bindgen Setup
+
 - Use `wasm-bindgen = "0.2.127"` (see workspace
   `nook-app/nook-platform/Cargo.toml`).
 - Export functions with `#[wasm_bindgen]`. Domain logic stays in `nook-core`; WASM wraps I/O and session state.
@@ -118,6 +83,7 @@ rules and cost tiers.
   - Use a modern version because old Debian Binaryen corrupts `externref` tables.
 
 ## 3. Session state (`NookVaultManager`)
+
 - `meta.secrets` — per-key armored ciphertext for the unlocked vault; the
   manager does not retain a hydrated plaintext `Database`
 - `crypto` — `nook_core::VaultCrypto` (derived once per connect)
@@ -155,18 +121,18 @@ Syntax-aware repository preflight rejects authored `JsValue` paths before
 wasm-bindgen macro expansion. Clippy's built-in `disallowed_types` cannot
 distinguish wasm-bindgen's generated ABI code from authored code.
 
-| Export | Use |
-|--------|-----|
-| `NookSecretListItem` | Metadata-only list item with no credential/body getters |
-| `NookSecretRecord` | One explicitly decrypted vault item; freed on hide/action completion |
-| `NookSecretPage` | Page-scoped metadata items plus total/offset/limit |
-| `NookJoinRequest` | Pending device join rows (`deviceId`, `publicKey`, `requestedAt`) |
-| `NookVaultMember` | Enrolled devices (`authId`, `deviceId`, …) |
-| `NookPasswordEntrySummary` | Backup-password list entries |
-| `NookVaultSyncResult` | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
-| `NookVaultClientPolicy` | Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions |
-| `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution |
-| `NookSecretFormFields` | WASM wrapper over core-owned variant-specific `SecretFormFields`; static constructors select the variant |
+| Export                                                                       | Use                                                                                                      |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `NookSecretListItem`                                                         | Metadata-only list item with no credential/body getters                                                  |
+| `NookSecretRecord`                                                           | One explicitly decrypted vault item; freed on hide/action completion                                     |
+| `NookSecretPage`                                                             | Page-scoped metadata items plus total/offset/limit                                                       |
+| `NookJoinRequest`                                                            | Pending device join rows (`deviceId`, `publicKey`, `requestedAt`)                                        |
+| `NookVaultMember`                                                            | Enrolled devices (`authId`, `deviceId`, …)                                                               |
+| `NookPasswordEntrySummary`                                                   | Backup-password list entries                                                                             |
+| `NookVaultSyncResult`                                                        | `sync_vault_from_storage` payload (`changed`, `accessStatus`, `secrets`, `pendingJoins`, `vaultMembers`) |
+| `NookVaultClientPolicy`                                                      | Portable login, lock, sync, join, remote-recovery, vault-switch, and pagination decisions                |
+| `NookResolveConflictKeepLocalResult` / `NookResolveConflictKeepRemoteResult` | conflict resolution                                                                                      |
+| `NookSecretFormFields`                                                       | WASM wrapper over core-owned variant-specific `SecretFormFields`; static constructors select the variant |
 
 - **Rust decisions:** Provider scoping, locked-device visibility, staged connect
   arguments, remote-reference normalization, and sync metadata updates cross as
@@ -238,11 +204,11 @@ notes, or secure-note bodies. Explicit reveal/copy calls return one
 `NookSecretRecord`, which must be freed as soon as the action or revealed state
 ends.
 
-| Layer | Responsibility |
-|-------|----------------|
-| `nook-core` | Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`) |
-| `nook-wasm` | Typed boundary structs, `build_secret_yaml`, session CRUD |
-| `nook-web` | Svelte forms and rendering; the type picker uses Rust-owned generated `SecretType` values |
+| Layer       | Responsibility                                                                            |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| `nook-core` | Schema, validation, YAML parse/serialize, display/search helpers (`secret_view.rs`)       |
+| `nook-wasm` | Typed boundary structs, `build_secret_yaml`, session CRUD                                 |
+| `nook-web`  | Svelte forms and rendering; the type picker uses Rust-owned generated `SecretType` values |
 
 **Reads:** page queries convert decrypted records into
 `Vec<NookSecretListItem>` and zeroize the full records before returning.
@@ -265,6 +231,7 @@ ends.
 6. **Playwright** — e2e for the new form if user-visible.
 
 ## 6. Testing
+
 - Test vault formats, crypto, validation, and passwords in `nook-core`.
 - **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-app/nook-platform/nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
 - **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).

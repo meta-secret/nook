@@ -1,13 +1,23 @@
 import { createTwoFilesPatch } from 'diff';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import {
   UntrustedYamlPropertyPresence,
   untrustedYamlProperty,
   type UntrustedYamlNode,
   isRecord,
 } from '../lib/guards.ts';
-import { findRepoRoot } from '../lib/repo.ts';
+import {
+  ExampleCatalogPresence,
+  blueprintIdentity,
+  exampleDocumentYaml,
+  familyRootCatalogEntry,
+  findExampleCatalogEntry,
+  type ExampleCatalogEntry,
+  type ExampleCatalogLookup,
+  type FindExampleCatalogEntryArgs,
+} from './example-documents.ts';
+import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
+
+import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
   AgentStatsOperation,
   PrLandOperation,
@@ -16,9 +26,8 @@ import {
 import { stringifyYaml } from './yaml.ts';
 
 import type { UntrustedYamlPropertyArgs } from '../lib/guards.ts';
-export enum BlueprintOperationMarker {
-  FamilyRoot = 'familyRoot',
-}
+
+export { ExampleOperationMarker as BlueprintOperationMarker } from './example-documents.ts';
 
 export enum BlueprintExplanationKind {
   Structural = 'structural',
@@ -42,82 +51,33 @@ export type BlueprintExplanation =
       readonly parseMessage: string;
     };
 
-type BlueprintRef = {
+function fallbackCatalogEntry(): ExampleCatalogEntry {
+  const lookup = familyRootCatalogEntry(RequestFamily.PrePush);
+  if (lookup.presence === ExampleCatalogPresence.Present) {
+    return lookup.entry;
+  }
+  const loomFailureDetailArgs: LoomFailureDetailArgs = {
+    code: LoomFailureCode.ValidationFailed,
+    text: 'missing prePush example catalog entry',
+  };
+  loomFailureDetail(loomFailureDetailArgs);
+}
+
+const DEFAULT_BLUEPRINT = fallbackCatalogEntry();
+
+export type LoadedBlueprint = {
   readonly blueprintPath: string;
-  readonly family: RequestFamily;
-  readonly operation:
-    AgentStatsOperation | PrLandOperation | BlueprintOperationMarker.FamilyRoot;
+  readonly blueprintYaml: string;
 };
 
-const DEFAULT_BLUEPRINT: BlueprintRef = {
-  family: RequestFamily.PrePush,
-  operation: BlueprintOperationMarker.FamilyRoot,
-  blueprintPath: 'agentic-ai/loom/params/pre-push/default.yaml',
-};
-
-const BLUEPRINTS: readonly BlueprintRef[] = [
-  DEFAULT_BLUEPRINT,
-  {
-    family: RequestFamily.ToolsList,
-    operation: BlueprintOperationMarker.FamilyRoot,
-    blueprintPath: 'agentic-ai/loom/params/tools-list/default.yaml',
-  },
-  {
-    family: RequestFamily.CortexAudit,
-    operation: BlueprintOperationMarker.FamilyRoot,
-    blueprintPath: 'agentic-ai/loom/params/cortex-audit/default.yaml',
-  },
-  {
-    family: RequestFamily.SkillScaffold,
-    operation: BlueprintOperationMarker.FamilyRoot,
-    blueprintPath: 'agentic-ai/loom/params/skill-scaffold/request.example.yaml',
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Assemble,
-    blueprintPath: 'agentic-ai/loom/params/agent-stats/assemble.example.yaml',
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Validate,
-    blueprintPath: 'agentic-ai/loom/params/agent-stats/validate.example.yaml',
-  },
-  {
-    family: RequestFamily.AgentStats,
-    operation: AgentStatsOperation.Publish,
-    blueprintPath: 'agentic-ai/loom/params/agent-stats/publish.example.yaml',
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Status,
-    blueprintPath: 'agentic-ai/loom/params/pr-land/status.example.yaml',
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Validate,
-    blueprintPath: 'agentic-ai/loom/params/pr-land/validate.example.yaml',
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.Ready,
-    blueprintPath: 'agentic-ai/loom/params/pr-land/ready.example.yaml',
-  },
-  {
-    family: RequestFamily.PrLand,
-    operation: PrLandOperation.MergeCheck,
-    blueprintPath: 'agentic-ai/loom/params/pr-land/merge-check.example.yaml',
-  },
-  {
-    family: RequestFamily.ToolsCall,
-    operation: BlueprintOperationMarker.FamilyRoot,
-    blueprintPath: 'agentic-ai/loom/params/tools-call/request.example.yaml',
-  },
-  {
-    family: RequestFamily.DependencyPopularity,
-    operation: BlueprintOperationMarker.FamilyRoot,
-    blueprintPath: 'agentic-ai/loom/params/dependency-popularity/default.yaml',
-  },
-];
+export function loadExampleBlueprint(
+  entry: ExampleCatalogEntry,
+): LoadedBlueprint {
+  return {
+    blueprintPath: blueprintIdentity(entry),
+    blueprintYaml: exampleDocumentYaml(entry.document),
+  };
+}
 
 export type ExplainSyntaxFailureArgs = {
   readonly receivedYaml: string;
@@ -129,7 +89,7 @@ export function explainSyntaxFailure(
 ): BlueprintExplanation {
   const { receivedYaml, parseMessage } = args;
 
-  const blueprint = loadBlueprint(DEFAULT_BLUEPRINT.blueprintPath);
+  const blueprint = loadExampleBlueprint(DEFAULT_BLUEPRINT);
   const yamlUnifiedDiffArgs2 = {
     blueprintPath: blueprint.blueprintPath,
     blueprintYaml: blueprint.blueprintYaml,
@@ -149,7 +109,7 @@ export function explainAgainstBlueprint(
   received: UntrustedYamlNode,
 ): BlueprintExplanation {
   const selected = selectBlueprint(received);
-  const blueprint = loadBlueprint(selected.blueprintPath);
+  const blueprint = loadExampleBlueprint(selected);
   const receivedYaml = stringifyYaml(received);
   const yamlUnifiedDiffArgs = {
     blueprintPath: blueprint.blueprintPath,
@@ -186,7 +146,7 @@ function normalizeYamlText(text: string): string {
   return text.endsWith('\n') ? text : `${text}\n`;
 }
 
-function selectBlueprint(received: UntrustedYamlNode): BlueprintRef {
+function selectBlueprint(received: UntrustedYamlNode): ExampleCatalogEntry {
   if (!isRecord(received)) {
     return DEFAULT_BLUEPRINT;
   }
@@ -208,31 +168,47 @@ function selectBlueprint(received: UntrustedYamlNode): BlueprintRef {
     payloadProperty.presence === UntrustedYamlPropertyPresence.Present &&
     isRecord(payloadProperty.value)
   ) {
-    const operationKeys = Object.keys(payloadProperty.value);
-    const match = BLUEPRINTS.find(
-      (entry) =>
-        entry.family === family &&
-        operationKeys.includes(String(entry.operation)),
-    );
-    if (match) {
-      return match;
+    const nestedOperationEntryArgs: NestedOperationEntryArgs = {
+      family,
+      operationKeys: Object.keys(payloadProperty.value),
+    };
+    const nestedMatch = nestedOperationEntry(nestedOperationEntryArgs);
+    if (nestedMatch.presence === ExampleCatalogPresence.Present) {
+      return nestedMatch.entry;
     }
   }
-  const familyMatch = BLUEPRINTS.find((entry) => entry.family === family);
-  if (familyMatch) {
-    return familyMatch;
+  const familyMatch = familyRootCatalogEntry(family);
+  if (familyMatch.presence === ExampleCatalogPresence.Present) {
+    return familyMatch.entry;
   }
   return DEFAULT_BLUEPRINT;
 }
 
-function loadBlueprint(blueprintPath: string): {
-  readonly blueprintPath: string;
-  readonly blueprintYaml: string;
-} {
-  const root = findRepoRoot();
-  const absolute = path.join(root, blueprintPath);
-  return {
-    blueprintPath,
-    blueprintYaml: readFileSync(absolute, 'utf8'),
-  };
+type NestedOperationEntryArgs = {
+  readonly family: RequestFamily.AgentStats | RequestFamily.PrLand;
+  readonly operationKeys: readonly string[];
+};
+
+function nestedOperationEntry(
+  args: NestedOperationEntryArgs,
+): ExampleCatalogLookup {
+  const { family, operationKeys } = args;
+  const operations =
+    family === RequestFamily.AgentStats
+      ? Object.values(AgentStatsOperation)
+      : Object.values(PrLandOperation);
+  for (const operation of operations) {
+    if (!operationKeys.includes(operation)) {
+      continue;
+    }
+    const findExampleCatalogEntryArgs: FindExampleCatalogEntryArgs = {
+      family,
+      operation,
+    };
+    const match = findExampleCatalogEntry(findExampleCatalogEntryArgs);
+    if (match.presence === ExampleCatalogPresence.Present) {
+      return match;
+    }
+  }
+  return { presence: ExampleCatalogPresence.Absent };
 }

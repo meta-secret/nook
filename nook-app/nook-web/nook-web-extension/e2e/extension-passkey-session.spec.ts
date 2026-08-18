@@ -24,6 +24,11 @@ import {
   waitForExtensionPairingReady,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
+import {
+  PairedVaultCompanionUnlockKind,
+  unlockPairedVaultThroughCompanion,
+  type PairedVaultCompanionUnlock,
+} from './helpers/paired-vault-companion-unlock'
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
@@ -557,14 +562,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       reopenedVaultPage.getByTestId('login-local-unlock-step'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-    await reopenedVaultPage.getByTestId('unlock-vault-btn').click()
-
-    await expect(
-      reopenedVaultPage.getByTestId('passkey-auth-overlay'),
-    ).toHaveCount(0)
-    await expect(
-      reopenedVaultPage.getByTestId('authenticated-shell'),
-    ).toBeVisible()
+    const firstUnlock: PairedVaultCompanionUnlock = {
+      context,
+      vaultPage: reopenedVaultPage,
+      companionUnlock: PairedVaultCompanionUnlockKind.Optional,
+      extensionId,
+    }
+    await unlockPairedVaultThroughCompanion(firstUnlock)
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(
@@ -631,31 +635,13 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('login-local-unlock-step'),
       ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-      const extensionAuthWindowPromise = restartedContext.waitForEvent('page')
-      await lockedVaultPage.getByTestId('unlock-vault-btn').click()
-      const extensionAuthWindow = await extensionAuthWindowPromise
-      await expect(extensionAuthWindow).toHaveURL(
-        `chrome-extension://${restartedExtensionId}/popup/index.html`,
-      )
-      await expect(
-        extensionAuthWindow.getByTestId('extension-device-setup'),
-      ).toBeVisible()
-      await expect(
-        lockedVaultPage.getByTestId('passkey-auth-overlay'),
-      ).toHaveCount(0)
-
-      await extensionAuthWindow
-        .getByTestId('device-protection-unlock-btn')
-        .click()
-      await expect(
-        extensionAuthWindow.getByTestId('extension-companion-home'),
-      ).toBeVisible()
-      await expect(
-        extensionAuthWindow.getByTestId('stay-as-companion-btn'),
-      ).toBeVisible()
-      await expect(
-        lockedVaultPage.getByTestId('authenticated-shell'),
-      ).toBeVisible({ timeout: 15_000 })
+      const restartedUnlock: PairedVaultCompanionUnlock = {
+        context: restartedContext,
+        vaultPage: lockedVaultPage,
+        companionUnlock: PairedVaultCompanionUnlockKind.Required,
+        extensionId: restartedExtensionId,
+      }
+      await unlockPairedVaultThroughCompanion(restartedUnlock)
       await expect(
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)

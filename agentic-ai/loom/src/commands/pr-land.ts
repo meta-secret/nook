@@ -1,4 +1,3 @@
-import path from 'node:path';
 import type {
   PrLandPrRequest,
   PrLandValidateRequest,
@@ -102,13 +101,17 @@ type PrLandValidateArgs = {
 async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
   const { repoRoot, request } = args;
 
-  const prePushRequest = path.join(
-    repoRoot,
-    'agentic-ai/loom/params/pre-push/default.yaml',
-  );
   const prePushArgs: RunCommandArgs = {
     command: 'bun',
-    args: ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', prePushRequest],
+    args: [
+      'run',
+      '--cwd',
+      'agentic-ai/loom',
+      'loom',
+      '--',
+      '--default',
+      'prePush',
+    ],
     cwd: repoRoot,
   };
   const prePush = runCommand(prePushArgs);

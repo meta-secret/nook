@@ -1,86 +1,5 @@
 # Nook Password Manager Specification
 
-## Relationships
-
-- [Auth Providers, Sync, and Login UX](../design-docs/auth-providers.md)
-  - Defines provider credential persistence, login UX, and provider transport boundaries.
-  - Read before changing the related architecture or security boundary.
-- [Website Passkey Manager](../design-docs/passkey-manager.md)
-  - Defines passkey ceremony ownership and website credential behavior.
-  - Read before changing the related architecture or security boundary.
-- [Secret Store Identity](../design-docs/secret-store-identity.md)
-  - Defines stable secret-store identity across local and provider replicas.
-  - Read before changing the related architecture or security boundary.
-- [Unified Vault Architecture](../design-docs/unified-vault.md)
-  - Defines the local canonical vault and provider replication model.
-  - Read before changing the related architecture or security boundary.
-- [Vault Event Log](../design-docs/vault-event-log.md)
-  - Defines immutable vault events, ordering, concurrency, and provider synchronization.
-  - Read before changing the related architecture or security boundary.
-- [Authenticator Items](authenticator-items.md)
-  - Defines TOTP item input, storage, display, enrollment capture, and extension use.
-  - Read when this document touches the related product behavior or user flow.
-- [Credit Card Items](credit-card-items.md)
-  - Defines payment-card fields, validation, display, import, and security behavior.
-  - Read when this document touches the related product behavior or user flow.
-- [File Attachments](file-attachments.md)
-  - Defines encrypted attachment upload, metadata, download, limits, and security behavior.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Defines the zero-knowledge vault product.
-  - Read first to understand the scope and intent of Overview.
-- [1. Product Overview & Goals](#1-product-overview--goals)
-  - The Nook Password Manager is a client-side, zero-knowledge secret vault.
-  - Read first to understand the scope and intent of 1. Product Overview & Goals.
-  - [Core Goals](#core-goals)
-    - Defines the zero-knowledge security promise.
-    - Read first to understand the scope and intent of Core Goals.
-- [2. Detailed User Flows](#2-detailed-user-flows)
-  - Defines the password manager's core user journeys.
-  - Read before changing a core password-manager user journey.
-  - [A. Login & Storage Provider Flow](#a-login--storage-provider-flow)
-    - Defines login and provider-connection behavior.
-    - Read before changing the A. Login & Storage Provider Flow flow or its state transitions.
-  - [B. Managing Vault Secrets](#b-managing-vault-secrets)
-    - Secrets List: Plaintext secrets are listed alphabetically by key (service name).
-    - Read before changing or relying on B. Managing Vault Secrets.
-  - [C. Cryptographically Secure Password Generator](#c-cryptographically-secure-password-generator)
-    - Options Panel: Located alongside the addition form.
-    - Read before changing the security or key boundary described by C. Cryptographically Secure Password Generator.
-- [3. Database Schema & File Formats](#3-database-schema--file-formats)
-  - The WASM session holds encrypted per-record payloads.
-  - Read before changing the persisted or wire representation in 3. Database Schema & File Formats.
-  - [A. Ciphertext-backed session and encrypted search catalog](#a-ciphertext-backed-session-and-encrypted-search-catalog)
-    - The WASM session holds encrypted per-record payloads.
-    - Read before changing or relying on A. Ciphertext-backed session and encrypted search catalog.
-  - [B. Local Projection Layout (YAML)](#b-local-projection-layout-yaml)
-    - Defines the browser-local YAML projection layout.
-    - Read before changing the persisted or wire representation in B. Local Projection Layout (YAML).
-  - [C. Local Storage Adapter (IndexedDB)](#c-local-storage-adapter-indexeddb)
-    - Defines the `nook_db` vault records.
-    - Read before changing the persisted or wire representation in C. Local Storage Adapter (IndexedDB).
-  - [D. GitHub Repository Adapter](#d-github-repository-adapter)
-    - Defines the GitHub event-storage adapter.
-    - Read before changing or relying on D. GitHub Repository Adapter.
-- [4. Cryptographic Specifications](#4-cryptographic-specifications)
-  - Per-record encryption: Each secret value is independently encrypted.
-  - Read before changing the security or key boundary described by 4. Cryptographic Specifications.
-  - [Vault access diagnostics](#vault-access-diagnostics)
-    - Nook exposes a Rust-owned diagnostic report for explaining encrypted vault access without exposing plaintext secrets or key material.
-    - Read before changing or relying on Vault access diagnostics.
-- [5. Rust Domain Modules (`nook-core`)](#5-rust-domain-modules-nook-core)
-  - Maps password-manager behavior to its Rust owners.
-  - Read before changing password-manager domain ownership in `nook-core`.
-- [6. TypeScript / UI Boundaries](#6-typescript--ui-boundaries)
-  - Separates Rust-owned policy and validation from typed UI rendering and browser lifecycle glue.
-  - Read before changing the user-facing behavior in 6. TypeScript / UI Boundaries.
-
 ## Overview
 
 This document defines the functional and technical specifications for Nook's Zero-Knowledge Password and Secret Manager.
@@ -97,6 +16,7 @@ secrets while keeping the model decentralized: your secrets, your storage, your
 keys.
 
 ### Core Goals
+
 - **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
 - **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, validation, password generation, and cryptographic operations are encapsulated in Rust (`nook-core` + `nook-wasm`).
 - **Portable Backends:** Support local browser storage (IndexedDB) and remote git-backed repositories (GitHub API) with a unified connection flow.
@@ -106,23 +26,15 @@ keys.
 
 ## 2. Detailed User Flows
 
-```
-      +--------------------+
-      | 1. Config & Login  | <---+ (Decryption fails / Key mismatch)
-      +--------------------+     |
-                |                |
-                v (Success)      |
-      +--------------------+     |
-      |  2. Secret Vault   | ----+
-      +--------------------+
-                |
-                v
-      +--------------------+
-      |3. Password Gen/Sync|
-      +--------------------+
+```mermaid
+flowchart TD
+    ConfigLogin["1. Config & Login"] -->|"Success"| SecretVault["2. Secret Vault"]
+    SecretVault -->|"Decryption fails / Key mismatch"| ConfigLogin
+    SecretVault --> PasswordGen["3. Password Gen/Sync"]
 ```
 
 ### A. Login & Storage Provider Flow
+
 1. **Device protection gate:**
    - Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable.
    - A backup password may instead unwrap a local vault directly.
@@ -145,6 +57,7 @@ keys.
 8. **Future:** Sync providers replicate one local vault with version-based reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
 
 ### B. Managing Vault Secrets
+
 1. **Secrets List:** Plaintext secrets are listed alphabetically by key (service name).
 2. **Search / Filter:** A search bar filters secrets in real-time. Filtering runs in `nook-core` (`filter_secrets`) via WASM — labels only, case-insensitive substring match.
 3. **Secret Visibility Toggle:** Secret values are masked as dots by default. Users can toggle reveal per row.
@@ -255,13 +168,15 @@ keys.
      and are never added to the event log.
    - See [authenticator-items.md](authenticator-items.md).
 10. **Credit card items:**
-   - Users can store payment cards as standalone secure items with a title,
-     optional cardholder name, card number, optional expiry, optional CVV, and
-     notes. Numbers are Luhn-validated in Rust; list views expose only last
-     four digits and never log full PAN or CVV.
-   - See [credit-card-items.md](credit-card-items.md).
+
+- Users can store payment cards as standalone secure items with a title,
+  optional cardholder name, card number, optional expiry, optional CVV, and
+  notes. Numbers are Luhn-validated in Rust; list views expose only last
+  four digits and never log full PAN or CVV.
+- See [credit-card-items.md](credit-card-items.md).
 
 ### C. Cryptographically Secure Password Generator
+
 1. **Options Panel:** Located alongside the addition form.
 2. **Parameters:**
    - **Length Slider:** Range 8–64 in UI (Rust accepts 8–128 via `PasswordGenerationOptions`).
@@ -273,6 +188,7 @@ keys.
 ## 3. Database Schema & File Formats
 
 ### A. Ciphertext-backed session and encrypted search catalog
+
 The WASM session holds encrypted per-record payloads. Full `SecretRecord`
 plaintext exists only for an explicit reveal/copy/edit or while deriving a new
 or changed catalog row, then it is zeroized.
@@ -289,6 +205,7 @@ The catalog is local-only and is not uploaded to sync
 providers.
 
 ### B. Local Projection Layout (YAML)
+
 Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `vault:{store_id}`).
 
 ```yaml
@@ -321,9 +238,10 @@ secrets:
   stores title/file metadata plus standard-base64 file bytes (max 1 MiB
   decoded); list projections expose metadata only. See
   [file-attachments.md](file-attachments.md).
-Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd nook-app/nook-platform && cargo run --example generate_vault_fixtures -p nook-core`).
+  Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd nook-app/nook-platform && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
+
 - **Database Name:** `nook_db`, version `1`, store `vault`
 - **Records:**
   - `device_identity_wrapped` — versioned AES-256-GCM-wrapped age X25519 identity plus WebAuthn PRF or PIN metadata (never synced).
@@ -333,6 +251,7 @@ Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd
   - Values are UTF-8 YAML text.
 
 ### D. GitHub Repository Adapter
+
 - **Repository:** `{username}/nook` (auto-created if missing).
 - **Event Path:** `nook-log/v1/events/{base64url_sha256_digest}.yaml`
 - **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-log/v1/events/{base64url_sha256_digest}.yaml`
@@ -377,13 +296,13 @@ do not grant vault access.
 
 ## 5. Rust Domain Modules (`nook-core`)
 
-| Module | Responsibility |
-|--------|----------------|
-| `lib.rs` / `Database` | Typed in-memory session, stored vault encrypt/decrypt |
-| `vault_format.rs` | YAML serialization and parsing |
-| `vault_crypto.rs` | Session-scoped age encrypt/decrypt |
-| `validation.rs` | Connect/secret validation, search filter |
-| `password.rs` | CSPRNG password generation |
+| Module                     | Responsibility                                               |
+| -------------------------- | ------------------------------------------------------------ |
+| `lib.rs` / `Database`      | Typed in-memory session, stored vault encrypt/decrypt        |
+| `vault_format.rs`          | YAML serialization and parsing                               |
+| `vault_crypto.rs`          | Session-scoped age encrypt/decrypt                           |
+| `validation.rs`            | Connect/secret validation, search filter                     |
+| `password.rs`              | CSPRNG password generation                                   |
 | `passkey_authenticator.rs` | RP/origin validation, ES256 registration/assertion, counters |
 
 All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-platform/nook-core/tests/vault_workflow.rs`.
@@ -393,6 +312,7 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 ## 6. TypeScript / UI Boundaries
 
 **Belongs in Rust (not TS/Svelte):**
+
 - Vault serialization (YAML)
 - Encrypt/decrypt
 - Password generation
@@ -402,6 +322,7 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 - WebAuthn request validation, key generation, signing, and counter mutation
 
 **Belongs in UI only:**
+
 - Tab navigation, loading spinners, toast messages
 - `localStorage` for storage mode + PAT convenience
 - Clipboard, reveal/hide, form bindings

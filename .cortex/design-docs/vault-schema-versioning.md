@@ -1,29 +1,5 @@
 # Vault Schema Versioning
 
-## Relationships
-
-- [Vault Event Log](vault-event-log.md)
-  - Defines durable vault events, ordering, and concurrency behavior.
-  - Read when the design changes persistence or synchronization.
-
-## Document map
-
-- [Overview](#overview)
-  - Status: Implemented Related:.
-  - Read before changing or relying on Overview.
-- [Decision](#decision)
-  - The immutable event log is the vault source of truth.
-  - Apply when making or reviewing decisions about Decision.
-- [Version axes](#version-axes)
-  - Summarizes the structured entries, ownership, and status for Version axes.
-  - Read before changing or relying on Version axes.
-- [Storage contract](#storage-contract)
-  - Vault creation writes the genesis event directly. Providers store immutable signed events. IndexedDB stores events, outbox entries,.
-  - Read before changing or relying on Storage contract.
-- [Release rule](#release-rule)
-  - Release tags are immutable.
-  - Apply when making or reviewing decisions about Release rule.
-
 ## Overview
 
 **Status:** Implemented
@@ -36,12 +12,12 @@ derived, browser-local cache and is never imported as an event source.
 
 ## Version axes
 
-| Axis | Current value | Owned by |
-|------|---------------|----------|
-| App semver | Release tag | CI and deployment workflows |
-| Projection `schema_version` | `1` | `nook-core` `vault_format.rs` |
-| Event `schema_version` | `3` | `nook-event-log` `event.rs` |
-| Password envelope `version` | Envelope crypto version | `password_envelope.rs` |
+| Axis                        | Current value           | Owned by                      |
+| --------------------------- | ----------------------- | ----------------------------- |
+| App semver                  | Release tag             | CI and deployment workflows   |
+| Projection `schema_version` | `1`                     | `nook-core` `vault_format.rs` |
+| Event `schema_version`      | `3`                     | `nook-event-log` `event.rs`   |
+| Password envelope `version` | Envelope crypto version | `password_envelope.rs`        |
 
 Current builds write event schema `3` and read schemas `2` and `3`. Schema `3`
 adds checkpoint replacement fields, so schema-2 readers reject those events

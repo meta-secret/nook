@@ -194,6 +194,11 @@ pub(crate) async fn commit_authenticated_identity_handoff(
                 .map_err(map_domain_error)?,
             None,
         ),
+        crate::manager::PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { .. } => {
+            return Err(NookError::Database(
+                "Paired session unlock does not publish identity membership.".to_owned(),
+            ));
+        }
         crate::manager::PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id } => {
             let existing = input.existing_vault.ok_or_else(|| {
                 NookError::Database("Existing-vault handoff material is missing.".to_owned())

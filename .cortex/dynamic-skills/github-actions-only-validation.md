@@ -1,44 +1,5 @@
 # GitHub-Hosted Execution and Validation
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Defines the mandatory relationship and internal-map structure.
-  - Apply whenever this skill card changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps the card and its navigation summaries concise.
-  - Apply while editing or reviewing this guidance.
-- [Cortex consistency](cortex-consistency.md)
-  - Requires the card to agree with related guidance and current code.
-  - Apply when rules, paths, commands, or examples change.
-- [Loom tools](../references/loom-tools.md)
-  - Defines the typed Loom requests used by hosted validation workflows.
-  - Read when invoking or changing the validation entrypoints.
-
-## Document map
-
-- [Purpose](#purpose)
-  - Explains why the skill exists and what invariant it protects.
-  - Read first to decide whether the skill applies.
-- [Problem Pattern](#problem-pattern)
-  - Identifies the recurring rejected pattern and its warning signs.
-  - Read while locating or reviewing violations.
-- [Preferred Pattern](#preferred-pattern)
-  - Defines the required structure or behavior.
-  - Read before implementing a correction.
-- [Scope](#scope)
-  - Sets the applicable paths and explicit boundaries.
-  - Read before expanding the task.
-- [Examples](#examples)
-  - Contrasts rejected and preferred forms.
-  - Read when the rule needs a concrete illustration.
-- [Application Checklist](#application-checklist)
-  - Lists the steps needed to apply and maintain the skill.
-  - Use during implementation and review.
-- [Validation](#validation)
-  - Names the smallest relevant mechanical and semantic proof.
-  - Run before completing the task.
-
 ## Purpose
 
 Keep agent machines on the lightest possible local work.
@@ -78,7 +39,7 @@ prLand:
 task loom:pre-push
 git commit …
 git push -u origin HEAD
-task loom:pr-land CONFIG=/tmp/pr-land-validate.yaml
+task loom:pr-land CONFIG=path/to/agent-owned/pr-land-validate.yaml
 ```
 
 - For Main-fix PRs, set `runFullE2e: true` in the `prLand.validate` request.

@@ -59,7 +59,7 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Trigger required PR validation immediately, then request non-blocking exact-head Codex review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    desc: Trigger required PR validation immediately, then request non-blocking exact-head Cloud review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
     requires:
       vars: [PR]
     env:
@@ -119,7 +119,7 @@ tasks:
           exit 2
         fi
         if ! task pr:review PR="$REQUESTED_PR"; then
-          echo "Codex review request was unavailable; validation is already running." >&2
+          echo "Exact-head review request was unavailable; validation is already running." >&2
         fi
         post_review_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
         if [ "$local_sha" != "$post_review_pr_sha" ]; then

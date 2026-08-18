@@ -89,6 +89,10 @@ fn hive_deploy_preserves_cluster_rotated_codex_auth() -> anyhow::Result<()> {
             "preflight/tests/hive_mutation_serialization.sh",
             "Hive mutation serialization",
         ),
+        (
+            "preflight/tests/hive_deploy_convergence.sh",
+            "Hive deployment convergence",
+        ),
     ] {
         let output = Command::new("bash")
             .arg(root.join(harness))
@@ -296,12 +300,27 @@ fn hive_graph_clients_never_mix_schema_revisions() -> anyhow::Result<()> {
         "for deployment in hive hive-workbench-dispatcher hive-observer",
         "kubectl scale \"deployment/$deployment\"",
         "--replicas=0",
-        "--selector \"app.kubernetes.io/name=$deployment\"",
-        "Timed out draining graph client deployment/$deployment",
+        "HIVE_DEPLOY_CONVERGENCE_HELPERS_BEGIN",
+        "hive_wait_for_graph_client_drain \"$deployment\" 60 2",
+        "hive_wait_for_ready_pool 60 2 3",
     ] {
         assert!(
             deployment_tasks.contains(required),
             "Hive graph-client rollout is missing: {required}"
+        );
+    }
+    for required in [
+        "--selector \"app.kubernetes.io/name=$1\"",
+        ".status.phase != \"Succeeded\" and .status.phase != \"Failed\"",
+        ".metadata.deletionTimestamp == null",
+        ".name == \"hive\" and .ready == true",
+        "Timed out draining active graph client deployment/$deployment",
+        "consecutive_ready=0",
+        "Hive pool did not stabilize at four ready workers",
+    ] {
+        assert!(
+            deployment_tasks.contains(required),
+            "Hive deployment convergence helper is missing: {required}"
         );
     }
     let drain = deployment_tasks

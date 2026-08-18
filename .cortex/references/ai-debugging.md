@@ -1,65 +1,5 @@
 # Playwright MCP Annotation Pilot
 
-## Relationships
-
-- [Reference: Application Logging](logging.md)
-  - Provides the Reference: Application Logging operational reference.
-  - Read when using its tools or commands.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Purpose and completion contract](#purpose-and-completion-contract)
-  - Explains why this article exists and what it protects.
-  - Read first to decide whether the guidance applies.
-- [What the pilot proves](#what-the-pilot-proves)
-  - States the capabilities and limits evaluated by the pilot.
-  - Read before interpreting pilot results.
-- [What "enable AI-debug mode" means](#what-enable-ai-debug-mode-means)
-  - Defines the URL, browser state, and annotation handoff contract.
-  - Apply whenever starting an AI-debug session.
-- [One-time setup](#one-time-setup)
-  - Lists the local preparation required for an AI-debug session.
-  - Complete before running the first pilot scenario.
-  - [Codex](#codex)
-    - Gives the Codex-specific setup path.
-    - Read when Codex drives the debug session.
-  - [Cursor](#cursor)
-    - Gives the Cursor-specific setup path.
-    - Read when Cursor drives the debug session.
-  - [Verify](#verify)
-    - Confirms that the pilot environment is ready.
-    - Run before collecting scenario evidence.
-  - [Concurrent AI-debug sessions](#concurrent-ai-debug-sessions)
-    - Defines isolation between simultaneous browser sessions.
-    - Read before running more than one AI-debug session.
-- [Run an annotation session](#run-an-annotation-session)
-  - Lists the supported commands and invocation contract.
-  - Read when operating the documented tooling.
-  - [Interaction and annotation are separate modes](#interaction-and-annotation-are-separate-modes)
-    - Separates browser control from evidence annotation.
-    - Read before switching between pilot modes.
-- [Read application logs safely](#read-application-logs-safely)
-  - Defines the safe log-inspection boundary.
-  - Follow whenever logs may contain sensitive state.
-- [Three required pilot scenarios](#three-required-pilot-scenarios)
-  - Lists the scenarios needed for a representative evaluation.
-  - Use while planning and recording the pilot.
-- [Security and platform boundaries](#security-and-platform-boundaries)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-  - [Passkey behavior in the pilot browser](#passkey-behavior-in-the-pilot-browser)
-    - Explains the browser-specific passkey limitation.
-    - Read before evaluating authentication scenarios.
-- [Evaluation gate](#evaluation-gate)
-  - Defines the evidence and checks required for completion.
-  - Use before declaring the work complete.
-- [References](#references)
-  - Collects the supporting context and related guidance.
-  - Read when deeper context or another owner is needed.
-
 ## Overview
 
 Nook's first in-place developer-to-agent debugging experiment uses Playwright
@@ -346,9 +286,9 @@ page logger API so the current UI state is not destroyed by navigation:
 
 ```js
 async () => {
-  await window.__nookLog?.flush()
-  return window.__nookLog?.dump({ minLevel: 'debug', limit: 200 }) ?? []
-}
+  await window.__nookLog?.flush();
+  return window.__nookLog?.dump({ minLevel: "debug", limit: 200 }) ?? [];
+};
 ```
 
 Before calling that function, use `browser_tabs` again and verify the active

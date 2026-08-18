@@ -1,53 +1,5 @@
 # Workbench Issue Management
 
-## Relationships
-
-- [Agent Feature Ownership](../dynamic-skills/agent-feature-ownership.md)
-  - Defines the Agent Feature Ownership context used by this document.
-  - Apply when implementation or delivery reaches this workflow boundary.
-- [Pull Request Workflow](pull-requests.md)
-  - Defines pull-request size, validation, readiness, review, and merge requirements.
-  - Apply when implementation or delivery reaches this workflow boundary.
-
-## Document map
-
-- [Overview](#overview)
-  - Preserves oversized, risky, blocked, or deferred work in Nook Workbench.
-  - Read when required work cannot safely remain in the current pull request.
-- [Repository boundary](#repository-boundary)
-  - Separates product artifacts from Workbench planning and delivery records.
-  - Read before deciding where new context belongs.
-- [Multi-PR feature sequences](#multi-pr-feature-sequences)
-  - Defines ordered feature, issue, plan, worklog, and PR relationships.
-  - Read when work must be split across multiple pull requests.
-- [Trigger](#trigger)
-  - Lists the statements and conditions that activate this workflow.
-  - Read before deferring, blocking, or excluding required work.
-- [Search first](#search-first)
-  - Requires searching existing Workbench context with product and code vocabulary.
-  - Read before creating a feature or focused issue.
-- [Required issue shape](#required-issue-shape)
-  - Defines required issue metadata, acceptance criteria, dependencies, and evidence.
-  - Read when creating or auditing a focused issue record.
-- [Choose update versus create](#choose-update-versus-create)
-  - Distinguishes extending the owning record from creating a new deliverable.
-  - Read after search results identify related Workbench context.
-- [Publishing changes](#publishing-changes)
-  - Defines the direct-to-main publication path for Workbench records.
-  - Read before committing and pushing planning context.
-- [Team safety](#team-safety)
-  - Prevents agents from claiming or overwriting another owner's active record.
-  - Read before updating shared Workbench state.
-- [Task-start plan requirement](#task-start-plan-requirement)
-  - Requires a validated Workbench plan before implementation edits.
-  - Read at the start of every task-owning implementation.
-- [Worklog requirement](#worklog-requirement)
-  - Requires one outcome-focused worklog before completion or blocker handoff.
-  - Read when recording final evidence and remaining work.
-- [Required handoff](#required-handoff)
-  - Defines the plan, issue, worklog, and PR links required in a handoff.
-  - Read before reporting completion or a blocker.
-
 ## Overview
 
 Use this workflow whenever a task reveals missing functionality that is too
@@ -122,9 +74,10 @@ After a slice merges:
 3. Choose one owner for the next dependency-free issue.
 4. If the current agent continues, claim the issue as `in_progress` before
    starting its branch from current Nook `origin/main`.
-5. If scheduled automation will continue, set `status: ready` and
-   `automation: agent`.
-6. In that case, the current agent must not also start the issue.
+5. If bounded automation will continue, set `status: ready` and `automation:
+agent`.
+6. Explicitly dispatch that issue's exact `issue_path`.
+7. In that case, the current agent must not also start the issue.
 
 - The feature remains incomplete while any required issue remains incomplete.
 - Do not convert remaining requested functionality into an optional follow-up.
@@ -181,10 +134,10 @@ Every focused issue follows
 Valid statuses are `proposed`, `ready`, `in_progress`, `blocked`, `done`, and
 `cancelled`. `automation` is `manual`, `agent`, or `hive`. The `hive` mode is
 reserved for trusted Main-failure incidents consumed by the isolated k0s Hive
-dispatcher; the scheduled implementation workflow must not claim those records.
+dispatcher. The bounded implementation workflow must not claim those records.
 
-This combination makes a record a candidate for the scheduled Nook
-implementation worker:
+This combination makes a record eligible for explicit dispatch to the bounded
+Nook implementation worker:
 
 ```yaml
 status: ready
@@ -193,8 +146,11 @@ owner: <nook-github-collaborator>
 ```
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
-- The scheduled scan skips a missing or unassigned owner.
-  - An explicitly requested ownerless record fails without implementation.
+- The dispatch must provide exactly one of `issue_path` or `prompt`.
+- An issue dispatch resolves only the exact requested path.
+- A missing or unassigned owner fails without implementation.
+- Each explicit dispatch creates its own workflow run.
+- The Workbench blob SHA rejects concurrent claims of the same issue.
 - Creating or editing any other record must not start implementation.
 - The worker claims an eligible record by committing `status: in_progress`
   before it runs.
@@ -324,12 +280,12 @@ NOOK_WORKBENCH_SOURCE_TASK_FILE=/absolute/private/source-task.md \
 - Keep the source-task file outside the checkout.
   - It lets the publisher reject copied prompt text.
   - Do not publish it.
-- The scheduled worker:
+- The bounded worker:
   1. uses a dedicated planning LLM turn;
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
-- A valid multi-PR plan also blocks scheduled implementation.
+- A valid multi-PR plan also blocks bounded implementation.
   1. Materialize the Workbench feature summary and focused issues.
   2. Dispatch the first focused issue with a bounded one-PR plan.
 

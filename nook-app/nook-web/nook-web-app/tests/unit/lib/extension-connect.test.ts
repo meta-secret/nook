@@ -9,6 +9,7 @@ import {
   ExtensionConnectRequestStateKind,
   ExtensionPairingDeliveryKind,
   deliverExtensionPairingApproval,
+  discoverPairedExtensionIdentity,
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
   openInstalledExtension,
@@ -27,6 +28,8 @@ import {
   isExtensionPairedVaultIdentityStatusMessage,
   isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
+  ExtensionPairedVaultIdentityStatusMessageStatus,
+  ExtensionPairedVaultIdentityStatusMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantPolicyReady,
@@ -812,5 +815,75 @@ describe('paired extension unlock request', () => {
     const result = requestPairedExtensionUnlock('store-1')
     await vi.advanceTimersByTimeAsync(5_000)
     await expect(result).resolves.toBe(false)
+  })
+})
+
+describe('paired extension identity discovery', () => {
+  test('retries a transient unavailable session before opening a paired vault', async () => {
+    vi.useFakeTimers()
+    document.documentElement.setAttribute(
+      'data-nook-extension-runtime-id',
+      'extension-1',
+    )
+    let attempts = 0
+    vi.stubGlobal('chrome', {
+      runtime: {
+        sendMessage: (
+          _extensionId: string,
+          message: {
+            payload: { requestId: string; vaultStoreId: string }
+          },
+          callback: (response: unknown) => void,
+        ) => {
+          attempts += 1
+          if (attempts === 1) {
+            callback({
+              type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
+              payload: {
+                requestId: message.payload.requestId,
+                vaultStoreId: message.payload.vaultStoreId,
+                status:
+                  ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
+              },
+            })
+            return
+          }
+          callback({
+            type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
+            payload: {
+              requestId: message.payload.requestId,
+              vaultStoreId: message.payload.vaultStoreId,
+              status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
+              extensionRuntimeId: 'extension-1',
+              deviceId: 'device-1',
+              devicePublicKey: 'age1device',
+              deviceSigningPublicKey: 'signing-key',
+              deviceLabel: 'Nook Extension',
+              nonce: 'nonce-1',
+              scopes: [ExtensionConnectScope.VaultAccess],
+            },
+          })
+        },
+      },
+    })
+
+    const discovery = discoverPairedExtensionIdentity('store-1')
+    await vi.advanceTimersByTimeAsync(150)
+
+    await expect(discovery).resolves.toEqual({
+      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
+      request: {
+        source: ExtensionIdentityRequestSource.PairedVault,
+        vaultStoreId: 'store-1',
+        extensionRuntimeId: 'extension-1',
+        deviceId: 'device-1',
+        devicePublicKey: 'age1device',
+        deviceSigningPublicKey: 'signing-key',
+        deviceLabel: 'Nook Extension',
+        nonce: 'nonce-1',
+        scopes: [ExtensionConnectScope.VaultAccess],
+      },
+    })
+    expect(attempts).toBe(2)
   })
 })

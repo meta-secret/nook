@@ -1,38 +1,5 @@
 # Credit Card Items
 
-## Relationships
-
-- [Product Specifications Index](index.md)
-  - Catalogs the product specifications and their current status.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Password Manager Specification](password-manager.md)
-  - Defines the core vault product, user flows, storage formats, cryptography, and UI boundaries.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Adds payment cards as typed vault items.
-  - Read first to understand the scope and intent of Overview.
-- [Goals](#goals)
-  - Defines encrypted checkout data.
-  - Read first to understand the scope and intent of Goals.
-- [Product model](#product-model)
-  - Defines the payment-card record.
-  - Read before changing or relying on Product model.
-- [UI and security](#ui-and-security)
-  - Defines the payment-card editor.
-  - Read before changing the security or key boundary described by UI and security.
-- [Import](#import)
-  - Defines supported payment-card importer mappings.
-  - Read before changing or relying on Import.
-- [Out of scope (for now)](#out-of-scope-for-now)
-  - Browser autofill of payment forms.
-  - Read before expanding the product boundary beyond Out of scope (for now).
-
 ## Overview
 
 Add payment cards as a first-class vault item type alongside login, API key,
@@ -49,15 +16,15 @@ secure note, seed phrase, passkey, and authenticator.
 
 ## Product model
 
-| Field | Required | Notes |
-|---|---|---|
-| `title` | yes | Display name (e.g. "Personal Visa") |
-| `cardholderName` | no | Name on card |
-| `number` | yes | Digits only after normalize; Luhn-validated; 12–19 digits |
-| `expirationMonth` | with year | `01`–`12` when set |
-| `expirationYear` | with month | Four-digit year when set |
-| `cvv` | no | 3–4 digits when set |
-| `notes` | no | Free-form notes |
+| Field             | Required   | Notes                                                     |
+| ----------------- | ---------- | --------------------------------------------------------- |
+| `title`           | yes        | Display name (e.g. "Personal Visa")                       |
+| `cardholderName`  | no         | Name on card                                              |
+| `number`          | yes        | Digits only after normalize; Luhn-validated; 12–19 digits |
+| `expirationMonth` | with year  | `01`–`12` when set                                        |
+| `expirationYear`  | with month | Four-digit year when set                                  |
+| `cvv`             | no         | 3–4 digits when set                                       |
+| `notes`           | no         | Free-form notes                                           |
 
 Expiry month and year are either both empty or both present.
 

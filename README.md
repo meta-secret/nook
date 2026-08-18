@@ -434,7 +434,7 @@ task extension:run:brave CHANNEL=prod # launch a hosted build in an isolated Bra
 task ci:pr                 # optional local mirror of the non-browser PR gate (daemon BuildKit; never shared nook-pr)
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
-task pr:review PR=410      # optional idempotent exact-head Codex review request
+task pr:review PR=410      # optional idempotent exact-head Codex or Cursor review request
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
@@ -450,6 +450,7 @@ task infra:hive:diagnose    # bounded Hive state, logs, events, and live probes
 task infra:hive:dashboard   # open the cluster-private Hive Control Center locally
 task infra:hive:queue:status # inspect durable task and latest/previous attempt state
 task infra:hive:queue:retry HIVE_TASK_ID=main-failure-<sha> # one bounded budget per Hive release
+task infra:hive:queue:cancel HIVE_TASK_ID=... HIVE_CANCEL_REASON=... # retire a superseded or unsolvable task
 HIVE_CODEX_AUTH_FILE=/secure/path/auth.json task infra:hive:auth:rotate # quiesce Hive and explicitly replace Codex auth
 task infra:services:diagnose # bounded Docker and Compose network evidence
 task infra:services:repair-network # recover Docker 26 chains without daemon restart

@@ -24,6 +24,7 @@ import {
 } from './field-error.ts';
 
 import type { FieldErrorArgs } from './field-error.ts';
+import { TOOLS_LIST_INVOKE } from './example-documents.ts';
 export type RecoverHint = {
   readonly toolsListRequest: string;
   readonly hint: string;
@@ -104,11 +105,8 @@ export type ExecuteErrorResponse =
 
 export type ErrorResponse = DecodeErrorResponse | ExecuteErrorResponse;
 
-export const TOOLS_LIST_REQUEST_PATH =
-  'agentic-ai/loom/params/tools-list/default.yaml';
-
 const DEFAULT_HINT =
-  'run loom with a toolsList request, then retry with a valid domain request object';
+  'run task loom:tools-list, then retry with a valid domain request object';
 
 const EXECUTE_HINT =
   'fix the underlying gate, then retry the same domain request object';
@@ -175,7 +173,7 @@ export function decodeErrorResponse(
     errors,
     explanation,
     recover: {
-      toolsListRequest: TOOLS_LIST_REQUEST_PATH,
+      toolsListRequest: TOOLS_LIST_INVOKE,
       hint: DEFAULT_HINT,
     },
   };
@@ -204,7 +202,7 @@ export function executeErrorResponseForFamily(
     family,
     errors,
     recover: {
-      toolsListRequest: TOOLS_LIST_REQUEST_PATH,
+      toolsListRequest: TOOLS_LIST_INVOKE,
       hint: EXECUTE_HINT,
     },
   };
@@ -228,7 +226,7 @@ export function executeErrorResponseForAgentStats(
     operation,
     errors,
     recover: {
-      toolsListRequest: TOOLS_LIST_REQUEST_PATH,
+      toolsListRequest: TOOLS_LIST_INVOKE,
       hint: EXECUTE_HINT,
     },
   };
@@ -252,7 +250,7 @@ export function executeErrorResponseForPrLand(
     operation,
     errors,
     recover: {
-      toolsListRequest: TOOLS_LIST_REQUEST_PATH,
+      toolsListRequest: TOOLS_LIST_INVOKE,
       hint: EXECUTE_HINT,
     },
   };

@@ -1,62 +1,5 @@
 # Identity, App Keys, Passkeys, and Vault DEKs
 
-## Relationships
-
-- [Auth Providers, Sync, and Login UX](auth-providers.md)
-  - Defines provider credential persistence, login UX, and provider transport boundaries.
-  - Read before changing the related architecture or security boundary.
-- [Vault Event Log](vault-event-log.md)
-  - Defines immutable vault events, ordering, concurrency, and provider synchronization.
-  - Read before changing the related architecture or security boundary.
-- [Vault Session, Lock, and Multi-Vault Model](vault-session-and-lock.md)
-  - Defines vault sessions, unlock, lock semantics, and multi-vault state.
-  - Read before changing the related architecture or security boundary.
-- [Browser Extension Product Spec](../product-specs/browser-extension.md)
-  - Defines the companion extension boundary, approval, authentication surfaces, and storage rules.
-  - Read when this document touches the related product behavior or user flow.
-- [Devices & access](../product-specs/devices-and-access.md)
-  - Defines identity, device protection evidence, onboarding, and verified vault grants.
-  - Read when this document touches the related product behavior or user flow.
-
-## Document map
-
-- [Overview](#overview)
-  - States the architecture decision, current status, and identity-first direction.
-  - Read before changing identity, vault, device, or passkey ownership.
-- [Normative vocabulary](#normative-vocabulary)
-  - Separates people, identities, passkeys, app keys, vaults, providers, and devices.
-  - Read when naming domain entities or defining their authority.
-- [Domain map](#domain-map)
-  - Shows ownership and authorization relationships among identity-domain entities.
-  - Read when tracing which entity creates, wraps, grants, or stores a key.
-- [Identity domain](#identity-domain)
-  - Defines identity records, app installations, and local evidence boundaries.
-  - Read when implementing identity discovery, enrollment, or device labeling.
-  - [Local directory phase](#local-directory-phase)
-    - Documents the current browser-local identity directory and migration boundary.
-    - Read when changing local identity persistence or reconciliation.
-- [DEK ownership](#dek-ownership)
-  - Assigns vault DEK creation and grant authority to identities.
-  - Read when changing vault creation, membership, or key wrapping.
-- [Vault domain](#vault-domain)
-  - Defines vault content as subordinate to identity-owned authorization.
-  - Read when changing vault metadata, grants, providers, or projections.
-- [Passkey locality](#passkey-locality)
-  - Keeps passkey portability claims within browser-reported evidence.
-  - Read when presenting or persisting passkey and device facts.
-- [Onboarding](#onboarding)
-  - Sequences identity selection before vault creation and provider setup.
-  - Read when changing onboarding or first-vault flows.
-- [Browser extension boundary](#browser-extension-boundary)
-  - Treats the extension as an installation with its own app identity and key.
-  - Read when pairing, authorizing, or labeling extension access.
-- [Invariants](#invariants)
-  - Collects the non-negotiable identity, key, and evidence constraints.
-  - Read before accepting an architecture or migration design.
-- [Related records](#related-records)
-  - Routes to product and architecture records that refine this model.
-  - Read when work crosses identity, access, extension, or vault-event boundaries.
-
 ## Overview
 
 **Status:** Architecture decision in implementation.
@@ -68,16 +11,16 @@ and vaults. None of these names are interchangeable.
 
 ## Normative vocabulary
 
-| Term | Meaning |
-|---|---|
-| **Person / user** | The human operator. One person may own or join multiple identities. |
-| **Identity** | Logical authorization subject. It possesses passkeys and therefore app keys. It owns per-vault DEKs. |
-| **Passkey / device key** | WebAuthn credential or PIN/passphrase fallback that protects a local app key. |
-| **App key** | Installation-local asymmetric key for Simple, Sentinel, or the web extension. Replaces the former `DeviceIdentity` name. |
-| **`app_id`** | Stable id for one app-key installation. Replaces the former `device_id` / `DeviceId` name. |
-| **Installation** | Browser-origin or extension storage context that holds one app private key. |
-| **Sync-provider mount** | Replication transport for an identity control log or vault event log. Not authority. |
-| **Vault** | Encrypted secret event log addressed by `store_id`. It cannot exist without an authorizing identity. |
+| Term                     | Meaning                                                                                                                  |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| **Person / user**        | The human operator. One person may own or join multiple identities.                                                      |
+| **Identity**             | Logical authorization subject. It possesses passkeys and therefore app keys. It owns per-vault DEKs.                     |
+| **Passkey / device key** | WebAuthn credential or PIN/passphrase fallback that protects a local app key.                                            |
+| **App key**              | Installation-local asymmetric key for Simple, Sentinel, or the web extension. Replaces the former `DeviceIdentity` name. |
+| **`app_id`**             | Stable id for one app-key installation. Replaces the former `device_id` / `DeviceId` name.                               |
+| **Installation**         | Browser-origin or extension storage context that holds one app private key.                                              |
+| **Sync-provider mount**  | Replication transport for an identity control log or vault event log. Not authority.                                     |
+| **Vault**                | Encrypted secret event log addressed by `store_id`. It cannot exist without an authorizing identity.                     |
 
 Historical name `DeviceIdentity` means app key.
 Historical name `device_id` means `app_id`.
@@ -86,14 +29,41 @@ Do not introduce those old names in new APIs.
 ## Domain map
 
 ```mermaid
-flowchart LR
-  Person -->|owns or joins 0..n| Identity
-  Passkey -->|unwraps| AppKey
-  AppKey -->|member of| Identity
-  Identity -->|generates and owns| DEK
-  DEK -->|encrypts secrets for| Vault
-  Identity -->|wraps DEK to| AppPublicKeys
-  AppPublicKeys --> AppKey
+flowchart TD
+    subgraph UserDevice["User & Local Device"]
+        Person["Person (User)"]
+        Passkey["Passkey / PIN"]
+        AppKey["Local App Key (app_id)<br/>(Private key in local storage)"]
+        Person -->|"authenticates with"| Passkey
+        Passkey -->|"unwraps local"| AppKey
+    end
+
+    subgraph IdentityDomain["Identity Domain"]
+        Identity["Identity (A, B, ...)"]
+        IdentityLog["Encrypted Identity Control Log<br/>(Members, public keys, passkey records)"]
+        DekEnvelopes["Per-Vault DEK Envelopes<br/>(DEK encrypted to App Public Keys)"]
+
+        Person -->|"owns or joins 0..n"| Identity
+        Identity -->|"governed by"| IdentityLog
+        Identity -->|"generates & owns"| DekEnvelopes
+        AppKey -.->|"public key registered in"| IdentityLog
+        AppKey -->|"unwraps DEK from"| DekEnvelopes
+    end
+
+    subgraph VaultDomain["Vault Domain"]
+        Vault["Vault (store_id)"]
+        VaultLog["Encrypted Vault Event Log<br/>(Secrets, event DAG, projection)"]
+
+        Identity -->|"authorizes & owns"| Vault
+        Vault -->|"contains"| VaultLog
+        DekEnvelopes -->|"provides DEK to decrypt"| VaultLog
+    end
+
+    subgraph ReplicationDomain["Replication Transport"]
+        Provider["Replication Provider<br/>(GitHub, Drive, etc.)"]
+        Provider -->|"syncs"| IdentityLog
+        Provider -->|"syncs"| VaultLog
+    end
 ```
 
 ## Identity domain

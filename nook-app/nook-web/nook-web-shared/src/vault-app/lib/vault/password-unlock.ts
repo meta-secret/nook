@@ -195,14 +195,16 @@ export async function unlockWithPassword({
     state.sentinelCeremonyPrompt = true;
     return;
   }
-  if (!state.hasRemoteCredentials()) {
+  if (state.storageMode !== "local" && !state.hasRemoteCredentials()) {
     state.errorMsg =
       state.storageMode === "oauth-file"
         ? state.t(I18N_KEYS.ErrorsGoogleSignInRequired)
         : state.t(I18N_KEYS.ErrorsGithubCredentialsRequired);
     return;
   }
-  await state.ensureOAuthTokensFresh();
+  if (state.storageMode !== "local") {
+    await state.ensureOAuthTokensFresh();
+  }
   if (!entryId.trim()) {
     state.errorMsg = state.t(I18N_KEYS.ErrorsVaultPasswordRequired);
     return;

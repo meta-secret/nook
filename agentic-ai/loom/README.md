@@ -118,10 +118,11 @@ Bun must be installed (`bun --version`). Stop and install Bun if it is missing.
 
 ## Leaf-tool protocol
 
-Single entrypoint:
+Leaf-tool entrypoints:
 
 ```bash
 loom <request.yaml>
+loom --default prePush
 ```
 
 Each request is a **domain-tagged object**. Exactly one root key selects the
@@ -138,8 +139,8 @@ prePush:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-scratch.json
-    outputPath: /tmp/123.yaml
+    scratchPath: '{agentTempDir}/pr-123-scratch.json'
+    outputPath: '{agentTempDir}/123.yaml'
     includeTestInventory: true
 ```
 
@@ -172,17 +173,39 @@ errors:
   - path: prePush.stageHostUpdates
     message: expected boolean
 recover:
-  toolsListRequest: agentic-ai/loom/params/tools-list/default.yaml
-  hint: run loom with a toolsList request, then retry with a valid domain request object
+  toolsListRequest: task loom:tools-list
+  hint: run task loom:tools-list, then retry with a valid domain request object
 ```
 
 Discover request kinds:
 
 ```bash
 task loom:tools-list
-# or (path is relative to the Loom package cwd)
-bun run --cwd agentic-ai/loom loom -- params/tools-list/default.yaml
 ```
+
+Each discovered request includes its typed `inputSchema`, canonical
+`exampleRequest` invoke command, exact `exampleYaml`, and explicit
+`resolvedExampleYaml`.
+Generated examples are the source of truth. Agents should consume that
+output instead of copying request bodies into guidance.
+
+Agent-statistics path fields also accept `{agentTempDir}`. Loom resolves it to:
+
+```text
+<os-temp>/nook-agent-stats/<40-character-task-anchor-commit>/<opaque-worktree-id>
+```
+
+The task-anchor commit is the exact commit checked out when the current task
+branch was first entered, or the worktree's initial commit when Git created the
+branch with the worktree. A later branch re-entry does not replace it. The
+worktree identifier isolates parallel worktrees on the same anchor. The mapping
+therefore stays stable so `assemble`, `validate`, and `publish` can share one
+file. Loom provisions this directory when it resolves the token. Ordinary
+relative and absolute paths remain supported.
+
+`task loom:tools-list` keeps the tokenized blueprint in `exampleYaml` and
+returns `resolvedExampleYaml` with the current worktree and commit path filled
+in. Use the resolved path when creating the scratch JSON before `assemble`.
 
 ## TypeScript domain structure
 
@@ -220,7 +243,7 @@ task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
 task loom:dependency-popularity
-task loom:run CONFIG=agentic-ai/loom/params/skill-scaffold/request.example.yaml
+task loom:skill-scaffold CONFIG=path/to/request.yaml
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
@@ -228,13 +251,14 @@ task loom:pr-land CONFIG=path/to/validate-request.yaml
 `task loom:run` resolves repo-root-relative `CONFIG` paths before entering the
 Loom package cwd.
 
-Direct Bun surface (paths are relative to `agentic-ai/loom`):
+Direct Bun surface for a defaultable family:
 
 ```bash
-bun run --cwd agentic-ai/loom loom -- params/pre-push/default.yaml
+bun run --cwd agentic-ai/loom loom -- --default prePush
 ```
 
-Committed examples live under `params/<domain>/`.
+Typed example documents in Loom generate discovery YAML and decode blueprints.
+There is no checked-in sample-file catalog.
 
 ## Tools
 

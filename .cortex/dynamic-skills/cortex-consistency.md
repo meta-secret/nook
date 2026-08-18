@@ -1,44 +1,5 @@
 # Cortex Consistency — Garbage Collector
 
-## Relationships
-
-- [Cortex document navigation](cortex-document-map.md)
-  - Requires graph links and internal maps to stay synchronized with content.
-  - Apply whenever a Cortex document changes.
-- [Cortex writer](cortex-writer.md)
-  - Keeps consistency corrections short and readable.
-  - Apply while rewriting obsolete or conflicting guidance.
-- [Subagent delegation](../workflows/subagent-delegation.md)
-  - Defines read-only evidence collection for a full-tree audit.
-  - Read when two or more document families need consistency review.
-
-## Document map
-
-- [Priority](#priority)
-  - Establishes stale or conflicting Cortex guidance as a P1 defect.
-  - Read before changing durable documentation.
-- [Purpose](#purpose)
-  - Defines the agent's documentation garbage-collector responsibility.
-  - Read when planning a Cortex-affecting task.
-- [Problem pattern](#problem-pattern)
-  - Lists common forms of documentation drift.
-  - Read while auditing a topic.
-- [Preferred pattern](#preferred-pattern)
-  - Defines verification steps and conflict resolution order.
-  - Follow when reconciling prose with code.
-- [Scope](#scope)
-  - Defines the default one-hop audit and full-tree delegation boundary.
-  - Read before expanding a consistency review.
-- [Examples](#examples)
-  - Shows cache-policy and vault-sync conflict corrections.
-  - Read when classifying stale guidance.
-- [Application checklist](#application-checklist)
-  - Lists evidence and synchronization checks.
-  - Use during implementation and review.
-- [Validation](#validation)
-  - Defines mechanical audit and semantic proof requirements.
-  - Run after consistency edits.
-
 ## Priority
 
 This is a P1 documentation integrity rule:
@@ -63,6 +24,7 @@ Common failures:
 
 - a workflow names a Task command that no longer exists;
 - two `.cortex` docs state opposite rules for the same topic;
+- a product spec omits features or rules introduced in chat, code, or PR reviews;
 - a design doc describes an old architecture after the code moved;
 - an index still links a deleted or renamed file;
 - a skill card teaches a pattern the repo already rejected;
@@ -75,15 +37,17 @@ When a task touches durable behavior, verify the related cortex surface.
 1. Find the most specific `.cortex` docs for the topic.
 2. Compare those docs with each other.
 3. Compare those docs with the current code and Task entrypoints.
-4. Fix obsolete facts in the same PR.
-5. Mark historical context as historical when it must remain.
-6. Remove or rewrite guidance that conflicts.
-7. Update indexes and `AGENTS.md` links when paths change.
+4. If newly discovered critical facts are missing, add them to Cortex.
+5. Fix obsolete facts in the same PR.
+6. Mark historical context as historical when it must remain.
+7. Remove or rewrite guidance that conflicts.
+8. Update `.cortex/knowledge-graph.md` and `AGENTS.md` links when headings or paths change.
 
 Verification checklist:
 
 - [ ] Docs agree with each other on the active rule.
 - [ ] Docs agree with the current code paths.
+- [ ] Product specs reflect implemented features, user flows, and chat decisions.
 - [ ] Named commands, packages, and paths still exist.
 - [ ] Superseded designs are labeled historical.
 - [ ] Dead links and orphan index rows are gone.
@@ -100,7 +64,7 @@ Conflict resolution order:
 
 Applies to:
 
-- every `.cortex/**/*.md` edit
+- every `.cortex/**/*.md` edit, including product specifications
 - implementation tasks that change durable architecture, workflow, or product
   behavior
 - skill-card capture and refactor work

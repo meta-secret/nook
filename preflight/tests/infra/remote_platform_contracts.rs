@@ -81,6 +81,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "--certificatesResolvers.letsencrypt.acme.tlsChallenge=true",
         "./traefik-dynamic.yaml:/etc/traefik/dynamic.yaml:ro",
         "traefik-data:/data",
+        "mem_limit: 2g",
         "restart: unless-stopped",
         "no-new-privileges:true",
     ] {
@@ -125,6 +126,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "registry",
         "sccache",
         "hive",
+        "hive-queue",
         "operations",
         "bake-cache",
     ];

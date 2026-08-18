@@ -70,7 +70,7 @@ describe('resolveRequestPath', () => {
 
   test('resolves relative paths from repository root', () => {
     const root = findRepoRoot();
-    const relative = 'agentic-ai/loom/params/pre-push/default.yaml';
+    const relative = 'agentic-ai/loom/package.json';
     const resolvedArgs: ResolveRequestPathArgs = {
       requestPath: relative,
       startDir: `${root}/agentic-ai/loom`,

@@ -1,71 +1,5 @@
 # Multi-Device Decentralized Auth Specification
 
-## Relationships
-
-- [Nook System Architecture Specification](../ARCHITECTURE.md)
-  - Defines system-wide package ownership, dependency flow, storage, and execution boundaries.
-  - Read before changing a durable cross-component boundary.
-- [Password Unlock & QR-Based Device Join](password-envelope.md)
-  - Defines password-wrapped vault keys and the one-step device-join envelope.
-  - Read when this document touches the related product behavior or user flow.
-- [SLIP-0039 Device Quorum Recovery](slip39-recovery.md)
-  - Defines fixed-quorum device recovery and its session-only QR exchange.
-  - Read when this document touches the related product behavior or user flow.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide implementation, testing, tooling, and delivery constraints.
-  - Apply throughout implementation and review.
-
-## Document map
-
-- [Overview](#overview)
-  - Defines the roles of `secrets_key` and `members_key`.
-  - Read first to understand the scope and intent of Overview.
-- [1. Goals](#1-goals)
-  - Multi-device E2E: Any enrolled device can decrypt the same vault file from GitHub or local storage.
-  - Read first to understand the scope and intent of 1. Goals.
-- [2. Key hierarchy](#2-key-hierarchy)
-  - Defines the multi-device key hierarchy.
-  - Read before changing the security or key boundary described by 2. Key hierarchy.
-  - [2.1 Local device-key protection](#21-local-device-key-protection)
-    - Before any provider credential or device-key operation, the browser runs WebAuthn with required user verification and the PRF extension.
-    - Read before changing the security or key boundary described by 2.1 Local device-key protection.
-  - [2.2 Browser and authenticator support (2026-07-03)](#22-browser-and-authenticator-support-2026-07-03)
-    - PRF support is a property of the complete browser + OS + authenticator path, not merely the presence of PublicKeyCredential.
-    - Read before changing or relying on 2.2 Browser and authenticator support (2026-07-03).
-- [3. Vault file layout](#3-vault-file-layout)
-  - Defines the encrypted vault authorization layout.
-  - Read before changing the persisted or wire representation in 3. Vault file layout.
-  - [Example](#example)
-    - Shows a complete encrypted vault representation.
-    - Read before changing or relying on Example.
-- [4. Design decisions](#4-design-decisions)
-  - `secrets_key` protects `secrets`; `members_key` protects `members`.
-  - Read before changing or relying on 4. Design decisions.
-  - [4.1 Explicit key names (not DEK/MEK/CEK…)](#41-explicit-key-names-not-dekmekcek)
-    - Preserves explicit `secrets_key` and `members_key` names.
-    - Read before changing the security or key boundary described by 4.1 Explicit key names (not DEK/MEK/CEK…).
-  - [4.2 Auth pk_id = SHA256(public key)](#42-auth-pk_id--sha256public-key)
-    - Stores `pk_id` as the SHA-256 digest of the public key.
-    - Read before changing the security or key boundary described by 4.2 Auth pk_id = SHA256(public key).
-  - [4.3 Join approval distributes both keys](#43-join-approval-distributes-both-keys)
-    - Defines the key distribution performed during join approval.
-    - Read before changing the security or key boundary described by 4.3 Join approval distributes both keys.
-  - [4.4 Shared members_key roster](#44-shared-members_key-roster)
-    - Defines the `members` roster encrypted by `members_key`.
-    - Read before changing the security or key boundary described by 4.4 Shared members_key roster.
-  - [4.5 Device labels and revocation](#45-device-labels-and-revocation)
-    - Member rows may include an optional user-facing label.
-    - Read before changing or relying on 4.5 Device labels and revocation.
-- [5. Auth API (`nook-auth2/src/auth/multi_device.rs`)](#5-auth-api-nook-auth2srcauthmulti_devicers)
-  - `nook-auth2` owns the portable authorization API.
-  - Read before changing the portable multi-device authorization API.
-- [6. Phase status](#6-phase-status)
-  - Records current multi-device implementation status.
-  - Read when assessing the current state of 6. Phase status.
-- [7. Backup password unlock (cross-link)](#7-backup-password-unlock-cross-link)
-  - Device keys remain the primary access path.
-  - Read before changing or relying on 7. Backup password unlock (cross-link).
-
 ## Overview
 
 - **Vault keys:** Use `secrets_key` to encrypt user secrets and `members_key` to
@@ -119,15 +53,15 @@ flowchart TB
   JOIN -->|"approve → auth + members row"| AUTH
 ```
 
-| Key | Purpose | Stored where |
-|---|---|---|
-| **secrets_key** | Symmetric key — encrypts all secret *values* in `secrets:` | Per-device age envelope in `auth.secrets_key` |
-| **members_key** | Symmetric key — encrypts each `{pk_id, pk}` entry in `members:` | Per-device age envelope in `auth.members_key` |
-| **Device identity** | X25519 keypair — unwraps this device's auth envelopes | For passkey mode, derived in-session from WebAuthn PRF output + `userHandle`; for PIN fallback, AES-256-GCM ciphertext in IndexedDB |
-| **Passkey PRF** | Produces the secret input used by HKDF to derive the device identity | Browser/platform authenticator; never persisted by Nook |
-| **Passkey metadata** | Credential id, `userHandle`, and deterministic PRF input needed to re-prompt the passkey | IndexedDB `device_identity_wrapped`; no age secret ciphertext in passkey mode |
-| **PIN fallback** | Local fallback secret for platforms that do not return WebAuthn PRF | User-entered at setup/unlock; never persisted by Nook |
-| **pk_id** | SHA256(public key), 64 hex | `auth:` row id and `members:` row id |
+| Key                  | Purpose                                                                                  | Stored where                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| **secrets_key**      | Symmetric key — encrypts all secret _values_ in `secrets:`                               | Per-device age envelope in `auth.secrets_key`                                                                                       |
+| **members_key**      | Symmetric key — encrypts each `{pk_id, pk}` entry in `members:`                          | Per-device age envelope in `auth.members_key`                                                                                       |
+| **Device identity**  | X25519 keypair — unwraps this device's auth envelopes                                    | For passkey mode, derived in-session from WebAuthn PRF output + `userHandle`; for PIN fallback, AES-256-GCM ciphertext in IndexedDB |
+| **Passkey PRF**      | Produces the secret input used by HKDF to derive the device identity                     | Browser/platform authenticator; never persisted by Nook                                                                             |
+| **Passkey metadata** | Credential id, `userHandle`, and deterministic PRF input needed to re-prompt the passkey | IndexedDB `device_identity_wrapped`; no age secret ciphertext in passkey mode                                                       |
+| **PIN fallback**     | Local fallback secret for platforms that do not return WebAuthn PRF                      | User-entered at setup/unlock; never persisted by Nook                                                                               |
+| **pk_id**            | SHA256(public key), 64 hex                                                               | `auth:` row id and `members:` row id                                                                                                |
 
 Both keys are generated together on genesis (`generate_vault_keys()`).
 
@@ -249,41 +183,41 @@ References: [WebAuthn PRF specification](https://www.w3.org/TR/webauthn-3/#prf-e
 
 ## 3. Vault file layout
 
-| YAML section | Record shape | Meaning |
-|---|---|---|
-| `secrets:` | `key` + `value` | User passwords (`value` encrypted with `secrets_key`) |
-| `auth:` | `pk_id` + `secrets_key` + `members_key` | Per-device age envelopes |
-| `joins:` | `key` + `value` | Pending join (`key` = device_id) |
-| `members:` | `pk_id` + `ciphertext` | One row per member; `members_key`-encrypted `{pk_id, pk, label?, enrolled_at?}` |
+| YAML section | Record shape                            | Meaning                                                                         |
+| ------------ | --------------------------------------- | ------------------------------------------------------------------------------- |
+| `secrets:`   | `key` + `value`                         | User passwords (`value` encrypted with `secrets_key`)                           |
+| `auth:`      | `pk_id` + `secrets_key` + `members_key` | Per-device age envelopes                                                        |
+| `joins:`     | `key` + `value`                         | Pending join (`key` = device_id)                                                |
+| `members:`   | `pk_id` + `ciphertext`                  | One row per member; `members_key`-encrypted `{pk_id, pk, label?, enrolled_at?}` |
 
 ### Example
 
 ```yaml
 secrets:
-- key: github.com
-  value: |
-    -----BEGIN AGE ENCRYPTED FILE-----
-    ...
+  - key: github.com
+    value: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
 
 auth:
-- pk_id: 7f3a9c2e1b8d4f6a8e0c3d5b2a1f9e4c7b6d8a0f2e1c3b5a7d9f0e2c4b6a8d0e2
-  secrets_key: |
-    -----BEGIN AGE ENCRYPTED FILE-----
-    ...
-  members_key: |
-    -----BEGIN AGE ENCRYPTED FILE-----
-    ...
+  - pk_id: 7f3a9c2e1b8d4f6a8e0c3d5b2a1f9e4c7b6d8a0f2e1c3b5a7d9f0e2c4b6a8d0e2
+    secrets_key: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
+    members_key: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      ...
 
 joins:
-- key: 26aa720ff5b4429c
-  value: '{"device_id":"26aa720ff5b4429c","public_key":"age1...","requested_at":"2026-06-21T12:00:00Z"}'
+  - key: 26aa720ff5b4429c
+    value: '{"device_id":"26aa720ff5b4429c","public_key":"age1...","requested_at":"2026-06-21T12:00:00Z"}'
 
 members:
-- pk_id: 7f3a9c2e1b8d4f6a...
-  ciphertext: |
-    -----BEGIN AGE ENCRYPTED FILE-----
-    # plaintext JSON: {"pk_id":"7f3a...","pk":"age1...","label":"Work laptop","enrolled_at":"2026-06-21T12:00:00Z"}
-    -----END AGE ENCRYPTED FILE-----
+  - pk_id: 7f3a9c2e1b8d4f6a...
+    ciphertext: |
+      -----BEGIN AGE ENCRYPTED FILE-----
+      # plaintext JSON: {"pk_id":"7f3a...","pk":"age1...","label":"Work laptop","enrolled_at":"2026-06-21T12:00:00Z"}
+      -----END AGE ENCRYPTED FILE-----
 ```
 
 ---
@@ -332,15 +266,15 @@ another valid path.
 `nook-core` re-exports them for compatibility and adds event-log adapters where
 core event types are required.
 
-| Function | Role |
-|---|---|
-| `generate_vault_keys()` | Create `secrets_key` + `members_key` |
-| `resolve_secrets_key()` / `resolve_members_key()` | Unwrap keys for current device |
-| `approve_join_request(secrets_key, members_key, …)` | Auth row + members row for joiner |
-| `ensure_self_in_roster()` | Self-heal missing members row on connect |
-| `rename_vault_member(records, members_key, auth_id, label)` | Update an encrypted roster label |
-| `revoke_vault_member(records, members_key, auth_id)` | Remove a member's `auth:` and `members:` rows |
-| `deny_join_request(records, device_id)` | Drop a pending `joins:` row |
+| Function                                                    | Role                                          |
+| ----------------------------------------------------------- | --------------------------------------------- |
+| `generate_vault_keys()`                                     | Create `secrets_key` + `members_key`          |
+| `resolve_secrets_key()` / `resolve_members_key()`           | Unwrap keys for current device                |
+| `approve_join_request(secrets_key, members_key, …)`         | Auth row + members row for joiner             |
+| `ensure_self_in_roster()`                                   | Self-heal missing members row on connect      |
+| `rename_vault_member(records, members_key, auth_id, label)` | Update an encrypted roster label              |
+| `revoke_vault_member(records, members_key, auth_id)`        | Remove a member's `auth:` and `members:` rows |
+| `deny_join_request(records, device_id)`                     | Drop a pending `joins:` row                   |
 
 Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secrets_key()`.
 
@@ -348,11 +282,11 @@ Rust retains `resolve_dek()` / `resolve_dec()` as thin aliases for `resolve_secr
 
 ## 6. Phase status
 
-| Phase | Scope | Status |
-|---|---|---|
-| 5 | `secrets_key` + `members_key` auth, members roster | Done |
-| 6 | Fixed 2-of-3 SLIP-0039 recovery via session-only QR exchange | Designed (#260); implementation split across #261-#265 |
-| 7 | Device-to-device messaging channel | Planned |
+| Phase | Scope                                                        | Status                                                 |
+| ----- | ------------------------------------------------------------ | ------------------------------------------------------ |
+| 5     | `secrets_key` + `members_key` auth, members roster           | Done                                                   |
+| 6     | Fixed 2-of-3 SLIP-0039 recovery via session-only QR exchange | Designed (#260); implementation split across #261-#265 |
+| 7     | Device-to-device messaging channel                           | Planned                                                |
 
 ---
 

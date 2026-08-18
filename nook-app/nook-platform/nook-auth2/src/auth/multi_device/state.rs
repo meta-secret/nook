@@ -186,6 +186,9 @@ pub struct VaultMetaState {
     pub auth: HashMap<AuthKeyId, AuthEnvelopes>,
     pub joins: HashMap<DeviceId, JoinRequest>,
     pub members: HashMap<AuthKeyId, StoredRecordPayload>,
+    /// Live enrolled devices reconstructed from `JoinApproved` events.
+    /// Encrypted `members:` rows are not replayed by event projection.
+    pub enrolled_devices: HashMap<DeviceId, JoinRequest>,
     pub sentinel_shares: HashMap<DeviceId, SentinelShareEnvelope>,
     pub sentinel_participants: HashMap<DeviceId, SentinelParticipantEntry>,
 }
@@ -197,6 +200,7 @@ impl VaultMetaState {
             && self.auth.is_empty()
             && self.joins.is_empty()
             && self.members.is_empty()
+            && self.enrolled_devices.is_empty()
             && self.sentinel_shares.is_empty()
             && self.sentinel_participants.is_empty()
     }

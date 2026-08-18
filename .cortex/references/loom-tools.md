@@ -1,71 +1,5 @@
 # Reference: Loom tools and static agent workflows
 
-## Relationships
-
-- [Agent Workflow Orchestration](../design-docs/agent-workflow-orchestration.md)
-  - Provides the Agent Workflow Orchestration architecture context.
-  - Read when changing the related design.
-- [Prefer Popular Libraries](../dynamic-skills/prefer-popular-libraries.md)
-  - Defines the Prefer Popular Libraries rule used by this document.
-  - Apply when that rule governs the task.
-- [TypeScript Domain Structure](../dynamic-skills/typescript-domain-structure.md)
-  - Defines the TypeScript Domain Structure rule used by this document.
-  - Apply when that rule governs the task.
-- [TypeScript Concrete Values](../dynamic-skills/typescript-no-unknown.md)
-  - Defines the TypeScript Concrete Values rule used by this document.
-  - Apply when that rule governs the task.
-- [TypeScript Single Parameter](../dynamic-skills/typescript-single-parameter.md)
-  - Defines the TypeScript Single Parameter rule used by this document.
-  - Apply when that rule governs the task.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [Static agent workflow boundary](#static-agent-workflow-boundary)
-  - Defines what the guidance covers and where its ownership ends.
-  - Read before expanding or assigning the work.
-- [Invoke a leaf tool](#invoke-a-leaf-tool)
-  - Lists the supported commands and invocation contract.
-  - Read when operating the documented tooling.
-- [TypeScript domain structure](#typescript-domain-structure)
-  - Describes the components, boundaries, and structural model.
-  - Read before changing the design or its interfaces.
-- [Domain request rule](#domain-request-rule)
-  - States the durable principles and invariants for this area.
-  - Use while making design and review decisions.
-- [Discover request kinds](#discover-request-kinds)
-  - Shows how to enumerate Loom's typed request families.
-  - Read when the correct domain request is unclear.
-  - [dependencyPopularity](#dependencypopularity)
-    - Defines the dependency-adoption check request.
-    - Use before adding commodity third-party code.
-- [Common requests](#common-requests)
-  - Collects the standard typed requests used by agents.
-  - Read when constructing a Loom input file.
-  - [prePush](#prepush)
-    - Defines the format and UI-demo pre-push request.
-    - Run before every implementation PR push.
-  - [cortexAudit](#cortexaudit)
-    - Defines the mechanical Cortex consistency audit.
-    - Run after changing `.cortex` documents.
-  - [skillScaffold](#skillscaffold)
-    - Defines synchronized dynamic-skill scaffolding.
-    - Use when creating a new canonical skill card.
-  - [agentStats (assemble / validate / publish)](#agentstats-assemble--validate--publish)
-    - Defines PR-statistics assembly, validation, and publication requests.
-    - Read when recording a merged agent-owned PR.
-  - [prLand (status / validate / ready / mergeCheck)](#prland-status--validate--ready--mergecheck)
-    - Defines typed PR status, validation, readiness, and merge checks.
-    - Read when automating a pull-request delivery transition.
-  - [toolsCall](#toolscall)
-    - Defines the direct typed tool-dispatch request.
-    - Read when invoking a single Loom operation programmatically.
-- [Response](#response)
-  - Defines Loom's success and failure result shape.
-  - Read when consuming or diagnosing command output.
-
 ## Overview
 
 - **Role:** Loom is the Bun tool runner for mechanical Cortex rites.
@@ -123,11 +57,19 @@ That workflow contains:
 
 ## Invoke a leaf tool
 
-Exactly one form:
+Defaultable tools use a Task alias and an in-code example:
+
+```bash
+task loom:pre-push
+task loom:tools-list
+task loom:cortex-audit
+task loom:dependency-popularity
+```
+
+Parameterized tools still take an agent-owned YAML file:
 
 ```bash
 loom <request.yaml>
-# or
 task loom:run CONFIG=<request.yaml>
 ```
 
@@ -185,8 +127,8 @@ Use one domain root family and descriptive fields. Same-prefix operations nest:
 agentStats:
   assemble:
     prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
+    scratchPath: "{agentTempDir}/pr-123-scratch.json"
+    outputPath: "{agentTempDir}/123.yaml"
     includeTestInventory: true
 ```
 
@@ -213,15 +155,6 @@ On decode errors:
 
 Reject low-adoption npm packages and crates.io crates:
 
-```yaml
-dependencyPopularity:
-  includeRepositoryManifests: true
-  minNpmWeeklyDownloads: 10000
-  minGitHubStars: 100
-  minCratesIoDownloads: 50000
-  minCratesIoRecentDownloads: 1000
-```
-
 ```bash
 task loom:dependency-popularity
 ```
@@ -231,13 +164,14 @@ Prefer libraries over boilerplate:
 
 ## Common requests
 
-### prePush
+`task loom:tools-list` returns the canonical invoke command in
+`exampleRequest`, exact `exampleYaml`, and typed `inputSchema` for every
+direct request below.
+`resolvedExampleYaml` equals the generated example for static requests and
+fills dynamic tokens for the current worktree and commit. Consume that output
+instead of maintaining request bodies in Cortex.
 
-```yaml
-prePush:
-  stageHostUpdates: true
-  fetchOriginMain: true
-```
+### prePush
 
 ```bash
 task loom:pre-push
@@ -245,22 +179,11 @@ task loom:pre-push
 
 ### cortexAudit
 
-```yaml
-cortexAudit:
-  includeDensityLint: false
-```
-
 ```bash
 task loom:cortex-audit
 ```
 
 ### skillScaffold
-
-```yaml
-skillScaffold:
-  skillSlug: example-skill
-  createExecutableWrappers: false
-```
 
 ```bash
 task loom:skill-scaffold CONFIG=path/to/request.yaml
@@ -268,30 +191,16 @@ task loom:skill-scaffold CONFIG=path/to/request.yaml
 
 ### agentStats (assemble / validate / publish)
 
-```yaml
-agentStats:
-  assemble:
-    prNumber: 123
-    scratchPath: /tmp/pr-123-events.json
-    outputPath: /tmp/123.yaml
-    includeTestInventory: true
-```
-
 ```bash
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 ```
 
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
-`statsFile`.
+`statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
+by Git commit and worktree. See
+[AI Agent PR Statistics](../workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
 ### prLand (status / validate / ready / mergeCheck)
-
-```yaml
-prLand:
-  validate:
-    prNumber: 948
-    runFullE2e: false
-```
 
 ```bash
 task loom:pr-land CONFIG=path/to/validate-request.yaml
@@ -299,16 +208,10 @@ task loom:pr-land CONFIG=path/to/validate-request.yaml
 
 ### toolsCall
 
-Wraps another domain request:
+Wraps another domain request.
 
-```yaml
-toolsCall:
-  prePush:
-    stageHostUpdates: true
-    fetchOriginMain: true
-```
-
-Prefer a top-level domain key for normal calls.
+Copy the generated `exampleYaml` from `task loom:tools-list` when you need a
+nested call. Prefer a top-level domain key for normal calls.
 
 ## Response
 

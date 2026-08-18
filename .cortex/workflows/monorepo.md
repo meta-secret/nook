@@ -1,39 +1,15 @@
 # Cross-Package Changes
 
-## Relationships
-
-- [Reference: Rust + WebAssembly (wasm-bindgen)](../references/rust-wasm.md)
-  - Provides the Reference: Rust + WebAssembly (wasm-bindgen) operational reference.
-  - Read when using its tools or commands.
-- [Nook Coding Rules & Golden Principles](../rules.md)
-  - Defines the repository-wide engineering rules.
-  - Apply throughout implementation and review.
-- [Coding Bro — Default Agent Workflow](coding-bro.md)
-  - Defines the Coding Bro — Default Agent Workflow workflow referenced here.
-  - Read before performing that workflow.
-- [Pull Request Workflow](pull-requests.md)
-  - Defines the Pull Request Workflow workflow referenced here.
-  - Read before performing that workflow.
-
-## Document map
-
-- [Overview](#overview)
-  - Introduces the document context and its operating assumptions.
-  - Read first before using the detailed guidance.
-- [New vault item type checklist](#new-vault-item-type-checklist)
-  - Defines the Rust-first implementation sequence across packages.
-  - Follow when planning and building a new vault item type.
-
 ## Overview
 
 Use this workflow for feature work that touches more than one package.
 
-0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [rules.md](../rules.md) §6).
-0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [rules.md](../rules.md) §6.
-0c. Estimate authored changed lines and map package ownership before editing.
-If the change approaches 5,000 lines, split it into ordered package- or
-layer-focused PRs. Follow
-[pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
+0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [pull-requests.md](pull-requests.md)).
+   0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [pull-requests.md](pull-requests.md#squash-merge-only---no-exceptions).
+   0c. Estimate authored changed lines and map package ownership before editing.
+   If the change approaches 5,000 lines, split it into ordered package- or
+   layer-focused PRs. Follow
+   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
 3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.

@@ -17,11 +17,11 @@ transaction, leases, attempts, and results. A narrow coordinator sidecar owns
 the Neo4j credential and exposes only typed worker operations over one private
 Unix connection; repository commands cannot issue raw graph queries.
 
-Every embedded turn is pinned to `gpt-5.6-terra` with `low` reasoning effort,
-which
-is the CLI/config representation of Codex Light. The binary and Kubernetes
-deployment carry the same explicit defaults so a platform-default change
-cannot silently change the worker pool's model or intelligence level.
+Every embedded turn is pinned to `gpt-5.6-sol` with `medium` reasoning effort.
+The binary and Kubernetes deployment carry the same explicit defaults so a
+platform-default change cannot silently change the worker pool's model or
+intelligence level. If that Sol or usage quota is exhausted, the worker retries
+once with `gpt-5.3-codex-spark` at `xhigh` effort.
 
 ## Stored readiness invariant
 
@@ -136,7 +136,7 @@ view, while `task infra:hive:diagnose` includes bounded observer logs.
 
 ## Graph schema
 
-Hive graph schema version `8` retains unique constraints for `Task`, `Agent`,
+Hive graph schema version `9` retains unique constraints for `Task`, `Agent`,
 `Attempt`, and `Artifact`, adds `TaskActivity` identity and timeline indexes,
 and retains the task-claim index. Migration records are
 stored as `(:HiveSchemaMigration {version, applied_at})`. A worker refuses to
@@ -154,7 +154,21 @@ Hive image digest and atomically rearming failed blocker dependencies. Version
 task's newest activity timestamp so bounded overview polling does not aggregate
 the retained activity graph. Version 8 initializes the explicit `obsolete`
 retirement marker on every `Task` and `Attempt`; new writes always persist the
-boolean so obsolete dependency revival is durable and queryable.
+boolean so obsolete dependency revival is durable and queryable. Version 9
+converts blocker edges whose children are already `COMPLETED` to
+`INCLUDES_ARTIFACT_FROM` lineage. An active child retains its scheduling edge
+until completion atomically converts that edge and readies its parent. The leaf
+policy prevents retained chains from growing while they drain. Claims traverse
+the non-scheduling lineage in depth order so child artifacts apply before parent
+artifacts, including when a completed blocker is reused by a future consumer.
+Scheduling and rearm traversal ignore the lineage.
+
+To roll version 9 back to a version-8 binary, first stop every Hive worker,
+coordinator, observer, and dispatcher. Restore the pre-version-9 Neo4j data
+volume backup before starting a version-8 binary. Draining tasks and deleting
+`INCLUDES_ARTIFACT_FROM` is not a safe rollback because completed blockers may
+be reused later and require that lineage. If the pre-migration backup is
+unavailable, remain on schema 9; do not delete the lineage or version marker.
 
 To roll version 8 back to a version-7 binary, first stop every Hive worker,
 coordinator, observer, and dispatcher and back up the Neo4j data volume. Delete
@@ -198,6 +212,8 @@ Runtime operations use the binary directly:
 ```text
 hive migrate
 hive enqueue --id task-1 --source-commit <full-git-object-id> --prompt "Implement the feature"
+hive queue status
+hive queue cancel --task-id <id> --reason "superseded by current Main"
 hive worker
 hive observer
 ```
