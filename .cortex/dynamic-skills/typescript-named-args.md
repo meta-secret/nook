@@ -25,7 +25,7 @@ expectBoolean({
   record: object.value,
   key: CortexAuditField.IncludeDensityLint,
   path: ROOT,
-})
+});
 ```
 
 Inline object literals hide the argument type at the call site and make reuse /
@@ -42,7 +42,7 @@ function collectOutcomeObservation({
   startedAt: number;
   authPath: string;
   sawMutation: boolean;
-}): void
+}): void;
 ```
 
 ## Preferred Pattern
@@ -58,7 +58,7 @@ function collectOutcomeObservation({
   startedAt,
   authPath,
   sawMutation,
-}: OutcomeObservationRequest): void
+}: OutcomeObservationRequest): void;
 
 const includeDensityLintArgs: ExpectFieldArgs<CortexAuditField> = {
   record: object.value,
@@ -146,4 +146,3 @@ task loom:verify
 - [ ] Prefer exported arg types from the callee module.
 - [ ] Prefer Rust-generated types for domain-owned boundary contracts.
 - [ ] Keep the applicable Loom or web lint task green.
-

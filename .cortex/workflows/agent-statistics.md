@@ -101,12 +101,12 @@ Measure on the merged implementation `head_sha`.
 
 Count individual test cases, not files or suites.
 
-| `by_type` key | What to count |
-|---|---|
-| `rust` | Nextest cases in core domain crates |
-| `preflight` | Nextest/cargo cases in `preflight` |
-| `web_unit` | Vitest cases under `nook-app/nook-web` |
-| `e2e` | Playwright cases under `nook-app/nook-web` |
+| `by_type` key | What to count                              |
+| ------------- | ------------------------------------------ |
+| `rust`        | Nextest cases in core domain crates        |
+| `preflight`   | Nextest/cargo cases in `preflight`         |
+| `web_unit`    | Vitest cases under `nook-app/nook-web`     |
+| `e2e`         | Playwright cases under `nook-app/nook-web` |
 
 `total` equals the sum of those four counts.
 
@@ -168,4 +168,3 @@ Before publishing:
 - publish with Loom (`task loom:agent-stats CONFIG=<publish-request.yaml>`).
 
 Invalid records must be corrected before publication.
-

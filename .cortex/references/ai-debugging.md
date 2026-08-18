@@ -286,9 +286,9 @@ page logger API so the current UI state is not destroyed by navigation:
 
 ```js
 async () => {
-  await window.__nookLog?.flush()
-  return window.__nookLog?.dump({ minLevel: 'debug', limit: 200 }) ?? []
-}
+  await window.__nookLog?.flush();
+  return window.__nookLog?.dump({ minLevel: "debug", limit: 200 }) ?? [];
+};
 ```
 
 Before calling that function, use `browser_tabs` again and verify the active
@@ -409,4 +409,3 @@ opening that next issue.
 - [Playwright MCP](https://github.com/microsoft/playwright-mcp)
 - [Application logging](logging.md)
 - [Codex project configuration](https://developers.openai.com/codex/codex-manual.md#configuration-auth-and-models)
-

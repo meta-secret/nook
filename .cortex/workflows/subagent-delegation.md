@@ -237,4 +237,3 @@ Before integration, verify:
 - write scopes did not overlap;
 - the parent reviewed all evidence;
 - only the delivery owner mutated shared lifecycle state.
-

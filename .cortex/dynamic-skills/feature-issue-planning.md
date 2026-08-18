@@ -49,4 +49,3 @@ Nook feature.
   information, environment values, or raw logs.
 
 Full workflow: [workflows/issues.md](../workflows/issues.md).
-

@@ -49,4 +49,3 @@ not JavaScript promise coordination.
 - Confirm the idle barrier never rejects.
 - Run `git diff --check`; run product validation only through the normal
   repository workflow.
-

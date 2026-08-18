@@ -24,6 +24,7 @@ Common failures:
 
 - a workflow names a Task command that no longer exists;
 - two `.cortex` docs state opposite rules for the same topic;
+- a product spec omits features or rules introduced in chat, code, or PR reviews;
 - a design doc describes an old architecture after the code moved;
 - an index still links a deleted or renamed file;
 - a skill card teaches a pattern the repo already rejected;
@@ -46,6 +47,7 @@ Verification checklist:
 
 - [ ] Docs agree with each other on the active rule.
 - [ ] Docs agree with the current code paths.
+- [ ] Product specs reflect implemented features, user flows, and chat decisions.
 - [ ] Named commands, packages, and paths still exist.
 - [ ] Superseded designs are labeled historical.
 - [ ] Dead links and orphan index rows are gone.
@@ -62,7 +64,7 @@ Conflict resolution order:
 
 Applies to:
 
-- every `.cortex/**/*.md` edit
+- every `.cortex/**/*.md` edit, including product specifications
 - implementation tasks that change durable architecture, workflow, or product
   behavior
 - skill-card capture and refactor work
@@ -156,4 +158,3 @@ For a full Cortex GC request, report:
 - cross-doc conflicts resolved;
 - code mismatches fixed;
 - remaining historical labels.
-

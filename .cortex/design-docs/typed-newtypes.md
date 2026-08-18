@@ -6,7 +6,7 @@
 
 ## Why
 
-A bare `String` does not tell the compiler what the value *means*. `DevicePublicKey` vs `DeviceSigningPublicKey` vs `SymmetricKey` are all strings on the wire but must never be swapped. Newtypes make intent explicit and turn mix-ups into compile errors.
+A bare `String` does not tell the compiler what the value _means_. `DevicePublicKey` vs `DeviceSigningPublicKey` vs `SymmetricKey` are all strings on the wire but must never be swapped. Newtypes make intent explicit and turn mix-ups into compile errors.
 
 The vault will carry **multiple schema versions** concurrently (events, envelopes, projection). Version fields should be newtypes (`VaultEventSchemaVersion`, `PasswordEnvelopeVersion`, …) so each struct's supported range is checked at parse time, not ad-hoc `u32` comparisons scattered through the code.
 
@@ -14,33 +14,33 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 
 ### Implemented (`nook-core`)
 
-| Newtype | Module | Wire / meaning |
-|---------|--------|----------------|
-| `CompactToken` | `vault_ids` | 11-char base64url random suffix |
-| `StoreId` | `vault_ids` | `store_{token}` vault identity |
-| `SecretId` | `vault_ids` | `secret_{token}` |
-| `AuthKeyId` | `vault_ids` | `key_{sha256_hex}` actor / auth row |
-| `DeviceId` | `vault_ids` | 16-hex device fingerprint |
-| `EventId` | `event_canonical` | `sha256u:{base64url_no_pad}` content-addressed event |
-| `KeyEpoch` | `vault_epoch` | wraps `EventId` — epoch protecting payloads |
-| `Ed25519Signature` | `event_canonical` | `ed25519:{hex}` event signature |
-| `Sha256Hex` | `vault_wire` | bare 64-hex digest (content hash, checkpoint) |
-| `DeviceSigningPublicKey` | `vault_wire` | 64-hex Ed25519 verifying key bytes |
-| `SymmetricKey` | `vault_wire` | 64-hex vault symmetric key |
-| `DevicePublicKey` | `vault_wire` | age X25519 recipient string |
-| `DeviceIdentitySecret` | `vault_wire` | age X25519 identity secret |
-| `AgeArmoredCiphertext` | `vault_wire` | age armor block |
-| `StoredRecordPayload` | `secret_types` | opaque on-disk ciphertext / JSON blob |
-| `StoredVaultYaml` | `vault_wire` | vault YAML blob |
-| `SecretPayloadYaml` | `vault_wire` | typed secret YAML before encryption |
-| `IsoTimestamp` | `vault_wire` | RFC 3339 timestamps (`created_at`, …) |
-| `MemberLabel` | `vault_wire` | human device / member label |
-| `PasswordEntryId` | `vault_wire` | password-unlock slot id |
-| `VaultEventSchemaVersion` | `vault_event` | event body `schema_version` |
-| `ObservedHeads` | `vault_event_builder` | validated causal head set |
-| `DecryptedPlaintext` | `vault_wire` | age-scrypt decrypt output (YAML or JSON) |
-| `SigningSeedHex` | `vault_wire` | 64-hex Ed25519 signing seed |
-| `VaultAccessStatus` | `vault_connect` | connect pre-flight tag (`new_vault`, `ready`, …) |
+| Newtype                   | Module                | Wire / meaning                                       |
+| ------------------------- | --------------------- | ---------------------------------------------------- |
+| `CompactToken`            | `vault_ids`           | 11-char base64url random suffix                      |
+| `StoreId`                 | `vault_ids`           | `store_{token}` vault identity                       |
+| `SecretId`                | `vault_ids`           | `secret_{token}`                                     |
+| `AuthKeyId`               | `vault_ids`           | `key_{sha256_hex}` actor / auth row                  |
+| `DeviceId`                | `vault_ids`           | 16-hex device fingerprint                            |
+| `EventId`                 | `event_canonical`     | `sha256u:{base64url_no_pad}` content-addressed event |
+| `KeyEpoch`                | `vault_epoch`         | wraps `EventId` — epoch protecting payloads          |
+| `Ed25519Signature`        | `event_canonical`     | `ed25519:{hex}` event signature                      |
+| `Sha256Hex`               | `vault_wire`          | bare 64-hex digest (content hash, checkpoint)        |
+| `DeviceSigningPublicKey`  | `vault_wire`          | 64-hex Ed25519 verifying key bytes                   |
+| `SymmetricKey`            | `vault_wire`          | 64-hex vault symmetric key                           |
+| `DevicePublicKey`         | `vault_wire`          | age X25519 recipient string                          |
+| `DeviceIdentitySecret`    | `vault_wire`          | age X25519 identity secret                           |
+| `AgeArmoredCiphertext`    | `vault_wire`          | age armor block                                      |
+| `StoredRecordPayload`     | `secret_types`        | opaque on-disk ciphertext / JSON blob                |
+| `StoredVaultYaml`         | `vault_wire`          | vault YAML blob                                      |
+| `SecretPayloadYaml`       | `vault_wire`          | typed secret YAML before encryption                  |
+| `IsoTimestamp`            | `vault_wire`          | RFC 3339 timestamps (`created_at`, …)                |
+| `MemberLabel`             | `vault_wire`          | human device / member label                          |
+| `PasswordEntryId`         | `vault_wire`          | password-unlock slot id                              |
+| `VaultEventSchemaVersion` | `vault_event`         | event body `schema_version`                          |
+| `ObservedHeads`           | `vault_event_builder` | validated causal head set                            |
+| `DecryptedPlaintext`      | `vault_wire`          | age-scrypt decrypt output (YAML or JSON)             |
+| `SigningSeedHex`          | `vault_wire`          | 64-hex Ed25519 signing seed                          |
+| `VaultAccessStatus`       | `vault_connect`       | connect pre-flight tag (`new_vault`, `ready`, …)     |
 
 ### WASM / JS boundary
 
@@ -48,11 +48,11 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 
 ### Legitimately raw (for now)
 
-| Type | Reason |
-|------|--------|
+| Type                                                      | Reason                                       |
+| --------------------------------------------------------- | -------------------------------------------- |
 | `SecretValue` inner fields (`website_url`, `password`, …) | Plaintext user content — not interchange IDs |
-| `i18n` lookup keys | Locale plumbing, not vault domain |
-| `serde_json::Value` in canonical JSON | Encoding primitive |
+| `i18n` lookup keys                                        | Locale plumbing, not vault domain            |
+| `serde_json::Value` in canonical JSON                     | Encoding primitive                           |
 
 ## Patterns
 
@@ -114,4 +114,3 @@ enum VersionedVaultEventBody {
 - [vault-event-log.md](vault-event-log.md) — event envelope fields
 - [references/rust-wasm.md](../references/rust-wasm.md) — WASM boundary conventions
 - [dynamic-skills/testing-pyramid-and-regression.md](../dynamic-skills/testing-pyramid-and-regression.md) — domain testing standards
-

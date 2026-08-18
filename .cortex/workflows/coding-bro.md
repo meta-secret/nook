@@ -42,6 +42,7 @@ Default PR-first loop:
 1. **Record the interpreted task:**
    - Fetch `origin/main`.
    - Write the important requirements in the agent's own words.
+   - For user-facing features, item types, or UX flows, find and read the owning specification in [`.cortex/product-specs/`](../product-specs/) (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
    - Apply [subagent-delegation.md](subagent-delegation.md).
    - Record the delegation decision and planned joins.
    - Estimate authored changed lines.
@@ -53,8 +54,10 @@ Default PR-first loop:
    capabilities, tests, migrations, and documentation to each slice. Create a
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
-3. **Implement functionality** — make the module-focused changes for the
-   current slice. Re-estimate when the scope changes.
+3. **Implement functionality:**
+   - Make the module-focused changes for the current slice.
+   - When implementation, chat dialogues, or debugging reveal new product requirements, rules, or edge cases, update the owning specification in [`.cortex/product-specs/`](../product-specs/) (or author a new specification) in the same PR.
+   - Re-estimate when the scope changes.
 4. **Prepare the coherent commit:**
    - Run `task loom:pre-push`.
    - Commit the formatted change.
@@ -233,9 +236,10 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 
 ## How it works
 
-0. **Interpret the request** — Identify the important requirements without copying the raw prompt or chat.
+0. **Interpret the request** — Identify the important requirements without copying the raw prompt or chat. Read the owning specification in [`.cortex/product-specs/`](../product-specs/) when product behavior or user flows are touched.
 1. **Confirm ownership, fetch, and publish the task plan:**
    - Identify the assigned feature and focused issues.
+   - Read the relevant product specification in `.cortex/product-specs/`.
    - Leave every other active task unchanged.
    - Sync with remote.
    - Estimate authored changed lines.
@@ -248,8 +252,10 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    scope in mind from the first implementation step.
 3. **Implement** — Make the module-focused change. Follow dynamic skills in
    [dynamic-skills/](../dynamic-skills/) and package boundaries in
-   [ARCHITECTURE.md](../ARCHITECTURE.md). If work is risky, blocked, or outside
-   the authorized scope, follow [issues.md](issues.md) before handoff:
+   [ARCHITECTURE.md](../ARCHITECTURE.md). Update relevant product specs in
+   `.cortex/product-specs/` in the same PR when product behavior or constraints
+   are refined. If work is risky, blocked, or outside the authorized scope,
+   follow [issues.md](issues.md) before handoff:
    - update or create the Workbench feature;
    - add focused Markdown records for the missing work.
 4. **Prepare the coherent commit:**
@@ -274,7 +280,10 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Before merging, fetch `origin/main` and verify the PR branch is not stale.
    - If it is stale, merge `origin/main`, push, and explicitly validate the refreshed head.
 7. **Fix loop on failure** — If Nook's PR test checks fail: read **app logs** → fix → `task loom:pre-push` → commit and push → optional focused `task remote` → explicitly re-validate.
-8. **Address and resolve PR comments** — Inspect feedback; reply; resolve threads; push when needed.
+8. **Address and resolve PR comments:**
+   - Inspect feedback.
+   - Update code, tests, and product specifications when review comments refine product rules.
+   - Reply to threads, resolve them, and push when needed.
 9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and every actionable comment is resolved.
 10. **Squash merge** — run `gh pr merge <n> --squash` immediately after `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` succeeds.
 11. **Publish Workbench completion context and statistics:**
@@ -510,10 +519,10 @@ Create the YAML from current Nook `main`:
 ## Related docs
 
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
+- [product-spec-lifecycle.md](../dynamic-skills/product-spec-lifecycle.md) — read specs before work; update specs on new knowledge from chat, tasks, or PR iterations
 - [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
 - [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
 - [issues.md](issues.md) — Workbench issues, required task-start plans, and completion worklogs
 - [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
 - [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and Workbench publication
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)
-

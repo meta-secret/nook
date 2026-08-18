@@ -75,7 +75,7 @@ After a slice merges:
 4. If the current agent continues, claim the issue as `in_progress` before
    starting its branch from current Nook `origin/main`.
 5. If bounded automation will continue, set `status: ready` and `automation:
-   agent`.
+agent`.
 6. Explicitly dispatch that issue's exact `issue_path`.
 7. In that case, the current agent must not also start the issue.
 
@@ -318,4 +318,3 @@ The final response or PR comment must link:
 
 Re-open the published files before handoff and verify the links and state are
 visible on Workbench `main`.
-

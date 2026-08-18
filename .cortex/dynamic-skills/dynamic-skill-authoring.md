@@ -68,4 +68,3 @@ For documentation-only captures, run `task loom:cortex-audit`.
 For code refactors using a dynamic skill, run `task loom:pre-push`, commit and
 push, use focused hosted tasks as useful, then explicitly trigger complete
 validation with `task pr:validate`.
-

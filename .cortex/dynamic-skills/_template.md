@@ -46,4 +46,3 @@ explicitly trigger complete validation with `task pr:validate`.
 
 For a docs-only Cortex change, run the focused checks named by
 [Cortex document navigation](cortex-document-map.md#validation).
-

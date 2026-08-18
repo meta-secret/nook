@@ -16,6 +16,7 @@ secrets while keeping the model decentralized: your secrets, your storage, your
 keys.
 
 ### Core Goals
+
 - **Zero-Knowledge Architecture:** Plaintext credentials and encryption keys must never leave the user's browser or be sent over the wire in unencrypted form.
 - **Stateless UI:** The frontend components act only as a view shell. All state mutation, serialization, validation, password generation, and cryptographic operations are encapsulated in Rust (`nook-core` + `nook-wasm`).
 - **Portable Backends:** Support local browser storage (IndexedDB) and remote git-backed repositories (GitHub API) with a unified connection flow.
@@ -33,6 +34,7 @@ flowchart TD
 ```
 
 ### A. Login & Storage Provider Flow
+
 1. **Device protection gate:**
    - Before provider credentials or device keys are loaded, the user creates or authorizes passkey-backed WebAuthn PRF protection, or a local PIN fallback when PRF is unavailable.
    - A backup password may instead unwrap a local vault directly.
@@ -55,6 +57,7 @@ flowchart TD
 8. **Future:** Sync providers replicate one local vault with version-based reconciliation — see [unified-vault.md](../design-docs/unified-vault.md).
 
 ### B. Managing Vault Secrets
+
 1. **Secrets List:** Plaintext secrets are listed alphabetically by key (service name).
 2. **Search / Filter:** A search bar filters secrets in real-time. Filtering runs in `nook-core` (`filter_secrets`) via WASM — labels only, case-insensitive substring match.
 3. **Secret Visibility Toggle:** Secret values are masked as dots by default. Users can toggle reveal per row.
@@ -165,13 +168,15 @@ flowchart TD
      and are never added to the event log.
    - See [authenticator-items.md](authenticator-items.md).
 10. **Credit card items:**
-   - Users can store payment cards as standalone secure items with a title,
-     optional cardholder name, card number, optional expiry, optional CVV, and
-     notes. Numbers are Luhn-validated in Rust; list views expose only last
-     four digits and never log full PAN or CVV.
-   - See [credit-card-items.md](credit-card-items.md).
+
+- Users can store payment cards as standalone secure items with a title,
+  optional cardholder name, card number, optional expiry, optional CVV, and
+  notes. Numbers are Luhn-validated in Rust; list views expose only last
+  four digits and never log full PAN or CVV.
+- See [credit-card-items.md](credit-card-items.md).
 
 ### C. Cryptographically Secure Password Generator
+
 1. **Options Panel:** Located alongside the addition form.
 2. **Parameters:**
    - **Length Slider:** Range 8–64 in UI (Rust accepts 8–128 via `PasswordGenerationOptions`).
@@ -183,6 +188,7 @@ flowchart TD
 ## 3. Database Schema & File Formats
 
 ### A. Ciphertext-backed session and encrypted search catalog
+
 The WASM session holds encrypted per-record payloads. Full `SecretRecord`
 plaintext exists only for an explicit reveal/copy/edit or while deriving a new
 or changed catalog row, then it is zeroized.
@@ -199,6 +205,7 @@ The catalog is local-only and is not uploaded to sync
 providers.
 
 ### B. Local Projection Layout (YAML)
+
 Path: browser-local `nook-projection.yaml` projection cache (IndexedDB `vault:{store_id}`).
 
 ```yaml
@@ -231,9 +238,10 @@ secrets:
   stores title/file metadata plus standard-base64 file bytes (max 1 MiB
   decoded); list projections expose metadata only. See
   [file-attachments.md](file-attachments.md).
-Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd nook-app/nook-platform && cargo run --example generate_vault_fixtures -p nook-core`).
+  Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd nook-app/nook-platform && cargo run --example generate_vault_fixtures -p nook-core`).
 
 ### C. Local Storage Adapter (IndexedDB)
+
 - **Database Name:** `nook_db`, version `1`, store `vault`
 - **Records:**
   - `device_identity_wrapped` — versioned AES-256-GCM-wrapped age X25519 identity plus WebAuthn PRF or PIN metadata (never synced).
@@ -243,6 +251,7 @@ Example fixtures: `nook-app/nook-platform/nook-core/fixtures/` (generate via `cd
   - Values are UTF-8 YAML text.
 
 ### D. GitHub Repository Adapter
+
 - **Repository:** `{username}/nook` (auto-created if missing).
 - **Event Path:** `nook-log/v1/events/{base64url_sha256_digest}.yaml`
 - **Endpoint:** `https://api.github.com/repos/{username}/nook/contents/nook-log/v1/events/{base64url_sha256_digest}.yaml`
@@ -287,13 +296,13 @@ do not grant vault access.
 
 ## 5. Rust Domain Modules (`nook-core`)
 
-| Module | Responsibility |
-|--------|----------------|
-| `lib.rs` / `Database` | Typed in-memory session, stored vault encrypt/decrypt |
-| `vault_format.rs` | YAML serialization and parsing |
-| `vault_crypto.rs` | Session-scoped age encrypt/decrypt |
-| `validation.rs` | Connect/secret validation, search filter |
-| `password.rs` | CSPRNG password generation |
+| Module                     | Responsibility                                               |
+| -------------------------- | ------------------------------------------------------------ |
+| `lib.rs` / `Database`      | Typed in-memory session, stored vault encrypt/decrypt        |
+| `vault_format.rs`          | YAML serialization and parsing                               |
+| `vault_crypto.rs`          | Session-scoped age encrypt/decrypt                           |
+| `validation.rs`            | Connect/secret validation, search filter                     |
+| `password.rs`              | CSPRNG password generation                                   |
 | `passkey_authenticator.rs` | RP/origin validation, ES256 registration/assertion, counters |
 
 All format, crypto, validation, and generator behavior must be covered by Rust tests (`task rust:test`). Integration workflows live in `nook-app/nook-platform/nook-core/tests/vault_workflow.rs`.
@@ -303,6 +312,7 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 ## 6. TypeScript / UI Boundaries
 
 **Belongs in Rust (not TS/Svelte):**
+
 - Vault serialization (YAML)
 - Encrypt/decrypt
 - Password generation
@@ -312,8 +322,8 @@ All format, crypto, validation, and generator behavior must be covered by Rust t
 - WebAuthn request validation, key generation, signing, and counter mutation
 
 **Belongs in UI only:**
+
 - Tab navigation, loading spinners, toast messages
 - `localStorage` for storage mode + PAT convenience
 - Clipboard, reveal/hide, form bindings
 - `requestAnimationFrame` yield before blocking WASM crypto (paint "Saving…")
-

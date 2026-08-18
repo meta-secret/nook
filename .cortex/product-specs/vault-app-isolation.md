@@ -9,12 +9,12 @@ building blocks. They are not selectable modes inside one production web app.
 
 ## Product Surfaces
 
-| Surface | Project | Production origin | Vault capability |
-|---|---|---|---|
-| Public site | `nook-web-app` | `https://nokey.sh` | Cannot open a vault session |
-| Everyday vault | `nook-vault-simple` | `https://simple.nokey.sh` | Simple only; extension pairing allowed |
-| Quorum safe | `nook-vault-sentinel` | `https://sentinel.nokey.sh` | Sentinel only; extension integration forbidden |
-| Browser companion | `nook-web-extension` | extension origin | Simple only |
+| Surface           | Project               | Production origin           | Vault capability                               |
+| ----------------- | --------------------- | --------------------------- | ---------------------------------------------- |
+| Public site       | `nook-web-app`        | `https://nokey.sh`          | Cannot open a vault session                    |
+| Everyday vault    | `nook-vault-simple`   | `https://simple.nokey.sh`   | Simple only; extension pairing allowed         |
+| Quorum safe       | `nook-vault-sentinel` | `https://sentinel.nokey.sh` | Sentinel only; extension integration forbidden |
+| Browser companion | `nook-web-extension`  | extension origin            | Simple only                                    |
 
 Main mirrors the same origin isolation at `dev.nokey.sh`,
 `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`. Pull requests use native
@@ -93,4 +93,3 @@ link back to Simple for users leaving the quorum-only product.
   3. Refuse a mixed release when vault hostnames report different commits.
 - **Cross-app navigation:** Call the Rust/WASM lock path before navigation.
   - Carry no vault payload, provider credential, or session token in the URL.
-

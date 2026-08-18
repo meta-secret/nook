@@ -11,7 +11,7 @@ Authored web code can use an absent initial value as an unnamed lifecycle
 state:
 
 ```ts
-let selected = $state<Item>()
+let selected = $state<Item>();
 ```
 
 The declaration silently means `Item | undefined`, so every consumer must
@@ -29,9 +29,9 @@ enum SelectionKind {
 
 type SelectionState =
   | { kind: SelectionKind.NotSelected }
-  | { kind: SelectionKind.Selected; item: Item }
+  | { kind: SelectionKind.Selected; item: Item };
 
-let selection = $state<SelectionState>({ kind: SelectionKind.NotSelected })
+let selection = $state<SelectionState>({ kind: SelectionKind.NotSelected });
 ```
 
 Modeling rules:
@@ -60,8 +60,8 @@ Modeling rules:
 Use an explicit initializer when state has a concrete initial value:
 
 ```ts
-let items = $state<Item[]>([])
-let isLoading = $state(false)
+let items = $state<Item[]>([]);
+let isLoading = $state(false);
 ```
 
 ## Scope
@@ -109,4 +109,3 @@ Does not apply to:
 Run the syntax-aware TypeScript application-state preflight and
 `git diff --check`. Run formatting only when preparing a push; product checks
 remain in GitHub Actions.
-

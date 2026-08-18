@@ -58,6 +58,7 @@ flowchart TD
 
 1. **No Circular Dependencies:** `nook-core` must not depend on `nook-wasm` or `nook-web`. `nook-wasm` must not depend on `nook-web`.
 2. **Platform Portability:** `nook-app-common`, `nook-auth2`, `nook-replication`, `nook-event-log`, and `nook-core` compile on native and `wasm32-unknown-unknown`.
+
 - No browser APIs in these crates.
 - Simple domain DTOs/enums may carry `wasm-bindgen` annotations so web callers use the same typed core models.
 
@@ -183,19 +184,19 @@ Nook operates on three primary data flows: multi-device vault unlock, incrementa
 
 ## 4. Storage & Cryptographic Specs
 
-| Layer | Format | Location |
-| --- | --- | --- |
-| Session (plaintext user secrets) | Typed `Database` records | WASM memory only |
-| On-disk user secrets | YAML `secrets:` list | Values encrypted with `secrets_key` |
-| Local search catalog | Age-encrypted `SecretListItem` buckets | IndexedDB `secret_search_v2:{store_id}:{bucket}` |
-| Logical secret store | YAML `store_id` | `store_{token}` across replicas |
-| Vault revision | Event-log causal heads | Live sync is the event log |
-| Active unlock mode | YAML `unlock:` tagged union | Omitted when device keys are the default |
-| Vault authorization envelopes | YAML `auth:` list | Per-device encrypted key envelopes |
-| Vault member catalog | YAML `members:` list | `members_key`-encrypted relationship data |
-| Vault-coupled joins | YAML `joins:` list | Transient device join wire |
-| Device identity (X25519 private) | AES-256-GCM wrapped or passkey-derived secret | IndexedDB `device_identity_wrapped` |
-| Replication-provider connections | JSON snapshot | IndexedDB `nook_auth` → `providers` |
+| Layer                            | Format                                        | Location                                         |
+| -------------------------------- | --------------------------------------------- | ------------------------------------------------ |
+| Session (plaintext user secrets) | Typed `Database` records                      | WASM memory only                                 |
+| On-disk user secrets             | YAML `secrets:` list                          | Values encrypted with `secrets_key`              |
+| Local search catalog             | Age-encrypted `SecretListItem` buckets        | IndexedDB `secret_search_v2:{store_id}:{bucket}` |
+| Logical secret store             | YAML `store_id`                               | `store_{token}` across replicas                  |
+| Vault revision                   | Event-log causal heads                        | Live sync is the event log                       |
+| Active unlock mode               | YAML `unlock:` tagged union                   | Omitted when device keys are the default         |
+| Vault authorization envelopes    | YAML `auth:` list                             | Per-device encrypted key envelopes               |
+| Vault member catalog             | YAML `members:` list                          | `members_key`-encrypted relationship data        |
+| Vault-coupled joins              | YAML `joins:` list                            | Transient device join wire                       |
+| Device identity (X25519 private) | AES-256-GCM wrapped or passkey-derived secret | IndexedDB `device_identity_wrapped`              |
+| Replication-provider connections | JSON snapshot                                 | IndexedDB `nook_auth` → `providers`              |
 
 Search catalog detail:
 
@@ -236,7 +237,7 @@ App key detail:
 Provider connections detail:
 
 - Credentials are sealed to the local device.
-Related design specifications:
+  Related design specifications:
 
 - [vault-session-and-lock.md](design-docs/vault-session-and-lock.md): Lock session vs persisted data boundaries.
 - [decentralized-auth.md](product-specs/decentralized-auth.md): Join and approve flows.
@@ -268,18 +269,18 @@ YAML payload sections:
 
 ## 6. Testing Strategy
 
-| Package | Tests |
-| --- | --- |
-| `preflight` | `task preflight` |
-| `nook-app-common` | `task rust:coverage:check` |
-| `nook-authenticator-domain` | `task rust:coverage:check` |
-| `nook-auth2` | `task rust:coverage:check` |
-| `nook-replication` | `task rust:coverage:check` |
-| `nook-event-log` | `task rust:coverage:check` |
-| `nook-companion-core` | `task rust:coverage:check` |
-| `nook-core` | `task rust:coverage:check` |
-| `nook-web/nook-web-app` | Playwright e2e |
-| `nook-wasm` | Covered via `nook-core` + e2e |
+| Package                       | Tests                                              |
+| ----------------------------- | -------------------------------------------------- |
+| `preflight`                   | `task preflight`                                   |
+| `nook-app-common`             | `task rust:coverage:check`                         |
+| `nook-authenticator-domain`   | `task rust:coverage:check`                         |
+| `nook-auth2`                  | `task rust:coverage:check`                         |
+| `nook-replication`            | `task rust:coverage:check`                         |
+| `nook-event-log`              | `task rust:coverage:check`                         |
+| `nook-companion-core`         | `task rust:coverage:check`                         |
+| `nook-core`                   | `task rust:coverage:check`                         |
+| `nook-web/nook-web-app`       | Playwright e2e                                     |
+| `nook-wasm`                   | Covered via `nook-core` + e2e                      |
 | `nook-web/nook-web-extension` | `task extension:check` + `task extension:test:e2e` |
 
 `preflight` detail:
@@ -382,4 +383,3 @@ See
 [design-docs/hive-isolated-agent-platform.md](design-docs/hive-isolated-agent-platform.md)
 for the complete component model, task lifecycle, trust boundaries, recovery
 semantics, cache topology, and deployment command surface.
-

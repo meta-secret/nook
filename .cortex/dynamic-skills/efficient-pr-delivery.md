@@ -98,4 +98,3 @@ Does not apply to:
   - feedback requiring handling.
 - The audit stays read-only.
 - The task-owning agent performs the squash merge after readiness succeeds.
-

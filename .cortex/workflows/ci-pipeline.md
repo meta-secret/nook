@@ -11,25 +11,74 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 ## Workflow map
 
-| Workflow | Trigger | What runs | GitHub PAT |
-| --- | --- | --- | --- |
-| [`remote.yml`](../../.github/workflows/remote.yml) | Manual allowlisted task dispatch | Focused command batch; no merge authorization | No |
-| [`pr.yml`](../../.github/workflows/pr.yml) | Explicit `ci:validate` / `ci:full-e2e` label | Exact-head PR gate, including Rust ecosystem jobs | No |
-| [`repository-policy.yml`](../../.github/workflows/repository-policy.yml) | Every PR; path-filtered Main changes | Source architecture plus conditional Loom verification | No |
-| [`web-research.yml`](../../.github/workflows/web-research.yml) | Path-filtered PR/Main changes or manual dispatch | Research check, build, Cloudflare deploy, and PR preview | No |
-| [`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml) | Schedule, manual, minds-only PR | Specialist Rust ecosystem entry points | No |
-| [`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml) | Successful same-repository PR workflow | Promote trusted PR artifacts | No |
-| [`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml) | Successful PR workflow / PR close | Publish PR demo WebMs to Linear | No |
-| [`main.yml`](../../.github/workflows/main.yml) | Push to `main` | Product + ecosystem verify, e2e, dev deploy | No |
-| [`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml) | Completed `Main` attempt | Commit Main build stats to Workbench | Yes (`NOOK_GITHUB_PAT`) |
-| [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml) | Failed `Main` attempt | Create Hive Workbench incident | Yes (`NOOK_GITHUB_PAT`) |
-| [`hive.yml`](../../.github/workflows/hive.yml) | Hive/infra PR changes and Main pushes | Hive format/Clippy/tests | No |
-| [`release.yml`](../../.github/workflows/release.yml) | Semver tag `v*.*.*` or manual version + ref | Production verify, deploy, release | No |
-| [`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml) | Weekly Monday 09:00 UTC + manual | Audit and AI-update Rust deps | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) | Explicit issue-path or prompt dispatch | Claim Workbench issue or run prompt → implement → PR | Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`) |
-| [`ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml) | Manual | ci-agent unit tests and open-handle exit smoke | No |
-| [`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml) | Manual | Debug e2e on a PR branch | Only for `sync-live` |
-| [`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) | Cron 13:00 UTC + manual | Docker prune on self-hosted `nook` runner | No |
+- **[`remote.yml`](../../.github/workflows/remote.yml)**
+  - Trigger: Manual allowlisted task dispatch
+  - Purpose: Focused command batch; no merge authorization
+  - GitHub PAT: No
+- **[`pr.yml`](../../.github/workflows/pr.yml)**
+  - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
+  - Purpose: Exact-head PR gate, including Rust ecosystem jobs
+  - GitHub PAT: No
+- **[`repository-policy.yml`](../../.github/workflows/repository-policy.yml)**
+  - Trigger: Every PR; path-filtered Main changes
+  - Purpose: Source architecture plus conditional Loom verification
+  - GitHub PAT: No
+- **[`web-research.yml`](../../.github/workflows/web-research.yml)**
+  - Trigger: Path-filtered PR/Main changes or manual dispatch
+  - Purpose: Research check, build, Cloudflare deploy, and PR preview
+  - GitHub PAT: No
+- **[`rust-ecosystem.yml`](../../.github/workflows/rust-ecosystem.yml)**
+  - Trigger: Schedule, manual, minds-only PR
+  - Purpose: Specialist Rust ecosystem entry points
+  - GitHub PAT: No
+- **[`pr-validation-handoff.yml`](../../.github/workflows/pr-validation-handoff.yml)**
+  - Trigger: Successful same-repository PR workflow
+  - Purpose: Promote trusted PR artifacts
+  - GitHub PAT: No
+- **[`linear-ui-demo.yml`](../../.github/workflows/linear-ui-demo.yml)**
+  - Trigger: Successful PR workflow / PR close
+  - Purpose: Publish PR demo WebMs to Linear
+  - GitHub PAT: No
+- **[`main.yml`](../../.github/workflows/main.yml)**
+  - Trigger: Push to `main`
+  - Purpose: Product + ecosystem verify, e2e, dev deploy
+  - GitHub PAT: No
+- **[`main-build-stats.yml`](../../.github/workflows/main-build-stats.yml)**
+  - Trigger: Completed `Main` attempt
+  - Purpose: Commit Main build stats to Workbench
+  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
+- **[`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)**
+  - Trigger: Failed `Main` attempt
+  - Purpose: Create Hive Workbench incident
+  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`)
+- **[`hive.yml`](../../.github/workflows/hive.yml)**
+  - Trigger: Hive/infra PR changes and Main pushes
+  - Purpose: Hive format/Clippy/tests
+  - GitHub PAT: No
+- **[`release.yml`](../../.github/workflows/release.yml)**
+  - Trigger: Semver tag `v*.*.*` or manual version + ref
+  - Purpose: Production verify, deploy, release
+  - GitHub PAT: No
+- **[`rust-dependency-updates.yml`](../../.github/workflows/rust-dependency-updates.yml)**
+  - Trigger: Weekly Monday 09:00 UTC + manual
+  - Purpose: Audit and AI-update Rust deps
+  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
+- **[`agent-implement.yml`](../../.github/workflows/agent-implement.yml)**
+  - Trigger: Explicit issue-path or prompt dispatch
+  - Purpose: Claim Workbench issue or run prompt → implement → PR
+  - GitHub PAT: Yes (`NOOK_GITHUB_PAT`, `CURSOR_API_KEY`)
+- **[`ci-agent-smoke.yml`](../../.github/workflows/ci-agent-smoke.yml)**
+  - Trigger: Manual
+  - Purpose: ci-agent unit tests and open-handle exit smoke
+  - GitHub PAT: No
+- **[`e2e-pr.yml`](../../.github/workflows/e2e-pr.yml)**
+  - Trigger: Manual
+  - Purpose: Debug e2e on a PR branch
+  - GitHub PAT: Only for `sync-live`
+- **[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml)**
+  - Trigger: Cron 13:00 UTC + manual
+  - Purpose: Docker prune on self-hosted `nook` runner
+  - GitHub PAT: No
 
 ### Workflow details
 
@@ -207,18 +256,18 @@ exception: an active run completes so its serialized cache writers cannot be
 interrupted, while the single pending slot is replaced by the newest merged
 revision during a burst.
 
-| Workflow           | Concurrency scope                    | Cancel active run? | Reason                                                                           |
-| ------------------ | ------------------------------------ | ------------------ | -------------------------------------------------------------------------------- |
-| PR                 | PR number                            | Yes                | Only the newest commit on the same PR needs validation                           |
-| Main               | `main`                               | No; one pending    | Finish active cache publication and coalesce bursts to the newest pending revision |
-| Main failure handoff | Failed Main head SHA               | No; one pending    | Serialize retries that update the same Workbench incident                         |
-| Main build stats   | Main run ID + attempt                 | No                 | Every completed attempt is immutable evidence; separate runs never supersede it   |
-| Manual PR e2e      | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                |
-| Web research       | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                        |
-| CI agent smoke     | Global smoke group                   | Yes                | Only the newest smoke result matters                                             |
-| Agent implement    | Issue number; manual runs are unique | No                 | It may already have pushed a branch or opened a PR                               |
-| Production release | Global production release group      | No                 | Serialize stateful publication without interrupting a deploy                     |
-| Runner cleanup     | Global cleanup group                 | No                 | Let an active Docker prune finish safely                                         |
+| Workflow             | Concurrency scope                    | Cancel active run? | Reason                                                                             |
+| -------------------- | ------------------------------------ | ------------------ | ---------------------------------------------------------------------------------- |
+| PR                   | PR number                            | Yes                | Only the newest commit on the same PR needs validation                             |
+| Main                 | `main`                               | No; one pending    | Finish active cache publication and coalesce bursts to the newest pending revision |
+| Main failure handoff | Failed Main head SHA                 | No; one pending    | Serialize retries that update the same Workbench incident                          |
+| Main build stats     | Main run ID + attempt                | No                 | Every completed attempt is immutable evidence; separate runs never supersede it    |
+| Manual PR e2e        | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                  |
+| Web research         | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                          |
+| CI agent smoke       | Global smoke group                   | Yes                | Only the newest smoke result matters                                               |
+| Agent implement      | Issue number; manual runs are unique | No                 | It may already have pushed a branch or opened a PR                                 |
+| Production release   | Global production release group      | No                 | Serialize stateful publication without interrupting a deploy                       |
+| Runner cleanup       | Global cleanup group                 | No                 | Let an active Docker prune finish safely                                           |
 
 ## Production release strategy
 
@@ -281,17 +330,17 @@ select another configured provider explicitly.
 
 Live credentials per provider:
 
-| Provider       | Secret / env                                              |
-| -------------- | --------------------------------------------------------- |
-| `github`       | `NOOK_GITHUB_PAT`                                         |
+| Provider       | Secret / env                                                    |
+| -------------- | --------------------------------------------------------------- |
+| `github`       | `NOOK_GITHUB_PAT`                                               |
 | `google-drive` | `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (private sync smoke, when wired) |
 
 Shared-folder grant live smoke (issue #289; not the private sync matrix row):
 
-| Env | Purpose |
-| --- | --- |
-| `NOOK_GOOGLE_E2E_ACCESS_TOKEN` | Owner token with `drive.file` |
-| `NOOK_GOOGLE_E2E_JOINER_EMAIL` | Email granted writer on the folder |
+| Env                                   | Purpose                                                     |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `NOOK_GOOGLE_E2E_ACCESS_TOKEN`        | Owner token with `drive.file`                               |
+| `NOOK_GOOGLE_E2E_JOINER_EMAIL`        | Email granted writer on the folder                          |
 | `NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` | Optional joiner token to verify access under that folder id |
 
 No-live-provider mode uses Playwright route handlers (`sync-stub.ts`,
@@ -427,13 +476,13 @@ Extension e2e starts an automatically selected Xvfb display, waits for readiness
 keeps it from resetting between Playwright retries, and uses one hosted worker
 so the persistent-context smoke cannot compete with other headed Chromium tests.
 
-| Workflow                                                                | `runs-on`       | Why                                                            |
-| ----------------------------------------------------------------------- | --------------- | -------------------------------------------------------------- |
-| `pr.yml`, `main.yml`, `release.yml`                                     | `ubuntu-latest` | Elastic delivery capacity with Main-seeded private Zot caches  |
-| `repository-policy.yml`, `hive.yml`                                    | `ubuntu-latest` | Independent architecture and package verification              |
-| `agent-implement.yml`, `ci-agent-smoke.yml`                             | `ubuntu-latest` | Background implementation and bounded smoke work               |
-| `e2e-pr.yml`, `web-research.yml`                                        | `ubuntu-latest` | Manual and research work scales independently                  |
-| `runner-cleanup.yml`                                                    | `nook`          | Maintain the registered self-hosted Docker host and disk       |
+| Workflow                                    | `runs-on`       | Why                                                           |
+| ------------------------------------------- | --------------- | ------------------------------------------------------------- |
+| `pr.yml`, `main.yml`, `release.yml`         | `ubuntu-latest` | Elastic delivery capacity with Main-seeded private Zot caches |
+| `repository-policy.yml`, `hive.yml`         | `ubuntu-latest` | Independent architecture and package verification             |
+| `agent-implement.yml`, `ci-agent-smoke.yml` | `ubuntu-latest` | Background implementation and bounded smoke work              |
+| `e2e-pr.yml`, `web-research.yml`            | `ubuntu-latest` | Manual and research work scales independently                 |
+| `runner-cleanup.yml`                        | `nook`          | Maintain the registered self-hosted Docker host and disk      |
 
 The runner-cleanup workflow runs its age-filtered system prune separately from
 its unused-volume prune: Docker does not support its `until` filter together
@@ -536,6 +585,7 @@ Combine with unconditional `task format` — see
 The `ui-demo` Playwright project runs Chromium headlessly at 1280x720.
 It always records WebM video.
 The pull-request demo job starts beside web verification.
+
 - The demo job starts after the WASM handoff is ready.
 - Its browser-image solve is read-only.
 - After Playwright succeeds, a cache-only publisher exports the warm graph to
@@ -575,12 +625,12 @@ results and traces, and must not receive real vault secrets.
 
 Defined in `nook-app/nook-web/playwright.config.ts`:
 
-| Project     | Specs                                     | CI                           |
-| ----------- | ----------------------------------------- | ---------------------------- |
-| `stable`    | IndexedDB-only specs (3 workers)          | main, e2e-pr (manual/debug)  |
-| `unstable`  | Local-provider and sync specs (2 workers) | main, e2e-pr (manual)        |
-| `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-pr (manual)              |
-| `ui-demo`   | `e2e/demos/**/*.demo.spec.ts`             | UI-changing PRs (1 worker)   |
+| Project     | Specs                                     | CI                          |
+| ----------- | ----------------------------------------- | --------------------------- |
+| `stable`    | IndexedDB-only specs (3 workers)          | main, e2e-pr (manual/debug) |
+| `unstable`  | Local-provider and sync specs (2 workers) | main, e2e-pr (manual)       |
+| `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-pr (manual)             |
+| `ui-demo`   | `e2e/demos/**/*.demo.spec.ts`             | UI-changing PRs (1 worker)  |
 
 The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
 
@@ -884,13 +934,13 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 ## Secrets and env
 
-| Secret / env | Used by |
-| --- | --- |
-| `NOOK_GITHUB_PAT` | sync-live e2e; agent-implement PR/push |
-| `NOOK_GITHUB_E2E_REPO` | CI sets per run for live suites (one repo per container) |
-| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; main development deploy/domain verification |
-| `GITHUB_TOKEN` | PR comments, deployment records, portable Rust coverage comment |
-| `CURSOR_API_KEY` | `agent-implement.yml` |
+| Secret / env                                        | Used by                                                         |
+| --------------------------------------------------- | --------------------------------------------------------------- |
+| `NOOK_GITHUB_PAT`                                   | sync-live e2e; agent-implement PR/push                          |
+| `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)        |
+| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; main development deploy/domain verification  |
+| `GITHUB_TOKEN`                                      | PR comments, deployment records, portable Rust coverage comment |
+| `CURSOR_API_KEY`                                    | `agent-implement.yml`                                           |
 
 **`NOOK_GITHUB_PAT`**
 
@@ -1023,10 +1073,10 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 
 [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
 
-| Trigger | When it runs |
-| --- | --- |
-| `workflow_dispatch.issue_path` | Claims that exact eligible Workbench issue |
-| `workflow_dispatch.prompt` | Runs the explicit prompt without claiming an issue |
+| Trigger                        | When it runs                                       |
+| ------------------------------ | -------------------------------------------------- |
+| `workflow_dispatch.issue_path` | Claims that exact eligible Workbench issue         |
+| `workflow_dispatch.prompt`     | Runs the explicit prompt without claiming an issue |
 
 Exactly one of `issue_path` or `prompt` is required. Empty or ambiguous
 dispatches fail before checkout. Issue eligibility requires `status: ready`,
@@ -1069,4 +1119,3 @@ final Workbench completion update. Agent secrets:
 See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
 
 <!-- agent-implement docker smoke -->
-

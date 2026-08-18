@@ -84,4 +84,3 @@ and `preflight` sources. Unused-code ownership is split as follows:
   validation is explicit: Loom pre-push, commit, push, then `task pr:validate`
   when the head is ready for the final gate.
   See [workflows/remote-execution.md](../workflows/remote-execution.md).
-

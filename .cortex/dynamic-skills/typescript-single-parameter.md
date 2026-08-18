@@ -23,7 +23,7 @@ Multi-argument APIs must use a named object type.
 export function writeAgentStatsFile(
   request: AgentStatsFileRequest,
   sourcePath: string,
-): Promise<AgentStatsFileResult>
+): Promise<AgentStatsFileResult>;
 ```
 
 Multiple positional parameters hide argument meaning at call sites and make
@@ -39,14 +39,14 @@ export type WriteAgentStatsFileArgs = {
 
 export function writeAgentStatsFile(
   args: WriteAgentStatsFileArgs,
-): Promise<AgentStatsFileResult>
+): Promise<AgentStatsFileResult>;
 ```
 
 Call sites pass a single object:
 
 ```ts
-const args: WriteAgentStatsFileArgs = { request, sourcePath }
-writeAgentStatsFile(args)
+const args: WriteAgentStatsFileArgs = { request, sourcePath };
+writeAgentStatsFile(args);
 ```
 
 Rules:
@@ -91,4 +91,3 @@ bun run --cwd agentic-ai/loom lint
 - [ ] Every object-shaped parameter refers to a named semantic contract.
 - [ ] Any host-callback exception is local and explains the host contract.
 - [ ] The applicable Loom or web lint task stays green.
-

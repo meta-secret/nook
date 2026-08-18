@@ -153,4 +153,3 @@ items currently present. Report Nook's applicable repository-owned PR test-check
 the unresolved-thread query result, and whether any unthreaded actionable
 review-body item remains in the handoff. This comment-handling workflow does not
 request reviewers or wait for checks to change state.
-

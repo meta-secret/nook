@@ -16,15 +16,15 @@ secure note, seed phrase, passkey, and authenticator.
 
 ## Product model
 
-| Field | Required | Notes |
-|---|---|---|
-| `title` | yes | Display name (e.g. "Personal Visa") |
-| `cardholderName` | no | Name on card |
-| `number` | yes | Digits only after normalize; Luhn-validated; 12–19 digits |
-| `expirationMonth` | with year | `01`–`12` when set |
-| `expirationYear` | with month | Four-digit year when set |
-| `cvv` | no | 3–4 digits when set |
-| `notes` | no | Free-form notes |
+| Field             | Required   | Notes                                                     |
+| ----------------- | ---------- | --------------------------------------------------------- |
+| `title`           | yes        | Display name (e.g. "Personal Visa")                       |
+| `cardholderName`  | no         | Name on card                                              |
+| `number`          | yes        | Digits only after normalize; Luhn-validated; 12–19 digits |
+| `expirationMonth` | with year  | `01`–`12` when set                                        |
+| `expirationYear`  | with month | Four-digit year when set                                  |
+| `cvv`             | no         | 3–4 digits when set                                       |
+| `notes`           | no         | Free-form notes                                           |
 
 Expiry month and year are either both empty or both present.
 
@@ -48,4 +48,3 @@ card number. Previously these items were counted as skipped unsupported.
 - Browser autofill of payment forms
 - Card brand detection UI (Visa/Mastercard/…) as a stored field
 - Billing address as structured fields (use notes if needed)
-

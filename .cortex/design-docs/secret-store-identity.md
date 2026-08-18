@@ -25,11 +25,11 @@ Provider credentials and file paths alone are not enough: the same user might po
 
 Nook uses **typed string prefixes** so ids are self-describing in YAML and logs:
 
-| Prefix | YAML field | Meaning | Example |
-|--------|------------|---------|---------|
-| `store_` | `store_id` | Logical secret store (whole vault database) | `store_SMypl8K0w9Y` |
-| `secret_` | `secrets[].id` | User secret item (generated ids) | `secret_k9Qx2mNp4Rt` |
-| `key_` | `auth[].pk_id`, `members[].pk_id` | Device auth key (SHA-256 of X25519 public key) | `key_1f9ed892…2609439` |
+| Prefix    | YAML field                        | Meaning                                        | Example                |
+| --------- | --------------------------------- | ---------------------------------------------- | ---------------------- |
+| `store_`  | `store_id`                        | Logical secret store (whole vault database)    | `store_SMypl8K0w9Y`    |
+| `secret_` | `secrets[].id`                    | User secret item (generated ids)               | `secret_k9Qx2mNp4Rt`   |
+| `key_`    | `auth[].pk_id`, `members[].pk_id` | Device auth key (SHA-256 of X25519 public key) | `key_1f9ed892…2609439` |
 
 Random suffix tokens use `generate_id()` — 11 chars, base64url. Auth keys append the full 64-hex digest after `key_`.
 
@@ -50,11 +50,11 @@ auth:
 
 **Legacy (still loads):** bare 11-char `store_id`, human secret labels (`github.com`), bare 64-hex `pk_id`. Next save normalizes to prefixed form where applicable.
 
-| Layer | Identifier | Scope | Example |
-|-------|------------|-------|---------|
-| **Secret store** | `store_id` | One logical encrypted database | `store_SMypl8K0w9Y` |
-| **Storage provider** | `StorageProvider.id` | Saved connection in `nook_auth` | compact id (no vault prefix) |
-| **Event log path** | Provider config | Physical event location | `nook-log/v1/events/{digest}.yaml` in `user/nook` |
+| Layer                | Identifier           | Scope                           | Example                                           |
+| -------------------- | -------------------- | ------------------------------- | ------------------------------------------------- |
+| **Secret store**     | `store_id`           | One logical encrypted database  | `store_SMypl8K0w9Y`                               |
+| **Storage provider** | `StorageProvider.id` | Saved connection in `nook_auth` | compact id (no vault prefix)                      |
+| **Event log path**   | Provider config      | Physical event location         | `nook-log/v1/events/{digest}.yaml` in `user/nook` |
 
 **Rules**
 
@@ -99,13 +99,12 @@ The **64-hex digest is kept** — only the **`key_` prefix** is added for type c
 
 ## 5. Implementation status
 
-| Piece | Status |
-|-------|--------|
-| Prefixed `store_id` / `secret_` / `key_` in vault YAML | Implemented |
-| `StorageProvider.storeId` | Implemented |
-| Legacy unprefixed read + normalize on write | Implemented |
-| Replication / mismatch guards | Implemented (`StoreIdMismatch` in `sync/vault_sync.rs`) |
-| Event-log causal heads | Implemented |
+| Piece                                                  | Status                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------- |
+| Prefixed `store_id` / `secret_` / `key_` in vault YAML | Implemented                                             |
+| `StorageProvider.storeId`                              | Implemented                                             |
+| Legacy unprefixed read + normalize on write            | Implemented                                             |
+| Replication / mismatch guards                          | Implemented (`StoreIdMismatch` in `sync/vault_sync.rs`) |
+| Event-log causal heads                                 | Implemented                                             |
 
 Implementation: `nook-app/nook-platform/nook-core/src/vault/vault_ids.rs`.
-

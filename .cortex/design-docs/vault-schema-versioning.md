@@ -12,12 +12,12 @@ derived, browser-local cache and is never imported as an event source.
 
 ## Version axes
 
-| Axis | Current value | Owned by |
-|------|---------------|----------|
-| App semver | Release tag | CI and deployment workflows |
-| Projection `schema_version` | `1` | `nook-core` `vault_format.rs` |
-| Event `schema_version` | `3` | `nook-event-log` `event.rs` |
-| Password envelope `version` | Envelope crypto version | `password_envelope.rs` |
+| Axis                        | Current value           | Owned by                      |
+| --------------------------- | ----------------------- | ----------------------------- |
+| App semver                  | Release tag             | CI and deployment workflows   |
+| Projection `schema_version` | `1`                     | `nook-core` `vault_format.rs` |
+| Event `schema_version`      | `3`                     | `nook-event-log` `event.rs`   |
+| Password envelope `version` | Envelope crypto version | `password_envelope.rs`        |
 
 Current builds write event schema `3` and read schemas `2` and `3`. Schema `3`
 adds checkpoint replacement fields, so schema-2 readers reject those events
@@ -38,4 +38,3 @@ There is no copy-on-upgrade, projection import, or compatibility conversion.
 Release tags are immutable. A rollback is a new deployment built from the
 chosen commit; existing tags are never moved or overwritten. Any future schema
 change requires an explicit current-format contract before release.
-

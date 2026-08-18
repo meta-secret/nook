@@ -71,4 +71,3 @@ Deployment verification must prove:
 - the packaged manifest.
 
 Run `task pr:validate` and monitor the repository-owned PR workflow.
-
