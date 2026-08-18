@@ -69,17 +69,26 @@ export type ExactHeadReviewRequestResult = {
   settled: boolean;
 };
 
+enum GitHubTextKind {
+  Missing = "missing",
+  Present = "present",
+}
+
+type GitHubText =
+  | { kind: GitHubTextKind.Missing }
+  | { kind: GitHubTextKind.Present; value: string };
+
 type IssueComment = {
-  body?: string | null;
+  body: GitHubText;
   id: number;
-  user?: unknown;
+  user: unknown;
 };
 
 type PullReview = {
-  body?: string | null;
-  commit_id?: string | null;
-  state?: string | null;
-  user?: unknown;
+  body: GitHubText;
+  commitId: GitHubText;
+  state: GitHubText;
+  user: unknown;
 };
 
 type CommentReaction = {
@@ -207,11 +216,19 @@ export async function requestExactHeadReview(
 }
 
 export function isCodexReviewer(actor: unknown): boolean {
-  return actorLogin(actor) === CODEX_REVIEWER_LOGIN;
+  const login = actorLogin(actor);
+  return (
+    login.state === ActorLoginState.Found &&
+    login.value === CODEX_REVIEWER_LOGIN
+  );
 }
 
 export function isCursorReviewer(actor: unknown): boolean {
-  return actorLogin(actor) === CURSOR_REVIEWER_LOGIN;
+  const login = actorLogin(actor);
+  return (
+    login.state === ActorLoginState.Found &&
+    login.value === CURSOR_REVIEWER_LOGIN
+  );
 }
 
 export function isSubmittedReviewState(state: string): boolean {
@@ -309,15 +326,24 @@ function reviewedCommitIn(body: string): ReviewedCommit {
   return { state: ReviewedCommitState.Found, value: match[1] };
 }
 
-function actorLogin(actor: unknown): string | undefined {
+enum ActorLoginState {
+  Missing = "missing",
+  Found = "found",
+}
+
+type ActorLogin =
+  | { state: ActorLoginState.Missing }
+  | { state: ActorLoginState.Found; value: string };
+
+function actorLogin(actor: unknown): ActorLogin {
   if (typeof actor !== "object" || !actor || !("login" in actor)) {
-    return undefined;
+    return { state: ActorLoginState.Missing };
   }
-  const login = (actor as { login?: unknown }).login;
+  const login = actor.login;
   if (typeof login !== "string") {
-    return undefined;
+    return { state: ActorLoginState.Missing };
   }
-  return login;
+  return { state: ActorLoginState.Found, value: login };
 }
 
 type ReviewSnapshot = {
@@ -359,39 +385,45 @@ async function snapshotFrom(
   const codexMarker = codexReviewRequestMarker(headSha);
   const cursorMarker = cursorReviewRequestMarker(headSha);
   const codexRequests = comments.filter((comment) =>
-    comment.body?.includes(codexMarker),
+    githubTextIncludes({ marker: codexMarker, text: comment.body }),
   );
   const cursorRequests = comments.filter((comment) =>
-    comment.body?.includes(cursorMarker),
+    githubTextIncludes({ marker: cursorMarker, text: comment.body }),
   );
-  const codexReviewSettled = reviews.some(
-    (review) =>
-      review.commit_id === headSha &&
-      typeof review.state === "string" &&
-      isSubmittedReviewState(review.state) &&
-      isCodexReviewer(review.user),
+  const codexReviewSettled = reviews.some((review) =>
+    isExactHeadSubmittedReview({
+      actorCheck: isCodexReviewer,
+      headSha,
+      review,
+    }),
   );
-  const cursorReviewSettled = reviews.some(
-    (review) =>
-      review.commit_id === headSha &&
-      typeof review.state === "string" &&
-      isSubmittedReviewState(review.state) &&
-      isCursorReviewer(review.user),
+  const cursorReviewSettled = reviews.some((review) =>
+    isExactHeadSubmittedReview({
+      actorCheck: isCursorReviewer,
+      headSha,
+      review,
+    }),
   );
-  const cleanComment = comments.some((comment) =>
-    isCleanCodexReviewComment(comment.body ?? "", comment.user, headSha),
+  const cleanComment = comments.some(
+    (comment) =>
+      comment.body.kind === GitHubTextKind.Present &&
+      isCleanCodexReviewComment(comment.body.value, comment.user, headSha),
   );
   const lastCodexRequestIndex = comments.reduce(
     (lastIndex, comment, index) =>
-      comment.body?.includes(codexMarker) ? index : lastIndex,
+      githubTextIncludes({ marker: codexMarker, text: comment.body })
+        ? index
+        : lastIndex,
     -1,
   );
   const usageLimited =
     lastCodexRequestIndex >= 0 &&
     comments
       .slice(lastCodexRequestIndex + 1)
-      .some((comment) =>
-        isCodexUsageLimitComment(comment.body ?? "", comment.user),
+      .some(
+        (comment) =>
+          comment.body.kind === GitHubTextKind.Present &&
+          isCodexUsageLimitComment(comment.body.value, comment.user),
       );
   const requestReactions =
     codexReviewSettled || cleanComment || codexRequests.length === 0
@@ -496,18 +528,63 @@ async function probeCodexAvailability(input: {
   return { kind: CodexProbeKind.Pending };
 }
 
+function githubTextFrom(value: unknown): GitHubText {
+  if (typeof value === "string") {
+    return { kind: GitHubTextKind.Present, value };
+  }
+  return { kind: GitHubTextKind.Missing };
+}
+
+type GitHubTextIncludesInput = {
+  marker: string;
+  text: GitHubText;
+};
+
+function githubTextIncludes(input: GitHubTextIncludesInput): boolean {
+  return (
+    input.text.kind === GitHubTextKind.Present &&
+    input.text.value.includes(input.marker)
+  );
+}
+
+type ExactHeadSubmittedReviewInput = {
+  actorCheck: (actor: unknown) => boolean;
+  headSha: string;
+  review: PullReview;
+};
+
+function isExactHeadSubmittedReview(
+  input: ExactHeadSubmittedReviewInput,
+): boolean {
+  return (
+    input.review.commitId.kind === GitHubTextKind.Present &&
+    input.review.commitId.value === input.headSha &&
+    input.review.state.kind === GitHubTextKind.Present &&
+    isSubmittedReviewState(input.review.state.value) &&
+    input.actorCheck(input.review.user)
+  );
+}
+
 async function listIssueComments(input: {
   octokit: Octokit;
   owner: string;
   prNumber: number;
   repo: string;
 }): Promise<IssueComment[]> {
-  return input.octokit.paginate(input.octokit.rest.issues.listComments, {
-    owner: input.owner,
-    repo: input.repo,
-    issue_number: input.prNumber,
-    per_page: 100,
-  });
+  const comments = await input.octokit.paginate(
+    input.octokit.rest.issues.listComments,
+    {
+      owner: input.owner,
+      repo: input.repo,
+      issue_number: input.prNumber,
+      per_page: 100,
+    },
+  );
+  return comments.map((comment) => ({
+    body: githubTextFrom(comment.body),
+    id: comment.id,
+    user: comment.user,
+  }));
 }
 
 async function listPullReviews(input: {
@@ -516,10 +593,19 @@ async function listPullReviews(input: {
   prNumber: number;
   repo: string;
 }): Promise<PullReview[]> {
-  return input.octokit.paginate(input.octokit.rest.pulls.listReviews, {
-    owner: input.owner,
-    repo: input.repo,
-    pull_number: input.prNumber,
-    per_page: 100,
-  });
+  const reviews = await input.octokit.paginate(
+    input.octokit.rest.pulls.listReviews,
+    {
+      owner: input.owner,
+      repo: input.repo,
+      pull_number: input.prNumber,
+      per_page: 100,
+    },
+  );
+  return reviews.map((review) => ({
+    body: githubTextFrom(review.body),
+    commitId: githubTextFrom(review.commit_id),
+    state: githubTextFrom(review.state),
+    user: review.user,
+  }));
 }
