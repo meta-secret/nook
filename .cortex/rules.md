@@ -2,11 +2,13 @@
 
 ## Overview
 
-This document defines the strict development standards, architectural boundaries, and validation requirements for the Nook monorepo. All changes must comply with these guidelines.
+This document defines the unified Golden Principles and core repository standards. It stays concise, high-level, and principle-focused. For deep operational guidelines, detailed constraints, and domain walkthroughs, follow the linked cards in `.cortex/dynamic-skills/`, `architecture/`, and `workflows/`.
 
 ---
 
 ## 1. Monorepo Architecture & Package Boundaries
+
+Detailed specification: [architecture/packages.md](architecture/packages.md).
 
 - **README stays in sync:** When this section's boundaries, package layout, sync model, or public Task surface change, update the root [`README.md`](../README.md) in the same PR. See [AGENTS.md — Keep the root README current](AGENTS.md#keep-the-root-readme-current).
 - **Strict Uni-directional Flow:** `nook-app-common` is a dependency-light
@@ -61,6 +63,11 @@ This document defines the strict development standards, architectural boundaries
 
 ## 2. Rust-Wasm Boundary Standards
 
+Detailed references & skills:
+- [references/rust-wasm.md](references/rust-wasm.md)
+- [dynamic-skills/rust-wasm-name-coherence.md](dynamic-skills/rust-wasm-name-coherence.md)
+- [dynamic-skills/rust-macro-minimization.md](dynamic-skills/rust-macro-minimization.md)
+
 - **Error Propagation:**
   - All fallible exported `#[wasm_bindgen]` functions must return `Result<T, wasm_bindgen::JsError>`.
   - Do not return string-based errors (e.g., `Result<T, JsValue>`). This allows the JS runtime to catch actual JavaScript `Error` objects with full stack traces.
@@ -77,6 +84,12 @@ This document defines the strict development standards, architectural boundaries
 ---
 
 ## 3. Svelte 5 & TypeScript UI Standards
+
+Detailed skills & UI design:
+- [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md)
+- [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md)
+- [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md)
+- [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md)
 
 - **No `null` in authored TypeScript/Svelte:** Authored `nook-app/nook-web/src` code must
   not use `null` as a value, state sentinel, return type, parameter type, or
@@ -115,6 +128,12 @@ This document defines the strict development standards, architectural boundaries
 ---
 
 ## 4. Testing Requirements
+
+Detailed specifications & beliefs:
+- [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-unit-tests-own-domain-correctness-e2e-is-smoke-only)
+- [design-docs/vault-event-log.md](design-docs/vault-event-log.md)
+- [references/logging.md](references/logging.md)
+- [workflows/ci-pipeline.md](workflows/ci-pipeline.md)
 
 ### Unit tests carry ~99% of functional coverage
 
@@ -216,6 +235,12 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 
 ## 5. Pinned Dependencies & Tooling Constraints
 
+Detailed skills & workflows:
+- [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md)
+- [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md)
+- [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md)
+- [workflows/quality.md](workflows/quality.md)
+
 - **Cargo Version Constraints:**
   - Pinned versions must be standard version strings (e.g., `age = "0.11.3"`, `hex = "0.4.3"`).
   - Do not prefix versions with `=` (e.g., `age = "=0.11.3"` is invalid).
@@ -291,6 +316,15 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 ---
 
 ## 6. Git & Pull Request Workflow
+
+Detailed workflows & skills:
+- [workflows/coding-bro.md](workflows/coding-bro.md)
+- [workflows/pull-requests.md](workflows/pull-requests.md)
+- [workflows/remote-execution.md](workflows/remote-execution.md)
+- [workflows/issues.md](workflows/issues.md)
+- [workflows/agent-statistics.md](workflows/agent-statistics.md)
+- [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md)
+- [dynamic-skills/code-review-comments.md](dynamic-skills/code-review-comments.md)
 
 > ## ⛔ PLAN FOR NO MORE THAN 5,000 AUTHORED CHANGED LINES
 >
