@@ -4,6 +4,9 @@
     readonly storeId: string
     readonly discoveringStagedImport: boolean
   }
+  type PairedExtensionUnlockPoll = {
+    readonly storeId: string
+  }
 
   import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
@@ -354,9 +357,12 @@
       ) {
         const requested = await requestPairedExtensionUnlock(activeStoreId)
         if (requested) {
-          await resumePairedExtensionVault(activeStoreId)
+          const unlockWait: PairedExtensionUnlockPoll = {
+            storeId: activeStoreId,
+          }
+          await waitForPairedExtensionUnlock(unlockWait)
+          return
         }
-        if (vault.isAuthenticated) return
       }
     }
     if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
@@ -549,6 +555,32 @@
     }
     await handleUnlock(true)
     return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  }
+
+  const PAIRED_EXTENSION_UNLOCK_ATTEMPTS = 16
+  const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350
+
+  async function waitForPairedExtensionUnlock(
+    request: PairedExtensionUnlockPoll,
+  ): Promise<void> {
+    for (
+      let attempt = 0;
+      attempt < PAIRED_EXTENSION_UNLOCK_ATTEMPTS;
+      attempt += 1
+    ) {
+      if (attempt > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
+        })
+      }
+      const status = await resumePairedExtensionVault(request.storeId)
+      if (
+        vault.isAuthenticated ||
+        status === ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+      ) {
+        return
+      }
+    }
   }
 
   function schedulePairedExtensionDiscoveryRetry(

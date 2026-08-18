@@ -66,6 +66,19 @@ mod tests {
         assert!(manager.device.pending_extension_handoff.is_some());
         Ok(())
     }
+
+    #[test]
+    fn lock_clears_session_keys_so_access_can_project_a_locked_identity() -> Result<(), NookError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        manager.lock_device_identity();
+
+        assert!(manager.device.identity_private_key.is_empty());
+        assert!(manager.device_access_snapshot_request().is_ok());
+        Ok(())
+    }
 }
 
 impl Drop for PendingExtensionIdentityHandoff {
@@ -141,7 +154,9 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn lock_device_identity(&mut self) {
         self.device.identity_private_key.zeroize();
+        self.device.identity_private_key.clear();
         self.device.extension_handoff_private_key.zeroize();
+        self.device.extension_handoff_private_key.clear();
     }
 
     /// Create a one-time age recipient for an extension identity handoff.
@@ -382,10 +397,15 @@ impl NookVaultManager {
     pub fn device_access_snapshot_request(
         &self,
     ) -> Result<crate::NookDeviceAccessSnapshotRequest, JsError> {
+        // A locked or rolled-back session must still project persisted passkey
+        // evidence. Do not fail the dashboard when in-memory keys cannot be
+        // parsed after lock or a failed handoff.
         let session_device_id = if self.device.identity_private_key.is_empty() {
             String::new()
         } else {
-            self.device_identity()?.device_id().as_str().to_owned()
+            self.device_identity()
+                .map(|identity| identity.device_id().as_str().to_owned())
+                .unwrap_or_default()
         };
         Ok(crate::NookDeviceAccessSnapshotRequest::new(
             session_device_id,

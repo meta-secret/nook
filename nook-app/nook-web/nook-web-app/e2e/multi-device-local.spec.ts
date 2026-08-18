@@ -99,7 +99,9 @@ test.describe('multi-device local vault with sync provider', () => {
     const join = await parseJoinFromStub(stub)
 
     await approveJoinLocalE2eFromBanner(deviceA, join.deviceId, stub, 2)
-    await expect(deviceA.getByTestId('vault-security-guide')).not.toBeVisible()
+    await expect(deviceA.getByTestId('vault-security-guide')).toHaveCount(0, {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
   })
 
   test('genesis device eventually sees pending join without manual refresh', async () => {

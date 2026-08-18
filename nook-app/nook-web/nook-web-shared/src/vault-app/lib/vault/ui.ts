@@ -55,7 +55,11 @@ function applySettings({
     state.settingsAccordionSection = accordion;
   }
   state.settingsOpen = true;
-  void state.refreshDeviceState();
+  // Access reads last-known device evidence from IndexedDB. A vault sync here
+  // races that snapshot when the dashboard remounts after leaving Access.
+  if (section !== SettingsSection.DevicesAccess) {
+    void state.refreshDeviceState();
+  }
 }
 
 type AdminViewSelection = {
