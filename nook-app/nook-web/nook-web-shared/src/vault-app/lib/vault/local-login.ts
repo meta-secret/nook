@@ -147,6 +147,7 @@ export async function prepareLocalLogin(state: VaultState): Promise<void> {
     state.clearOauthFile();
     state.clearLocalFolder();
     await state.refreshPasswordEntriesList();
+    await refreshLoginUnlockCapabilities(state);
     state.localLoginPreparation = LocalLoginPreparationState.Ready;
   } catch (error) {
     state.localLoginPreparation = LocalLoginPreparationState.Idle;

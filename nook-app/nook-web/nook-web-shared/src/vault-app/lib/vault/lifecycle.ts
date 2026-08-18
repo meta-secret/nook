@@ -128,9 +128,13 @@ export async function initOnce(state: VaultState): Promise<void> {
         await state.enqueueStorage(() =>
           unlockDeviceProtection(state.requireManager()),
         );
+        deviceIdentityUnlocked = true;
+        state.deviceAuthorizationInProgress = true;
       } else if (state.deviceProtectionStatus === DeviceProtectionStatus.Pin) {
         return;
-      } else {
+      } else if (!state.localVaultPresent) {
+        // A surviving local vault must not mint a replacement app key. That
+        // key is not on the roster, and backup-password recovery would fail.
         await state.enqueueStorage(() => {
           const setupArgs: Parameters<typeof setupDeviceProtection>[0] = {
             manager: state.requireManager(),
@@ -139,9 +143,9 @@ export async function initOnce(state: VaultState): Promise<void> {
           };
           return setupDeviceProtection(setupArgs);
         });
+        deviceIdentityUnlocked = true;
+        state.deviceAuthorizationInProgress = true;
       }
-      deviceIdentityUnlocked = true;
-      state.deviceAuthorizationInProgress = true;
     }
 
     if (!state.deviceProtectionReady && !deviceIdentityUnlocked) {
@@ -151,7 +155,16 @@ export async function initOnce(state: VaultState): Promise<void> {
         state.prefillEnrollmentCode = enrollment.payload;
         state.enrollmentFromUrlPending = true;
       }
-      if (!state.localVaultPresent && state.localVaults.length === 0) {
+      // A backup password opens only its vault keys. Do not create a new app
+      // key merely because this browser still has a local vault: that key has
+      // not been granted membership and password recovery must remain usable
+      // without altering identity ownership.
+      if (state.localVaultPresent) {
+        state.storageMode = LOCAL_PROVIDER_TYPE;
+        await state.prepareLocalLogin();
+        return;
+      }
+      if (state.localVaults.length === 0) {
         try {
           const loadProvidersArgs: Parameters<typeof state.loadProviders>[0] = {
             ensureLocalRow: true,

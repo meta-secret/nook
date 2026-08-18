@@ -1,5 +1,12 @@
 <script lang="ts">
   type EnrollmentCodeUseRequest = { readonly code: string; readonly password: string }
+  type PairedExtensionDiscoveryRetry = {
+    readonly storeId: string
+    readonly discoveringStagedImport: boolean
+  }
+  type PairedExtensionUnlockPoll = {
+    readonly storeId: string
+  }
 
   import { I18N_KEYS } from '../generated/i18n-keys'
   import { onMount, untrack } from 'svelte'
@@ -87,7 +94,9 @@
   } from '$lib/app/browser-lifecycle'
   import {
     ActiveVaultKind,
+    LocalVaultCatalogKind,
     LoginSetupKind,
+    LoginVaultSelectionKind,
   } from '$lib/vault/state/provider.svelte'
   import {
     WorkspaceRoute,
@@ -267,6 +276,22 @@
     )
   })
 
+  function loginUnlockStoreId(): string {
+    if (vault.activeVault.kind === ActiveVaultKind.Open) {
+      const storeId = vault.activeVault.storeId.trim()
+      if (storeId) return storeId
+    }
+    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
+      const storeId = vault.selectedLoginVault.storeId.trim()
+      if (storeId) return storeId
+    }
+    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
+      const storeId = vault.localVaultCatalog.first.storeId.trim()
+      if (storeId) return storeId
+    }
+    return ''
+  }
+
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
@@ -285,10 +310,7 @@
       await vault.connectStagedProvider()
       return
     }
-    let activeStoreId =
-      vault.activeVault.kind === ActiveVaultKind.Open
-        ? vault.activeVault.storeId.trim()
-        : ''
+    let activeStoreId = loginUnlockStoreId()
     if (existingVaultImport) {
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
@@ -310,7 +332,9 @@
         ExtensionConnectIntentKind.Requested &&
       extensionIdentityRequestState.request.source ===
         ExtensionIdentityRequestSource.PairedVault &&
-      extensionIdentityRequestState.request.vaultStoreId === activeStoreId
+      extensionIdentityRequestState.request.vaultStoreId === activeStoreId &&
+      !vault.isVerifying &&
+      !vault.deviceAuthorizationInProgress
     ) {
       const connectRequest = extensionIdentityRequestState.request
       const authorizeWithExternalDeviceIdentityArgs: Parameters<typeof vault.authorizeWithExternalDeviceIdentity>[0] = {
@@ -328,12 +352,16 @@
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         authorizeWithExternalDeviceIdentityArgs,
       )
-      if (!adopted) return
-      extensionBackedVaultSession = true
-      await (existingVaultImport
-        ? existingVaultImportLifecycle.resume()
-        : vault.loadDb())
-      return
+      if (adopted) {
+        extensionBackedVaultSession = true
+        await (existingVaultImport
+          ? existingVaultImportLifecycle.resume()
+          : vault.loadDb())
+        return
+      }
+      if (skipExtensionDiscovery) {
+        return
+      }
     }
     if (
       !skipExtensionDiscovery &&
@@ -346,11 +374,25 @@
       if (vault.isAuthenticated) return
       if (
         discoveryStatus ===
-        ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+          ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
+        discoveryStatus ===
+          ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
       ) {
-        const requested = await requestPairedExtensionUnlock(activeStoreId)
-        if (requested) return
+        if (
+          discoveryStatus ===
+          ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+        ) {
+          await requestPairedExtensionUnlock(activeStoreId)
+        }
+        const unlockWait: PairedExtensionUnlockPoll = {
+          storeId: activeStoreId,
+        }
+        await waitForPairedExtensionUnlock(unlockWait)
+        if (vault.isAuthenticated) return
       }
+    }
+    if (skipExtensionDiscovery) {
+      return
     }
     if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
       if (
@@ -502,12 +544,15 @@
       vault.loginSetup.kind === LoginSetupKind.Active
     extensionDiscoveryStoreId = storeId
     const discovery = await discoverPairedExtensionIdentity(storeId)
+    const openVaultIsDifferentStore =
+      vault.activeVault.kind === ActiveVaultKind.Open &&
+      vault.activeVault.storeId !== storeId
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
-      ((vault.activeVault.kind !== ActiveVaultKind.Open ||
-        vault.activeVault.storeId !== storeId) &&
-        !discoveringStagedImport)
+      vault.isVerifying ||
+      vault.deviceAuthorizationInProgress ||
+      (openVaultIsDifferentStore && !discoveringStagedImport)
     ) {
       return discovery.status ===
         ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
@@ -518,23 +563,22 @@
       discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
-      window.setTimeout(() => {
-        if (
-          !vault.isAuthenticated &&
-          ((vault.activeVault.kind === ActiveVaultKind.Open &&
-            vault.activeVault.storeId === storeId) ||
-            discoveringStagedImport) &&
-          extensionDiscoveryStoreId === storeId
-        ) {
-          extensionDiscoveryStoreId = ''
-        }
-      }, EXTENSION_LOCKED_RETRY_MS)
+      const lockedRetry: PairedExtensionDiscoveryRetry = {
+        storeId,
+        discoveringStagedImport,
+      }
+      schedulePairedExtensionDiscoveryRetry(lockedRetry)
       return ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     }
     if (
       discovery.status !==
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
     ) {
+      const unavailableRetry: PairedExtensionDiscoveryRetry = {
+        storeId,
+        discoveringStagedImport,
+      }
+      schedulePairedExtensionDiscoveryRetry(unavailableRetry)
       return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
     }
     extensionIdentityRequestState = {
@@ -543,6 +587,41 @@
     }
     await handleUnlock(true)
     return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+  }
+
+  const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
+  const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350
+
+  async function waitForPairedExtensionUnlock(
+    request: PairedExtensionUnlockPoll,
+  ): Promise<void> {
+    const deadline = Date.now() + PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS
+    for (let attempt = 0; Date.now() < deadline; attempt += 1) {
+      if (attempt > 0) {
+        await new Promise<void>((resolve) => {
+          window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
+        })
+      }
+      await resumePairedExtensionVault(request.storeId)
+      if (vault.isAuthenticated) {
+        return
+      }
+    }
+  }
+
+  function schedulePairedExtensionDiscoveryRetry(
+    request: PairedExtensionDiscoveryRetry,
+  ) {
+    window.setTimeout(() => {
+      if (
+        !vault.isAuthenticated &&
+        (loginUnlockStoreId() === request.storeId ||
+          request.discoveringStagedImport) &&
+        extensionDiscoveryStoreId === request.storeId
+      ) {
+        extensionDiscoveryStoreId = ''
+      }
+    }, EXTENSION_LOCKED_RETRY_MS)
   }
 
   async function handleCreateDeviceVault(label: string) {
@@ -715,15 +794,13 @@
   })
 
   $effect(() => {
-    const storeId =
-      vault.activeVault.kind === ActiveVaultKind.Open
-        ? vault.activeVault.storeId.trim()
-        : ''
+    const storeId = loginUnlockStoreId()
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
       extensionIdentityRequestState.request.source ===
         ExtensionIdentityRequestSource.PairedVault &&
+      storeId &&
       extensionIdentityRequestState.request.vaultStoreId !== storeId
     ) {
       extensionIdentityRequestState = {
