@@ -95,6 +95,7 @@
   import {
     ActiveVaultKind,
     LoginSetupKind,
+    LoginVaultSelectionKind,
   } from '$lib/vault/state/provider.svelte'
   import {
     WorkspaceRoute,
@@ -295,7 +296,9 @@
     let activeStoreId =
       vault.activeVault.kind === ActiveVaultKind.Open
         ? vault.activeVault.storeId.trim()
-        : ''
+        : vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
+          ? vault.selectedLoginVault.storeId.trim()
+          : ''
     if (existingVaultImport) {
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
@@ -361,7 +364,7 @@
             storeId: activeStoreId,
           }
           await waitForPairedExtensionUnlock(unlockWait)
-          return
+          if (vault.isAuthenticated) return
         }
       }
     }
@@ -515,12 +518,13 @@
       vault.loginSetup.kind === LoginSetupKind.Active
     extensionDiscoveryStoreId = storeId
     const discovery = await discoverPairedExtensionIdentity(storeId)
+    const openVaultIsDifferentStore =
+      vault.activeVault.kind === ActiveVaultKind.Open &&
+      vault.activeVault.storeId !== storeId
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
-      ((vault.activeVault.kind !== ActiveVaultKind.Open ||
-        vault.activeVault.storeId !== storeId) &&
-        !discoveringStagedImport)
+      (openVaultIsDifferentStore && !discoveringStagedImport)
     ) {
       return discovery.status ===
         ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
@@ -570,11 +574,8 @@
           window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
         })
       }
-      const status = await resumePairedExtensionVault(request.storeId)
-      if (
-        vault.isAuthenticated ||
-        status === ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
-      ) {
+      await resumePairedExtensionVault(request.storeId)
+      if (vault.isAuthenticated) {
         return
       }
     }
