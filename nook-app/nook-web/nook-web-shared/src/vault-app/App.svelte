@@ -94,6 +94,7 @@
   } from '$lib/app/browser-lifecycle'
   import {
     ActiveVaultKind,
+    LocalVaultCatalogKind,
     LoginSetupKind,
     LoginVaultSelectionKind,
   } from '$lib/vault/state/provider.svelte'
@@ -275,6 +276,22 @@
     )
   })
 
+  function loginUnlockStoreId(): string {
+    if (vault.activeVault.kind === ActiveVaultKind.Open) {
+      const storeId = vault.activeVault.storeId.trim()
+      if (storeId) return storeId
+    }
+    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
+      const storeId = vault.selectedLoginVault.storeId.trim()
+      if (storeId) return storeId
+    }
+    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
+      const storeId = vault.localVaultCatalog.first.storeId.trim()
+      if (storeId) return storeId
+    }
+    return ''
+  }
+
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
@@ -293,12 +310,7 @@
       await vault.connectStagedProvider()
       return
     }
-    let activeStoreId =
-      vault.activeVault.kind === ActiveVaultKind.Open
-        ? vault.activeVault.storeId.trim()
-        : vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected
-          ? vault.selectedLoginVault.storeId.trim()
-          : ''
+    let activeStoreId = loginUnlockStoreId()
     if (existingVaultImport) {
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
@@ -356,17 +368,25 @@
       if (vault.isAuthenticated) return
       if (
         discoveryStatus ===
-        ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+          ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
+        discoveryStatus ===
+          ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
       ) {
-        const requested = await requestPairedExtensionUnlock(activeStoreId)
-        if (requested) {
-          const unlockWait: PairedExtensionUnlockPoll = {
-            storeId: activeStoreId,
-          }
-          await waitForPairedExtensionUnlock(unlockWait)
-          if (vault.isAuthenticated) return
+        if (
+          discoveryStatus ===
+          ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+        ) {
+          await requestPairedExtensionUnlock(activeStoreId)
         }
+        const unlockWait: PairedExtensionUnlockPoll = {
+          storeId: activeStoreId,
+        }
+        await waitForPairedExtensionUnlock(unlockWait)
+        if (vault.isAuthenticated) return
       }
+    }
+    if (skipExtensionDiscovery) {
+      return
     }
     if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
       if (
@@ -524,6 +544,8 @@
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
+      vault.isVerifying ||
+      vault.deviceAuthorizationInProgress ||
       (openVaultIsDifferentStore && !discoveringStagedImport)
     ) {
       return discovery.status ===
@@ -587,8 +609,7 @@
     window.setTimeout(() => {
       if (
         !vault.isAuthenticated &&
-        ((vault.activeVault.kind === ActiveVaultKind.Open &&
-          vault.activeVault.storeId === request.storeId) ||
+        (loginUnlockStoreId() === request.storeId ||
           request.discoveringStagedImport) &&
         extensionDiscoveryStoreId === request.storeId
       ) {
@@ -767,15 +788,13 @@
   })
 
   $effect(() => {
-    const storeId =
-      vault.activeVault.kind === ActiveVaultKind.Open
-        ? vault.activeVault.storeId.trim()
-        : ''
+    const storeId = loginUnlockStoreId()
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
       extensionIdentityRequestState.request.source ===
         ExtensionIdentityRequestSource.PairedVault &&
+      storeId &&
       extensionIdentityRequestState.request.vaultStoreId !== storeId
     ) {
       extensionIdentityRequestState = {
