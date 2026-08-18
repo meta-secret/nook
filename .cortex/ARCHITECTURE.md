@@ -207,14 +207,14 @@ App key detail:
 Provider connections detail:
 
 - Credentials are sealed to the local device.
-- Targets may mount independently by identity and vault logs.
+Related design specifications:
 
-See [vault-session-and-lock.md](design-docs/vault-session-and-lock.md) for Lock vs persisted data.
-See [decentralized-auth.md](product-specs/decentralized-auth.md) for join/approve flows.
-See [auth-providers.md](design-docs/auth-providers.md) for login UX and sync-provider credential persistence.
-See [vault-event-log.md](design-docs/vault-event-log.md) for provider event-log sync.
-See [unified-vault.md](design-docs/unified-vault.md) for local-first vault architecture (scalar sync historical).
-See [identity-vault-architecture.md](design-docs/identity-vault-architecture.md) for identity, onboarding, grant, and provider ownership.
+- [vault-session-and-lock.md](design-docs/vault-session-and-lock.md): Lock session vs persisted data boundaries.
+- [decentralized-auth.md](product-specs/decentralized-auth.md): Join and approve flows.
+- [auth-providers.md](design-docs/auth-providers.md): Login UX and sync-provider credential persistence.
+- [vault-event-log.md](design-docs/vault-event-log.md): Provider event-log sync.
+- [unified-vault.md](design-docs/unified-vault.md): Local-first vault architecture (scalar sync historical).
+- [identity-vault-architecture.md](design-docs/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
 
 YAML payload sections:
 
