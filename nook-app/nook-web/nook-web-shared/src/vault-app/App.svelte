@@ -557,17 +557,14 @@
     return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
   }
 
-  const PAIRED_EXTENSION_UNLOCK_ATTEMPTS = 16
+  const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
   const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350
 
   async function waitForPairedExtensionUnlock(
     request: PairedExtensionUnlockPoll,
   ): Promise<void> {
-    for (
-      let attempt = 0;
-      attempt < PAIRED_EXTENSION_UNLOCK_ATTEMPTS;
-      attempt += 1
-    ) {
+    const deadline = Date.now() + PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS
+    for (let attempt = 0; Date.now() < deadline; attempt += 1) {
       if (attempt > 0) {
         await new Promise<void>((resolve) => {
           window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)

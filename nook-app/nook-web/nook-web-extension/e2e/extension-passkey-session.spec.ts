@@ -1,10 +1,4 @@
-import {
-  chromium,
-  expect,
-  test,
-  type BrowserContext,
-  type Page,
-} from '@playwright/test'
+import { chromium, expect, test, type Page } from '@playwright/test'
 import {
   assertWebsitePasskeyThroughExtension,
   attachNookLogsForTest,
@@ -30,6 +24,11 @@ import {
   waitForExtensionPairingReady,
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
+import {
+  PairedVaultCompanionUnlockKind,
+  unlockPairedVaultThroughCompanion,
+  type PairedVaultCompanionUnlock,
+} from './helpers/paired-vault-companion-unlock'
 import { belongs_to_simple_vault } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
 import { OpenCompanionLauncherIntent } from '../../nook-web-shared/src/extension/companion-launcher-message'
@@ -71,49 +70,6 @@ type ExtensionConnectionParametersParseResult =
       kind: ExtensionConnectionParametersParseKind.Invalid
       missingParameter: ExtensionConnectionParameter
     }
-
-enum PairedVaultCompanionUnlockKind {
-  Optional = 'optional',
-  Required = 'required',
-}
-
-type PairedVaultCompanionUnlock = {
-  readonly context: BrowserContext
-  readonly vaultPage: Page
-  readonly companionUnlock: PairedVaultCompanionUnlockKind
-}
-
-async function unlockPairedVaultThroughCompanion(
-  request: PairedVaultCompanionUnlock,
-): Promise<void> {
-  const { context, vaultPage, companionUnlock } = request
-  const companionWaitMs =
-    companionUnlock === PairedVaultCompanionUnlockKind.Required
-      ? EXTENSION_UNLOCK_TIMEOUT_MS
-      : 5_000
-  const companionPagePromise = context.waitForEvent('page', {
-    predicate: (page) => page.url().includes('/popup/index.html'),
-    timeout: companionWaitMs,
-  })
-  await vaultPage.getByTestId('unlock-vault-btn').click()
-  await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-  const companionPage =
-    companionUnlock === PairedVaultCompanionUnlockKind.Required
-      ? await companionPagePromise
-      : await companionPagePromise.catch(() => null)
-  if (companionPage) {
-    await expect(
-      companionPage.getByTestId('extension-device-setup'),
-    ).toBeVisible()
-    await companionPage.getByTestId('device-protection-unlock-btn').click()
-    await expect(
-      companionPage.getByTestId('extension-companion-home'),
-    ).toBeVisible()
-  }
-  await expect(vaultPage.getByTestId('authenticated-shell')).toBeVisible({
-    timeout: 15_000,
-  })
-}
 
 function parseExtensionConnectionParameters(
   connectionUrl: URL,
