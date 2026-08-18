@@ -12,7 +12,7 @@ import {
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
 test("requiredPrCheckNames maps changed paths to repository-owned gates", () => {
-  assert.deepEqual(requiredPrCheckNames([".cortex/rules.md"]), []);
+  assert.deepEqual(requiredPrCheckNames([".cortex/AGENTS.md"]), []);
   assert.deepEqual(
     requiredPrCheckNames(["nook-app/nook-platform/nook-core/src/lib.rs"]),
     ["Verify and preview"],

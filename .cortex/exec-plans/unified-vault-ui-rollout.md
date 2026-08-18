@@ -148,5 +148,5 @@ No user-visible UI changes yet.
 
 ## Merge
 
-Squash-merge [#79](https://github.com/meta-secret/nook/pull/79) (`feat/unified-vault` → `main`) per [rules.md §6](../rules.md#6-git--pull-request-workflow).
+Squash-merge [#79](https://github.com/meta-secret/nook/pull/79) (`feat/unified-vault` → `main`) per [pull-requests.md](../workflows/pull-requests.md#squash-merge-only---no-exceptions).
 

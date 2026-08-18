@@ -411,7 +411,7 @@ Use this workflow for quality, CI, and deployment changes.
     checks before merge or handoff. After a complete-gate failure, fix, run Loom
     pre-push, commit, push, and validate the replacement head. Use focused hosted
     proof only when it shortens diagnosis.
-13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [rules.md §5 — Docker daemon](../rules.md#docker-daemon--never-kill-it).
+13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.
     - `grep`/`tail`/`head` **buffer their input until the upstream command exits**.
     - A multi-minute `task setup` / `task check` / `docker buildx bake` then shows **zero output** the entire time.
@@ -430,7 +430,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Playwright (`task web:test:e2e:pr`) is a thin UI smoke layer.
     - New domain behavior requires new Rust tests in the same change.
     - **Below 90% line coverage, agents add tests before finishing.**
-    - See [rules.md §4](../rules.md#4-testing-requirements).
+    - See [testing-pyramid-and-regression.md](../dynamic-skills/testing-pyramid-and-regression.md).
 17. **Cortex + README hygiene:**
     - After learning something durable from tests, CI, or PR review, update `.cortex` per [core-beliefs.md §10](../design-docs/core-beliefs.md#10-grow-cortex-dynamically).
     - When the change is architectural or alters the public developer/product surface, also update the root [`README.md`](../../README.md) in the same PR ([AGENTS.md — Keep the root README current](../AGENTS.md#keep-the-root-readme-current)).

@@ -2,7 +2,7 @@
 name: cortex-document-map
 description: >-
   Require Cortex document navigation and structural section maps to be
-  centralized in .cortex/INDEX.md. Use whenever creating, editing, or
+  centralized in .cortex/knowledge-graph.md. Use whenever creating, editing, or
   auditing .cortex documents.
 ---
 

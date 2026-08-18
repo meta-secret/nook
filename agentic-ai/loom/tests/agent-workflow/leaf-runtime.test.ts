@@ -82,8 +82,8 @@ test('runs the mechanical audit from the invocation working directory', async ()
       '# Agents\n\n[Missing](missing.md)\n',
     );
     await writeFile(
-      join(repositoryRoot, '.cortex', 'INDEX.md'),
-      '# Cortex Index\n\n- [Agents](AGENTS.md)\n- [Skills](dynamic-skills/index.md)\n',
+      join(repositoryRoot, '.cortex', 'knowledge-graph.md'),
+      '# Cortex Knowledge Graph\n\n- [Agents](AGENTS.md)\n- [Skills](dynamic-skills/index.md)\n',
     );
     await writeFile(join(skillsDirectory, 'index.md'), '# Skills\n');
 
