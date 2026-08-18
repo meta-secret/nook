@@ -262,13 +262,13 @@ self-enrolment path as QR.
 
 ### 5.1 Threat coverage
 
-| Threat                                                 | Mitigation                                                                                                                                                        |
-| ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Threat                                                 | Mitigation                                                                                                                                                                |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | QR captured in transit (screen photo, MITM screenshot) | Rotate or remove the selected password entry. Old codes stop unwrapping future epoch keys. Provider PAT scope is user-controlled. The user can revoke it at the provider. |
-| Weak password brute force on leaked vault data         | Scrypt work factor >=18 (age default, around 1s on a laptop). UI blocks empty/typo entries. UI encourages generated passwords.                                    |
-| Stolen vault file alone                                | `secrets:` ciphertext remains bound to `secrets_key`; password entries add a brute-force path gated by scrypt cost.                                               |
-| Compromise of one device                               | Device revocation and password removal are event-log security operations that rotate future epoch keys.                                                           |
-| Password reuse across services                         | UI warns and recommends generating a random password.                                                                                                             |
+| Weak password brute force on leaked vault data         | Scrypt work factor >=18 (age default, around 1s on a laptop). UI blocks empty/typo entries. UI encourages generated passwords.                                            |
+| Stolen vault file alone                                | `secrets:` ciphertext remains bound to `secrets_key`; password entries add a brute-force path gated by scrypt cost.                                                       |
+| Compromise of one device                               | Device revocation and password removal are event-log security operations that rotate future epoch keys.                                                                   |
+| Password reuse across services                         | UI warns and recommends generating a random password.                                                                                                                     |
 
 ### 5.2 Non-goals
 
@@ -313,14 +313,14 @@ All scrypt work happens in portable Rust (`nook-auth2`, Wasm-compatible).
 
 ## 7. WASM bridge additions (`nook-wasm`)
 
-| Method                                                          | Role                                                                |
-| --------------------------------------------------------------- | ------------------------------------------------------------------- |
+| Method                                                                | Role                                                            |
+| --------------------------------------------------------------------- | --------------------------------------------------------------- |
 | `list_vault_password_entries()` / `fetch_vault_password_entries(...)` | Surface labelled password choices to login/settings/onboarding. |
-| `add_vault_password(label, password)`                           | Add a new backup password entry.                                    |
-| `update_vault_password_entry(entry_id, password)`               | Rotate one entry and start a new key epoch.                         |
-| `remove_vault_password_entry(entry_id)`                         | Remove one entry and start a new key epoch.                         |
-| `verify_vault_password(entry_id, password)`                     | Local password check for QR issuance and login UX.                  |
-| `connect_with_password(mode, creds, entry_id, password)`        | Self-enrol/unlock via a selected password entry.                    |
+| `add_vault_password(label, password)`                                 | Add a new backup password entry.                                |
+| `update_vault_password_entry(entry_id, password)`                     | Rotate one entry and start a new key epoch.                     |
+| `remove_vault_password_entry(entry_id)`                               | Remove one entry and start a new key epoch.                     |
+| `verify_vault_password(entry_id, password)`                           | Local password check for QR issuance and login UX.              |
+| `connect_with_password(mode, creds, entry_id, password)`              | Self-enrol/unlock via a selected password entry.                |
 
 There is no separate client unlock-mode flag: device keys remain primary and
 the presence of `password_entries` determines whether additive password
@@ -359,4 +359,3 @@ provider credentials and the selected password, not raw vault keys.
   credentials. Future: emit every active provider the issuer has, so the
   joining device adopts the full provider set in one step (foundation for the
   multi-provider replication phase in [auth-providers.md](../design-docs/auth-providers.md) §5).
-

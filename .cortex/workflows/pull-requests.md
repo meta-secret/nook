@@ -213,14 +213,14 @@ See [issues.md](issues.md#multi-pr-feature-sequences) for Workbench ownership.
 
 ## ⛔ SQUASH MERGE ONLY
 
-**Every PR merged into `main` MUST be squash-merged.**
-
-| Allowed                         | Forbidden                                               |
-| ------------------------------- | ------------------------------------------------------- |
-| GitHub UI: **Squash and merge** | Create a merge commit                                   |
-| CLI: `gh pr merge <n> --squash` | `gh pr merge --merge`                                   |
-| One commit per PR on `main`     | `gh pr merge --rebase`                                  |
-|                                 | Fast-forward that keeps branch commit history on `main` |
+- **Allowed squash merge methods:**
+  - GitHub UI: **Squash and merge**
+  - CLI: `gh pr merge <n> --squash`
+  - Linear git history: exactly one squash commit per PR on `main`
+- **Forbidden merge methods:**
+  - Merge commits (`gh pr merge --merge`)
+  - Rebase merges (`gh pr merge --rebase`)
+  - Fast-forward merges that retain branch commit history on `main`
 
 `main` must stay linear: **one squash commit per PR**. Feature branches can have many commits; that history is discarded at merge time.
 
@@ -348,13 +348,18 @@ task pr:validate PR=<number>
 task pr:validate PR=<number> FULL_E2E=1
 ```
 
-| When                       | Command                                          | Why                                             |
-| -------------------------- | ------------------------------------------------ | ----------------------------------------------- |
-| Before every push          | `task loom:pre-push`                             | Only required local product action              |
-| UI-facing path changes     | included in Loom pre-push                        | Cheap hygiene before hosted execution           |
-| Focused build/test feedback| `task remote TASK_NAMES=<a>,<b>`                | Reuse one hosted worker for selected tasks      |
-| Final validation boundary  | `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`     | Start the complete exact-head PR gate           |
-| After complete CI failure  | fix → Loom pre-push → commit → push → validate again | A push does not refresh `pr.yml`              |
+- **Before every push**
+  - Command: `task loom:pre-push`
+  - Purpose: Only required local product action; applies formatting and UI demo contract
+- **Focused build/test feedback**
+  - Command: `task remote TASK_NAMES=<a>,<b>`
+  - Purpose: Reuse one hosted worker for selected tasks
+- **Final validation boundary**
+  - Command: `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` or `task pr:validate PR=<number>`
+  - Purpose: Start the complete exact-head PR gate
+- **After complete CI failure**
+  - Command: Fix → `task loom:pre-push` → commit → push → trigger validation again
+  - Purpose: Pushing alone does not start `pr.yml`
 
 See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
 
@@ -621,4 +626,3 @@ gh pr merge <number> --squash
 ```
 
 See also [coding-bro.md](coding-bro.md).
-

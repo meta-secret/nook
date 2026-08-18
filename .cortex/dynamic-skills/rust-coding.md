@@ -239,14 +239,14 @@ impl NookRuntimeConfig {
 class VaultState {
   runtimeConfig = new NookRuntimeConfig(
     NookClientRunModeUtil.parse(import.meta.env.MODE),
-    import.meta.env.VITE_E2E_EXPOSE_VAULT === 'true',
-  )
+    import.meta.env.VITE_E2E_EXPOSE_VAULT === "true",
+  );
 }
 
-const rawIdleTimeout = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS
+const rawIdleTimeout = import.meta.env.VITE_VAULT_IDLE_TIMEOUT_MS;
 const idleTimeout = rawIdleTimeout
   ? vault.runtimeConfig.resolve_vault_idle_timeout_ms(rawIdleTimeout)
-  : vault.runtimeConfig.default_vault_idle_timeout_ms()
+  : vault.runtimeConfig.default_vault_idle_timeout_ms();
 ```
 
 ## Scope
@@ -292,6 +292,5 @@ whether a value exists.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
 - Run targeted portable Rust tests plus `cd nook-app/nook-platform && cargo clippy -p
-  nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings`.
+nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings`.
 - When exposed to web, regenerate wasm bindings and run the web type check.
-

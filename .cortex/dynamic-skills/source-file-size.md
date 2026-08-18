@@ -132,4 +132,3 @@ and scanner diagnostics; code review must verify the actual architectural seam.
 
 Use the hosted remote preflight task while developing the gate. Before every
 push, run `task loom:pre-push`; explicitly trigger the complete PR gate when ready.
-

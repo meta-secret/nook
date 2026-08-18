@@ -8,6 +8,7 @@ This is a P1 documentation rule for every `.cortex` Markdown file.
   invariant.
 - Static directory trees in documentation are a failed documentation invariant.
 - ASCII art, ASCII box drawings, and text flowcharts are prohibited.
+- Tables in Markdown files are discouraged; use enclosed lists instead.
 
 ## Purpose
 
@@ -17,17 +18,18 @@ Cortex is optimized for AI legibility and structure:
 
 - One sentence should carry one idea.
 - Complex facts belong in short sentences, bullets, or lists.
+- Tables in Markdown files are not advisable; replace them with enclosed structured lists.
 - Project structure is dynamic; documents must not contain static directory trees.
 - ASCII graphics are hard for AI agents to parse; diagrams must use Mermaid (` ```mermaid `) or structured lists.
 
 ## Problem Pattern
 
 A writer packs many constraints, identities, failure modes, and commands into
-one long sentence or table cell.
+one long sentence, or uses multi-column tables that create horizontal clutter.
 
 Static directory trees and ASCII box diagrams are embedded into documentation.
 
-Readers must hold too many clauses at once, static trees quickly become
+Readers must hold too many clauses at once, tables wrap poorly and cram complex facts, static trees quickly become
 stale, and ASCII graphics confuse AI agents.
 
 Warning signs:
@@ -35,7 +37,7 @@ Warning signs:
 - multiple independent facts joined by semicolons or "and";
 - one sentence that names several actors with different credentials;
 - one sentence that states a requirement, a failure mode, and an escape hatch;
-- table cells that read like paragraphs;
+- markdown tables used for multi-attribute inventories;
 - nested conditions inside a single clause;
 - ASCII directory trees (`├──`, `└──`) or nested file listings in Markdown;
 - ASCII box drawings (`+---+`, `| |`) or manual ASCII flowcharts.
@@ -48,7 +50,11 @@ Split the idea before writing the final prose.
 2. Write one short sentence per unit when the fact stands alone.
 3. Use a bullet list when several units share one topic.
 4. Use a nested list only when a parent item owns clear children.
-5. Keep table cells short. Move long detail under the table or into bullets.
+5. **Do not use tables in Markdown files.**
+   - Using tables is not advisable.
+   - Replace tables with enclosed structured lists.
+   - Enclose related properties under a bold primary item with nested child bullets.
+   - Enclosed lists are clean, wrap naturally, and are easily parsed and maintained by AI agents.
 6. **Never include project or directory trees in Cortex files.**
    - Project structure is dynamic.
    - Agents must investigate repository structure directly using tools (`list_dir`, `find_by_name`, `grep_search`).
@@ -134,8 +140,9 @@ Full rewritten example:
 - [ ] Scan new or edited `.cortex` prose for multi-clause sentences.
 - [ ] Split each independent fact into a short sentence or bullet.
 - [ ] Prefer lists for actors, credentials, commands, and failure modes.
-- [ ] Keep table cells short; move dense detail out of the cell.
+- [ ] Replace tables with enclosed structured lists with nested bullet attributes.
 - [ ] Remove project/directory trees and replace with dynamic inspection or flat subsystem lists.
+- [ ] Replace ASCII graphics with Mermaid diagrams or structured lists.
 - [ ] Apply the same rule to this skill card when updating it.
 
 ## Validation
@@ -152,4 +159,3 @@ Full rewritten example:
   1. run `task loom:pre-push`;
   2. commit and push; and
   3. use the normal hosted validation path.
-

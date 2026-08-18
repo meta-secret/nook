@@ -66,20 +66,20 @@ explicit fallback action. Conditional mediation is left to the browser.
 
 ## Threat model
 
-| Threat | Required behavior |
-|---|---|
+| Threat                                         | Required behavior                                                                                                                                                                                            |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Host page replays or alters a ceremony request | Bind worker authorization to the exact sender origin, RP, tab/frame, request id, and one pending request; repeat all security validation in Rust. Public response objects do not authorize vault operations. |
-| Host page requests another RP | Validate the exact sender origin in the service worker and repeat RP/origin/public-suffix validation in Rust. |
-| Revoked extension keeps signing | Rebuild the local event graph and require current device approval/key-envelope access before each operation. |
-| Private key leaks through UI or logs | Keep key parsing/signing in Rust, redact `Debug`, zeroize decrypted payloads, and expose no key getter. |
-| Duplicate/replayed ceremony | Deduplicate pending tab/frame/request tuples; use fresh browser challenges and random credential ids; persist counters atomically. |
-| Malformed or oversized page input | Reject over 64 KiB in the isolated bridge and runtime validator, then apply typed bounded parsing in Rust. |
-| Extension is locked or unavailable | Do not expose account metadata; invoke the browser's original WebAuthn method. |
-| Nook ceremony fails after selection | Return a generic `NotAllowedError`; do not leak vault, key, or provider details to the website. |
-| Spoofed Pilot HUD proposes Create/Use passkey | Treat HUD approval only as permission to activate a site passkey control. Ceremony consent, RP/origin binding, and private-key ops stay in the existing WebAuthn intercept (`webauthn-content` / Rust). |
-| Pilot proposal mints challenges or signs | Forbidden. Proposal policy returns non-secret eligibility only (`none` / `use-passkey` / `create-passkey`). Create/assert remain on the consented ceremony path. |
-| Locked session advertises vault matches | Matching account counts are attached only from an unlocked, granted Simple Vault projection; locked/unavailable sessions contribute `0` and never expose metadata. |
-| Pilot auto-submits or silently creates | Default remains explicit user action. No permanent site autopilot grant; Take over always available. |
+| Host page requests another RP                  | Validate the exact sender origin in the service worker and repeat RP/origin/public-suffix validation in Rust.                                                                                                |
+| Revoked extension keeps signing                | Rebuild the local event graph and require current device approval/key-envelope access before each operation.                                                                                                 |
+| Private key leaks through UI or logs           | Keep key parsing/signing in Rust, redact `Debug`, zeroize decrypted payloads, and expose no key getter.                                                                                                      |
+| Duplicate/replayed ceremony                    | Deduplicate pending tab/frame/request tuples; use fresh browser challenges and random credential ids; persist counters atomically.                                                                           |
+| Malformed or oversized page input              | Reject over 64 KiB in the isolated bridge and runtime validator, then apply typed bounded parsing in Rust.                                                                                                   |
+| Extension is locked or unavailable             | Do not expose account metadata; invoke the browser's original WebAuthn method.                                                                                                                               |
+| Nook ceremony fails after selection            | Return a generic `NotAllowedError`; do not leak vault, key, or provider details to the website.                                                                                                              |
+| Spoofed Pilot HUD proposes Create/Use passkey  | Treat HUD approval only as permission to activate a site passkey control. Ceremony consent, RP/origin binding, and private-key ops stay in the existing WebAuthn intercept (`webauthn-content` / Rust).      |
+| Pilot proposal mints challenges or signs       | Forbidden. Proposal policy returns non-secret eligibility only (`none` / `use-passkey` / `create-passkey`). Create/assert remain on the consented ceremony path.                                             |
+| Locked session advertises vault matches        | Matching account counts are attached only from an unlocked, granted Simple Vault projection; locked/unavailable sessions contribute `0` and never expose metadata.                                           |
+| Pilot auto-submits or silently creates         | Default remains explicit user action. No permanent site autopilot grant; Take over always available.                                                                                                         |
 
 ## Pilot proposals
 
@@ -93,4 +93,3 @@ The extension prompt is visually Nook-owned but a website can imitate any
 in-page UI. It therefore never asks for recovery material, provider tokens, or
 vault passwords. Device authorization remains in the extension-owned popup and
 offscreen session.
-

@@ -74,4 +74,3 @@ to generate bookkeeping.
 
 Run `node scripts/validate.mjs` in a Workbench checkout and inspect the rendered
 Markdown on GitHub. Full workflow: [workflows/issues.md](../workflows/issues.md).
-

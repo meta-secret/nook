@@ -104,4 +104,3 @@ When applying a skill to code:
    push the coherent iteration. Run focused hosted tasks as useful. Trigger
    complete validation with `task pr:validate` when the head is ready for the
    final gate.
-

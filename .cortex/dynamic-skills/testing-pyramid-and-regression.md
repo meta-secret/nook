@@ -42,11 +42,13 @@ The portable Rust crates (`nook-app-common`, `nook-core`, `nook-auth2`, `nook-re
 ## Scope
 
 Applies to:
+
 - All domain logic, cryptographic operations, sync mechanisms, and state machines.
 - All bug fixes across Rust, WASM, Svelte, and browser extensions.
 - CI and local test execution.
 
 Does not apply to:
+
 - Purely visual design tweaks with no business logic.
 
 ## Application Checklist

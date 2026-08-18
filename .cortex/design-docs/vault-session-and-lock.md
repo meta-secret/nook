@@ -10,15 +10,15 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, th
 
 ## 1. Core concepts
 
-| Concept | What it is | Persists when locked? |
-|---------|------------|------------------------|
-| **Vault** | One logical encrypted database identified by `store_id` in YAML | Yes — encrypted blob on disk |
-| **Local vault cache** | Authoritative copies in `nook_db` as `vault:{store_id}` blobs + registry | Yes |
-| **Sync provider** | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth` | Yes — credentials only |
-| **Device identity** | Passkey-PRF or PIN-wrapped X25519 key in `nook_db.device_identity_wrapped` | Ciphertext persists; plaintext does not |
-| **Unlocked session** | Vault keys + encrypted records in WASM; metadata page plus explicitly revealed records in Svelte | **No** — cleared on Lock |
-| **Sentinel genesis draft** | Pre-vault policy and verified participant public keys | Not a vault or unlocked session; persistence policy is a separate decision |
-| **Lock** | End session; return to login gate | N/A |
+| Concept                    | What it is                                                                                       | Persists when locked?                                                      |
+| -------------------------- | ------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| **Vault**                  | One logical encrypted database identified by `store_id` in YAML                                  | Yes — encrypted blob on disk                                               |
+| **Local vault cache**      | Authoritative copies in `nook_db` as `vault:{store_id}` blobs + registry                         | Yes                                                                        |
+| **Sync provider**          | Saved connection (GitHub PAT, Drive OAuth, …) in `nook_auth`                                     | Yes — credentials only                                                     |
+| **Device identity**        | Passkey-PRF or PIN-wrapped X25519 key in `nook_db.device_identity_wrapped`                       | Ciphertext persists; plaintext does not                                    |
+| **Unlocked session**       | Vault keys + encrypted records in WASM; metadata page plus explicitly revealed records in Svelte | **No** — cleared on Lock                                                   |
+| **Sentinel genesis draft** | Pre-vault policy and verified participant public keys                                            | Not a vault or unlocked session; persistence policy is a separate decision |
+| **Lock**                   | End session; return to login gate                                                                | N/A                                                                        |
 
 `nook-auth2` owns the portable security/key-access primitives behind these rows:
 device identities, `auth:` envelopes, `password_entries`, member roster
@@ -84,13 +84,13 @@ discovered again.
 
 **Implementation:** `VaultState.lockVault()` → `set_vault_session_locked(true)` + `clearUnlockedSession()`:
 
-| Cleared (memory) | Kept (disk) |
-|------------------|-------------|
-| `isAuthenticated`, current metadata page, revealed records | `nook_db` vault blobs + registry |
-| WASM vault keys + `VaultCrypto` via `reset_vault_session()` | `nook_db.device_identity_wrapped` |
-| WASM device identity via `lock_device_identity()` | WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms |
-| Pending joins / roster UI cache | `nook_auth` sync provider list + tokens |
-| Settings / help panels | Password entries inside encrypted YAML |
+| Cleared (memory)                                            | Kept (disk)                                                                                  |
+| ----------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `isAuthenticated`, current metadata page, revealed records  | `nook_db` vault blobs + registry                                                             |
+| WASM vault keys + `VaultCrypto` via `reset_vault_session()` | `nook_db.device_identity_wrapped`                                                            |
+| WASM device identity via `lock_device_identity()`           | WebAuthn credential in the platform authenticator, or PIN fallback for PRF-missing platforms |
+| Pending joins / roster UI cache                             | `nook_auth` sync provider list + tokens                                                      |
+| Settings / help panels                                      | Password entries inside encrypted YAML                                                       |
 
 **Refresh:** `sessionStorage` flag `nook_vault_session_locked` blocks `shouldAutoUnlock()` until the user unlocks again (`markVaultUnlocked()` clears the flag). Device-key vaults still auto-unlock on reload when the user did **not** lock.
 
@@ -212,13 +212,13 @@ When the user explicitly chooses **Unlock**:
 
 ## 3. Multiple vaults on one browser (#120)
 
-| Surface | Behavior |
-|---------|----------|
-| Local cache | Multiple `vault:{store_id}` blobs + `vault_registry` in `nook_db` |
-| Login gate | Vault picker when >1 vault: open / create new / import from provider |
-| Sync providers | Scoped to active vault `store_id`; full list in `nook_auth` |
-| Lock / switch | Clears session; vault chooser when multiple vaults exist |
-| `store_id` mismatch | **Import as new vault** in sync conflict dialog |
+| Surface             | Behavior                                                             |
+| ------------------- | -------------------------------------------------------------------- |
+| Local cache         | Multiple `vault:{store_id}` blobs + `vault_registry` in `nook_db`    |
+| Login gate          | Vault picker when >1 vault: open / create new / import from provider |
+| Sync providers      | Scoped to active vault `store_id`; full list in `nook_auth`          |
+| Lock / switch       | Clears session; vault chooser when multiple vaults exist             |
+| `store_id` mismatch | **Import as new vault** in sync conflict dialog                      |
 
 Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/nook-wasm/src/storage/indexed_db.rs`, `LoginVaultPicker.svelte`.
 
@@ -226,12 +226,12 @@ Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/no
 
 ## 4. Sync providers ≠ separate vaults
 
-| User intent | Correct action |
-|-------------|----------------|
-| **Create a vault** | Login → **Create vault** (starts in this browser) |
-| **Create a Sentinel vault** | Login → **Create vault** → Sentinel policy and reverse onboarding; no provider until atomic genesis is complete |
-| **Replicate this vault** | Settings → Sync providers → Add GitHub / Drive |
-| **Open a vault from elsewhere** | Login → **Connect sync provider** or **Import as new vault** |
+| User intent                                   | Correct action                                                                                                                          |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| **Create a vault**                            | Login → **Create vault** (starts in this browser)                                                                                       |
+| **Create a Sentinel vault**                   | Login → **Create vault** → Sentinel policy and reverse onboarding; no provider until atomic genesis is complete                         |
+| **Replicate this vault**                      | Settings → Sync providers → Add GitHub / Drive                                                                                          |
+| **Open a vault from elsewhere**               | Login → **Connect sync provider** or **Import as new vault**                                                                            |
 | **Local folder contains multiple vault logs** | Choose a dedicated folder for one vault; Nook shows the detected `store_id`s and refuses to sync until the provider path is unambiguous |
 
 If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **import as new vault** or keep one copy — Nook refuses to merge unrelated databases ([unified-vault.md](unified-vault.md) §5).
@@ -240,11 +240,11 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 
 ## 5. UI surfaces
 
-| Surface | Purpose |
-|---------|---------|
-| **Header Lock / Switch vault** | End session; switch vault when multiple exist |
-| **Login gate chooser** | Vault picker, create local vault, or connect sync provider |
-| **Settings → Sync providers** | Manage replica targets for the **active** vault only |
+| Surface                                | Purpose                                                                                  |
+| -------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Header Lock / Switch vault**         | End session; switch vault when multiple exist                                            |
+| **Login gate chooser**                 | Vault picker, create local vault, or connect sync provider                               |
+| **Settings → Sync providers**          | Manage replica targets for the **active** vault only                                     |
 | **Settings → Delete local vault data** | Remove every Nook vault and credential persisted by this browser; remote replicas remain |
 
 **Test ids:** `header-lock-vault-btn`, `header-switch-vault-btn`, `login-vault-picker`, `login-vault-option`, `login-create-additional-vault-btn`, `sync-conflict-import-new-vault-btn`, `unlock-vault-btn`, `login-create-device-vault-btn`, `login-connect-storage-btn`, `add-provider-btn`.
@@ -278,4 +278,3 @@ If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **i
 - Sentinel provider access never replaces participant quorum. Possessing a remote
   replica without `T` valid participant contributions must not produce an
   unlocked session.
-

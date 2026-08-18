@@ -67,4 +67,3 @@ Does not apply to:
 
 - `task loom:dependency-popularity`
 - Review findings for any `verdict: fail` entries before merge
-

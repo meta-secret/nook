@@ -45,4 +45,3 @@ automation, ad hoc `curl`, or a new API token when MCP is available.
 
 For preview, development, and release topology, required CI permissions, and
 the live-verification contract, see [CI Pipeline](../workflows/ci-pipeline.md).
-

@@ -97,4 +97,3 @@ Does not apply to:
 
 Proof is a PR whose first Verify attempt is not wasted on format/demo misses,
 and whose complete validation was requested only for a ready head.
-

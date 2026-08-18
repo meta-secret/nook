@@ -82,4 +82,3 @@ diagnose wasted feedback cycles, but do not mix their partial durations into a
 successful-build median. A performance regression still requires both more
 than 20 percent and at least 60 seconds of slowdown against a comparable
 baseline; inspect the detailed steps before assigning the cause to the build.
-

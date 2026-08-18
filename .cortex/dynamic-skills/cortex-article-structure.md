@@ -181,4 +181,3 @@ Review the diff semantically after the mechanical checks pass.
 
 The reviewer must be able to identify article purpose, action order, branches,
 and completion evidence without reconstructing them from dense prose.
-

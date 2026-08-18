@@ -112,7 +112,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **`.cortex` is a living knowledge base**, not a frozen snapshot.
 - Agents must **update it when durable knowledge is gained**.
 - Sources include user prompts, design dialogues, test discoveries, CI/PR postmortems, and code archaeology.
-- **What to capture:** testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons.
+- **What to capture:** product requirements and constraints, testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons.
 - Write concise, actionable prose.
 - Link to source files.
 - **How to write it:** follow [`../dynamic-skills/cortex-writer.md`](../dynamic-skills/cortex-writer.md).
@@ -123,7 +123,8 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Agents garbage-collect obsolete cortex facts.
 - Docs must agree with each other and with the code.
 - Conflicts and stale claims are P1 documentation findings.
-- **Where to put it:** extend the relevant existing doc (`dynamic-skills/`, `design-docs/`, `workflows/`, `references/`).
+- **Where to put it:** extend the relevant existing doc (`product-specs/`, `dynamic-skills/`, `design-docs/`, `workflows/`, `references/`).
+- For user-facing requirements, item schemas, or UX flows, read and update the owning specification in `product-specs/` (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
 - For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills/) and follow [dynamic-skills.md](../workflows/dynamic-skills.md).
 - Add a new file only when the topic is substantial and has no natural home.
 - Update [design-docs/index.md](index.md) or [AGENTS.md](../AGENTS.md) links when adding docs.
@@ -135,4 +136,3 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Do not duplicate large code blocks — point to modules and tests instead.
 - **When:** as part of the same PR that learns the fact, or in an immediate follow-up before the task is marked done.
 - If you fixed a bug because tests revealed a missing invariant, document that invariant in `.cortex`.
-
