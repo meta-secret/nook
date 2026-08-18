@@ -313,4 +313,3 @@ This decision does not:
   documents project-instruction-triggered delegation.
 - [Codex SDK](https://learn.chatgpt.com/docs/codex-sdk.md) documents
   programmatic local Codex threads for internal workflows.
-

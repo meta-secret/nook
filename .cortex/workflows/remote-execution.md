@@ -228,4 +228,3 @@ Before squash merge:
 5. `task pr:ready PR=<number>` succeeds.
 
 The successful exact-head audit, not the continued presence of a label, is the merge authorization boundary.
-

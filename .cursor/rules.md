@@ -8,7 +8,6 @@ Before working on any task, load and follow the instructions in these files:
 4. `.cortex/dynamic-skills/index.md` — canonical dynamic skill cards
 5. `.cortex/design-docs/index.md` — design docs and operating beliefs
 6. `.cortex/product-specs/index.md` — product requirements and specifications
-7. `.cortex/exec-plans/tech-debt-tracker.md` — execution plans and refactoring status
 
 These files are the source of truth for how this project works.
 
@@ -37,6 +36,11 @@ These files are the source of truth for how this project works.
 ### WASM API contract
 - `NookVaultManager.connect(storage_mode, github_pat)` — two arguments only.
 - After changing `nook-wasm`, rebuild bindings: `task wasm:build` (or `task build`).
+
+### Product specifications
+- **Read specifications before implementation.** Search `.cortex/product-specs/` and `.cortex/knowledge-graph.md` before planning or editing code for user-facing features, item types, or UX workflows.
+- **Update specifications on new knowledge.** Capture user requirements from chat, task execution, and PR review iterations in the owning `.cortex/product-specs/` document in the same PR.
+- **Treat stale/missing specs as P1 defects.** Follow `.cortex/dynamic-skills/product-spec-lifecycle.md`.
 
 ### Tooling
 - Use `task` commands (via Docker) for build, check, format, and test. Do not run raw compiler commands unless debugging.

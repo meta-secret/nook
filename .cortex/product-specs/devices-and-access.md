@@ -167,4 +167,3 @@ Current dashboard requirements:
 - [identity-vault-architecture.md](../design-docs/identity-vault-architecture.md)
 - [vault-event-log.md](../design-docs/vault-event-log.md)
 - [browser-extension.md](browser-extension.md)
-

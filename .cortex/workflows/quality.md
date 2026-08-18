@@ -154,7 +154,6 @@ Use this workflow for quality, CI, and deployment changes.
 10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
-
     - `.github/workflows/pr.yml`, `.github/workflows/main.yml`, and `.github/workflows/release.yml` run on GitHub-hosted `ubuntu-latest`.
     - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
       instance selected with `docker buildx use` before Task runs.
@@ -163,7 +162,6 @@ Use this workflow for quality, CI, and deployment changes.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
     #### BuildKit cache (Zot)
-
     - Private Zot is the authoritative BuildKit cache.
     - The k0s Zot Pod reserves one CPU and 2 GiB of memory.
     - It may burst to four CPUs and 8 GiB during parallel cache transfers.
@@ -307,7 +305,6 @@ Use this workflow for quality, CI, and deployment changes.
     scope after tests pass, and a fresh retry restores every stage as CACHED.
 
     #### SeaweedFS sccache
-
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.
     - They read/write compiler objects in `nook-sccache` and publish shared verified Zot refs.
     - Explicit collaborator-dispatched Remote jobs use a separate SeaweedFS identity.
@@ -319,7 +316,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow
-
     - Main serializes native → WASM → web publisher lanes.
     - Each lane verifies read-only first, then exports its already-solved graph from the same job-scoped builder.
     - WASM dependencies export alone with no hosted reimport and forced zstd compression.
@@ -329,7 +325,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-
     - PR runs native Rust and verified WASM on independent hosted producer runners.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
@@ -349,7 +344,6 @@ Use this workflow for quality, CI, and deployment changes.
       preflight Cargo task.
 
     #### Coverage reporting
-
     - Native coverage uses a run-stable artifact name consumed by a separate `needs: rust` report job.
     - That job downloads the current attempt directly.
     - When changed covered sources require a base comparison, it accepts an unexpired exact-commit artifact from an authenticated Main push.
@@ -361,14 +355,12 @@ Use this workflow for quality, CI, and deployment changes.
     - It validates the reused run-stable artifact before publication.
 
     #### Release workflow
-
     - Release checks out the requested source first.
     - It preserves the current workflow tooling in ignored `.nook/release-workflow`.
     - It initializes the safe builder from that side checkout so the cache fingerprint describes the exact release source without reviving historical setup logic.
     - Release performs immutable tag validation, main-equivalent verify/e2e, stable production deployment, and GitHub Release publication.
 
     #### Manual and scheduled jobs
-
     - Credentialed `sync-live` validation is manual through `e2e-pr.yml`.
     - Weekly: `rust-dependency-updates.yml` audits every direct dependency in each Rust root.
     - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
@@ -382,7 +374,6 @@ Use this workflow for quality, CI, and deployment changes.
     - `.github/workflows/runner-cleanup.yml` remains on `nook` for registered-host maintenance.
 
     #### Main failure incidents (Hive)
-
     - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident per failed SHA.
     - This includes `Web e2e`, `UI demos`, and `Extension e2e` failures.
     - Each rerun creates a fresh delivery generation with generation-specific publication records and no completed publication reuse.
@@ -478,12 +469,12 @@ Quality gates exist to force remediation. When **Knip**, **jscpd**, or **any
 other** check in `task check` / `task ci:pr` / PR CI fails, agents **must fix the
 reported problems in the same task** and leave the gate green.
 
-| Gate | Typical findings | Correct fix |
-|------|------------------|-------------|
-| Knip (`bun run unused`) | unused files, exports, dependencies | delete dead code, wire it up, or export only what callers need |
-| jscpd (`bun run duplicates`) | copy/paste clones over threshold | extract a shared helper/module; do not duplicate again |
-| fmt / prettier / eslint / svelte-check / clippy / tsc | style, type, lint defects | correct the code |
-| vitest / Rust tests / coverage / e2e / preflight | failing or missing coverage | fix behavior and add the required tests |
+| Gate                                                  | Typical findings                    | Correct fix                                                    |
+| ----------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------- |
+| Knip (`bun run unused`)                               | unused files, exports, dependencies | delete dead code, wire it up, or export only what callers need |
+| jscpd (`bun run duplicates`)                          | copy/paste clones over threshold    | extract a shared helper/module; do not duplicate again         |
+| fmt / prettier / eslint / svelte-check / clippy / tsc | style, type, lint defects           | correct the code                                               |
+| vitest / Rust tests / coverage / e2e / preflight      | failing or missing coverage         | fix behavior and add the required tests                        |
 
 **Do not** "resolve" a finding by:
 
@@ -499,4 +490,3 @@ with the rationale in the PR. Default agent behavior is: read the failure → fi
 the code → re-run the same gate until green. See
 [AGENTS.md — Fix every failing check finding](../AGENTS.md#non-negotiable-fix-every-failing-check-finding)
 and [coding-bro.md](coding-bro.md).
-

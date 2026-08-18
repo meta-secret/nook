@@ -311,10 +311,6 @@ const CATEGORIES: readonly CategoryDefinition[] = [
     heading: 'References (`references/`)',
     filter: (doc) => doc.relativePath.startsWith('references/'),
   },
-  {
-    heading: 'Execution Plans (`exec-plans/`)',
-    filter: (doc) => doc.relativePath.startsWith('exec-plans/'),
-  },
 ];
 
 export function renderCortexIndexMarkdown(
@@ -324,7 +320,7 @@ export function renderCortexIndexMarkdown(
   lines.push('# Cortex Knowledge Graph & Navigation Map');
   lines.push('');
   lines.push(
-    'Central knowledge graph and index of all specifications, architecture documents, rules, skills, workflows, references, and execution plans in Nook Cortex.',
+    'Central knowledge graph and index of all specifications, architecture documents, rules, skills, workflows, and references in Nook Cortex.',
   );
   lines.push('');
   lines.push('## Overview');

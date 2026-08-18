@@ -152,13 +152,12 @@ it.
 
 ```ts
 export type EnrollmentProvider =
-  | { type: 'local' }
-  | { type: 'github'; pat: string; repo: string }
+  { type: "local" } | { type: "github"; pat: string; repo: string };
 
 export type EnrollmentIssueInput = {
-  provider: EnrollmentProvider
-  entryId: string
-}
+  provider: EnrollmentProvider;
+  entryId: string;
+};
 ```
 
 After: Rust owns the app/domain schema, wasm exposes a typed boundary, and the
@@ -220,11 +219,11 @@ impl NookEnrollmentProvider {
 
 ```ts
 const provider =
-  selectedProvider === 'github'
+  selectedProvider === "github"
     ? NookEnrollmentProvider.github(githubRepo, githubPat)
-    : NookEnrollmentProvider.local()
+    : NookEnrollmentProvider.local();
 
-await issueEnrollmentCode(provider, selectedEntryId)
+await issueEnrollmentCode(provider, selectedEntryId);
 ```
 
 If the provider type already exists in `nook-core` (for example
@@ -243,9 +242,11 @@ pub struct NookEnrollmentProvider {
 - **Before:** TypeScript computes provider identity or storage-mode rules.
 
 ```ts
-export function syncProviderTargetKey(provider: StorageProvider): string | undefined {
-  if (provider.type === 'github') {
-    return `github:${provider.githubRepo?.toLowerCase()}:${provider.githubPat}`
+export function syncProviderTargetKey(
+  provider: StorageProvider,
+): string | undefined {
+  if (provider.type === "github") {
+    return `github:${provider.githubRepo?.toLowerCase()}:${provider.githubPat}`;
   }
   // ...
 }
@@ -363,7 +364,7 @@ Rules:
 
 Treat every `Option<String>` (and `Option<T>` more broadly) as a **strong signal
 that the type is really a two-state enum whose states are not yet named**. An
-`Option` says "present or absent" but says nothing about *what each state means*;
+`Option` says "present or absent" but says nothing about _what each state means_;
 an enum makes the states, their names, and their payloads explicit — which is
 more descriptive in almost every case.
 
@@ -465,4 +466,3 @@ types, same-argument forwarding functions around generated WASM imports,
 unchecked WASM type hints, and raw provider/auth `JsValue` DTO signatures.
 Extension ownership checks must reject known portable decision patterns after
 their Rust replacement lands.
-

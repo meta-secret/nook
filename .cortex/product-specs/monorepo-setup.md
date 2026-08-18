@@ -131,4 +131,3 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.
   - That includes browser E2E and UI-demo failures.
   - Real-provider sync-live checks run only through explicit manual validation.
-

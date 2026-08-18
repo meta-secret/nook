@@ -501,4 +501,3 @@ re-sealed for the extension device before leaving the approving vault session.
   background provider sync remain the next runtime slice.
 - #237 owns matched-account selection and explicit fill behavior once the
   extension runtime can query its authorized encrypted state.
-

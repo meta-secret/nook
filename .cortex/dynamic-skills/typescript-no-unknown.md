@@ -23,8 +23,8 @@ Do not add them, widen them, or copy them into new code.
 ## Problem Pattern
 
 ```ts
-export function decodeDependencyPopularityRequest(value: unknown)
-export type UnknownRecord = Record<string, unknown>
+export function decodeDependencyPopularityRequest(value: unknown);
+export type UnknownRecord = Record<string, unknown>;
 ```
 
 - `unknown` is an unnamed top type.
@@ -44,7 +44,7 @@ export type DependencyPopularityRequest = {
 
 export function evaluateDependencyPopularity(
   request: DependencyPopularityRequest,
-): DependencyPopularityResult
+): DependencyPopularityResult;
 ```
 
 Rules:
@@ -91,7 +91,7 @@ Name the source or format when it improves clarity:
 ```ts
 export function decodeDependencyPopularityRequest(
   value: UntrustedYamlNode,
-): DecodeOutcome<DependencyPopularityRequest>
+): DecodeOutcome<DependencyPopularityRequest>;
 ```
 
 ## Enforcement
@@ -125,4 +125,3 @@ bun run --cwd agentic-ai/loom lint
 - [ ] Keep any unavoidable external-value use inside a dedicated adapter.
 - [ ] Prove that each adapter returns a concrete domain type or typed failure.
 - [ ] Keep the applicable Loom or web lint task green.
-

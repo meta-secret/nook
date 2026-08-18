@@ -189,4 +189,3 @@ runtime discriminant constructors and comparisons, while accepting enum member
 types and ignoring comments and unrelated prose strings. Add positive and
 negative fixtures whenever the rule is sharpened. Run `task format` before
 pushing and use GitHub Actions as the product validation gate.
-

@@ -51,12 +51,12 @@
 Nook's MVP uses SLIP-0039's recommended single-group representation for a
 single-level threshold scheme:
 
-| Field | Value | Meaning |
-|---|---:|---|
-| `G` | 1 | one group |
-| `GT` | 1 | one group required |
-| `N_1` | 3 | three member shares |
-| `T_1` | 2 | any two member shares recover |
+| Field | Value | Meaning                       |
+| ----- | ----: | ----------------------------- |
+| `G`   |     1 | one group                     |
+| `GT`  |     1 | one group required            |
+| `N_1` |     3 | three member shares           |
+| `T_1` |     2 | any two member shares recover |
 
 Do not expose these as user-configurable fields in the first implementation.
 The code may use typed constants such as `RECOVERY_SHARE_COUNT = 3` and
@@ -348,11 +348,11 @@ Apache-2.0 audit/reference source. Do not depend directly on the
 
 ### Candidate audit
 
-| Candidate | Decision | Rationale |
-|---|---|---|
-| `Internet-of-People/slip39-rust` | Reject as a direct dependency | Published as `slip39` but GPL-3.0-or-later, old, command-oriented, and a wrapper around another crate. Useful only as a behavioral reference. |
+| Candidate                             | Decision                                      | Rationale                                                                                                                                                     |
+| ------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Internet-of-People/slip39-rust`      | Reject as a direct dependency                 | Published as `slip39` but GPL-3.0-or-later, old, command-oriented, and a wrapper around another crate. Useful only as a behavioral reference.                 |
 | `rust-bitcoin/rust-wallet/src/sss.rs` | Use as primary reference, not blind vendoring | Apache-2.0 and contains generate/combine/share parsing plus test vectors, but the repo is archived and the code uses old wallet-local types and dependencies. |
-| `yeastplume/rust-sssmc39` | Use as secondary reference only | Apache-2.0 and closer to a library, but explicitly work-in-progress and uses older dependency choices. |
+| `yeastplume/rust-sssmc39`             | Use as secondary reference only               | Apache-2.0 and closer to a library, but explicitly work-in-progress and uses older dependency choices.                                                        |
 
 Follow-up #261 should create a Nook-owned module rather than add a large
 external dependency.
@@ -457,4 +457,3 @@ Every implementation PR in #261 through #265 must preserve these invariants:
 
 Do not start with UI. The UI must consume typed WASM states from the auth-owned
 model so the recovery protocol does not drift into TypeScript.
-

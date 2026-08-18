@@ -35,6 +35,7 @@ Enforce container harness stability, cache predictability, and dependency reprod
 ## Scope
 
 Applies to:
+
 - All Dockerfiles, compose files, and container tasks under `infra/`.
 - Dependency manifests (`Cargo.toml`, `package.json`, `bun.lock`).
 - Local development workflows and CI runners.

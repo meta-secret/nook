@@ -12,6 +12,8 @@ ignore = [
   # moves to hickory 0.26.1 or later.
   "RUSTSEC-2026-0118",
   "RUSTSEC-2026-0119",
+  # Low severity empty DATA frames in h2 0.4.15 (pinned transitive dependency in codex / minds)
+  "RUSTSEC-2026-0258",
 ]
 unmaintained = "workspace"
 yanked = "deny"
@@ -19,6 +21,7 @@ yanked = "deny"
 [licenses]
 confidence-threshold = 0.93
 allow = [
+  "0BSD",
   "Apache-2.0",
   "BSD-2-Clause",
   "BSD-3-Clause",
@@ -29,7 +32,9 @@ allow = [
   "MIT",
   "MPL-2.0",
   "NCSA",
+  "OpenSSL",
   "Unicode-3.0",
+  "Unlicense",
   "Zlib",
 ]
 
@@ -44,7 +49,11 @@ unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
   "https://github.com/helix-editor/nucleo",
+  "https://github.com/helix-editor/nucleo.git",
   "https://github.com/openai-oss-forks/tokio-tungstenite",
+  "https://github.com/openai-oss-forks/tokio-tungstenite.git",
   "https://github.com/openai-oss-forks/tungstenite-rs",
+  "https://github.com/openai-oss-forks/tungstenite-rs.git",
   "https://github.com/openai/codex",
+  "https://github.com/openai/codex.git",
 ]

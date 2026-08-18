@@ -119,18 +119,18 @@ sandbox and lifecycle checks continue.
 
 ## 3. Components and ownership
 
-| Component | Runs where | Owns | Must not own |
-| --- | --- | --- | --- |
-| Main failure handoff | GitHub Actions | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures | Agent execution, raw failure logs, deployment |
-| Workbench dispatcher | One Kata Pod | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth |
-| Neo4j | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations | Codex or repository execution |
-| Control Center observer | Dedicated runc Pod | Read-only, localized task/worker projection and the static operator dashboard | Task mutation, Codex auth, GitHub credentials, or raw agent output |
-| Coordinator | Worker Kata Pod | Neo4j credential and a typed Unix-socket task-store protocol | Raw-query access for the worker |
-| Worker | Worker Kata Pod | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration | Raw Neo4j access or Kubernetes administrative credentials |
-| Auth broker | Worker Kata Pod | Codex credential source, refresh, and one established token channel | Repository execution or GitHub publication |
-| Pod reaper | Worker Kata Pod | Requests whole-Pod replacement with an opaque one-purpose credential | Kubernetes API or auth persistence |
-| Lifecycle controller | Dedicated runc Pod | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies | Codex auth or task execution |
-| Kubernetes Deployment | k0s | Four ready worker Pods and clean replacement | Durable task semantics |
+| Component               | Runs where                      | Owns                                                                                                                                                                     | Must not own                                                       |
+| ----------------------- | ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ |
+| Main failure handoff    | GitHub Actions                  | Converts every actionable unsuccessful trusted `Main` run into one Workbench incident keyed by failed SHA, including browser E2E and UI-demo failures                    | Agent execution, raw failure logs, deployment                      |
+| Workbench dispatcher    | One Kata Pod                    | Polls public-safe `status: ready`, `automation: hive` incidents, binds the referenced run to the exact Nook Main push SHA, and idempotently enqueues unresolved failures | GitHub publication token, Codex auth                               |
+| Neo4j                   | `hive-data`, runc, retained PVC | Task DAG, readiness, claims, leases, agents, attempts, results, artifacts, schema migrations                                                                             | Codex or repository execution                                      |
+| Control Center observer | Dedicated runc Pod              | Read-only, localized task/worker projection and the static operator dashboard                                                                                            | Task mutation, Codex auth, GitHub credentials, or raw agent output |
+| Coordinator             | Worker Kata Pod                 | Neo4j credential and a typed Unix-socket task-store protocol                                                                                                             | Raw-query access for the worker                                    |
+| Worker                  | Worker Kata Pod                 | Claim loop, workspace, heartbeat, embedded Codex thread, scoped GitHub credential, standard GitHub delivery, terminal result, dependency patch integration               | Raw Neo4j access or Kubernetes administrative credentials          |
+| Auth broker             | Worker Kata Pod                 | Codex credential source, refresh, and one established token channel                                                                                                      | Repository execution or GitHub publication                         |
+| Pod reaper              | Worker Kata Pod                 | Requests whole-Pod replacement with an opaque one-purpose credential                                                                                                     | Kubernetes API or auth persistence                                 |
+| Lifecycle controller    | Dedicated runc Pod              | Validates Hive Pod identity, deletes only labeled Hive Pods, and reconciles the live Neo4j endpoint into worker and dispatcher egress policies                           | Codex auth or task execution                                       |
+| Kubernetes Deployment   | k0s                             | Four ready worker Pods and clean replacement                                                                                                                             | Durable task semantics                                             |
 
 The warm-pool size is four. Each Pod is a security and lifecycle unit, not four
 independent long-lived worker processes sharing one filesystem.
@@ -559,13 +559,13 @@ TypeScript PR audit without Docker.
 
 ### Credential ownership
 
-| Credential | Mounted into | Exposed to worker/Codex |
-| --- | --- | --- |
-| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access | No password or raw graph connection |
-| Codex `auth.json` | Auth broker only | Short-lived tokens on one pre-established private channel |
-| Repository-scoped GitHub token | Main-repair worker | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
-| Reaper controller credential | Pod reaper, Workbench dispatcher, and dedicated controller only | No |
-| Kubernetes auth-refresh token | Auth broker only | No |
+| Credential                          | Mounted into                                                    | Exposed to worker/Codex                                   |
+| ----------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- |
+| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access     | No password or raw graph connection                       |
+| Codex `auth.json`                   | Auth broker only                                                | Short-lived tokens on one pre-established private channel |
+| Repository-scoped GitHub token      | Main-repair worker                                              | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
+| Reaper controller credential        | Pod reaper, Workbench dispatcher, and dedicated controller only | No                                                        |
+| Kubernetes auth-refresh token       | Auth broker only                                                | No                                                        |
 
 - **Service-account tokens:** Disable automatic mounting.
   - The service account may patch only the Codex-auth Secret.
@@ -779,6 +779,7 @@ task infra:deploy
   - Kube-router masquerades cluster egress.
   - CoreDNS and allowlisted worker egress receive replies through the node.
   - Do not expose a control-plane port on the public interface.
+
 - **Installer rollback:** Use a temporary owned rule while k0s starts.
   - Restore previous live and persisted firewall state on error, exit, or
     termination.
@@ -837,18 +838,17 @@ global ruleset.
 
 ## 11. Source map
 
-| Concern | Source of truth |
-| --- | --- |
-| Rust platform implementation | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/) |
+| Concern                                | Source of truth                                                                                                                 |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Rust platform implementation           | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/)                                                                |
 | Task dependencies and artifact lineage | [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs) |
-| Worker image and cache stages | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile) |
-| Hive developer commands | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml) |
-| Infrastructure command composition | [`infra/Taskfile.yml`](../../infra/Taskfile.yml) |
-| Infrastructure operations and pins | [`infra/tasks/`](../../infra/tasks/) |
-| k0s, Kata, Neo4j, and Hive manifests | [`infra/k0s/`](../../infra/k0s/) |
-| Main failure handoff | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml) |
-| Hive verification workflow | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml) |
-| Main coalescing and delivery | [`.github/workflows/main.yml`](../../.github/workflows/main.yml) |
-| Workbench issue contract | [`workflows/issues.md`](../workflows/issues.md) |
-| Pull-request ownership contract | [`workflows/pull-requests.md`](../workflows/pull-requests.md) |
-
+| Worker image and cache stages          | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile)                                                    |
+| Hive developer commands                | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml)                                                |
+| Infrastructure command composition     | [`infra/Taskfile.yml`](../../infra/Taskfile.yml)                                                                                |
+| Infrastructure operations and pins     | [`infra/tasks/`](../../infra/tasks/)                                                                                            |
+| k0s, Kata, Neo4j, and Hive manifests   | [`infra/k0s/`](../../infra/k0s/)                                                                                                |
+| Main failure handoff                   | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)                                |
+| Hive verification workflow             | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml)                                                                |
+| Main coalescing and delivery           | [`.github/workflows/main.yml`](../../.github/workflows/main.yml)                                                                |
+| Workbench issue contract               | [`workflows/issues.md`](../workflows/issues.md)                                                                                 |
+| Pull-request ownership contract        | [`workflows/pull-requests.md`](../workflows/pull-requests.md)                                                                   |

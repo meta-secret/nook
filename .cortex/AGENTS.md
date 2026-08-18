@@ -7,7 +7,7 @@ Consult [`.cortex/knowledge-graph.md`](knowledge-graph.md) for the universal kno
 
 ## How to search and navigate the Knowledge Graph
 
-All specifications, architectural contracts, domain models, testing policies, dynamic skills, workflows, references, and execution plans are mapped in [`.cortex/knowledge-graph.md`](knowledge-graph.md).
+All specifications, architectural contracts, domain models, testing policies, dynamic skills, workflows, and references are mapped in [`.cortex/knowledge-graph.md`](knowledge-graph.md).
 
 Agents must follow this navigation and search protocol:
 
@@ -29,36 +29,49 @@ Agents must follow this navigation and search protocol:
 ## ⛔ Core P1 Operating Invariants
 
 ### 1. Always consult the Knowledge Graph first
+
 - Read [`.cortex/knowledge-graph.md`](knowledge-graph.md) before exploring files or starting implementation.
 - Retrieve exact section anchors rather than reading whole files or guessing paths.
 - See [dynamic-skills/cortex-document-map.md](dynamic-skills/cortex-document-map.md).
 
 ### 2. Proactively enrich Cortex with critical discovered knowledge
+
 - Dynamically evaluate new knowledge gained during tasks (tool failures, invariants, testing contracts, architecture rules).
 - If critical knowledge is missing from Cortex, update Cortex and `knowledge-graph.md` in the same PR.
 - See [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md).
 
 ### 3. Keep cognitive complexity low in Cortex
+
 - Use short sentences, bullet points, and lists (1 idea per sentence).
 - Prohibit static project directory trees (use dynamic discovery tools) and ASCII graphics (use Mermaid).
 - See [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md).
 
 ### 4. Expose semantic structure in Cortex articles
+
 - Expose clear explanation, rule, procedure, and reference hierarchies using semantic headings and lists.
 - See [dynamic-skills/cortex-article-structure.md](dynamic-skills/cortex-article-structure.md).
 
 ### 5. Keep documentation consistent (Garbage Collection)
+
 - Treat Cortex as maintained knowledge; garbage-collect obsolete claims and resolve cross-document conflicts immediately.
 - See [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md).
 
 ### 6. Keep the root README synchronized
+
 - Update the root [`README.md`](../README.md) in the same PR whenever boundaries, package layout, or public commands change.
+
+### 7. Product specifications must stay active and updated in the agent loop
+
+- Read owning specifications in [`.cortex/product-specs/`](product-specs/) before planning or implementing user-facing features, item types, or UX flows.
+- Update specifications in `.cortex/product-specs/` (or author new ones) in the same PR when chat dialogues, tasks, or PR reviews reveal new product knowledge.
+- Treat stale or missing product specifications as P1 documentation defects.
+- See [dynamic-skills/product-spec-lifecycle.md](dynamic-skills/product-spec-lifecycle.md).
 
 ---
 
 ## ⛔ Agent Execution & Safety Boundaries
 
-- **Feature ownership boundary:** Every agent stays strictly inside its assigned feature and focused issue set; another active agent's work is read-only. See [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
+- **Feature ownership boundary:** Every agent stays strictly inside its assigned feature and focused issue set (agents mutate only their owned feature). Another active agent's work is read-only — wait for an explicit user, owner, or orchestrator handoff. See [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
 - **Source file size limit (1,000 lines):** Every authored file, including Rust, stays at or below 1,000 lines. Oversized Rust signals excessive domain responsibility and requires cohesive domain or architectural decomposition; extracting unit tests alone is prohibited while integration tests remain separate. See [dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
 - **Format on host before every push:** Always run `task loom:pre-push` before pushing to apply host formatting and check the UI demo contract. See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
 - **Heavy work runs remotely on GitHub Actions:** Heavy builds, tests, and product gates run on GitHub-hosted workers, not locally. See [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) and [workflows/remote-execution.md](workflows/remote-execution.md).
@@ -72,12 +85,12 @@ Agents must follow this navigation and search protocol:
 
 Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) from start to finish:
 
-1. **Branch & plan:** Fetch `origin/main`, branch, and publish the task plan to Workbench. Target <= 5,000 authored changed lines per PR.
-2. **Implement:** Write focused code applying canonical dynamic skills and architecture package boundaries.
+1. **Branch & plan:** Fetch `origin/main`. Read owning product specs for product tasks. Branch, and publish the task plan to Workbench. Target <= 5,000 authored changed lines per PR.
+2. **Implement:** Write focused code using canonical dynamic skills. Update `.cortex/product-specs/` when new product knowledge is gained.
 3. **Pre-push format:** Run `task loom:pre-push` to apply host formatting.
 4. **Commit & push:** Commit formatted changes and push to the feature branch.
 5. **Remote validation & review:** Run advisory local review before the first owner push; run complete PR validation and exact-head Cloud review via `task pr:validate`.
-6. **Address all feedback:** Inspect and resolve all active review comments from humans or automated systems.
+6. **Address all feedback:** Inspect and resolve all active review comments. Update code, tests, and product specifications when review comments refine product behavior.
 7. **Squash merge:** Once `task pr:ready` succeeds, squash-merge automatically (`gh pr merge --squash`).
 8. **Publish Workbench records:** Update the Workbench issue, add the completion worklog, and publish `stats/ai-agent/<pr>.yaml`.
 
@@ -86,7 +99,9 @@ Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) 
 ## Canonical Registries
 
 - **Dynamic Skills Registry:** [dynamic-skills/index.md](dynamic-skills/index.md) (executable rules for Rust, TypeScript, Svelte, Testing, UI Design, and Code Hygiene).
+- **Product Specifications:** [product-specs/index.md](product-specs/index.md) (living specifications for user-facing features, item schemas, and UX workflows).
 - **Architecture Specifications:** [ARCHITECTURE.md](ARCHITECTURE.md) and [architecture/packages.md](architecture/packages.md).
+- **Technical References:** [references/index.md](references/index.md) (cheat sheets and runbooks for logging, WASM, Loom, Svelte, and debugging).
 - **Workflow Procedures:** [workflows/coding-bro.md](workflows/coding-bro.md), [workflows/pull-requests.md](workflows/pull-requests.md), and [workflows/remote-execution.md](workflows/remote-execution.md).
 - **Design Documents:** [design-docs/index.md](design-docs/index.md).
 - **Central Knowledge Graph:** [knowledge-graph.md](knowledge-graph.md).

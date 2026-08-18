@@ -44,4 +44,3 @@ key, seed phrase, secure note, authenticator, and passkey.
 
 Active — implemented with Rust validation, WASM form builders, and Simple Vault
 upload/download UI.
-

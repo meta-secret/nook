@@ -280,17 +280,17 @@ All branch code executes on ephemeral GitHub-hosted runners. The self-hosted `no
 
 ## 9. Docker Cache Model
 
-| Artifact | Cache Strategy | Location |
-| --- | --- | --- |
-| Rust/web/browser layers | Local builder store; hosted BuildKit registry refs | `registry.dev.nokey.sh` |
-| Rust crate dependencies | cargo-chef + Zot refs | `nook-rust-deps-v3` |
-| Rust compiler cache | SeaweedFS S3 `sccache` | `sccache.dev.nokey.sh` |
-| OCI registry | Zot in k0s | `10.96.90.10:5000` via Traefik |
-| `nook-app/target/` | Rust lineage only | `/meta-secret/nook/nook-app/target` |
-| `node_modules` | `web-deps` Dockerfile layer | Immutable image layer |
-| Web wasm pkg + coverage | Host artifact handoff | `${TMPDIR}/nook-web-artifacts/...` |
-| Web dist | Image build time (`bun run build`) | Built into `nook-web` image |
-| Playwright Chromium | `web-e2e-base` only | Isolated browser image |
+| Artifact                | Cache Strategy                                     | Location                            |
+| ----------------------- | -------------------------------------------------- | ----------------------------------- |
+| Rust/web/browser layers | Local builder store; hosted BuildKit registry refs | `registry.dev.nokey.sh`             |
+| Rust crate dependencies | cargo-chef + Zot refs                              | `nook-rust-deps-v3`                 |
+| Rust compiler cache     | SeaweedFS S3 `sccache`                             | `sccache.dev.nokey.sh`              |
+| OCI registry            | Zot in k0s                                         | `10.96.90.10:5000` via Traefik      |
+| `nook-app/target/`      | Rust lineage only                                  | `/meta-secret/nook/nook-app/target` |
+| `node_modules`          | `web-deps` Dockerfile layer                        | Immutable image layer               |
+| Web wasm pkg + coverage | Host artifact handoff                              | `${TMPDIR}/nook-web-artifacts/...`  |
+| Web dist                | Image build time (`bun run build`)                 | Built into `nook-web` image         |
+| Playwright Chromium     | `web-e2e-base` only                                | Isolated browser image              |
 
 ---
 

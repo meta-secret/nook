@@ -128,4 +128,3 @@ The repository preflight contract must retain the ownership guard in:
 - `.cortex/AGENTS.md`;
 - `.cortex/workflows/coding-bro.md`;
 - `.cortex/workflows/issues.md`.
-

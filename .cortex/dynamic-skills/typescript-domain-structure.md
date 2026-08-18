@@ -11,7 +11,7 @@ Do not ship any of these:
 
 ```ts
 // Forbidden: raw-string field allow-list
-const ALLOWED = new Set(['stageHostUpdates', 'fetchOriginMain']);
+const ALLOWED = new Set(["stageHostUpdates", "fetchOriginMain"]);
 
 // Forbidden: generic Optional / Result clones
 type Result<T> = Ok<T> | Err;
@@ -19,9 +19,9 @@ type Maybe<T> = Present<T> | Absent;
 
 // Forbidden: flat same-prefix closed vocabularies
 enum RequestKind {
-  AgentStatsAssemble = 'agentStatsAssemble',
-  AgentStatsValidate = 'agentStatsValidate',
-  AgentStatsPublish = 'agentStatsPublish',
+  AgentStatsAssemble = "agentStatsAssemble",
+  AgentStatsValidate = "agentStatsValidate",
+  AgentStatsPublish = "agentStatsPublish",
 }
 ```
 
@@ -101,4 +101,3 @@ Does not apply to:
 
 For Loom's one-parameter function rule, see
 [typescript-single-parameter.md](typescript-single-parameter.md).
-

@@ -71,4 +71,3 @@ Before push:
 1. Run `task loom:pre-push`.
 2. Run the UI demo contract against `origin/main`.
 3. Let repository-owned GitHub Actions run product gates.
-

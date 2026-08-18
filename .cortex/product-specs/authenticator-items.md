@@ -81,4 +81,3 @@ silent page scraping.
   attached to a named authenticator through typed replace/merge policy in
   Rust/WASM. Ambiguous page text cannot be saved without choosing the target
   authenticator.
-

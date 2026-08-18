@@ -13,12 +13,12 @@ Add **secure notes** as a first-class vault item type alongside login, API key, 
 
 ## Implemented scope
 
-| Area | Notes |
-|---|---|
-| Core (`secret_types.rs`) | `SecretType::SecureNote`, `SecureNoteSecret { title, note }` |
-| Wasm bridge | Serialize/deserialize + validation in Rust |
-| Web UI | Type picker, create/edit form, list and detail rendering, reveal, copy, and delete |
-| Tests | Rust validation and replacement coverage plus browser create/reveal/delete coverage |
+| Area                     | Notes                                                                               |
+| ------------------------ | ----------------------------------------------------------------------------------- |
+| Core (`secret_types.rs`) | `SecretType::SecureNote`, `SecureNoteSecret { title, note }`                        |
+| Wasm bridge              | Serialize/deserialize + validation in Rust                                          |
+| Web UI                   | Type picker, create/edit form, list and detail rendering, reveal, copy, and delete  |
+| Tests                    | Rust validation and replacement coverage plus browser create/reveal/delete coverage |
 
 ## Editing behavior
 
@@ -38,4 +38,3 @@ not replacement policy.
 
 Implemented across the Rust domain, WASM bridge, Simple Vault UI, imports, and
 targeted tests.
-
