@@ -770,6 +770,7 @@ Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 * [design-docs/vault-session-and-lock.md](design-docs/vault-session-and-lock.md) — **Lock**, in-memory session, vault vs sync provider model.
 * [design-docs/auth-providers.md](design-docs/auth-providers.md) — Login gate, `nook_auth` sync-provider credentials, OAuth origins.
 * [design-docs/vault-event-log.md](design-docs/vault-event-log.md) — Immutable event log, causal DAG, projection (live provider sync).
+* [design-docs/package-responsibilities.md](design-docs/package-responsibilities.md) — **Package responsibilities and layers**: detailed Rust crate, WASM bridge, and web presentation layer designs.
 
 ## 3. Product Specifications (`product-specs/`)
 * [product-specs/index.md](product-specs/index.md) — Index of product specifications.

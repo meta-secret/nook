@@ -98,261 +98,31 @@ The normative model is in
 
 ## 2. Package Responsibilities & Layers
 
-### Shared leaf: `nook-app-common`
+Nook is structured into three architectural tiers: portable Rust platform crates, a typed WebAssembly bridge, and isolated web presentation packages.
 
-- **Cross-cutting application primitives:** Owns dependency-light facilities
-  needed by sibling portable crates without depending on their auth, event, or
-  vault domains.
-- **Localization source of truth:** Owns locale catalogs, translation behavior,
-  and the single generated Rust translation-key registry. `nook-auth2` and
-  `nook-core` consume it; `nook-core` may compatibility-re-export the API.
-- **Not a dumping ground:** Authentication policy stays in `nook-auth2`, vault
-  semantics stay in `nook-core`, and browser/platform behavior stays in
-  `nook-wasm` or the web packages.
+Detailed package design, module breakdowns, and service boundaries live in
+[design-docs/package-responsibilities.md](design-docs/package-responsibilities.md).
 
-### A. `nook-auth2` (Portable Identity and Vault Authorization)
+### Rust Platform Tier
 
-- **Identity and app-key foundations:** `IdentityId`, identity control records,
-  app keys (`AppKey` / `AppId`), passkey bindings, and identity-owned per-vault
-  DEK envelopes belong here. Legacy `DeviceIdentity` / `device_id` names are
-  migration aliases only.
-- **App-key protection:** Passkey PRF validation plus HKDF/AES-GCM wrapping for
-  an installation-specific private app key. Browser/WebAuthn ceremonies stay
-  outside this crate. Target model: fresh random local app key.
-  Deterministic passkey-derived keys remain a compatibility boundary.
-- **Authorization envelopes:** Current vault `auth:` rows remain the legacy
-  wire boundary. Target ownership moves DEK envelopes onto the identity
-  control log. Vault create requires an identity with at least one key and a
-  generated DEK.
-- **Quorum recovery:** Fixed-policy SLIP-0039 recovery roots, protected per-device shares, and recovery-envelope helpers for `secrets_key` and `members_key` live here; recovery request/response exchange state stays out of sync providers.
-- **Key material and row types:** Portable newtypes for vault key material, auth/member ids, age-armored ciphertext, signing public keys, and the opaque `StoredSecretRecord` row shape shared by user secrets and auth metadata.
-- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, PAT, browser
-  APIs, or sync reconciliation. Provider credentials authorize replica access
-  only; they are not identity-membership or vault-unlock credentials.
-- **Portability:** Compiles on native and `wasm32-unknown-unknown` so browser, extension, CLI, server, mobile, HSM, YubiKey, and future quorum-recovery adapters can share the same key-access semantics.
+- **`nook-app-common` (Shared Leaf Primitives):** Owns localization catalogs, translation behavior, and leaf primitives shared across portable crates.
+- **`nook-auth2` (Identity & Authorization):** Owns logical identities, app-key derivation, passkey PRF wrapping, and per-vault DEK authorization envelopes.
+- **`nook-replication` (Replication Mechanics):** Owns causal DAG index calculations, topological event ordering, and provider-agnostic replica repair.
+- **`nook-event-log` (Signed Vault History):** Owns content-addressed event encoding, Ed25519 signatures, authorization graphs, and encrypted projection state.
+- **`nook-core` (Application Domain Core):** Owns vault application services, sync reconciliation, crypto operations, search indexing, and domain workflows.
 
-### B. `nook-replication` (Portable Replication Mechanics)
+### WebAssembly Bridge Tier
 
-- **Causal index:** Generic parent relationships, heads, ancestry,
-  concurrency, pending-parent handling, deterministic topological ordering,
-  quarantine indexing/exclusion, and set union.
-- **Replica bookkeeping:** Provider-neutral immutable event bytes, per-provider
-  outboxes, and missing-event repair planning.
-- **No identity or vault policy:** No identity membership, vault operation,
-  secret payload, actor authorization, key epoch, projection, provider
-  credential, or session behavior. It supplies mechanics independently to
-  identity-control and vault-event-log callers.
-- **No provider I/O:** No GitHub, Drive, iCloud, IndexedDB, OAuth, browser API,
-  or network transport. Hosts remain responsible for loading and persisting
-  bytes.
-- **Portability:** Compiles on native and `wasm32-unknown-unknown`; it has no
-  dependency on `nook-core`, `nook-wasm`, or `nook-web`.
+- **`nook-wasm` (The Bridge Layer):** Exposes typed Rust domain services to the browser, manages in-memory sessions, and conducts storage I/O (IndexedDB and HTTP REST) without implementing business logic.
 
-### C. `nook-event-log` (Portable Signed Vault History)
+### Web Presentation Tier
 
-- **Canonical envelope:** Content-addressed event ids, canonical JSON body
-  encoding, Ed25519 signatures, schema validation, and stable YAML storage
-  bytes.
-- **Vault operations:** Encrypted secret mutations, membership events,
-  password-envelope changes, epoch checkpoints, and opaque fingerprint metadata.
-- **Authorization graph:** Vault actor authorization layered over
-  `nook-replication`'s generic causal index, including pending and quarantined
-  events.
-- **Projection:** Deterministic encrypted vault projection, replacement and
-  security conflicts, key-epoch metadata, and replay-invariance checks.
-- **Event-store orchestration:** Typed append, union, store classification, and
-  compatibility between opaque replica bytes and validated vault events.
-- **No plaintext or provider I/O:** No plaintext secret models, key encryption,
-  GitHub, Drive, iCloud, IndexedDB, OAuth, browser APIs, or network transport.
-- **Portability:** Depends only on `nook-auth2` wire/key-access types and
-  `nook-replication` mechanics; it has no dependency on `nook-core`,
-  `nook-wasm`, or `nook-web`.
-
-The name is deliberate: Nook's source of truth is a multi-head causal event
-DAG, so `commit-log` would incorrectly imply a linear history.
-`event-sourcing` would imply command and application-service ownership beyond
-this crate.
-
-### D. `nook-core` (The Application Domain Core)
-
-- **`src/auth/`:** Compatibility re-exports for `nook-auth2` plus the core-only adapter that replays vault event operations into auth metadata state.
-- **`src/crypto/`:** Vault encryption and key-epoch re-encryption. Canonical
-  event signing lives in `nook-event-log`.
-- **`src/secrets/`:** Secret payload types/views, mnemonic helpers, password generation, and plaintext session mutation helpers.
-- **`src/sync/`:** Storage-provider validation/configuration, credential sealing,
-  provider snapshot migration, vault reconciliation, and portable sync workflow
-  states (last-success observation, manual provider operation, conflict review,
-  and local-folder health).
-- **`src/vault/`:** In-memory database, vault formats, import/connect,
-  event-session application services, session-cache workflows, typed access
-  states, and portable idle/sync runtime policy. Signed history delegates to
-  `nook-event-log`.
-- **Application services:** Provider-agnostic connect decisions live in `vault_connect`.
-- Unlock/session hydration lives in `vault_session` and `vault_session_cache`.
-- Enrollment lives in `auth/enrollment`.
-- Mutation/event orchestration lives in `nook-event-log::builder` and `vault_event_session`.
-- Sync reconciliation lives in `vault_sync_session` and `vault_sync_store`.
-- Hosts load or persist bytes, tokens, revisions, and timestamps.
-- Hosts then call these services.
-- They do not repeat service decisions.
-- **Host boundary:** `LocalEventStore` and `MemoryVaultStore` are portable in-memory service inputs.
-- Browser event storage, projection cache, clocks, secure randomness ceremonies, and provider transports remain adapters in `nook-wasm`.
-- Portable functions receive their resulting typed data explicitly.
-- **Root exports:** `nook-app/nook-platform/nook-core/src/lib.rs` keeps established `nook_core::...` type and function paths available.
-- It re-exports the event-log domain alongside core-owned application services.
-- Fallible event-log APIs return `EventResult` / `EventError` at both crate roots.
-- Core-owned application services convert those errors into `VaultResult` / `VaultError`.
-- **Tests:** Unit tests in each module + `tests/vault_workflow.rs` + `tests/multi_device_workflow.rs`.
-
-### E. `nook-wasm` (The Bridge Layer)
-
-- **`NookVaultManager`:** Session state — typed `Database`, vault metadata, `secrets_key`, `members_key`, `VaultCrypto`, device identity, GitHub SHA.
-- **Storage I/O:** IndexedDB (`rexie`), GitHub REST API (`reqwest`).
-- **Device protection:** Persist/migrate the wrapped identity, build WebAuthn PRF option payloads with `1Password/passkey-rs` `passkey-types`, and expose typed setup/unlock values to the web layer. Delegates portable key wrapping and auth metadata behavior to `nook-auth2` through `nook-core`.
-- **Exported methods:** `connect`, `add_secret`, `approve_join_request`, `enroll_and_connect(secrets_key, members_key)`, etc.
-- **No domain logic** that belongs in `nook-core` — validate/delegate/serialize via core.
-- **Runtime wrappers:** Runtime policy, architecture, secret forms, diagnostics,
-  Sentinel session/finalization state, sync conflicts, and recovery issues are
-  core-owned values exposed through typed wrappers. WASM does not own timeout
-  rules, domain DTO mirrors, or string status taxonomies.
-
-### F. Isolated vault applications (The Web Presentation Layer)
-
-- **`nook-vault-simple`:** fixed Simple capability, Simple-only local registry,
-  create/import/open/manage flows, and the extension-consent route.
-- **`nook-vault-sentinel`:** fixed Sentinel capability, Sentinel-only local
-  registry, genesis/quorum/import/open/manage flows, no extension route or
-  protocol UI, and Rust-rejected extension approval.
-- **`nook-web-app`:** public `nokey.sh` site and unified local/e2e harness. It
-  is not a universal production vault artifact; the public production build
-  contains no vault entrypoint.
-- **Origin boundary:** each production app uses its own origin-scoped IndexedDB,
-  WebAuthn RP ID (`simple.nokey.sh` or `sentinel.nokey.sh`), session state,
-  security headers, and Cloudflare Pages project. Before app modules load, its
-  entrypoint configures an immutable Rust/WASM `VaultApplication` identity that
-  every manager uses for fail-closed capability checks.
-
-- **Svelte 5 components:** Shared layout and forms are consumed by separate
-  project entrypoints; TypeScript visibility never authorizes a vault type.
-- **`VaultState` (`vault.svelte.ts`):** Reactive shell.
-- It calls WASM and holds metadata-only `NookSecretListItem` pages for reactivity.
-- It requests one `NookSecretRecord` only for reveal/secret-copy.
-- Portable client transitions, provider scoping/staging/metadata rules, sync workflow variants, vault-architecture drafts, and page normalization are owned by `nook-core`.
-- They are exposed through typed WASM APIs.
-- The Svelte shell stores those generated values reactively and applies their outcomes to browser/UI state.
-- Cohesive browser workflows live in focused `lib/vault/*` action modules.
-- `vault.svelte.ts` remains the reactive facade and must not grow duplicate implementations.
-- **`auth/providers.ts` (shared):** Thin TS adapters + i18n over WASM `NookVaultManager` load/save APIs. IndexedDB `nook_auth` persistence and credential sealing live in `nook-wasm` / `nook-core` — see [auth-providers.md](design-docs/auth-providers.md).
-- **`auth/passkey-device-protection.ts`:** Thin browser-only WebAuthn create/get adapter.
-- Rust/WASM builds the PRF option payloads.
-- TypeScript invokes `navigator.credentials` and extracts the returned PRF output.
-- TypeScript performs no encryption.
-- `nook-wasm/src/passkey_browser.rs` classifies WebAuthn `NotAllowedError` as the stable `PASSKEY_CEREMONY_NOT_ALLOWED` result.
-- The browser uses that error for cancellation, timeout, policy refusal, and unavailable credentials.
-- UI callers localize that ambiguity for create, recovery, and unlock flows.
-- They must not infer PRF absence or offer the PIN fallback unless the browser returns the distinct PRF-unavailable result.
-- **`DeviceProtectionGate`:** Mandatory passkey setup/unlock before provider credentials or device keys are loaded.
-- **`LoginGate`:** Login when vault is locked — create local vault, connect sync provider, or unlock existing cache; see [vault-session-and-lock.md](design-docs/vault-session-and-lock.md).
-- **`VaultState.lockVault()`:** Clears WASM session + Svelte secrets; header **Lock vault** button.
-- **`nook.ts`:** WASM loader + sync result mapping; vault list rows are
-  `NookSecretListItem` wasm objects and explicit plaintext exposure uses
-  `NookSecretRecord` (no TS schema mirror).
-- **No** vault format logic, crypto, validation, password generation, or search filtering in TS/Svelte.
-
-### D2. `nook-web/nook-web-shared` (Shared TypeScript/Svelte Source)
-
-- **Source-only package:** Shared TypeScript helpers and small Svelte presentation
-  primitives that are safe for the two vault apps and the browser extension.
-- **Canonical source:** `nook-web-shared/src/vault-app` is imported directly by
-  the Unified, Simple, and Sentinel projects. Do not recreate an app-local
-  `src/lib` symlink or copy shared entrypoints/components into those projects.
-- **Package-oriented modules:** `vault-app/lib` keeps only the `nook.ts`,
-  `utils.ts`, and `vault.svelte.ts` facades at its root. Browser-owned modules
-  are grouped by capability under `app`, `auth`, `content`, `enrollment`,
-  `extension`, `runtime`, and `vault`; provider-specific authentication adapters
-  live under `auth/google` and `auth/icloud`. Presentation remains under
-  `components`, with its own feature-oriented subpackages, rather than being
-  mixed into browser adapters.
-- **No ownership of domain policy:** Shared TS/Svelte code may coordinate UI,
-  browser-page scanning, message DTOs, or adapters around WASM exports, but it
-  must not own vault format logic, crypto, validation, password generation, or
-  secret search. Generated WASM types/functions are imported or re-exported
-  directly; a TypeScript wrapper must perform an actual lifecycle, reactive
-  proxy, UI-default, or browser-state translation. Those domain behaviors and
-  types remain in `nook-core` and are exposed through `nook-wasm`.
-- **One generated WASM package:** `nook-wasm` is compiled and optimized once into `nook-web-shared/src/vault-app/lib/nook-wasm`.
-- Unified, Simple, Sentinel, and extension bootstraps configure distinct immutable Rust application identities before importing their app modules.
-- Separate web projects and origins remain the product boundary.
-- Manager construction and domain operations validate the configured identity in Rust.
-- Sentinel's built web surface contains no extension route, protocol, or UI.
-- Rust rejects extension approval for its identity even though the shared binding exists for Simple and the browser companion.
-
-### E. `nook-web/nook-web-extension` (The Browser Extension Layer)
-
-- **Manifest V3 package:** Browser extension build output lives in `nook-app/nook-web/nook-web-extension/dist`; source lives under `nook-app/nook-web/nook-web-extension/src`.
-- **Simple Vault owns the vault UI:** Before pairing, the toolbar popup contains
-  only the standard extension-origin device-protection widget. Creating,
-  recovering, or unlocking that identity sends its public keys directly to the
-  environment-configured Simple Vault consent route. The extension contains no
-  duplicate vault-management popup, website-first enable page, or second setup
-  window. Its other visible surface is the contextual in-page authentication
-  widget.
-- **Environment target:** `NOOK_SIMPLE_VAULT_URL` is sealed into the extension
-  bundle and manifest. Production uses `simple.nokey.sh`, development uses
-  `simple.dev.nokey.sh`, PR previews use their isolated
-  `pr-<number>.nokey-simple.pages.dev` origin, and local development uses
-  trusted HTTPS localhost. Each channel has a distinct deterministic extension
-  id so extension-origin state and passkeys cannot cross environments.
-- **Deployment artifacts:** The sealed image packages the exact tested bundle
-  into the site artifact's `/downloads/` directory with `extension.json`
-  metadata and a SHA-256 checksum. PR and main workflows publish and verify the
-  preview/development ZIP; immutable releases publish the versioned production
-  ZIP through both `nokey.sh` and the GitHub Release.
-- **Simple-only product surface:** The service worker, content scripts, and
-  future autofill flows pair only through `simple.nokey.sh`. The manifest and
-  runtime guard exclude both Nook vault origins from widget injection, and Rust
-  rejects Sentinel extension approval.
-- **Two user-facing responsibilities:** The extension acts for a selected
-  virtual identity through its installation-specific device key and manages
-  that identity's authorized relationship with a website/origin. It then
-  integrates vault-owned passwords and website passkeys after an applicable
-  vault grant is active. The first is identity management; the second is
-  vault-content integration. Neither turns the extension into a third vault
-  application.
-- **Task/Docker integration:**
-  - `task extension:build` builds the extension in Docker.
-  - `task extension:test:e2e` runs the extension Playwright smoke.
-  - The sealed `nook-web:local` image also builds `nook-app/nook-web/nook-web-extension/dist` at image time.
-  - Use `task docker:extract:extension` to copy the built bundle to the host for manual browser loading.
-  - `task extension:install:hosted` and hosted `extension:run:*` variants verify deployment metadata and SHA-256.
-  - They activate an immutable release atomically and launch it only in a channel-specific isolated browser profile.
-  - `task extension:smoke:hosted CHANNEL=dev` or `PR=<number>` uses the verified hosted bundle and matching Simple Vault deployment.
-  - The smoke covers pairing, vault, login-fill, lock, and restart flow.
-  - It then removes its temporary browser and vault state.
-  - Production is intentionally rejected because the smoke creates vault data.
-- **Domain boundary:** The extension uses Rust/WASM for portable policy,
-  domain-payload validation, persistence classification, and workflow decisions.
-  - TypeScript owns Chrome APIs, DOM access, WebAuthn ceremony calls, timers,
-    and browser lifecycle orchestration.
-  - TypeScript passes concrete browser observations into Rust.
-  - Rust returns typed decisions that TypeScript applies through browser APIs.
-  - TypeScript may validate Chrome and DOM transport envelopes before it passes
-    their concrete domain payloads to Rust.
-  - The extension must not reimplement vault format logic, crypto, validation,
-    password generation, search filtering, or portable observation
-    classification in TypeScript.
-- **Local projection bridge:**
-  - Simple Vault publishes its canonical encrypted, signed event log after local mutations and provider pulls.
-  - A content script restricted to the configured Simple origin transports that snapshot to the service worker.
-  - Rust/WASM validates canonical ids/signatures, store identity, the extension's protected device id, current approval, and revocation before persisting an extension-origin IndexedDB projection.
-  - Non-secret connection metadata also remains in WASM-managed extension-origin Rexie/IndexedDB.
-  - Sync providers complement this bridge for changes originating on other devices.
-  - They are not required for same-browser website/extension coherence.
-
-### F. `nook-web/nook-web-research` (Isolated UI Experiments)
-
-- **Independent research surface:** A small Svelte 5 + Vite catalog for disposable UI experiments. Each experiment lives in its own directory under `src/experiments/` and is registered in the catalog.
-- **No production coupling:** It does not import production Nook code or WASM and is not part of the Docker, CI, deploy, or production web build. Run it directly with Bun from its package directory.
+- **`nook-vault-simple` (Simple Vault):** Origin-isolated single-user vault application hosted on `simple.nokey.sh` with extension pairing support.
+- **`nook-vault-sentinel` (Sentinel Vault):** Origin-isolated multisig/threshold vault application hosted on `sentinel.nokey.sh` with strict protocol isolation.
+- **`nook-web-app` (Marketing & Test Site):** Public landing page on `nokey.sh` and local/e2e test harness.
+- **`nook-web-shared` (Shared Presentation):** Source-only TypeScript utilities, Svelte 5 UI components, and the shared compiled WASM artifact.
+- **`nook-web-extension` (Browser Companion):** Manifest V3 browser companion paired with Simple Vault for in-page credential integration.
+- **`nook-web-research` (UI Experiments):** Disposable Svelte 5 catalog for isolated visual experiments without production coupling.
 
 ---
 
