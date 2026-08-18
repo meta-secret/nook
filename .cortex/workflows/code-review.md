@@ -89,7 +89,8 @@ empty. Feedback that arrives while checks run takes priority.
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
 existing comments and reviews for inspection. It does not require a Codex or
-Cursor result and does not wait for one.
+Cursor result and does not wait for one. A Cursor Bugbot disabled-account
+upsell comment is status. It is not a finding.
 
 ## Handling feedback that already exists
 

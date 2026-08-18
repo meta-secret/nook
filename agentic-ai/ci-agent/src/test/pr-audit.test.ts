@@ -26,6 +26,13 @@ test("buildPrAudit reports an exact-head repository-green PR as ready", async ()
   assert.equal(audit.feedback.substantiveComments, 0);
 });
 
+test("buildPrAudit ignores a Cursor Bugbot disabled-account upsell comment", async () => {
+  const audit = await buildPrAudit(mockOctokit(), repoRef, 410);
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.substantiveComments, 0);
+});
+
 test("buildPrAudit ignores a Cursor request comment and stale Cursor status review", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
@@ -439,6 +446,9 @@ function createMockOctokit(options: MockOptions): Octokit {
         },
         {
           body: `cursor review\n\n<!-- nook-cursor-review:${headSha} -->`,
+        },
+        {
+          body: "<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->\nBugbot is not enabled for your account, so this pull request was not reviewed.",
         },
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",

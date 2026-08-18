@@ -429,7 +429,9 @@ function isRepositoryStatusComment(body: string): boolean {
     isExactHeadReviewRequestComment(trimmed) ||
     isAgentImplementationHandoffComment(trimmed) ||
     // Codex posts this when it cannot review; it is status, not a finding.
-    trimmed.includes("Codex usage limits for code reviews")
+    trimmed.includes("Codex usage limits for code reviews") ||
+    // Cursor posts this when Bugbot is not enabled; it is status, not a finding.
+    trimmed.includes("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->")
   );
 }
 
