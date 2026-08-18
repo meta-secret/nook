@@ -4,6 +4,25 @@
 
 This is the system of record and entry point for all AI agents working in this repository. Consult [`.cortex/knowledge-graph.md`](knowledge-graph.md) for the central knowledge graph, hierarchical topic index, and exact section anchors across all specifications, architecture documents, rules, skills, and workflows.
 
+## How to search and navigate the Knowledge Graph
+
+All specifications, architectural contracts, domain models, testing policies, dynamic skills, workflows, references, and execution plans are mapped in [`.cortex/knowledge-graph.md`](knowledge-graph.md).
+
+Agents must follow this navigation and search protocol:
+
+1. **Perform keyword and topic searches against the Knowledge Graph:**
+   - Use `grep_search` or targeted text search within `.cortex/knowledge-graph.md` for topics, keywords, domain terms (such as `DEK`, `Sentinel`, `cache-from`, `migration`, `coverage`, `Loom`).
+   - The Knowledge Graph contains hierarchical category groupings, document titles, exact markdown section fragments (`#section-anchor`), and 1-line directional summaries for each section.
+
+2. **Retrieve exact section anchors instead of reading full documents:**
+   - Locate the owning document and exact section anchor from `knowledge-graph.md`.
+   - Read only the relevant line range using `view_file` with `StartLine` and `EndLine`.
+   - Avoid dumping 50k+ tokens of full design documents or specifications into context when only a single section or rule is needed.
+
+3. **Verify anchor integrity when authoring:**
+   - If an agent adds, renames, or restructures headings in any `.cortex/` document, update `knowledge-graph.md` in the same task.
+   - Run `task loom:cortex-audit` to verify zero broken links, zero orphan rows, and complete heading coverage.
+
 ## ⛔ P1 — most critical `.cortex` navigation rule: always consult the Knowledge Graph first
 
 Knowledge-graph navigation requirements are:
@@ -20,6 +39,30 @@ Knowledge-graph navigation requirements are:
 
 Full contract:
 [dynamic-skills/cortex-document-map.md](dynamic-skills/cortex-document-map.md).
+
+## ⛔ P1 — Proactively enrich Cortex with critical discovered knowledge
+
+During task and prompt execution, an AI agent must dynamically evaluate all newly gained or discovered knowledge:
+
+- **Dynamic importance evaluation:**
+  - When investigating bugs, implementing features, running tests, or reviewing code, determine whether discovered facts are critical or durable.
+  - Critical knowledge includes:
+    - architectural invariants and package boundaries;
+    - security domain models, key handshakes, and cryptographic invariants;
+    - unexpected tool, build, or runtime failure modes and exact fixes;
+    - non-obvious testing contracts, flakiness patterns, and coverage floors;
+    - reusable design patterns, coding rules, and language boundaries;
+    - workflow procedures, CI interactions, and review policies.
+
+- **Mandatory Cortex enrichment:**
+  - If critical or durable knowledge is missing from Cortex or the Knowledge Graph, the agent **must update Cortex in the same task and PR**.
+  - Do not leave critical discoveries isolated in ephemeral chat transcripts.
+  - Place knowledge in the most specific existing Cortex document, or author a new dynamic skill in `.cortex/dynamic-skills/` if it represents a recurring rule or pattern.
+  - Register all new documents and section anchors in [`.cortex/knowledge-graph.md`](knowledge-graph.md).
+  - Run `task loom:cortex-audit` to confirm complete integration.
+
+Full contract:
+[dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md).
 
 ## ⛔ P1 — most critical `.cortex` writing rule: keep cognitive complexity low
 
@@ -774,73 +817,11 @@ task loom:agent-stats CONFIG=path/to/agent-owned/publish-request.yaml
 
 Full policy: [workflows/agent-statistics.md](workflows/agent-statistics.md).
 
-## 1. Rules & Architecture Specifications
-* [ARCHITECTURE.md](ARCHITECTURE.md) — Top-level system overview, package layout, dependencies, execution flows, and quality gates.
-* [architecture/index.md](architecture/index.md) — Normative architecture specifications catalog.
-  * [architecture/packages.md](architecture/packages.md) — Detailed package responsibilities, crate boundaries, application services, and presentation packages.
-  * [architecture/engineering-harness.md](architecture/engineering-harness.md) — Containerized Taskfile hierarchy, Docker BuildKit caching, Zot registry scopes, and sccache compilation acceleration.
-* [rules.md](rules.md) — Golden Principles and hard coding/tooling constraints (**§6: squash merge every PR**).
+## Document Catalog of Record
 
-## 2. Design Specs & Beliefs (`design-docs/`)
-* [design-docs/index.md](design-docs/index.md) — Index of design specifications and status.
-* [design-docs/core-beliefs.md](design-docs/core-beliefs.md) — Agent-first operating beliefs.
-* [design-docs/hive-isolated-agent-platform.md](design-docs/hive-isolated-agent-platform.md) — **Stateful isolated AI-agent platform**: trusted Codex operators, k0s/Kata topology, Neo4j task DAG, direct scoped credentials, disposable workers, complete Main-repair delivery, caching, and Taskfile operations.
-* [design-docs/identity-vault-architecture.md](design-docs/identity-vault-architecture.md) — **Identity and vault separation**: multiple virtual identities per person, physical-device versus device-key boundaries, synced versus device-bound passkeys, identity provider mounts, encrypted DEK grants, and independent vault event logs.
-* [design-docs/unified-vault.md](design-docs/unified-vault.md) — **Local-first unified vault** (scalar sync historical; see event-log).
-* [design-docs/vault-session-and-lock.md](design-docs/vault-session-and-lock.md) — **Lock**, in-memory session, vault vs sync provider model.
-* [design-docs/auth-providers.md](design-docs/auth-providers.md) — Login gate, `nook_auth` sync-provider credentials, OAuth origins.
-* [design-docs/vault-event-log.md](design-docs/vault-event-log.md) — Immutable event log, causal DAG, projection (live provider sync).
+All specifications, architectural contracts, domain models, product specifications, dynamic skills, workflows, cheat sheets, and execution plans are mapped and indexed in [`.cortex/knowledge-graph.md`](knowledge-graph.md). Consult the Knowledge Graph for the single source of truth for all repository documents.
 
-## 3. Product Specifications (`product-specs/`)
-* [product-specs/index.md](product-specs/index.md) — Index of product specifications.
-* [product-specs/monorepo-setup.md](product-specs/monorepo-setup.md) — Monorepo setup spec.
-* [product-specs/password-manager.md](product-specs/password-manager.md) — Password Manager spec.
-
-## 4. Execution Plans (`exec-plans/`)
-* [exec-plans/tech-debt-tracker.md](exec-plans/tech-debt-tracker.md) — Tech debt and refactoring tasks.
-* [exec-plans/unified-vault-ui-rollout.md](exec-plans/unified-vault-ui-rollout.md) — **Unified vault UI migration** (page-by-page rollout).
-* [exec-plans/ts-domain-to-rust-remaining.md](exec-plans/ts-domain-to-rust-remaining.md) — Remaining content-script / Node host-policy mirrors after core ownership.
-* [exec-plans/completed/cortex-restructure.md](exec-plans/completed/cortex-restructure.md) — Restructure execution plan and walkthrough notes.
-
-## 5. Technology Cheat Sheets (`references/`)
-* [references/rust-wasm.md](references/rust-wasm.md) — Rust-Wasm binding conventions.
-* [references/bun-svelte.md](references/bun-svelte.md) — Bun, Svelte, and Vite development reference.
-* [references/logging.md](references/logging.md) — **Application logging** (WASM logger + IndexedDB, `/logs` viewer, level gating, per-test e2e log attachments).
-* [references/ai-debugging.md](references/ai-debugging.md) — **Playwright MCP annotation pilot** (trusted project config, Task-first setup, privacy guardrails, live annotation + app-log workflow, evaluation gate).
-* [references/cloudflare-operations.md](references/cloudflare-operations.md) — **Privileged Cloudflare operations** through the OAuth-authenticated `cloudflare-api` MCP connection in the local AI-agent environment.
-
-## 6. Workflows (`workflows/`)
-
-- [workflows/coding-bro.md](workflows/coding-bro.md) — **Default PR-first agent workflow** (fetch → branch + prepare PR → implement → **always `task loom:pre-push`** → commit/push → Loom/Task validate → optional focused diagnosis → fix loop → readiness audit → automatic agent-owned squash merge).
-- [workflows/subagent-delegation.md](workflows/subagent-delegation.md) — **Mandatory bounded delegation rule**, child-worker contract, safe fan-out patterns, and parent-owned integration.
-- [`.cursor/skills/coding-bro/SKILL.md`](../.cursor/skills/coding-bro/SKILL.md) — Cursor skill mirror of coding-bro (auto-invoked).
-- [`agentic-ai/loom/README.md`](../agentic-ai/loom/README.md) — **Loom**: YAML tool protocol for mechanical cortex rites.
-- [references/loom-tools.md](references/loom-tools.md) — Loom request/response contracts and examples.
-- [workflows/code-review.md](workflows/code-review.md) — Non-blocking external-review policy and rules for handling feedback that already exists.
-- [workflows/dynamic-skills.md](workflows/dynamic-skills.md) — Canonical project skill registry workflow. All durable repo-specific agent skills live as `.cortex/dynamic-skills/` cards; optional Cursor project skills only mirror them for invocation.
-- [dynamic-skills/cortex-writer.md](dynamic-skills/cortex-writer.md) — **P1 `.cortex` writing rule:** short sentences, bullets, and lists over dense multi-clause prose; no static directory trees.
-- [dynamic-skills/cortex-article-structure.md](dynamic-skills/cortex-article-structure.md) — **P1 `.cortex` article rule:** semantic headings, ordered procedures, parallel rule lists, and nested ownership.
-- [dynamic-skills/cortex-consistency.md](dynamic-skills/cortex-consistency.md) — **P1 `.cortex` GC rule:** docs must stay current, mutually consistent, and aligned with code.
-- [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md) — **Always host-apply `task format` + UI demo contract before push** (prevents Prettier/rustfmt/demo-contract Verify burns).
-- [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) — **Format locally; run focused tasks and complete gates explicitly on GitHub-hosted workers**.
-- [dynamic-skills/ui-design-skills.md](dynamic-skills/ui-design-skills.md) — **Load `design-taste-frontend` for user-visible UI work; Impeccable is explicit opt-in only**.
-- [dynamic-skills/prefer-popular-libraries.md](dynamic-skills/prefer-popular-libraries.md) — **Prefer mature high-adoption libraries over hand-rolled boilerplate; reject obscure deps**.
-- [dynamic-skills/typescript-single-parameter.md](dynamic-skills/typescript-single-parameter.md) — **Loom and migrated Nook web: max one function parameter**.
-- [dynamic-skills/typescript-no-unknown.md](dynamic-skills/typescript-no-unknown.md) — **Loom and migrated Nook web: require domain values; generic transport values are boundary-only exceptions**.
-- [dynamic-skills/typescript-named-args.md](dynamic-skills/typescript-named-args.md) —
-  **Loom and all Nook web production TypeScript/Svelte: require named semantic
-  object parameter contracts and name object call arguments**.
-- [workflows/pull-requests.md](workflows/pull-requests.md) — **Squash merge policy**, detailed agent pipeline, and PR checklist.
-- [workflows/issues.md](workflows/issues.md) — Workbench Markdown issue hierarchy, lifecycle, automation, required task-start plans, and completion worklogs.
-- [workflows/remote-execution.md](workflows/remote-execution.md) — **Main agent execution path** (allowlisted focused hosted tasks, label-gated exact-head PR validation, and failure loops).
-- [workflows/ci-pipeline.md](workflows/ci-pipeline.md) — **GitHub Actions pipeline** (remote task / label-gated PR / main / manual live-e2e split).
-- [workflows/monorepo.md](workflows/monorepo.md) — Cross-package changes.
-- [workflows/quality.md](workflows/quality.md) — Quality gates (Knip, jscpd, lint, coverage), **fix findings not silence them**, testing pyramid, and release.
-- [workflows/agent-statistics.md](workflows/agent-statistics.md) — Per-PR AI-agent timing/counter YAML, repository test inventory, historical comparison, waste analysis, and direct Workbench publication.
-- [workflows/main-build-statistics.md](workflows/main-build-statistics.md) — Post-completion Main run/job/step metrics and trusted automatic Workbench publication.
-- [design-docs/agent-workflow-orchestration.md](design-docs/agent-workflow-orchestration.md) — Cortex, Loom, Hive, and delivery-owner responsibility boundary.
-
-## 7. Agent duties beyond code
+## Agent duties beyond code
 
 ### Testing pyramid
 * **Rust unit/integration tests** must cover ~99% of domain behavior — especially event sourcing, causal DAG sync, projection, epochs, and crypto. E2e is smoke only. See [rules.md §4](rules.md#4-testing-requirements) and [design-docs/core-beliefs.md §9](design-docs/core-beliefs.md#9-unit-tests-own-domain-correctness-e2e-is-smoke-only).
