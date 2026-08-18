@@ -39,8 +39,8 @@ function audit(documents: readonly CortexDocumentSource[]) {
 }
 
 const INDEX_DOC_ARGS: MakeDocumentArgs = {
-  path: '.cortex/INDEX.md',
-  content: `# Cortex Knowledge Map & Index
+  path: '.cortex/knowledge-graph.md',
+  content: `# Cortex Knowledge Graph & Navigation Map
 
 ## Overview
 
@@ -85,11 +85,20 @@ Details text.
 };
 const DOCUMENT_B = makeDocument(DOCUMENT_B_ARGS);
 
-test('accepts clean documents and valid centralized INDEX.md', () => {
+test('accepts clean documents and valid centralized knowledge-graph.md', () => {
   expect(audit([INDEX_DOC, DOCUMENT_A, DOCUMENT_B])).toEqual([]);
 });
 
-test('reports missing INDEX.md when centralized index is absent', () => {
+test('accepts k-graph.md as an alias for the centralized knowledge graph', () => {
+  const kGraphDocArgs: MakeDocumentArgs = {
+    path: '.cortex/k-graph.md',
+    content: INDEX_DOC_ARGS.content,
+  };
+  const kGraphDoc = makeDocument(kGraphDocArgs);
+  expect(audit([kGraphDoc, DOCUMENT_A, DOCUMENT_B])).toEqual([]);
+});
+
+test('reports missing knowledge-graph.md when centralized index is absent', () => {
   const findings = audit([DOCUMENT_A, DOCUMENT_B]);
   const codes = findings.map((finding) => finding.code);
   expect(codes).toContain(CortexStructureFindingCode.MissingIndex);
@@ -132,8 +141,8 @@ Text.
 
 test('rejects index links pointing to non-existent documents', () => {
   const badIndexArgs: MakeDocumentArgs = {
-    path: '.cortex/INDEX.md',
-    content: `# Cortex Knowledge Map & Index
+    path: '.cortex/knowledge-graph.md',
+    content: `# Cortex Knowledge Graph & Navigation Map
 
 - [Missing](missing-file.md)
 `,
@@ -145,8 +154,8 @@ test('rejects index links pointing to non-existent documents', () => {
 
 test('rejects index links pointing to missing heading fragments', () => {
   const badIndexArgs: MakeDocumentArgs = {
-    path: '.cortex/INDEX.md',
-    content: `# Cortex Knowledge Map & Index
+    path: '.cortex/knowledge-graph.md',
+    content: `# Cortex Knowledge Graph & Navigation Map
 
 - [A](a.md)
   - [Broken Anchor](a.md#non-existent-section)
@@ -161,10 +170,10 @@ test('rejects index links pointing to missing heading fragments', () => {
   expect(codes).toContain(CortexStructureFindingCode.BrokenFragment);
 });
 
-test('reports unindexed documents missing from INDEX.md', () => {
+test('reports unindexed documents missing from knowledge-graph.md', () => {
   const incompleteIndexArgs: MakeDocumentArgs = {
-    path: '.cortex/INDEX.md',
-    content: `# Cortex Knowledge Map & Index
+    path: '.cortex/knowledge-graph.md',
+    content: `# Cortex Knowledge Graph & Navigation Map
 
 - [A](a.md)
   - [Overview](a.md#overview)

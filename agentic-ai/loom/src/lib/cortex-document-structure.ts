@@ -86,15 +86,22 @@ export function auditCortexDocumentStructure(
   );
 
   const indexDoc =
-    catalog.get('.cortex/INDEX.md') ?? catalog.get('INDEX.md') ?? false;
+    catalog.get('.cortex/knowledge-graph.md') ??
+    catalog.get('knowledge-graph.md') ??
+    catalog.get('.cortex/k-graph.md') ??
+    catalog.get('k-graph.md') ??
+    catalog.get('.cortex/INDEX.md') ??
+    catalog.get('INDEX.md') ??
+    false;
 
   if (indexDoc === false) {
     const findingArgs: AddFindingArgs = {
       findings,
       code: CortexStructureFindingCode.MissingIndex,
-      file: '.cortex/INDEX.md',
+      file: '.cortex/knowledge-graph.md',
       line: 1,
-      message: 'Centralized Cortex index `.cortex/INDEX.md` is missing.',
+      message:
+        'Centralized Cortex knowledge graph `.cortex/knowledge-graph.md` is missing.',
     };
     addFinding(findingArgs);
   } else {
@@ -109,7 +116,14 @@ export function auditCortexDocumentStructure(
 
   for (const document of parsedDocuments) {
     const normPath = normalizeCortexRelativePath(document.relativePath);
-    if (normPath === '.cortex/INDEX.md' || normPath === 'INDEX.md') {
+    if (
+      normPath === '.cortex/knowledge-graph.md' ||
+      normPath === 'knowledge-graph.md' ||
+      normPath === '.cortex/k-graph.md' ||
+      normPath === 'k-graph.md' ||
+      normPath === '.cortex/INDEX.md' ||
+      normPath === 'INDEX.md'
+    ) {
       continue;
     }
     const validateArgs: ValidateDocumentArgs = {
@@ -175,7 +189,7 @@ function validateDocument(args: ValidateDocumentArgs): void {
         code: CortexStructureFindingCode.ProhibitedNavigation,
         file: args.document.relativePath,
         line: nodeLine(h2),
-        message: `Inline \`## ${text}\` is prohibited; navigation is centralized in \`.cortex/INDEX.md\`.`,
+        message: `Inline \`## ${text}\` is prohibited; navigation is centralized in \`.cortex/knowledge-graph.md\`.`,
       };
       addFinding(findingArgs);
     }
@@ -193,7 +207,7 @@ function validateIndex(args: ValidateIndexArgs): void {
       code: CortexStructureFindingCode.InvalidTitle,
       file: args.indexDocument.relativePath,
       line: nodeLine(h1s[0] ?? false),
-      message: 'INDEX.md must begin with exactly one H1 title.',
+      message: 'Knowledge graph must begin with exactly one H1 title.',
     };
     addFinding(findingArgs);
   }
@@ -240,9 +254,16 @@ function validateIndex(args: ValidateIndexArgs): void {
     }
   }
 
-  // Verify all documents in catalog (except INDEX.md) are present in INDEX.md
+  // Verify all documents in catalog (except knowledge graph) are present in index
   for (const [normPath] of args.catalog) {
-    if (normPath === '.cortex/INDEX.md' || normPath === 'INDEX.md') {
+    if (
+      normPath === '.cortex/knowledge-graph.md' ||
+      normPath === 'knowledge-graph.md' ||
+      normPath === '.cortex/k-graph.md' ||
+      normPath === 'k-graph.md' ||
+      normPath === '.cortex/INDEX.md' ||
+      normPath === 'INDEX.md'
+    ) {
       continue;
     }
     if (!indexedFiles.has(normPath)) {
@@ -251,7 +272,7 @@ function validateIndex(args: ValidateIndexArgs): void {
         code: CortexStructureFindingCode.MissingFromIndex,
         file: args.indexDocument.relativePath,
         line: 1,
-        message: `Document is not indexed in .cortex/INDEX.md: ${normPath}`,
+        message: `Document is not indexed in .cortex/knowledge-graph.md: ${normPath}`,
       };
       addFinding(findingArgs);
     }

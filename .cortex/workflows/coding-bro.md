@@ -246,10 +246,10 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    Split work above the size boundary into an ordered Workbench issue sequence.
    Create a feature branch for the first slice. Keep its PR title, body, and
    scope in mind from the first implementation step.
-3. **Implement** — Make the module-focused change. Follow [rules.md](../rules.md)
-   and package boundaries in [ARCHITECTURE.md](../ARCHITECTURE.md). If work is
-   risky, blocked, or outside the authorized scope, follow [issues.md](issues.md)
-   before handoff:
+3. **Implement** — Make the module-focused change. Follow dynamic skills in
+   [dynamic-skills/](../dynamic-skills/) and package boundaries in
+   [ARCHITECTURE.md](../ARCHITECTURE.md). If work is risky, blocked, or outside
+   the authorized scope, follow [issues.md](issues.md) before handoff:
    - update or create the Workbench feature;
    - add focused Markdown records for the missing work.
 4. **Prepare the coherent commit:**
@@ -451,7 +451,7 @@ When Nook's applicable repository-owned PR test checks are complete, every actio
 gh pr merge <number> --squash
 ```
 
-Squash merge only. See [rules.md §6](../rules.md#6-git--pull-request-workflow). The successful merge is the implementation delivery boundary. Do not wait for or monitor the resulting Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure.
+Squash merge only. See [pull-requests.md](pull-requests.md#squash-merge-only---no-exceptions). The successful merge is the implementation delivery boundary. Do not wait for or monitor the resulting Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure.
 
 ### 11 — Publish Workbench records
 
@@ -498,7 +498,7 @@ Create the YAML from current Nook `main`:
   - Require `task pr:ready` after repository-owned checks pass.
   - Never wait for Codex or Cursor after checks finish.
   - Do not request Claude, CodeRabbit, or other optional reviewers.
-- **Never kill the Docker daemon** — only stop containers. See [rules.md §5](../rules.md#docker-daemon--never-kill-it).
+- **Never kill the Docker daemon** — only stop containers. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
 - **Plan bounded PRs** — target no more than 5,000 authored changed lines per
   PR. Prefer one cohesive module, package, layer, or responsibility. Continue

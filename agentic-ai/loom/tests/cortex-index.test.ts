@@ -43,7 +43,7 @@ Model text.
 
   const renderArgs = { index };
   const markdown = renderCortexIndexMarkdown(renderArgs);
-  expect(markdown).toContain('# Cortex Knowledge Map & Index');
+  expect(markdown).toContain('# Cortex Knowledge Graph & Navigation Map');
   expect(markdown).toContain('- [Rules](rules.md)');
   expect(markdown).toContain('- [Spec A](product-specs/spec-a.md)');
   expect(markdown).toContain('rules.md#overview');

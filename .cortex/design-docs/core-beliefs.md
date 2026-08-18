@@ -123,7 +123,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Agents garbage-collect obsolete cortex facts.
 - Docs must agree with each other and with the code.
 - Conflicts and stale claims are P1 documentation findings.
-- **Where to put it:** extend the relevant existing doc (`rules.md`, `design-docs/`, `workflows/`, `references/`).
+- **Where to put it:** extend the relevant existing doc (`dynamic-skills/`, `design-docs/`, `workflows/`, `references/`).
 - For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills/) and follow [dynamic-skills.md](../workflows/dynamic-skills.md).
 - Add a new file only when the topic is substantial and has no natural home.
 - Update [design-docs/index.md](index.md) or [AGENTS.md](../AGENTS.md) links when adding docs.

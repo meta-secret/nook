@@ -36,10 +36,11 @@ When a task touches durable behavior, verify the related cortex surface.
 1. Find the most specific `.cortex` docs for the topic.
 2. Compare those docs with each other.
 3. Compare those docs with the current code and Task entrypoints.
-4. Fix obsolete facts in the same PR.
-5. Mark historical context as historical when it must remain.
-6. Remove or rewrite guidance that conflicts.
-7. Update indexes and `AGENTS.md` links when paths change.
+4. If newly discovered critical facts are missing, add them to Cortex.
+5. Fix obsolete facts in the same PR.
+6. Mark historical context as historical when it must remain.
+7. Remove or rewrite guidance that conflicts.
+8. Update `.cortex/knowledge-graph.md` and `AGENTS.md` links when headings or paths change.
 
 Verification checklist:
 

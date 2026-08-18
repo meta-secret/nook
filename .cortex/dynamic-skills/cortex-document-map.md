@@ -1,6 +1,6 @@
 # Cortex Document Navigation
 
-All Cortex document navigation and structural maps are centralized in `.cortex/INDEX.md`.
+All Cortex document navigation and structural maps are centralized in `.cortex/knowledge-graph.md`.
 
 ## Purpose
 
@@ -8,9 +8,9 @@ Help humans and agents route through Cortex without reading every document in fu
 
 Centralized navigation allows AI agents to load exact sections and anchors into context with zero prompt overhead.
 
-## Centralized index structure
+## Centralized knowledge-graph structure
 
-`.cortex/INDEX.md` is the canonical knowledge graph and table of contents.
+`.cortex/knowledge-graph.md` is the canonical knowledge graph and table of contents.
 
 It contains:
 
@@ -21,7 +21,7 @@ It contains:
 
 ## Individual document structure
 
-Every `.cortex/**/*.md` document (except `INDEX.md`) has this structure:
+Every `.cortex/**/*.md` document (except `knowledge-graph.md`) has this structure:
 
 1. Exactly one H1 title at the top of the file.
 2. An optional short introduction paragraph.
@@ -47,7 +47,7 @@ Overview prose follows directly.
 Domain rules follow.
 ```
 
-Centralized index entry in `.cortex/INDEX.md`:
+Centralized entry in `.cortex/knowledge-graph.md`:
 
 ```markdown
 ### Product Specifications (`product-specs/`)
@@ -67,14 +67,14 @@ Applies to:
 - every authored `.cortex/**/*.md` file;
 - new documents;
 - edits that add, rename, or reorder headings;
-- updates to `.cortex/INDEX.md`.
+- updates to `.cortex/knowledge-graph.md`.
 
 ## Application checklist
 
 - [ ] Ensure the document starts with exactly one H1 title.
 - [ ] Omit inline `## Relationships` and `## Document map` from individual documents.
-- [ ] Add the document and its section anchors to `.cortex/INDEX.md`.
-- [ ] Give every section entry in `INDEX.md` a concise directional summary.
+- [ ] Add the document and its section anchors to `.cortex/knowledge-graph.md`.
+- [ ] Give every section entry in `knowledge-graph.md` a concise directional summary.
 - [ ] Apply the Cortex writer and consistency checks.
 
 ## Validation
@@ -87,4 +87,4 @@ task loom:cortex-audit
 task preflight:loom-contracts
 ```
 
-Loom audits `.cortex/INDEX.md` to ensure every document and section anchor is valid and mapped.
+Loom audits `.cortex/knowledge-graph.md` to ensure every document and section anchor is valid and mapped.
