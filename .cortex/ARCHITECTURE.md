@@ -627,6 +627,8 @@ Review and audit behavior:
 
 - The local review command runs advisory Codex review against `origin/main`.
 - The review command posts an idempotent SHA-bound Codex request.
+- If Codex reports a usage limit, the same command posts a SHA-bound Cursor
+  Bugbot request instead of retrying Codex.
 - Complete validation immediately dispatches repository-owned checks.
 - It then requests exact-head review without making it a gate.
 - Review results are not required for readiness.

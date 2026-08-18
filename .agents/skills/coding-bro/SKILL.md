@@ -32,8 +32,10 @@ Follow the delivery sequence in the cortex workflow:
 8. Squash-merge and publish the Workbench completion records.
 9. Report duration.
 
-Never wait for a Codex result after repository-owned checks finish. Do not
-request other external reviews or checks. Never run heavy product work locally.
+Never wait for a Codex or Cursor result after repository-owned checks finish.
+`task pr:review` may request Cursor Bugbot when Codex reports a usage limit.
+Do not request Claude, CodeRabbit, or other optional reviewers. Never run heavy
+product work locally.
 
 Before any mutation, apply
 [agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the

@@ -1,0 +1,321 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+
+import type { Octokit } from "@octokit/rest";
+
+import {
+  ExactHeadReviewFallback,
+  ExactHeadReviewProvider,
+  codexReviewRequestMarker,
+  cursorReviewRequestMarker,
+  requestExactHeadReview,
+} from "../main/github-review.js";
+
+const repoRef = { owner: "meta-secret", repo: "nook" };
+const headSha = "0123456789abcdef0123456789abcdef01234567";
+
+type MockComment = {
+  body: string;
+  id: number;
+  user?: { login: string };
+};
+
+type MockReview = {
+  body?: string;
+  commit_id: string;
+  state: string;
+  user: { login: string };
+};
+
+function mockOctokit(input: {
+  comments?: MockComment[];
+  createCalls?: { count: number };
+  createdBodies?: string[];
+  reactions?: Array<{ content: string; user: { login: string } }>;
+  reviews?: MockReview[];
+  sha?: string;
+}): Octokit {
+  const comments = input.comments ?? [];
+  const createdBodies = input.createdBodies ?? [];
+  const reviews = input.reviews ?? [];
+  const sha = input.sha ?? "head-sha";
+  return {
+    rest: {
+      issues: {
+        createComment: async ({ body }: { body: string }) => {
+          if (input.createCalls) {
+            input.createCalls.count += 1;
+          }
+          createdBodies.push(body);
+          comments.push({ body, id: comments.length + 1 });
+          return { data: { id: comments.length } };
+        },
+        listComments: async () => ({ data: comments }),
+      },
+      pulls: {
+        get: async () => ({ data: { head: { sha } } }),
+        listReviews: async () => ({ data: reviews }),
+      },
+      reactions: {
+        listForIssueComment: async () => ({
+          data: input.reactions ?? [],
+        }),
+      },
+    },
+    paginate: async (
+      route: (args: unknown) => Promise<{ data: unknown[] }>,
+      args: unknown,
+    ) => (await route(args)).data,
+  } as unknown as Octokit;
+}
+
+test("requestExactHeadReview posts one exact-head Codex marker", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({ createdBodies });
+
+  const first = await requestExactHeadReview(octokit, repoRef, 410);
+  const second = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(first, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha: "head-sha",
+    provider: ExactHeadReviewProvider.Codex,
+    requested: true,
+    settled: false,
+  });
+  assert.deepEqual(second, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha: "head-sha",
+    provider: ExactHeadReviewProvider.Codex,
+    requested: false,
+    settled: false,
+  });
+  assert.deepEqual(createdBodies, [
+    "@codex review\n\n<!-- nook-codex-review:head-sha -->",
+  ]);
+});
+
+test("requestExactHeadReview reports an exact-head Codex approval reaction as settled", async () => {
+  const createCalls = { count: 0 };
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+    ],
+    createCalls,
+    reactions: [
+      { content: "+1", user: { login: "chatgpt-codex-connector[bot]" } },
+    ],
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: false,
+    settled: true,
+  });
+  assert.equal(createCalls.count, 0);
+});
+
+test("requestExactHeadReview switches to Cursor after a Codex usage-limit comment", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+      {
+        body: "You have reached your Codex usage limits for code reviews.",
+        id: 2,
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const fallback = await requestExactHeadReview(octokit, repoRef, 410);
+  const idempotent = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(fallback, {
+    fallback: ExactHeadReviewFallback.CodexUsageLimit,
+    headSha,
+    provider: ExactHeadReviewProvider.Cursor,
+    requested: true,
+    settled: false,
+  });
+  assert.deepEqual(idempotent, {
+    fallback: ExactHeadReviewFallback.CodexUsageLimit,
+    headSha,
+    provider: ExactHeadReviewProvider.Cursor,
+    requested: false,
+    settled: false,
+  });
+  assert.deepEqual(createdBodies, [
+    `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
+  ]);
+});
+
+test("requestExactHeadReview recognizes a clean Codex comment for the exact head", async () => {
+  const createCalls = { count: 0 };
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+        id: 1,
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    createCalls,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: false,
+    settled: true,
+  });
+  assert.equal(createCalls.count, 0);
+});
+
+test("requestExactHeadReview probes Codex and switches to Cursor when usage-limit appears", async () => {
+  const createdBodies: string[] = [];
+  const comments: MockComment[] = [];
+  const octokit = mockOctokit({ comments, createdBodies, sha: headSha });
+  const clock = {
+    async waitMs(): Promise<void> {
+      comments.push({
+        body: "You have reached your Codex usage limits for code reviews.",
+        id: comments.length + 1,
+        user: { login: "chatgpt-codex-connector[bot]" },
+      });
+    },
+  };
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410, {
+    clock,
+    probe: { intervalMs: 1, timeoutMs: 20 },
+  });
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.CodexUsageLimit,
+    headSha,
+    provider: ExactHeadReviewProvider.Cursor,
+    requested: true,
+    settled: false,
+  });
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+    `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
+  ]);
+});
+
+test("requestExactHeadReview still prefers Codex on a new head after an older usage-limit comment", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker("old-head-sha")}`,
+        id: 1,
+      },
+      {
+        body: "You have reached your Codex usage limits for code reviews.",
+        id: 2,
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: true,
+    settled: false,
+  });
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+  ]);
+});
+
+test("requestExactHeadReview does not request Cursor while Codex is pending", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.None,
+    headSha,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: false,
+    settled: false,
+  });
+  assert.deepEqual(createdBodies, []);
+});
+
+test("requestExactHeadReview treats an exact-head Cursor review as settled", async () => {
+  const createCalls = { count: 0 };
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+      {
+        body: "You have reached your Codex usage limits for code reviews.",
+        id: 2,
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+      {
+        body: `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
+        id: 3,
+      },
+    ],
+    createCalls,
+    reviews: [
+      {
+        body: "Found a bug in the fallback path.",
+        commit_id: headSha,
+        state: "COMMENTED",
+        user: { login: "cursor[bot]" },
+      },
+    ],
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.deepEqual(result, {
+    fallback: ExactHeadReviewFallback.CodexUsageLimit,
+    headSha,
+    provider: ExactHeadReviewProvider.Cursor,
+    requested: false,
+    settled: true,
+  });
+  assert.equal(createCalls.count, 0);
+});

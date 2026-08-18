@@ -311,16 +311,17 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 >
 > Linear `main` history is a project requirement, not a preference.
 
-> ## ⛔ REQUEST CODEX REVIEW; DO NOT DELAY VALIDATION
+> ## ⛔ REQUEST EXACT-HEAD REVIEW; DO NOT DELAY VALIDATION
 >
 > Before merge or handoff, inspect comments and findings that already exist and
 > address every active actionable item, regardless of whether it came from a
 > human or an external service. Reply with the fix, validation, or no-change
 > rationale and resolve each actionable thread. Every external-service review
 > comment already present must be inspected. Complete validation dispatches
-> checks immediately. It then requests one idempotent exact-head Codex review.
-> Claude, Cursor, CodeRabbit, and other external reviewers remain optional. Do not
-> request or wait for them. Optional review never means optional handling of
+> checks immediately. It then requests one idempotent exact-head Cloud review.
+> That request prefers Codex and switches to Cursor Bugbot when Codex reports a
+> usage limit. Claude, CodeRabbit, and other external reviewers remain optional.
+> Do not request or wait for them. Optional review never means optional handling of
 > feedback that already arrived.
 
 > ## ⛔ FORMAT LOCALLY; PRODUCT GATES ON GITHUB ACTIONS ONLY
@@ -370,7 +371,7 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
   3. Commit and run advisory local Codex review.
   4. Push or update the PR.
   5. Use focused hosted diagnostics only when useful.
-  6. Trigger complete PR validation and the exact-head Codex review request at
+  6. Trigger complete PR validation and the exact-head Cloud review request at
      the final boundary.
   7. Fix failures, comments, and conflicts.
   8. Require `task pr:ready` and squash-merge automatically.
@@ -389,7 +390,9 @@ Fast iteration without coverage instrumentation: `task rust:test` (nextest only)
 - **Request review without delaying complete validation.**
   - Run `task pr:review-local` on a coherent local head.
   - When the head is ready for the final gate, run `task pr:validate`.
-  - It dispatches checks and then requests exact-head Codex review.
+  - It dispatches checks and then requests exact-head Cloud review.
+  - The review request prefers Codex and falls back to Cursor Bugbot when Codex
+    reports a usage limit.
   - Review-request failure does not stop those checks.
   - Address findings that arrive while checks run.
   - If none arrive by check completion, continue without waiting.

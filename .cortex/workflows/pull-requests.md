@@ -53,11 +53,12 @@ ownership until merge or a concrete blocked handoff:
    - When the coherent head is ready, run one complete-validation command:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
-   - It dispatches checks and then requests exact-head Codex Cloud review.
+   - It dispatches checks and then requests exact-head Cloud review.
+   - Codex is preferred. Cursor Bugbot is the usage-limit fallback.
    - Review-request failure does not block those checks.
    - Fix every actionable finding that arrives while checks run.
    - If no feedback exists when checks finish, continue without waiting.
-   - Do not request or wait for other optional reviewers.
+   - Do not request Claude, CodeRabbit, or other optional reviewers.
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the
@@ -307,9 +308,10 @@ See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 - After each coherent push, inspect feedback already present.
 - Use focused remote tasks when they shorten diagnosis.
 - Trigger complete validation only when the head is ready for the final gate.
-  - It dispatches checks immediately and requests exact-head Codex review.
+  - It dispatches checks immediately and requests exact-head Cloud review.
 - After a complete-gate failure, validate the completed replacement head again.
-- Do not wait for Codex or request other external reviewers.
+- Do not wait for Codex or Cursor after checks finish.
+  - Cursor Bugbot is requested only when Codex reports a usage limit.
   - See [Code review](code-review.md).
 
 The feedback inspection and readiness audit replace any blind review-batching grace period.
@@ -417,9 +419,9 @@ task pr:preflight PR=<number>
   `task pr:ready` for read-only exact-head readiness.
   - The command never merges by itself.
   - Success tells the task owner to squash-merge immediately.
-- Codex review is not a readiness requirement.
+- Codex or Cursor review is not a readiness requirement.
   - Do not wait for it after repository checks finish.
-  - Do not request or wait for optional external reviews or checks.
+  - Do not request Claude, CodeRabbit, or other optional external reviews.
 - Repository-owned checks and exact-head deployment remain required when
   applicable.
 - Before merge, always verify the branch against latest `origin/main` even when
@@ -485,8 +487,8 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 - Track unthreaded submitted-review items in the checklist and handoff instead
   of creating comment spam.
 - Resolve all actionable threads and re-query immediately before merge.
-- Do not wait for Codex after repository checks finish or request optional
-  external status changes.
+- Do not wait for Codex or Cursor after repository checks finish.
+  - Do not request Claude, CodeRabbit, or other optional reviewers.
   - See [Code review](code-review.md).
 
 ### 7. Fix loop on failure
@@ -598,14 +600,15 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 7. Push and open or update the PR.
 8. Use focused `task remote` jobs only for faster isolated diagnosis.
 9. Run Loom or Task validation on the ready head.
-10. It dispatches checks and then requests exact-head Codex review.
-11. Do not wait for review after checks finish or request optional reviews.
-12. Address and resolve actionable comments.
-13. On failure, fix the issue and repeat pre-push hygiene.
-14. Push the fix and explicitly validate the replacement head.
-15. Squash-merge after the exact-head readiness audit succeeds.
-16. Publish the Workbench completion records.
-17. Report task duration.
+10. It dispatches checks and then requests exact-head Cloud review.
+11. Do not wait for review after checks finish.
+12. Do not request Claude, CodeRabbit, or other optional reviews.
+13. Address and resolve actionable comments.
+14. On failure, fix the issue and repeat pre-push hygiene.
+15. Push the fix and explicitly validate the replacement head.
+16. Squash-merge after the exact-head readiness audit succeeds.
+17. Publish the Workbench completion records.
+18. Report task duration.
 
 ## CLI reference
 

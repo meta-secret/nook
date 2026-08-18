@@ -42,7 +42,9 @@ Delivery rules:
   readiness.
 - Loom never squash-merges.
   - The task-owning agent merges after readiness succeeds.
-- Loom dispatches complete validation and then requests exact-head Codex review.
+- Loom dispatches complete validation and then requests exact-head Cloud review.
+  - The request prefers Codex and falls back to Cursor Bugbot when Codex reports
+    a usage limit.
   - A failed request or missing result is non-blocking.
 - Inspect feedback again at the readiness boundary.
 - A later push invalidates the audit.
@@ -59,8 +61,8 @@ Applies to:
 
 Does not apply to:
 
-- Waiting for Codex after repository-owned checks finish
-- Requesting other optional external AI review
+- Waiting for Codex or Cursor after repository-owned checks finish
+- Requesting Claude, CodeRabbit, or other optional external AI review
 - Replacing GitHub Actions with a required local product gate
 - Automatically classifying substantive review feedback as resolved
 
