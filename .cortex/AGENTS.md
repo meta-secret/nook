@@ -2,7 +2,24 @@
 
 ## Overview
 
-This is the system of record and entry point for all AI agents working in this repository. Consult [`.cortex/INDEX.md`](INDEX.md) for the central knowledge map, hierarchical topic index, and exact section anchors across all specifications, architecture documents, rules, skills, and workflows.
+This is the system of record and entry point for all AI agents working in this repository. Consult [`.cortex/knowledge-graph.md`](knowledge-graph.md) for the central knowledge graph, hierarchical topic index, and exact section anchors across all specifications, architecture documents, rules, skills, and workflows.
+
+## ⛔ P1 — most critical `.cortex` navigation rule: always consult the Knowledge Graph first
+
+Knowledge-graph navigation requirements are:
+
+- Read [`.cortex/knowledge-graph.md`](knowledge-graph.md) before exploring files or starting implementation.
+- Use the Knowledge Graph whenever an agent needs to know anything about the project:
+  - architecture and package boundaries;
+  - security-domain models and cryptographic specifications;
+  - coding rules and language boundaries;
+  - testing standards and coverage floors;
+  - workflows, review policies, and delivery procedures.
+- Retrieve the exact section anchors from `knowledge-graph.md` instead of loading entire documents into context or guessing file paths.
+- Treat unmapped Cortex documents, broken index anchors, or bypassing the Knowledge Graph as P1 documentation findings.
+
+Full contract:
+[dynamic-skills/cortex-document-map.md](dynamic-skills/cortex-document-map.md).
 
 ## ⛔ P1 — most critical `.cortex` writing rule: keep cognitive complexity low
 

@@ -1,16 +1,17 @@
-# Cortex Knowledge Map & Index
+# Cortex Knowledge Graph & Navigation Map
 
-Central index of all specifications, architecture documents, rules, skills, workflows, references, and execution plans in Nook Cortex.
+Central knowledge graph and index of all specifications, architecture documents, rules, skills, workflows, references, and execution plans in Nook Cortex.
 
 ## Overview
 
-This central index provides complete hierarchical navigation across all Cortex documents.
-Use this index to discover relevant knowledge and retrieve exact section anchors without loading entire documents into context.
+This central knowledge graph provides complete hierarchical navigation across all Cortex documents.
+AI agents must always consult this knowledge graph first to discover relevant knowledge and retrieve exact section anchors without loading entire documents into context.
 
 ## Golden Principles & Entry Points
 
 - [Nook Agent Map (Table of Contents)](AGENTS.md)
   - [Overview](AGENTS.md#overview)
+  - [⛔ P1 — most critical .cortex navigation rule: always consult the Knowledge Graph first](AGENTS.md#-p1--most-critical-cortex-navigation-rule-always-consult-the-knowledge-graph-first)
   - [⛔ P1 — most critical .cortex writing rule: keep cognitive complexity low](AGENTS.md#-p1--most-critical-cortex-writing-rule-keep-cognitive-complexity-low)
   - [⛔ P1 — Cortex articles must expose their semantic structure](AGENTS.md#-p1--cortex-articles-must-expose-their-semantic-structure)
   - [⛔ P1 — most critical .cortex integrity rule: keep docs consistent](AGENTS.md#-p1--most-critical-cortex-integrity-rule-keep-docs-consistent)
@@ -201,7 +202,7 @@ Use this index to discover relevant knowledge and retrieve exact section anchors
   - [Validation](dynamic-skills/cortex-consistency.md#validation)
 - [Cortex Document Navigation](dynamic-skills/cortex-document-map.md)
   - [Purpose](dynamic-skills/cortex-document-map.md#purpose)
-  - [Centralized index structure](dynamic-skills/cortex-document-map.md#centralized-index-structure)
+  - [Centralized knowledge-graph structure](dynamic-skills/cortex-document-map.md#centralized-knowledge-graph-structure)
   - [Individual document structure](dynamic-skills/cortex-document-map.md#individual-document-structure)
   - [Preferred pattern](dynamic-skills/cortex-document-map.md#preferred-pattern)
   - [Scope](dynamic-skills/cortex-document-map.md#scope)

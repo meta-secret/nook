@@ -250,7 +250,11 @@ export function extractCortexIndex(args: ExtractCortexIndexArgs): CortexIndex {
     const rel = source.relativePath.startsWith('.cortex/')
       ? source.relativePath.slice('.cortex/'.length)
       : source.relativePath;
-    if (rel === 'INDEX.md') {
+    if (
+      rel === 'knowledge-graph.md' ||
+      rel === 'k-graph.md' ||
+      rel === 'INDEX.md'
+    ) {
       continue;
     }
     const parseArgs: ParseDocumentIndexArgs = {
@@ -317,19 +321,19 @@ export function renderCortexIndexMarkdown(
   args: RenderCortexIndexMarkdownArgs,
 ): string {
   const lines: string[] = [];
-  lines.push('# Cortex Knowledge Map & Index');
+  lines.push('# Cortex Knowledge Graph & Navigation Map');
   lines.push('');
   lines.push(
-    'Central index of all specifications, architecture documents, rules, skills, workflows, references, and execution plans in Nook Cortex.',
+    'Central knowledge graph and index of all specifications, architecture documents, rules, skills, workflows, references, and execution plans in Nook Cortex.',
   );
   lines.push('');
   lines.push('## Overview');
   lines.push('');
   lines.push(
-    'This central index provides complete hierarchical navigation across all Cortex documents.',
+    'This central knowledge graph provides complete hierarchical navigation across all Cortex documents.',
   );
   lines.push(
-    'Use this index to discover relevant knowledge and retrieve exact section anchors without loading entire documents into context.',
+    'AI agents must always consult this knowledge graph first to discover relevant knowledge and retrieve exact section anchors without loading entire documents into context.',
   );
   lines.push('');
 
