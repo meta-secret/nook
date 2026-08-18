@@ -67,11 +67,40 @@ Nook separates identity management from encrypted vault storage:
 
 ```mermaid
 flowchart TD
-    Person["Person"] --> Identity["Identity (A, B, ...)"]
-    Passkey["Passkey / PIN"] --> AppKey["Local app key (app_id)"] --> IdentityMember["Identity member record"]
-    Provider1["Replication provider"] --> IdentityLog["Encrypted identity control log"]
-    Identity --> DEK["Per-vault DEK envelopes"] --> VaultSecrets["Vault secrets log"]
-    Provider2["Replication provider"] --> VaultLog["Encrypted vault event log"]
+    subgraph UserDevice["User & Local Device"]
+        Person["Person (User)"]
+        Passkey["Passkey / PIN"]
+        AppKey["Local App Key (app_id)<br/>(Private key in local storage)"]
+        Person -->|"authenticates with"| Passkey
+        Passkey -->|"unwraps local"| AppKey
+    end
+
+    subgraph IdentityDomain["Identity Domain"]
+        Identity["Identity (A, B, ...)"]
+        IdentityLog["Encrypted Identity Control Log<br/>(Members, public keys, passkey records)"]
+        DekEnvelopes["Per-Vault DEK Envelopes<br/>(DEK encrypted to App Public Keys)"]
+
+        Person -->|"owns or selects"| Identity
+        Identity -->|"governed by"| IdentityLog
+        Identity -->|"generates & holds"| DekEnvelopes
+        AppKey -.->|"public key member in"| IdentityLog
+        AppKey -->|"unwraps DEK from"| DekEnvelopes
+    end
+
+    subgraph VaultDomain["Vault Domain"]
+        Vault["Vault (store_id)"]
+        VaultLog["Encrypted Vault Event Log<br/>(Secrets, event DAG, projection)"]
+
+        Identity -->|"authorizes & owns"| Vault
+        Vault -->|"contains"| VaultLog
+        DekEnvelopes -->|"provides DEK to decrypt"| VaultLog
+    end
+
+    subgraph ReplicationDomain["Replication Transport"]
+        Provider["Replication Provider<br/>(GitHub, Drive, etc.)"]
+        Provider -->|"syncs"| IdentityLog
+        Provider -->|"syncs"| VaultLog
+    end
 ```
 
 - **Identity:** An identity is a logical account.
