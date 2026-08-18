@@ -566,6 +566,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       context,
       vaultPage: reopenedVaultPage,
       companionUnlock: PairedVaultCompanionUnlockKind.Optional,
+      extensionId,
     }
     await unlockPairedVaultThroughCompanion(firstUnlock)
     if (!isHostedSmoke) {
@@ -638,6 +639,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         context: restartedContext,
         vaultPage: lockedVaultPage,
         companionUnlock: PairedVaultCompanionUnlockKind.Required,
+        extensionId: restartedExtensionId,
       }
       await unlockPairedVaultThroughCompanion(restartedUnlock)
       await expect(

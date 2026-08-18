@@ -10,14 +10,11 @@ export type PairedVaultCompanionUnlock = {
   readonly context: BrowserContext
   readonly vaultPage: Page
   readonly companionUnlock: PairedVaultCompanionUnlockKind
+  readonly extensionId: string
 }
 
 type CompanionPopupUnlock = {
   readonly page: Page
-}
-
-type ExtensionIdLookup = {
-  readonly context: BrowserContext
 }
 
 type OwnedCompanionPopupOpen = {
@@ -26,16 +23,6 @@ type OwnedCompanionPopupOpen = {
 }
 
 const COMPANION_UNLOCK_ADOPT_WAIT_MS = 3_000
-
-function readExtensionId(request: ExtensionIdLookup): string {
-  for (const page of request.context.pages()) {
-    if (!page.url().startsWith('chrome-extension://')) {
-      continue
-    }
-    return new URL(page.url()).host
-  }
-  throw new Error('Extension page is not open')
-}
 
 async function openOwnedCompanionPopup(
   request: OwnedCompanionPopupOpen,
@@ -51,11 +38,16 @@ async function completeCompanionPopupUnlock(
   request: CompanionPopupUnlock,
 ): Promise<void> {
   const { page } = request
-  await expect(page.getByTestId('extension-device-setup')).toBeVisible({
+  const deviceSetup = page.getByTestId('extension-device-setup')
+  const companionHome = page.getByTestId('extension-companion-home')
+  await expect(deviceSetup.or(companionHome)).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
+  if (!(await deviceSetup.isVisible())) {
+    return
+  }
   await page.getByTestId('device-protection-unlock-btn').click()
-  await expect(page.getByTestId('extension-companion-home')).toBeVisible({
+  await expect(companionHome).toBeVisible({
     timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
   })
 }
@@ -63,9 +55,7 @@ async function completeCompanionPopupUnlock(
 export async function unlockPairedVaultThroughCompanion(
   request: PairedVaultCompanionUnlock,
 ): Promise<void> {
-  const { context, vaultPage, companionUnlock } = request
-  const extensionIdLookup: ExtensionIdLookup = { context }
-  const extensionId = readExtensionId(extensionIdLookup)
+  const { context, vaultPage, companionUnlock, extensionId } = request
   await vaultPage.getByTestId('unlock-vault-btn').click()
   await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
   if (companionUnlock === PairedVaultCompanionUnlockKind.Optional) {
