@@ -347,11 +347,11 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    const vaultsNode = page.getByTestId('devices-access-node-vaults')
-    await expect(vaultsNode).toBeVisible({
+    const remountedVaultsNode = page.getByTestId('devices-access-node-vaults')
+    await expect(remountedVaultsNode).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await vaultsNode.click()
+    await remountedVaultsNode.click()
     await page
       .getByTestId('devices-access-panel')
       .getByRole('button', { name: 'Manage backup passwords' })

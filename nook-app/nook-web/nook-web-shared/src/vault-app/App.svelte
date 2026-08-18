@@ -353,7 +353,10 @@
         ExtensionPairedVaultIdentityStatusMessageStatus.Locked
       ) {
         const requested = await requestPairedExtensionUnlock(activeStoreId)
-        if (requested) return
+        if (requested) {
+          await resumePairedExtensionVault(activeStoreId)
+        }
+        if (vault.isAuthenticated) return
       }
     }
     if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
