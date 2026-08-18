@@ -247,27 +247,55 @@ flowchart LR
 
 ## Workflow concurrency policy
 
-Cancellation is scoped to work that a newer run actually supersedes. In
-particular, PR validation uses `pr-<number>`: a new commit cancels the older run
-for that PR, while separate PRs continue to receive independent required checks.
-Do not replace this with one global PR group; that would leave older PRs with a
-cancelled required check whenever another contributor pushes. Main is the
-exception: an active run completes so its serialized cache writers cannot be
-interrupted, while the single pending slot is replaced by the newest merged
-revision during a burst.
+Cancellation is scoped to work that a newer run actually supersedes:
 
-| Workflow             | Concurrency scope                    | Cancel active run? | Reason                                                                             |
-| -------------------- | ------------------------------------ | ------------------ | ---------------------------------------------------------------------------------- |
-| PR                   | PR number                            | Yes                | Only the newest commit on the same PR needs validation                             |
-| Main                 | `main`                               | No; one pending    | Finish active cache publication and coalesce bursts to the newest pending revision |
-| Main failure handoff | Failed Main head SHA                 | No; one pending    | Serialize retries that update the same Workbench incident                          |
-| Main build stats     | Main run ID + attempt                | No                 | Every completed attempt is immutable evidence; separate runs never supersede it    |
-| Manual PR e2e        | PR number + suite                    | Yes                | A repeated run of the same suite supersedes its older debug build                  |
-| Web research         | PR number or ref                     | Yes                | Keep only the newest build for the same preview or branch                          |
-| CI agent smoke       | Global smoke group                   | Yes                | Only the newest smoke result matters                                               |
-| Agent implement      | Issue number; manual runs are unique | No                 | It may already have pushed a branch or opened a PR                                 |
-| Production release   | Global production release group      | No                 | Serialize stateful publication without interrupting a deploy                       |
-| Runner cleanup       | Global cleanup group                 | No                 | Let an active Docker prune finish safely                                           |
+- PR validation uses `pr-<number>`: a new commit cancels the older run for that PR.
+- Separate PRs continue to receive independent required checks.
+- Do not replace this with a global PR group, which would cancel other contributors' required checks on push.
+- Main is serialized: an active run completes to protect its cache writers, while the single pending slot coalesces bursts to the newest merged revision.
+
+### Concurrency scopes
+
+- **PR (`pr.yml`)**
+  - Scope: PR number (`pr-<number>`)
+  - Cancel active run: Yes
+  - Reason: Only the newest commit on the same PR needs validation.
+- **Main (`main.yml`)**
+  - Scope: `main`
+  - Cancel active run: No (one pending)
+  - Reason: Finish active cache publication and coalesce bursts to the newest pending revision.
+- **Main failure handoff (`main-failure-handoff.yml`)**
+  - Scope: Failed Main head SHA
+  - Cancel active run: No (one pending)
+  - Reason: Serialize retries that update the same Workbench incident.
+- **Main build stats (`main-build-stats.yml`)**
+  - Scope: Main run ID + attempt
+  - Cancel active run: No
+  - Reason: Every completed attempt is immutable evidence; separate runs never supersede it.
+- **Manual PR e2e (`e2e-pr.yml`)**
+  - Scope: PR number + suite
+  - Cancel active run: Yes
+  - Reason: A repeated run of the same suite supersedes its older debug build.
+- **Web research (`web-research.yml`)**
+  - Scope: PR number or ref
+  - Cancel active run: Yes
+  - Reason: Keep only the newest build for the same preview or branch.
+- **CI agent smoke (`ci-agent-smoke.yml`)**
+  - Scope: Global smoke group
+  - Cancel active run: Yes
+  - Reason: Only the newest smoke result matters.
+- **Agent implement (`agent-implement.yml`)**
+  - Scope: Issue number (manual runs are unique)
+  - Cancel active run: No
+  - Reason: An active run may already have pushed a branch or opened a PR.
+- **Production release (`release.yml`)**
+  - Scope: Global production release group
+  - Cancel active run: No
+  - Reason: Serialize stateful publication without interrupting a deployment.
+- **Runner cleanup (`runner-cleanup.yml`)**
+  - Scope: Global cleanup group
+  - Cancel active run: No
+  - Reason: Let an active Docker prune finish safely.
 
 ## Production release strategy
 
@@ -301,11 +329,11 @@ make the deployed artifact differ from its tagged commit.
 
 ## Provider selection (`NOOK_E2E_SYNC_PROVIDER`)
 
-The **same sync spec files** run against different backends. CI swaps providers by setting one env var per job:
+The **same sync spec files** run against different backends. CI swaps providers by setting one environment variable per job:
 
-| Env                      | Values                                    | Default |
-| ------------------------ | ----------------------------------------- | ------- |
-| `NOOK_E2E_SYNC_PROVIDER` | `file`, `local`, `google-drive`, `github` | `file`  |
+- **`NOOK_E2E_SYNC_PROVIDER`**
+  - Supported values: `file`, `local`, `google-drive`, `github`
+  - Default value: `file`
 
 Registry and factories live in `nook-app/nook-web/nook-web-app/e2e/sync-provider.ts`:
 
@@ -330,18 +358,19 @@ select another configured provider explicitly.
 
 Live credentials per provider:
 
-| Provider       | Secret / env                                                    |
-| -------------- | --------------------------------------------------------------- |
-| `github`       | `NOOK_GITHUB_PAT`                                               |
-| `google-drive` | `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (private sync smoke, when wired) |
+- **`github`**
+  - Credential: `NOOK_GITHUB_PAT`
+- **`google-drive`**
+  - Credential: `NOOK_GOOGLE_E2E_ACCESS_TOKEN` (private sync smoke, when wired)
 
-Shared-folder grant live smoke (issue #289; not the private sync matrix row):
+Shared-folder grant live smoke environment (issue #289; not the private sync matrix row):
 
-| Env                                   | Purpose                                                     |
-| ------------------------------------- | ----------------------------------------------------------- |
-| `NOOK_GOOGLE_E2E_ACCESS_TOKEN`        | Owner token with `drive.file`                               |
-| `NOOK_GOOGLE_E2E_JOINER_EMAIL`        | Email granted writer on the folder                          |
-| `NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN` | Optional joiner token to verify access under that folder id |
+- **`NOOK_GOOGLE_E2E_ACCESS_TOKEN`**
+  - Purpose: Owner token with `drive.file`
+- **`NOOK_GOOGLE_E2E_JOINER_EMAIL`**
+  - Purpose: Email granted writer on the folder
+- **`NOOK_GOOGLE_E2E_JOINER_ACCESS_TOKEN`**
+  - Purpose: Optional joiner token to verify access under that folder ID
 
 No-live-provider mode uses Playwright route handlers (`sync-stub.ts`,
 `drive-stub.ts`, `file-sync-stub.ts`) — no API quota. For the default `file`
@@ -453,36 +482,50 @@ The preparation solve runs once. The small final web-image solve retries once
 after the known immediate BuildKit frontend/Dockerfile-load flake, without
 repeating the multi-minute Rust/WASM and dependency graph.
 
-PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
-That label adds the `Full browser e2e (main fix)` and `Full extension e2e
-(main fix)` jobs to the ordinary PR workflow. A dedicated producer verifies
-WASM once and uploads only its generated package; preview and both browser jobs
-download that artifact instead of recompiling Rust. The two browser jobs build
-the Chromium image and run deterministic local-provider plus split-app tests
-and extension e2e on separate hosted runners through
-`task ci:pr:e2e:web:artifacts` and
-`task ci:pr:e2e:extension:artifacts`. Both tasks use the same bounded BuildKit
-health/recovery wrapper as Main. Pull-request browser consumers publish only
-isolated exact-head cache refs. Each consumer probes its exact browser ref.
-An available exact ref is imported alone. A missing exact ref falls back to
-the browser-image seed owned by trusted Main. The web full-e2e job publishes
-the verified exact-head browser graph after its assertions pass. The UI-demo
-publisher is suppressed in that mode so the two jobs never write the same ref
-concurrently. Adding
-or removing the label retriggers PR Actions for the current head. Because the
-readiness audit already requires the exact-head `PR` workflow to succeed, a
-labeled PR cannot be ready while this job is queued, red, or cancelled.
-Extension e2e starts an automatically selected Xvfb display, waits for readiness,
-keeps it from resetting between Playwright retries, and uses one hosted worker
-so the persistent-context smoke cannot compete with other headed Chromium tests.
+### Browser validation for Main-fix PRs
 
-| Workflow                                    | `runs-on`       | Why                                                           |
-| ------------------------------------------- | --------------- | ------------------------------------------------------------- |
-| `pr.yml`, `main.yml`, `release.yml`         | `ubuntu-latest` | Elastic delivery capacity with Main-seeded private Zot caches |
-| `repository-policy.yml`, `hive.yml`         | `ubuntu-latest` | Independent architecture and package verification             |
-| `agent-implement.yml`, `ci-agent-smoke.yml` | `ubuntu-latest` | Background implementation and bounded smoke work              |
-| `e2e-pr.yml`, `web-research.yml`            | `ubuntu-latest` | Manual and research work scales independently                 |
-| `runner-cleanup.yml`                        | `nook`          | Maintain the registered self-hosted Docker host and disk      |
+PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
+
+- **Label effect:** Adds `Full browser e2e (main fix)` and `Full extension e2e (main fix)` jobs to the PR workflow.
+- **WASM artifact sharing:**
+  - A dedicated producer verifies WASM once and uploads only its generated package.
+  - Preview and both browser jobs download that artifact instead of recompiling Rust.
+- **Parallel browser jobs:**
+  - The two browser jobs build the Chromium image and run deterministic local-provider plus split-app tests and extension e2e on separate hosted runners.
+  - Commands: `task ci:pr:e2e:web:artifacts` and `task ci:pr:e2e:extension:artifacts`.
+  - Both tasks use the bounded BuildKit health and recovery wrapper.
+- **Exact-head cache policy:**
+  - PR browser consumers publish only isolated exact-head cache refs.
+  - Each consumer probes its exact browser ref.
+  - An available exact ref is imported alone.
+  - A missing exact ref falls back to the browser-image seed owned by trusted Main.
+  - The web full-e2e job publishes the verified exact-head browser graph after its assertions pass.
+  - The UI-demo publisher is suppressed in this mode to avoid concurrent ref writes.
+- **Readiness requirement:**
+  - Adding or removing the label retriggers PR Actions for the current head.
+  - A labeled PR cannot be ready while this job is queued, failing, or cancelled.
+- **Extension e2e environment:**
+  - Extension e2e starts an automatically selected Xvfb display.
+  - It waits for readiness and prevents resets between Playwright retries.
+  - It uses one hosted worker so persistent-context smoke does not compete with headed Chromium tests.
+
+### Runner allocation
+
+- **`pr.yml`, `main.yml`, `release.yml`**
+  - Runner: `ubuntu-latest`
+  - Purpose: Elastic delivery capacity with Main-seeded private Zot caches
+- **`repository-policy.yml`, `hive.yml`**
+  - Runner: `ubuntu-latest`
+  - Purpose: Independent architecture and package verification
+- **`agent-implement.yml`, `ci-agent-smoke.yml`**
+  - Runner: `ubuntu-latest`
+  - Purpose: Background implementation and bounded smoke work
+- **`e2e-pr.yml`, `web-research.yml`**
+  - Runner: `ubuntu-latest`
+  - Purpose: Manual and research work scales independently
+- **`runner-cleanup.yml`**
+  - Runner: `nook`
+  - Purpose: Maintain the registered self-hosted Docker host and disk
 
 The runner-cleanup workflow runs its age-filtered system prune separately from
 its unused-volume prune: Docker does not support its `until` filter together
@@ -625,12 +668,18 @@ results and traces, and must not receive real vault secrets.
 
 Defined in `nook-app/nook-web/playwright.config.ts`:
 
-| Project     | Specs                                     | CI                          |
-| ----------- | ----------------------------------------- | --------------------------- |
-| `stable`    | IndexedDB-only specs (3 workers)          | main, e2e-pr (manual/debug) |
-| `unstable`  | Local-provider and sync specs (2 workers) | main, e2e-pr (manual)       |
-| `sync-live` | `e2e/live/**/*.spec.ts`                   | e2e-pr (manual)             |
-| `ui-demo`   | `e2e/demos/**/*.demo.spec.ts`             | UI-changing PRs (1 worker)  |
+- **`stable`**
+  - Specs: IndexedDB-only specs (3 workers)
+  - CI: `main.yml`, `e2e-pr.yml` (manual/debug)
+- **`unstable`**
+  - Specs: Local-provider and sync specs (2 workers)
+  - CI: `main.yml`, `e2e-pr.yml` (manual)
+- **`sync-live`**
+  - Specs: `e2e/live/**/*.spec.ts`
+  - CI: `e2e-pr.yml` (manual)
+- **`ui-demo`**
+  - Specs: `e2e/demos/**/*.demo.spec.ts` (1 worker)
+  - CI: UI-changing PRs
 
 The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
 
@@ -934,18 +983,19 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 ## Secrets and env
 
-| Secret / env                                        | Used by                                                         |
-| --------------------------------------------------- | --------------------------------------------------------------- |
-| `NOOK_GITHUB_PAT`                                   | sync-live e2e; agent-implement PR/push                          |
-| `NOOK_GITHUB_E2E_REPO`                              | CI sets per run for live suites (one repo per container)        |
-| `CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID` | PR preview deploy; main development deploy/domain verification  |
-| `GITHUB_TOKEN`                                      | PR comments, deployment records, portable Rust coverage comment |
-| `CURSOR_API_KEY`                                    | `agent-implement.yml`                                           |
-
-**`NOOK_GITHUB_PAT`**
-
-- Repo scope required for sync-live e2e and agent-implement PR/push.
-- PR creation must act as a user so normal workflows fire.
+- **`NOOK_GITHUB_PAT`**
+  - Used by: `sync-live` e2e; `agent-implement` PR/push
+  - Scope: Classic with `repo` scope or fine-grained with contents and pull requests write on this repository.
+  - Requirement: PR creation must act as a user so normal workflows fire.
+- **`NOOK_GITHUB_E2E_REPO`**
+  - Used by: CI sets per run for live suites (one repo per container)
+- **`CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID`**
+  - Used by: PR preview deploy; main development deploy and domain verification
+  - Scope: Account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`.
+- **`GITHUB_TOKEN`**
+  - Used by: PR comments, deployment records, portable Rust coverage comment
+- **`CURSOR_API_KEY`**
+  - Used by: `agent-implement.yml`
 
 **Cloudflare credentials**
 
@@ -1042,11 +1092,11 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 2026-06-29 20:14:35,001 INFO  [ci-agent/cursor] shell exit 1
 ```
 
-| Field     | Meaning                                                                                                                |
-| --------- | ---------------------------------------------------------------------------------------------------------------------- |
-| Timestamp | UTC, `yyyy-MM-dd HH:mm:ss,SSS`                                                                                         |
-| Level     | `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`                                                                          |
-| Component | `ci-agent/<module>` — e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell` |
+### Log fields
+
+- **Timestamp:** UTC, `yyyy-MM-dd HH:mm:ss,SSS`
+- **Level:** `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`
+- **Component:** `ci-agent/<module>` (e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell`)
 
 - Set `CI_AGENT_LOG_LEVEL=DEBUG` for step and turn traces.
 - Log tool starts, shell output, and command results at **INFO**.
@@ -1073,10 +1123,12 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
 
 [`agent-implement.yml`](../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
 
-| Trigger                        | When it runs                                       |
-| ------------------------------ | -------------------------------------------------- |
-| `workflow_dispatch.issue_path` | Claims that exact eligible Workbench issue         |
-| `workflow_dispatch.prompt`     | Runs the explicit prompt without claiming an issue |
+### Agent implement triggers
+
+- **`workflow_dispatch.issue_path`**
+  - Behavior: Claims that exact eligible Workbench issue
+- **`workflow_dispatch.prompt`**
+  - Behavior: Runs the explicit prompt without claiming an issue
 
 Exactly one of `issue_path` or `prompt` is required. Empty or ambiguous
 dispatches fail before checkout. Issue eligibility requires `status: ready`,
