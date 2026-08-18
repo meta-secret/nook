@@ -55,9 +55,14 @@ function applySettings({
     state.settingsAccordionSection = accordion;
   }
   state.settingsOpen = true;
-  // Access reads last-known device evidence from IndexedDB. A vault sync here
-  // races that snapshot when the dashboard remounts after leaving Access.
-  if (section !== SettingsSection.DevicesAccess) {
+  // Access and enrolled-device settings read last-known evidence. A vault
+  // sync here races that snapshot when the dashboard remounts after leaving
+  // Access through "Manage enrolled devices".
+  const skipDeviceRefresh =
+    section === SettingsSection.DevicesAccess ||
+    (section === SettingsSection.Storage &&
+      accordion === SettingsAccordionSection.Devices);
+  if (!skipDeviceRefresh) {
     void state.refreshDeviceState();
   }
 }

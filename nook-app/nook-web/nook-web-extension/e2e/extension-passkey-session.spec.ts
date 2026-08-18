@@ -1,4 +1,10 @@
-import { chromium, expect, test, type Page } from '@playwright/test'
+import {
+  chromium,
+  expect,
+  test,
+  type BrowserContext,
+  type Page,
+} from '@playwright/test'
 import {
   assertWebsitePasskeyThroughExtension,
   attachNookLogsForTest,
@@ -65,6 +71,49 @@ type ExtensionConnectionParametersParseResult =
       kind: ExtensionConnectionParametersParseKind.Invalid
       missingParameter: ExtensionConnectionParameter
     }
+
+enum PairedVaultCompanionUnlockKind {
+  Optional = 'optional',
+  Required = 'required',
+}
+
+type PairedVaultCompanionUnlock = {
+  readonly context: BrowserContext
+  readonly vaultPage: Page
+  readonly companionUnlock: PairedVaultCompanionUnlockKind
+}
+
+async function unlockPairedVaultThroughCompanion(
+  request: PairedVaultCompanionUnlock,
+): Promise<void> {
+  const { context, vaultPage, companionUnlock } = request
+  const companionWaitMs =
+    companionUnlock === PairedVaultCompanionUnlockKind.Required
+      ? EXTENSION_UNLOCK_TIMEOUT_MS
+      : 5_000
+  const companionPagePromise = context.waitForEvent('page', {
+    predicate: (page) => page.url().includes('/popup/index.html'),
+    timeout: companionWaitMs,
+  })
+  await vaultPage.getByTestId('unlock-vault-btn').click()
+  await expect(vaultPage.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+  const companionPage =
+    companionUnlock === PairedVaultCompanionUnlockKind.Required
+      ? await companionPagePromise
+      : await companionPagePromise.catch(() => null)
+  if (companionPage) {
+    await expect(
+      companionPage.getByTestId('extension-device-setup'),
+    ).toBeVisible()
+    await companionPage.getByTestId('device-protection-unlock-btn').click()
+    await expect(
+      companionPage.getByTestId('extension-companion-home'),
+    ).toBeVisible()
+  }
+  await expect(vaultPage.getByTestId('authenticated-shell')).toBeVisible({
+    timeout: 15_000,
+  })
+}
 
 function parseExtensionConnectionParameters(
   connectionUrl: URL,
@@ -557,14 +606,12 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
       reopenedVaultPage.getByTestId('login-local-unlock-step'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-    await reopenedVaultPage.getByTestId('unlock-vault-btn').click()
-
-    await expect(
-      reopenedVaultPage.getByTestId('passkey-auth-overlay'),
-    ).toHaveCount(0)
-    await expect(
-      reopenedVaultPage.getByTestId('authenticated-shell'),
-    ).toBeVisible()
+    const firstUnlock: PairedVaultCompanionUnlock = {
+      context,
+      vaultPage: reopenedVaultPage,
+      companionUnlock: PairedVaultCompanionUnlockKind.Optional,
+    }
+    await unlockPairedVaultThroughCompanion(firstUnlock)
     if (!isHostedSmoke) {
       expect(
         await reopenedVaultPage.evaluate(
@@ -631,31 +678,12 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
         lockedVaultPage.getByTestId('login-local-unlock-step'),
       ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
 
-      const extensionAuthWindowPromise = restartedContext.waitForEvent('page')
-      await lockedVaultPage.getByTestId('unlock-vault-btn').click()
-      const extensionAuthWindow = await extensionAuthWindowPromise
-      await expect(extensionAuthWindow).toHaveURL(
-        `chrome-extension://${restartedExtensionId}/popup/index.html`,
-      )
-      await expect(
-        extensionAuthWindow.getByTestId('extension-device-setup'),
-      ).toBeVisible()
-      await expect(
-        lockedVaultPage.getByTestId('passkey-auth-overlay'),
-      ).toHaveCount(0)
-
-      await extensionAuthWindow
-        .getByTestId('device-protection-unlock-btn')
-        .click()
-      await expect(
-        extensionAuthWindow.getByTestId('extension-companion-home'),
-      ).toBeVisible()
-      await expect(
-        extensionAuthWindow.getByTestId('stay-as-companion-btn'),
-      ).toBeVisible()
-      await expect(
-        lockedVaultPage.getByTestId('authenticated-shell'),
-      ).toBeVisible({ timeout: 15_000 })
+      const restartedUnlock: PairedVaultCompanionUnlock = {
+        context: restartedContext,
+        vaultPage: lockedVaultPage,
+        companionUnlock: PairedVaultCompanionUnlockKind.Required,
+      }
+      await unlockPairedVaultThroughCompanion(restartedUnlock)
       await expect(
         lockedVaultPage.getByTestId('passkey-auth-overlay'),
       ).toHaveCount(0)

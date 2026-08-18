@@ -58,7 +58,7 @@ use crate::storage::{
     github::{ensure_github_repo_exists, fetch_github_username},
     indexed_db::{load_from_indexed_db, save_to_indexed_db},
 };
-use crate::types::records_to_vec;
+use crate::types::{members_to_vec, records_to_vec};
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultArchitecture, NookVaultMember};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
@@ -320,7 +320,16 @@ impl NookVaultManager {
     }
 
     pub(crate) fn vault_members(&self) -> Result<Vec<NookVaultMember>, NookError> {
-        vault_members_to_vec(&self.stored_records_snapshot(), &self.vault.members_key)
+        let roster =
+            vault_members_to_vec(&self.stored_records_snapshot(), &self.vault.members_key)?;
+        if roster.len() >= self.vault.meta.enrolled_devices.len() {
+            return Ok(roster);
+        }
+        let mut enrolled = Vec::new();
+        for join in self.vault.meta.enrolled_devices.values() {
+            enrolled.push(nook_core::member_from_join(join)?);
+        }
+        Ok(members_to_vec(enrolled))
     }
 
     pub(in crate::manager) fn serialize_current_projection_yaml(

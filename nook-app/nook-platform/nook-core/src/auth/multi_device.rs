@@ -92,52 +92,44 @@ pub fn apply_vault_meta_operation(
             encryption_public_key,
             signing_public_key,
             ..
-        } => {
-            state.joins.insert(
-                device_id.clone(),
-                JoinRequest {
-                    device_id: device_id.clone(),
-                    public_key: encryption_public_key.clone(),
-                    signing_public_key: signing_public_key.clone(),
-                    requested_at: requested_at.to_owned(),
-                },
-            );
-        }
+        } => record_pending_join(
+            state,
+            device_id,
+            encryption_public_key,
+            signing_public_key,
+            requested_at,
+        ),
         VaultOperation::JoinApproved {
             device_id,
             encryption_public_key,
+            signing_public_key,
             secrets_key_ciphertext,
             members_key_ciphertext,
             ..
-        } => {
-            state.joins.remove(device_id);
-            let auth_id = dec_auth_id_from_public_key(encryption_public_key)?;
-            state.auth.insert(
-                auth_id,
-                AuthEnvelopes {
-                    secrets_key: secrets_key_ciphertext.clone(),
-                    members_key: members_key_ciphertext.clone(),
-                },
-            );
-        }
+        } => apply_join_approved(
+            state,
+            &JoinApprovedReplay {
+                device_id,
+                encryption_public_key,
+                signing_public_key,
+                secrets_key_ciphertext,
+                members_key_ciphertext,
+                requested_at,
+            },
+        )?,
         VaultOperation::SentinelParticipantEnrolled {
             device_id,
             encryption_public_key,
             signing_public_key,
             label,
-        } => {
-            state.joins.remove(device_id);
-            state.sentinel_participants.insert(
-                device_id.clone(),
-                SentinelParticipantEntry {
-                    device_id: device_id.clone(),
-                    encryption_public_key: encryption_public_key.clone(),
-                    signing_public_key: signing_public_key.clone(),
-                    label: label.as_str().to_owned(),
-                    enrolled_at: requested_at.to_owned(),
-                },
-            );
-        }
+        } => record_sentinel_participant(
+            state,
+            device_id,
+            encryption_public_key,
+            signing_public_key,
+            label,
+            requested_at,
+        ),
         VaultOperation::JoinDenied { device_id } => {
             state.joins.remove(device_id);
         }
@@ -152,6 +144,7 @@ pub fn apply_vault_meta_operation(
         VaultOperation::DeviceRevoked { device_id } => {
             state.sentinel_participants.remove(device_id);
             state.sentinel_shares.remove(device_id);
+            state.enrolled_devices.remove(device_id);
         }
         VaultOperation::EpochCheckpoint {
             rotated_meta_records: crate::EpochMetadataState::Replace(rotated_meta_records),
@@ -159,6 +152,7 @@ pub fn apply_vault_meta_operation(
         } => {
             state.auth.clear();
             state.members.clear();
+            state.enrolled_devices.clear();
             for record in rotated_meta_records {
                 state.apply_record(record);
             }
@@ -178,6 +172,79 @@ pub fn apply_vault_meta_operation(
             ..
         } => {}
     }
+    Ok(())
+}
+
+struct JoinApprovedReplay<'a> {
+    device_id: &'a crate::DeviceId,
+    encryption_public_key: &'a crate::DevicePublicKey,
+    signing_public_key: &'a crate::DeviceSigningPublicKey,
+    secrets_key_ciphertext: &'a crate::AgeArmoredCiphertext,
+    members_key_ciphertext: &'a crate::AgeArmoredCiphertext,
+    requested_at: &'a str,
+}
+
+fn record_pending_join(
+    state: &mut VaultMetaState,
+    device_id: &crate::DeviceId,
+    encryption_public_key: &crate::DevicePublicKey,
+    signing_public_key: &crate::DeviceSigningPublicKey,
+    requested_at: &str,
+) {
+    state.joins.insert(
+        device_id.clone(),
+        JoinRequest {
+            device_id: device_id.clone(),
+            public_key: encryption_public_key.clone(),
+            signing_public_key: signing_public_key.clone(),
+            requested_at: requested_at.to_owned(),
+        },
+    );
+}
+
+fn record_sentinel_participant(
+    state: &mut VaultMetaState,
+    device_id: &crate::DeviceId,
+    encryption_public_key: &crate::DevicePublicKey,
+    signing_public_key: &crate::DeviceSigningPublicKey,
+    label: &crate::MemberLabel,
+    requested_at: &str,
+) {
+    state.joins.remove(device_id);
+    state.sentinel_participants.insert(
+        device_id.clone(),
+        SentinelParticipantEntry {
+            device_id: device_id.clone(),
+            encryption_public_key: encryption_public_key.clone(),
+            signing_public_key: signing_public_key.clone(),
+            label: label.as_str().to_owned(),
+            enrolled_at: requested_at.to_owned(),
+        },
+    );
+}
+
+fn apply_join_approved(
+    state: &mut VaultMetaState,
+    approved: &JoinApprovedReplay<'_>,
+) -> nook_auth2::MultiDeviceResult<()> {
+    state.joins.remove(approved.device_id);
+    state.enrolled_devices.insert(
+        approved.device_id.clone(),
+        JoinRequest {
+            device_id: approved.device_id.clone(),
+            public_key: approved.encryption_public_key.clone(),
+            signing_public_key: approved.signing_public_key.clone(),
+            requested_at: approved.requested_at.to_owned(),
+        },
+    );
+    let auth_id = dec_auth_id_from_public_key(approved.encryption_public_key)?;
+    state.auth.insert(
+        auth_id,
+        AuthEnvelopes {
+            secrets_key: approved.secrets_key_ciphertext.clone(),
+            members_key: approved.members_key_ciphertext.clone(),
+        },
+    );
     Ok(())
 }
 
@@ -600,6 +667,7 @@ mod tests {
         for operation in &operations {
             apply_vault_meta_operation(&mut state, operation, "2026-08-14T00:00:00Z")?;
         }
+        assert_eq!(state.enrolled_devices.len(), 2);
         for app_key in [&current, &second] {
             let envelopes = state
                 .auth
@@ -662,6 +730,8 @@ mod tests {
         let mut meta = VaultMetaState::default();
         materialize_vault_meta_from_graph(&graph, &mut meta)?;
         assert!(meta.auth.contains_key(&auth_id));
+        assert_eq!(meta.enrolled_devices.len(), 1);
+        assert!(meta.enrolled_devices.contains_key(extension.device_id()));
         let (other_signing, _) = SigningIdentity::generate()?;
         assert!(!event_graph_has_active_device_access(
             &graph,
@@ -696,6 +766,8 @@ mod tests {
             &signing.public_key(),
         )?);
         assert!(event_graph_active_auth_ids(&graph)?.is_empty());
+        materialize_vault_meta_from_graph(&graph, &mut meta)?;
+        assert!(!meta.enrolled_devices.contains_key(extension.device_id()));
         Ok(())
     }
 
@@ -725,9 +797,24 @@ mod tests {
     #[test]
     fn explicit_empty_checkpoint_metadata_clears_live_grants() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
         let keys = crate::generate_vault_keys()?;
         let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let envelopes = crate::parse_auth_envelopes(auth.value.as_str())?;
         let mut meta = VaultMetaState::from_stored_records(&[auth]);
+        apply_vault_meta_operation(
+            &mut meta,
+            &VaultOperation::JoinApproved {
+                device_id: identity.device_id().clone(),
+                encryption_public_key: identity.public_key(),
+                signing_public_key: signing.public_key(),
+                label: MemberLabel::from_trusted("Owner".to_owned()),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            },
+            "2026-08-14T23:59:00Z",
+        )?;
+        assert_eq!(meta.enrolled_devices.len(), 1);
 
         apply_vault_meta_operation(
             &mut meta,
@@ -742,6 +829,7 @@ mod tests {
 
         assert!(meta.auth.is_empty());
         assert!(meta.members.is_empty());
+        assert!(meta.enrolled_devices.is_empty());
         Ok(())
     }
 
