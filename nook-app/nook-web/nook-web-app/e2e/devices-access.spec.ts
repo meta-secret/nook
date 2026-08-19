@@ -215,7 +215,7 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-key-card').first(),
     ).toBeVisible()
     await expect(identityKeys).toContainText('Passkey')
-    await expect(identityKeys).toContainText('App key')
+    await expect(identityKeys).not.toContainText('App key')
     await page.getByTestId('devices-access-layout-graph').click()
     await expect(bridge).toBeVisible()
 

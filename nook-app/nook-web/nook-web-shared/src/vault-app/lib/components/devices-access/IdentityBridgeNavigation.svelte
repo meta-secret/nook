@@ -1,3 +1,8 @@
+<!--
+Reading this as: Operate-mode Access browse chrome for Identity versus Vault,
+preserving Identity Bridge evidence language, as a compact top strip so graph
+and list can use the full column, interaction priority scan-and-act.
+-->
 <script lang="ts">
   import { Fingerprint, KeyRound, Vault as VaultIcon } from '@lucide/svelte'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
@@ -13,23 +18,15 @@
     vault,
     perspective,
     selectedVault,
-    verifiedVaultCount,
     vaults,
-    identityTitle,
-    identityDescription,
     onPerspective,
-    onIdentity,
     onVault,
   }: {
     vault: VaultState
     perspective: IdentityBridgePerspective
     selectedVault: IdentityBridgeVaultSelection
-    verifiedVaultCount: number
     vaults: readonly VaultAccessView[]
-    identityTitle: string
-    identityDescription: string
     onPerspective: (perspective: IdentityBridgePerspective) => void
-    onIdentity: () => void
     onVault: (storeId: string) => void
   } = $props()
 
@@ -68,42 +65,9 @@
     </button>
   </div>
 
-  {#if perspective === IdentityBridgePerspective.Identities}
-    <ol>
-      <li>
-        <button
-          type="button"
-          class="entity active"
-          aria-current="page"
-          onclick={onIdentity}
-        >
-          <span class="entity-mark"
-            ><Fingerprint class="size-4" aria-hidden="true" /></span
-          >
-          <span class="entity-copy">
-            <strong>{identityTitle}</strong>
-            <small>{identityDescription}</small>
-          </span>
-          <span class="entity-count" aria-hidden="true"
-            ><VaultIcon
-              class="size-3"
-              aria-hidden="true"
-            />{verifiedVaultCount}</span
-          >
-          <span class="sr-only">
-            {(() => { const translationRequest: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.DevicesAccessBridgeVerifiedVaultCount,
-  replacements: {
-              count: String(verifiedVaultCount),
-            },
-}; return vault.t(translationRequest); })()}
-          </span>
-        </button>
-      </li>
-    </ol>
-  {:else if vaults.length === 0}
+  {#if perspective === IdentityBridgePerspective.Vaults && vaults.length === 0}
     <p class="empty-list">{vault.t(I18N_KEYS.DevicesAccessNoVaultsReady)}</p>
-  {:else}
+  {:else if perspective === IdentityBridgePerspective.Vaults}
     <ol>
       {#each vaults as vaultEntry (vaultEntry.storeId)}
         <li>
@@ -140,12 +104,15 @@
                 : 0}</span
             >
             <span class="sr-only">
-              {(() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount,
-  replacements: {
-                count: vaultEntry.verified ? '1' : '0',
-              },
-}; return vault.t(translationRequest2); })()}
+              {(() => {
+                const translationRequest: Parameters<typeof vault.t>[0] = {
+                  key: I18N_KEYS.DevicesAccessBridgeVerifiedDeviceKeyCount,
+                  replacements: {
+                    count: vaultEntry.verified ? '1' : '0',
+                  },
+                }
+                return vault.t(translationRequest)
+              })()}
             </span>
           </button>
         </li>
@@ -156,10 +123,12 @@
 
 <style>
   .bridge-menu {
+    display: grid;
     min-width: 0;
+    gap: 0.75rem;
   }
   .menu-label {
-    margin: 0 0 0.55rem 0.75rem;
+    margin: 0;
     color: var(--muted-foreground);
     font-family: ui-monospace, monospace;
     font-size: 0.625rem;
@@ -167,10 +136,10 @@
     text-transform: uppercase;
   }
   .perspective-switch {
-    display: grid;
+    display: inline-grid;
+    width: min(22rem, 100%);
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.3rem;
-    margin: 0 0 1.4rem 0.75rem;
   }
   .perspective-switch button,
   .entity {
@@ -215,24 +184,29 @@
     background: var(--primary);
   }
   ol {
-    display: grid;
+    display: flex;
+    min-width: 0;
     gap: 0.45rem;
     margin: 0;
-    padding: 0;
+    padding: 0.15rem 0;
+    overflow-x: auto;
     list-style: none;
+  }
+  ol li {
+    min-width: min(16rem, 78vw);
   }
   .entity {
     display: grid;
     width: 100%;
-    min-height: 4.65rem;
+    min-height: 3.5rem;
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.6rem 0.8rem 0.6rem 1.15rem;
-    border-radius: 2.5rem 0 0 2.5rem;
+    gap: 0.65rem;
+    padding: 0.45rem 0.8rem 0.45rem 1rem;
+    border-radius: 2.5rem;
   }
   .entity::before {
-    left: 0;
+    left: 0.15rem;
     height: 1.5rem;
   }
   .entity.active {
@@ -244,13 +218,13 @@
     color: var(--foreground);
   }
   .entity.active::before {
-    height: 3.25rem;
+    height: 2.5rem;
     background: var(--primary);
   }
   .entity-mark {
     display: grid;
-    width: 2.7rem;
-    height: 2.7rem;
+    width: 2.25rem;
+    height: 2.25rem;
     place-items: center;
     border: 1px solid var(--border);
     border-radius: 999px;
@@ -279,7 +253,7 @@
     font-weight: 550;
   }
   .entity-copy small {
-    margin-top: 0.2rem;
+    margin-top: 0.15rem;
     color: var(--muted-foreground);
     font-size: 0.6875rem;
   }
@@ -291,7 +265,7 @@
     font-size: 0.625rem;
   }
   .empty-list {
-    margin: 0.75rem;
+    margin: 0;
     color: var(--muted-foreground);
     font-size: 0.75rem;
     line-height: 1.5;
@@ -303,47 +277,9 @@
     outline: 2px solid var(--ring);
     outline-offset: 2px;
   }
-  @media (width < 80rem) {
-    .bridge-menu {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr);
-      align-items: end;
-      gap: 0.75rem 1rem;
-    }
-    .menu-label {
-      grid-column: 1 / -1;
-      margin-left: 0;
-    }
-    .perspective-switch {
-      width: min(19rem, 100%);
-      margin: 0;
-    }
-    ol {
-      display: flex;
-      min-width: 0;
-      overflow-x: auto;
-      padding-block: 0.15rem;
-    }
-    ol li {
-      min-width: min(19rem, 78vw);
-    }
-    .entity {
-      border-radius: 2.5rem;
-    }
-    .entity::before {
-      left: 0.1rem;
-    }
-  }
   @media (width < 40rem) {
-    .bridge-menu {
-      display: block;
-    }
     .perspective-switch {
       width: 100%;
-      margin-bottom: 1rem;
-    }
-    ol li {
-      min-width: min(18rem, 82vw);
     }
   }
 </style>

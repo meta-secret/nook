@@ -36,7 +36,7 @@ test('walk the access chain from passkey to app key to vaults', async ({
     page.getByTestId('devices-access-key-card').first(),
   ).toBeVisible()
   await expect(identityKeys).toContainText('Passkey')
-  await expect(identityKeys).toContainText('App key')
+  await expect(identityKeys).not.toContainText('App key')
   await page.getByTestId('devices-access-layout-graph').click()
   await expect(chain).toBeVisible()
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(

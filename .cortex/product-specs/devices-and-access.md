@@ -170,7 +170,16 @@ Current dashboard requirements:
   Raw passkey credential bytes never appear.
 - Devices & access offers Graph and List layouts.
   Graph remains the relationship canvas.
-  List shows the current identity and its keys as cards.
+  List shows the current identity's unlock protector as cards.
+- Browse Identity versus Vault sits above Graph and List.
+  Do not repeat the current identity as a second browse row.
+  Vault browse still lists vaults because more than one vault can exist.
+- The Access frame uses a wider measure than the secrets workspace so Graph
+  and List can occupy the content column.
+- A local passkey, PIN, or companion session unwraps one app key.
+  List omits a sibling app-key card in that 1:1 case.
+  Graph still shows the app-key node.
+  The inspect panel still exposes app-key facts.
 
 ## Related records
 
