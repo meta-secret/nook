@@ -146,6 +146,12 @@ private identity.
   Simple Vault.
 - The popup starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
+- The Simple Vault header vault menu lists every local vault in the viewport.
+- The vault that currently holds the companion grant shows a connected badge.
+- An unlocked vault that is not the connected vault can start pairing from that
+  menu.
+- The companion popup can start pairing another vault while a grant already
+  exists.
 - Never put vault browsing or management in the launcher.
 - Management actions originating from the widget open the corresponding Simple
   Vault route rather than recreating that interface in the extension.

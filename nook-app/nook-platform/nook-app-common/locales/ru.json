@@ -395,6 +395,9 @@
     "switcher_manage_vaults": "Управление сейфами",
     "switcher_admin": "Открыть админ",
     "switcher_choose": "Переключить сейф",
+    "switcher_extension_badge": "Расширение браузера",
+    "switcher_pair_this_vault": "Связать этот сейф с расширением браузера",
+    "switcher_extension_connected": "Расширение браузера подключено к {vault}",
     "create_title": "Создать сейф",
     "manage_title": "Управление сейфами",
     "manager_name_label": "Название сейфа",
@@ -1772,7 +1775,8 @@
       "connect_description": "Свяжите этот браузер с Simple Vault, когда будете готовы. Помощник может оставаться доступным без открытия сейфа.",
       "not_connected": "Сейф не подключен",
       "stay_ready": "Оставаться готовым",
-      "not_now": "Не сейчас"
+      "not_now": "Не сейчас",
+      "pair_another_vault": "Связать другой сейф"
     },
     "authenticator_picker": {
       "step_label": "2FA через Nook",

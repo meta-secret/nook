@@ -54,6 +54,31 @@ function parseStoreId(yaml: string): string {
   return match[1]
 }
 
+type ViewportBox = {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+type ViewportBounds = {
+  width: number
+  height: number
+}
+
+type VisibleInViewportRequest = {
+  box: ViewportBox
+  viewport: ViewportBounds
+}
+
+function assertBoxVisibleInViewport(request: VisibleInViewportRequest): void {
+  expect(request.box.y).toBeGreaterThanOrEqual(0)
+  expect(request.box.y + request.box.height).toBeLessThanOrEqual(
+    request.viewport.height,
+  )
+  expect(request.box.x).toBeGreaterThanOrEqual(0)
+}
+
 async function seedScopedSyncProviders(
   page: import('@playwright/test').Page,
   storeA: string,
@@ -217,6 +242,35 @@ test.describe('multi-vault on one browser profile', () => {
     await page.getByTestId('vault-switcher-trigger').click()
     await expect(page.getByTestId('vault-switcher-menu')).toBeVisible()
     await expect(page.getByTestId('vault-switcher-count')).toBeVisible()
+    const menuBox = await page.getByTestId('vault-switcher-menu').boundingBox()
+    if (!menuBox) {
+      throw new Error('Vault switcher menu was not rendered in the viewport.')
+    }
+    const viewport = page.viewportSize()
+    if (!viewport) {
+      throw new Error('Page viewport size was not available.')
+    }
+    const menuVisibility: VisibleInViewportRequest = {
+      box: menuBox,
+      viewport,
+    }
+    assertBoxVisibleInViewport(menuVisibility)
+    const optionLocators = page.getByTestId('vault-switcher-option')
+    await expect(optionLocators).toHaveCount(2)
+    const options = await optionLocators.all()
+    for (const option of options) {
+      const optionBox = await option.boundingBox()
+      if (!optionBox) {
+        throw new Error(
+          'Vault switcher option was clipped out of the viewport.',
+        )
+      }
+      const optionVisibility: VisibleInViewportRequest = {
+        box: optionBox,
+        viewport,
+      }
+      assertBoxVisibleInViewport(optionVisibility)
+    }
 
     await page
       .locator(

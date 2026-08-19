@@ -7,6 +7,14 @@
   type AuthenticatorMigrationUriCollection = string[]
 
   import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
+  import {
+    vaultEntryHoldsExtensionGrant,
+    resolveVaultExtensionLink,
+    type ExtensionConnectedEntryRequest,
+    type VaultExtensionLinkRequest,
+    type VaultSwitcherEntryLabel,
+  } from './vault-switcher-extension'
   import {
     Check,
     CheckCircle2,
@@ -62,6 +70,7 @@
 
   let {
     vault,
+    extensionSetupState,
     isVerifying,
     isInitializing,
     syncProviders,
@@ -102,6 +111,7 @@
     activeSection = $bindable(AdminAccordionSection.Vaults),
   }: {
     vault: VaultState
+    extensionSetupState: ExtensionSetupOffer
     isVerifying: boolean
     isInitializing: boolean
     syncProviders: StorageProvider[]
@@ -190,6 +200,26 @@
       : '',
   )
   const vaults = $derived(vault.localVaults)
+  const unnamedVaultLabel = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+  const extensionEntryLabels = $derived.by((): VaultSwitcherEntryLabel[] => {
+    const labels: VaultSwitcherEntryLabel[] = []
+    for (const entry of vaults) {
+      const label: VaultSwitcherEntryLabel = {
+        storeId: entry.storeId,
+        displayName: entry.display_label(unnamedVaultLabel),
+      }
+      labels.push(label)
+    }
+    return labels
+  })
+  const extensionLink = $derived.by(() => {
+    const request: VaultExtensionLinkRequest = {
+      offer: extensionSetupState,
+      activeStoreId,
+      entries: extensionEntryLabels,
+    }
+    return resolveVaultExtensionLink(request)
+  })
   const hasPasswords = $derived(passwordEntries.length > 0)
   const isBusy = $derived(
     isVerifying ||
@@ -417,13 +447,27 @@
                   }}
                 />
               {:else}
+                {@const grantRequest: ExtensionConnectedEntryRequest = {
+                  link: extensionLink,
+                  storeId: entry.storeId,
+                }}
                 <div
                   class="flex h-10 min-w-0 items-center"
                   data-testid="vault-admin-name"
                   data-store-id={entry.storeId}
                 >
-                  <span class="truncate text-sm font-medium text-foreground">
-                    {entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))}
+                  <span class="flex min-w-0 items-center gap-2">
+                    <span class="truncate text-sm font-medium text-foreground">
+                      {entry.display_label(unnamedVaultLabel)}
+                    </span>
+                    {#if vaultEntryHoldsExtensionGrant(grantRequest)}
+                      <span
+                        class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
+                        data-testid="vault-admin-extension-badge"
+                      >
+                        {vault.t(I18N_KEYS.VaultSwitcherExtensionBadge)}
+                      </span>
+                    {/if}
                   </span>
                 </div>
               {/if}

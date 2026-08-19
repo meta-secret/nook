@@ -885,8 +885,10 @@
       legalPageOpen={legalPageState.kind === LegalRouteKind.Legal}
       {logsPage}
       {extensionConnectRoute}
+      extensionSetupState={extensionSetupStateValue}
       onNavigateHome={navigateHome}
       onToggleColorMode={toggleColorMode}
+      onPairExtension={() => void handleExtensionConnect()}
     />
 
     <div

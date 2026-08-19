@@ -351,6 +351,20 @@
       >
         {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
       </button>
+      {#if pairingCandidate.kind === PairingCandidateKind.Selected}
+        <button
+          type="button"
+          class="secondary-button"
+          disabled={busy}
+          data-testid="pair-another-vault-btn"
+          onclick={() => {
+            if (pairingCandidate.kind === PairingCandidateKind.Selected)
+              beginPairing(pairingCandidate.device)
+          }}
+        >
+          {translatePlain(I18N_KEYS.ExtensionCompanionPairAnotherVault)}
+        </button>
+      {/if}
     {:else if pairingCandidate.kind === PairingCandidateKind.Selected}
       <button
         type="button"
