@@ -231,6 +231,7 @@ tasks:
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
     cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.test.sh"
       - >-
         bash -c 'set -euo pipefail;
         artifacts="{{.CI_ARTIFACT_DIR}}";

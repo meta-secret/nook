@@ -34,6 +34,17 @@ is_buildkit_frontend_flake() {
     "$log_file"
 }
 
+is_unattributed_syntax_frontend_exit() {
+  local log_file="$1"
+  # Some BuildKit frontend disconnects are reported only as the Dockerfile
+  # directive and an exit status. A failed RUN names the instruction instead,
+  # so require the directive evidence before retrying this otherwise-generic
+  # status.
+  grep -Eiq 'Dockerfile:[0-9]+' "$log_file" \
+    && grep -Eiq '>>> # syntax=docker/dockerfile:' "$log_file" \
+    && grep -Eiq 'failed to solve: exit code: 2' "$log_file"
+}
+
 # BSD/macOS mktemp requires the X template to end the path.
 log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
 cleanup() {
@@ -52,7 +63,8 @@ for attempt in 1 2; do
   if [ "$attempt" -eq 2 ]; then
     exit "$status"
   fi
-  if ! is_buildkit_frontend_flake "$log_file"; then
+  if ! is_buildkit_frontend_flake "$log_file" \
+    && ! is_unattributed_syntax_frontend_exit "$log_file"; then
     echo "task ${label}: non-transient Bake failure; not retrying" >&2
     exit "$status"
   fi
