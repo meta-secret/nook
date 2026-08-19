@@ -29,6 +29,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/inputs/base.txt"),
         format!("{sim}/inputs/parent.txt"),
         format!("{sim}/inputs/platform.txt"),
+        format!("{sim}/inputs/crate-a.txt"),
+        format!("{sim}/inputs/crate-b.txt"),
         format!("{sim}/inputs/leaf.txt"),
         format!("{sim}/inputs/consumer.txt"),
     ] {
@@ -145,6 +147,11 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario U: promoter setup failure leaves stable input intact")
             && tasks
                 .contains("Scenario W: independent Node consumer owns and replays its exact leaf",)
+            && tasks.contains("Scenario X: later crate edit keeps earlier crate CACHED")
+            && tasks.contains("bake-sim-crate-a-expensive")
+            && tasks.contains("bake-sim-crate-b-expensive")
+            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-a")
+            && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-b")
             && tasks.contains("promote_registry_tag")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
@@ -156,7 +163,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, Node consumer ownership, and the broken/fixed nightly leaf graph"
+        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, Node consumer ownership, sequential crates, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     assert!(
@@ -167,7 +174,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     assert!(
         quality.contains("task infra:bake-cache:prove")
             && quality.contains("bake_cache_proofs.rs")
-            && quality.contains("parallel PR git-scope isolation"),
+            && quality.contains("parallel PR git-scope isolation")
+            && quality.contains("Scenario X proves sequential crate COPY+RUN layers"),
         "cortex quality must document the runtime sim beside static theorems"
     );
 }

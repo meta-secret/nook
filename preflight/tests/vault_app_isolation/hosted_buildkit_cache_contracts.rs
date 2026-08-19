@@ -552,6 +552,9 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-build")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-tests")
             && wasm_dockerfile.contains("FROM builder-wasm-tests AS builder-wasm")
+            && wasm_dockerfile.contains("wasm-source-app-common")
+            && wasm_dockerfile.contains("wasm-source-core")
+            && wasm_dockerfile.contains("wasm-source-wasm")
             && wasm_dockerfile
                 .contains("COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed")
             && wasm_dockerfile.contains(

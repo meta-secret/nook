@@ -337,7 +337,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         deps_from.contains("nook-rust-deps-v3")
             && native_source_from.contains("nook-rust-native-source-v3")
             && native_source_from.contains("nook-rust-deps-v3"),
-        "native deps/source must restore the v3 own scopes after leaving short-chain rust-base"
+        "native deps/source must restore the v3 own scopes; source cold fallback may import deps after leaving rust-base"
     );
     assert!(
         policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools-v4"),
