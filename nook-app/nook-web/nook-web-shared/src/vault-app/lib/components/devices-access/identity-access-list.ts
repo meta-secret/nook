@@ -55,7 +55,7 @@ export function buildIdentityAccessCards({
     const namedPasskey = knownText(view.passkeyName)
       ? textValue(view.passkeyName)
       : vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed);
-    cards.push({
+    const passkeyCard: IdentityAccessCard = {
       key: "passkey",
       kind: IdentityAccessKeyKind.Passkey,
       stage: AccessChainStage.Unlock,
@@ -66,9 +66,10 @@ export function buildIdentityAccessCards({
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey),
       lastUsedLabel: lastUsed,
       description: keeperStorageNote(keeperStorageNoteArgs),
-    });
+    };
+    cards.push(passkeyCard);
   } else if (view.protection === DeviceAccessProtectionKind.PinOrPassphrase) {
-    cards.push({
+    const pinCard: IdentityAccessCard = {
       key: "pin",
       kind: IdentityAccessKeyKind.PinOrPassphrase,
       stage: AccessChainStage.Unlock,
@@ -76,9 +77,10 @@ export function buildIdentityAccessCards({
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePin),
       lastUsedLabel: lastUsed,
       description: vault.t(I18N_KEYS.DevicesAccessPinPanelDesc),
-    });
+    };
+    cards.push(pinCard);
   } else if (view.protection === DeviceAccessProtectionKind.CompanionSession) {
-    cards.push({
+    const companionCard: IdentityAccessCard = {
       key: "companion",
       kind: IdentityAccessKeyKind.CompanionSession,
       stage: AccessChainStage.Unlock,
@@ -86,10 +88,11 @@ export function buildIdentityAccessCards({
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeCompanion),
       lastUsedLabel: lastUsed,
       description: vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc),
-    });
+    };
+    cards.push(companionCard);
   }
 
-  cards.push({
+  const appKeyCard: IdentityAccessCard = {
     key: "app-key",
     kind: IdentityAccessKeyKind.AppKey,
     stage: AccessChainStage.DeviceKey,
@@ -97,6 +100,7 @@ export function buildIdentityAccessCards({
     typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeAppKey),
     lastUsedLabel: lastUsed,
     description: vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc),
-  });
+  };
+  cards.push(appKeyCard);
   return cards;
 }
