@@ -247,6 +247,7 @@ pub struct NookDeviceAccessSnapshot {
     transports: Vec<NookPasskeyTransport>,
     backup_state: NookPasskeyBackupState,
     aaguid: NookDeviceAccessText,
+    keeper: nook_core::PasskeyKeeperKind,
     observed_browser: nook_core::PasskeyObservedBrowser,
     observed_platform: nook_core::PasskeyObservedPlatform,
     vaults: Vec<NookDeviceVaultAccess>,
@@ -321,6 +322,12 @@ impl NookDeviceAccessSnapshot {
     #[wasm_bindgen(getter)]
     pub fn aaguid(&self) -> NookDeviceAccessText {
         self.aaguid.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn keeper(&self) -> nook_core::PasskeyKeeperKind {
+        self.keeper
     }
 
     #[wasm_bindgen(getter, js_name = observedBrowser)]
@@ -430,7 +437,8 @@ pub(crate) async fn device_access_snapshot_for_session(
             .map(|kind| NookPasskeyTransport { kind })
             .collect(),
         backup_state: backup_state(passkey.observation.backup_state),
-        aaguid: NookDeviceAccessText::from_option(passkey.observation.aaguid),
+        aaguid: NookDeviceAccessText::from_option(passkey.observation.aaguid.clone()),
+        keeper: nook_core::passkey_keeper_kind(passkey.observation.aaguid.as_deref()),
         observed_browser: passkey.observation.browser,
         observed_platform: passkey.observation.platform,
         vaults,

@@ -22,11 +22,11 @@ pub use device_access::{
     DeviceAccessProfileTransitionError, DeviceAccessProfileVersion, DeviceAccessProtectionKind,
     DeviceAccessProviderLabelError, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,
     PasskeyBackupState, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
-    PasskeyCreationCeremony, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
+    PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
     classify_device_access_identity_state, classify_device_access_protection,
     decode_device_access_profile, normalize_device_access_provider_label,
-    passkey_credential_identifier, passkey_user_handle_identifier,
+    passkey_credential_identifier, passkey_keeper_kind, passkey_user_handle_identifier,
 };
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
