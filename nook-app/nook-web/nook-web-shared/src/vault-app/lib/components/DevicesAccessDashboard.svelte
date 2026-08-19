@@ -34,6 +34,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     type DashboardTimestamp,
     DashboardTimestampKind,
     type DashboardView,
+    DevicesAccessLayoutKind,
     providerSaveFocus,
     ProviderSaveFocusKind,
     ProviderSaveKind,
@@ -51,6 +52,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     textValue,
     type VaultAccessView,
   } from './devices-access/access-chain'
+  import IdentityAccessList from './devices-access/IdentityAccessList.svelte'
   import IdentityBridgeGraph from './devices-access/IdentityBridgeGraph.svelte'
   import IdentityBridgeNavigation from './devices-access/IdentityBridgeNavigation.svelte'
   import {
@@ -77,6 +79,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     kind: DashboardLoadKind.Loading,
   })
   let selectedStage = $state(AccessChainStage.Unlock)
+  let selectedLayout = $state(DevicesAccessLayoutKind.Graph)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
   let selectedVault = $state<IdentityBridgeVaultSelection>({
     kind: IdentityBridgeVaultSelectionKind.Empty,
@@ -198,6 +201,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           transports,
           backupState: snapshot.backupState,
           aaguid: readText(snapshot.aaguid),
+          keeper: snapshot.keeper,
           observedBrowser: snapshot.observedBrowser,
           observedPlatform: snapshot.observedPlatform,
           vaults,
@@ -572,8 +576,48 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                         I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
                       )}
               </p>
+              <div
+                class="mt-5 inline-flex rounded-lg border border-border p-1"
+                role="group"
+                aria-label={vault.t(I18N_KEYS.DevicesAccessLayoutGroup)}
+              >
+                <button
+                  type="button"
+                  class="min-h-11 rounded-md px-3 text-sm font-medium {selectedLayout ===
+                  DevicesAccessLayoutKind.Graph
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'}"
+                  aria-pressed={selectedLayout === DevicesAccessLayoutKind.Graph}
+                  data-testid="devices-access-layout-graph"
+                  onclick={() =>
+                    (selectedLayout = DevicesAccessLayoutKind.Graph)}
+                >
+                  {vault.t(I18N_KEYS.DevicesAccessLayoutGraph)}
+                </button>
+                <button
+                  type="button"
+                  class="min-h-11 rounded-md px-3 text-sm font-medium {selectedLayout ===
+                  DevicesAccessLayoutKind.List
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'}"
+                  aria-pressed={selectedLayout === DevicesAccessLayoutKind.List}
+                  data-testid="devices-access-layout-list"
+                  onclick={() =>
+                    (selectedLayout = DevicesAccessLayoutKind.List)}
+                >
+                  {vault.t(I18N_KEYS.DevicesAccessLayoutList)}
+                </button>
+              </div>
             </div>
 
+            {#if selectedLayout === DevicesAccessLayoutKind.List}
+              <IdentityAccessList
+                {vault}
+                {view}
+                {selectedStage}
+                onSelectStage={(stage) => (selectedStage = stage)}
+              />
+            {:else}
             <IdentityBridgeGraph
               perspective={selectedPerspective}
               {selectedVault}
@@ -636,6 +680,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 ),
               }}
             />
+            {/if}
           </div>
         </div>
 

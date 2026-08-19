@@ -9,6 +9,7 @@ behind one disclosure.
   import { Check, RefreshCw } from '@lucide/svelte'
   import {
     DeviceAccessProtectionKind,
+    PasskeyKeeperKind,
     type NookPasskeyAttachmentState,
     type NookPasskeyBackupState,
     type PasskeyObservedBrowser,
@@ -35,6 +36,8 @@ behind one disclosure.
     attachmentLabel,
     backupLabel,
     clientEnvironmentLabel,
+    keeperLabel,
+    keeperStorageNote,
     transportsLabel,
   } from './passkey-evidence-labels'
 
@@ -51,6 +54,7 @@ behind one disclosure.
     transports,
     backupState,
     aaguid,
+    keeper,
     observedBrowser,
     observedPlatform,
     providerDraft = $bindable(''),
@@ -70,6 +74,7 @@ behind one disclosure.
     transports: PasskeyTransport[]
     backupState: NookPasskeyBackupState
     aaguid: DashboardText
+    keeper: PasskeyKeeperKind
     observedBrowser: PasskeyObservedBrowser
     observedPlatform: PasskeyObservedPlatform
     providerDraft: string
@@ -128,6 +133,20 @@ behind one disclosure.
       </div>
       <div>
         <dt class="access-micro-label text-muted-foreground">
+          {vault.t(I18N_KEYS.DevicesAccessKeeperLabel)}
+        </dt>
+        <dd
+          class="mt-1.5 text-sm font-medium text-foreground"
+          data-testid="devices-access-keeper"
+        >
+          {(() => { const keeperLabelArgs: Parameters<typeof keeperLabel>[0] = {
+            vault,
+            value: keeper,
+          }; return keeperLabel(keeperLabelArgs); })()}
+        </dd>
+      </div>
+      <div>
+        <dt class="access-micro-label text-muted-foreground">
           {vault.t(I18N_KEYS.DevicesAccessCreated)}
         </dt>
         <dd class="mt-1.5 text-sm text-foreground">
@@ -140,6 +159,13 @@ behind one disclosure.
         </dd>
       </div>
     </dl>
+
+    <p class="text-xs leading-relaxed text-pretty text-muted-foreground">
+      {(() => { const keeperStorageNoteArgs: Parameters<typeof keeperStorageNote>[0] = {
+        vault,
+        value: keeper,
+      }; return keeperStorageNote(keeperStorageNoteArgs); })()}
+    </p>
 
     <div class="border-t border-border/60 pt-5">
       <label

@@ -49,6 +49,13 @@ Dashboard facts must be distinguishable as:
 WebAuthn cannot inventory external passkey managers.
 The dashboard must never imply that capability.
 
+Registration evidence may include an authenticator GUID.
+Nook maps known GUIDs to a typed keeper name such as Apple Passwords,
+Proton Pass, or Google Password Manager.
+That name is browser-reported display help.
+It is not an inventory of the keeper.
+It must stay distinct from the optional user reminder.
+
 A synced passkey is shown as provider-available.
 It is never shown as stored on one physical laptop.
 
@@ -161,6 +168,9 @@ Current dashboard requirements:
   dashboard.
 - Technical identifiers use progressive disclosure.
   Raw passkey credential bytes never appear.
+- Devices & access offers Graph and List layouts.
+  Graph remains the relationship canvas.
+  List shows the current identity and its keys as cards.
 
 ## Related records
 

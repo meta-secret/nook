@@ -59,10 +59,16 @@ export type DashboardView = {
   transports: PasskeyTransport[];
   backupState: NookPasskeyBackupState;
   aaguid: DashboardText;
+  keeper: PasskeyKeeperKind;
   observedBrowser: PasskeyObservedBrowser;
   observedPlatform: PasskeyObservedPlatform;
   vaults: VaultAccessView[];
 };
+
+export enum DevicesAccessLayoutKind {
+  Graph = "graph",
+  List = "list",
+}
 
 export enum ProviderSaveKind {
   Idle = "idle",
@@ -188,6 +194,7 @@ import type {
   DeviceAccessProtectionKind,
   NookPasskeyAttachmentState,
   NookPasskeyBackupState,
+  PasskeyKeeperKind,
   PasskeyObservedBrowser,
   PasskeyObservedPlatform,
   PasskeyTransport,

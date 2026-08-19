@@ -34,10 +34,16 @@ type PasskeyClientEnvironmentLabelRequest = {
   readonly platform: PasskeyObservedPlatform;
 };
 
+type PasskeyKeeperLabelRequest = {
+  readonly vault: VaultState;
+  readonly value: PasskeyKeeperKind;
+};
+
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
   NookPasskeyAttachmentState,
   NookPasskeyBackupState,
+  PasskeyKeeperKind,
   PasskeyObservedBrowser,
   PasskeyObservedPlatform,
   PasskeyTransport,
@@ -185,4 +191,90 @@ export function clientEnvironmentLabel({
     },
   };
   return vault.t(translationRequest);
+}
+
+export function keeperLabel({
+  vault,
+  value,
+}: PasskeyKeeperLabelRequest): string {
+  if (value === PasskeyKeeperKind.ApplePasswords) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperApplePasswords);
+  }
+  if (value === PasskeyKeeperKind.GooglePasswordManager) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperGooglePasswordManager);
+  }
+  if (value === PasskeyKeeperKind.Chrome) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperChrome);
+  }
+  if (value === PasskeyKeeperKind.ProtonPass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperProtonPass);
+  }
+  if (value === PasskeyKeeperKind.OnePassword) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperOnepassword);
+  }
+  if (value === PasskeyKeeperKind.Bitwarden) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperBitwarden);
+  }
+  if (value === PasskeyKeeperKind.WindowsHello) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperWindowsHello);
+  }
+  if (value === PasskeyKeeperKind.Dashlane) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperDashlane);
+  }
+  if (value === PasskeyKeeperKind.Enpass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperEnpass);
+  }
+  if (value === PasskeyKeeperKind.Keeper) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperKeeper);
+  }
+  if (value === PasskeyKeeperKind.NordPass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperNordpass);
+  }
+  if (value === PasskeyKeeperKind.SamsungPass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperSamsungPass);
+  }
+  return vault.t(I18N_KEYS.DevicesAccessKeeperUnknown);
+}
+
+export function keeperStorageNote({
+  vault,
+  value,
+}: PasskeyKeeperLabelRequest): string {
+  if (value === PasskeyKeeperKind.ApplePasswords) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageApplePasswords);
+  }
+  if (value === PasskeyKeeperKind.GooglePasswordManager) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageGooglePasswordManager);
+  }
+  if (value === PasskeyKeeperKind.Chrome) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageChrome);
+  }
+  if (value === PasskeyKeeperKind.ProtonPass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageProtonPass);
+  }
+  if (value === PasskeyKeeperKind.OnePassword) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageOnepassword);
+  }
+  if (value === PasskeyKeeperKind.Bitwarden) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageBitwarden);
+  }
+  if (value === PasskeyKeeperKind.WindowsHello) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageWindowsHello);
+  }
+  if (value === PasskeyKeeperKind.Dashlane) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageDashlane);
+  }
+  if (value === PasskeyKeeperKind.Enpass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageEnpass);
+  }
+  if (value === PasskeyKeeperKind.Keeper) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageKeeper);
+  }
+  if (value === PasskeyKeeperKind.NordPass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageNordpass);
+  }
+  if (value === PasskeyKeeperKind.SamsungPass) {
+    return vault.t(I18N_KEYS.DevicesAccessKeeperStorageSamsungPass);
+  }
+  return vault.t(I18N_KEYS.DevicesAccessKeeperStorageUnknown);
 }

@@ -10,8 +10,10 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{DeviceId, IsoTimestamp, StoreId, WrappedDeviceIdentity};
 
+mod passkey_keeper;
 mod passkey_observation;
 
+pub use passkey_keeper::{PasskeyKeeperKind, passkey_keeper_kind};
 pub use passkey_observation::*;
 
 pub const DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS: usize = 80;
