@@ -818,7 +818,7 @@
     "layout_graph": "Graph",
     "layout_list": "List",
     "identity_keys_heading": "Keys for this identity",
-    "identity_keys_lede": "Passkeys and app keys that belong to this identity.",
+    "identity_keys_lede": "How this identity unlocks in this browser.",
     "key_type_passkey": "Passkey",
     "key_type_app_key": "App key",
     "key_type_pin": "PIN or passphrase",

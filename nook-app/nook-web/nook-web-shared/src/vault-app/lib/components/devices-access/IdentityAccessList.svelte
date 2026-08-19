@@ -51,7 +51,7 @@ scan-and-act.
   <p class="mt-2 max-w-[70ch] text-sm leading-relaxed text-pretty text-muted-foreground">
     {vault.t(I18N_KEYS.DevicesAccessIdentityKeysLede)}
   </p>
-  <ul class="mt-5 grid gap-3 sm:grid-cols-2">
+  <ul class="mt-5 grid gap-3 {cards.length > 1 ? 'sm:grid-cols-2' : 'max-w-xl'}">
     {#each cards as card (card.key)}
       {@const Icon = cardIcon(card.kind)}
       <li>

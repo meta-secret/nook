@@ -72,7 +72,7 @@ describe('identity access cards', () => {
       view: passkeyView(PasskeyKeeperKind.ApplePasswords),
     }
     const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
-    expect(cards).toHaveLength(2)
+    expect(cards).toHaveLength(1)
     expect(cards[0]).toMatchObject({
       kind: IdentityAccessKeyKind.Passkey,
       stage: AccessChainStage.Unlock,
@@ -80,12 +80,19 @@ describe('identity access cards', () => {
       typeLabel: I18N_KEYS.DevicesAccessKeyTypePasskey,
       description: I18N_KEYS.DevicesAccessKeeperStorageApplePasswords,
     })
-    expect(cards[1]).toMatchObject({
-      kind: IdentityAccessKeyKind.AppKey,
-      stage: AccessChainStage.DeviceKey,
-      title: I18N_KEYS.DevicesAccessDeviceAgeKey,
-      typeLabel: I18N_KEYS.DevicesAccessKeyTypeAppKey,
-    })
+  })
+
+  test('omits a sibling app-key card when a passkey already unwraps that key', () => {
+    const buildIdentityAccessCardsArgs: Parameters<
+      typeof buildIdentityAccessCards
+    >[0] = {
+      vault,
+      view: passkeyView(PasskeyKeeperKind.ApplePasswords),
+    }
+    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    expect(cards.map((card) => card.kind)).toEqual([
+      IdentityAccessKeyKind.Passkey,
+    ])
   })
 
   test('names a Proton Pass keeper from the same browser-reported map', () => {

@@ -310,10 +310,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
         : AccessChainStage.Vaults
   }
 
-  function selectCurrentIdentity(): void {
-    selectPerspective(IdentityBridgePerspective.Identities)
-  }
-
   function selectVault(storeId: string): void {
     selectedVault = {
       kind: IdentityBridgeVaultSelectionKind.Selected,
@@ -348,7 +344,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
 </script>
 
 <section
-  class="mx-auto w-full max-w-[90rem] space-y-8 pb-4"
+  class="w-full space-y-8 pb-4"
   data-testid="devices-access-dashboard"
 >
   <header class="flex items-start gap-3 border-b border-border/60 pb-5">
@@ -436,9 +432,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
         {@const identityTitle = companionIdentity
           ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentity)
           : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentity)}
-        {@const identityDescription = companionIdentity
-          ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityDesc)
-          : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentityDesc)}
         {@const bridgeCopy = {
           protectionStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
@@ -516,19 +509,13 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           formatEvidence: (value: string) => (() => { const formatAccessDateArgs: Parameters<typeof formatAccessDate>[0] = { vault, value }; return formatAccessDate(formatAccessDateArgs); })(),
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
-        <div
-          class="grid min-w-0 gap-8 min-[80rem]:grid-cols-[16rem_minmax(0,1fr)] min-[80rem]:items-start"
-        >
+        <div class="flex min-w-0 flex-col gap-6">
           <IdentityBridgeNavigation
             {vault}
             perspective={selectedPerspective}
             {selectedVault}
-            {verifiedVaultCount}
             vaults={view.vaults}
-            {identityTitle}
-            {identityDescription}
             onPerspective={selectPerspective}
-            onIdentity={selectCurrentIdentity}
             onVault={selectVault}
           />
 

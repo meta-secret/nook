@@ -1,8 +1,3 @@
-type IdentityAccessCardsRequest = {
-  readonly vault: VaultState;
-  readonly view: DashboardView;
-};
-
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import { DeviceAccessProtectionKind, PasskeyKeeperKind } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
@@ -31,6 +26,11 @@ export type IdentityAccessCard = {
   readonly typeLabel: string;
   readonly lastUsedLabel: string;
   readonly description: string;
+};
+
+type IdentityAccessCardsRequest = {
+  readonly vault: VaultState;
+  readonly view: DashboardView;
 };
 
 export function buildIdentityAccessCards({
@@ -90,6 +90,10 @@ export function buildIdentityAccessCards({
       description: vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc),
     };
     cards.push(companionCard);
+  }
+
+  if (cards.length > 0) {
+    return cards;
   }
 
   const appKeyCard: IdentityAccessCard = {

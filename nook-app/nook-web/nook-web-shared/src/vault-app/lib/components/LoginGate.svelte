@@ -48,6 +48,7 @@
     workspacePath,
     workspaceRouteFromPath,
   } from '$lib/app/workspace-route'
+  import { applyWorkspaceRoute } from '$lib/vault/ui'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -220,6 +221,11 @@
   ): Promise<void> {
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
+    const applyWorkspaceRouteArgs: Parameters<typeof applyWorkspaceRoute>[0] = {
+      state: vault,
+      route: WorkspaceRoute.DevicesAccess,
+    }
+    applyWorkspaceRoute(applyWorkspaceRouteArgs)
     const pushStateArgs: Parameters<typeof history.pushState>[0] = {};
     history.pushState(pushStateArgs, '', workspacePath(WorkspaceRoute.DevicesAccess))
     await tick()
@@ -228,6 +234,11 @@
 
   async function closeDevicesAccess(): Promise<void> {
     devicesAccessOpen = false
+    const applyWorkspaceRouteArgs2: Parameters<typeof applyWorkspaceRoute>[0] = {
+      state: vault,
+      route: WorkspaceRoute.Vault,
+    }
+    applyWorkspaceRoute(applyWorkspaceRouteArgs2)
     const pushStateArgs2: Parameters<typeof history.pushState>[0] = {};
     history.pushState(pushStateArgs2, '', workspacePath(WorkspaceRoute.Vault))
     await tick()

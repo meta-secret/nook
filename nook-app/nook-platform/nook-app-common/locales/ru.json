@@ -818,7 +818,7 @@
     "layout_graph": "Граф",
     "layout_list": "Список",
     "identity_keys_heading": "Ключи этой личности",
-    "identity_keys_lede": "Ключи доступа и ключи приложения, которые принадлежат этой личности.",
+    "identity_keys_lede": "Как эта личность разблокируется в этом браузере.",
     "key_type_passkey": "Ключ доступа",
     "key_type_app_key": "Ключ приложения",
     "key_type_pin": "PIN или кодовая фраза",
