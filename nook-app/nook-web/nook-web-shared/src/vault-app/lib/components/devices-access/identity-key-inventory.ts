@@ -74,7 +74,7 @@ export function buildIdentityKeyInventory({
     const protector = buildIdentityAccessCards(cardArgs)[0];
     if (protector) {
       const passkeyProtectorArgs: PasskeyProtectorRequest = { vault, view };
-      rows.push({
+      const protectorRow: IdentityKeyInventoryRow = {
         key: `protector:${protector.key}`,
         kind: IdentityKeyInventoryRowKind.Protector,
         title: protector.title,
@@ -83,13 +83,14 @@ export function buildIdentityKeyInventory({
         lastUsed: protector.lastUsedLabel,
         stage: protector.stage,
         action: IdentityKeyInventoryActionKind.InspectCurrentBrowser,
-      });
+      };
+      rows.push(protectorRow);
     }
   }
 
   for (const member of identity.members) {
     const isCurrent = member.currentBrowser;
-    rows.push({
+    const appKeyRow: IdentityKeyInventoryRow = {
       key: `app:${member.appId}`,
       kind: IdentityKeyInventoryRowKind.AppKey,
       title:
@@ -111,7 +112,8 @@ export function buildIdentityKeyInventory({
       action: isCurrent
         ? IdentityKeyInventoryActionKind.InspectCurrentBrowser
         : IdentityKeyInventoryActionKind.Unavailable,
-    });
+    };
+    rows.push(appKeyRow);
   }
   return rows;
 }

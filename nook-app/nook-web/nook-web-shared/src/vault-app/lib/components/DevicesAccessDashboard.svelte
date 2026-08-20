@@ -418,18 +418,18 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     selectedStage = AccessChainStage.Vaults
   }
 
-  function selectedVaultLabel(view: DashboardView): string {
+  function selectedVaultLabel(vaults: readonly VaultAccessView[]): string {
     if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      for (const entry of view.vaults) {
+      for (const entry of vaults) {
         if (entry.storeId === selectedVault.storeId) return entry.label
       }
     }
     return vault.t(I18N_KEYS.DevicesAccessBridgeVault)
   }
 
-  function selectedVaultVerified(view: DashboardView): boolean {
+  function selectedVaultVerified(vaults: readonly VaultAccessView[]): boolean {
     if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      for (const entry of view.vaults) {
+      for (const entry of vaults) {
         if (entry.storeId === selectedVault.storeId) return entry.verified
       }
     }
@@ -621,8 +621,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
         {@const verifiedVaultCount = view.vaults.filter(
           (entry) => entry.verified,
         ).length}
-        {@const selectedVaultIsVerified = selectedVaultVerified(view)}
-        {@const selectedVaultName = selectedVaultLabel(view)}
+        {@const selectedVaultIsVerified = selectedVaultVerified(identity.vaults)}
+        {@const selectedVaultName = selectedVaultLabel(identity.vaults)}
         {@const selectedVaultExists =
           selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected}
         {@const deviceIdentifier =
