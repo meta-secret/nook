@@ -658,55 +658,56 @@ test.describe('devices and access dashboard', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await attachNookLogsForTest(page, testInfo)
-    page.once('dialog', (dialog) => dialog.accept())
-    await page.getByTestId('device-protection-recovery-btn').click()
-    await expect(
-      page.getByTestId('device-protection-use-existing-choice'),
-    ).toHaveText('Authenticate')
-    await page.evaluate(() => {
-      history.replaceState(history.state, '', '/devices-access')
-    })
-
-    await page.reload()
-    // The vault tab already pushed /devices-access, so LoginGate opens Access
-    // directly after reload. Passkey-first unlock may cover it briefly.
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
     try {
-      await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
-      await page.getByTestId('passkey-auth-overlay-dismiss').click()
-      await expect(passkeyOverlay).toBeHidden()
-    } catch {
-      // Identity metadata is already gone; unlock overlay may never appear.
-    }
-    const loginDevicesAccess = page.getByTestId('login-devices-access')
-    if (await loginDevicesAccess.isVisible()) {
-      await loginDevicesAccess.click()
-    } else {
-      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      page.once('dialog', (dialog) => dialog.accept())
+      await page.getByTestId('device-protection-recovery-btn').click()
+      await expect(
+        page.getByTestId('device-protection-use-existing-choice'),
+      ).toHaveText('Authenticate')
+      await page.evaluate(() => {
+        history.replaceState(history.state, '', '/devices-access')
+        window.dispatchEvent(new PopStateEvent('popstate'))
+      })
+
+      await expect(page.getByTestId('login-gate')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
+      const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+      try {
+        await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
+        await page.getByTestId('passkey-auth-overlay-dismiss').click()
+        await expect(passkeyOverlay).toBeHidden()
+      } catch {
+        // Identity metadata is already gone; unlock overlay may never appear.
+      }
+      const loginDevicesAccess = page.getByTestId('login-devices-access')
+      if (await loginDevicesAccess.isVisible()) {
+        await loginDevicesAccess.click()
+      } else {
+        await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+          timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+        })
+      }
+      const preview = page.getByTestId('devices-access-chain-preview')
+      await expect(preview).toContainText(
+        'Known vaults remain on this browser',
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      await expect(
+        page.getByTestId('devices-access-preview-vaults'),
+      ).toContainText('Test vault')
+      await expect(
+        page.getByTestId('devices-access-preview-vaults'),
+      ).toContainText('Access not yet verified')
+      await expect(preview).toContainText('not verified')
+      await expect(preview).not.toContainText('opens')
+      await expect(preview).not.toContainText('No local vaults yet')
+    } finally {
+      // Recovery intentionally disposes the active WASM identity. Its logs
+      // were attached above while IndexedDB was still readable; always leave
+      // the origin so the shared fixture does not reopen the reset store.
+      await page.goto('about:blank').catch(() => undefined)
     }
-    const preview = page.getByTestId('devices-access-chain-preview')
-    await expect(preview).toContainText('Known vaults remain on this browser', {
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(
-      page.getByTestId('devices-access-preview-vaults'),
-    ).toContainText('Test vault')
-    await expect(
-      page.getByTestId('devices-access-preview-vaults'),
-    ).toContainText('Access not yet verified')
-    await expect(preview).toContainText('not verified')
-    await expect(preview).not.toContainText('opens')
-    await expect(preview).not.toContainText('No local vaults yet')
-
-    // The recovery flow intentionally disposes the active WASM identity. Its
-    // canonical logs were attached above while IndexedDB was still readable;
-    // leave the origin so the shared fixture does not reopen the reset store.
-    await page.goto('about:blank')
   })
 
   test('never claims access to a vault this app key has not opened', async ({
