@@ -717,7 +717,7 @@ test.describe('devices and access dashboard', () => {
       // Recovery intentionally disposes the active WASM identity. Its logs
       // were attached above while IndexedDB was still readable; always leave
       // the origin so the shared fixture does not reopen the reset store.
-      await page.goto('about:blank').catch(() => undefined)
+      await page.goto('about:blank').catch(() => {})
     }
   })
 
