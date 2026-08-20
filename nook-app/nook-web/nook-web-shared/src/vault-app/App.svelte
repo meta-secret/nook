@@ -66,9 +66,11 @@
   } from '$lib/app/extension-setup'
   import {
     APP_SHELL_WIDTH,
+    APP_SHELL_WIDTH_WIDE,
     APP_VERSION,
     appShellSpacing,
   } from '$lib/app/shell-layout'
+  import { SettingsSection } from '$lib/vault/state/ui.svelte'
   import {
     assess_vault_security,
     configured_vault_application_is_simple,
@@ -464,7 +466,12 @@
   }
 
   const appVersion = APP_VERSION
-  const shellWidth = APP_SHELL_WIDTH
+  const shellWidth = $derived(
+    vault.settingsOpen &&
+      vault.settingsSection === SettingsSection.DevicesAccess
+      ? APP_SHELL_WIDTH_WIDE
+      : APP_SHELL_WIDTH,
+  )
   let secretsAddOpen = $state(false)
   const shellSpacing = $derived.by(() => {
     const appShellSpacingArgs: Parameters<typeof appShellSpacing>[0] = {

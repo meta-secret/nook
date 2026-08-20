@@ -548,16 +548,59 @@ pub const DEVICES_ACCESS_DONT_SHOW_AGAIN: &str = "devices_access.dont_show_again
 pub const DEVICES_ACCESS_ENROLLED_DEVICES: &str = "devices_access.enrolled_devices";
 pub const DEVICES_ACCESS_EVIDENCE_LEGEND: &str = "devices_access.evidence_legend";
 pub const DEVICES_ACCESS_IDENTITIES_SECTION: &str = "devices_access.identities_section";
+pub const DEVICES_ACCESS_IDENTITY_KEYS_HEADING: &str = "devices_access.identity_keys_heading";
+pub const DEVICES_ACCESS_IDENTITY_KEYS_LEDE: &str = "devices_access.identity_keys_lede";
 pub const DEVICES_ACCESS_IDENTITY_LOCKED: &str = "devices_access.identity_locked";
 pub const DEVICES_ACCESS_IDENTITY_MISSING: &str = "devices_access.identity_missing";
 pub const DEVICES_ACCESS_IDENTITY_UNLOCKED: &str = "devices_access.identity_unlocked";
 pub const DEVICES_ACCESS_INSIDE_CURRENT_VAULT: &str = "devices_access.inside_current_vault";
 pub const DEVICES_ACCESS_INSIDE_CURRENT_VAULT_DESC: &str =
     "devices_access.inside_current_vault_desc";
+pub const DEVICES_ACCESS_KEEPER_APPLE_PASSWORDS: &str = "devices_access.keeper_apple_passwords";
+pub const DEVICES_ACCESS_KEEPER_BITWARDEN: &str = "devices_access.keeper_bitwarden";
+pub const DEVICES_ACCESS_KEEPER_CHROME: &str = "devices_access.keeper_chrome";
+pub const DEVICES_ACCESS_KEEPER_DASHLANE: &str = "devices_access.keeper_dashlane";
+pub const DEVICES_ACCESS_KEEPER_ENPASS: &str = "devices_access.keeper_enpass";
+pub const DEVICES_ACCESS_KEEPER_GOOGLE_PASSWORD_MANAGER: &str =
+    "devices_access.keeper_google_password_manager";
+pub const DEVICES_ACCESS_KEEPER_KEEPER: &str = "devices_access.keeper_keeper";
+pub const DEVICES_ACCESS_KEEPER_LABEL: &str = "devices_access.keeper_label";
+pub const DEVICES_ACCESS_KEEPER_NORDPASS: &str = "devices_access.keeper_nordpass";
+pub const DEVICES_ACCESS_KEEPER_ONEPASSWORD: &str = "devices_access.keeper_onepassword";
+pub const DEVICES_ACCESS_KEEPER_PROTON_PASS: &str = "devices_access.keeper_proton_pass";
+pub const DEVICES_ACCESS_KEEPER_SAMSUNG_PASS: &str = "devices_access.keeper_samsung_pass";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_APPLE_PASSWORDS: &str =
+    "devices_access.keeper_storage_apple_passwords";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_BITWARDEN: &str = "devices_access.keeper_storage_bitwarden";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_CHROME: &str = "devices_access.keeper_storage_chrome";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_DASHLANE: &str = "devices_access.keeper_storage_dashlane";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_ENPASS: &str = "devices_access.keeper_storage_enpass";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_GOOGLE_PASSWORD_MANAGER: &str =
+    "devices_access.keeper_storage_google_password_manager";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_KEEPER: &str = "devices_access.keeper_storage_keeper";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_NORDPASS: &str = "devices_access.keeper_storage_nordpass";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_ONEPASSWORD: &str =
+    "devices_access.keeper_storage_onepassword";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_PROTON_PASS: &str =
+    "devices_access.keeper_storage_proton_pass";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_SAMSUNG_PASS: &str =
+    "devices_access.keeper_storage_samsung_pass";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_UNKNOWN: &str = "devices_access.keeper_storage_unknown";
+pub const DEVICES_ACCESS_KEEPER_STORAGE_WINDOWS_HELLO: &str =
+    "devices_access.keeper_storage_windows_hello";
+pub const DEVICES_ACCESS_KEEPER_UNKNOWN: &str = "devices_access.keeper_unknown";
+pub const DEVICES_ACCESS_KEEPER_WINDOWS_HELLO: &str = "devices_access.keeper_windows_hello";
+pub const DEVICES_ACCESS_KEY_TYPE_APP_KEY: &str = "devices_access.key_type_app_key";
+pub const DEVICES_ACCESS_KEY_TYPE_COMPANION: &str = "devices_access.key_type_companion";
+pub const DEVICES_ACCESS_KEY_TYPE_PASSKEY: &str = "devices_access.key_type_passkey";
+pub const DEVICES_ACCESS_KEY_TYPE_PIN: &str = "devices_access.key_type_pin";
 pub const DEVICES_ACCESS_KNOWN_VAULTS_UNPREPARED: &str = "devices_access.known_vaults_unprepared";
 pub const DEVICES_ACCESS_LAST_CLIENT: &str = "devices_access.last_client";
 pub const DEVICES_ACCESS_LAST_LOCAL_UPDATE: &str = "devices_access.last_local_update";
 pub const DEVICES_ACCESS_LAST_SUCCESSFUL_USE: &str = "devices_access.last_successful_use";
+pub const DEVICES_ACCESS_LAYOUT_GRAPH: &str = "devices_access.layout_graph";
+pub const DEVICES_ACCESS_LAYOUT_GROUP: &str = "devices_access.layout_group";
+pub const DEVICES_ACCESS_LAYOUT_LIST: &str = "devices_access.layout_list";
 pub const DEVICES_ACCESS_LINK_OPENS: &str = "devices_access.link_opens";
 pub const DEVICES_ACCESS_LINK_UNLOCKS: &str = "devices_access.link_unlocks";
 pub const DEVICES_ACCESS_LINK_UNVERIFIED: &str = "devices_access.link_unverified";

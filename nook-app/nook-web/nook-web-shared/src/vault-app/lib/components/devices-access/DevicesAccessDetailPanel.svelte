@@ -166,6 +166,7 @@
         transports={view.transports}
         backupState={view.backupState}
         aaguid={view.aaguid}
+        keeper={view.keeper}
         observedBrowser={view.observedBrowser}
         observedPlatform={view.observedPlatform}
         bind:providerDraft

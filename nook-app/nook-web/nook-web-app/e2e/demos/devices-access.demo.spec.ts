@@ -29,6 +29,16 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(chain).toContainText('App key')
   await expect(chain).toContainText('Identity')
   await expect(chain).toContainText('Vaults')
+  await page.getByTestId('devices-access-layout-list').click()
+  const identityKeys = page.getByTestId('devices-access-identity-keys')
+  await expect(identityKeys).toBeVisible()
+  await expect(
+    page.getByTestId('devices-access-key-card').first(),
+  ).toBeVisible()
+  await expect(identityKeys).toContainText('Passkey')
+  await expect(identityKeys).not.toContainText('App key')
+  await page.getByTestId('devices-access-layout-graph').click()
+  await expect(chain).toBeVisible()
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
     1,
   )

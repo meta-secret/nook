@@ -34,6 +34,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     type DashboardTimestamp,
     DashboardTimestampKind,
     type DashboardView,
+    DevicesAccessLayoutKind,
     providerSaveFocus,
     ProviderSaveFocusKind,
     ProviderSaveKind,
@@ -51,6 +52,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     textValue,
     type VaultAccessView,
   } from './devices-access/access-chain'
+  import IdentityAccessList from './devices-access/IdentityAccessList.svelte'
   import IdentityBridgeGraph from './devices-access/IdentityBridgeGraph.svelte'
   import IdentityBridgeNavigation from './devices-access/IdentityBridgeNavigation.svelte'
   import {
@@ -77,6 +79,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     kind: DashboardLoadKind.Loading,
   })
   let selectedStage = $state(AccessChainStage.Unlock)
+  let selectedLayout = $state(DevicesAccessLayoutKind.Graph)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
   let selectedVault = $state<IdentityBridgeVaultSelection>({
     kind: IdentityBridgeVaultSelectionKind.Empty,
@@ -198,6 +201,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           transports,
           backupState: snapshot.backupState,
           aaguid: readText(snapshot.aaguid),
+          keeper: snapshot.keeper,
           observedBrowser: snapshot.observedBrowser,
           observedPlatform: snapshot.observedPlatform,
           vaults,
@@ -306,10 +310,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
         : AccessChainStage.Vaults
   }
 
-  function selectCurrentIdentity(): void {
-    selectPerspective(IdentityBridgePerspective.Identities)
-  }
-
   function selectVault(storeId: string): void {
     selectedVault = {
       kind: IdentityBridgeVaultSelectionKind.Selected,
@@ -344,7 +344,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
 </script>
 
 <section
-  class="mx-auto w-full max-w-[90rem] space-y-8 pb-4"
+  class="w-full space-y-8 pb-4"
   data-testid="devices-access-dashboard"
 >
   <header class="flex items-start gap-3 border-b border-border/60 pb-5">
@@ -432,9 +432,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
         {@const identityTitle = companionIdentity
           ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentity)
           : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentity)}
-        {@const identityDescription = companionIdentity
-          ? vault.t(I18N_KEYS.DevicesAccessBridgeCompanionIdentityDesc)
-          : vault.t(I18N_KEYS.DevicesAccessBridgeCurrentIdentityDesc)}
         {@const bridgeCopy = {
           protectionStage: vault.t(
             I18N_KEYS.DevicesAccessBridgeProtectionEvidence,
@@ -512,19 +509,13 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           formatEvidence: (value: string) => (() => { const formatAccessDateArgs: Parameters<typeof formatAccessDate>[0] = { vault, value }; return formatAccessDate(formatAccessDateArgs); })(),
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
-        <div
-          class="grid min-w-0 gap-8 min-[80rem]:grid-cols-[16rem_minmax(0,1fr)] min-[80rem]:items-start"
-        >
+        <div class="flex min-w-0 flex-col gap-6">
           <IdentityBridgeNavigation
             {vault}
             perspective={selectedPerspective}
             {selectedVault}
-            {verifiedVaultCount}
             vaults={view.vaults}
-            {identityTitle}
-            {identityDescription}
             onPerspective={selectPerspective}
-            onIdentity={selectCurrentIdentity}
             onVault={selectVault}
           />
 
@@ -572,8 +563,48 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                         I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
                       )}
               </p>
+              <div
+                class="mt-5 inline-flex rounded-lg border border-border p-1"
+                role="group"
+                aria-label={vault.t(I18N_KEYS.DevicesAccessLayoutGroup)}
+              >
+                <button
+                  type="button"
+                  class="min-h-11 rounded-md px-3 text-sm font-medium {selectedLayout ===
+                  DevicesAccessLayoutKind.Graph
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'}"
+                  aria-pressed={selectedLayout === DevicesAccessLayoutKind.Graph}
+                  data-testid="devices-access-layout-graph"
+                  onclick={() =>
+                    (selectedLayout = DevicesAccessLayoutKind.Graph)}
+                >
+                  {vault.t(I18N_KEYS.DevicesAccessLayoutGraph)}
+                </button>
+                <button
+                  type="button"
+                  class="min-h-11 rounded-md px-3 text-sm font-medium {selectedLayout ===
+                  DevicesAccessLayoutKind.List
+                    ? 'bg-muted text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'}"
+                  aria-pressed={selectedLayout === DevicesAccessLayoutKind.List}
+                  data-testid="devices-access-layout-list"
+                  onclick={() =>
+                    (selectedLayout = DevicesAccessLayoutKind.List)}
+                >
+                  {vault.t(I18N_KEYS.DevicesAccessLayoutList)}
+                </button>
+              </div>
             </div>
 
+            {#if selectedLayout === DevicesAccessLayoutKind.List}
+              <IdentityAccessList
+                {vault}
+                {view}
+                {selectedStage}
+                onSelectStage={(stage) => (selectedStage = stage)}
+              />
+            {:else}
             <IdentityBridgeGraph
               perspective={selectedPerspective}
               {selectedVault}
@@ -636,6 +667,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 ),
               }}
             />
+            {/if}
           </div>
         </div>
 

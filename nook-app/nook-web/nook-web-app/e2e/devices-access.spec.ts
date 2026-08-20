@@ -208,6 +208,17 @@ test.describe('devices and access dashboard', () => {
     await expect(strengthVaults).toHaveCount(1)
     await expect(strengthVaults).toContainText('Verified way in')
 
+    await page.getByTestId('devices-access-layout-list').click()
+    const identityKeys = page.getByTestId('devices-access-identity-keys')
+    await expect(identityKeys).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-key-card').first(),
+    ).toBeVisible()
+    await expect(identityKeys).toContainText('Passkey')
+    await expect(identityKeys).not.toContainText('App key')
+    await page.getByTestId('devices-access-layout-graph').click()
+    await expect(bridge).toBeVisible()
+
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(
       bridge.getByRole('img', {
