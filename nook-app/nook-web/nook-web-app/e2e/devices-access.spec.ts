@@ -684,12 +684,13 @@ test.describe('devices and access dashboard', () => {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
       const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
-      try {
-        await expect(passkeyOverlay).toBeVisible({ timeout: 5_000 })
+      const passkeyOverlayAppeared = await passkeyOverlay
+        .waitFor({ state: 'visible', timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (passkeyOverlayAppeared) {
         await page.getByTestId('passkey-auth-overlay-dismiss').click()
         await expect(passkeyOverlay).toBeHidden()
-      } catch {
-        // Identity metadata is already gone; unlock overlay may never appear.
       }
       const loginDevicesAccess = page.getByTestId('login-devices-access')
       if (await loginDevicesAccess.isVisible()) {
