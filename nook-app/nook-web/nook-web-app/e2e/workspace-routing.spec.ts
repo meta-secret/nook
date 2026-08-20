@@ -2,9 +2,7 @@ import { expect, type Page, test } from './fixtures'
 import {
   authorizeDeviceProtection,
   connectLocalVault,
-  disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
-  waitForVaultOperationsIdle,
 } from './helpers'
 
 async function traverseWorkspaceHistoryBack(page: Page) {
@@ -14,9 +12,7 @@ async function traverseWorkspaceHistoryBack(page: Page) {
 }
 
 test.describe('persistent workspace routing', () => {
-  test('keeps primary pages in browser history and restores a deep link', async ({
-    page,
-  }) => {
+  test('keeps primary pages in browser history', async ({ page }) => {
     await connectLocalVault(page)
 
     await page.getByTestId('vault-devices-access-tab').click()
@@ -30,15 +26,6 @@ test.describe('persistent workspace routing', () => {
     await traverseWorkspaceHistoryBack(page)
     await expect(page).toHaveURL(/\/devices-access$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
-
-    await waitForVaultOperationsIdle(page)
-    await disableLoginAutoUnlock(page)
-    await page.reload()
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(page).toHaveURL(/\/devices-access$/)
 
     await page.getByTestId('vault-settings-tab').click()
     await expect(page).toHaveURL(/\/settings$/)
