@@ -1,9 +1,17 @@
-import { expect, test } from './fixtures'
+import { expect, type Page, test } from './fixtures'
 import {
   authorizeDeviceProtection,
   connectLocalVault,
+  disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  waitForVaultOperationsIdle,
 } from './helpers'
+
+async function traverseWorkspaceHistoryBack(page: Page) {
+  await page.evaluate(() => {
+    setTimeout(() => window.history.back(), 0)
+  })
+}
 
 test.describe('persistent workspace routing', () => {
   test('keeps primary pages in browser history and restores a deep link', async ({
@@ -19,10 +27,12 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
-    await page.goBack()
+    await traverseWorkspaceHistoryBack(page)
     await expect(page).toHaveURL(/\/devices-access$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
 
+    await waitForVaultOperationsIdle(page)
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
@@ -38,7 +48,7 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/help$/)
     await expect(page.getByTestId('help-page')).toBeVisible()
 
-    await page.goBack()
+    await traverseWorkspaceHistoryBack(page)
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
     expect(new URL(page.url()).search).toBe('')
