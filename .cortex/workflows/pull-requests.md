@@ -39,6 +39,7 @@ ownership until merge or a concrete blocked handoff:
    - Split larger features into an ordered PR sequence.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
+   - Create ignored `.cortex/.session/` memory for substantial work.
 2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
 3. **Prepare a coherent commit:**
    - Run `task loom:pre-push`.
@@ -64,7 +65,11 @@ ownership until merge or a concrete blocked handoff:
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the
    failure, run pre-push hygiene, and push the complete fix. Request review and
    validate the replacement head together.
-7. **Merge automatically when ready.** Require a current branch, green
+7. **Run the self-improvement review when session memory was created.** Read the
+   complete file. Promote only evidence-backed durable knowledge. Update the
+   knowledge graph when required. Delete the session file. Repeat exact-head
+   validation when promotion changed the branch.
+8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, and the exact-head
    readiness audit. Then squash-merge without separate permission.
 
@@ -274,6 +279,9 @@ Never commit directly on `main`.
 
 Implement only the bounded slice described by the task plan and preserve its
 owning interfaces and acceptance evidence.
+
+Capture meaningful discoveries and evidence in `.cortex/.session/`. The session
+file remains provisional and untracked.
 
 ### 3. Push an exact remote-executable commit
 
@@ -503,7 +511,9 @@ Investigation order: **test output** → **static analysis** → **app logs** (m
 Static analysis includes Knip unused findings and jscpd clone/duplicate findings. Fix those problems in code; do not silence the gate. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
 
 1. Read the failed job log: `gh run view <run-id> --log-failed`
-2. For **e2e / web failures**, read persisted app logs before changing code: Playwright attachment `nook-app-logs.json`, local `fetchAppLogs(page)` / `/app-logs`, or `dumpNookLogs(page)`.
+2. For **e2e / web failures**, read persisted app logs before changing code.
+   Use the Playwright `nook-app-logs.json` attachment. Local sources include
+   `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.
 3. Fix the root cause.
 4. Run `task loom:pre-push`, commit, and push the completed fix.
 5. Run Loom/Task validate and return to monitoring Nook's complete exact-head PR checks. Use a focused `task remote` job only when it shortens diagnosis.
@@ -514,7 +524,18 @@ If the failure was obviously fmt-only, `task loom:pre-push` before re-push is en
 
 ### 8. Merge and finish
 
-When **Nook's applicable repository-owned PR test checks pass**, the branch is current with `origin/main`, all actionable comments are resolved, and `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` / `task pr:ready` succeeds:
+For a substantial task, complete the checklist in
+[Agent self-improvement](../dynamic-skills/self-improvement.md#pull-request-completion-contract).
+Delete temporary session memory. If promotion changed the branch, validate the
+new exact head.
+
+Merge only when all readiness conditions pass:
+
+- Nook's applicable repository-owned PR test checks are green.
+- The branch is current with `origin/main`.
+- All actionable comments are resolved.
+- `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or `task pr:ready`
+  succeeds.
 
 ```bash
 gh pr merge <number> --squash
@@ -594,7 +615,7 @@ Rules:
 
 ## Standard flow (summary)
 
-See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
+See [coding-bro.md](coding-bro.md) for the numbered 0–13 checklist.
 
 1. Fetch `origin/main` and branch from it.
 2. Implement the focused change.
@@ -609,11 +630,13 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–12 checklist.
 11. Do not wait for review after checks finish.
 12. Do not request Claude, CodeRabbit, or other optional reviews.
 13. Address and resolve actionable comments.
-14. On failure, fix the issue and repeat pre-push hygiene.
-15. Push the fix and explicitly validate the replacement head.
-16. Squash-merge after the exact-head readiness audit succeeds.
-17. Publish the Workbench completion records.
-18. Report task duration.
+14. When session memory was created, run the self-improvement review.
+15. Curate durable knowledge and delete temporary session memory.
+16. On failure, fix the issue and repeat pre-push hygiene.
+17. Push the fix and explicitly validate the replacement head.
+18. Squash-merge after the exact-head readiness audit succeeds.
+19. Publish the Workbench completion records.
+20. Report task duration.
 
 ## CLI reference
 

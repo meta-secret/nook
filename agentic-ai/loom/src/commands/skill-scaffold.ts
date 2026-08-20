@@ -22,6 +22,56 @@ export type SkillScaffoldReport = {
   readonly created: boolean;
 };
 
+type RenderSkillCardArgs = {
+  readonly template: string;
+  readonly title: string;
+};
+
+export function renderSkillCard(args: RenderSkillCardArgs): string {
+  const rendered = args.template.replace(/^# Skill name$/m, `# ${args.title}`);
+  if (rendered === args.template) {
+    const failureArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.SkillScaffoldFailed,
+      text: 'Could not find the skill title placeholder in _template.md',
+    };
+    loomFailureDetail(failureArgs);
+  }
+  return rendered;
+}
+
+type InsertSkillCatalogEntryArgs = {
+  readonly createExecutableWrappers: boolean;
+  readonly indexContent: string;
+  readonly slug: string;
+};
+
+export function insertSkillCatalogEntry(
+  args: InsertSkillCatalogEntryArgs,
+): string {
+  if (args.indexContent.includes(`(${args.slug}.md)`)) {
+    return args.indexContent;
+  }
+
+  const marker = /\n## How to add one\n/i;
+  const markerMatch = marker.exec(args.indexContent);
+  if (!markerMatch) {
+    const failureArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.SkillScaffoldFailed,
+      text: 'Could not find the skill-authoring section in dynamic-skills/index.md',
+    };
+    loomFailureDetail(failureArgs);
+  }
+
+  const executableSkill = args.createExecutableWrappers
+    ? `\n  - Executable skill: [\`.agents/skills/${args.slug}/SKILL.md\`](../../.agents/skills/${args.slug}/SKILL.md)`
+    : '';
+  const entry = `- **[${args.slug}.md](${args.slug}.md)**\n  - Purpose: TODO: purpose${executableSkill}`;
+  const markerIndex = markerMatch.index;
+  const before = args.indexContent.slice(0, markerIndex).trimEnd();
+  const after = args.indexContent.slice(markerIndex);
+  return `${before}\n${entry}\n${after}`;
+}
+
 export async function runSkillScaffold(
   request: SkillScaffoldRequest,
 ): Promise<SkillScaffoldReport> {
@@ -53,28 +103,19 @@ export async function runSkillScaffold(
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(' ');
   const template = readFileSync(templatePath, 'utf8');
-  const card = template.replace('<Skill Name>', title);
-  writeFileSync(cardPath, card, 'utf8');
+  const renderArgs: RenderSkillCardArgs = { template, title };
+  const card = renderSkillCard(renderArgs);
+  const currentIndexContent = readFileSync(indexPath, 'utf8');
+  const insertArgs: InsertSkillCatalogEntryArgs = {
+    createExecutableWrappers: request.createExecutableWrappers,
+    indexContent: currentIndexContent,
+    slug,
+  };
+  const indexContent = insertSkillCatalogEntry(insertArgs);
+  const indexUpdated = indexContent !== currentIndexContent;
 
-  let indexUpdated = false;
-  let indexContent = readFileSync(indexPath, 'utf8');
-  const row = `| [${slug}.md](${slug}.md) | TODO: purpose | |`;
-  if (!indexContent.includes(`(${slug}.md)`)) {
-    const marker = '\n## How To Add One\n';
-    const markerIndex = indexContent.indexOf(marker);
-    if (markerIndex < 0) {
-      const loomFailureDetailArgs: LoomFailureDetailArgs = {
-        code: LoomFailureCode.SkillScaffoldFailed,
-        text: 'Could not find "## How To Add One" in dynamic-skills/index.md',
-      };
-      loomFailureDetail(loomFailureDetailArgs);
-    }
-    const before = indexContent.slice(0, markerIndex).trimEnd();
-    const after = indexContent.slice(markerIndex);
-    indexContent = `${before}\n${row}\n${after}`;
-    writeFileSync(indexPath, indexContent, 'utf8');
-    indexUpdated = true;
-  }
+  writeFileSync(cardPath, card, 'utf8');
+  if (indexUpdated) writeFileSync(indexPath, indexContent, 'utf8');
 
   const wrappersCreated: string[] = [];
   if (request.createExecutableWrappers) {

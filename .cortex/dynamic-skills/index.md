@@ -5,8 +5,12 @@ directory name `dynamic-skills` means the skills are captured and updated
 dynamically from concrete project feedback; it does not mean optional or ad hoc.
 
 Use this index before refactors, review handling, issue-scope decisions, or skill
-creation so agents apply the existing repo-specific guidance and keep related
-knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.cursor/skills/` and `.claude/skills/`) enable direct invocation across Antigravity, Cursor, Claude, and Codex; the `.cortex` card remains the source of truth.
+creation. Apply existing repository guidance and keep related knowledge
+consolidated.
+
+Executable `.agents/skills/` entries enable direct invocation. `.cursor/skills/`
+and `.claude/skills/` contain symlink mirrors. The `.cortex` card remains the
+source of truth.
 
 ## Skill catalog
 
@@ -92,6 +96,9 @@ knowledge consolidated. Executable `.agents/skills/` entries (mirrored in `.curs
   - Purpose: Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor
 - **[docker-container-harness.md](docker-container-harness.md)**
   - Purpose: Prohibit Dockerfile cache mounts and killing the Docker daemon; enforce exact dependency pinning and Bun lockfiles
+- **[self-improvement.md](self-improvement.md)**
+  - Purpose: Capture provisional task discoveries in ignored session memory, then promote only evidence-backed durable knowledge after reflection
+  - Executable skill: [`.agents/skills/self-improvement/SKILL.md`](../../.agents/skills/self-improvement/SKILL.md)
 
 ## How to add one
 

@@ -24,14 +24,16 @@ Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting.
 Follow the delivery sequence in the cortex workflow:
 
 1. Fetch repo, read owning product specs, and publish the Workbench task plan.
-2. Branch, implement (updating specs on new product knowledge), and run `task loom:pre-push`.
-3. Commit and run advisory local Codex review.
-4. Push and use focused hosted execution when useful.
-5. Trigger complete validation and exact-head Cloud review through Loom.
-6. Resolve actionable feedback while repository-owned checks run.
-7. Fix until exact-head checks and readiness pass.
-8. Squash-merge and publish the Workbench completion records.
-9. Report duration.
+2. Branch and create ignored session memory for substantial work.
+3. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
+4. Commit and run advisory local Codex review.
+5. Push and use focused hosted execution when useful.
+6. Trigger complete validation and exact-head Cloud review through Loom.
+7. Resolve actionable feedback while repository-owned checks run.
+8. Fix until exact-head checks pass.
+9. When session memory was created, reflect, promote durable knowledge, remove the file, and verify readiness.
+10. Squash-merge and publish the Workbench completion records.
+11. Report duration.
 
 Never wait for a Codex or Cursor result after repository-owned checks finish.
 `task pr:review` may request Cursor Bugbot when Codex reports a usage limit.
@@ -57,15 +59,16 @@ contract:
 | 0    | Interpret the request; read owning product spec in `.cortex/product-specs/` when product flows are touched; never copy the raw prompt                           |
 | 1    | `git fetch origin main`                                                                                                                                         |
 | 2    | Publish `plans/<feature>/<timestamp>-<task>.md`, then branch from `origin/main`                                                                                 |
-| 3    | Implement the published plan; update product specs on new product knowledge                                                                                     |
+| 3    | Create session memory for substantial work; implement the plan; capture discoveries; update product specs when justified                                     |
 | 4    | **Always** `task loom:pre-push`                                                                                                                                 |
 | 5    | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff                                             |
 | 6    | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to dispatch validation and request review             |
 | 7    | Watch exact-head repository-owned checks and inspect feedback already present                                                                                   |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation                                                     |
-| 11   | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds                                                 |
-| 12   | Publish the issue update, plan-linked worklog, and Loom AI-agent stats to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
-| 13   | Duration report                                                                                                                                                 |
+| 11   | Reflect; promote durable knowledge; update the graph when needed; delete session memory; revalidate a changed head                                               |
+| 12   | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds                                                 |
+| 13   | Publish the issue update, plan-linked worklog, and Loom AI-agent stats to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
+| 14   | Duration report                                                                                                                                                 |
 
 Pre-push format/demo rules: [`.cortex/dynamic-skills/pre-push-hygiene.md`](../../.cortex/dynamic-skills/pre-push-hygiene.md).
 
