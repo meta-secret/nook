@@ -6,6 +6,7 @@ import {
 } from '$app-wasm'
 import {
   addVaultPassword,
+  attachNookLogsForTest,
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
@@ -440,6 +441,9 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('vault-devices-section').locator('button').first(),
     ).toBeFocused()
     await page.getByTestId('vault-devices-access-tab').click()
+    await page.getByTestId('devices-access-back').click()
+    await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
+    await page.getByTestId('vault-devices-access-tab').click()
     // Remount after leaving Access invalidates the earlier vaultsNode locator.
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -456,10 +460,6 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('vault-unlock-section').locator('button').first(),
     ).toBeFocused()
-    await page.getByTestId('vault-devices-access-tab').dispatchEvent('click')
-
-    await page.getByTestId('devices-access-back').click()
-    await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
   })
 
   test('keeps localized evidence tabs inside a narrow viewport', async ({
@@ -624,7 +624,7 @@ test.describe('devices and access dashboard', () => {
 
   test('keeps known vaults visible after identity recovery reset', async ({
     page,
-  }) => {
+  }, testInfo) => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
     await page.getByTestId('devices-access-node-vaults').click()
@@ -657,6 +657,7 @@ test.describe('devices and access dashboard', () => {
     await expect(recoveryOverlay).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await attachNookLogsForTest(page, testInfo)
     page.once('dialog', (dialog) => dialog.accept())
     await page.getByTestId('device-protection-recovery-btn').click()
     await expect(
@@ -702,9 +703,10 @@ test.describe('devices and access dashboard', () => {
     await expect(preview).not.toContainText('opens')
     await expect(preview).not.toContainText('No local vaults yet')
 
-    // The recovery flow intentionally disposes the active WASM identity. Leave
-    // that runtime before the shared fixture reads persisted application logs.
-    await page.goto('/privacy.html')
+    // The recovery flow intentionally disposes the active WASM identity. Its
+    // canonical logs were attached above while IndexedDB was still readable;
+    // leave the origin so the shared fixture does not reopen the reset store.
+    await page.goto('about:blank')
   })
 
   test('never claims access to a vault this app key has not opened', async ({
