@@ -634,8 +634,11 @@ test.describe('devices and access dashboard', () => {
 
     // Use the production transaction so the identity directory and protected
     // app-key records cannot diverge while preserving known vault projections.
+    // Unmount Access first, matching the recovery gate's runtime boundary.
+    await page.getByTestId('vault-settings-tab').click()
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
     await page.evaluate(async () => {
-      const manager = (
+      const vault = (
         window as Window & {
           __nookVault?: {
             stopVaultSync(): void
@@ -647,11 +650,12 @@ test.describe('devices and access dashboard', () => {
           }
         }
       ).__nookVault
-      if (!manager) throw new Error('Vault runtime is not exposed')
-      manager.stopVaultSync()
-      await manager.waitForStorageChain()
-      const vaultManager = manager.requireManager()
-      await manager.enqueueExclusiveStorage(() =>
+      if (!vault) throw new Error('Vault runtime is not exposed')
+      history.replaceState(history.state, '', '/devices-access')
+      vault.stopVaultSync()
+      await vault.waitForStorageChain()
+      const vaultManager = vault.requireManager()
+      await vault.enqueueExclusiveStorage(() =>
         vaultManager.reset_device_protection_for_recovery(),
       )
     })
