@@ -33,8 +33,11 @@ test.describe('persistent workspace routing', () => {
     await page.evaluate(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.goto('about:blank')
-    await page.goto('/devices-access')
+    await page.getByTestId('header-lock-vault-btn').click()
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.reload()
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
