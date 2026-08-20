@@ -63,6 +63,7 @@ export function buildIdentityKeyInventory({
   view,
 }: IdentityKeyInventoryRequest): readonly IdentityKeyInventoryRow[] {
   const rows: IdentityKeyInventoryRow[] = [];
+  let currentProtector = vault.t(I18N_KEYS.DevicesAccessThisBrowser);
   if (
     identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser &&
     view.protection !== DeviceAccessProtectionKind.Missing
@@ -73,6 +74,7 @@ export function buildIdentityKeyInventory({
     };
     const protector = buildIdentityAccessCards(cardArgs)[0];
     if (protector) {
+      currentProtector = protector.title;
       const passkeyProtectorArgs: PasskeyProtectorRequest = { vault, view };
       const protectorRow: IdentityKeyInventoryRow = {
         key: `protector:${protector.key}`,
@@ -96,17 +98,15 @@ export function buildIdentityKeyInventory({
       title:
         member.label.kind === DashboardTextKind.Known
           ? member.label.value
-          : vault.t(
+          : `${vault.t(
               isCurrent
                 ? I18N_KEYS.DevicesAccessThisBrowserAppKey
                 : I18N_KEYS.DevicesAccessOtherAppKey,
-            ),
+            )} · ${member.appId.slice(-8)}`,
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeAppKey),
-      protector: vault.t(
-        isCurrent
-          ? I18N_KEYS.DevicesAccessThisBrowser
-          : I18N_KEYS.DevicesAccessOtherInstallation,
-      ),
+      protector: isCurrent
+        ? currentProtector
+        : vault.t(I18N_KEYS.DevicesAccessOtherInstallation),
       lastUsed: vault.t(I18N_KEYS.DevicesAccessUnknown),
       stage: AccessChainStage.DeviceKey,
       action: isCurrent

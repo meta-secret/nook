@@ -50,7 +50,6 @@ const identities: readonly IdentityDirectoryEntry[] = [
   {
     identityId: 'personal',
     label: 'Personal',
-    fingerprint: 'personal-fingerprint',
     localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
     members: [
       {
@@ -59,13 +58,11 @@ const identities: readonly IdentityDirectoryEntry[] = [
         currentBrowser: true,
       },
     ],
-    vaultStoreIds: [],
     vaults: [],
   },
   {
     identityId: 'work',
     label: 'Work',
-    fingerprint: 'work-fingerprint',
     localAccess: NookIdentityLocalAccessKind.OtherInstallation,
     members: [
       {
@@ -74,7 +71,6 @@ const identities: readonly IdentityDirectoryEntry[] = [
         currentBrowser: false,
       },
     ],
-    vaultStoreIds: [],
     vaults: [],
   },
 ]
@@ -93,8 +89,10 @@ describe('identity directory selection', () => {
     expect(rendered.getByText('Work phone app key')).toBeTruthy()
     expect(rendered.getByTestId('other-installation-evidence')).toBeTruthy()
     expect(
-      rendered.getByTestId('devices-access-identity-details'),
-    ).toBeDisabled()
-    expect(rendered.queryByText('MacBook app key')).not.toBeInTheDocument()
+      rendered
+        .getByTestId('devices-access-identity-details')
+        .hasAttribute('disabled'),
+    ).toBe(true)
+    expect(rendered.queryByText('MacBook app key')).toBeNull()
   })
 })

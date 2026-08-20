@@ -143,7 +143,6 @@ describe('identity key inventory', () => {
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
       label: 'Personal',
-      fingerprint: 'fingerprint_personal',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [
         {
@@ -157,7 +156,6 @@ describe('identity key inventory', () => {
           currentBrowser: false,
         },
       ],
-      vaultStoreIds: ['vault_personal'],
       vaults: [],
     }
     const buildIdentityKeyInventoryArgs: Parameters<
@@ -177,6 +175,7 @@ describe('identity key inventory', () => {
     })
     expect(rows[1]).toMatchObject({
       title: 'MacBook app key',
+      protector: I18N_KEYS.DevicesAccessKeeperApplePasswords,
       action: IdentityKeyInventoryActionKind.InspectCurrentBrowser,
       lastUsed: I18N_KEYS.DevicesAccessUnknown,
     })
@@ -192,7 +191,6 @@ describe('identity key inventory', () => {
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_work',
       label: 'Work',
-      fingerprint: 'fingerprint_work',
       localAccess: NookIdentityLocalAccessKind.OtherInstallation,
       members: [
         {
@@ -201,7 +199,6 @@ describe('identity key inventory', () => {
           currentBrowser: false,
         },
       ],
-      vaultStoreIds: [],
       vaults: [],
     }
     const buildIdentityKeyInventoryArgs: Parameters<
@@ -219,13 +216,44 @@ describe('identity key inventory', () => {
     })
   })
 
+  test('distinguishes unlabeled peer app keys by public identifier', () => {
+    const view = passkeyView(PasskeyKeeperKind.ApplePasswords)
+    const identity: IdentityDirectoryEntry = {
+      identityId: 'identity_work',
+      label: 'Work',
+      localAccess: NookIdentityLocalAccessKind.OtherInstallation,
+      members: [
+        {
+          appId: 'app_peer_12345678',
+          label: unknownText,
+          currentBrowser: false,
+        },
+        {
+          appId: 'app_peer_87654321',
+          label: unknownText,
+          currentBrowser: false,
+        },
+      ],
+      vaults: [],
+    }
+    const buildIdentityKeyInventoryArgs: Parameters<
+      typeof buildIdentityKeyInventory
+    >[0] = { vault, identity, view }
+
+    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+
+    expect(rows.map((row) => row.title)).toEqual([
+      `${I18N_KEYS.DevicesAccessOtherAppKey} · 12345678`,
+      `${I18N_KEYS.DevicesAccessOtherAppKey} · 87654321`,
+    ])
+  })
+
   test('does not invent a protector for an unprepared browser', () => {
     const view = passkeyView(PasskeyKeeperKind.Unknown)
     view.protection = DeviceAccessProtectionKind.Missing
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
       label: 'Personal',
-      fingerprint: 'fingerprint_personal',
       localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
       members: [
         {
@@ -234,7 +262,6 @@ describe('identity key inventory', () => {
           currentBrowser: true,
         },
       ],
-      vaultStoreIds: [],
       vaults: [],
     }
     const buildIdentityKeyInventoryArgs: Parameters<

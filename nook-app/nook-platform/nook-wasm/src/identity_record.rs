@@ -100,6 +100,7 @@ impl NookIdentitySnapshot {
         record: &nook_core::IdentityRecord,
         current_app_id: Option<&str>,
     ) -> Self {
+        let current_app_id = current_app_id.and_then(|value| nook_core::AppId::parse(value).ok());
         let app_id = record
             .members
             .first()
@@ -113,7 +114,12 @@ impl NookIdentitySnapshot {
             members: record
                 .members
                 .iter()
-                .map(|member| NookIdentityMemberSnapshot::from_member(member, current_app_id))
+                .map(|member| {
+                    NookIdentityMemberSnapshot::from_member(
+                        member,
+                        current_app_id.as_ref().map(nook_core::AppId::as_str),
+                    )
+                })
                 .collect(),
             vault_store_ids: record
                 .vault_deks
@@ -124,10 +130,9 @@ impl NookIdentitySnapshot {
             app_key_count: u32::try_from(record.members.len()).unwrap_or(u32::MAX),
             vault_count: u32::try_from(record.vault_deks.len()).unwrap_or(u32::MAX),
             fingerprint: nook_core::identity_fingerprint(&record.identity_id),
-            local_access: if record
-                .members
-                .iter()
-                .any(|member| current_app_id.is_some_and(|app_id| member.app_id.as_str() == app_id))
+            local_access: if current_app_id
+                .as_ref()
+                .is_some_and(|app_id| record.has_app_id(app_id))
             {
                 NookIdentityLocalAccessKind::CurrentBrowser
             } else {

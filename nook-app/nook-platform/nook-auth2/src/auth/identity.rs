@@ -162,6 +162,12 @@ impl IdentityRecord {
         !self.members.is_empty()
     }
 
+    /// Whether this identity authorizes the supplied public app-key member.
+    #[must_use]
+    pub fn has_app_id(&self, app_id: &AppId) -> bool {
+        self.members.iter().any(|member| member.app_id == *app_id)
+    }
+
     /// Generate vault DEKs and wrap them to every current member.
     ///
     /// A vault cannot be created until this succeeds.
@@ -572,6 +578,9 @@ mod tests {
         })?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let keys = identity.generate_vault_dek(store.clone())?;
+        assert!(identity.has_app_id(app_key.app_id()));
+        assert!(identity.has_app_id(second_key.app_id()));
+        assert!(identity.owns_vault(&store));
         let vault_dek = identity
             .vault_dek(&store)
             .ok_or_else(|| anyhow::anyhow!("identity DEK missing after generate"))?;

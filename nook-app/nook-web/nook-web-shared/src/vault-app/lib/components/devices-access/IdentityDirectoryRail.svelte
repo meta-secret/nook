@@ -58,7 +58,7 @@ creation as the primary interactions.
       pluralKey: I18N_KEYS.DevicesAccessIdentityKeyCountPlural,
     }
     const vaultCountArgs: CountLabelRequest = {
-      count: identity.vaultStoreIds.length,
+      count: identity.vaults.length,
       singularKey: I18N_KEYS.DevicesAccessIdentityVaultCountSingular,
       pluralKey: I18N_KEYS.DevicesAccessIdentityVaultCountPlural,
     }

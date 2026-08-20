@@ -31,7 +31,8 @@
     "src/main.ts",
     "../nook-web-shared/src/**/*.ts",
     "../nook-web-shared/src/**/*.svelte",
-    "tests/**/*.ts"
+    "tests/**/*.ts",
+    "tests/**/*.svelte"
   ],
   "exclude": [
     "src/lib",

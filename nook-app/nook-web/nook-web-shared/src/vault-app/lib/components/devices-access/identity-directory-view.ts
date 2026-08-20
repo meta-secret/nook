@@ -34,10 +34,8 @@ export type IdentityMemberView = {
 export type IdentityDirectoryEntry = {
   readonly identityId: string;
   readonly label: string;
-  readonly fingerprint: string;
   readonly localAccess: NookIdentityLocalAccessKind;
   readonly members: readonly IdentityMemberView[];
-  readonly vaultStoreIds: readonly string[];
   readonly vaults: readonly VaultAccessView[];
 };
 
@@ -88,10 +86,8 @@ function readIdentity(identity: NookIdentitySnapshot): IdentityDirectoryEntry {
     return {
       identityId: identity.identityId,
       label: identity.label,
-      fingerprint: identity.fingerprint,
       localAccess: identity.localAccess,
       members: identity.members().map(readMember),
-      vaultStoreIds: identity.vault_store_ids(),
       vaults: identity.vaults().map((entry) => {
         try {
           const verifiedAt = entry.verifiedAt;

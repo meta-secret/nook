@@ -269,10 +269,8 @@ fn vaults_for_identity(
     vaults
         .iter()
         .filter(|vault| {
-            identity
-                .vault_deks
-                .iter()
-                .any(|grant| grant.store_id.as_str() == vault.store_id)
+            nook_core::StoreId::parse(&vault.store_id)
+                .is_ok_and(|store_id| identity.owns_vault(&store_id))
         })
         .cloned()
         .collect()

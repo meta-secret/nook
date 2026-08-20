@@ -6,18 +6,19 @@ use super::NookVaultManager;
 use crate::identity_record::{NookIdentityDirectorySnapshotRequest, NookIdentitySnapshot};
 use crate::storage::identity_record::update_identity_directory;
 
+fn identity_directory_session_app_id(device: &super::session::DeviceSessionState) -> String {
+    device.id.trim().to_owned()
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     pub fn identity_directory_snapshot_request(
         &self,
     ) -> Result<NookIdentityDirectorySnapshotRequest, JsError> {
-        let session_app_id = if self.device.identity_private_key.is_empty() {
-            String::new()
-        } else {
-            self.device_identity()
-                .map(|identity| identity.app_id().as_str().to_owned())
-                .unwrap_or_default()
-        };
+        // The public session ID survives locking. Keeping it here prevents a
+        // locked companion session from falling back to this browser's
+        // persisted app key and borrowing its identity evidence.
+        let session_app_id = identity_directory_session_app_id(&self.device);
         Ok(NookIdentityDirectorySnapshotRequest::new(session_app_id))
     }
 
@@ -39,5 +40,24 @@ impl NookVaultManager {
         })
         .await
         .map_err(|error| JsError::new(&error.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locked_session_keeps_its_public_app_id() {
+        let device = super::super::session::DeviceSessionState {
+            id: "app_companion_session".to_owned(),
+            identity_private_key: String::new(),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            identity_directory_session_app_id(&device),
+            "app_companion_session"
+        );
     }
 }
