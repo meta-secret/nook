@@ -50,6 +50,7 @@ recipe.json
 .impeccable/*.png
 .impeccable/live/server.json
 .impeccable/live/sessions/
+.cortex/.session/
 .impeccable/live/previews/
 .impeccable/live/annotations/
 .impeccable/live/cache/

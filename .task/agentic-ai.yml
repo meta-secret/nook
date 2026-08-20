@@ -233,6 +233,7 @@ tasks:
     env:
       PR_NUMBER: '{{.PR}}'
     cmds:
+      - bash .github/scripts/assert-cortex-session-clean.sh
       - cd agentic-ai/ci-agent && npm ci
       - cd agentic-ai/ci-agent && npm run build
       - >-
@@ -480,6 +481,7 @@ tasks:
     requires:
       vars: [PR]
     cmds:
+      - bash .github/scripts/assert-cortex-session-clean.sh
       - >-
         bash -c 'set -euo pipefail;
         export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";

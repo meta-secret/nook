@@ -65,7 +65,7 @@ export async function runCortexAuditFromDirectory(
     loomFailureDetail(loomFailureDetailArgs);
   }
 
-  const mdFiles = listMarkdownFiles(cortexRoot);
+  const mdFiles = listPersistentCortexMarkdownFiles(cortexRoot);
   const brokenLinks: BrokenLink[] = [];
   const densityFindings: DensityFinding[] = [];
   const documents: CortexDocumentSource[] = [];
@@ -292,7 +292,7 @@ function ledgerEntries(content: string): readonly string[] {
     .filter((line) => line.length > 0 && !line.startsWith('#'));
 }
 
-function listMarkdownFiles(root: string): string[] {
+export function listPersistentCortexMarkdownFiles(root: string): string[] {
   const out: string[] = [];
   const stack = [root];
   const directoryReadOptions: { readonly withFileTypes: true } = {
@@ -306,6 +306,9 @@ function listMarkdownFiles(root: string): string[] {
     for (const entry of readdirSync(current, directoryReadOptions)) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
+        if (path.relative(root, full) === '.session') {
+          continue;
+        }
         stack.push(full);
         continue;
       }
