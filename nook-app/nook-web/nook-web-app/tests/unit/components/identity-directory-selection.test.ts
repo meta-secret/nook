@@ -81,6 +81,7 @@ describe('identity directory selection', () => {
       vault,
       view,
       identities,
+      initialIdentityId: 'personal',
     })
 
     await fireEvent.click(rendered.getByRole('button', { name: /Work/ }))
@@ -93,6 +94,6 @@ describe('identity directory selection', () => {
         .getByTestId('devices-access-identity-details')
         .hasAttribute('disabled'),
     ).toBe(true)
-    expect(rendered.queryByText('MacBook app key')).toBeNull()
+    expect(() => rendered.getByText('MacBook app key')).toThrow()
   })
 })

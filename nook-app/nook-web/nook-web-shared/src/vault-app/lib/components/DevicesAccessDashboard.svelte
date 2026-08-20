@@ -345,13 +345,15 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
       selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
       return
     }
-    if (
-      selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected &&
-      identitySelection.identity.vaults.some(
-        (entry) => entry.storeId === selectedVault.storeId,
-      )
-    ) {
-      return
+    if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
+      const selectedVaultId = selectedVault.storeId
+      if (
+        identitySelection.identity.vaults.some(
+          (entry) => entry.storeId === selectedVaultId,
+        )
+      ) {
+        return
+      }
     }
     selectedVault = {
       kind: IdentityBridgeVaultSelectionKind.Selected,

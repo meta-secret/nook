@@ -11,13 +11,15 @@
     vault,
     view,
     identities,
+    initialIdentityId,
   }: {
     vault: VaultState
     view: DashboardView
     identities: readonly IdentityDirectoryEntry[]
+    initialIdentityId: string
   } = $props()
 
-  let selectedIdentityId = $state(identities[0]?.identityId ?? '')
+  let selectedIdentityId = $state(initialIdentityId)
   let selectedStage = $state(AccessChainStage.Unlock)
   const identity = $derived(
     identities.find((entry) => entry.identityId === selectedIdentityId),
