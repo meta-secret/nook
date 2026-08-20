@@ -59,5 +59,8 @@ wasm-bindgen-test = "0.3.77"
 default = []
 browser-wasm-tests = []
 
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz"]
+
 [lints]
 workspace = true

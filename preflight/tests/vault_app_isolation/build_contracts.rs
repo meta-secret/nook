@@ -78,6 +78,66 @@ fn production_vault_apps_share_one_wasm_build() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[test]
+fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
+    let root = repository_root();
+    for manifest in [
+        "nook-app/nook-platform/nook-wasm/Cargo.toml",
+        "nook-app/nook-platform/nook-companion-wasm/Cargo.toml",
+    ] {
+        let cargo = read(&root, manifest);
+        assert!(cargo.contains("[package.metadata.wasm-pack.profile.release]"));
+        assert!(cargo.contains("wasm-opt = [\"-Oz\"]"));
+    }
+
+    let vite = read(&root, "nook-app/nook-web/nook-web-shared/vite-config.ts");
+    for required in [
+        "nook_wasm_bg",
+        "rel: \"preload\"",
+        "as: \"fetch\"",
+        "type: \"application/wasm\"",
+    ] {
+        assert!(vite.contains(required));
+    }
+
+    let verifier = read(
+        &root,
+        "nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts",
+    );
+    for required in [
+        "VAULT_WASM_RAW_SIZE_LIMIT",
+        "VAULT_WASM_BROTLI_SIZE_LIMIT",
+        "nook_companion_wasm",
+        "must contain exactly one vault WASM asset",
+        "configureVaultExtensionConnectScopeRuntime",
+        "extension_vault_access_scope",
+        "is_extension_connect_scope",
+    ] {
+        assert!(verifier.contains(required));
+    }
+
+    let extension_scope = read(
+        &root,
+        "nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts",
+    );
+    assert!(extension_scope.contains("configureExtensionConnectScopeRuntime"));
+    assert!(extension_scope.contains("ExtensionConnectScope as RustExtensionConnectScope"));
+    assert!(
+        extension_scope.contains("export type ExtensionConnectScope = RustExtensionConnectScope")
+    );
+    assert!(!extension_scope.contains("extensionConnectScopeBrand"));
+
+    let vault_wasm = read(&root, "nook-app/nook-platform/nook-wasm/src/lib.rs");
+    for required in [
+        "extension_vault_access_scope",
+        "extension_password_filling_scope",
+        "is_extension_connect_scope",
+        ") -> nook_companion_core::ExtensionConnectScope",
+    ] {
+        assert!(vault_wasm.contains(required));
+    }
+}
+
 fn assert_shared_wasm_build_contract(root: &Path) {
     for project in ["nook-vault-simple", "nook-vault-sentinel"] {
         assert!(

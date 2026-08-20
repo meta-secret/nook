@@ -93,8 +93,40 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
         &root,
         "nook-app/nook-web/nook-web-shared/src/vault-app/main.ts",
     );
-    assert!(shared_entry.contains("await ensureAppWasm(expectedKind)"));
-    assert!(shared_entry.contains("await import("));
+    assert!(shared_entry.contains("ensureAppWasm(expectedKind)"));
+    assert!(shared_entry.contains("import(\"./App.svelte\")"));
+    assert!(!shared_entry.contains("await Promise.all"));
+    assert!(shared_entry.contains("createVaultStartupShell"));
+    assert!(shared_entry.contains("startupShell.showUnavailable()"));
+    assert!(shared_entry.contains("throw error"));
+    assert!(!shared_entry.contains("companionWasmReady"));
+    assert!(
+        shared_entry
+            .find("createVaultStartupShell")
+            .unwrap_or(usize::MAX)
+            < shared_entry
+                .find("ensureAppWasm(expectedKind)")
+                .unwrap_or(0),
+        "the startup shell must render before the vault WASM gate"
+    );
+    assert!(
+        shared_entry
+            .find("await ensureAppWasm(expectedKind)")
+            .unwrap_or(usize::MAX)
+            < shared_entry.find("import(\"./App.svelte\")").unwrap_or(0),
+        "the vault WASM must initialize before application modules can call its exports"
+    );
+    assert!(
+        shared_entry
+            .find("mount(App, mountArgs)")
+            .unwrap_or(usize::MAX)
+            < shared_entry.find("startupShell.remove()").unwrap_or(0),
+        "the startup shell must remain connected until Svelte mounts"
+    );
+    let unified_entry = read(&root, "nook-app/nook-web/nook-web-app/src/main.ts");
+    assert!(unified_entry.contains("mountVaultApp(VaultApplication.UnifiedDevelopment)"));
+    assert!(unified_entry.contains("configureVaultExtensionConnectScopeRuntime()"));
+    assert!(!unified_entry.contains("companionWasmReady"));
     for (entry, expected_kind) in [
         (
             "nook-app/nook-web/nook-vault-simple/src/main.ts",
@@ -107,6 +139,11 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
     ] {
         assert!(read(&root, entry).contains(expected_kind));
     }
+    let simple_entry = read(&root, "nook-app/nook-web/nook-vault-simple/src/main.ts");
+    assert!(simple_entry.contains("configureVaultExtensionConnectScopeRuntime()"));
+    let sentinel_entry = read(&root, "nook-app/nook-web/nook-vault-sentinel/src/main.ts");
+    assert!(!sentinel_entry.contains("configureVaultExtensionConnectScopeRuntime"));
+    assert!(!shared_entry.contains("configureExtensionConnectScopeRuntime"));
 
     let dockerignore = read(&root, ".dockerignore");
     assert!(

@@ -1,4 +1,14 @@
-import initCompanionWasm from "./nook-companion-wasm/nook_companion_wasm.js";
+import initCompanionWasm, {
+  extension_passkey_management_scope,
+  extension_password_filling_scope,
+  extension_sync_provider_credentials_scope,
+  extension_vault_access_scope,
+  is_extension_connect_scope,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
+import {
+  configureExtensionConnectScopeRuntime,
+  type ExtensionConnectScopeRuntime,
+} from "./extension-connect-scope";
 
 type ChromeRuntime = {
   runtime?: { getURL?: (path: string) => string };
@@ -253,4 +263,15 @@ async function startCompanionWasm(): Promise<unknown> {
  * Avoid top-level await and `import.meta` so Chrome classic content scripts can
  * parse the autofill bundle after companion WASM extraction.
  */
-export const companionWasmReady: Promise<unknown> = startCompanionWasm();
+export const companionWasmReady: Promise<void> = startCompanionWasm().then(
+  () => {
+    const scopeRuntime: ExtensionConnectScopeRuntime = {
+      extension_vault_access_scope,
+      extension_password_filling_scope,
+      extension_passkey_management_scope,
+      extension_sync_provider_credentials_scope,
+      is_extension_connect_scope,
+    };
+    configureExtensionConnectScopeRuntime(scopeRuntime);
+  },
+);

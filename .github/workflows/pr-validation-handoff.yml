@@ -193,7 +193,7 @@ jobs:
           test -x "$native/tools/nook-preflight"
           jq -e '.data[0].totals.lines.percent >= 0' "$native/summary.json" >/dev/null
 
-          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts; do
+          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts nook-wasm-build-mode; do
             test -s "$wasm/$file"
           done
           jq -e '.name == "nook-wasm"' "$wasm/package.json" >/dev/null

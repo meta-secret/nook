@@ -91,6 +91,7 @@ WORKDIR /build
 
 FROM toolchain AS chef-planner
 COPY Cargo.toml Cargo.lock ./
+COPY vendor vendor
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p lace/src hive/src \
@@ -120,6 +121,7 @@ RUN bun run format
 
 FROM toolchain AS fetched-dependencies
 COPY Cargo.toml Cargo.lock ./
+COPY vendor vendor
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
 RUN mkdir -p lace/src hive/src \
@@ -168,6 +170,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 
 FROM toolchain AS formatter
 COPY Cargo.toml Cargo.lock ./
+COPY vendor vendor
 COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
 COPY lace/src lace/src

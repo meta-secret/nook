@@ -293,7 +293,7 @@ jobs:
              .source_workflow == ".github/workflows/pr.yml" and
              .producer_jobs_verified == true' \
             "$dir/nook-validation-manifest.json" >/dev/null
-          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts; do
+          for file in package.json nook_wasm.js nook_wasm.d.ts nook_wasm_bg.wasm nook_wasm_bg.wasm.d.ts nook-wasm-build-mode; do
             test -s "$dir/$file"
           done
           for file in package.json nook_companion_wasm.js nook_companion_wasm.d.ts nook_companion_wasm_bg.wasm nook_companion_wasm_bg.wasm.d.ts; do

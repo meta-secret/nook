@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs'
 import { readFile, readdir } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { brotliCompressSync, constants as zlibConstants } from 'node:zlib'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   createManifest,
@@ -15,6 +16,8 @@ const webRoot = resolve(import.meta.dir, '../..')
 const simpleRoot = join(webRoot, 'nook-vault-simple')
 const sentinelRoot = join(webRoot, 'nook-vault-sentinel')
 const siteRoot = join(webRoot, 'nook-web-app/dist/site')
+const VAULT_WASM_RAW_SIZE_LIMIT = 7_200_000
+const VAULT_WASM_BROTLI_SIZE_LIMIT = 2_300_000
 
 async function filesBelow(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true })
@@ -164,6 +167,18 @@ if (!simpleHtml.includes('name="nook-app-kind" content="simple"')) {
 if (!sentinelHtml.includes('name="nook-app-kind" content="sentinel"')) {
   throw new Error('Sentinel Vault artifact is missing its fixed app identity.')
 }
+for (const [appName, html] of [
+  ['Simple', simpleHtml],
+  ['Sentinel', sentinelHtml],
+] as const) {
+  if (
+    !html.includes('rel="preload"') ||
+    !html.includes('as="fetch"') ||
+    !html.includes('type="application/wasm"')
+  ) {
+    throw new Error(`${appName} Vault must preload its engine WASM asset.`)
+  }
+}
 if (!existsSync(join(simpleRoot, 'dist/extension-connect.html'))) {
   throw new Error(
     'Simple Vault artifact is missing its extension consent route.',
@@ -237,10 +252,65 @@ const sentinelText = (
 for (const forbidden of [
   'nook:extension-pairing-approved',
   'sync-provider-credentials',
+  'configureVaultExtensionConnectScopeRuntime',
+  'extension_vault_access_scope',
+  'is_extension_connect_scope',
 ]) {
   if (sentinelText.includes(forbidden)) {
     throw new Error(
       `Sentinel Vault bundle contains extension protocol token: ${forbidden}`,
+    )
+  }
+}
+
+const vaultArtifacts = await Promise.all(
+  [simpleRoot, sentinelRoot].map(async (root) => {
+    const files = await filesBelow(join(root, 'dist'))
+    const wasmFiles = files.filter((path) => path.endsWith('.wasm'))
+    if (wasmFiles.length !== 1) {
+      throw new Error(
+        `${root} must contain exactly one vault WASM asset, found ${wasmFiles.length}.`,
+      )
+    }
+    if (files.some((path) => path.includes('nook_companion_wasm'))) {
+      throw new Error(`${root} eagerly ships the companion WASM package.`)
+    }
+    return readFile(wasmFiles[0])
+  }),
+)
+if (!vaultArtifacts[0].equals(vaultArtifacts[1])) {
+  throw new Error('Simple and Sentinel must ship the same audited vault WASM.')
+}
+const vaultWasm = vaultArtifacts[0]
+const brotliOptions: Parameters<typeof brotliCompressSync>[1] = {
+  params: {
+    [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+  },
+}
+const brotliSize = brotliCompressSync(vaultWasm, brotliOptions).byteLength
+const wasmBuildMode = await readFile(
+  join(
+    webRoot,
+    'nook-web-shared/src/vault-app/lib/nook-wasm/nook-wasm-build-mode',
+  ),
+  'utf8',
+)
+const normalizedWasmBuildMode = wasmBuildMode.trim()
+if (
+  normalizedWasmBuildMode !== 'no-opt' &&
+  normalizedWasmBuildMode !== 'optimized'
+) {
+  throw new Error(
+    `Unsupported vault WASM build mode: ${normalizedWasmBuildMode}`,
+  )
+}
+if (normalizedWasmBuildMode === 'optimized') {
+  if (
+    vaultWasm.byteLength > VAULT_WASM_RAW_SIZE_LIMIT ||
+    brotliSize > VAULT_WASM_BROTLI_SIZE_LIMIT
+  ) {
+    throw new Error(
+      `Optimized vault WASM exceeds its size budget: raw=${vaultWasm.byteLength}/${VAULT_WASM_RAW_SIZE_LIMIT}, brotli=${brotliSize}/${VAULT_WASM_BROTLI_SIZE_LIMIT}.`,
     )
   }
 }
@@ -320,5 +390,5 @@ if (
 }
 
 console.log(
-  'Verified independent Simple and Sentinel artifacts and extension isolation.',
+  `Verified independent Simple and Sentinel artifacts, extension isolation, and vault WASM size raw=${vaultWasm.byteLength} brotli=${brotliSize}.`,
 )
