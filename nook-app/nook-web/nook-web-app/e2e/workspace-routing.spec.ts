@@ -30,7 +30,8 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
 
     await waitForVaultOperationsIdle(page)
-    await page.reload()
+    await page.goto('about:blank')
+    await page.goto('/devices-access')
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
