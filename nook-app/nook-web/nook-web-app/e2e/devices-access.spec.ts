@@ -463,6 +463,7 @@ test.describe('devices and access dashboard', () => {
     await expect(accessTabFromBackupPasswords).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await accessTabFromBackupPasswords.focus()
     await accessTabFromBackupPasswords.evaluate((element) => {
       ;(element as HTMLButtonElement).click()
     })
