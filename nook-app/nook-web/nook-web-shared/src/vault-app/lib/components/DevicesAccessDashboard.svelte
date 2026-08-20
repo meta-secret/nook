@@ -1,16 +1,17 @@
 <!--
-THESIS: Identity Bridge is an operational map, not a dashboard of disconnected facts.
+THESIS: Identity selection and key ownership must be clear before relationship details.
 OWN-WORLD: Nook's restrained security surfaces, semantic tokens, evidence-aware language, and real local state remain intact.
-STORY: Choose the current identity context or a vault, follow verified device-key evidence without inferring an identity grant, then inspect or manage the selected layer below.
-FIRST VIEWPORT: Navigation, plain-language consequence, and the complete relationship graph appear before supporting controls.
-FORM: The approved Identity Bridge hierarchy becomes the production interaction model; graph nodes explain relationships while standard panels retain every existing action.
+STORY: Choose an identity from a persistent rail, scan its protector and app keys, then inspect its vault relationships and technical evidence below.
+FIRST VIEWPORT: The complete local identity directory and selected-identity key inventory appear before the relationship map.
+FORM: A quiet master-detail layout makes identity ownership primary while the existing graph and evidence panels remain available as progressive disclosure.
 -->
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { tick, untrack } from 'svelte'
-  import { ArrowLeft, RefreshCw } from '@lucide/svelte'
+  import { ArrowLeft, Fingerprint, RefreshCw } from '@lucide/svelte'
   import {
     DeviceAccessProtectionKind,
+    NookIdentityLocalAccessKind,
     NookDeviceAccessTextKind,
     NookDeviceVaultAccessState,
     NookPasskeyTimestampEvidenceKind,
@@ -34,13 +35,14 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     type DashboardTimestamp,
     DashboardTimestampKind,
     type DashboardView,
-    DevicesAccessLayoutKind,
     providerSaveFocus,
     ProviderSaveFocusKind,
     ProviderSaveKind,
   } from './devices-access-dashboard-state'
   import AccessStrengthPreview from './devices-access/AccessStrengthPreview.svelte'
   import DevicesAccessDetailPanel from './devices-access/DevicesAccessDetailPanel.svelte'
+  import IdentityDirectoryRail from './devices-access/IdentityDirectoryRail.svelte'
+  import IdentityKeyInventory from './devices-access/IdentityKeyInventory.svelte'
   import {
     AccessChainStage,
     accessChainTab,
@@ -52,9 +54,15 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     textValue,
     type VaultAccessView,
   } from './devices-access/access-chain'
-  import IdentityAccessList from './devices-access/IdentityAccessList.svelte'
   import IdentityBridgeGraph from './devices-access/IdentityBridgeGraph.svelte'
   import IdentityBridgeNavigation from './devices-access/IdentityBridgeNavigation.svelte'
+  import {
+    IdentityDirectoryLoadKind,
+    type IdentityDirectoryLoadState,
+    IdentityDirectorySelectionKind,
+    loadIdentityDirectoryView,
+    selectedIdentity,
+  } from './devices-access/identity-directory-view'
   import {
     IdentityBridgeDeviceIconKind,
     IdentityBridgePerspective,
@@ -78,8 +86,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   let loadState = $state<DashboardLoadState<DashboardView>>({
     kind: DashboardLoadKind.Loading,
   })
+  let directoryLoadState = $state<IdentityDirectoryLoadState>({
+    kind: IdentityDirectoryLoadKind.Loading,
+  })
   let selectedStage = $state(AccessChainStage.Unlock)
-  let selectedLayout = $state(DevicesAccessLayoutKind.Graph)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
   let selectedVault = $state<IdentityBridgeVaultSelection>({
     kind: IdentityBridgeVaultSelectionKind.Empty,
@@ -90,6 +100,9 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     DashboardFocusTargetKind.None,
   )
   let loadGeneration = 0
+  let directoryLoadGeneration = 0
+  let snapshotLoadGeneration = 0
+  let snapshotsRefreshing = $state(false)
 
   function readText(value: NookDeviceAccessText): DashboardText {
     try {
@@ -129,7 +142,8 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
       }
       case DashboardFocusTargetKind.RetryResult: {
         const target = document.querySelector<HTMLElement>(
-          loadState.kind === DashboardLoadKind.Failed
+          loadState.kind === DashboardLoadKind.Failed ||
+            directoryLoadState.kind === IdentityDirectoryLoadKind.Failed
             ? '[data-testid="devices-access-retry"]'
             : '[data-testid="devices-access-back"]',
         )
@@ -144,9 +158,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
   async function focusAfterProtectionReady(): Promise<void> {
     selectedStage = AccessChainStage.Unlock
     pendingFocusTarget = DashboardFocusTargetKind.ChainSelection
-    if (loadState.kind !== DashboardLoadKind.Ready) return
-    await tick()
-    focusPendingDashboardTarget()
+    await reloadSnapshots()
   }
 
   async function loadDashboard(): Promise<DashboardLoadKind> {
@@ -226,8 +238,11 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           }
         }
         loadState = { kind: DashboardLoadKind.Ready, view }
-        await tick()
-        focusPendingDashboardTarget()
+        resetSelectedVaultForIdentity()
+        if (!snapshotsRefreshing) {
+          await tick()
+          focusPendingDashboardTarget()
+        }
         return DashboardLoadKind.Ready
       } finally {
         snapshot.free()
@@ -236,8 +251,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
       const isCurrentGeneration = generation === loadGeneration
       if (isCurrentGeneration) {
         loadState = { kind: DashboardLoadKind.Failed }
-        await tick()
-        focusPendingDashboardTarget()
+        if (!snapshotsRefreshing) {
+          await tick()
+          focusPendingDashboardTarget()
+        }
       }
       return isCurrentGeneration
         ? DashboardLoadKind.Failed
@@ -245,9 +262,107 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     }
   }
 
+  async function loadDirectory(): Promise<IdentityDirectoryLoadKind> {
+    const generation = ++directoryLoadGeneration
+    if (
+      untrack(() => directoryLoadState.kind) !==
+      IdentityDirectoryLoadKind.Ready
+    ) {
+      directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
+    }
+    try {
+      const view = await loadIdentityDirectoryView(vault.requireManager())
+      if (generation !== directoryLoadGeneration) {
+        return IdentityDirectoryLoadKind.Loading
+      }
+      const browsedIdentityId = untrack(() =>
+        directoryLoadState.kind === IdentityDirectoryLoadKind.Ready &&
+        directoryLoadState.view.selection.kind ===
+          IdentityDirectorySelectionKind.Selected
+          ? directoryLoadState.view.selection.identityId
+          : '',
+      )
+      const preservedView =
+        browsedIdentityId.length > 0 &&
+        view.identities.some(
+          (identity) => identity.identityId === browsedIdentityId,
+        )
+          ? {
+              ...view,
+              selection: {
+                kind: IdentityDirectorySelectionKind.Selected,
+                identityId: browsedIdentityId,
+              } as const,
+            }
+          : view
+      directoryLoadState = {
+        kind: IdentityDirectoryLoadKind.Ready,
+        view: preservedView,
+      }
+      resetSelectedVaultForIdentity()
+      return IdentityDirectoryLoadKind.Ready
+    } catch {
+      if (generation === directoryLoadGeneration) {
+        directoryLoadState = { kind: IdentityDirectoryLoadKind.Failed }
+        return IdentityDirectoryLoadKind.Failed
+      }
+      return IdentityDirectoryLoadKind.Loading
+    }
+  }
+
   async function retryDashboard(): Promise<void> {
     pendingFocusTarget = DashboardFocusTargetKind.RetryResult
-    await loadDashboard()
+    await reloadSnapshots()
+  }
+
+  function chooseIdentity(identityId: string): void {
+    if (directoryLoadState.kind !== IdentityDirectoryLoadKind.Ready) return
+    directoryLoadState = {
+      kind: IdentityDirectoryLoadKind.Ready,
+      view: {
+        ...directoryLoadState.view,
+        selection: {
+          kind: IdentityDirectorySelectionKind.Selected,
+          identityId,
+        },
+      },
+    }
+    selectedStage = AccessChainStage.Unlock
+    selectedPerspective = IdentityBridgePerspective.Identities
+    selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+    resetSelectedVaultForIdentity()
+  }
+
+  function resetSelectedVaultForIdentity(): void {
+    if (
+      loadState.kind !== DashboardLoadKind.Ready ||
+      directoryLoadState.kind !== IdentityDirectoryLoadKind.Ready
+    ) {
+      return
+    }
+    const identitySelection = selectedIdentity(directoryLoadState.view)
+    if (identitySelection.kind === IdentityDirectorySelectionKind.Empty) {
+      selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+      return
+    }
+    if (identitySelection.identity.vaults.length === 0) {
+      selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+      return
+    }
+    if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
+      const selectedVaultId = selectedVault.storeId
+      if (
+        identitySelection.identity.vaults.some(
+          (entry) => entry.storeId === selectedVaultId,
+        )
+      ) {
+        return
+      }
+    }
+    selectedVault = {
+      kind: IdentityBridgeVaultSelectionKind.Selected,
+      storeId: identitySelection.identity.vaults[0].storeId,
+    }
   }
 
   async function saveProviderLabel(): Promise<void> {
@@ -318,28 +433,38 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     selectedStage = AccessChainStage.Vaults
   }
 
-  function selectedVaultLabel(view: DashboardView): string {
+  function selectedVaultLabel(vaults: readonly VaultAccessView[]): string {
     if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      for (const entry of view.vaults) {
+      for (const entry of vaults) {
         if (entry.storeId === selectedVault.storeId) return entry.label
       }
     }
     return vault.t(I18N_KEYS.DevicesAccessBridgeVault)
   }
 
-  function selectedVaultVerified(view: DashboardView): boolean {
+  function selectedVaultVerified(vaults: readonly VaultAccessView[]): boolean {
     if (selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected) {
-      for (const entry of view.vaults) {
+      for (const entry of vaults) {
         if (entry.storeId === selectedVault.storeId) return entry.verified
       }
     }
     return false
   }
 
+  async function reloadSnapshots(): Promise<void> {
+    const generation = ++snapshotLoadGeneration
+    snapshotsRefreshing = true
+    await Promise.all([loadDashboard(), loadDirectory()])
+    if (generation !== snapshotLoadGeneration) return
+    snapshotsRefreshing = false
+    await tick()
+    focusPendingDashboardTarget()
+  }
+
   $effect(() => {
     void vault.deviceProtectionStatus
     void vault.localVaults.length
-    void loadDashboard()
+    void reloadSnapshots()
   })
 </script>
 
@@ -373,7 +498,7 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
     </div>
   </header>
 
-  {#if loadState.kind === DashboardLoadKind.Loading}
+  {#if snapshotsRefreshing || loadState.kind === DashboardLoadKind.Loading}
     <div
       class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"
       role="status"
@@ -400,27 +525,131 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
         {vault.t(I18N_KEYS.DevicesAccessTryAgain)}
       </Button>
     </div>
+  {:else if directoryLoadState.kind === IdentityDirectoryLoadKind.Loading}
+    <div
+      class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"
+      role="status"
+    >
+      <RefreshCw class="size-4 animate-spin" />
+      {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryLoading)}
+    </div>
+  {:else if directoryLoadState.kind === IdentityDirectoryLoadKind.Failed}
+    <div
+      class="rounded-xl border border-destructive/30 bg-destructive/5 p-5"
+      role="alert"
+    >
+      <p class="font-medium text-foreground">
+        {vault.t(I18N_KEYS.DevicesAccessIdentityDirectoryFailed)}
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        class="mt-3"
+        data-testid="devices-access-retry"
+        onclick={() => void retryDashboard()}
+      >
+        <RefreshCw class="size-4" />
+        {vault.t(I18N_KEYS.DevicesAccessTryAgain)}
+      </Button>
+    </div>
   {:else}
-    {@const view = loadState.view}
-    <div class="min-w-0">
-      {#if view.protection === DeviceAccessProtectionKind.Missing}
-        <AccessStrengthPreview {vault} vaults={view.vaults} />
-        <div
-          class="mt-8 border-t border-border/70 pt-6"
-          data-testid="devices-access-prepare-browser"
-        >
-          <DeviceProtectionGate
-            {vault}
-            frame={DeviceProtectionGateFrame.HostSection}
-            onProtectionReady={() => void focusAfterProtectionReady()}
-          />
-        </div>
-      {:else}
+    {@const accessView = loadState.view}
+    {@const directory = directoryLoadState.view}
+    {@const identitySelection = selectedIdentity(directory)}
+    {@const selectedIdentityId =
+      directory.selection.kind === IdentityDirectorySelectionKind.Selected
+        ? directory.selection.identityId
+        : ''}
+    <div
+      class="grid min-w-0 gap-8 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-0"
+    >
+      <IdentityDirectoryRail
+        {vault}
+        view={accessView}
+        identities={directory.identities}
+        {selectedIdentityId}
+        onSelectIdentity={chooseIdentity}
+      />
+
+      <div
+        class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8"
+      >
+        {#if accessView.protection === DeviceAccessProtectionKind.Missing &&
+        !(identitySelection.kind === IdentityDirectorySelectionKind.Selected &&
+          identitySelection.identity.localAccess ===
+            NookIdentityLocalAccessKind.OtherInstallation)}
+          <AccessStrengthPreview {vault} vaults={accessView.vaults} />
+          <div
+            class="mt-8 border-t border-border/70 pt-6"
+            data-testid="devices-access-prepare-browser"
+          >
+            <DeviceProtectionGate
+              {vault}
+              frame={DeviceProtectionGateFrame.HostSection}
+              onProtectionReady={() => void focusAfterProtectionReady()}
+            />
+          </div>
+        {:else if identitySelection.kind === IdentityDirectorySelectionKind.Empty && directory.identities.length === 0}
+          <div
+            class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
+            data-testid="devices-access-no-identities"
+          >
+            <Fingerprint class="size-8 text-muted-foreground" />
+            <h2 class="mt-4 text-lg font-semibold text-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessNoIdentities)}
+            </h2>
+            <p
+              class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+            >
+              {vault.t(I18N_KEYS.DevicesAccessNoIdentitiesDescription)}
+            </p>
+          </div>
+        {:else if identitySelection.kind === IdentityDirectorySelectionKind.Empty}
+          <div
+            class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
+            data-testid="devices-access-no-session-identity"
+          >
+            <Fingerprint class="size-8 text-muted-foreground" />
+            <h2 class="mt-4 text-lg font-semibold text-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentity)}
+            </h2>
+            <p
+              class="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground"
+            >
+              {vault.t(I18N_KEYS.DevicesAccessNoSessionIdentityDescription)}
+            </p>
+          </div>
+        {:else}
+        {@const identity = identitySelection.identity}
+        {@const view = { ...accessView, vaults: [...identity.vaults] }}
+        <IdentityKeyInventory
+          {vault}
+          {identity}
+          {view}
+          {selectedStage}
+          onSelectStage={(stage) => (selectedStage = stage)}
+        />
+        {#if identity.localAccess ===
+        NookIdentityLocalAccessKind.OtherInstallation}
+          <div
+            class="mt-8 rounded-lg border border-border bg-muted/30 p-5"
+            data-testid="devices-access-other-identity-notice"
+          >
+            <p class="text-sm font-medium text-foreground">
+              {vault.t(I18N_KEYS.DevicesAccessOtherIdentityEvidenceTitle)}
+            </p>
+            <p class="mt-2 max-w-[64ch] text-sm leading-relaxed text-muted-foreground">
+              {vault.t(
+                I18N_KEYS.DevicesAccessOtherIdentityEvidenceUnavailable,
+              )}
+            </p>
+          </div>
+        {:else}
         {@const verifiedVaultCount = view.vaults.filter(
           (entry) => entry.verified,
         ).length}
-        {@const selectedVaultIsVerified = selectedVaultVerified(view)}
-        {@const selectedVaultName = selectedVaultLabel(view)}
+        {@const selectedVaultIsVerified = selectedVaultVerified(identity.vaults)}
+        {@const selectedVaultName = selectedVaultLabel(identity.vaults)}
         {@const selectedVaultExists =
           selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected}
         {@const deviceIdentifier =
@@ -509,6 +738,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           formatEvidence: (value: string) => (() => { const formatAccessDateArgs: Parameters<typeof formatAccessDate>[0] = { vault, value }; return formatAccessDate(formatAccessDateArgs); })(),
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
+        <div
+          class="mt-10 border-t border-border pt-8"
+          data-testid="devices-access-relationship-details"
+        >
         <div class="flex min-w-0 flex-col gap-6">
           <IdentityBridgeNavigation
             {vault}
@@ -563,48 +796,8 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                         I18N_KEYS.DevicesAccessBridgeNoSelectedVaultDesc,
                       )}
               </p>
-              <div
-                class="mt-5 inline-flex rounded-lg border border-border p-1"
-                role="group"
-                aria-label={vault.t(I18N_KEYS.DevicesAccessLayoutGroup)}
-              >
-                <button
-                  type="button"
-                  class="min-h-11 rounded-md px-3 text-sm font-medium {selectedLayout ===
-                  DevicesAccessLayoutKind.Graph
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'}"
-                  aria-pressed={selectedLayout === DevicesAccessLayoutKind.Graph}
-                  data-testid="devices-access-layout-graph"
-                  onclick={() =>
-                    (selectedLayout = DevicesAccessLayoutKind.Graph)}
-                >
-                  {vault.t(I18N_KEYS.DevicesAccessLayoutGraph)}
-                </button>
-                <button
-                  type="button"
-                  class="min-h-11 rounded-md px-3 text-sm font-medium {selectedLayout ===
-                  DevicesAccessLayoutKind.List
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground'}"
-                  aria-pressed={selectedLayout === DevicesAccessLayoutKind.List}
-                  data-testid="devices-access-layout-list"
-                  onclick={() =>
-                    (selectedLayout = DevicesAccessLayoutKind.List)}
-                >
-                  {vault.t(I18N_KEYS.DevicesAccessLayoutList)}
-                </button>
-              </div>
             </div>
 
-            {#if selectedLayout === DevicesAccessLayoutKind.List}
-              <IdentityAccessList
-                {vault}
-                {view}
-                {selectedStage}
-                onSelectStage={(stage) => (selectedStage = stage)}
-              />
-            {:else}
             <IdentityBridgeGraph
               perspective={selectedPerspective}
               {selectedVault}
@@ -667,7 +860,6 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
                 ),
               }}
             />
-            {/if}
           </div>
         </div>
 
@@ -682,7 +874,10 @@ FORM: The approved Identity Bridge hierarchy becomes the production interaction 
           {onManageVaultDevices}
           {onManageVaultPasswords}
         />
-      {/if}
+          </div>
+        {/if}
+        {/if}
+      </div>
     </div>
   {/if}
 </section>

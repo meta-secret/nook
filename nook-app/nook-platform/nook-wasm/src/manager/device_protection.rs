@@ -80,6 +80,21 @@ mod tests {
 
         assert!(manager.device.identity_private_key.is_empty());
         assert!(manager.device_access_snapshot_request().is_ok());
+        assert!(manager.identity_directory_snapshot_request().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn failed_handoff_clears_the_adopted_public_app_id() -> Result<(), NookError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.id = identity.device_id().to_string();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        manager.rollback_extension_identity_handoff();
+
+        assert!(manager.device.id.is_empty());
+        assert!(manager.device.identity_private_key.is_empty());
         Ok(())
     }
 
@@ -399,6 +414,7 @@ impl NookVaultManager {
             self.event_log.signing_seed =
                 std::mem::take(&mut pending.previous_session_signing_seed);
         }
+        self.device.id.clear();
         self.lock_device_identity();
         self.reset_vault_session();
     }
@@ -423,15 +439,10 @@ impl NookVaultManager {
         // A locked or rolled-back session must still project persisted passkey
         // evidence. Do not fail the dashboard when in-memory keys cannot be
         // parsed after lock or a failed handoff.
-        let session_device_id = if self.device.identity_private_key.is_empty() {
-            String::new()
-        } else {
-            self.device_identity()
-                .map(|identity| identity.device_id().as_str().to_owned())
-                .unwrap_or_default()
-        };
+        let session_device_id = self.device.public_app_id();
         Ok(crate::NookDeviceAccessSnapshotRequest::new(
             session_device_id,
+            !self.device.identity_private_key.is_empty(),
         ))
     }
 
@@ -660,9 +671,17 @@ impl NookVaultManager {
 
             let identity = self.device_identity()?;
             let record = nook_core::wrap_device_identity_with_pin(&identity.secret_string(), &pin)?;
-            indexed_db::save_wrapped_device_identity(&self.device.id, &record).await
+            crate::storage::identity_record::save_protected_local_identity(
+                &identity, &record, "Personal",
+            )
+            .await?;
+            Ok(())
         }
         .await;
+        if result.is_err() {
+            self.device.id.clear();
+            self.lock_device_identity();
+        }
         result.map_err(Into::into)
     }
 
@@ -775,9 +794,20 @@ impl NookVaultManager {
         &mut self,
         material: &nook_core::PasskeyDeviceIdentityMaterial,
     ) -> Result<String, NookError> {
-        indexed_db::save_wrapped_device_identity(material.device_id(), material.record()).await?;
         self.device.id = material.device_id().to_owned();
         self.device.identity_private_key = material.identity_secret().clone().into_inner();
+        let identity = self.device_identity()?;
+        let persisted = crate::storage::identity_record::save_protected_local_identity(
+            &identity,
+            material.record(),
+            "Personal",
+        )
+        .await;
+        if let Err(error) = persisted {
+            self.device.id.clear();
+            self.lock_device_identity();
+            return Err(error);
+        }
         Ok(self.device.id.clone())
     }
 }

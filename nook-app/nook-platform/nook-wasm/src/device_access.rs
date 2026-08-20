@@ -215,11 +215,15 @@ impl NookDeviceVaultAccess {
 #[wasm_bindgen]
 pub struct NookDeviceAccessSnapshotRequest {
     session_device_id: String,
+    session_unlocked: bool,
 }
 
 impl NookDeviceAccessSnapshotRequest {
-    pub(crate) fn new(session_device_id: String) -> Self {
-        Self { session_device_id }
+    pub(crate) fn new(session_device_id: String, session_unlocked: bool) -> Self {
+        Self {
+            session_device_id,
+            session_unlocked,
+        }
     }
 }
 
@@ -228,7 +232,7 @@ impl NookDeviceAccessSnapshotRequest {
     /// Resolve the browser-backed projection without retaining a borrow of the
     /// live vault manager across `IndexedDB` work.
     pub async fn resolve(&self) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
-        device_access_snapshot_for_session(&self.session_device_id).await
+        device_access_snapshot_for_session(&self.session_device_id, self.session_unlocked).await
     }
 }
 
@@ -251,6 +255,29 @@ pub struct NookDeviceAccessSnapshot {
     observed_browser: nook_core::PasskeyObservedBrowser,
     observed_platform: nook_core::PasskeyObservedPlatform,
     vaults: Vec<NookDeviceVaultAccess>,
+}
+
+impl NookDeviceAccessSnapshot {
+    pub(crate) fn vaults_for_identity(
+        &self,
+        identity: &nook_core::IdentityRecord,
+    ) -> Vec<NookDeviceVaultAccess> {
+        vaults_for_identity(&self.vaults, identity)
+    }
+}
+
+fn vaults_for_identity(
+    vaults: &[NookDeviceVaultAccess],
+    identity: &nook_core::IdentityRecord,
+) -> Vec<NookDeviceVaultAccess> {
+    vaults
+        .iter()
+        .filter(|vault| {
+            nook_core::StoreId::parse(&vault.store_id)
+                .is_ok_and(|store_id| identity.owns_vault(&store_id))
+        })
+        .cloned()
+        .collect()
 }
 
 #[wasm_bindgen]
@@ -350,10 +377,25 @@ impl NookDeviceAccessSnapshot {
 
 pub(crate) async fn device_access_snapshot_for_session(
     session_device_id: &str,
+    session_unlocked: bool,
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let protected = indexed_db::load_wrapped_device_identity().await?;
+    device_access_snapshot_for_session_with_protected(
+        session_device_id,
+        session_unlocked,
+        protected,
+    )
+    .await
+}
+
+pub(crate) async fn device_access_snapshot_for_session_with_protected(
+    session_device_id: &str,
+    session_unlocked: bool,
+    protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
+) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let session_device_id = session_device_id.trim();
     let identity_state = nook_core::classify_device_access_identity_state(
+        session_unlocked,
         session_device_id,
         protected.as_ref().map(|(device_id, _)| device_id.as_str()),
     );
@@ -473,5 +515,47 @@ fn backup_state(value: nook_core::PasskeyBackupState) -> NookPasskeyBackupState 
         nook_core::PasskeyBackupState::NotEligible => NookPasskeyBackupState::NotEligible,
         nook_core::PasskeyBackupState::Eligible => NookPasskeyBackupState::Eligible,
         nook_core::PasskeyBackupState::BackedUp => NookPasskeyBackupState::BackedUp,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vault_row(store_id: &nook_core::StoreId, label: &str) -> NookDeviceVaultAccess {
+        NookDeviceVaultAccess {
+            store_id: store_id.to_string(),
+            label: label.to_owned(),
+            last_local_update_at: NookDeviceAccessText::from_option(None),
+            verified_at: NookDeviceAccessText::from_option(None),
+        }
+    }
+
+    #[test]
+    fn scopes_current_and_companion_identity_vault_rows() -> anyhow::Result<()> {
+        let current_key = nook_core::AppKey::generate()?;
+        let companion_key = nook_core::AppKey::generate()?;
+        let current_store = nook_core::generate_store_id()?;
+        let companion_store = nook_core::generate_store_id()?;
+        let unrelated_store = nook_core::generate_store_id()?;
+        let mut current =
+            nook_core::IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
+        let mut companion =
+            nook_core::IdentityRecord::create_with_app_key("Work", &companion_key, None)?;
+        current.generate_vault_dek(current_store.clone())?;
+        companion.generate_vault_dek(companion_store.clone())?;
+        let vaults = vec![
+            vault_row(&current_store, "Personal vault"),
+            vault_row(&companion_store, "Work vault"),
+            vault_row(&unrelated_store, "Unrelated vault"),
+        ];
+
+        let current_rows = vaults_for_identity(&vaults, &current);
+        let companion_rows = vaults_for_identity(&vaults, &companion);
+        assert_eq!(current_rows.len(), 1);
+        assert_eq!(current_rows[0].store_id(), current_store.as_str());
+        assert_eq!(companion_rows.len(), 1);
+        assert_eq!(companion_rows[0].store_id(), companion_store.as_str());
+        Ok(())
     }
 }

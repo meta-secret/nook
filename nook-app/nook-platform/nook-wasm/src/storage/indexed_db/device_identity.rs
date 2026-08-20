@@ -99,11 +99,11 @@ async fn idb_get_string_preferring(
 
 /// Atomically install a verified wrapped identity after the just-written
 /// ciphertext can be read back.
+#[cfg(test)]
 pub(crate) async fn save_wrapped_device_identity(
     device_id: &str,
     record: &nook_core::WrappedDeviceIdentity,
 ) -> Result<(), NookError> {
-    let wrapped = nook_core::serialize_wrapped_device_identity(record)?;
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -112,6 +112,21 @@ pub(crate) async fn save_wrapped_device_identity(
         .store("vault")
         .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
 
+    put_wrapped_device_identity(&store, device_id, record).await?;
+
+    transaction
+        .done()
+        .await
+        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
+    Ok(())
+}
+
+pub(crate) async fn put_wrapped_device_identity(
+    store: &rexie::Store,
+    device_id: &str,
+    record: &nook_core::WrappedDeviceIdentity,
+) -> Result<(), NookError> {
+    let wrapped = nook_core::serialize_wrapped_device_identity(record)?;
     let id_value = serde_wasm_bindgen::to_value(device_id)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let wrapped_value = serde_wasm_bindgen::to_value(&wrapped)
@@ -149,10 +164,6 @@ pub(crate) async fn save_wrapped_device_identity(
         ));
     }
 
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
     Ok(())
 }
 

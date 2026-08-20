@@ -149,7 +149,7 @@ test.describe('devices and access dashboard', () => {
     ).not.toHaveText('Unknown')
   })
 
-  test('uses the wide canvas and one browse control without duplicating the app key in List', async ({
+  test('uses the wide canvas with a persistent identity rail and key inventory', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -192,14 +192,20 @@ test.describe('devices and access dashboard', () => {
     )
     expect(browseBottom).toBeLessThan(headingTop)
 
-    await page.getByTestId('devices-access-layout-list').click()
-    const keyCards = page.getByTestId('devices-access-key-card')
-    await expect(keyCards).toHaveCount(1)
-    await expect(keyCards).toHaveAttribute('data-kind', 'passkey')
-    await expect(keyCards).toContainText('Passkey')
-    await expect(keyCards).not.toContainText('App key')
+    const identityRail = page.getByTestId('devices-access-identity-rail')
+    const keyInventory = page.getByTestId('devices-access-key-inventory')
+    const keyRows = page.getByTestId('devices-access-key-row')
+    await expect(identityRail).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-identity-option'),
+    ).toHaveCount(1)
+    await expect(keyInventory).toBeVisible()
+    await expect(keyRows).toHaveCount(2)
+    await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
+    await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
+    await expect(keyInventory).toContainText('Passkey')
+    await expect(keyInventory).toContainText('App key')
 
-    await page.getByTestId('devices-access-layout-graph').click()
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
     await page.getByTestId('devices-access-node-device-key').click()
@@ -277,18 +283,29 @@ test.describe('devices and access dashboard', () => {
     await expect(strengthVaults).toHaveCount(1)
     await expect(strengthVaults).toContainText('Verified way in')
 
-    await page.getByTestId('devices-access-layout-list').click()
-    const identityKeys = page.getByTestId('devices-access-identity-keys')
+    const identityRail = page.getByTestId('devices-access-identity-rail')
+    const identityOptions = page.getByTestId('devices-access-identity-option')
+    const identityKeys = page.getByTestId('devices-access-key-inventory')
+    const keyRows = page.getByTestId('devices-access-key-row')
+    await expect(identityRail).toBeVisible()
+    await expect(identityOptions).toHaveCount(1)
+    await expect(identityOptions.filter({ hasText: 'Personal' })).toContainText(
+      '2 keys',
+    )
     await expect(identityKeys).toBeVisible()
-    await expect(
-      page.getByTestId('devices-access-key-card').first(),
-    ).toBeVisible()
+    await expect(keyRows).toHaveCount(2)
     await expect(identityKeys).toContainText('Passkey')
-    await expect(identityKeys).not.toContainText('App key')
-    await page.getByTestId('devices-access-layout-graph').click()
+    await expect(identityKeys).toContainText('App key')
+
+    await expect(page.getByTestId('devices-access-add-identity')).toBeDisabled()
+    await expect(identityRail).toContainText(
+      'Another identity needs its own protected app key',
+    )
     await expect(bridge).toBeVisible()
 
     await page.setViewportSize({ width: 390, height: 844 })
+    await expect(identityRail).toBeVisible()
+    await expect(identityKeys).toBeVisible()
     await expect(
       bridge.getByRole('img', {
         name: /This identity holds the DEK for Test vault/i,

@@ -8,6 +8,64 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
 
+#[wasm_bindgen_test]
+async fn pin_protection_bootstraps_the_initial_identity() -> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+
+    manager
+        .finish_pin_device_protection("correct horse battery staple".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
+    let request = manager.identity_directory_snapshot_request()?;
+    let snapshot = request.resolve().await?;
+
+    assert_eq!(snapshot.length(), 1);
+    assert_eq!(
+        snapshot.selection_kind(),
+        crate::identity_record::NookIdentityDirectorySelectionKind::Selected
+    );
+    assert_eq!(snapshot.identity(0)?.label(), "Personal");
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn passkey_protection_bootstraps_the_initial_identity() -> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+
+    manager
+        .finish_device_protection(
+            vec![7u8; 32],
+            setup.user_handle().to_vec(),
+            setup.prf_input().to_vec(),
+            vec![21u8; 32],
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("protect device with passkey: {error:?}"))?;
+    let request = manager.identity_directory_snapshot_request()?;
+    let snapshot = request.resolve().await?;
+
+    assert_eq!(snapshot.length(), 1);
+    assert_eq!(snapshot.identity(0)?.label(), "Personal");
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
 struct ImportFixture {
     records: Vec<ExternalEventLogRecord>,
     store_id: String,

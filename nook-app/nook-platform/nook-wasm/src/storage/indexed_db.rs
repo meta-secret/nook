@@ -29,9 +29,11 @@
 mod device_identity;
 
 pub use device_identity::DeviceProtectionDeviceModeState;
+#[cfg(test)]
+pub(crate) use device_identity::save_wrapped_device_identity;
 pub(crate) use device_identity::{
     delete_device_identity_for_recovery, device_identity_device_mode,
-    device_identity_protection_status, load_wrapped_device_identity, save_wrapped_device_identity,
+    device_identity_protection_status, load_wrapped_device_identity, put_wrapped_device_identity,
 };
 
 use crate::{NookError, storage::open_nook_database};
