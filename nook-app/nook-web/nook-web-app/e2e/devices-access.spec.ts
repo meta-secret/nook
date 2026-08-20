@@ -641,17 +641,17 @@ test.describe('devices and access dashboard', () => {
       localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
     })
     await page.reload()
-    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+    const recoveryOverlay = page.getByTestId('passkey-auth-overlay')
     const unlock = page.getByTestId('unlock-vault-btn')
     await expect
       .poll(async () => {
-        if (await passkeyOverlay.isVisible()) return 'overlay'
+        if (await recoveryOverlay.isVisible()) return 'overlay'
         if (await unlock.isVisible()) return 'unlock'
         return 'waiting'
       })
       .not.toBe('waiting')
-    if (!(await passkeyOverlay.isVisible())) await unlock.click()
-    await expect(passkeyOverlay).toBeVisible({
+    if (!(await recoveryOverlay.isVisible())) await unlock.click()
+    await expect(recoveryOverlay).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     page.once('dialog', (dialog) => dialog.accept())
