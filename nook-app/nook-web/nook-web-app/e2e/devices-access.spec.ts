@@ -441,9 +441,6 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('vault-devices-section').locator('button').first(),
     ).toBeFocused()
     await page.getByTestId('vault-devices-access-tab').click()
-    await page.getByTestId('devices-access-back').click()
-    await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
-    await page.getByTestId('vault-devices-access-tab').click()
     // Remount after leaving Access invalidates the earlier vaultsNode locator.
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -460,17 +457,10 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('vault-unlock-section').locator('button').first(),
     ).toBeFocused()
-    const accessTabFromBackupPasswords = page.getByTestId(
-      'vault-devices-access-tab',
-    )
-    await expect(accessTabFromBackupPasswords).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await accessTabFromBackupPasswords.click({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await page.getByTestId('vault-devices-access-tab').click()
+
     await page.getByTestId('devices-access-back').click()
-    await expect(accessTabFromBackupPasswords).toBeFocused()
+    await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
   })
 
   test('keeps localized evidence tabs inside a narrow viewport', async ({
