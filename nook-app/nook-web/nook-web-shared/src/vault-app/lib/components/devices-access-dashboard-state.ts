@@ -65,11 +65,6 @@ export type DashboardView = {
   vaults: VaultAccessView[];
 };
 
-export enum DevicesAccessLayoutKind {
-  Graph = "graph",
-  List = "list",
-}
-
 export enum ProviderSaveKind {
   Idle = "idle",
   Saving = "saving",

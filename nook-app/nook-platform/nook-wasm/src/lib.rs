@@ -32,9 +32,10 @@ pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
 pub use device_access::*;
 pub use identity_record::{
-    NookIdentityDirectorySelectionKind, NookIdentityDirectorySnapshot, NookIdentitySnapshot,
-    NookIdentitySnapshotKind, NookIdentitySnapshotLoad, load_identity_directory_snapshot,
-    load_identity_snapshot, select_identity,
+    NookIdentityDirectorySelectionKind, NookIdentityDirectorySnapshot,
+    NookIdentityDirectorySnapshotRequest, NookIdentitySnapshot, NookIdentitySnapshotKind,
+    NookIdentitySnapshotLoad, load_identity_directory_snapshot, load_identity_snapshot,
+    select_identity,
 };
 pub use logger::NookLogEntries;
 pub use manager::{

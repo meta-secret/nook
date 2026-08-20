@@ -164,22 +164,41 @@ Current dashboard requirements:
 - Login opens `/devices-access`.
 - `/vault` remains the secrets workspace only.
 - Create-vault flows require identity creation first when no identity exists.
-- An unprepared browser may start passkey or PIN protection from the
-  dashboard.
+- The primary desktop layout uses a persistent identity rail.
+  - Every local identity remains visible while one identity is selected.
+  - Each identity row shows the same visible key count as its inventory and its
+    vault count.
+  - Narrow screens stack the identity navigator above the selected identity.
+- Selecting an identity changes the local browse context without changing the
+  persisted authorization selection.
+- The directory and access evidence derive current-installation ownership from
+  the same live Rust session app key.
+  - A locked browser may fall back to its persisted protected app ID.
+  - A companion session must not inherit the persisted browser app ID.
+  - Rust/WASM projects each identity's locally known vault-access rows together
+    with the identity directory. Presentation code must not infer grants by
+    intersecting independently loaded identity and vault snapshots.
+- **Add identity** remains visible but unavailable until Nook can create and
+  protect an independent app key for the new identity.
+- An unprepared browser may start passkey or PIN protection from the dashboard.
+- The selected identity uses a flat key inventory as its primary view.
+  - The current protector and current app key appear as separate rows.
+  - Every other public app-key member also appears.
+  - Protector provenance and last-used evidence remain explicit.
+  - App keys from another installation are read-only.
+  - They never open the current browser's detail evidence.
+- The relationship graph remains available below the key inventory.
+  - It is supporting access detail rather than the primary identity selector.
+  - Vault browsing remains available inside that relationship detail.
+  - It renders only when the browsed identity owns the current browser app key.
+  - Another installation receives an explicit unavailable-evidence state.
+- **Add a key** must not imply success before explicit identity enrollment
+  exists.
+  - The control explains that another installation must request enrollment.
 - Technical identifiers use progressive disclosure.
   Raw passkey credential bytes never appear.
-- Devices & access offers Graph and List layouts.
-  Graph remains the relationship canvas.
-  List shows the current identity's unlock protector as cards.
-- Browse Identity versus Vault sits above Graph and List.
-  Do not repeat the current identity as a second browse row.
-  Vault browse still lists vaults because more than one vault can exist.
 - The Access frame uses a wider measure than the secrets workspace so Graph
-  and List can occupy the content column.
-- A local passkey, PIN, or companion session unwraps one app key.
-  List omits a sibling app-key card in that 1:1 case.
-  Graph still shows the app-key node.
-  The inspect panel still exposes app-key facts.
+  and the key inventory can occupy the content column.
 
 ## Related records
 

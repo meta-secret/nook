@@ -552,6 +552,26 @@ mod tests {
             reloaded.selected().map_err(map_domain_error)?.identity_id,
             work_id
         );
+        let snapshot = crate::identity_record::load_identity_directory_snapshot()
+            .await
+            .map_err(|error| NookError::Database(format!("{error:?}")))?;
+        assert_eq!(snapshot.length(), 2);
+        assert_eq!(
+            snapshot.selection_kind(),
+            crate::identity_record::NookIdentityDirectorySelectionKind::Selected
+        );
+        assert_eq!(
+            snapshot
+                .selected_identity_id()
+                .map_err(|error| NookError::Database(format!("{error:?}")))?,
+            work_id.as_str()
+        );
+        let selected = snapshot
+            .identity(1)
+            .map_err(|error| NookError::Database(format!("{error:?}")))?;
+        assert_eq!(selected.label(), "Work");
+        assert_eq!(selected.members().len(), 1);
+        assert!(selected.vault_store_ids().is_empty());
         clear_identity_directory_for_test().await
     }
 

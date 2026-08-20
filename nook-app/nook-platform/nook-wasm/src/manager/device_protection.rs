@@ -80,6 +80,7 @@ mod tests {
 
         assert!(manager.device.identity_private_key.is_empty());
         assert!(manager.device_access_snapshot_request().is_ok());
+        assert!(manager.identity_directory_snapshot_request().is_ok());
         Ok(())
     }
 
