@@ -92,9 +92,7 @@ creation as the primary interactions.
           class:border-border={identity.identityId === selectedIdentityId}
           class:bg-muted={identity.identityId === selectedIdentityId}
           class:shadow-sm={identity.identityId === selectedIdentityId}
-          aria-current={identity.identityId === selectedIdentityId
-            ? 'true'
-            : undefined}
+          aria-current={identity.identityId === selectedIdentityId}
           data-testid="devices-access-identity-option"
           data-selected={identity.identityId === selectedIdentityId}
           onclick={() => onSelectIdentity(identity.identityId)}

@@ -101,6 +101,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
   )
   let loadGeneration = 0
   let directoryLoadGeneration = 0
+  let snapshotLoadGeneration = 0
+  let snapshotsRefreshing = $state(false)
 
   function readText(value: NookDeviceAccessText): DashboardText {
     try {
@@ -140,7 +142,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
       }
       case DashboardFocusTargetKind.RetryResult: {
         const target = document.querySelector<HTMLElement>(
-          loadState.kind === DashboardLoadKind.Failed
+          loadState.kind === DashboardLoadKind.Failed ||
+            directoryLoadState.kind === IdentityDirectoryLoadKind.Failed
             ? '[data-testid="devices-access-retry"]'
             : '[data-testid="devices-access-back"]',
         )
@@ -155,10 +158,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
   async function focusAfterProtectionReady(): Promise<void> {
     selectedStage = AccessChainStage.Unlock
     pendingFocusTarget = DashboardFocusTargetKind.ChainSelection
-    if (loadState.kind !== DashboardLoadKind.Ready) return
-    await loadDirectory()
-    await tick()
-    focusPendingDashboardTarget()
+    await reloadSnapshots()
   }
 
   async function loadDashboard(): Promise<DashboardLoadKind> {
@@ -308,7 +308,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
 
   async function retryDashboard(): Promise<void> {
     pendingFocusTarget = DashboardFocusTargetKind.RetryResult
-    await Promise.all([loadDashboard(), loadDirectory()])
+    await reloadSnapshots()
   }
 
   function chooseIdentity(identityId: string): void {
@@ -324,6 +324,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
       },
     }
     selectedStage = AccessChainStage.Unlock
+    selectedPerspective = IdentityBridgePerspective.Identities
     selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
     resetSelectedVaultForIdentity()
   }
@@ -342,6 +343,14 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     }
     if (identitySelection.identity.vaults.length === 0) {
       selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+      return
+    }
+    if (
+      selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected &&
+      identitySelection.identity.vaults.some(
+        (entry) => entry.storeId === selectedVault.storeId,
+      )
+    ) {
       return
     }
     selectedVault = {
@@ -436,11 +445,20 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     return false
   }
 
+  async function reloadSnapshots(): Promise<void> {
+    const generation = ++snapshotLoadGeneration
+    snapshotsRefreshing = true
+    await Promise.all([loadDashboard(), loadDirectory()])
+    if (generation !== snapshotLoadGeneration) return
+    snapshotsRefreshing = false
+    await tick()
+    focusPendingDashboardTarget()
+  }
+
   $effect(() => {
     void vault.deviceProtectionStatus
     void vault.localVaults.length
-    void loadDashboard()
-    void loadDirectory()
+    void reloadSnapshots()
   })
 </script>
 
@@ -474,7 +492,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     </div>
   </header>
 
-  {#if loadState.kind === DashboardLoadKind.Loading}
+  {#if snapshotsRefreshing || loadState.kind === DashboardLoadKind.Loading}
     <div
       class="flex min-h-56 items-center justify-center gap-2 text-sm text-muted-foreground"
       role="status"
@@ -550,7 +568,10 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
       <div
         class="min-w-0 border-t border-border pt-8 md:border-t-0 md:pt-0 md:pl-8"
       >
-        {#if accessView.protection === DeviceAccessProtectionKind.Missing}
+        {#if accessView.protection === DeviceAccessProtectionKind.Missing &&
+        !(identitySelection.kind === IdentityDirectorySelectionKind.Selected &&
+          identitySelection.identity.localAccess ===
+            NookIdentityLocalAccessKind.OtherInstallation)}
           <AccessStrengthPreview {vault} vaults={accessView.vaults} />
           <div
             class="mt-8 border-t border-border/70 pt-6"

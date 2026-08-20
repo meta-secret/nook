@@ -5,6 +5,7 @@ surface and technical inspection as a secondary action.
 -->
 <script lang="ts">
   import { Fingerprint, KeyRound, Plus, Settings } from '@lucide/svelte'
+  import { NookIdentityLocalAccessKind } from '$app-wasm'
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
@@ -62,6 +63,8 @@ surface and technical inspection as a secondary action.
       type="button"
       variant="ghost"
       class="self-start sm:self-auto"
+      disabled={identity.localAccess ===
+        NookIdentityLocalAccessKind.OtherInstallation}
       data-testid="devices-access-identity-details"
       onclick={() => onSelectStage(AccessChainStage.DeviceKey)}
     >
