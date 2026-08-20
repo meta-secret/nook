@@ -149,6 +149,71 @@ test.describe('devices and access dashboard', () => {
     ).not.toHaveText('Unknown')
   })
 
+  test('uses the wide canvas and one browse control without duplicating the app key in List', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.setViewportSize({ width: 1440, height: 900 })
+
+    const shell = page.getByTestId('app-shell-content')
+    const vaultShellWidth = await shell.evaluate(
+      (element) => element.getBoundingClientRect().width,
+    )
+
+    await page.getByTestId('vault-devices-access-tab').click()
+    const dashboard = page.getByTestId('devices-access-dashboard')
+    await expect(dashboard).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    const accessShellWidth = await shell.evaluate(
+      (element) => element.getBoundingClientRect().width,
+    )
+    expect(accessShellWidth).toBeGreaterThan(vaultShellWidth + 200)
+
+    const browse = page.getByRole('navigation', { name: 'Browse by' })
+    await expect(
+      browse.getByRole('button', { name: 'Identity', exact: true }),
+    ).toHaveCount(1)
+    await expect(
+      browse.getByRole('button', { name: 'Vault', exact: true }),
+    ).toHaveCount(1)
+    await expect(browse.getByRole('list')).toHaveCount(0)
+
+    const identityHeading = page.getByRole('heading', {
+      name: 'This identity holds DEKs for 1 vault.',
+      exact: true,
+    })
+    const browseBottom = await browse.evaluate(
+      (element) => element.getBoundingClientRect().bottom,
+    )
+    const headingTop = await identityHeading.evaluate(
+      (element) => element.getBoundingClientRect().top,
+    )
+    expect(browseBottom).toBeLessThan(headingTop)
+
+    await page.getByTestId('devices-access-layout-list').click()
+    const keyCards = page.getByTestId('devices-access-key-card')
+    await expect(keyCards).toHaveCount(1)
+    await expect(keyCards).toHaveAttribute('data-kind', 'passkey')
+    await expect(keyCards).toContainText('Passkey')
+    await expect(keyCards).not.toContainText('App key')
+
+    await page.getByTestId('devices-access-layout-graph').click()
+    const bridge = page.getByTestId('devices-access-chain')
+    await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
+    await page.getByTestId('devices-access-node-device-key').click()
+    await expect(page.getByTestId('devices-access-panel')).toContainText(
+      'App key',
+    )
+
+    await page.getByTestId('devices-access-perspective-vaults').click()
+    await expect(browse.getByRole('list')).toHaveCount(1)
+    await expect(
+      browse.getByRole('button', { name: /Test vault.*App keys: 1/ }),
+    ).toBeVisible()
+  })
+
   test('walks the access chain from passkey to app key to vaults', async ({
     page,
   }) => {
