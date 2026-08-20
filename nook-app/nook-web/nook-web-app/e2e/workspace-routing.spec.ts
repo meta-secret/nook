@@ -30,6 +30,9 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
 
     await waitForVaultOperationsIdle(page)
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
     await page.goto('about:blank')
     await page.goto('/devices-access')
     await authorizeDeviceProtection(page)
