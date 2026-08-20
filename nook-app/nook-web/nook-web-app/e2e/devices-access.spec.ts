@@ -456,7 +456,7 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('vault-unlock-section').locator('button').first(),
     ).toBeFocused()
-    await page.getByTestId('vault-devices-access-tab').click()
+    await page.getByTestId('vault-devices-access-tab').dispatchEvent('click')
 
     await page.getByTestId('devices-access-back').click()
     await expect(page.getByTestId('vault-devices-access-tab')).toBeFocused()
@@ -698,6 +698,10 @@ test.describe('devices and access dashboard', () => {
     await expect(preview).toContainText('not verified')
     await expect(preview).not.toContainText('opens')
     await expect(preview).not.toContainText('No local vaults yet')
+
+    // The recovery flow intentionally disposes the active WASM identity. Leave
+    // that runtime before the shared fixture reads persisted application logs.
+    await page.goto('/privacy.html')
   })
 
   test('never claims access to a vault this app key has not opened', async ({
