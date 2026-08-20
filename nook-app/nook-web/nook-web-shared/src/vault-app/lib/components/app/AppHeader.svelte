@@ -12,6 +12,7 @@
   import { Button } from '$lib/components/ui/button'
   import { ColorMode } from '$lib/app/theme'
   import type { VaultState } from '$lib/vault.svelte'
+  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
 
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
   const SIMPLE_VAULT_APP_URL = simple_vault_app_url(
@@ -25,8 +26,10 @@
     legalPageOpen,
     logsPage,
     extensionConnectRoute,
+    extensionSetupState,
     onNavigateHome,
     onToggleColorMode,
+    onPairExtension,
   }: {
     vault: VaultState
     colorMode: ColorMode
@@ -34,8 +37,10 @@
     legalPageOpen: boolean
     logsPage: boolean
     extensionConnectRoute: boolean
+    extensionSetupState: ExtensionSetupOffer
     onNavigateHome: () => void
     onToggleColorMode: () => void
+    onPairExtension: () => void
   } = $props()
 
   function navigateToSiblingApp(event: MouseEvent) {
@@ -51,14 +56,18 @@
   <div
     class="mx-auto flex items-center justify-between gap-4 px-4 py-2 sm:px-6 {shellWidth}"
   >
-    <div class="flex min-w-0 flex-1 items-center gap-3 overflow-hidden">
+    <div class="flex min-w-0 flex-1 items-center gap-3">
       <NookLogo
         {colorMode}
         size={LogoSize.Small}
         class="rounded-lg overflow-hidden"
       />
       {#if vault.isAuthenticated && !legalPageOpen && !logsPage && !vault.helpOpen}
-        <VaultSwitcher {vault} />
+        <VaultSwitcher
+          {vault}
+          {extensionSetupState}
+          {onPairExtension}
+        />
       {/if}
     </div>
 

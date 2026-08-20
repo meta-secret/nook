@@ -211,6 +211,7 @@
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
+          extensionSetupState={extensionSetupState}
           bind:activeSection={vault.adminAccordionSection}
           syncProviders={vault.syncProviders}
           manualProviderSync={vault.manualProviderSync}
