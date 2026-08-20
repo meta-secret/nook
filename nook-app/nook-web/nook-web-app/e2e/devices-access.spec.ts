@@ -638,14 +638,22 @@ test.describe('devices and access dashboard', () => {
       const manager = (
         window as Window & {
           __nookVault?: {
+            stopVaultSync(): void
+            waitForStorageChain(): Promise<void>
+            enqueueExclusiveStorage<T>(operation: () => Promise<T>): Promise<T>
             requireManager(): {
               reset_device_protection_for_recovery(): Promise<void>
             }
           }
         }
-      ).__nookVault?.requireManager()
-      if (!manager) throw new Error('Vault manager is not exposed')
-      await manager.reset_device_protection_for_recovery()
+      ).__nookVault
+      if (!manager) throw new Error('Vault runtime is not exposed')
+      manager.stopVaultSync()
+      await manager.waitForStorageChain()
+      const vaultManager = manager.requireManager()
+      await manager.enqueueExclusiveStorage(() =>
+        vaultManager.reset_device_protection_for_recovery(),
+      )
     })
 
     await page.reload()
