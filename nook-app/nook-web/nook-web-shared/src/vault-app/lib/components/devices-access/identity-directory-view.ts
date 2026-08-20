@@ -150,7 +150,8 @@ export function selectedIdentity(
   if (directory.selection.kind === IdentityDirectorySelectionKind.Empty) {
     return undefined;
   }
+  const selectedIdentityId = directory.selection.identityId;
   return directory.identities.find(
-    (identity) => identity.identityId === directory.selection.identityId,
+    (identity) => identity.identityId === selectedIdentityId,
   );
 }
