@@ -41,6 +41,29 @@ export function vaultSpaPlugin(options: VaultSpaOptions): Plugin {
   };
   return {
     name: options.name,
+    transformIndexHtml(_html, context) {
+      const vaultWasm = Object.values(context.bundle ?? {}).find(
+        (output) =>
+          output.type === "asset" &&
+          output.fileName.includes("nook_wasm_bg") &&
+          output.fileName.endsWith(".wasm"),
+      );
+      return vaultWasm
+        ? [
+            {
+              tag: "link",
+              attrs: {
+                rel: "preload",
+                href: `./${vaultWasm.fileName}`,
+                as: "fetch",
+                type: "application/wasm",
+                crossorigin: "anonymous",
+              },
+              injectTo: "head",
+            },
+          ]
+        : [];
+    },
     configureServer(server) {
       installMiddleware(server.middlewares);
     },

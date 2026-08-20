@@ -16,6 +16,7 @@ const EXCLUDED_DIRECTORIES: &[&str] = &[
     "dist",
     "node_modules",
     "target",
+    "vendor",
 ];
 
 /// Finds repository-defined declarative and procedural Rust macros.
@@ -150,6 +151,24 @@ mod tests {
         let mut visitor = MacroDefinitionVisitor::default();
         visitor.visit_file(&syntax);
         assert!(visitor.lines.is_empty());
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ignores_vendored_dependency_macro_definitions() -> anyhow::Result<()> {
+        let root = temporary_directory("vendor")?;
+        let vendor = root.join("vendor/arrayref/src");
+        fs::create_dir_all(&vendor)?;
+        fs::write(
+            vendor.join("lib.rs"),
+            "macro_rules! third_party { () => {}; }",
+        )?;
+
+        let violations = authored_rust_macro_definitions(&root)?;
+
+        fs::remove_dir_all(root)?;
+        assert!(violations.is_empty());
         Ok(())
     }
 

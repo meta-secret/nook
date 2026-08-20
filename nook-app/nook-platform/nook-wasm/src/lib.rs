@@ -70,6 +70,36 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[must_use]
+pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
+    nook_companion_core::ExtensionConnectScope::VaultAccess
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
+    nook_companion_core::ExtensionConnectScope::PasswordFilling
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
+    nook_companion_core::ExtensionConnectScope::PasskeyManagement
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
+    nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn is_extension_connect_scope(value: &str) -> bool {
+    nook_companion_core::ExtensionConnectScope::parse(value).is_some()
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn sentinel_genesis_phase_translation_key(phase: nook_core::SentinelGenesisPhase) -> String {
     phase.translation_key().to_owned()
 }

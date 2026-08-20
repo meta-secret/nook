@@ -156,6 +156,75 @@
 }
 
 @layer utilities {
+  .vault-startup-shell {
+    display: grid;
+    min-height: 100svh;
+    place-items: center;
+    padding: 1.5rem;
+    background:
+      radial-gradient(
+        circle at 50% 42%,
+        color-mix(in oklch, var(--card) 82%, transparent) 0,
+        transparent 18rem
+      ),
+      var(--background);
+  }
+
+  .vault-startup-status {
+    display: grid;
+    width: min(18rem, 100%);
+    justify-items: center;
+    gap: 1rem;
+    color: var(--muted-foreground);
+    text-align: center;
+  }
+
+  .vault-startup-icon {
+    width: 3rem;
+    height: 3rem;
+    border: 1px solid var(--border);
+    border-radius: calc(var(--radius) + 0.25rem);
+    box-shadow: 0 1rem 2.5rem rgb(0 0 0 / 9%);
+  }
+
+  .vault-startup-indicator {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid
+      color-mix(in oklch, var(--muted-foreground) 22%, transparent);
+    border-top-color: var(--foreground);
+    border-radius: 9999px;
+    animation: vault-startup-spin 800ms linear infinite;
+  }
+
+  .vault-startup-message {
+    max-width: 28rem;
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+  }
+
+  .vault-startup-shell[data-state="unavailable"] .vault-startup-indicator {
+    border-color: color-mix(in oklch, var(--destructive) 55%, transparent);
+    animation: none;
+  }
+
+  .vault-startup-shell[data-state="unavailable"] .vault-startup-message {
+    color: var(--foreground);
+  }
+
+  @keyframes vault-startup-spin {
+    to {
+      transform: rotate(1turn);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .vault-startup-indicator {
+      animation: none;
+    }
+  }
+
   /* Quiet tracked data label used by the devices & access map. Colour is
    * applied by the caller so it can invert on selected surfaces. */
   .access-micro-label {

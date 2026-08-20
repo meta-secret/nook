@@ -70,6 +70,7 @@ tasks:
         esac;
         vault_output="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm";
         vault_stamp="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/.wasm-source-sha256";
+        vault_build_mode="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook-wasm-build-mode";
         companion_output="{{.WEB_SHARED_ROOT}}/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm";
         companion_stamp="{{.WEB_SHARED_ROOT}}/src/extension/nook-companion-wasm/.wasm-source-sha256";
         desired="$current $stamp_mode";
@@ -81,7 +82,8 @@ tasks:
           cd "{{.PLATFORM_ROOT}}" && wasm-pack build nook-companion-wasm --target web --out-dir "../../nook-web/nook-web-shared/src/extension/nook-companion-wasm" --out-name nook_companion_wasm $wasm_opt_flag;
           echo "$desired" > "$vault_stamp";
           echo "$desired" > "$companion_stamp";
-        fi'
+        fi;
+        echo "$stamp_mode" > "$vault_build_mode"'
 
   _wasm:test:
     desc: Run release-profile wasm-bindgen tests in Node.

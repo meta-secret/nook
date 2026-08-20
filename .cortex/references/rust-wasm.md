@@ -26,8 +26,8 @@
 - `WASM_BUILD_MODE` defaults to `dev`.
 - Dev mode runs release `wasm-pack` with `--no-opt` and stamps
   `.wasm-source-sha256` with `no-opt`.
-- `WASM_BUILD_MODE=prod` runs the Binaryen `wasm-opt` pass and stamps
-  `optimized`.
+- `WASM_BUILD_MODE=prod` runs the Binaryen size-focused `wasm-opt -Oz` pass and
+  stamps `optimized`.
 - Local `task check`, `task setup`, `task web:dev`, `task wasm:build`, PR CI,
   and main development delivery use dev mode.
 - Release CI passes `WASM_BUILD_MODE=prod`.
@@ -39,6 +39,12 @@
 - It uses the existing `nook-web:local` image and bind-mounts the worktree.
 - Run `task setup` once first if that image does not exist.
 - `task wasm:build:prod` is the explicit optimized local path.
+
+Production vault HTML preloads the fingerprinted `nook-wasm` artifact so the
+browser can fetch it while JavaScript loads. The isolation verifier reports raw
+and Brotli-compressed WASM sizes and enforces the release ceilings. Simple and
+Sentinel share that artifact; they do not load `nook-companion-wasm` during
+universal vault startup.
 
 - **CI:** PR and main call Task with `WASM_BUILD_MODE=dev` to skip `wasm-opt`.
   - Release alone uses `WASM_BUILD_MODE=prod` so stable artifacts are optimized

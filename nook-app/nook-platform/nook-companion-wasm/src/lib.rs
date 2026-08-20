@@ -282,34 +282,26 @@ pub fn extension_pairing_setup_storage_key() -> String {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_vault_access_scope() -> String {
+pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::VaultAccess
-        .as_str()
-        .to_owned()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_password_filling_scope() -> String {
+pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::PasswordFilling
-        .as_str()
-        .to_owned()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_passkey_management_scope() -> String {
+pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::PasskeyManagement
-        .as_str()
-        .to_owned()
 }
 
 #[wasm_bindgen]
 #[must_use]
-pub fn extension_sync_provider_credentials_scope() -> String {
+pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
     nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
-        .as_str()
-        .to_owned()
 }
 
 #[wasm_bindgen]

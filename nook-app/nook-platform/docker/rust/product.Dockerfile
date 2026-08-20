@@ -702,6 +702,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
          | cut -d' ' -f1)" \
          && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/.wasm-source-sha256 \
          && echo "$current $stamp_mode" > ../nook-web/nook-web-shared/src/extension/nook-companion-wasm/.wasm-source-sha256 \
+         && echo "$stamp_mode" > ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/nook-wasm-build-mode \
          && mkdir -p /opt/nook/wasm-handoff \
          && cp -a ../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/. /opt/nook/wasm-handoff/ \
          && mkdir -p /opt/nook/wasm-handoff/nook-companion-wasm \
