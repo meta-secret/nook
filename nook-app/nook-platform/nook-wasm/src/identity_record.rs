@@ -174,7 +174,7 @@ impl NookIdentitySnapshot {
         self.members.clone()
     }
 
-    #[wasm_bindgen(js_name = vaultStoreIds)]
+    #[wasm_bindgen]
     pub fn vault_store_ids(&self) -> Vec<String> {
         self.vault_store_ids.clone()
     }

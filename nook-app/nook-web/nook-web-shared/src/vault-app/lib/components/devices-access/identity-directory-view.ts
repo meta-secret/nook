@@ -91,7 +91,7 @@ function readIdentity(identity: NookIdentitySnapshot): IdentityDirectoryEntry {
       fingerprint: identity.fingerprint,
       localAccess: identity.localAccess,
       members: identity.members().map(readMember),
-      vaultStoreIds: identity.vaultStoreIds(),
+      vaultStoreIds: identity.vault_store_ids(),
       vaults: identity.vaults().map((entry) => {
         try {
           const verifiedAt = entry.verifiedAt;
