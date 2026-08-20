@@ -14,9 +14,9 @@ import {
   PasskeyKeeperKind,
   PasskeyObservedBrowser,
   PasskeyObservedPlatform,
-  type NookVaultManager,
+  NookVaultManager,
 } from '$app-wasm'
-import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
+import { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 import DevicesAccessDashboard from '../../../../nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte'
 
 const identities = [
@@ -108,7 +108,7 @@ const directorySnapshot = {
   free,
 }
 
-const manager = {
+const managerMethods = {
   device_access_snapshot_request: () => ({
     resolve: async () => accessSnapshot,
     free,
@@ -117,24 +117,33 @@ const manager = {
     resolve: async () => directorySnapshot,
     free,
   }),
-} as NookVaultManager
+}
+const manager: NookVaultManager = Object.assign(
+  Object.create(NookVaultManager.prototype),
+  managerMethods,
+)
 
-const vault = {
+const vaultFields = {
   locale: 'en',
   t: (key: string) => key,
   deviceProtectionStatus: DeviceProtectionStatus.Unlocked,
   localVaults: [],
   requireManager: () => manager,
-} as VaultState
+}
+const vault: VaultState = Object.assign(
+  Object.create(VaultState.prototype),
+  vaultFields,
+)
 
 describe('identity directory selection', () => {
   test('switches the key inventory to an identity from another installation', async () => {
-    const rendered = render(DevicesAccessDashboard, {
+    const renderProps = {
       vault,
       onBack: free,
       onManageVaultDevices: free,
       onManageVaultPasswords: free,
-    })
+    }
+    const rendered = render(DevicesAccessDashboard, renderProps)
 
     await waitFor(() =>
       expect(rendered.getByRole('button', { name: /Work/ })).toBeTruthy(),
@@ -144,7 +153,9 @@ describe('identity directory selection', () => {
 
     expect(rendered.getByRole('heading', { name: 'Work' })).toBeTruthy()
     expect(rendered.getByText('Work phone app key')).toBeTruthy()
-    expect(rendered.getByTestId('other-installation-evidence')).toBeTruthy()
+    expect(
+      rendered.getByTestId('devices-access-other-identity-notice'),
+    ).toBeTruthy()
     expect(
       rendered
         .getByTestId('devices-access-identity-details')

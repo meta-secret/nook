@@ -341,6 +341,7 @@ async fn identity_directory_snapshot_for_session(
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
     let access = crate::device_access::device_access_snapshot_for_session_with_protected(
         session_app_id,
+        !session_app_id.is_empty(),
         protected,
     )
     .await?;

@@ -302,12 +302,13 @@ pub fn classify_device_access_protection(
 
 #[must_use]
 pub fn classify_device_access_identity_state(
+    session_unlocked: bool,
     session_device_id: &str,
     persisted_device_id: Option<&str>,
 ) -> DeviceAccessIdentityState {
-    if !session_device_id.trim().is_empty() {
+    if session_unlocked {
         DeviceAccessIdentityState::Unlocked
-    } else if persisted_device_id.is_some() {
+    } else if !session_device_id.trim().is_empty() || persisted_device_id.is_some() {
         DeviceAccessIdentityState::Locked
     } else {
         DeviceAccessIdentityState::Missing
@@ -480,20 +481,32 @@ mod tests {
     #[test]
     fn distinguishes_missing_locked_and_unlocked_identity_sessions() {
         assert_eq!(
-            classify_device_access_identity_state("", None),
+            classify_device_access_identity_state(false, "", None),
             DeviceAccessIdentityState::Missing
         );
         assert_eq!(
-            classify_device_access_identity_state("", Some("device-persisted")),
+            classify_device_access_identity_state(false, "", Some("device-persisted")),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            classify_device_access_identity_state("device-session", Some("device-persisted")),
+            classify_device_access_identity_state(
+                false,
+                "device-persisted",
+                Some("device-persisted")
+            ),
+            DeviceAccessIdentityState::Locked
+        );
+        assert_eq!(
+            classify_device_access_identity_state(true, "device-session", Some("device-persisted")),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            classify_device_access_identity_state("device-companion", None),
+            classify_device_access_identity_state(true, "device-companion", None),
             DeviceAccessIdentityState::Unlocked
+        );
+        assert_eq!(
+            classify_device_access_identity_state(false, "device-companion", None),
+            DeviceAccessIdentityState::Locked
         );
     }
 

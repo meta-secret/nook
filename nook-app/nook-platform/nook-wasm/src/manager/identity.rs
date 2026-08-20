@@ -41,8 +41,6 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn locked_session_keeps_its_public_app_id() {
         let device = super::super::session::DeviceSessionState {

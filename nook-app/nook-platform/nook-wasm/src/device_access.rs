@@ -215,11 +215,15 @@ impl NookDeviceVaultAccess {
 #[wasm_bindgen]
 pub struct NookDeviceAccessSnapshotRequest {
     session_device_id: String,
+    session_unlocked: bool,
 }
 
 impl NookDeviceAccessSnapshotRequest {
-    pub(crate) fn new(session_device_id: String) -> Self {
-        Self { session_device_id }
+    pub(crate) fn new(session_device_id: String, session_unlocked: bool) -> Self {
+        Self {
+            session_device_id,
+            session_unlocked,
+        }
     }
 }
 
@@ -228,7 +232,7 @@ impl NookDeviceAccessSnapshotRequest {
     /// Resolve the browser-backed projection without retaining a borrow of the
     /// live vault manager across `IndexedDB` work.
     pub async fn resolve(&self) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
-        device_access_snapshot_for_session(&self.session_device_id).await
+        device_access_snapshot_for_session(&self.session_device_id, self.session_unlocked).await
     }
 }
 
@@ -373,17 +377,25 @@ impl NookDeviceAccessSnapshot {
 
 pub(crate) async fn device_access_snapshot_for_session(
     session_device_id: &str,
+    session_unlocked: bool,
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let protected = indexed_db::load_wrapped_device_identity().await?;
-    device_access_snapshot_for_session_with_protected(session_device_id, protected).await
+    device_access_snapshot_for_session_with_protected(
+        session_device_id,
+        session_unlocked,
+        protected,
+    )
+    .await
 }
 
 pub(crate) async fn device_access_snapshot_for_session_with_protected(
     session_device_id: &str,
+    session_unlocked: bool,
     protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let session_device_id = session_device_id.trim();
     let identity_state = nook_core::classify_device_access_identity_state(
+        session_unlocked,
         session_device_id,
         protected.as_ref().map(|(device_id, _)| device_id.as_str()),
     );

@@ -427,6 +427,7 @@ impl NookVaultManager {
         let session_device_id = self.device.public_app_id();
         Ok(crate::NookDeviceAccessSnapshotRequest::new(
             session_device_id,
+            !self.device.identity_private_key.is_empty(),
         ))
     }
 
