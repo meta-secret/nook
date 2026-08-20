@@ -85,6 +85,20 @@ mod tests {
     }
 
     #[test]
+    fn failed_handoff_clears_the_adopted_public_app_id() -> Result<(), NookError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.id = identity.device_id().to_string();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        manager.rollback_extension_identity_handoff();
+
+        assert!(manager.device.id.is_empty());
+        assert!(manager.device.identity_private_key.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn paired_vault_handoff_after_lock_adopts_the_extension_without_a_local_app_key()
     -> Result<(), NookError> {
         let context = NookExtensionIdentityHandoffContext {
@@ -400,6 +414,7 @@ impl NookVaultManager {
             self.event_log.signing_seed =
                 std::mem::take(&mut pending.previous_session_signing_seed);
         }
+        self.device.id.clear();
         self.lock_device_identity();
         self.reset_vault_session();
     }
@@ -656,14 +671,17 @@ impl NookVaultManager {
 
             let identity = self.device_identity()?;
             let record = nook_core::wrap_device_identity_with_pin(&identity.secret_string(), &pin)?;
-            indexed_db::save_wrapped_device_identity(&self.device.id, &record).await?;
-            crate::storage::identity_record::ensure_local_identity_for_app_key(
-                &identity, "Personal",
+            crate::storage::identity_record::save_protected_local_identity(
+                &identity, &record, "Personal",
             )
             .await?;
             Ok(())
         }
         .await;
+        if result.is_err() {
+            self.device.id.clear();
+            self.lock_device_identity();
+        }
         result.map_err(Into::into)
     }
 
@@ -776,12 +794,20 @@ impl NookVaultManager {
         &mut self,
         material: &nook_core::PasskeyDeviceIdentityMaterial,
     ) -> Result<String, NookError> {
-        indexed_db::save_wrapped_device_identity(material.device_id(), material.record()).await?;
         self.device.id = material.device_id().to_owned();
         self.device.identity_private_key = material.identity_secret().clone().into_inner();
         let identity = self.device_identity()?;
-        crate::storage::identity_record::ensure_local_identity_for_app_key(&identity, "Personal")
-            .await?;
+        let persisted = crate::storage::identity_record::save_protected_local_identity(
+            &identity,
+            material.record(),
+            "Personal",
+        )
+        .await;
+        if let Err(error) = persisted {
+            self.device.id.clear();
+            self.lock_device_identity();
+            return Err(error);
+        }
         Ok(self.device.id.clone())
     }
 }
