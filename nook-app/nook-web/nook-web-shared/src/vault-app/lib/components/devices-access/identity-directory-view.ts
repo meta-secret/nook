@@ -48,6 +48,13 @@ export type IdentityDirectorySelection =
       readonly identityId: string;
     };
 
+export type SelectedIdentityEntry =
+  | { readonly kind: IdentityDirectorySelectionKind.Empty }
+  | {
+      readonly kind: IdentityDirectorySelectionKind.Selected;
+      readonly identity: IdentityDirectoryEntry;
+    };
+
 export type IdentityDirectoryView = {
   readonly identities: readonly IdentityDirectoryEntry[];
   readonly selection: IdentityDirectorySelection;
@@ -146,12 +153,15 @@ export async function loadIdentityDirectoryView(
 
 export function selectedIdentity(
   directory: IdentityDirectoryView,
-): IdentityDirectoryEntry | undefined {
+): SelectedIdentityEntry {
   if (directory.selection.kind === IdentityDirectorySelectionKind.Empty) {
-    return undefined;
+    return { kind: IdentityDirectorySelectionKind.Empty };
   }
   const selectedIdentityId = directory.selection.identityId;
-  return directory.identities.find(
-    (identity) => identity.identityId === selectedIdentityId,
-  );
+  for (const identity of directory.identities) {
+    if (identity.identityId === selectedIdentityId) {
+      return { kind: IdentityDirectorySelectionKind.Selected, identity };
+    }
+  }
+  return { kind: IdentityDirectorySelectionKind.Empty };
 }

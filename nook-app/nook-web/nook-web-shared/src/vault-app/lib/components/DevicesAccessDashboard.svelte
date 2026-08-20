@@ -335,19 +335,19 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     ) {
       return
     }
-    const identity = selectedIdentity(directoryLoadState.view)
-    if (identity === undefined) {
+    const identitySelection = selectedIdentity(directoryLoadState.view)
+    if (identitySelection.kind === IdentityDirectorySelectionKind.Empty) {
       selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
       return
     }
-    const firstVault = identity.vaults[0]
-    selectedVault =
-      firstVault === undefined
-        ? { kind: IdentityBridgeVaultSelectionKind.Empty }
-        : {
-            kind: IdentityBridgeVaultSelectionKind.Selected,
-            storeId: firstVault.storeId,
-          }
+    if (identitySelection.identity.vaults.length === 0) {
+      selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+      return
+    }
+    selectedVault = {
+      kind: IdentityBridgeVaultSelectionKind.Selected,
+      storeId: identitySelection.identity.vaults[0].storeId,
+    }
   }
 
   async function saveProviderLabel(): Promise<void> {
@@ -531,7 +531,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
   {:else}
     {@const accessView = loadState.view}
     {@const directory = directoryLoadState.view}
-    {@const identity = selectedIdentity(directory)}
+    {@const identitySelection = selectedIdentity(directory)}
     {@const selectedIdentityId =
       directory.selection.kind === IdentityDirectorySelectionKind.Selected
         ? directory.selection.identityId
@@ -562,7 +562,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
               onProtectionReady={() => void focusAfterProtectionReady()}
             />
           </div>
-        {:else if identity === undefined && directory.identities.length === 0}
+        {:else if identitySelection.kind === IdentityDirectorySelectionKind.Empty && directory.identities.length === 0}
           <div
             class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
             data-testid="devices-access-no-identities"
@@ -577,7 +577,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
               {vault.t(I18N_KEYS.DevicesAccessNoIdentitiesDescription)}
             </p>
           </div>
-        {:else if identity === undefined}
+        {:else if identitySelection.kind === IdentityDirectorySelectionKind.Empty}
           <div
             class="flex min-h-64 flex-col items-center justify-center rounded-lg border border-dashed border-border px-6 text-center"
             data-testid="devices-access-no-session-identity"
@@ -593,6 +593,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
             </p>
           </div>
         {:else}
+        {@const identity = identitySelection.identity}
         {@const view = { ...accessView, vaults: [...identity.vaults] }}
         <IdentityKeyInventory
           {vault}
