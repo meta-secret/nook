@@ -644,11 +644,14 @@ test.describe('devices and access dashboard', () => {
     const recoveryOverlay = page.getByTestId('passkey-auth-overlay')
     const unlock = page.getByTestId('unlock-vault-btn')
     await expect
-      .poll(async () => {
-        if (await recoveryOverlay.isVisible()) return 'overlay'
-        if (await unlock.isVisible()) return 'unlock'
-        return 'waiting'
-      })
+      .poll(
+        async () => {
+          if (await recoveryOverlay.isVisible()) return 'overlay'
+          if (await unlock.isVisible()) return 'unlock'
+          return 'waiting'
+        },
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
       .not.toBe('waiting')
     if (!(await recoveryOverlay.isVisible())) await unlock.click()
     await expect(recoveryOverlay).toBeVisible({
