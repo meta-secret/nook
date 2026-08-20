@@ -3,6 +3,7 @@ import {
   authorizeDeviceProtection,
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  waitForVaultOperationsIdle,
 } from './helpers'
 
 test.describe('persistent workspace routing', () => {
@@ -23,6 +24,7 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/devices-access$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
 
+    await waitForVaultOperationsIdle(page)
     await page.reload()
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
