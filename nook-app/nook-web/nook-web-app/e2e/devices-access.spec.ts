@@ -172,8 +172,12 @@ test.describe('devices and access dashboard', () => {
       'Passkey · recoverable identity',
     )
     await expect(
-      page.getByRole('button', {
-        name: /Identity.*1 vaults/,
+      page.getByTestId('devices-access-perspective-identities'),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(
+      page.getByRole('heading', {
+        name: 'This identity holds DEKs for 1 vault.',
+        exact: true,
       }),
     ).toBeVisible()
 
