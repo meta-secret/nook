@@ -15,6 +15,7 @@ test.describe('persistent workspace routing', () => {
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page).toHaveURL(/\/devices-access$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await waitForVaultOperationsIdle(page)
 
     await page.getByTestId('vault-admin-tab').click()
     await expect(page).toHaveURL(/\/admin$/)
