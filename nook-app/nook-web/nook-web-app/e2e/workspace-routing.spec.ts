@@ -2,6 +2,7 @@ import { expect, type Page, test } from './fixtures'
 import {
   authorizeDeviceProtection,
   connectLocalVault,
+  disableLoginAutoUnlock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   waitForVaultOperationsIdle,
 } from './helpers'
@@ -33,10 +34,7 @@ test.describe('persistent workspace routing', () => {
     await page.evaluate(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
-    await page.getByTestId('header-lock-vault-btn').click()
-    await expect(page.getByTestId('login-gate')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await disableLoginAutoUnlock(page)
     await page.reload()
     await authorizeDeviceProtection(page)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
