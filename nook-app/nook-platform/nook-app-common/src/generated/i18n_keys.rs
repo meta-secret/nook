@@ -634,6 +634,9 @@ pub const DEVICES_ACCESS_NO_IDENTITIES: &str = "devices_access.no_identities";
 pub const DEVICES_ACCESS_NO_IDENTITIES_DESCRIPTION: &str =
     "devices_access.no_identities_description";
 pub const DEVICES_ACCESS_NO_LOCAL_UPDATE: &str = "devices_access.no_local_update";
+pub const DEVICES_ACCESS_NO_SESSION_IDENTITY: &str = "devices_access.no_session_identity";
+pub const DEVICES_ACCESS_NO_SESSION_IDENTITY_DESCRIPTION: &str =
+    "devices_access.no_session_identity_description";
 pub const DEVICES_ACCESS_NO_VAULTS: &str = "devices_access.no_vaults";
 pub const DEVICES_ACCESS_NO_VAULTS_READY: &str = "devices_access.no_vaults_ready";
 pub const DEVICES_ACCESS_NO_VAULTS_SHORT: &str = "devices_access.no_vaults_short";

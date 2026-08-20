@@ -502,6 +502,8 @@ export const I18N_KEYS = {
   DevicesAccessNoIdentities: 'devices_access.no_identities',
   DevicesAccessNoIdentitiesDescription: 'devices_access.no_identities_description',
   DevicesAccessNoLocalUpdate: 'devices_access.no_local_update',
+  DevicesAccessNoSessionIdentity: 'devices_access.no_session_identity',
+  DevicesAccessNoSessionIdentityDescription: 'devices_access.no_session_identity_description',
   DevicesAccessNoVaults: 'devices_access.no_vaults',
   DevicesAccessNoVaultsReady: 'devices_access.no_vaults_ready',
   DevicesAccessNoVaultsShort: 'devices_access.no_vaults_short',
