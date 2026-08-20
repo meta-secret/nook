@@ -632,31 +632,21 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-strength-vaults'),
     ).toContainText('Test vault', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
-    // The production reset flow is covered in device-key-protection.spec.ts.
-    // Reproduce its persisted identity deletion here without invoking the
-    // destructive manager call while that same manager is actively rendering.
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve, reject) => {
-          const request = indexedDB.open('nook_db')
-          request.onerror = () => reject(request.error)
-          request.onsuccess = () => {
-            const db = request.result
-            const transaction = db.transaction('vault', 'readwrite')
-            const store = transaction.objectStore('vault')
-            store.delete('device_access_profile')
-            store.delete('device_identity_wrapped')
-            store.delete('device_id')
-            store.delete('app_key_wrapped')
-            store.delete('app_id')
-            transaction.onerror = () => reject(transaction.error)
-            transaction.oncomplete = () => {
-              db.close()
-              resolve()
+    // Use the production transaction so the identity directory and protected
+    // app-key records cannot diverge while preserving known vault projections.
+    await page.evaluate(async () => {
+      const manager = (
+        window as Window & {
+          __nookVault?: {
+            requireManager(): {
+              reset_device_protection_for_recovery(): Promise<void>
             }
           }
-        }),
-    )
+        }
+      ).__nookVault?.requireManager()
+      if (!manager) throw new Error('Vault manager is not exposed')
+      await manager.reset_device_protection_for_recovery()
+    })
 
     await page.reload()
     // The vault tab already pushed /devices-access, so LoginGate opens Access
