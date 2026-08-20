@@ -632,32 +632,35 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-strength-vaults'),
     ).toContainText('Test vault', { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
 
-    // Use the production transaction so the identity directory and protected
-    // app-key records cannot diverge while preserving known vault projections.
-    // Unmount Access first, matching the recovery gate's runtime boundary.
-    await page.getByTestId('vault-settings-tab').click()
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
-    await page.evaluate(async () => {
-      const vault = (
-        window as Window & {
-          __nookVault?: {
-            stopVaultSync(): void
-            waitForStorageChain(): Promise<void>
-            enqueueExclusiveStorage<T>(operation: () => Promise<T>): Promise<T>
-            requireManager(): {
-              reset_device_protection_for_recovery(): Promise<void>
-            }
-          }
-        }
-      ).__nookVault
-      if (!vault) throw new Error('Vault runtime is not exposed')
+    // Enter recovery through the same locked-state UI as production. This
+    // quiesces the active vault before its protected identity is forgotten.
+    await page.getByTestId('vault-secrets-tab').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await page.getByTestId('header-lock-vault-btn').click()
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_passkey_mode', 'cancel')
+    })
+    await page.reload()
+    const passkeyOverlay = page.getByTestId('passkey-auth-overlay')
+    const unlock = page.getByTestId('unlock-vault-btn')
+    await expect
+      .poll(async () => {
+        if (await passkeyOverlay.isVisible()) return 'overlay'
+        if (await unlock.isVisible()) return 'unlock'
+        return 'waiting'
+      })
+      .not.toBe('waiting')
+    if (!(await passkeyOverlay.isVisible())) await unlock.click()
+    await expect(passkeyOverlay).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    page.once('dialog', (dialog) => dialog.accept())
+    await page.getByTestId('device-protection-recovery-btn').click()
+    await expect(
+      page.getByTestId('device-protection-use-existing-choice'),
+    ).toHaveText('Authenticate')
+    await page.evaluate(() => {
       history.replaceState(history.state, '', '/devices-access')
-      vault.stopVaultSync()
-      await vault.waitForStorageChain()
-      const vaultManager = vault.requireManager()
-      await vault.enqueueExclusiveStorage(() =>
-        vaultManager.reset_device_protection_for_recovery(),
-      )
     })
 
     await page.reload()
