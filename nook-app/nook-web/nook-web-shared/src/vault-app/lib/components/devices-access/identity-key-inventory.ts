@@ -92,6 +92,9 @@ export function buildIdentityKeyInventory({
 
   for (const member of identity.members) {
     const isCurrent = member.currentBrowser;
+    const isCompanion =
+      isCurrent &&
+      view.protection === DeviceAccessProtectionKind.CompanionSession;
     const appKeyRow: IdentityKeyInventoryRow = {
       key: `app:${member.appId}`,
       kind: IdentityKeyInventoryRowKind.AppKey,
@@ -99,9 +102,11 @@ export function buildIdentityKeyInventory({
         member.label.kind === DashboardTextKind.Known
           ? member.label.value
           : `${vault.t(
-              isCurrent
-                ? I18N_KEYS.DevicesAccessThisBrowserAppKey
-                : I18N_KEYS.DevicesAccessOtherAppKey,
+              isCompanion
+                ? I18N_KEYS.DevicesAccessCompanionSession
+                : isCurrent
+                  ? I18N_KEYS.DevicesAccessThisBrowserAppKey
+                  : I18N_KEYS.DevicesAccessOtherAppKey,
             )} · ${member.appId.slice(-8)}`,
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeAppKey),
       protector: isCurrent

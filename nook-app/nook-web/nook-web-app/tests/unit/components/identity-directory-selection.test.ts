@@ -1,52 +1,25 @@
-import { fireEvent, render } from '@testing-library/svelte'
+import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import { describe, expect, test } from 'vitest'
 import {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
+  DeviceProtectionStatus,
+  NookDeviceAccessTextKind,
   NookIdentityLocalAccessKind,
+  NookIdentityDirectorySelectionKind,
+  NookIdentityMemberLabelKind,
   NookPasskeyAttachmentState,
   NookPasskeyBackupState,
+  NookPasskeyTimestampEvidenceKind,
   PasskeyKeeperKind,
   PasskeyObservedBrowser,
   PasskeyObservedPlatform,
+  type NookVaultManager,
 } from '$app-wasm'
-import type { IdentityDirectoryEntry } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-directory-view'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
-import IdentityDirectorySelectionHarness from './fixtures/IdentityDirectorySelectionHarness.svelte'
-import {
-  DashboardTextKind,
-  DashboardTimestampKind,
-  type DashboardView,
-} from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
+import DevicesAccessDashboard from '../../../../nook-web-shared/src/vault-app/lib/components/DevicesAccessDashboard.svelte'
 
-const unknownText = { kind: DashboardTextKind.Unknown } as const
-const unavailableTime = { kind: DashboardTimestampKind.Unavailable } as const
-const vault = {
-  locale: 'en',
-  t: (key: string) => key,
-} as VaultState
-
-const view: DashboardView = {
-  protection: DeviceAccessProtectionKind.PasskeyStandard,
-  identityState: DeviceAccessIdentityState.Unlocked,
-  deviceId: { kind: DashboardTextKind.Known, value: 'browser-app' },
-  credentialId: unknownText,
-  userHandleId: unknownText,
-  passkeyName: { kind: DashboardTextKind.Known, value: 'MacBook passkey' },
-  providerLabel: unknownText,
-  createdAt: unavailableTime,
-  lastUsedAt: unavailableTime,
-  attachment: NookPasskeyAttachmentState.Platform,
-  transports: [],
-  backupState: NookPasskeyBackupState.Unknown,
-  aaguid: unknownText,
-  keeper: PasskeyKeeperKind.ApplePasswords,
-  observedBrowser: PasskeyObservedBrowser.Unknown,
-  observedPlatform: PasskeyObservedPlatform.Unknown,
-  vaults: [],
-}
-
-const identities: readonly IdentityDirectoryEntry[] = [
+const identities = [
   {
     identityId: 'personal',
     label: 'Personal',
@@ -54,7 +27,7 @@ const identities: readonly IdentityDirectoryEntry[] = [
     members: [
       {
         appId: 'browser-app',
-        label: { kind: DashboardTextKind.Known, value: 'MacBook app key' },
+        label: 'MacBook app key',
         currentBrowser: true,
       },
     ],
@@ -67,22 +40,105 @@ const identities: readonly IdentityDirectoryEntry[] = [
     members: [
       {
         appId: 'phone-app',
-        label: { kind: DashboardTextKind.Known, value: 'Work phone app key' },
+        label: 'Work phone app key',
         currentBrowser: false,
       },
     ],
     vaults: [],
   },
-]
+] as const
+
+function free(): void {}
+
+function unknownText() {
+  return { kind: NookDeviceAccessTextKind.Unknown, free }
+}
+
+function unavailableTime() {
+  return { kind: NookPasskeyTimestampEvidenceKind.Unavailable, free }
+}
+
+function identitySnapshot(identity: (typeof identities)[number]) {
+  return {
+    identityId: identity.identityId,
+    label: identity.label,
+    localAccess: identity.localAccess,
+    members: () =>
+      identity.members.map((member) => ({
+        appId: member.appId,
+        currentBrowser: member.currentBrowser,
+        labelKind: NookIdentityMemberLabelKind.Known,
+        label: () => member.label,
+        free,
+      })),
+    vaults: () => [],
+    free,
+  }
+}
+
+const accessSnapshot = {
+  protection: DeviceAccessProtectionKind.PasskeyStandard,
+  identityState: DeviceAccessIdentityState.Unlocked,
+  deviceId: unknownText(),
+  credentialId: unknownText(),
+  userHandleId: unknownText(),
+  passkeyName: unknownText(),
+  providerLabel: unknownText(),
+  createdAt: unavailableTime(),
+  lastUsedAt: unavailableTime(),
+  attachment: NookPasskeyAttachmentState.Platform,
+  transports: () => [],
+  backupState: NookPasskeyBackupState.Unknown,
+  aaguid: unknownText(),
+  keeper: PasskeyKeeperKind.ApplePasswords,
+  observedBrowser: PasskeyObservedBrowser.Unknown,
+  observedPlatform: PasskeyObservedPlatform.Unknown,
+  vaults: () => [],
+  free,
+}
+
+const directorySnapshot = {
+  length: identities.length,
+  selectionKind: NookIdentityDirectorySelectionKind.Selected,
+  selectedIdentityId: 'personal',
+  identity: (index: number) =>
+    index === 0
+      ? identitySnapshot(identities[0])
+      : identitySnapshot(identities[1]),
+  free,
+}
+
+const manager = {
+  device_access_snapshot_request: () => ({
+    resolve: async () => accessSnapshot,
+    free,
+  }),
+  identity_directory_snapshot_request: () => ({
+    resolve: async () => directorySnapshot,
+    free,
+  }),
+} as NookVaultManager
+
+const vault = {
+  locale: 'en',
+  t: (key: string) => key,
+  deviceProtectionStatus: DeviceProtectionStatus.Unlocked,
+  localVaults: [],
+  requireManager: () => manager,
+} as VaultState
 
 describe('identity directory selection', () => {
   test('switches the key inventory to an identity from another installation', async () => {
-    const rendered = render(IdentityDirectorySelectionHarness, {
+    const rendered = render(DevicesAccessDashboard, {
       vault,
-      view,
-      identities,
-      initialIdentityId: 'personal',
+      onBack: free,
+      onManageVaultDevices: free,
+      onManageVaultPasswords: free,
     })
+
+    await waitFor(() =>
+      expect(rendered.getByRole('button', { name: /Work/ })).toBeTruthy(),
+    )
 
     await fireEvent.click(rendered.getByRole('button', { name: /Work/ }))
 

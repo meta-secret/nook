@@ -236,6 +236,12 @@ pub(in crate::manager) struct DeviceSessionState {
         Option<super::device_protection::PendingExtensionIdentityHandoff>,
 }
 
+impl DeviceSessionState {
+    pub(in crate::manager) fn public_app_id(&self) -> String {
+        self.id.trim().to_owned()
+    }
+}
+
 pub(in crate::manager) struct StatusChannel {
     pub(in crate::manager) tx: flume::Sender<String>,
     pub(in crate::manager) rx: flume::Receiver<String>,

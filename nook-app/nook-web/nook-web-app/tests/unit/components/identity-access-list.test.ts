@@ -248,6 +248,34 @@ describe('identity key inventory', () => {
     ])
   })
 
+  test('labels the live companion member as companion-owned', () => {
+    const view = passkeyView(PasskeyKeeperKind.Unknown)
+    view.protection = DeviceAccessProtectionKind.CompanionSession
+    const identity: IdentityDirectoryEntry = {
+      identityId: 'identity_work',
+      label: 'Work',
+      localAccess: NookIdentityLocalAccessKind.CurrentBrowser,
+      members: [
+        {
+          appId: 'app_companion_12345678',
+          label: unknownText,
+          currentBrowser: true,
+        },
+      ],
+      vaults: [],
+    }
+    const buildIdentityKeyInventoryArgs: Parameters<
+      typeof buildIdentityKeyInventory
+    >[0] = { vault, identity, view }
+
+    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+
+    expect(rows[1]).toMatchObject({
+      title: `${I18N_KEYS.DevicesAccessCompanionSession} · 12345678`,
+      protector: I18N_KEYS.DevicesAccessCompanionSession,
+    })
+  })
+
   test('does not invent a protector for an unprepared browser', () => {
     const view = passkeyView(PasskeyKeeperKind.Unknown)
     view.protection = DeviceAccessProtectionKind.Missing

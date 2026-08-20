@@ -239,8 +239,10 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
         }
         loadState = { kind: DashboardLoadKind.Ready, view }
         resetSelectedVaultForIdentity()
-        await tick()
-        focusPendingDashboardTarget()
+        if (!snapshotsRefreshing) {
+          await tick()
+          focusPendingDashboardTarget()
+        }
         return DashboardLoadKind.Ready
       } finally {
         snapshot.free()
@@ -249,8 +251,10 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
       const isCurrentGeneration = generation === loadGeneration
       if (isCurrentGeneration) {
         loadState = { kind: DashboardLoadKind.Failed }
-        await tick()
-        focusPendingDashboardTarget()
+        if (!snapshotsRefreshing) {
+          await tick()
+          focusPendingDashboardTarget()
+        }
       }
       return isCurrentGeneration
         ? DashboardLoadKind.Failed
