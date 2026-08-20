@@ -48,6 +48,8 @@ Default PR-first loop:
    - Estimate authored changed lines.
    - Identify module and interface boundaries.
    - Publish the public-safe start snapshot to Nook Workbench.
+   - Create ignored session memory under `.cortex/.session/` for substantial
+     work.
    - Never copy the raw prompt or chat transcript.
 2. **Prepare the PR path** — if the feature may approach 5,000 authored changed
    lines, publish an ordered semantic issue and PR sequence. Map complete
@@ -56,6 +58,7 @@ Default PR-first loop:
    be draft or normal.
 3. **Implement functionality:**
    - Make the module-focused changes for the current slice.
+   - Capture meaningful discoveries and evidence in temporary session memory.
    - When implementation, chat dialogues, or debugging reveal new product requirements, rules, or edge cases, update the owning specification in [`.cortex/product-specs/`](../product-specs/) (or author a new specification) in the same PR.
    - Re-estimate when the scope changes.
 4. **Prepare the coherent commit:**
@@ -92,7 +95,13 @@ Default PR-first loop:
    - Fix the code; do not silence the check.
    - Push the completed fix, then explicitly trigger complete validation again.
    - Use a focused remote task only when it shortens diagnosis of a known failure.
-8. **Merge automatically when ready:**
+8. **Reflect and curate before readiness:**
+   - When session memory was created, read the complete file.
+   - Promote only evidence-backed durable knowledge from that review.
+   - Update `.cortex/knowledge-graph.md` when discoverability changed.
+   - Delete the temporary file.
+   - Repeat exact-head validation when promotion changed the pushed head.
+9. **Merge automatically when ready:**
    - Require `task pr:ready PR=<number>`.
    - Require a current branch, green repository-owned PR checks, and no active
      actionable feedback.
@@ -185,11 +194,12 @@ Default agent flow:
    - Fetch `origin/main`.
    - Publish `plans/<feature>/<timestamp>-<task>.md` before implementation
      edits.
+   - Create `.cortex/.session/<task>.md` for substantial work.
    - Capture synthesized requirements, constraints, initial steps, and
      completion evidence.
    - Do not copy raw prompts or transcripts.
 2. **Prepare the PR path** — branch from `origin/main` and plan the PR title/scope.
-3. **Implement** — use the focused hosted catalog when build/test feedback is useful.
+3. **Implement** — use the focused hosted catalog when build/test feedback is useful. Capture meaningful discoveries in session memory.
 4. **Prepare the coherent commit:**
    - Always run `task loom:pre-push`.
    - Commit the formatted change.
@@ -214,7 +224,14 @@ Default agent flow:
    - Reply with the fix, validation, or no-change rationale.
    - Push required changes.
    - Repeat complete validation for the replacement head.
-9. **Resolve conflicts and merge:**
+9. **Reflect and curate:**
+   - When session memory exists, review the full file.
+   - Update existing Cortex authorities only for durable, evidence-backed
+     knowledge.
+   - Update the knowledge graph when required.
+   - Delete the session file.
+   - Revalidate when the resulting PR head changed.
+10. **Resolve conflicts and merge:**
    - Verify the branch is current with `origin/main`.
    - Update and push it when stale.
    - Re-run complete validation and readiness after the push.
@@ -246,6 +263,7 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Identify module and interface boundaries.
    - Publish the public-safe structured interpretation and execution plan to
      Workbench before implementation begins.
+   - Create ignored session memory for substantial work.
 2. **Branch from `origin/main` and prepare the PR** — Never commit on `main`.
    Split work above the size boundary into an ordered Workbench issue sequence.
    Create a feature branch for the first slice. Keep its PR title, body, and
@@ -285,15 +303,22 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Update code, tests, and product specifications when review comments refine product rules.
    - Reply to threads, resolve them, and push when needed.
 9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and every actionable comment is resolved.
-10. **Squash merge** — run `gh pr merge <n> --squash` immediately after `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` succeeds.
-11. **Publish Workbench completion context and statistics:**
+10. **Run the self-improvement review:**
+    - When session memory exists, read the complete file.
+    - Promote only durable knowledge under
+      [Agent self-improvement](../dynamic-skills/self-improvement.md).
+    - Update the knowledge graph when required.
+    - Delete session memory.
+    - Repeat validation when promotion changed the pushed head.
+11. **Squash merge** — run `gh pr merge <n> --squash` immediately after `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` succeeds.
+12. **Publish Workbench completion context and statistics:**
     - Update the associated Workbench issue.
     - Add the required worklog linked to the task plan.
     - Assemble and publish `stats/ai-agent/<n>.yaml` with Loom.
     - Do not create a Nook bookkeeping PR.
     - Open a separate normal performance PR for actionable waste or regression.
     - See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
-12. **Finish** — report the task duration after the implementation PR and Workbench records are published and any required performance PR is landed.
+13. **Finish** — report the task duration after the implementation PR and Workbench records are published and any required performance PR is landed.
 
 For a feature with multiple planned slices:
 
@@ -323,7 +348,7 @@ For `agent-implement.yml` PRs, the `## Ownership` section records the handoff.
 
 ```mermaid
 flowchart TD
-  P[0 Interpret request] --> F[1 Fetch + publish Workbench task plan]
+  P[0 Interpret request] --> F[1 Fetch + publish plan + create session memory]
   F --> B[2 Branch + prepare PR]
   B --> I[3 Implement]
   I --> H[4 Always loom pre-push]
@@ -331,16 +356,17 @@ flowchart TD
   PU --> PR[6 Monitor applicable Nook PR checks on GHA]
   PR --> G{Nook PR checks green?}
   G -->|yes| C[8 Address comments]
-  C --> M[10 Squash merge]
+  C --> R[10 Reflect + curate + delete session memory]
+  R --> M[11 Squash merge]
   G -->|no| FIX[7 Read app logs + fix + loom pre-push]
   FIX --> PUSH[Push completed fix]
   PUSH --> PR
-  M --> S[11 Publish Workbench issue + linked worklog + stats]
+  M --> S[12 Publish Workbench issue + linked worklog + stats]
   S --> N{Another ready feature slice?}
   N -->|yes| F
   N -->|no| W{Actionable regression or waste?}
   W -->|yes| BP[Open normal build-performance PR]
-  W -->|no| D[12 Duration report]
+  W -->|no| D[13 Duration report]
   BP --> D
 ```
 
@@ -452,7 +478,20 @@ git push origin HEAD
 task pr:ready PR=<number>
 ```
 
-### 10 — Merge
+### 10 — Self-improvement review
+
+Before final readiness:
+
+1. When session memory exists, read the complete `.cortex/.session/` file.
+2. Promote only evidence-backed durable knowledge.
+3. Update `.cortex/knowledge-graph.md` when discoverability changed.
+4. Run the relevant Cortex checks.
+5. Delete temporary session memory.
+6. Repeat exact-head validation when promotion changed the branch.
+
+See [Agent self-improvement](../dynamic-skills/self-improvement.md).
+
+### 11 — Merge
 
 When Nook's applicable repository-owned PR test checks are complete, every actionable thread is resolved, and `task pr:ready` succeeds:
 
@@ -460,9 +499,15 @@ When Nook's applicable repository-owned PR test checks are complete, every actio
 gh pr merge <number> --squash
 ```
 
-Squash merge only. See [pull-requests.md](pull-requests.md#squash-merge-only---no-exceptions). The successful merge is the implementation delivery boundary. Do not wait for or monitor the resulting Main workflow, development deployment, or live origins unless the user explicitly requested deployment/live verification or assigned a Main failure.
+Squash merge only. See
+[pull-requests.md](pull-requests.md#squash-merge-only---no-exceptions).
 
-### 11 — Publish Workbench records
+The successful merge is the implementation delivery boundary. Do not monitor
+the resulting Main workflow or development deployment unless the user requested
+it. Do not live-verify origins unless the user requested live verification or
+assigned a Main failure.
+
+### 12 — Publish Workbench records
 
 After the implementation PR merges:
 
@@ -514,12 +559,17 @@ Create the YAML from current Nook `main`:
   through every planned slice until the requested feature is complete. See
   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 - **Workbench plan before implementation; summary and statistics after merge** — publish the public-safe task plan before edits, then publish the issue update, plan-linked worklog, and `stats/ai-agent/<pr-number>.yaml` directly to Workbench. See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
+- **Curated self-improvement before readiness** — use ignored session memory for
+  substantial tasks. Promote only evidence-backed durable knowledge. Delete the
+  session file before readiness. See
+  [self-improvement.md](../dynamic-skills/self-improvement.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
 
 ## Related docs
 
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [product-spec-lifecycle.md](../dynamic-skills/product-spec-lifecycle.md) — read specs before work; update specs on new knowledge from chat, tasks, or PR iterations
+- [self-improvement.md](../dynamic-skills/self-improvement.md) — capture provisional discoveries, reflect, promote durable knowledge, and remove session memory
 - [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
 - [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
 - [issues.md](issues.md) — Workbench issues, required task-start plans, and completion worklogs

@@ -195,6 +195,73 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 }
 
 #[test]
+fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
+    let gitignore = read(".gitignore");
+    let agent_map = read(".cortex/AGENTS.md");
+    let coding_workflow = read(".cortex/workflows/coding-bro.md");
+    let pull_request_workflow = read(".cortex/workflows/pull-requests.md");
+    let self_improvement = read(".cortex/dynamic-skills/self-improvement.md");
+    let skill_wrapper = read(".agents/skills/self-improvement/SKILL.md");
+
+    assert!(
+        gitignore.lines().any(|line| line == ".cortex/.session/"),
+        "temporary Cortex session memory must remain ignored"
+    );
+    for required in [
+        "capture provisional discoveries under",
+        "Promote only evidence-backed, reusable knowledge",
+        "Delete temporary session memory before readiness or handoff",
+    ] {
+        assert!(
+            agent_map.contains(required),
+            "agent map is missing the self-improvement guard: {required}"
+        );
+    }
+    for required in [
+        "Create ignored session memory",
+        "Run the self-improvement review",
+        "Repeat validation when promotion changed the pushed head",
+    ] {
+        assert!(
+            coding_workflow.contains(required),
+            "coding workflow is missing the self-improvement step: {required}"
+        );
+    }
+    assert!(
+        pull_request_workflow.contains("Agent self-improvement")
+            && pull_request_workflow.contains("Delete temporary session memory")
+            && pull_request_workflow.contains("promotion changed the branch")
+            && pull_request_workflow.contains("new exact head."),
+        "pull-request readiness must reflect, clean up session memory, and revalidate promoted knowledge"
+    );
+    for required in [
+        "## Knowledge classification",
+        "## Self-improvement review",
+        "## Promotion criteria",
+        "## Evidence and consistency",
+        "No Cortex update is a valid outcome",
+        "## Protocol evolution safety",
+        "## Pull-request completion contract",
+    ] {
+        assert!(
+            self_improvement.contains(required),
+            "self-improvement skill is missing: {required}"
+        );
+    }
+    assert!(
+        skill_wrapper.contains(".cortex/dynamic-skills/self-improvement.md")
+            && skill_wrapper.contains("Delete the temporary session file"),
+        "the executable skill must route agents through the canonical lifecycle"
+    );
+
+    assert!(
+        !directory_has_files(&repository_root().join(".cortex/.session")),
+        "temporary Cortex session memory must be removed before preflight"
+    );
+    Ok(())
+}
+
+#[test]
 fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
     let collector = read(".github/workflows/main-build-stats.yml");
     let publisher = read(".github/scripts/workbench-publish.cjs");
