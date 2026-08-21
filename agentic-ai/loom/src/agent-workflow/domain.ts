@@ -2,6 +2,13 @@ export enum StaticAgentWorkflowName {
   CortexFullGarbageCollection = 'cortex-full-garbage-collection',
 }
 
+export enum DelegatedAgentWorkflowName {
+  AgentWork = 'delegated-agent-work',
+}
+
+export type AgentProcessingWorkflowName =
+  StaticAgentWorkflowName | DelegatedAgentWorkflowName;
+
 export enum WorkflowExecutorKind {
   Agent = 'agent',
   LoomLeaf = 'loom-leaf',

@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -597,10 +597,46 @@ describe('static workflow scheduler', () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as WorkflowEvent<CortexAuditTask>);
-      const replayRequest = { events: workflowEvents };
+      const replayRequest = {
+        events: workflowEvents,
+        runDirectory: fixture.configuration.journal.runDirectory,
+      };
       const replay = replayWorkflowJournal(replayRequest);
       expect(replay.taskTerminals).toHaveLength(
         CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.taskNames.length,
+      );
+      const noncanonicalEvents = workflowEvents.map((event) => {
+        if (
+          event.kind !== WorkflowEventKind.TaskTerminalRecorded ||
+          event.task !== CortexAuditTask.AuditWorkflowsAndReferences ||
+          event.processing.kind !== 'agent-attempt'
+        ) {
+          return event;
+        }
+        return {
+          ...event,
+          processing: {
+            ...event.processing,
+            events: {
+              ...event.processing.events,
+              path: event.processing.events.path.replace(
+                '/attempt-1/',
+                '/attempt-1/../attempt-1/',
+              ),
+            },
+          },
+        };
+      });
+      const noncanonicalReplayRequest = {
+        events: noncanonicalEvents,
+        runDirectory: fixture.configuration.journal.runDirectory,
+      };
+      expect(() => replayWorkflowJournal(noncanonicalReplayRequest)).toThrow(
+        'projection escapes its run directory',
+      );
+      await appendFile(childEventsPath, '{}\n', 'utf8');
+      expect(() => replayWorkflowJournal(replayRequest)).toThrow(
+        'projection digest does not match',
       );
     } finally {
       await rm(fixture.runRoot, removeOptions);

@@ -115,16 +115,15 @@ export function materializerTopologyValidationMessages<
       adjacency: request.adjacency,
     };
     const downstream = reachableNodes(downstreamRequest);
-    const unsupportedParent = workflow.taskNames.find(
+    const unsupportedIntermediate = workflow.taskNames.find(
       (candidate) =>
         candidate !== taskName &&
         candidate !== workflow.materializedViewTask &&
-        downstream.has(request.taskNode(candidate)) &&
-        workflow.tasks[candidate].execution.kind === WorkflowExecutorKind.Agent,
+        downstream.has(request.taskNode(candidate)),
     );
-    if (unsupportedParent) {
+    if (unsupportedIntermediate) {
       messages.push(
-        `agent task ${taskName} reaches intermediate agent ${unsupportedParent}; nested runtime tiers are not enabled`,
+        `agent task ${taskName} reaches intermediate task ${unsupportedIntermediate}; intermediate executors cannot preserve agent evidence`,
       );
     }
   }

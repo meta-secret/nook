@@ -34,6 +34,7 @@ const VIEW_AUTHOR_KINDS = new Set<string>(
   Object.values(MaterializedViewAuthorKind),
 );
 const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
+const MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH = 1024;
 
 export function replayAgentAttemptJournal(
   request: ReplayAgentAttemptJournalRequest,
@@ -67,6 +68,7 @@ export function replayAgentAttemptJournal(
     if (!PARENT_KINDS.has(event.parent.kind)) {
       throw new Error('Agent attempt journal contains an unknown parent kind.');
     }
+    assertValidIdentity(event);
     if (
       event.kind === AgentAttemptEventKind.AttemptStarted &&
       event.sequence !== 1
@@ -84,7 +86,9 @@ export function replayAgentAttemptJournal(
     }
     if (
       event.kind === AgentAttemptEventKind.RuntimeActivity &&
-      !RUNTIME_ACTIVITY_KINDS.has(event.activity)
+      (!RUNTIME_ACTIVITY_KINDS.has(event.activity) ||
+        event.detail.length > MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH ||
+        containsForbiddenControl(event.detail))
     ) {
       throw new Error(
         'Agent attempt journal contains unknown runtime activity.',
@@ -135,6 +139,16 @@ export function replayAgentAttemptJournal(
           'Agent attempt terminal view differs from its projection event.',
         );
       }
+      if (
+        event.view.presence !== MaterializedViewPresence.Recorded ||
+        (event.terminalKind === TaskTerminalKind.Completed
+          ? event.view.authorKind !== MaterializedViewAuthorKind.Agent
+          : event.view.authorKind !== MaterializedViewAuthorKind.LoomRuntime)
+      ) {
+        throw new Error(
+          'Agent attempt terminal and materialized view author are inconsistent.',
+        );
+      }
       terminal = {
         eventCount: request.events.length,
         terminalKind: event.terminalKind,
@@ -146,6 +160,51 @@ export function replayAgentAttemptJournal(
     throw new Error('Agent attempt journal has no terminal event.');
   }
   return terminal;
+}
+
+function assertValidIdentity(event: AgentAttemptEventMetadata): void {
+  if (
+    !safeIdentifier(event.task) ||
+    !safeIdentifier(event.agent) ||
+    !Number.isSafeInteger(event.attempt) ||
+    event.attempt < 1 ||
+    !Number.isSafeInteger(event.depth) ||
+    event.depth < 1 ||
+    event.depth > 64
+  ) {
+    throw new Error('Agent attempt journal identity is invalid.');
+  }
+  if (event.parent.kind === AgentAttemptParentKind.WorkflowRoot) {
+    if (event.depth !== 1 || Object.keys(event.parent).length !== 1) {
+      throw new Error('Root agent attempt lineage is invalid.');
+    }
+    return;
+  }
+  if (
+    event.depth < 2 ||
+    !safeIdentifier(event.parent.task) ||
+    !safeIdentifier(event.parent.agent) ||
+    !Number.isSafeInteger(event.parent.attempt) ||
+    event.parent.attempt < 1 ||
+    (event.parent.task === event.task &&
+      event.parent.agent === event.agent &&
+      event.parent.attempt === event.attempt)
+  ) {
+    throw new Error('Parent agent attempt lineage is invalid.');
+  }
+}
+
+function safeIdentifier(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
+}
+
+function containsForbiddenControl(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return (
+      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+    );
+  });
 }
 
 function validProjection(projection: ProjectionReference): boolean {

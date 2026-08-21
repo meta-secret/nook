@@ -17,6 +17,11 @@ description: >-
 
 # Coding Bro
 
+When delegating any part of this workflow outside a compiled Loom graph, follow
+the `subagent-delegation` skill and finalize every reached attempt with
+`task loom:agent-delegation:record REQUEST=<request.json>` before consuming its
+semantic view.
+
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
 Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting.

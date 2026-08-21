@@ -689,7 +689,7 @@ describe('static agent workflow validation', () => {
     if (validation.status === WorkflowValidationStatus.Invalid) {
       expect(
         validation.issues.some((issue) =>
-          issue.message.includes('nested runtime tiers are not enabled'),
+          issue.message.includes('intermediate executors cannot preserve'),
         ),
       ).toBe(true);
     }

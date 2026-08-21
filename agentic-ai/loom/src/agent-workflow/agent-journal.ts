@@ -8,6 +8,7 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
+  AgentAttemptParentKind,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
   TaskTerminalKind,
@@ -16,11 +17,11 @@ import {
 import type {
   AgentAttemptParent,
   AgentAttemptProcessingReference,
+  AgentProcessingWorkflowName,
   GitCommit,
   IsoTimestamp,
   MaterializedViewReference,
   ProjectionReference,
-  StaticAgentWorkflowName,
   TaskTerminal,
   WorkflowAttemptNumber,
   WorkflowEventSequence,
@@ -41,7 +42,7 @@ const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
 export type AgentAttemptJournalConfiguration = {
   readonly runDirectory: string;
   readonly runId: WorkflowRunId;
-  readonly workflow: StaticAgentWorkflowName;
+  readonly workflow: AgentProcessingWorkflowName;
   readonly workflowVersion: WorkflowVersion;
   readonly sourceCommit: GitCommit;
   readonly task: string;
@@ -72,6 +73,7 @@ export class AgentAttemptJournal<TTask extends string> {
     ) {
       throw new Error('Agent attempt and hierarchy depth must be bounded.');
     }
+    assertParentLineage(configuration);
     this.configuration = configuration;
     this.attemptDirectory = join(
       configuration.runDirectory,
@@ -137,6 +139,7 @@ export class AgentAttemptJournal<TTask extends string> {
   async finalize(
     terminal: TaskTerminal<TTask>,
   ): Promise<AgentAttemptProcessingReference> {
+    this.assertTerminal(terminal);
     const jsonProjection: JsonProjectionInput<TTask> = {
       filename: 'result.json',
       value: terminal,
@@ -170,6 +173,36 @@ export class AgentAttemptJournal<TTask extends string> {
       sha256: sha256(eventsSerialized),
     };
     return { kind: TaskProcessingKind.AgentAttempt, events, result, view };
+  }
+
+  private assertTerminal(terminal: TaskTerminal<TTask>): void {
+    if (
+      terminal.task !== this.configuration.task ||
+      terminal.attempt !== this.configuration.attempt
+    ) {
+      throw new Error('Agent terminal identity differs from its journal.');
+    }
+    if (terminal.kind === TaskTerminalKind.Completed) {
+      const view = terminal.output?.materializedViewMarkdown;
+      if (
+        typeof terminal.threadId !== 'string' ||
+        terminal.threadId.trim() === '' ||
+        typeof view !== 'string' ||
+        view.trim() === '' ||
+        view.length > 65_536
+      ) {
+        throw new Error('Completed agent terminal view must be bounded.');
+      }
+      return;
+    }
+    if (
+      typeof terminal.summary !== 'string' ||
+      terminal.summary.trim() === '' ||
+      terminal.summary.length > 4096 ||
+      containsForbiddenControl(terminal.summary)
+    ) {
+      throw new Error('Agent terminal failure summary must be bounded.');
+    }
   }
 
   private async projectView(
@@ -274,6 +307,30 @@ function sha256(serialized: string): string {
 function assertFilesystemIdentifier(identifier: string): void {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identifier)) {
     throw new Error(`Unsafe agent processing identifier: ${identifier}`);
+  }
+}
+
+function assertParentLineage(
+  configuration: AgentAttemptJournalConfiguration,
+): void {
+  const parent = configuration.parent;
+  if (parent.kind === AgentAttemptParentKind.WorkflowRoot) {
+    if (configuration.depth !== 1 || Object.keys(parent).length !== 1) {
+      throw new Error('Root agent attempt lineage is invalid.');
+    }
+    return;
+  }
+  assertFilesystemIdentifier(parent.task);
+  assertFilesystemIdentifier(parent.agent);
+  if (
+    configuration.depth < 2 ||
+    !Number.isSafeInteger(parent.attempt) ||
+    parent.attempt < 1 ||
+    (parent.task === configuration.task &&
+      parent.agent === configuration.agent &&
+      parent.attempt === configuration.attempt)
+  ) {
+    throw new Error('Parent agent attempt lineage is invalid.');
   }
 }
 

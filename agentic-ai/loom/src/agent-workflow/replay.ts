@@ -1,4 +1,9 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { isAbsolute, join, relative, resolve } from 'node:path';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
+import { replayAgentAttemptJournal } from './agent-replay.ts';
+import type { AgentAttemptEvent } from './agent-events.ts';
 import { WorkflowEventKind, WorkflowRuntimeActivityKind } from './events.ts';
 
 import type {
@@ -10,6 +15,7 @@ import type {
   MaterializedViewReference,
   TaskProcessingReference,
   ProjectionReference,
+  TaskTerminal,
 } from './domain.ts';
 import {
   MaterializedViewPresence,
@@ -59,6 +65,7 @@ export type ReplayedWorkflowJournal<TTask extends string> = {
 
 export type ReplayWorkflowJournalRequest<TTask extends string> = {
   readonly events: readonly WorkflowEvent<TTask>[];
+  readonly runDirectory?: string;
 };
 
 const WORKFLOW_EVENT_KINDS = new Set<string>(Object.values(WorkflowEventKind));
@@ -139,7 +146,11 @@ export function replayWorkflowJournal<TTask extends string>(
         );
       }
       terminalAttempts.add(terminalAttemptKey);
-      assertProcessingReference(event);
+      const processingRequest: AssertProcessingReferenceRequest<TTask> = {
+        event,
+        runDirectory: request.runDirectory ?? false,
+      };
+      assertProcessingReference(processingRequest);
       const terminalReference: ReplayedTaskTerminalReference<TTask> = {
         task: event.task,
         attempt: event.attempt,
@@ -216,9 +227,15 @@ function assertMaterializedViewReference(
   }
 }
 
+type AssertProcessingReferenceRequest<TTask extends string> = {
+  readonly event: TaskTerminalRecordedEvent<TTask>;
+  readonly runDirectory: string | false;
+};
+
 function assertProcessingReference<TTask extends string>(
-  event: TaskTerminalRecordedEvent<TTask>,
+  request: AssertProcessingReferenceRequest<TTask>,
 ): void {
+  const event = request.event;
   const processing = event.processing;
   if (
     !processing ||
@@ -241,6 +258,150 @@ function assertProcessingReference<TTask extends string>(
     );
   }
   assertMaterializedViewReference(processing.view);
+  if (processing.kind === TaskProcessingKind.AgentAttempt) {
+    if (!request.runDirectory) {
+      invalidJournal(
+        `workflow journal task ${event.task} requires its run directory to verify agent processing`,
+      );
+    }
+    const verificationRequest: VerifyAgentProcessingRequest<TTask> = {
+      event,
+      runDirectory: request.runDirectory,
+      processing,
+    };
+    verifyAgentProcessing(verificationRequest);
+  }
+}
+
+type VerifyAgentProcessingRequest<TTask extends string> = {
+  readonly event: TaskTerminalRecordedEvent<TTask>;
+  readonly runDirectory: string;
+  readonly processing: Extract<
+    TaskProcessingReference,
+    { readonly kind: TaskProcessingKind.AgentAttempt }
+  >;
+};
+
+function verifyAgentProcessing<TTask extends string>(
+  request: VerifyAgentProcessingRequest<TTask>,
+): void {
+  const eventProjectionRequest: ReadVerifiedProjectionRequest = {
+    runDirectory: request.runDirectory,
+    projection: request.processing.events,
+  };
+  const eventText = readVerifiedProjection(eventProjectionRequest);
+  const resultProjectionRequest: ReadVerifiedProjectionRequest = {
+    runDirectory: request.runDirectory,
+    projection: request.processing.result,
+  };
+  const resultText = readVerifiedProjection(resultProjectionRequest);
+  let result: TaskTerminal<string>;
+  try {
+    result = JSON.parse(resultText) as TaskTerminal<string>;
+  } catch {
+    invalidJournal(
+      `workflow journal task ${request.event.task} has an unreadable result projection`,
+    );
+  }
+  if (request.processing.view.presence === MaterializedViewPresence.Recorded) {
+    const viewProjectionRequest: ReadVerifiedProjectionRequest = {
+      runDirectory: request.runDirectory,
+      projection: request.processing.view.projection,
+    };
+    const viewText = readVerifiedProjection(viewProjectionRequest);
+    if (
+      result.kind === TaskTerminalKind.Completed &&
+      viewText !== `${result.output.materializedViewMarkdown.trim()}\n`
+    ) {
+      invalidJournal(
+        `workflow journal task ${request.event.task} view differs from its result projection`,
+      );
+    }
+  }
+  let events: readonly AgentAttemptEvent[];
+  try {
+    events = eventText
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+  } catch {
+    invalidJournal(
+      `workflow journal task ${request.event.task} has an unreadable agent attempt stream`,
+    );
+  }
+  let replayed: ReturnType<typeof replayAgentAttemptJournal>;
+  try {
+    const replayRequest = { events };
+    replayed = replayAgentAttemptJournal(replayRequest);
+  } catch {
+    invalidJournal(
+      `workflow journal task ${request.event.task} has an invalid agent attempt stream`,
+    );
+  }
+  const identity = events[0];
+  const expectedAttemptDirectory = identity
+    ? join('agents', identity.task, `attempt-${identity.attempt}`)
+    : '';
+  if (
+    !identity ||
+    identity.runId !== request.event.runId ||
+    identity.workflow !== request.event.workflow ||
+    identity.workflowVersion !== request.event.workflowVersion ||
+    identity.sourceCommit !== request.event.sourceCommit ||
+    identity.task !== request.event.task ||
+    identity.attempt !== request.event.attempt ||
+    result.task !== request.event.task ||
+    result.attempt !== request.event.attempt ||
+    result.kind !== request.event.terminalKind ||
+    request.processing.events.path !==
+      join(expectedAttemptDirectory, 'events.jsonl') ||
+    request.processing.result.path !==
+      join(expectedAttemptDirectory, 'result.json') ||
+    (request.processing.view.presence === MaterializedViewPresence.Recorded &&
+      request.processing.view.projection.path !==
+        join(expectedAttemptDirectory, 'view.md')) ||
+    replayed.terminalKind !== request.event.terminalKind ||
+    JSON.stringify(replayed.view) !== JSON.stringify(request.processing.view)
+  ) {
+    invalidJournal(
+      `workflow journal task ${request.event.task} disagrees with its agent attempt stream`,
+    );
+  }
+}
+
+type ReadVerifiedProjectionRequest = {
+  readonly runDirectory: string;
+  readonly projection: ProjectionReference;
+};
+
+function readVerifiedProjection(
+  request: ReadVerifiedProjectionRequest,
+): string {
+  const absoluteRunDirectory = resolve(request.runDirectory);
+  const absolutePath = resolve(absoluteRunDirectory, request.projection.path);
+  const relativePath = relative(absoluteRunDirectory, absolutePath);
+  const projectionSegments = request.projection.path.split(/[\\/]/);
+  if (
+    isAbsolute(request.projection.path) ||
+    projectionSegments.some(
+      (segment) => segment === '' || segment === '.' || segment === '..',
+    ) ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${process.platform === 'win32' ? '\\' : '/'}`)
+  ) {
+    invalidJournal('workflow journal projection escapes its run directory');
+  }
+  let serialized: string;
+  try {
+    serialized = readFileSync(absolutePath, 'utf8');
+  } catch {
+    invalidJournal('workflow journal projection cannot be read');
+  }
+  const digest = createHash('sha256').update(serialized).digest('hex');
+  if (digest !== request.projection.sha256) {
+    invalidJournal('workflow journal projection digest does not match');
+  }
+  return serialized;
 }
 
 function validProjection(projection: ProjectionReference | false): boolean {

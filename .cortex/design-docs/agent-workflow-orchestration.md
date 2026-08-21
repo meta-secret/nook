@@ -149,6 +149,14 @@ An opt-in automated integration test remains future work.
 A local Loom run writes an event-sourced processing hierarchy under
 `workflow/processing/`.
 
+Ordinary collaboration-tool delegation uses the same processing hierarchy
+through `task loom:agent-delegation:record REQUEST=<request.json>`. The child
+produces the bounded action and semantic-result request. The parent finalizes
+it through Loom, consumes the returned hashed view, and records its own
+higher-level aggregation attempt. This repeats until the root attempt and the
+delivery owner's final report. A compiled static graph is not required for the
+per-attempt event and view contract.
+
 The run-level `events.jsonl` journal is the scheduling authority for that local
 run.
 
@@ -197,8 +205,9 @@ the hierarchy. It does not become scheduling authority.
   - Agent result JSON, agent view Markdown, the root result, and the root view
     are content-hashed projections.
   - Root task-terminal events reference finalized child streams and views.
-- **Current replay:** The replay API validates identity, sequence, and terminal
-  references.
+- **Current replay:** The replay API validates identity, sequence, terminal
+  references, canonical projection paths and hashes, referenced agent streams,
+  result equivalence, lineage, and view authorship.
   - It does not yet rebuild scheduler eligibility or join state.
 
 Journal events are bounded and secret-sanitized. They must not contain:

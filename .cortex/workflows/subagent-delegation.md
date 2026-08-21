@@ -153,6 +153,34 @@ attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
 
 The run-level stream remains the single local scheduling authority.
 
+Ordinary coding delegation uses the generic Loom recording adapter when no
+compiled workflow owns the dispatch. The parent declares the run identity and
+lineage before dispatch. The child produces a typed record request containing
+its bounded observable activities and its agent-authored semantic result. After
+the child returns, the parent finalizes that request with:
+
+```sh
+task loom:agent-delegation:record REQUEST=<request.json>
+```
+
+The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
+contract used by compiled workflows. It rejects reuse of an existing attempt
+directory. This gives collaboration-tool subagents a journal boundary without
+making their transcript or Markdown output into scheduling authority.
+
+The record request contains:
+
+- the shared run identifier and exact 40-character source commit;
+- the task, agent, attempt, hierarchy depth, and parent identity;
+- only bounded `WorkflowRuntimeActivityKind` observations;
+- one typed terminal whose task and attempt match the declared identity; and
+- for completed work, the agent-authored Markdown view inside the typed output.
+
+The child does not write canonical projections directly. Loom validates the
+request and owns canonical event serialization, append order, projection
+storage, and content hashes. The parent consumes only the returned projection
+references and verified `view.md`.
+
 ### Semantic materialized views
 
 An action stream is operational evidence. It does not contain enough semantic
@@ -213,6 +241,12 @@ Path contracts are:
 - `workflow/processing/<workflow>/<run-id>/agents/<task>/attempt-<n>/view.md`
   for its semantic projection; and
 - `workflow/processing/<workflow>/<run-id>/view.md` for the root aggregate.
+
+The workflow segment is `delegated-agent-work` for ordinary coding delegation.
+Each tier can be recorded as an attempt: child attempts point to their declared
+parent attempt, the root aggregation attempt points to `workflow-root`, and the
+delivery owner's final user report is the final public projection of that root
+view.
 
 Keep processing evidence through aggregation and handoff. Cleanup is explicit.
 It is separate from disposable `.cortex/.session/` reflection memory.

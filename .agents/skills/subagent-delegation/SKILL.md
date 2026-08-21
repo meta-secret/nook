@@ -19,6 +19,11 @@ Before dispatch:
    scope, terminal barrier, and parent-owned join.
 2. Keep one delivery owner for shared files and lifecycle state.
 3. Use Loom or another deterministic tool for mechanical work.
+4. For ordinary coding delegation, require the child to return one `record`
+   request containing its bounded observable actions and typed semantic result.
+   The parent finalizes it with
+   `task loom:agent-delegation:record REQUEST=<request.json>`. Static Loom
+   workflows record the same contract automatically.
 
 For every reached agent attempt:
 

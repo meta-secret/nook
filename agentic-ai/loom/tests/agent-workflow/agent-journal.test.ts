@@ -128,6 +128,42 @@ describe('agent attempt journal', () => {
       expect(() =>
         replayAgentAttemptJournal(duplicateViewReplayRequest),
       ).toThrow('duplicate views');
+      const oversizedActivityEvents = parsedEvents.map((event) =>
+        event.kind === AgentAttemptEventKind.RuntimeActivity
+          ? { ...event, detail: 'x'.repeat(1025) }
+          : event,
+      );
+      const oversizedActivityRequest = { events: oversizedActivityEvents };
+      expect(() => replayAgentAttemptJournal(oversizedActivityRequest)).toThrow(
+        'runtime activity',
+      );
+      const malformedParentEvents = parsedEvents.map((event) => ({
+        ...event,
+        parent: { kind: AgentAttemptParentKind.AgentAttempt },
+      })) as never as readonly AgentAttemptEvent[];
+      const malformedParentRequest = { events: malformedParentEvents };
+      expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
+        'lineage',
+      );
+      const wrongAuthorEvents = parsedEvents.map((event) => {
+        if (
+          event.kind !== AgentAttemptEventKind.ViewProjected &&
+          event.kind !== AgentAttemptEventKind.AttemptTerminalRecorded
+        ) {
+          return event;
+        }
+        return {
+          ...event,
+          view: {
+            ...event.view,
+            authorKind: MaterializedViewAuthorKind.LoomRuntime,
+          },
+        };
+      }) as readonly AgentAttemptEvent[];
+      const wrongAuthorRequest = { events: wrongAuthorEvents };
+      expect(() => replayAgentAttemptJournal(wrongAuthorRequest)).toThrow(
+        'view author',
+      );
       expect(processing.view.presence).toBe(MaterializedViewPresence.Recorded);
       if (processing.view.presence === MaterializedViewPresence.Recorded) {
         const view = await readFile(

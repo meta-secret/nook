@@ -419,6 +419,7 @@ workflow view.
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
+task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task remote:list           # allowlisted focused GitHub-hosted task catalog
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
 task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks

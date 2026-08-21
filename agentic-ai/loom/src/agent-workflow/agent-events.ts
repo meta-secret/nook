@@ -1,10 +1,10 @@
 import type {
   AgentAttemptParent,
+  AgentProcessingWorkflowName,
   GitCommit,
   IsoTimestamp,
   MaterializedViewReference,
   ProjectionReference,
-  StaticAgentWorkflowName,
   TaskTerminalKind,
   WorkflowAttemptNumber,
   WorkflowEventSequence,
@@ -26,7 +26,7 @@ export enum AgentAttemptEventKind {
 
 export type AgentAttemptEventMetadata = {
   readonly runId: WorkflowRunId;
-  readonly workflow: StaticAgentWorkflowName;
+  readonly workflow: AgentProcessingWorkflowName;
   readonly workflowVersion: WorkflowVersion;
   readonly sourceCommit: GitCommit;
   readonly task: string;
