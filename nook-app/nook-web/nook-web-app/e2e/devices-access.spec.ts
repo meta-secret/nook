@@ -457,6 +457,21 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('vault-unlock-section').locator('button').first(),
     ).toBeFocused()
+    const accessTabFromBackupPasswords = page.getByTestId(
+      'vault-devices-access-tab',
+    )
+    await expect(accessTabFromBackupPasswords).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await accessTabFromBackupPasswords.click({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      noWaitAfter: true,
+    })
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('devices-access-back').click()
+    await expect(accessTabFromBackupPasswords).toBeFocused()
   })
 
   test('keeps localized evidence tabs inside a narrow viewport', async ({
@@ -660,7 +675,9 @@ test.describe('devices and access dashboard', () => {
       await page.getByTestId('device-protection-recovery-btn').click()
       await expect(
         page.getByTestId('device-protection-use-existing-choice'),
-      ).toHaveText('Authenticate')
+      ).toHaveText('Authenticate', {
+        timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+      })
       await page.evaluate(() => {
         history.replaceState(history.state, '', '/devices-access')
         window.dispatchEvent(new PopStateEvent('popstate'))

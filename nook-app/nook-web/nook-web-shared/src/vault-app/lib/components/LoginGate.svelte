@@ -408,14 +408,14 @@
   data-testid="login-gate"
   data-local-vault={vault.localVaultPresent ? 'true' : 'false'}
 >
-  {#if devicesAccessOpen}
+  {#if devicesAccessOpen && !isInitializing}
     <DevicesAccessDashboard
       {vault}
       onBack={() => void closeDevicesAccess()}
       onManageVaultDevices={() => {}}
       onManageVaultPasswords={() => {}}
     />
-  {:else}
+  {:else if !devicesAccessOpen}
     <div class="flex justify-end">
       <Button
         type="button"
