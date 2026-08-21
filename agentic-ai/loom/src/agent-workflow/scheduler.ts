@@ -24,6 +24,7 @@ import type {
   WorkflowTaskOutput,
   MaterializedViewReference,
   TaskProcessingReference,
+  AgentAttemptParent,
 } from './domain.ts';
 import type { WorkflowEventWithoutMetadata } from './events.ts';
 import { WorkflowJournal } from './journal.ts';
@@ -72,6 +73,7 @@ type TaskExecutionContext<TTask extends string, TAgent extends string> = {
   readonly signal: AbortSignal;
   readonly journal: WorkflowJournal<TTask>;
   readonly processingReferences: Map<TTask, TaskProcessingReference>;
+  readonly agentJournalConfiguration: AgentAttemptJournalConfiguration | false;
 };
 
 export async function runStaticWorkflow<
@@ -151,31 +153,45 @@ export async function runStaticWorkflow<
           workflow: configuration.workflow,
           task,
         };
+        const agentProfile = resolveAgentProfile(agentResolution);
+        const agentJournalResolution: AgentJournalResolution<
+          TTask,
+          TAgent,
+          TJoin
+        > = {
+          configuration,
+          task,
+          agentProfile,
+        };
         const upstreamOutputs: WorkflowDependencyOutput<TTask>[] = [];
+        let dependencyIntegrityFailure = false;
         for (const upstreamTask of dependencyTasks.get(taskName) ?? []) {
           const output = dependencyOutputs.get(upstreamTask);
           const upstreamTerminal = terminals.get(upstreamTask);
           const upstreamProcessing = processingReferences.get(upstreamTask);
           if (output && upstreamTerminal && upstreamProcessing) {
-            const materializedViewMarkdown =
-              await configuration.journal.readVerifiedProcessingView(
-                upstreamProcessing,
-              );
+            let materializedViewMarkdown: string;
+            try {
+              materializedViewMarkdown =
+                await configuration.journal.readVerifiedProcessingView(
+                  upstreamProcessing,
+                );
+            } catch {
+              dependencyIntegrityFailure = true;
+              break;
+            }
             const dependencyOutput: WorkflowDependencyOutput<TTask> = {
               task: upstreamTask,
               terminalKind: upstreamTerminal.kind,
               view: upstreamProcessing.view,
-              output: {
-                ...output,
-                materializedViewMarkdown: materializedViewMarkdown.trimEnd(),
-              },
+              materializedViewMarkdown: materializedViewMarkdown.trimEnd(),
             };
             upstreamOutputs.push(dependencyOutput);
           }
         }
         const executionContext: TaskExecutionContext<TTask, TAgent> = {
           task: task as StaticTaskDefinition<TTask, TAgent, string>,
-          agentProfile: resolveAgentProfile(agentResolution),
+          agentProfile,
           runtime: configuration.runtime,
           runId: configuration.runId,
           sourceCommit: configuration.sourceCommit,
@@ -184,10 +200,15 @@ export async function runStaticWorkflow<
           signal: cancellationGate.signal,
           journal: configuration.journal,
           processingReferences,
+          agentJournalConfiguration: resolveAgentJournalConfiguration(
+            agentJournalResolution,
+          ),
         };
         const runningTask: RunningTask<TTask> = {
           task: taskName,
-          completion: executeTask(executionContext),
+          completion: dependencyIntegrityFailure
+            ? recordDependencyIntegrityFailure(executionContext)
+            : executeTask(executionContext),
         };
         running.push(runningTask);
       }
@@ -488,25 +509,8 @@ async function executeTask<TTask extends string, TAgent extends string>(
     attempt: 1,
   };
   await context.journal.append(startedEvent);
-  const agentJournalConfiguration: AgentAttemptJournalConfiguration | false =
-    context.task.execution.kind === WorkflowExecutorKind.Agent &&
-    context.agentProfile
-      ? {
-          runDirectory: context.journal.runDirectory,
-          runId: context.runId,
-          workflow: context.journal.identity.workflow,
-          workflowVersion: context.journal.identity.workflowVersion,
-          sourceCommit: context.sourceCommit,
-          task: context.task.name,
-          agent: context.agentProfile.name,
-          attempt: 1,
-          depth: 1,
-          parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-          now: context.journal.now,
-        }
-      : false;
-  const agentJournal = agentJournalConfiguration
-    ? new AgentAttemptJournal<TTask>(agentJournalConfiguration)
+  const agentJournal = context.agentJournalConfiguration
+    ? new AgentAttemptJournal<TTask>(context.agentJournalConfiguration)
     : false;
   if (agentJournal) {
     await agentJournal.initialize();
@@ -603,6 +607,25 @@ async function executeTask<TTask extends string, TAgent extends string>(
   } finally {
     acceptingActivity = false;
   }
+  const terminalRecording: TerminalRecording<TTask, TAgent> = {
+    context,
+    terminal,
+    agentJournal,
+  };
+  await recordTaskTerminal(terminalRecording);
+  return terminal;
+}
+
+type TerminalRecording<TTask extends string, TAgent extends string> = {
+  readonly context: TaskExecutionContext<TTask, TAgent>;
+  readonly terminal: TaskTerminal<TTask>;
+  readonly agentJournal: AgentAttemptJournal<TTask> | false;
+};
+
+async function recordTaskTerminal<TTask extends string, TAgent extends string>(
+  recording: TerminalRecording<TTask, TAgent>,
+): Promise<void> {
+  const { context, terminal, agentJournal } = recording;
   const projection = await context.journal.projectTaskTerminal(terminal);
   const workflowTaskProcessingInput: WorkflowTaskProcessingInput<TTask> = {
     journal: context.journal,
@@ -623,7 +646,87 @@ async function executeTask<TTask extends string, TAgent extends string>(
     processing,
   };
   await context.journal.append(terminalEvent);
+}
+
+async function recordDependencyIntegrityFailure<
+  TTask extends string,
+  TAgent extends string,
+>(context: TaskExecutionContext<TTask, TAgent>): Promise<TaskTerminal<TTask>> {
+  const startedEvent: WorkflowEventWithoutMetadata<TTask> = {
+    kind: WorkflowEventKind.TaskAttemptStarted,
+    task: context.task.name,
+    attempt: 1,
+  };
+  await context.journal.append(startedEvent);
+  const agentJournal = context.agentJournalConfiguration
+    ? new AgentAttemptJournal<TTask>(context.agentJournalConfiguration)
+    : false;
+  if (agentJournal) await agentJournal.initialize();
+  const terminal: TaskTerminal<TTask> = {
+    kind: TaskTerminalKind.Failed,
+    task: context.task.name,
+    attempt: 1,
+    summary:
+      'Dependency processing integrity verification failed. Inspect the immutable child projections and sanitized attempt streams.',
+  };
+  const terminalRecording: TerminalRecording<TTask, TAgent> = {
+    context,
+    terminal,
+    agentJournal,
+  };
+  await recordTaskTerminal(terminalRecording);
   return terminal;
+}
+
+type AgentJournalResolution<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+> = {
+  readonly configuration: StaticWorkflowRunConfiguration<TTask, TAgent, TJoin>;
+  readonly task: StaticTaskDefinition<TTask, TAgent, TJoin>;
+  readonly agentProfile: AgentProfile<TAgent> | false;
+};
+
+function resolveAgentJournalConfiguration<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+>(
+  resolution: AgentJournalResolution<TTask, TAgent, TJoin>,
+): AgentAttemptJournalConfiguration | false {
+  if (
+    resolution.task.execution.kind !== WorkflowExecutorKind.Agent ||
+    !resolution.agentProfile
+  ) {
+    return false;
+  }
+  const workflow = resolution.configuration.workflow;
+  const materializer = workflow.tasks[workflow.materializedViewTask];
+  const isMaterializer = resolution.task.name === workflow.materializedViewTask;
+  const parent: AgentAttemptParent =
+    !isMaterializer &&
+    materializer.execution.kind === WorkflowExecutorKind.Agent
+      ? {
+          kind: AgentAttemptParentKind.AgentAttempt,
+          task: materializer.name,
+          agent: materializer.execution.agent,
+          attempt: 1,
+        }
+      : { kind: AgentAttemptParentKind.WorkflowRoot };
+  return {
+    runDirectory: resolution.configuration.journal.runDirectory,
+    runId: resolution.configuration.runId,
+    workflow: resolution.configuration.journal.identity.workflow,
+    workflowVersion: resolution.configuration.journal.identity.workflowVersion,
+    sourceCommit: resolution.configuration.sourceCommit,
+    task: resolution.task.name,
+    agent: resolution.agentProfile.name,
+    attempt: 1,
+    depth: isMaterializer ? 1 : 2,
+    parent,
+    now: resolution.configuration.journal.now,
+  };
 }
 
 type TimedExecution<TTask extends string, TAgent extends string> = {

@@ -153,7 +153,7 @@ function buildPrompt<TTask extends string, TAgent extends string>(
     'Author materializedViewMarkdown as a concise Markdown read model of outcomes, evidence, risks, and parent actions. It must not contain hidden reasoning, prompts, credentials, or raw command output.',
     'Return only the requested structured result. Do not create unscheduled subagents.',
     invocation.upstreamOutputs.length > 0
-      ? `Completed upstream materialized views and typed results:\n${upstream}`
+      ? `Verified upstream materialized views:\n${upstream}`
       : 'No upstream results.',
   ].join('\n\n');
 }

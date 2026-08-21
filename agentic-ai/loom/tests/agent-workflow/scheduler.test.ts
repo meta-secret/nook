@@ -19,8 +19,10 @@ import {
   WorkflowTerminalKind,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
+  AgentAttemptParentKind,
   noTasks,
 } from '../../src/agent-workflow/domain.ts';
+import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
 import type {
   StaticAgentWorkflowDefinition,
   TaskTerminal,
@@ -47,87 +49,13 @@ import {
 } from '../../src/agent-workflow/runtime.ts';
 import { runStaticWorkflow } from '../../src/agent-workflow/scheduler.ts';
 import type { StaticWorkflowRunConfiguration } from '../../src/agent-workflow/scheduler.ts';
+import {
+  createSchedulerFixture as createFixture,
+  type ScriptedRuntimeConfiguration,
+} from './scheduler-fixture.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const FIXED_TIME = '2026-08-14T05:00:00.000Z';
-
-type ScriptedRuntimeConfiguration = {
-  readonly failedTask: CortexAuditTask | false;
-};
-
-class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
-  CortexAuditTask,
-  CortexAuditAgent
-> {
-  readonly failedTask: CortexAuditTask | false;
-  readonly started: CortexAuditTask[] = [];
-  readonly upstreamByTask = new Map<
-    CortexAuditTask,
-    readonly WorkflowDependencyOutput<CortexAuditTask>[]
-  >();
-  running = 0;
-  maximumRunning = 0;
-
-  constructor(configuration: ScriptedRuntimeConfiguration) {
-    this.failedTask = configuration.failedTask;
-  }
-
-  start(
-    invocation: WorkflowTaskInvocation<CortexAuditTask, CortexAuditAgent>,
-  ): WorkflowTaskAttempt<CortexAuditTask> {
-    const completion = this.execute(invocation);
-    return confirmedAttempt(completion);
-  }
-
-  private async execute(
-    invocation: WorkflowTaskInvocation<CortexAuditTask, CortexAuditAgent>,
-  ): Promise<TaskTerminal<CortexAuditTask>> {
-    this.started.push(invocation.task);
-    this.upstreamByTask.set(invocation.task, invocation.upstreamOutputs);
-    this.running += 1;
-    this.maximumRunning = Math.max(this.maximumRunning, this.running);
-    await Bun.sleep(5);
-    this.running -= 1;
-    if (this.failedTask === invocation.task) {
-      return {
-        kind: TaskTerminalKind.Failed,
-        task: invocation.task,
-        attempt: invocation.attempt,
-        summary: 'Scripted failure.',
-      };
-    }
-    const resultKind =
-      invocation.execution.kind === WorkflowExecutorKind.Agent
-        ? invocation.execution.resultKind
-        : WorkflowResultKind.LoomLeafEvidence;
-    const output: WorkflowTaskOutput = {
-      resultKind,
-      summary: `${invocation.task} completed.`,
-      materializedViewMarkdown: `# ${invocation.task}\n\nCompleted.`,
-      findings: [],
-      notesForParent: [],
-      artifacts: [],
-    };
-    return {
-      kind: TaskTerminalKind.Completed,
-      task: invocation.task,
-      attempt: invocation.attempt,
-      threadId: `thread-${invocation.task}`,
-      output,
-    };
-  }
-}
-
-type SchedulerFixture = {
-  readonly runRoot: string;
-  readonly runtime: ScriptedWorkflowRuntime;
-  readonly abortController: AbortController;
-  readonly configuration: StaticWorkflowRunConfiguration<
-    CortexAuditTask,
-    CortexAuditAgent,
-    CortexAuditJoin
-  >;
-};
 
 enum LeafOnlyTask {
   Inspect = 'inspect',
@@ -607,41 +535,6 @@ async function createLeafWorkflowFixture(
   return { runRoot, runtime, abortController, configuration };
 }
 
-async function createFixture(
-  runtimeConfiguration: ScriptedRuntimeConfiguration,
-): Promise<SchedulerFixture> {
-  const runRoot = await mkdtemp(join(tmpdir(), 'loom-static-scheduler-'));
-  const journalConfiguration: WorkflowJournalConfiguration = {
-    runRoot,
-    identity: {
-      runId: 'scheduler-test',
-      workflow: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
-      workflowVersion: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.version,
-      sourceCommit: SOURCE_COMMIT,
-    },
-    now: () => FIXED_TIME,
-  };
-  const journal = new WorkflowJournal<CortexAuditTask>(journalConfiguration);
-  const runtime = new ScriptedWorkflowRuntime(runtimeConfiguration);
-  const abortController = new AbortController();
-  const configuration: StaticWorkflowRunConfiguration<
-    CortexAuditTask,
-    CortexAuditAgent,
-    CortexAuditJoin
-  > = {
-    workflow: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
-    runtime,
-    journal,
-    runId: 'scheduler-test',
-    sourceCommit: SOURCE_COMMIT,
-    workingDirectory: process.cwd(),
-    maxConcurrency: 4,
-    signal: abortController.signal,
-    now: () => FIXED_TIME,
-  };
-  return { runRoot, runtime, abortController, configuration };
-}
-
 describe('static workflow scheduler', () => {
   test('rejects invalid concurrency before starting a run', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
@@ -771,9 +664,114 @@ describe('static workflow scheduler', () => {
         (entry) => entry.task === CortexAuditTask.AuditRuntimeTaskAndCi,
       );
       expect(failedInput?.terminalKind).toBe(TaskTerminalKind.Failed);
-      expect(failedInput?.output.materializedViewMarkdown).toContain(
-        'Status: failed',
+      expect(failedInput?.materializedViewMarkdown).toContain('Status: failed');
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('records worker attempts as children of the materializer attempt', async () => {
+    const runtimeConfiguration: ScriptedRuntimeConfiguration = {
+      failedTask: false,
+    };
+    const fixture = await createFixture(runtimeConfiguration);
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      await runStaticWorkflow(fixture.configuration);
+      const childEventsPath = join(
+        fixture.configuration.journal.runDirectory,
+        'agents',
+        CortexAuditTask.AuditWorkflowsAndReferences,
+        'attempt-1',
+        'events.jsonl',
       );
+      const rootEventsPath = join(
+        fixture.configuration.journal.runDirectory,
+        'agents',
+        CortexAuditTask.SynthesizeFindings,
+        'attempt-1',
+        'events.jsonl',
+      );
+      const childStart = JSON.parse(
+        (await readFile(childEventsPath, 'utf8')).split('\n')[0] ?? '',
+      ) as AgentAttemptEvent;
+      const rootStart = JSON.parse(
+        (await readFile(rootEventsPath, 'utf8')).split('\n')[0] ?? '',
+      ) as AgentAttemptEvent;
+
+      expect(childStart.depth).toBe(2);
+      const expectedChildParent = {
+        kind: AgentAttemptParentKind.AgentAttempt,
+        task: CortexAuditTask.SynthesizeFindings,
+        agent: CortexAuditAgent.FindingSynthesizer,
+        attempt: 1,
+      } as const;
+      expect(childStart.parent).toEqual(expectedChildParent);
+      expect(rootStart.depth).toBe(1);
+      const expectedRootParent = {
+        kind: AgentAttemptParentKind.WorkflowRoot,
+      } as const;
+      expect(rootStart.parent).toEqual(expectedRootParent);
+    } finally {
+      await rm(fixture.runRoot, removeOptions);
+    }
+  });
+
+  test('finalizes a root failure view after dependency integrity rejection', async () => {
+    const runtimeConfiguration: ScriptedRuntimeConfiguration = {
+      failedTask: false,
+    };
+    const fixture = await createFixture(runtimeConfiguration);
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    const readVerified =
+      fixture.configuration.journal.readVerifiedProcessingView.bind(
+        fixture.configuration.journal,
+      );
+    fixture.configuration.journal.readVerifiedProcessingView = async (
+      processing,
+    ) => {
+      const projection =
+        processing.view.presence === MaterializedViewPresence.Recorded
+          ? processing.view.projection
+          : false;
+      if (
+        projection &&
+        projection.path.includes(
+          `${CortexAuditTask.AuditWorkflowsAndReferences}/attempt-1/view.md`,
+        )
+      ) {
+        throw new Error('simulated child projection integrity rejection');
+      }
+      return readVerified(processing);
+    };
+    try {
+      const terminal = await runStaticWorkflow(fixture.configuration);
+      expect(terminal.kind).toBe(WorkflowTerminalKind.CompletedWithFailures);
+      expect(fixture.runtime.started).not.toContain(
+        CortexAuditTask.SynthesizeFindings,
+      );
+      const synthesis = terminal.taskTerminals.find(
+        (task) => task.task === CortexAuditTask.SynthesizeFindings,
+      );
+      expect(synthesis?.kind).toBe(TaskTerminalKind.Failed);
+      expect(terminal.materializedView.presence).toBe(
+        MaterializedViewPresence.Recorded,
+      );
+      if (
+        terminal.materializedView.presence === MaterializedViewPresence.Recorded
+      ) {
+        expect(terminal.materializedView.authorKind).toBe(
+          MaterializedViewAuthorKind.LoomRuntime,
+        );
+        const rootView = await readFile(
+          join(
+            fixture.configuration.journal.runDirectory,
+            terminal.materializedView.projection.path,
+          ),
+          'utf8',
+        );
+        expect(rootView).toContain('did not complete');
+      }
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

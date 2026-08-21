@@ -27,6 +27,7 @@ import type {
   WorkflowTaskRuntime,
 } from './runtime.ts';
 import type { TaskStopRequest } from './runtime.ts';
+import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from './structured-result-codec.ts';
 
 export class LocalWorkflowTaskRuntime<
   TTask extends string,
@@ -271,7 +272,7 @@ export function mechanicalCortexAuditOutput(
   const evidence = findings.flatMap((finding) =>
     finding.evidence.map((entry) => `- ${finding.title}: ${entry}`),
   );
-  const materializedViewMarkdown = [
+  const completeMaterializedViewMarkdown = [
     '# Mechanical Cortex audit',
     '',
     summary,
@@ -280,5 +281,24 @@ export function mechanicalCortexAuditOutput(
     '',
     ...(evidence.length > 0 ? evidence : ['- No actionable findings.']),
   ].join('\n');
+  const materializedViewMarkdown = boundedLoomMaterializedView(
+    completeMaterializedViewMarkdown,
+  );
   return { ...output, materializedViewMarkdown, findings };
+}
+
+function boundedLoomMaterializedView(markdown: string): string {
+  if (markdown.length <= MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH) {
+    return markdown;
+  }
+  const truncationNotice = [
+    '',
+    '',
+    '## Truncation',
+    '',
+    '- Additional mechanical evidence was omitted from this bounded read model. The typed findings remain available in the task result projection.',
+  ].join('\n');
+  const retainedLength =
+    MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH - truncationNotice.length;
+  return `${markdown.slice(0, retainedLength).trimEnd()}${truncationNotice}`;
 }

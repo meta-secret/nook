@@ -13,6 +13,8 @@ import {
   isRecord,
   untrustedYamlProperty,
 } from '../lib/guards.ts';
+
+export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
 import type {
   UntrustedYamlMap,
   UntrustedYamlNode,
@@ -36,7 +38,7 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
     materializedViewMarkdown: {
       type: 'string',
       minLength: 1,
-      maxLength: 65_536,
+      maxLength: MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH,
       pattern: '\\S',
     },
     findings: {
@@ -138,7 +140,7 @@ export function decodeWorkflowTaskOutput(
   );
   if (
     materializedViewMarkdown.trim() === '' ||
-    materializedViewMarkdown.length > 65_536 ||
+    materializedViewMarkdown.length > MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH ||
     containsForbiddenControlCharacter(materializedViewMarkdown)
   ) {
     invalidOutput(

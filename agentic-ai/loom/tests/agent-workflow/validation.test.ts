@@ -244,6 +244,35 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
+  test('rejects an all-terminal arrival with only one outcome edge', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.AuditRuntimeTaskAndCi]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditRuntimeTaskAndCi
+          ],
+          failed: noTasks,
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.InvalidJoin,
+    };
+
+    expectIssue(assertion);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('requires both outcomes'),
+        ),
+      ).toBe(true);
+    }
+  });
+
   test('rejects a task with two scheduling sources', () => {
     const workflow: CortexWorkflow = {
       ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,

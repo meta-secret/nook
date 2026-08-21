@@ -15,6 +15,8 @@ import type {
 } from './domain.ts';
 import { materializerValidationMessages } from './materializer-validation.ts';
 import type { MaterializerValidationRequest } from './materializer-validation.ts';
+import { allTerminalJoinValidationIssues } from './join-validation.ts';
+import type { AllTerminalJoinValidationRequest } from './join-validation.ts';
 import {
   WorkflowValidationIssueKind,
   WorkflowValidationStatus,
@@ -379,6 +381,15 @@ export function validateStaticAgentWorkflow<
       issues,
     };
     inspectJoinArrivals(arrivalInspection);
+    const joinValidationRequest: AllTerminalJoinValidationRequest<
+      TTask,
+      TAgent,
+      TJoin
+    > = {
+      workflow,
+      join: joinName,
+    };
+    issues.push(...allTerminalJoinValidationIssues(joinValidationRequest));
     const targetInspection: JoinTargetInspection<TTask, TAgent, TJoin> = {
       workflow,
       sourceNode: joinNodeName,

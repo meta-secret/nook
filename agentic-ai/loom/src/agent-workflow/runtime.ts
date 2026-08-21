@@ -20,7 +20,7 @@ export type WorkflowDependencyOutput<TTask extends string> = {
   readonly task: TTask;
   readonly terminalKind: TaskTerminalKind;
   readonly view: MaterializedViewReference;
-  readonly output: WorkflowTaskOutput;
+  readonly materializedViewMarkdown: string;
 };
 
 type WorkflowTaskInvocationBase<TTask extends string> = {
