@@ -179,8 +179,30 @@ describe('workflow journal', () => {
       expect(replay.eventCount).toBe(3);
       expect(replay.taskTerminals).toHaveLength(1);
       expect(replay.taskTerminals[0]?.resultSha256).toBe(taskProjection.sha256);
+      expect(replay.taskTerminals[0]?.processing).toEqual(processing);
       expect(replay.workflowTerminal.presence).toBe(
         ReplayedWorkflowTerminalPresence.Recorded,
+      );
+
+      const conflictingProcessingEvents = events.map((event) =>
+        event.kind === WorkflowEventKind.TaskTerminalRecorded
+          ? {
+              ...event,
+              processing: {
+                ...event.processing,
+                result: {
+                  ...event.processing.result,
+                  sha256: '0'.repeat(64),
+                },
+              },
+            }
+          : event,
+      );
+      const conflictingReplayRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events: conflictingProcessingEvents,
+      };
+      expect(() => replayWorkflowJournal(conflictingReplayRequest)).toThrow(
+        'invalid processing result reference',
       );
 
       const taskResultPath = join(journal.runDirectory, taskProjection.path);

@@ -534,16 +534,15 @@ async function executeTask<TTask extends string, TAgent extends string>(
     }
     if (agentJournal) {
       await agentJournal.append(runtimeActivityEvent(observation));
-    } else {
-      const event: WorkflowEventWithoutMetadata<TTask> = {
-        kind: WorkflowEventKind.RuntimeActivity,
-        task: context.task.name,
-        attempt: 1,
-        activity: observation.activity,
-        detail: observation.detail,
-      };
-      await context.journal.append(event);
     }
+    const event: WorkflowEventWithoutMetadata<TTask> = {
+      kind: WorkflowEventKind.RuntimeActivity,
+      task: context.task.name,
+      attempt: 1,
+      activity: observation.activity,
+      detail: observation.detail,
+    };
+    await context.journal.append(event);
   };
   const taskController = new AbortController();
   const forwardCancellation = (): void => taskController.abort();
@@ -598,6 +597,18 @@ async function executeTask<TTask extends string, TAgent extends string>(
         context.signal.removeEventListener('abort', forwardCancellation),
     };
     terminal = await withTimeout(timedExecution);
+    if (
+      terminal.kind === TaskTerminalKind.Completed &&
+      !(await dependenciesRemainVerified(context))
+    ) {
+      terminal = {
+        kind: TaskTerminalKind.Failed,
+        task: context.task.name,
+        attempt: 1,
+        summary:
+          'Dependency processing changed during parent execution. The parent result was rejected.',
+      };
+    }
   } catch (error) {
     if (error instanceof UnconfirmedTaskTeardownError) {
       throw error;
@@ -622,6 +633,22 @@ async function executeTask<TTask extends string, TAgent extends string>(
   };
   await recordTaskTerminal(terminalRecording);
   return terminal;
+}
+
+async function dependenciesRemainVerified<
+  TTask extends string,
+  TAgent extends string,
+>(context: TaskExecutionContext<TTask, TAgent>): Promise<boolean> {
+  try {
+    for (const dependency of context.upstreamOutputs) {
+      const processing = context.processingReferences.get(dependency.task);
+      if (!processing) return false;
+      await context.journal.readVerifiedProcessingView(processing);
+    }
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 type TerminalRecording<TTask extends string, TAgent extends string> = {

@@ -539,6 +539,7 @@ describe('static workflow scheduler', () => {
   test('rejects invalid concurrency before starting a run', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: false,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };
@@ -563,6 +564,7 @@ describe('static workflow scheduler', () => {
   test('rejects a runner identity that differs from its journal', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: false,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };
@@ -587,6 +589,7 @@ describe('static workflow scheduler', () => {
   test('runs the explicit parallel wave and releases the join once', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: false,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };
@@ -634,6 +637,19 @@ describe('static workflow scheduler', () => {
             ) && /^[0-9a-f]{64}$/.test(entry.resultArtifact.sha256),
         ),
       ).toBe(true);
+      const journalEvents = (
+        await readFile(fixture.configuration.journal.eventsPath, 'utf8')
+      )
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as WorkflowEvent<CortexAuditTask>);
+      expect(
+        journalEvents.some(
+          (event) =>
+            event.kind === WorkflowEventKind.RuntimeActivity &&
+            event.task === CortexAuditTask.AuditWorkflowsAndReferences,
+        ),
+      ).toBe(true);
       const mechanicalInputs = fixture.runtime.upstreamByTask.get(
         CortexAuditTask.MechanicalCortexAudit,
       );
@@ -648,6 +664,7 @@ describe('static workflow scheduler', () => {
   test('aggregates a failed lane after the all-terminal evidence barrier', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: CortexAuditTask.AuditRuntimeTaskAndCi,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };
@@ -681,6 +698,7 @@ describe('static workflow scheduler', () => {
   test('records worker attempts as children of the materializer attempt', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: false,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };
@@ -728,6 +746,7 @@ describe('static workflow scheduler', () => {
   test('finalizes a root failure view after dependency integrity rejection', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: false,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };
@@ -788,6 +807,7 @@ describe('static workflow scheduler', () => {
   test('drains running work without activating successors after cancellation', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: false,
+      tamperResultArtifactDuringSynthesis: false,
     };
     const fixture = await createFixture(runtimeConfiguration);
     const removeOptions: RmOptions = { recursive: true, force: true };

@@ -1,4 +1,4 @@
-import { mkdtemp } from 'node:fs/promises';
+import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -25,6 +25,8 @@ import type {
   WorkflowTaskRuntime,
 } from '../../src/agent-workflow/runtime.ts';
 import { TaskTeardownKind } from '../../src/agent-workflow/runtime.ts';
+import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
+import type { RuntimeActivityObservation } from '../../src/agent-workflow/events.ts';
 import type { StaticWorkflowRunConfiguration } from '../../src/agent-workflow/scheduler.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -32,6 +34,7 @@ const FIXED_TIME = '2026-08-14T05:00:00.000Z';
 
 export type ScriptedRuntimeConfiguration = {
   readonly failedTask: CortexAuditTask | false;
+  readonly tamperResultArtifactDuringSynthesis: boolean;
 };
 
 class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
@@ -39,6 +42,7 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
   CortexAuditAgent
 > {
   readonly failedTask: CortexAuditTask | false;
+  readonly tamperResultArtifactDuringSynthesis: boolean;
   readonly started: CortexAuditTask[] = [];
   readonly upstreamByTask = new Map<
     CortexAuditTask,
@@ -49,6 +53,8 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
 
   constructor(configuration: ScriptedRuntimeConfiguration) {
     this.failedTask = configuration.failedTask;
+    this.tamperResultArtifactDuringSynthesis =
+      configuration.tamperResultArtifactDuringSynthesis;
   }
 
   start(
@@ -69,6 +75,11 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
   ): Promise<TaskTerminal<CortexAuditTask>> {
     this.started.push(invocation.task);
     this.upstreamByTask.set(invocation.task, invocation.upstreamOutputs);
+    const observation: RuntimeActivityObservation = {
+      activity: WorkflowRuntimeActivityKind.TurnStarted,
+      detail: 'Scripted task turn started.',
+    };
+    await invocation.observe(observation);
     this.running += 1;
     this.maximumRunning = Math.max(this.maximumRunning, this.running);
     await Bun.sleep(5);
@@ -80,6 +91,19 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
         attempt: invocation.attempt,
         summary: 'Scripted failure.',
       };
+    }
+    if (
+      this.tamperResultArtifactDuringSynthesis &&
+      invocation.task === CortexAuditTask.SynthesizeFindings
+    ) {
+      const dependency = invocation.upstreamOutputs[0];
+      if (dependency) {
+        await writeFile(
+          dependency.resultArtifact.location,
+          '{"tampered":true}\n',
+          'utf8',
+        );
+      }
     }
     const resultKind =
       invocation.execution.kind === WorkflowExecutorKind.Agent

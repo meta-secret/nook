@@ -9,8 +9,11 @@ import type {
   WorkflowTerminalKind,
   WorkflowVersion,
   GitCommit,
+  TaskProcessingReference,
+  ProjectionReference,
 } from './domain.ts';
-import type { WorkflowEvent } from './events.ts';
+import { MaterializedViewPresence, TaskProcessingKind } from './domain.ts';
+import type { TaskTerminalRecordedEvent, WorkflowEvent } from './events.ts';
 
 export type ReplayedTaskTerminalReference<TTask extends string> = {
   readonly task: TTask;
@@ -18,6 +21,7 @@ export type ReplayedTaskTerminalReference<TTask extends string> = {
   readonly terminalKind: TaskTerminalKind;
   readonly resultPath: string;
   readonly resultSha256: string;
+  readonly processing: TaskProcessingReference;
 };
 
 export enum ReplayedWorkflowTerminalPresence {
@@ -113,12 +117,14 @@ export function replayWorkflowJournal<TTask extends string>(
         );
       }
       terminalAttempts.add(terminalAttemptKey);
+      assertProcessingReference(event);
       const terminalReference: ReplayedTaskTerminalReference<TTask> = {
         task: event.task,
         attempt: event.attempt,
         terminalKind: event.terminalKind,
         resultPath: event.resultPath,
         resultSha256: event.resultSha256,
+        processing: event.processing,
       };
       taskTerminals.push(terminalReference);
     }
@@ -139,6 +145,46 @@ export function replayWorkflowJournal<TTask extends string>(
     taskTerminals,
     workflowTerminal,
   };
+}
+
+function assertProcessingReference<TTask extends string>(
+  event: TaskTerminalRecordedEvent<TTask>,
+): void {
+  const processing = event.processing;
+  if (
+    !processing ||
+    !validProjection(processing.result) ||
+    processing.result.path !== event.resultPath ||
+    processing.result.sha256 !== event.resultSha256
+  ) {
+    invalidJournal(
+      `workflow journal task ${event.task} has an invalid processing result reference`,
+    );
+  }
+  if (
+    processing.kind === TaskProcessingKind.AgentAttempt &&
+    !validProjection(processing.events)
+  ) {
+    invalidJournal(
+      `workflow journal task ${event.task} has an invalid attempt stream reference`,
+    );
+  }
+  if (
+    processing.view.presence === MaterializedViewPresence.Recorded &&
+    !validProjection(processing.view.projection)
+  ) {
+    invalidJournal(
+      `workflow journal task ${event.task} has an invalid materialized view reference`,
+    );
+  }
+}
+
+function validProjection(projection: ProjectionReference | false): boolean {
+  return Boolean(
+    projection &&
+    projection.path.trim() !== '' &&
+    /^[0-9a-f]{64}$/.test(projection.sha256),
+  );
 }
 
 function invalidJournal(message: string): never {
