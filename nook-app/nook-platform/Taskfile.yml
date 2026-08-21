@@ -181,7 +181,8 @@ tasks:
            [ "${NOOK_ARC_RUNNER:-}" = "1" ] &&
            [ "${NOOK_BUILDKIT_ADDR:-}" = "tcp://127.0.0.1:1234" ]; then
           probe_context="$(mktemp -d)";
-          cp nook-app/nook-platform/docker/sccache-health.Dockerfile "$probe_context/Dockerfile";
+          repo_root="$(git rev-parse --show-toplevel)";
+          cp "$repo_root/nook-app/nook-platform/docker/sccache-health.Dockerfile" "$probe_context/Dockerfile";
           probe_status=0;
           {{.DOCKER}} buildx build \
             --progress plain \
