@@ -156,6 +156,46 @@ require(
     "streamed GitHub credentials must not retain transport newlines",
 )
 require(
+    TASKS,
+    "Existing ARC repository credential retained; set ARC_GITHUB_TOKEN_FILE to rotate it",
+    "routine ARC deployment must retain the installed repository credential",
+)
+require(
+    TASKS,
+    'test -s "$token_file"',
+    "explicit ARC credential rotation must reject an empty credential file",
+)
+forbid(
+    TASKS,
+    "gh auth token",
+    "ARC deployment must not persist an implicit operator CLI credential",
+)
+require(
+    TASKS,
+    "gh workflow run remote.yml",
+    "ARC smoke must dispatch independently from the branch-only remote helper",
+)
+require(
+    TASKS,
+    '--raw-field "tasks=preflight"',
+    "ARC smoke must dispatch only the preflight selector",
+)
+forbid(
+    TASKS,
+    "task remote TASK_NAME=preflight",
+    "ARC smoke must remain usable from a pushed Main checkout",
+)
+require(
+    TASKS,
+    "for _ in $(seq 1 500)",
+    "ARC smoke must outlive cold setup plus the preflight command timeout",
+)
+require(
+    TASKS,
+    "did not complete within 25 minutes",
+    "ARC smoke timeout diagnostics must match the polling budget",
+)
+require(
     REMOTE_WORKFLOW,
     "(inputs.tasks || inputs.task) == 'preflight'",
     "only the daemon-free remote task subset may select ARC",

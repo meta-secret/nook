@@ -596,13 +596,33 @@ TypeScript PR audit without Docker.
 
 ### Credential ownership
 
-| Credential                          | Mounted into                                                    | Exposed to worker/Codex                                   |
-| ----------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- |
-| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access     | No password or raw graph connection                       |
-| Codex `auth.json`                   | Auth broker only                                                | Short-lived tokens on one pre-established private channel |
-| Repository-scoped GitHub token      | Main-repair worker                                              | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
-| Reaper controller credential        | Pod reaper, Workbench dispatcher, and dedicated controller only | No                                                        |
-| Kubernetes auth-refresh token       | Auth broker only                                                | No                                                        |
+- **Neo4j password and private CA trust:** Mount into the coordinator.
+  - Give the dispatcher its own bounded database access.
+  - Do not expose the password or raw graph connection to workers or Codex.
+- **Codex `auth.json`:** Mount into the auth broker only.
+  - Expose only short-lived tokens on one pre-established private channel.
+- **Repository-scoped GitHub token:** Mount into the Main-repair worker.
+  - Expose it as `GH_TOKEN` for standard `git` and `gh` operations.
+- **ARC GitHub token:** Store in `arc-runners/nook-arc-github` for the ARC
+  controller and listener.
+  - Never mount it into an ephemeral runner Pod.
+  - Use a fine-grained personal access token limited to `meta-secret/nook`.
+  - Grant only repository Administration read/write, which ARC needs to create
+    registration and just-in-time runner configuration tokens.
+  - Grant no organization permissions.
+  - The infrastructure operator owns rotation and revocation.
+  - Routine `infra:deploy` retains the installed Secret.
+  - To rotate it, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file outside the
+    checkout and run `task infra:arc:deploy`.
+  - Verify `task infra:arc:status` and `task infra:arc:smoke`, then revoke the
+    replaced token.
+  - For emergency revocation, run `task infra:arc:fallback`, revoke the token
+    on GitHub, and delete `nook-arc-github` from the `arc-runners` namespace.
+- **Reaper controller credential:** Mount into the Pod reaper, Workbench
+  dispatcher, and dedicated controller only.
+  - Do not expose it to workers or Codex.
+- **Kubernetes auth-refresh token:** Mount into the auth broker only.
+  - Do not expose it to workers or Codex.
 
 - **Service-account tokens:** Disable automatic mounting.
   - The service account may patch only the Codex-auth Secret.

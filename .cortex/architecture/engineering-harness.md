@@ -104,10 +104,11 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Web checks consume only web dependencies plus the generated WASM package.
 - They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
 
-Complete PR, Main, release, and browser validation executes on ephemeral
-GitHub-hosted runners. Daemon-free `preflight` and `rust:ci` focused jobs may run
-in fresh Kata QEMU microVMs through ARC. The self-hosted `nook` pool remains
-maintenance-only.
+Trusted same-repository PR and Main native Rust plus Rust ecosystem validation
+executes in fresh Kata QEMU microVMs through ARC. Daemon-free `preflight` and
+`rust:ci` focused jobs may use the same scale set. Fork PRs and runtime-dependent,
+browser, WASM, deployment, and release validation execute on ephemeral
+GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 
 ---
 

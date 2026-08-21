@@ -92,8 +92,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Use `task format:diff` only when you need the raw patch.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
-  - PR, main delivery, production release, long-running AI agents, and scheduled/manual validation use GitHub-hosted `ubuntu-latest`.
+  - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the configured ARC scale set.
   - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set; every job receives a fresh Kata QEMU microVM and private BuildKit worker.
+  - Fork PRs and runtime-dependent, browser, WASM, deployment, release,
+    long-running AI, and scheduled/manual validation use GitHub-hosted
+    `ubuntu-latest`.
   - Delivery jobs restore scoped BuildKit layers through private Zot.
   - The self-hosted `nook` label remains only for maintenance cleanup.
   - Do not use Blacksmith or other third-party runner labels.

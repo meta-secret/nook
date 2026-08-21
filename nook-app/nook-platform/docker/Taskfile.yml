@@ -327,45 +327,26 @@ tasks:
         rust-base-restore
 
   docker:ecosystem:policy-tools:
-    desc: Bake and load rust-ecosystem-policy-tools (pinned deny/audit CLIs).
+    desc: Bake pinned deny/audit CLIs without exporting a runnable image.
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
       - task: docker:rust-base
-      # Force write off even when the job exported GHA_CACHE_WRITE_ENABLED.
       - >-
-        GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         rust-ecosystem-policy-tools
-      - |
-        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
-          # Publish Zot only. Do not reload type=docker or a thin export can replace
-          # the already-loaded runnable policy-tools tag used by dependency-policy:run.
-          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
-            {{.NOOK_BAKE_FILES}} \
-            --set "rust-ecosystem-policy-tools.output=type=cacheonly" \
-            rust-ecosystem-policy-tools
-        fi
 
   docker:ecosystem:dependency-policy:run:
     internal: true
-    desc: Run cargo-deny and cargo-audit for one workspace in the policy-tools image.
+    desc: Run cargo-deny and cargo-audit for one workspace inside BuildKit.
     requires:
       vars: [WORKSPACE]
     cmds:
-      # Use bash -c (not -lc): a login shell resets PATH and drops /usr/local/cargo/bin.
       - >-
-        bash -c 'set -euo pipefail;
-        workspace="{{.WORKSPACE}}";
-        {{.DOCKER}} run --rm
-        --platform linux/amd64
-        {{.DOCKER_RUN_LIMITS}}
-        -v "{{.REPO_ROOT}}:/meta-secret/nook"
-        -w /meta-secret/nook
-        {{.DOCKER_POLICY_TOOLS_IMAGE}}
-        bash -c "set -euo pipefail;
-        cargo-deny --manifest-path \"$workspace/Cargo.toml\" --log-level error check --hide-inclusion-graph;
-        (cd \"$workspace\" && cargo-audit audit --quiet)"'
+        {{.DOCKER}} buildx bake
+        {{.NOOK_BAKE_FILES}}
+        --set "rust-ecosystem-dependency-policy.args.WORKSPACE={{.WORKSPACE}}"
+        rust-ecosystem-dependency-policy
 
   docker:ecosystem:dependency-policy:
     desc: Run cargo-deny and cargo-audit for every Rust workspace via its Taskfile.

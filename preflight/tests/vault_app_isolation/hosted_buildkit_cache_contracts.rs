@@ -77,8 +77,9 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
                 .count()
                 == 1
             && !rust_toolchain_bake.contains("rust_ecosystem_policy_cache_to")
-            && !rust_toolchain_bake.contains("target \"rust-dependency-policy\""),
-        "ecosystem policy-tools must seed its hosted cache without an aggregate deny/audit Bake leaf"
+            && rust_toolchain_bake.contains("target \"rust-ecosystem-dependency-policy\"")
+            && !rust_toolchain_bake.contains("type=docker"),
+        "policy-tools must own cache publication while dependency checks stay cache-only"
     );
     assert!(
         !rust_toolchain_bake.contains("rust_ecosystem_nightly_cache_")

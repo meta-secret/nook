@@ -3,9 +3,10 @@
 ## Purpose
 
 Minimize agent wall time by formatting locally and using the configured GitHub
-Actions runner for focused tasks while iterating. Spend the complete hosted PR
+Actions runner for focused tasks while iterating. Spend the complete PR
 pipeline only on a ready head, then carry ready PRs directly through squash
-merge.
+merge. Trusted Rust gates may use ARC while runtime-dependent gates remain
+hosted.
 
 ## Problem Pattern
 

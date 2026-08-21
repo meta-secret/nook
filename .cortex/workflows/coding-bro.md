@@ -179,7 +179,8 @@ If Actions fails:
 
 **PR GitHub Actions is the sole merge validation pipeline.**
 
-- `pr.yml` runs on GitHub-hosted `ubuntu-latest`.
+- Trusted native Rust and Rust ecosystem jobs in `pr.yml` may use ARC; fork PRs
+  and runtime-dependent jobs use GitHub-hosted `ubuntu-latest`.
 - Every result is bound to the explicitly validated PR head.
 - A push after validation makes the earlier result stale and does not start a replacement; the agent must run `task pr:validate` again.
 - Delivery restores private Zot BuildKit cache scopes for Rust/WASM, web dependencies, and the final web image.

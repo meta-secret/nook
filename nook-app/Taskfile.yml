@@ -23,7 +23,6 @@ vars:
   DOCKER_RUST_IMAGE: '{{default "nook-rust:local" .DOCKER_RUST_IMAGE}}'
   DOCKER_RUST_FAST_IMAGE: '{{default "nook-rust-fast:local" .DOCKER_RUST_FAST_IMAGE}}'
   DOCKER_RUST_BROWSER_IMAGE: '{{default "nook-rust-browser:local" .DOCKER_RUST_BROWSER_IMAGE}}'
-  DOCKER_POLICY_TOOLS_IMAGE: '{{default "nook-rust-policy-tools:local" .DOCKER_POLICY_TOOLS_IMAGE}}'
   DOCKER_E2E_IMAGE: '{{default "nook-web-e2e:local" .DOCKER_E2E_IMAGE}}'
   DOCKER_MKCERT_IMAGE: '{{default "nook-mkcert:local" .DOCKER_MKCERT_IMAGE}}'
   # Shared across git worktrees. Credentials and other machine-local config live under ~/.nook.

@@ -6,7 +6,8 @@ description: >-
   publish a public-safe task plan to Workbench before implementation, branch
   from origin/main, implement (and update specs on new product knowledge), always
   host-apply task format (and the UI demo contract when UI paths change), commit
-  and push/open the PR, run focused allowlisted tasks on GitHub-hosted workers,
+  and push/open the PR, run focused allowlisted tasks on the configured Actions
+  runner,
   then explicitly trigger complete exact-head PR validation; on failure fix from
   CI logs, format, push, and trigger again until Nook's PR checks are green,
   resolve every actionable comment already present, then squash merge; afterward
@@ -34,7 +35,7 @@ Follow the delivery sequence in the cortex workflow:
    Require attempt streams and recursive view aggregation before integration.
 4. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
 5. Commit and run advisory local Codex review.
-6. Push and use focused hosted execution when useful.
+6. Push and use focused execution on the configured Actions runner when useful.
 7. Trigger complete validation and exact-head Cloud review through Loom.
 8. Resolve actionable feedback while repository-owned checks run.
 9. Fix until exact-head checks pass.
@@ -45,7 +46,10 @@ Follow the delivery sequence in the cortex workflow:
 Never wait for a Codex or Cursor result after repository-owned checks finish.
 `task pr:review` may request Cursor Bugbot when Codex reports a usage limit.
 Do not request Claude, CodeRabbit, or other optional reviewers. Never run heavy
-product work locally.
+product work locally. Focused daemon-free tasks and trusted native or Rust
+ecosystem merge gates may run on fresh ARC Kata microVMs. Fork PRs and
+runtime-dependent, browser, WASM, deployment, and release gates stay on
+GitHub-hosted workers.
 
 Before any mutation, apply
 [agent-feature-ownership](../agent-feature-ownership/SKILL.md). Work only on the

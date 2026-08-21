@@ -452,8 +452,8 @@ task pr:review PR=410      # optional idempotent exact-head Codex or Cursor revi
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
-task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, Neo4j, and Hive
-task infra:arc:deploy       # deploy the Kata-isolated, daemon-free ARC runner scale set
+task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
+task infra:arc:deploy       # targeted redeploy of the Kata-isolated, daemon-free ARC scale set
 task infra:arc:activate     # route daemon-free remote selections to ARC
 task infra:arc:fallback     # route every remote selection to GitHub-hosted capacity
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
@@ -494,7 +494,7 @@ Labeled PR validation and merged-head verification run the shared **Rust
 ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore
 shows product and ecosystem checks on one Actions run.
 `task docker:ecosystem:*` runs dependency policy (per-workspace Taskfile
-checks in the loaded `rust-ecosystem-policy-tools` image), RustSec,
+checks in the cache-only `rust-ecosystem-dependency-policy` BuildKit target), RustSec,
 Proptest/Insta/Loom, cargo-fuzz, and Dylint from sibling Dockerfiles under
 `nook-app/nook-platform/docker/rust/` as separate images off `rust-base`
 (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) so the product base

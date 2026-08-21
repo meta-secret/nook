@@ -4,8 +4,9 @@
 
 Keep agent machines on the lightest possible local work.
 
-Use the configured GitHub Actions runner for iterative builds and tests. Use
-GitHub-hosted runners for complete merge validation.
+Use the configured GitHub Actions runner for iterative builds and tests.
+Trusted native Rust and Rust ecosystem merge gates may use ARC. Fork PRs and
+runtime-dependent gates stay GitHub-hosted.
 
 ## Problem Pattern
 
@@ -25,6 +26,9 @@ Validation has three layers:
   feedback than complete validation.
   - Do not batch broad gates sequentially before complete validation.
 - **Required remotely:** explicitly trigger complete exact-head PR validation.
+  - Trusted same-repository native Rust and Rust ecosystem jobs may select ARC.
+  - Fork PRs and runtime-dependent, browser, WASM, deployment, and release jobs
+    stay on GitHub-hosted workers.
 
 Validate request example:
 

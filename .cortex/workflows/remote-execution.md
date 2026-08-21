@@ -17,7 +17,7 @@ Nook intentionally separates iterative investigation from merge authorization:
 
 Ordinary PR pushes do not start complete validation. This lets an agent commit
 and push several experimental iterations, use focused remote tasks between
-iterations, and spend the full parallel hosted PR pipeline only when the head
+iterations, and spend the full parallel PR pipeline only when the head
 is ready.
 
 ## Focused remote tasks
@@ -250,7 +250,7 @@ read failed PR logs and app artifacts → fix → task loom:pre-push → commit 
 → optional focused remote tasks → task pr:validate → monitor exact-head checks
 ```
 
-Never treat a focused remote task as a substitute for complete PR validation. Never fall back to heavy local product gates merely because a hosted task failed. Interactive local servers and browser inspection remain appropriate when the debugging work intrinsically requires a persistent local session.
+Never treat a focused remote task as a substitute for complete PR validation. Never fall back to heavy local product gates merely because an Actions task failed. Interactive local servers and browser inspection remain appropriate when the debugging work intrinsically requires a persistent local session.
 
 ## Merge boundary
 

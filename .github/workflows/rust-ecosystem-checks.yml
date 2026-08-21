@@ -24,7 +24,7 @@ permissions:
 jobs:
   dependency-policy:
     name: Dependency policy and RustSec
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
@@ -49,7 +49,7 @@ jobs:
 
   deterministic-tests:
     name: Proptest, Insta, and Loom
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -72,7 +72,7 @@ jobs:
 
   fuzz-smoke:
     name: Cargo fuzz smoke
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -97,7 +97,7 @@ jobs:
 
   kani:
     name: Kani bounded proofs
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -118,7 +118,7 @@ jobs:
 
   dylint:
     name: Dylint repository lints
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository)) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
