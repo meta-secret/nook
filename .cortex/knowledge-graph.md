@@ -770,7 +770,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [PR-first mandate](workflows/coding-bro.md#pr-first-mandate)
   - [Testing strategy — GitHub Actions only](workflows/coding-bro.md#testing-strategy--github-actions-only)
     - [⛔ Pre-push hygiene — always format (the only required local action)](workflows/coding-bro.md#-pre-push-hygiene--always-format-the-only-required-local-action)
-    - [⛔ Format, push, execute on GitHub-hosted workers](workflows/coding-bro.md#-format-push-execute-on-github-hosted-workers)
+    - [⛔ Format, push, execute through GitHub Actions](workflows/coding-bro.md#-format-push-execute-through-github-actions)
   - [Debug information — always check app logs](workflows/coding-bro.md#debug-information--always-check-app-logs)
   - [How it works](workflows/coding-bro.md#how-it-works)
   - [Commands](workflows/coding-bro.md#commands)
