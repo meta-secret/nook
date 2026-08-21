@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import {
   TaskTargetKind,
   TaskTerminalKind,
@@ -185,6 +186,13 @@ export async function runStaticWorkflow<
               terminalKind: upstreamTerminal.kind,
               view: upstreamProcessing.view,
               materializedViewMarkdown: materializedViewMarkdown.trimEnd(),
+              resultArtifact: {
+                location: join(
+                  configuration.journal.runDirectory,
+                  upstreamProcessing.result.path,
+                ),
+                sha256: upstreamProcessing.result.sha256,
+              },
             };
             upstreamOutputs.push(dependencyOutput);
           }

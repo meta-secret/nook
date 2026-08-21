@@ -94,6 +94,7 @@ test('bounds Loom-authored mechanical materialized views', () => {
     MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH,
   );
   expect(output.materializedViewMarkdown).toContain('## Truncation');
+  expect(output.materializedViewMarkdown).toContain('`resultArtifact`');
   expect(output.findings).toHaveLength(2_000);
 });
 

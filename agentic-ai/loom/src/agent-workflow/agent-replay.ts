@@ -59,6 +59,9 @@ export function replayAgentAttemptJournal(
       projectedResult = event.result;
     }
     if (event.kind === AgentAttemptEventKind.ViewProjected) {
+      if (sawView) {
+        throw new Error('Agent attempt journal contains duplicate views.');
+      }
       if (!projectedResult) {
         throw new Error('Agent attempt view was projected before its result.');
       }

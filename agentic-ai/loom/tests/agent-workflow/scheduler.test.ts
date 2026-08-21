@@ -626,6 +626,14 @@ describe('static workflow scheduler', () => {
           (entry) => entry.view.presence === MaterializedViewPresence.Recorded,
         ),
       ).toBe(true);
+      expect(
+        synthesisInputs?.every(
+          (entry) =>
+            entry.resultArtifact.location.startsWith(
+              fixture.configuration.journal.runDirectory,
+            ) && /^[0-9a-f]{64}$/.test(entry.resultArtifact.sha256),
+        ),
+      ).toBe(true);
       const mechanicalInputs = fixture.runtime.upstreamByTask.get(
         CortexAuditTask.MechanicalCortexAudit,
       );

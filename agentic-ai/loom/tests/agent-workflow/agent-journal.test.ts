@@ -83,6 +83,31 @@ describe('agent attempt journal', () => {
       expect(() => replayAgentAttemptJournal(mismatchedReplayRequest)).toThrow(
         'terminal result differs from its projection event',
       );
+      const duplicateViewEvents: AgentAttemptEvent[] = [];
+      for (const event of parsedEvents) {
+        if (event.kind === AgentAttemptEventKind.AttemptTerminalRecorded) {
+          const shiftedTerminal: AgentAttemptEvent = {
+            ...event,
+            sequence: event.sequence + 1,
+          };
+          duplicateViewEvents.push(shiftedTerminal);
+          continue;
+        }
+        duplicateViewEvents.push(event);
+        if (event.kind === AgentAttemptEventKind.ViewProjected) {
+          const duplicateView: AgentAttemptEvent = {
+            ...event,
+            sequence: event.sequence + 1,
+          };
+          duplicateViewEvents.push(duplicateView);
+        }
+      }
+      const duplicateViewReplayRequest: ReplayAgentAttemptJournalRequest = {
+        events: duplicateViewEvents,
+      };
+      expect(() =>
+        replayAgentAttemptJournal(duplicateViewReplayRequest),
+      ).toThrow('duplicate views');
       expect(processing.view.presence).toBe(MaterializedViewPresence.Recorded);
       if (processing.view.presence === MaterializedViewPresence.Recorded) {
         const view = await readFile(

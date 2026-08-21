@@ -296,7 +296,7 @@ function boundedLoomMaterializedView(markdown: string): string {
     '',
     '## Truncation',
     '',
-    '- Additional mechanical evidence was omitted from this bounded read model. The typed findings remain available in the task result projection.',
+    '- Additional mechanical evidence was omitted from this bounded read model. Read the verified `resultArtifact` supplied with this view for the complete typed findings.',
   ].join('\n');
   const retainedLength =
     MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH - truncationNotice.length;

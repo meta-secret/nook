@@ -21,6 +21,12 @@ export type WorkflowDependencyOutput<TTask extends string> = {
   readonly terminalKind: TaskTerminalKind;
   readonly view: MaterializedViewReference;
   readonly materializedViewMarkdown: string;
+  readonly resultArtifact: VerifiedWorkflowResultArtifact;
+};
+
+export type VerifiedWorkflowResultArtifact = {
+  readonly location: string;
+  readonly sha256: string;
 };
 
 type WorkflowTaskInvocationBase<TTask extends string> = {

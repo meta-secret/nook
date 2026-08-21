@@ -406,9 +406,18 @@ not start the complete pipeline. Local Task mirrors below remain available for
 humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
 suites.
 
+For a read-only, event-sourced Cortex garbage-collection audit, run
+**`task loom:agent-workflow:cortex-audit`**. Each reached agent writes an
+immutable JSONL attempt stream under the gitignored
+**`workflow/processing/<workflow>/<run>/agents/`** tree. Agents also author
+bounded Markdown materialized views there. Loom verifies those projections
+before a parent aggregates them into the next-level view and, finally, the root
+workflow view.
+
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
+task loom:agent-workflow:cortex-audit # event streams plus hierarchical read models
 task remote:list           # allowlisted focused GitHub-hosted task catalog
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
 task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks
