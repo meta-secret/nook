@@ -212,6 +212,24 @@ describe('workflow journal', () => {
         'invalid materialized view reference',
       );
 
+      const unknownRootViewEvents = events.map((event) =>
+        event.kind === WorkflowEventKind.WorkflowTerminalRecorded
+          ? {
+              ...event,
+              materializedView: {
+                presence: 'future-value',
+                reason: 'Must not be accepted.',
+              },
+            }
+          : event,
+      ) as readonly WorkflowEvent<TestTask>[];
+      const unknownRootViewRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events: unknownRootViewEvents,
+      };
+      expect(() => replayWorkflowJournal(unknownRootViewRequest)).toThrow(
+        'unknown materialized view presence',
+      );
+
       const conflictingProcessingEvents = events.map((event) =>
         event.kind === WorkflowEventKind.TaskTerminalRecorded
           ? {

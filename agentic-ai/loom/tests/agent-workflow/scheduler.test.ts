@@ -763,10 +763,17 @@ describe('static workflow scheduler', () => {
         fixture.configuration.journal.eventsPath,
         'utf8',
       );
-      expect(events).not.toContain('"kind":"workflow-terminal-recorded"');
+      expect(events).toContain(
+        '"kind":"workflow-terminal-recorded","terminalKind":"failed"',
+      );
       expect(events).not.toContain(
         '"task":"unsafe","attempt":1,"terminalKind"',
       );
+      const rootView = await readFile(
+        join(fixture.configuration.journal.runDirectory, 'view.md'),
+        'utf8',
+      );
+      expect(rootView).toContain('Status: failed');
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

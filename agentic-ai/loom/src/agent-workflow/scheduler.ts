@@ -124,6 +124,7 @@ export async function runStaticWorkflow<
   const dependencyOutputs = new Map<TTask, WorkflowTaskOutput>();
   const terminals = new Map<TTask, TaskTerminal<TTask>>();
   const processingReferences = new Map<TTask, TaskProcessingReference>();
+  let fatalError: Error | false = false;
   const joinArrivals = new Map<TJoin, Set<TTask>>();
   const dependencyTasks = new Map<TTask, readonly TTask[]>();
   const running: RunningTask<TTask>[] = [];
@@ -272,7 +273,10 @@ export async function runStaticWorkflow<
   } catch (error) {
     cancellationGate.cancel();
     await drainRunningTasks(running);
-    throw error;
+    fatalError =
+      error instanceof Error
+        ? error
+        : new Error('Workflow execution failed with an invalid error value.');
   } finally {
     cancellationGate.dispose();
   }
@@ -321,7 +325,9 @@ export async function runStaticWorkflow<
     cancelled: configuration.signal.aborted,
     terminals: orderedTerminals,
   };
-  const terminalKind = resolveWorkflowTerminalKind(terminalResolution);
+  const terminalKind = fatalError
+    ? WorkflowTerminalKind.Failed
+    : resolveWorkflowTerminalKind(terminalResolution);
   const materializedOutput = completedOutputs.get(
     configuration.workflow.materializedViewTask,
   );
@@ -371,6 +377,7 @@ export async function runStaticWorkflow<
     materializedView,
   };
   await configuration.journal.append(terminalEvent);
+  if (fatalError) throw fatalError;
   return runTerminal;
 }
 

@@ -167,6 +167,11 @@ function assertMaterializedViewReference(
     }
     return;
   }
+  if (reference.presence !== MaterializedViewPresence.Unavailable) {
+    invalidJournal(
+      'workflow journal terminal has an unknown materialized view presence',
+    );
+  }
   if (reference.reason.trim() === '') {
     invalidJournal(
       'workflow journal terminal has an invalid unavailable view reason',

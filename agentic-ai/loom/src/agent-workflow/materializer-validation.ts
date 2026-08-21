@@ -78,6 +78,17 @@ export function materializerTopologyValidationMessages<
       'materialized view task must be reached on every terminal workflow route',
     );
   }
+  const successfulTaskExit = workflow.taskNames.find(
+    (taskName) =>
+      taskName !== workflow.materializedViewTask &&
+      reachableFromEntry.has(request.taskNode(taskName)) &&
+      workflow.tasks[taskName].completed.kind === TaskTargetKind.None,
+  );
+  if (successfulTaskExit) {
+    messages.push(
+      `task ${successfulTaskExit} has a successful terminal route that bypasses the materialized view task`,
+    );
+  }
 
   for (const taskName of workflow.taskNames) {
     if (taskName === workflow.materializedViewTask) continue;

@@ -529,6 +529,34 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
+  test('rejects a successful outcome that bypasses the materializer', () => {
+    const baseline =
+      CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+        CortexAuditTask.ResolveBaseline
+      ];
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      version: 'successful-bypass-test',
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.ResolveBaseline]: {
+          ...baseline,
+          completed: baseline.failed,
+          failed: baseline.completed,
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('successful terminal route that bypasses'),
+        ),
+      ).toBe(true);
+    }
+  });
+
   test('rejects nested agent tiers until recursive scheduling is enabled', () => {
     const leafRequest: NestedAgentTaskRequest = {
       task: NestedAgentTask.Leaf,
