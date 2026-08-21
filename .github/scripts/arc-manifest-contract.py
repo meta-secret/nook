@@ -177,6 +177,11 @@ require(
 )
 require(
     TASKS,
+    "bash <<'BASH'\n        set -euo pipefail\n        smoke_ref=",
+    "ARC smoke monitoring must use Bash rather than Task's embedded shell interpreter",
+)
+require(
+    TASKS,
     '--raw-field "tasks=preflight"',
     "ARC smoke must dispatch only the preflight selector",
 )

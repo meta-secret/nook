@@ -312,6 +312,7 @@ tasks:
           exit 2
         fi
       - |
+        bash <<'BASH'
         set -euo pipefail
         smoke_ref="$(git branch --show-current)"
         if test -z "$smoke_ref"; then
@@ -482,3 +483,4 @@ tasks:
           exit 1
         fi
         echo "ARC smoke run $run_id completed on {{.ARC_RUNNER_LABEL}}"
+        BASH
