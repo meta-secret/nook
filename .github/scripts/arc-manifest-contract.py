@@ -38,6 +38,16 @@ require(
 )
 require(RUNNERS, "runnerScaleSetName: nook-k0s", "runner label must stay stable")
 require(RUNNERS, "maxRunners: 4", "runner concurrency must remain bounded")
+require(
+    RUNNERS,
+    'limits:\n            cpu: "4"\n            memory: 10Gi',
+    "BuildKit limits must keep the Kata guest within node capacity",
+)
+require(
+    RUNNERS,
+    'limits:\n            cpu: "2"\n            memory: 4Gi',
+    "runner limits must keep the Kata guest within node capacity",
+)
 require(RUNNERS, "runAsNonRoot: true", "ARC listener must run as non-root")
 require(
     RUNNERS,

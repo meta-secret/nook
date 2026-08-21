@@ -94,12 +94,12 @@ template:
             mountPath: /tmp
         resources:
           requests:
-            cpu: "4"
-            memory: 8Gi
+            cpu: "3"
+            memory: 6Gi
             ephemeral-storage: 50Gi
           limits:
-            cpu: "12"
-            memory: 32Gi
+            cpu: "4"
+            memory: 10Gi
             ephemeral-storage: 200Gi
     containers:
       - name: runner
@@ -141,8 +141,8 @@ template:
             memory: 2Gi
             ephemeral-storage: 10Gi
           limits:
-            cpu: "4"
-            memory: 8Gi
+            cpu: "2"
+            memory: 4Gi
             ephemeral-storage: 50Gi
     volumes:
       - name: work
