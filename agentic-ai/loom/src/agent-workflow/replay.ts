@@ -9,6 +9,7 @@ import type {
   WorkflowTerminalKind,
   WorkflowVersion,
   GitCommit,
+  MaterializedViewReference,
   TaskProcessingReference,
   ProjectionReference,
 } from './domain.ts';
@@ -36,6 +37,7 @@ export type ReplayedWorkflowTerminalReference =
       readonly terminalKind: WorkflowTerminalKind;
       readonly resultPath: string;
       readonly resultSha256: string;
+      readonly materializedView: MaterializedViewReference;
     };
 
 export type ReplayedWorkflowIdentity = {
@@ -130,11 +132,13 @@ export function replayWorkflowJournal<TTask extends string>(
     }
 
     if (event.kind === WorkflowEventKind.WorkflowTerminalRecorded) {
+      assertMaterializedViewReference(event.materializedView);
       workflowTerminal = {
         presence: ReplayedWorkflowTerminalPresence.Recorded,
         terminalKind: event.terminalKind,
         resultPath: event.resultPath,
         resultSha256: event.resultSha256,
+        materializedView: event.materializedView,
       };
     }
   }
@@ -145,6 +149,29 @@ export function replayWorkflowJournal<TTask extends string>(
     taskTerminals,
     workflowTerminal,
   };
+}
+
+function assertMaterializedViewReference(
+  reference: MaterializedViewReference,
+): void {
+  if (!reference) {
+    invalidJournal(
+      'workflow journal terminal has no materialized view reference',
+    );
+  }
+  if (reference.presence === MaterializedViewPresence.Recorded) {
+    if (!validProjection(reference.projection)) {
+      invalidJournal(
+        'workflow journal terminal has an invalid materialized view reference',
+      );
+    }
+    return;
+  }
+  if (reference.reason.trim() === '') {
+    invalidJournal(
+      'workflow journal terminal has an invalid unavailable view reason',
+    );
+  }
 }
 
 function assertProcessingReference<TTask extends string>(

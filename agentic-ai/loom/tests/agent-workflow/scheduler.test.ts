@@ -34,6 +34,7 @@ import type {
   WorkflowEventWithoutMetadata,
 } from '../../src/agent-workflow/events.ts';
 import { WorkflowJournal } from '../../src/agent-workflow/journal.ts';
+import { replayWorkflowJournal } from '../../src/agent-workflow/replay.ts';
 import type { WorkflowJournalConfiguration } from '../../src/agent-workflow/journal.ts';
 import type {
   WorkflowDependencyOutput,
@@ -53,6 +54,10 @@ import {
   createSchedulerFixture as createFixture,
   type ScriptedRuntimeConfiguration,
 } from './scheduler-fixture.ts';
+import {
+  createTeardownDrainFixture,
+  TeardownDrainTask,
+} from './scheduler-teardown-fixture.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const FIXED_TIME = '2026-08-14T05:00:00.000Z';
@@ -127,159 +132,6 @@ function confirmedAttempt<TTask extends string>(
       return { kind: TaskTeardownKind.Confirmed };
     },
   };
-}
-
-enum TeardownDrainTask {
-  Entry = 'entry',
-  Unsafe = 'unsafe',
-  Sibling = 'sibling',
-}
-
-class TeardownDrainRuntime implements WorkflowTaskRuntime<
-  TeardownDrainTask,
-  never
-> {
-  siblingDrained = false;
-  readonly stopReasons = new Map<TeardownDrainTask, TaskStopReason>();
-
-  start(
-    invocation: WorkflowTaskInvocation<TeardownDrainTask, never>,
-  ): WorkflowTaskAttempt<TeardownDrainTask> {
-    if (invocation.task === TeardownDrainTask.Entry) {
-      return confirmedAttempt(Promise.resolve(completedDrainTask(invocation)));
-    }
-    const completion = new Promise<TaskTerminal<TeardownDrainTask>>(() => {});
-    return {
-      completion,
-      stop: async (request: TaskStopRequest) => {
-        this.stopReasons.set(invocation.task, request.reason);
-        if (invocation.task === TeardownDrainTask.Unsafe) {
-          throw new UnconfirmedTaskTeardownError(invocation.task);
-        }
-        await Bun.sleep(25);
-        this.siblingDrained = true;
-        return { kind: TaskTeardownKind.Confirmed };
-      },
-    };
-  }
-}
-
-function completedDrainTask(
-  invocation: WorkflowTaskInvocation<TeardownDrainTask, never>,
-): TaskTerminal<TeardownDrainTask> {
-  const output: WorkflowTaskOutput = {
-    resultKind: WorkflowResultKind.LoomLeafEvidence,
-    summary: `${invocation.task} completed.`,
-    materializedViewMarkdown: `# ${invocation.task}\n\nCompleted.`,
-    findings: [],
-    notesForParent: [],
-    artifacts: [],
-  };
-  return {
-    kind: TaskTerminalKind.Completed,
-    task: invocation.task,
-    attempt: invocation.attempt,
-    threadId: 'loom-leaf',
-    output,
-  };
-}
-
-async function createTeardownDrainFixture(): Promise<{
-  readonly runRoot: string;
-  readonly runtime: TeardownDrainRuntime;
-  readonly configuration: StaticWorkflowRunConfiguration<
-    TeardownDrainTask,
-    never,
-    never
-  >;
-}> {
-  const workflow: StaticAgentWorkflowDefinition<
-    TeardownDrainTask,
-    never,
-    never
-  > = {
-    name: StaticAgentWorkflowName.CortexFullGarbageCollection,
-    version: 'teardown-drain-test',
-    entry: TeardownDrainTask.Entry,
-    materializedViewTask: TeardownDrainTask.Sibling,
-    taskNames: [
-      TeardownDrainTask.Entry,
-      TeardownDrainTask.Unsafe,
-      TeardownDrainTask.Sibling,
-    ],
-    agentNames: [],
-    joinNames: [],
-    agents: {},
-    tasks: {
-      [TeardownDrainTask.Entry]: {
-        name: TeardownDrainTask.Entry,
-        execution: {
-          kind: WorkflowExecutorKind.LoomLeaf,
-          leaf: LoomLeafKind.VerifyGitBaseline,
-        },
-        completed: {
-          kind: TaskTargetKind.Parallel,
-          tasks: [TeardownDrainTask.Unsafe, TeardownDrainTask.Sibling],
-        },
-        failed: noTasks,
-        resources: { read: ['git:HEAD'], write: [] },
-        timeoutMs: 1_000,
-      },
-      [TeardownDrainTask.Unsafe]: {
-        name: TeardownDrainTask.Unsafe,
-        execution: {
-          kind: WorkflowExecutorKind.LoomLeaf,
-          leaf: LoomLeafKind.VerifyGitBaseline,
-        },
-        completed: noTasks,
-        failed: noTasks,
-        resources: { read: ['git:HEAD'], write: [] },
-        timeoutMs: 5,
-      },
-      [TeardownDrainTask.Sibling]: {
-        name: TeardownDrainTask.Sibling,
-        execution: {
-          kind: WorkflowExecutorKind.LoomLeaf,
-          leaf: LoomLeafKind.VerifyGitBaseline,
-        },
-        completed: noTasks,
-        failed: noTasks,
-        resources: { read: ['git:HEAD'], write: [] },
-        timeoutMs: 60_000,
-      },
-    },
-    joins: {},
-  };
-  const runRoot = await mkdtemp(join(tmpdir(), 'loom-teardown-drain-'));
-  const journalConfiguration: WorkflowJournalConfiguration = {
-    runRoot,
-    identity: {
-      runId: 'teardown-drain-test',
-      workflow: workflow.name,
-      workflowVersion: workflow.version,
-      sourceCommit: SOURCE_COMMIT,
-    },
-    now: () => FIXED_TIME,
-  };
-  const journal = new WorkflowJournal<TeardownDrainTask>(journalConfiguration);
-  const runtime = new TeardownDrainRuntime();
-  const abortController = new AbortController();
-  const configuration: StaticWorkflowRunConfiguration<
-    TeardownDrainTask,
-    never,
-    never
-  > = {
-    workflow,
-    runtime,
-    journal,
-    runId: 'teardown-drain-test',
-    sourceCommit: SOURCE_COMMIT,
-    workingDirectory: process.cwd(),
-    maxConcurrency: 2,
-    signal: abortController.signal,
-    now: () => FIXED_TIME,
-  };
-  return { runRoot, runtime, configuration };
 }
 
 enum CancellationRaceTask {
@@ -738,6 +590,17 @@ describe('static workflow scheduler', () => {
         kind: AgentAttemptParentKind.WorkflowRoot,
       } as const;
       expect(rootStart.parent).toEqual(expectedRootParent);
+      const workflowEvents = (
+        await readFile(fixture.configuration.journal.eventsPath, 'utf8')
+      )
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as WorkflowEvent<CortexAuditTask>);
+      const replayRequest = { events: workflowEvents };
+      const replay = replayWorkflowJournal(replayRequest);
+      expect(replay.taskTerminals).toHaveLength(
+        CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.taskNames.length,
+      );
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

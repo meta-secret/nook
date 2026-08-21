@@ -661,23 +661,28 @@ async function recordTaskTerminal<TTask extends string, TAgent extends string>(
   recording: TerminalRecording<TTask, TAgent>,
 ): Promise<void> {
   const { context, terminal, agentJournal } = recording;
-  const projection = await context.journal.projectTaskTerminal(terminal);
-  const workflowTaskProcessingInput: WorkflowTaskProcessingInput<TTask> = {
-    journal: context.journal,
-    terminal,
-    result: projection,
-  };
-  const processing: TaskProcessingReference = agentJournal
-    ? await agentJournal.finalize(terminal)
-    : await projectWorkflowTaskProcessing(workflowTaskProcessingInput);
+  let processing: TaskProcessingReference;
+  if (agentJournal) {
+    processing = await agentJournal.finalize(terminal);
+  } else {
+    const projection = await context.journal.projectTaskTerminal(terminal);
+    const workflowTaskProcessingInput: WorkflowTaskProcessingInput<TTask> = {
+      journal: context.journal,
+      terminal,
+      result: projection,
+    };
+    processing = await projectWorkflowTaskProcessing(
+      workflowTaskProcessingInput,
+    );
+  }
   context.processingReferences.set(terminal.task, processing);
   const terminalEvent: WorkflowEventWithoutMetadata<TTask> = {
     kind: WorkflowEventKind.TaskTerminalRecorded,
     task: terminal.task,
     attempt: terminal.attempt,
     terminalKind: terminal.kind,
-    resultPath: projection.path,
-    resultSha256: projection.sha256,
+    resultPath: processing.result.path,
+    resultSha256: processing.result.sha256,
     processing,
   };
   await context.journal.append(terminalEvent);

@@ -6,9 +6,12 @@ import {
   CortexAuditTask,
 } from '../../src/agent-workflow/cortex-workflow.ts';
 import {
+  AgentReasoningEffort,
+  AgentWorkspacePolicy,
   LoomLeafKind,
   TaskTargetKind,
   WorkflowExecutorKind,
+  WorkflowResultKind,
   isValidTaskResourceClaim,
   noTasks,
   taskResourcePatternsOverlap,
@@ -19,7 +22,10 @@ import {
   validateStaticAgentWorkflow,
 } from '../../src/agent-workflow/validation.ts';
 
-import type { StaticAgentWorkflowDefinition } from '../../src/agent-workflow/domain.ts';
+import type {
+  StaticAgentWorkflowDefinition,
+  StaticTaskDefinition,
+} from '../../src/agent-workflow/domain.ts';
 import type {
   WorkflowValidation,
   WorkflowValidationIssue,
@@ -55,10 +61,50 @@ type SharedOutcomeWorkflow = StaticAgentWorkflowDefinition<
   never
 >;
 
+enum NestedAgentTask {
+  Leaf = 'leaf',
+  Intermediate = 'intermediate',
+  Root = 'root',
+}
+
+enum NestedAgent {
+  Leaf = 'leaf-agent',
+  Intermediate = 'intermediate-agent',
+  Root = 'root-agent',
+}
+
 type WorkflowIssueAssertion = {
   readonly validation: WorkflowValidation;
   readonly kind: WorkflowValidationIssueKind;
 };
+
+type NestedAgentTaskRequest = {
+  readonly task: NestedAgentTask;
+  readonly agent: NestedAgent;
+  readonly successor: NestedAgentTask | false;
+};
+
+function nestedAgentTask(
+  request: NestedAgentTaskRequest,
+): StaticTaskDefinition<NestedAgentTask, NestedAgent, never> {
+  return {
+    name: request.task,
+    execution: {
+      kind: WorkflowExecutorKind.Agent,
+      agent: request.agent,
+      instruction: 'Produce a bounded semantic materialized view.',
+      resultKind: WorkflowResultKind.CortexEvidence,
+    },
+    completed: request.successor
+      ? { kind: TaskTargetKind.Task, task: request.successor }
+      : noTasks,
+    failed: request.successor
+      ? { kind: TaskTargetKind.Task, task: request.successor }
+      : noTasks,
+    resources: { read: [], write: [] },
+    timeoutMs: 1_000,
+  };
+}
 
 function expectIssue(assertion: WorkflowIssueAssertion): void {
   expect(assertion.validation.status).toBe(WorkflowValidationStatus.Invalid);
@@ -398,7 +444,7 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
-  test('accepts conflicting claims on mutually exclusive outcome branches', () => {
+  test('rejects a materializer that is absent from one terminal route', () => {
     const leafExecution = {
       kind: WorkflowExecutorKind.LoomLeaf,
       leaf: LoomLeafKind.VerifyGitBaseline,
@@ -475,11 +521,86 @@ describe('static agent workflow validation', () => {
       joins: {},
     };
     const validation = validateStaticAgentWorkflow(workflow);
-    const expectedValidation: WorkflowValidation = {
-      status: WorkflowValidationStatus.Valid,
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.InvalidMaterializedViewTask,
     };
 
-    expect(validation).toEqual(expectedValidation);
+    expectIssue(assertion);
+  });
+
+  test('rejects nested agent tiers until recursive scheduling is enabled', () => {
+    const leafRequest: NestedAgentTaskRequest = {
+      task: NestedAgentTask.Leaf,
+      agent: NestedAgent.Leaf,
+      successor: NestedAgentTask.Intermediate,
+    };
+    const intermediateRequest: NestedAgentTaskRequest = {
+      task: NestedAgentTask.Intermediate,
+      agent: NestedAgent.Intermediate,
+      successor: NestedAgentTask.Root,
+    };
+    const rootRequest: NestedAgentTaskRequest = {
+      task: NestedAgentTask.Root,
+      agent: NestedAgent.Root,
+      successor: false,
+    };
+    const workflow: StaticAgentWorkflowDefinition<
+      NestedAgentTask,
+      NestedAgent,
+      never
+    > = {
+      name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
+      version: 'nested-agent-test',
+      entry: NestedAgentTask.Leaf,
+      materializedViewTask: NestedAgentTask.Root,
+      taskNames: [
+        NestedAgentTask.Leaf,
+        NestedAgentTask.Intermediate,
+        NestedAgentTask.Root,
+      ],
+      agentNames: [
+        NestedAgent.Leaf,
+        NestedAgent.Intermediate,
+        NestedAgent.Root,
+      ],
+      joinNames: [],
+      agents: {
+        [NestedAgent.Leaf]: {
+          name: NestedAgent.Leaf,
+          instructionPrefix: 'Inspect leaf evidence.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Medium,
+        },
+        [NestedAgent.Intermediate]: {
+          name: NestedAgent.Intermediate,
+          instructionPrefix: 'Aggregate leaf evidence.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Medium,
+        },
+        [NestedAgent.Root]: {
+          name: NestedAgent.Root,
+          instructionPrefix: 'Aggregate intermediate evidence.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Medium,
+        },
+      },
+      tasks: {
+        [NestedAgentTask.Leaf]: nestedAgentTask(leafRequest),
+        [NestedAgentTask.Intermediate]: nestedAgentTask(intermediateRequest),
+        [NestedAgentTask.Root]: nestedAgentTask(rootRequest),
+      },
+      joins: {},
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('nested runtime tiers are not enabled'),
+        ),
+      ).toBe(true);
+    }
   });
 
   test('rejects conflicts when one outcome shares a descendant', () => {

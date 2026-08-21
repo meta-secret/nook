@@ -1,5 +1,7 @@
-import { TaskTargetKind } from './domain.ts';
+import { TaskTargetKind, WorkflowExecutorKind } from './domain.ts';
 import type { StaticAgentWorkflowDefinition } from './domain.ts';
+import { WorkflowValidationIssueKind } from './validation-result.ts';
+import type { WorkflowValidationIssue } from './validation-result.ts';
 
 export type MaterializerValidationRequest<
   TTask extends string,
@@ -10,6 +12,23 @@ export type MaterializerValidationRequest<
   readonly declaredTaskNames: ReadonlySet<TTask>;
   readonly registryTaskNames: ReadonlySet<string>;
 };
+
+export type MaterializerTopologyValidationRequest<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+> = {
+  readonly workflow: StaticAgentWorkflowDefinition<TTask, TAgent, TJoin>;
+  readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly taskNode: (task: string) => string;
+};
+
+export type MaterializerWorkflowValidationRequest<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+> = MaterializerValidationRequest<TTask, TAgent, TJoin> &
+  MaterializerTopologyValidationRequest<TTask, TAgent, TJoin>;
 
 export function materializerValidationMessages<
   TTask extends string,
@@ -33,4 +52,97 @@ export function materializerValidationMessages<
     return ['materialized view task must be terminal'];
   }
   return [];
+}
+
+export function materializerTopologyValidationMessages<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+>(
+  request: MaterializerTopologyValidationRequest<TTask, TAgent, TJoin>,
+): readonly string[] {
+  const workflow = request.workflow;
+  const materializerNode = request.taskNode(workflow.materializedViewTask);
+  const entryNode = request.taskNode(workflow.entry);
+  const entryReachability: ReachableNodesRequest = {
+    start: entryNode,
+    adjacency: request.adjacency,
+  };
+  const reachableFromEntry = reachableNodes(entryReachability);
+  const terminalNodes = [...reachableFromEntry].filter(
+    (node) => (request.adjacency.get(node)?.size ?? 0) === 0,
+  );
+  const messages: string[] = [];
+  if (terminalNodes.some((node) => node !== materializerNode)) {
+    messages.push(
+      'materialized view task must be reached on every terminal workflow route',
+    );
+  }
+
+  for (const taskName of workflow.taskNames) {
+    if (taskName === workflow.materializedViewTask) continue;
+    const task = workflow.tasks[taskName];
+    if (task.execution.kind !== WorkflowExecutorKind.Agent) continue;
+    const downstreamRequest: ReachableNodesRequest = {
+      start: request.taskNode(taskName),
+      adjacency: request.adjacency,
+    };
+    const downstream = reachableNodes(downstreamRequest);
+    const unsupportedParent = workflow.taskNames.find(
+      (candidate) =>
+        candidate !== taskName &&
+        candidate !== workflow.materializedViewTask &&
+        downstream.has(request.taskNode(candidate)) &&
+        workflow.tasks[candidate].execution.kind === WorkflowExecutorKind.Agent,
+    );
+    if (unsupportedParent) {
+      messages.push(
+        `agent task ${taskName} reaches intermediate agent ${unsupportedParent}; nested runtime tiers are not enabled`,
+      );
+    }
+  }
+  return messages;
+}
+
+export function materializerWorkflowValidationIssues<
+  TTask extends string,
+  TAgent extends string,
+  TJoin extends string,
+>(
+  request: MaterializerWorkflowValidationRequest<TTask, TAgent, TJoin>,
+): readonly WorkflowValidationIssue[] {
+  const messages = [...materializerValidationMessages(request)];
+  const workflow = request.workflow;
+  const hasEntry =
+    request.declaredTaskNames.has(workflow.entry) &&
+    request.registryTaskNames.has(workflow.entry);
+  const hasMaterializer =
+    request.declaredTaskNames.has(workflow.materializedViewTask) &&
+    request.registryTaskNames.has(workflow.materializedViewTask);
+  if (hasEntry && hasMaterializer) {
+    messages.push(...materializerTopologyValidationMessages(request));
+  }
+  return messages.map((message) => ({
+    kind: WorkflowValidationIssueKind.InvalidMaterializedViewTask,
+    message,
+  }));
+}
+
+type ReachableNodesRequest = {
+  readonly start: string;
+  readonly adjacency: ReadonlyMap<string, ReadonlySet<string>>;
+};
+
+function reachableNodes(request: ReachableNodesRequest): ReadonlySet<string> {
+  const reachable = new Set<string>();
+  const pending = [request.start];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (!node || reachable.has(node)) continue;
+    reachable.add(node);
+    for (const successor of request.adjacency.get(node) ?? []) {
+      pending.push(successor);
+    }
+  }
+  return reachable;
 }

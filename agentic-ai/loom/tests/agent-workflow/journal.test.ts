@@ -183,6 +183,34 @@ describe('workflow journal', () => {
       expect(replay.workflowTerminal.presence).toBe(
         ReplayedWorkflowTerminalPresence.Recorded,
       );
+      if (
+        replay.workflowTerminal.presence ===
+        ReplayedWorkflowTerminalPresence.Recorded
+      ) {
+        expect(replay.workflowTerminal.materializedView).toEqual(
+          workflowTerminal.materializedView,
+        );
+      }
+
+      const malformedRootViewEvents = events.map((event) =>
+        event.kind === WorkflowEventKind.WorkflowTerminalRecorded
+          ? {
+              ...event,
+              materializedView: {
+                presence: MaterializedViewPresence.Recorded,
+                authorKind: MaterializedViewAuthorKind.Agent,
+                projection: { path: 'view.md', sha256: 'invalid' },
+                eventHighWaterMark: 1,
+              } as const,
+            }
+          : event,
+      );
+      const malformedRootViewRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events: malformedRootViewEvents,
+      };
+      expect(() => replayWorkflowJournal(malformedRootViewRequest)).toThrow(
+        'invalid materialized view reference',
+      );
 
       const conflictingProcessingEvents = events.map((event) =>
         event.kind === WorkflowEventKind.TaskTerminalRecorded

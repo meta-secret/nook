@@ -13,8 +13,7 @@ import type {
   TaskResourceClaims,
   TaskResourcePatternPair,
 } from './domain.ts';
-import { materializerValidationMessages } from './materializer-validation.ts';
-import type { MaterializerValidationRequest } from './materializer-validation.ts';
+import { materializerWorkflowValidationIssues } from './materializer-validation.ts';
 import { allTerminalJoinValidationIssues } from './join-validation.ts';
 import type { AllTerminalJoinValidationRequest } from './join-validation.ts';
 import {
@@ -256,23 +255,6 @@ export function validateStaticAgentWorkflow<
     issues.push(issue);
   }
 
-  const materializerRequest: MaterializerValidationRequest<
-    TTask,
-    TAgent,
-    TJoin
-  > = {
-    workflow,
-    declaredTaskNames: taskNames,
-    registryTaskNames: registryTaskNameSet,
-  };
-  for (const message of materializerValidationMessages(materializerRequest)) {
-    const issue: WorkflowValidationIssue = {
-      kind: WorkflowValidationIssueKind.InvalidMaterializedViewTask,
-      message,
-    };
-    issues.push(issue);
-  }
-
   const topology: WorkflowTopology = {
     adjacency: new Map(),
     schedulingSources: new Map(),
@@ -401,6 +383,15 @@ export function validateStaticAgentWorkflow<
     };
     inspectJoinTarget(targetInspection);
   }
+
+  const materializerRequest = {
+    workflow,
+    declaredTaskNames: taskNames,
+    registryTaskNames: registryTaskNameSet,
+    adjacency: topology.adjacency,
+    taskNode,
+  };
+  issues.push(...materializerWorkflowValidationIssues(materializerRequest));
 
   const duplicateInspection: DuplicateSchedulingInspection<TTask> = {
     entry: workflow.entry,
