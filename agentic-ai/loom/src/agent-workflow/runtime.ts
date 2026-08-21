@@ -93,9 +93,12 @@ export interface WorkflowTaskAttempt<TTask extends string> {
 }
 
 export class UnconfirmedTaskTeardownError extends Error {
+  readonly task: string;
+
   constructor(task: string) {
     super(`Task ${task} did not confirm teardown before its hard deadline.`);
     this.name = 'UnconfirmedTaskTeardownError';
+    this.task = task;
   }
 }
 

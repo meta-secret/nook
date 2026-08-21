@@ -51,6 +51,22 @@ export function materializerValidationMessages<
   ) {
     return ['materialized view task must be terminal'];
   }
+  const hasAgentEvidence = request.workflow.taskNames.some((taskName) => {
+    const task = request.workflow.tasks[taskName];
+    if (!task) return false;
+    return (
+      taskName !== materializerName &&
+      task.execution.kind === WorkflowExecutorKind.Agent
+    );
+  });
+  if (
+    hasAgentEvidence &&
+    materializer.execution.kind !== WorkflowExecutorKind.Agent
+  ) {
+    return [
+      'workflows with agent evidence require an agent materialized view task',
+    ];
+  }
   return [];
 }
 

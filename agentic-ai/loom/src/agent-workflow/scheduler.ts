@@ -46,7 +46,10 @@ import {
   validateStaticAgentWorkflow,
   WorkflowValidationStatus,
 } from './validation.ts';
-import { drainRunningTasks } from './task-drain.ts';
+import {
+  drainRunningTasks,
+  unconfirmedTeardownTerminal,
+} from './task-drain.ts';
 import type { RunningTask } from './task-drain.ts';
 
 export type StaticWorkflowRunConfiguration<
@@ -593,6 +596,7 @@ async function executeTask<TTask extends string, TAgent extends string>(
     invocation = leafInvocation;
   }
   let terminal: TaskTerminal<TTask>;
+  let fatalError: UnconfirmedTaskTeardownError | false = false;
   try {
     const timedExecution: TimedExecution<TTask, TAgent> = {
       invocation,
@@ -618,18 +622,20 @@ async function executeTask<TTask extends string, TAgent extends string>(
     }
   } catch (error) {
     if (error instanceof UnconfirmedTaskTeardownError) {
-      throw error;
+      fatalError = error;
+      terminal = unconfirmedTeardownTerminal(context.task.name);
+    } else {
+      terminal = {
+        kind: context.signal.aborted
+          ? TaskTerminalKind.Cancelled
+          : TaskTerminalKind.Failed,
+        task: context.task.name,
+        attempt: 1,
+        summary: context.signal.aborted
+          ? 'Workflow cancellation stopped this task.'
+          : 'Task runtime failed. Inspect sanitized attempt events and local diagnostics.',
+      };
     }
-    terminal = {
-      kind: context.signal.aborted
-        ? TaskTerminalKind.Cancelled
-        : TaskTerminalKind.Failed,
-      task: context.task.name,
-      attempt: 1,
-      summary: context.signal.aborted
-        ? 'Workflow cancellation stopped this task.'
-        : 'Task runtime failed. Inspect sanitized attempt events and local diagnostics.',
-    };
   } finally {
     acceptingActivity = false;
   }
@@ -639,6 +645,7 @@ async function executeTask<TTask extends string, TAgent extends string>(
     agentJournal,
   };
   await recordTaskTerminal(terminalRecording);
+  if (fatalError) throw fatalError;
   return terminal;
 }
 

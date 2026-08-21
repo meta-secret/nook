@@ -21,7 +21,7 @@ export function allTerminalJoinValidationIssues<
 ): readonly WorkflowValidationIssue[] {
   const join = request.workflow.joins[request.join];
   if (join.policy !== JoinCompletionPolicy.AllTerminal) return [];
-  return join.arrivals.flatMap((arrival) => {
+  const issues = join.arrivals.flatMap((arrival) => {
     const task = request.workflow.tasks[arrival];
     if (!task) return [];
     const routesCompleted =
@@ -37,4 +37,21 @@ export function allTerminalJoinValidationIssues<
     };
     return [issue];
   });
+  const coReachable = request.workflow.taskNames.some((taskName) => {
+    const task = request.workflow.tasks[taskName];
+    if (!task) return false;
+    return [task.completed, task.failed].some(
+      (target) =>
+        target.kind === TaskTargetKind.Parallel &&
+        join.arrivals.every((arrival) => target.tasks.includes(arrival)),
+    );
+  });
+  if (!coReachable && join.arrivals.length > 1) {
+    const issue: WorkflowValidationIssue = {
+      kind: WorkflowValidationIssueKind.InvalidJoin,
+      message: `all-terminal join ${request.join} arrivals must share one explicit parallel scheduling wave`,
+    };
+    issues.push(issue);
+  }
+  return issues;
 }

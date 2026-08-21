@@ -1,19 +1,22 @@
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
-import { WorkflowEventKind } from './events.ts';
+import { WorkflowEventKind, WorkflowRuntimeActivityKind } from './events.ts';
 
 import type {
   StaticAgentWorkflowName,
-  TaskTerminalKind,
   WorkflowAttemptNumber,
   WorkflowRunId,
-  WorkflowTerminalKind,
   WorkflowVersion,
   GitCommit,
   MaterializedViewReference,
   TaskProcessingReference,
   ProjectionReference,
 } from './domain.ts';
-import { MaterializedViewPresence, TaskProcessingKind } from './domain.ts';
+import {
+  MaterializedViewPresence,
+  TaskProcessingKind,
+  TaskTerminalKind,
+  WorkflowTerminalKind,
+} from './domain.ts';
 import type { TaskTerminalRecordedEvent, WorkflowEvent } from './events.ts';
 
 export type ReplayedTaskTerminalReference<TTask extends string> = {
@@ -58,6 +61,15 @@ export type ReplayWorkflowJournalRequest<TTask extends string> = {
   readonly events: readonly WorkflowEvent<TTask>[];
 };
 
+const WORKFLOW_EVENT_KINDS = new Set<string>(Object.values(WorkflowEventKind));
+const TASK_TERMINAL_KINDS = new Set<string>(Object.values(TaskTerminalKind));
+const WORKFLOW_TERMINAL_KINDS = new Set<string>(
+  Object.values(WorkflowTerminalKind),
+);
+const RUNTIME_ACTIVITY_KINDS = new Set<string>(
+  Object.values(WorkflowRuntimeActivityKind),
+);
+
 export function replayWorkflowJournal<TTask extends string>(
   request: ReplayWorkflowJournalRequest<TTask>,
 ): ReplayedWorkflowJournal<TTask> {
@@ -82,6 +94,9 @@ export function replayWorkflowJournal<TTask extends string>(
   };
 
   for (const [eventIndex, event] of request.events.entries()) {
+    if (!WORKFLOW_EVENT_KINDS.has(event.kind)) {
+      invalidJournal('workflow journal contains an unknown event kind');
+    }
     const expectedSequence = eventIndex + 1;
     if (event.sequence !== expectedSequence) {
       invalidJournal(
@@ -112,6 +127,11 @@ export function replayWorkflowJournal<TTask extends string>(
     }
 
     if (event.kind === WorkflowEventKind.TaskTerminalRecorded) {
+      if (!TASK_TERMINAL_KINDS.has(event.terminalKind)) {
+        invalidJournal(
+          `workflow journal task ${event.task} has an unknown terminal kind`,
+        );
+      }
       const terminalAttemptKey = `${event.task}\u0000${event.attempt}`;
       if (terminalAttempts.has(terminalAttemptKey)) {
         invalidJournal(
@@ -131,7 +151,24 @@ export function replayWorkflowJournal<TTask extends string>(
       taskTerminals.push(terminalReference);
     }
 
+    if (
+      event.kind === WorkflowEventKind.RuntimeActivity &&
+      !RUNTIME_ACTIVITY_KINDS.has(event.activity)
+    ) {
+      invalidJournal('workflow journal contains unknown runtime activity');
+    }
+
     if (event.kind === WorkflowEventKind.WorkflowTerminalRecorded) {
+      const terminalProjection: ProjectionReference = {
+        path: event.resultPath,
+        sha256: event.resultSha256,
+      };
+      if (
+        !WORKFLOW_TERMINAL_KINDS.has(event.terminalKind) ||
+        !validProjection(terminalProjection)
+      ) {
+        invalidJournal('workflow journal has an invalid terminal reference');
+      }
       assertMaterializedViewReference(event.materializedView);
       workflowTerminal = {
         presence: ReplayedWorkflowTerminalPresence.Recorded,

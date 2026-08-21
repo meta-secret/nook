@@ -344,6 +344,40 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
+  test('rejects all-terminal arrivals from mutually exclusive waves', () => {
+    const baseline =
+      CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+        CortexAuditTask.ResolveBaseline
+      ];
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      version: 'exclusive-arrivals-test',
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.ResolveBaseline]: {
+          ...baseline,
+          completed: {
+            kind: TaskTargetKind.Task,
+            task: CortexAuditTask.AuditWorkflowsAndReferences,
+          },
+          failed: {
+            kind: TaskTargetKind.Task,
+            task: CortexAuditTask.AuditDesignDocsAndProductSpecs,
+          },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('one explicit parallel scheduling wave'),
+        ),
+      ).toBe(true);
+    }
+  });
+
   test('rejects overlapping write and read claims in one parallel wave', () => {
     const sharedWrite = {
       read: [],
@@ -552,6 +586,36 @@ describe('static agent workflow validation', () => {
       expect(
         validation.issues.some((issue) =>
           issue.message.includes('successful terminal route that bypasses'),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test('rejects a leaf materializer for upstream agent evidence', () => {
+    const materializer =
+      CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+        CortexAuditTask.SynthesizeFindings
+      ];
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      version: 'leaf-materializer-test',
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.SynthesizeFindings]: {
+          ...materializer,
+          execution: {
+            kind: WorkflowExecutorKind.LoomLeaf,
+            leaf: LoomLeafKind.VerifyGitBaseline,
+          },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('require an agent materialized view task'),
         ),
       ).toBe(true);
     }

@@ -1,5 +1,11 @@
 import { AgentAttemptEventKind } from './agent-events.ts';
-import { MaterializedViewPresence } from './domain.ts';
+import {
+  AgentAttemptParentKind,
+  MaterializedViewAuthorKind,
+  MaterializedViewPresence,
+  TaskTerminalKind,
+} from './domain.ts';
+import { WorkflowRuntimeActivityKind } from './events.ts';
 import type {
   AgentAttemptEvent,
   AgentAttemptEventMetadata,
@@ -7,7 +13,6 @@ import type {
 import type {
   MaterializedViewReference,
   ProjectionReference,
-  TaskTerminalKind,
 } from './domain.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
@@ -20,6 +25,16 @@ export type ReplayedAgentAttempt = {
   readonly view: MaterializedViewReference;
 };
 
+const AGENT_EVENT_KINDS = new Set<string>(Object.values(AgentAttemptEventKind));
+const RUNTIME_ACTIVITY_KINDS = new Set<string>(
+  Object.values(WorkflowRuntimeActivityKind),
+);
+const TASK_TERMINAL_KINDS = new Set<string>(Object.values(TaskTerminalKind));
+const VIEW_AUTHOR_KINDS = new Set<string>(
+  Object.values(MaterializedViewAuthorKind),
+);
+const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
+
 export function replayAgentAttemptJournal(
   request: ReplayAgentAttemptJournalRequest,
 ): ReplayedAgentAttempt {
@@ -31,6 +46,9 @@ export function replayAgentAttemptJournal(
   let sawView = false;
   let terminal: ReplayedAgentAttempt | false = false;
   for (const [index, event] of request.events.entries()) {
+    if (!AGENT_EVENT_KINDS.has(event.kind)) {
+      throw new Error('Agent attempt journal contains an unknown event kind.');
+    }
     if (terminal) {
       throw new Error(
         'Agent attempt journal contains an event after terminal.',
@@ -46,6 +64,9 @@ export function replayAgentAttemptJournal(
       actual: event,
     };
     assertSameIdentity(identityPair);
+    if (!PARENT_KINDS.has(event.parent.kind)) {
+      throw new Error('Agent attempt journal contains an unknown parent kind.');
+    }
     if (
       event.kind === AgentAttemptEventKind.AttemptStarted &&
       event.sequence !== 1
@@ -56,7 +77,18 @@ export function replayAgentAttemptJournal(
       if (projectedResult) {
         throw new Error('Agent attempt journal contains duplicate results.');
       }
+      if (!validProjection(event.result)) {
+        throw new Error('Agent attempt result projection is invalid.');
+      }
       projectedResult = event.result;
+    }
+    if (
+      event.kind === AgentAttemptEventKind.RuntimeActivity &&
+      !RUNTIME_ACTIVITY_KINDS.has(event.activity)
+    ) {
+      throw new Error(
+        'Agent attempt journal contains unknown runtime activity.',
+      );
     }
     if (event.kind === AgentAttemptEventKind.ViewProjected) {
       if (sawView) {
@@ -67,7 +99,9 @@ export function replayAgentAttemptJournal(
       }
       if (
         event.view.presence !== MaterializedViewPresence.Recorded ||
-        event.view.eventHighWaterMark !== event.sequence - 1
+        event.view.eventHighWaterMark !== event.sequence - 1 ||
+        !validProjection(event.view.projection) ||
+        !VIEW_AUTHOR_KINDS.has(event.view.authorKind)
       ) {
         throw new Error(
           'Agent attempt view has an invalid event high-water mark.',
@@ -76,6 +110,9 @@ export function replayAgentAttemptJournal(
       sawView = true;
     }
     if (event.kind === AgentAttemptEventKind.AttemptTerminalRecorded) {
+      if (!TASK_TERMINAL_KINDS.has(event.terminalKind)) {
+        throw new Error('Agent attempt terminal kind is unknown.');
+      }
       if (!projectedResult) {
         throw new Error('Agent attempt terminal has no result projection.');
       }
@@ -109,6 +146,12 @@ export function replayAgentAttemptJournal(
     throw new Error('Agent attempt journal has no terminal event.');
   }
   return terminal;
+}
+
+function validProjection(projection: ProjectionReference): boolean {
+  return (
+    projection.path.trim() !== '' && /^[0-9a-f]{64}$/.test(projection.sha256)
+  );
 }
 
 type AgentAttemptIdentityPair = {

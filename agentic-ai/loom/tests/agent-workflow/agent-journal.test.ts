@@ -69,6 +69,26 @@ describe('agent attempt journal', () => {
       const replay = replayAgentAttemptJournal(replayRequest);
       expect(processing.events.sha256).toBe(sha256(events));
       expect(replay.terminalKind).toBe(TaskTerminalKind.Completed);
+      const firstEvent = parsedEvents[0]!;
+      const unknownKindEvent = {
+        ...firstEvent,
+        kind: 'future-agent-event',
+        sequence: 2,
+      } as never as AgentAttemptEvent;
+      const shiftedEvents = parsedEvents
+        .slice(1)
+        .map((event) => ({ ...event, sequence: event.sequence + 1 }));
+      const unknownKindEvents = [
+        firstEvent,
+        unknownKindEvent,
+        ...shiftedEvents,
+      ];
+      const unknownKindRequest: ReplayAgentAttemptJournalRequest = {
+        events: unknownKindEvents,
+      };
+      expect(() => replayAgentAttemptJournal(unknownKindRequest)).toThrow(
+        'unknown event kind',
+      );
       const mismatchedEvents = parsedEvents.map((event) =>
         event.kind === AgentAttemptEventKind.AttemptTerminalRecorded
           ? {

@@ -191,6 +191,20 @@ describe('workflow journal', () => {
           workflowTerminal.materializedView,
         );
       }
+      const unknownWorkflowEvent = {
+        ...events[0]!,
+        kind: 'future-workflow-event',
+        sequence: 2,
+      } as never as WorkflowEvent<TestTask>;
+      const shiftedWorkflowEvents = events
+        .slice(1)
+        .map((event) => ({ ...event, sequence: event.sequence + 1 }));
+      const unknownWorkflowRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events: [events[0]!, unknownWorkflowEvent, ...shiftedWorkflowEvents],
+      };
+      expect(() => replayWorkflowJournal(unknownWorkflowRequest)).toThrow(
+        'unknown event kind',
+      );
 
       const malformedRootViewEvents = events.map((event) =>
         event.kind === WorkflowEventKind.WorkflowTerminalRecorded

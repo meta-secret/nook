@@ -767,9 +767,10 @@ describe('static workflow scheduler', () => {
       expect(events).toContain(
         '"kind":"workflow-terminal-recorded","terminalKind":"failed"',
       );
-      expect(events).not.toContain(
-        '"task":"unsafe","attempt":1,"terminalKind"',
+      expect(events).toContain(
+        '"task":"unsafe","attempt":1,"terminalKind":"failed"',
       );
+      expect(events).not.toContain('"task":"unsafe","attempt":0');
       expect(events).toContain(
         '"task":"sibling","attempt":1,"terminalKind":"cancelled"',
       );
@@ -791,6 +792,11 @@ describe('static workflow scheduler', () => {
           (terminal) => terminal.task === TeardownDrainTask.Sibling,
         )?.kind,
       ).toBe(TaskTerminalKind.Cancelled);
+      expect(
+        runResult.taskTerminals.find(
+          (terminal) => terminal.task === TeardownDrainTask.Unsafe,
+        )?.kind,
+      ).toBe(TaskTerminalKind.Failed);
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }
