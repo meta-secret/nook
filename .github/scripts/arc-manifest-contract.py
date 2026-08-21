@@ -63,6 +63,12 @@ require(
 require(RUNNERS, "- overlayfs", "private BuildKit must avoid native layer copies")
 require(
     RUNNERS,
+    "localhost/nook-arc-buildkit:0.32.2-ext4-v1",
+    "private BuildKit must use the node-imported ext4 wrapper image",
+)
+require(RUNNERS, "imagePullPolicy: Never", "the node-imported image must stay local")
+require(
+    RUNNERS,
     'limits:\n            cpu: "6"\n            memory: 10Gi',
     "BuildKit limits must keep four 8-vCPU guests within node capacity",
 )

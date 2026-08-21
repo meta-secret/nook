@@ -559,9 +559,10 @@ The Kata runner contains Docker client tooling but no Docker daemon. Buildx
 connects over Pod loopback to a private BuildKit sidecar in the same microVM.
 BuildKit is privileged inside that disposable guest so it can create OCI build
 processes, but the Pod has no Kubernetes service-account token, hostPath, or
-host runtime socket. It uses overlayfs inside the guest and keeps disposable
-state in a 100 GiB `emptyDir` with an 80 GB garbage-collection target; durable
-cache manifests and layers remain in Zot.
+host runtime socket. A pinned wrapper mounts a 96 GiB sparse ext4 image from the
+100 GiB `emptyDir` inside the guest, allowing BuildKit to use overlayfs without
+placing writable layers on Kata's virtiofs mount. The garbage-collection target
+is 80 GB; durable cache manifests and layers remain in Zot.
 
 Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
 guest lost its ttrpc sandbox again when the 16 GiB ARC job began exercising its

@@ -81,7 +81,8 @@ tasks:
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
-        grep -q 'moby/buildkit:v0.32.2@sha256:' "$runner_render"
+        grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-v1' "$runner_render"
+        grep -q 'imagePullPolicy: Never' "$runner_render"
         grep -q -- '--oci-worker-snapshotter' "$runner_render"
         grep -q -- '- overlayfs' "$runner_render"
         grep -q 'restartPolicy: Always' "$runner_render"
@@ -97,10 +98,35 @@ tasks:
         echo "Pinned ARC render satisfies the private microVM-builder contract"
         REMOTE
 
+  arc:buildkit:image:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        temp_dir="$(mktemp -d)"
+        artifact="$temp_dir/nook-arc-buildkit.tar"
+        cleanup() { rm -rf "$temp_dir"; }
+        trap cleanup EXIT
+
+        docker buildx build \
+          --platform linux/amd64 \
+          --provenance=false \
+          --tag localhost/nook-arc-buildkit:0.32.2-ext4-v1 \
+          --output "type=oci,dest=$artifact" \
+          infra/k0s/images/arc-buildkit
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          'sudo -n k0s ctr --namespace k8s.io images import -' \
+          < "$artifact"
+        echo "Imported the pinned ARC BuildKit wrapper into k0s containerd"
+        BASH
+
   arc:deploy:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
+      - task: arc:buildkit:image:sync
       - task: arc:render:check
       - task: arc:auth:sync
       - |

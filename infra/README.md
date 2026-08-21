@@ -13,9 +13,9 @@ This directory owns Nook's stateful server infrastructure:
 - A pinned Actions Runner Controller scale set runs focused Actions jobs in
   single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM carries Docker
   client tooling and its own privileged BuildKit sidecar on Pod loopback. Its
-  overlayfs builder state is capped at 100 GiB and discarded after the job.
-  There is no Docker daemon, DinD, Sysbox, shared builder, host socket, or
-  hostPath.
+  overlayfs builder state uses a guest-mounted ext4 image, is capped at 100 GiB,
+  and is discarded after the job. There is no Docker daemon, DinD, Sysbox,
+  shared builder, host socket, or hostPath.
   No runners stay warm: ARC creates one fresh microVM per job. The four-runner
   maximum is only a node-capacity concurrency bound.
 

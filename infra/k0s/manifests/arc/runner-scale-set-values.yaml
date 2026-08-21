@@ -67,7 +67,8 @@ template:
             cpu: 100m
             memory: 128Mi
       - name: buildkit
-        image: moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-v1
+        imagePullPolicy: Never
         restartPolicy: Always
         args:
           - --addr
@@ -91,7 +92,7 @@ template:
           failureThreshold: 90
         volumeMounts:
           - name: buildkit-state
-            mountPath: /var/lib/buildkit
+            mountPath: /var/lib/nook-buildkit-backing
           - name: temporary
             mountPath: /tmp
         resources:
