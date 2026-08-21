@@ -168,8 +168,8 @@ require(TASKS, "Successful smoke run did not report", "ARC smoke must verify its
 require(TASKS, "known_run_ids", "ARC smoke must ignore pre-existing exact-head runs")
 require(
     REMOTE_BATCH,
-    'rust:ci) run_with_timeout "$timeout_minutes" task ci:pr:rust',
-    "the daemon-free Rust selector must execute its Task target",
+    'rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust',
+    "the daemon-free Rust selector must use a writable artifact root and execute its Task target",
 )
 forbid(
     REGISTRY_TASKS,
