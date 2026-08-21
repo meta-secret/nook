@@ -124,6 +124,12 @@ tasks:
           task loom:default FAMILY=cortexAudit
         fi
 
+  loom:cortex-session-clean:
+    desc: Assert that ignored Cortex session memory is absent.
+    deps: [loom:install]
+    cmds:
+      - task loom:default FAMILY=cortexSessionClean
+
   loom:agent-workflow:cortex-audit:
     desc: Run the compiled Cortex full-GC agent workflow (BASELINE=<40-char-sha>, PLAN=1 for dry-run).
     deps: [loom:install]
@@ -233,7 +239,7 @@ tasks:
     env:
       PR_NUMBER: '{{.PR}}'
     cmds:
-      - bash .github/scripts/assert-cortex-session-clean.sh
+      - task loom:cortex-session-clean
       - cd agentic-ai/ci-agent && npm ci
       - cd agentic-ai/ci-agent && npm run build
       - >-
@@ -481,7 +487,7 @@ tasks:
     requires:
       vars: [PR]
     cmds:
-      - bash .github/scripts/assert-cortex-session-clean.sh
+      - task loom:cortex-session-clean
       - >-
         bash -c 'set -euo pipefail;
         export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";

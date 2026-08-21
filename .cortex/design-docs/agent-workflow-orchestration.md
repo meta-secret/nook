@@ -246,6 +246,9 @@ The parallel wave contains these tasks:
 - **Evidence flow:** Every task returns typed evidence.
   - The join waits for all declared arrivals.
   - The synthesis task deduplicates findings and proposes corrections.
+  - Workflow findings distinguish semantic policy, deterministic leaves,
+    bounded agent tasks, compiled graph candidates, delivery-owner actions, and
+    ephemeral guidance.
   - The mechanical leaf reuses Loom's existing Cortex audit and reaches the
     same join before synthesis.
 - **Mutation boundary:** The workflow edits no repository file and mutates no

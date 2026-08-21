@@ -4,7 +4,6 @@ use anyhow::Context as _;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::Command,
 };
 
 fn repository_root() -> PathBuf {
@@ -204,38 +203,21 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let self_improvement = read(".cortex/dynamic-skills/self-improvement.md");
     let skill_wrapper = read(".agents/skills/self-improvement/SKILL.md");
     let agent_tasks = read(".task/agentic-ai.yml");
-    let readiness_guard = read(".github/scripts/assert-cortex-session-clean.sh");
+    let readiness_guard = read("agentic-ai/loom/src/commands/cortex-session-clean.ts");
 
     assert!(
         gitignore.lines().any(|line| line == ".cortex/.session/"),
         "temporary Cortex session memory must remain ignored"
     );
-    for required in [
-        "capture provisional discoveries under",
-        "Promote only evidence-backed, reusable knowledge",
-        "Delete temporary session memory before readiness or handoff",
-    ] {
-        assert!(
-            agent_map.contains(required),
-            "agent map is missing the self-improvement guard: {required}"
-        );
-    }
-    for required in [
-        "Create ignored session memory",
-        "Run the self-improvement review",
-        "Repeat validation when promotion changed the pushed head",
-    ] {
-        assert!(
-            coding_workflow.contains(required),
-            "coding workflow is missing the self-improvement step: {required}"
-        );
-    }
     assert!(
-        pull_request_workflow.contains("Agent self-improvement")
-            && pull_request_workflow.contains("Delete temporary session memory")
-            && pull_request_workflow.contains("promotion changed the branch")
-            && pull_request_workflow.contains("new exact head."),
-        "pull-request readiness must reflect, clean up session memory, and revalidate promoted knowledge"
+        agent_map.contains("dynamic-skills/self-improvement.md")
+            && coding_workflow.contains("dynamic-skills/self-improvement.md")
+            && pull_request_workflow.contains("dynamic-skills/self-improvement.md"),
+        "agent entry points must invoke the canonical self-improvement skill"
+    );
+    assert!(
+        pull_request_workflow.contains("completion contract"),
+        "pull-request readiness must invoke the canonical completion contract"
     );
     for required in [
         "## Knowledge classification",
@@ -244,6 +226,11 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         "## Evidence and consistency",
         "No Cortex update is a valid outcome",
         "## Protocol evolution safety",
+        "## Workflow improvement review",
+        "### Instruction classification",
+        "### Loom extraction procedure",
+        "task loom:agent-workflow:cortex-audit",
+        "task loom:cortex-session-clean",
         "## Pull-request completion contract",
     ] {
         assert!(
@@ -253,45 +240,21 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     }
     assert!(
         skill_wrapper.contains(".cortex/dynamic-skills/self-improvement.md")
-            && skill_wrapper.contains("Delete the temporary session file"),
+            && skill_wrapper.contains("invocation mirror")
+            && !skill_wrapper.contains("Create `.cortex/.session"),
         "the executable skill must route agents through the canonical lifecycle"
     );
     assert!(
         agent_tasks
-            .matches("bash .github/scripts/assert-cortex-session-clean.sh")
+            .matches("- task loom:cortex-session-clean")
             .count()
             == 2
             && readiness_guard
-                .contains("PR readiness requires removing temporary Cortex session memory"),
+                .contains("PR readiness requires removing temporary Cortex session memory")
+            && !repository_root()
+                .join(".github/scripts/assert-cortex-session-clean.sh")
+                .exists(),
         "host and Hive readiness must reject leftover temporary session memory"
-    );
-
-    let test_root = std::env::temp_dir().join(format!(
-        "nook-cortex-session-cleanup-test-{}",
-        std::process::id()
-    ));
-    let session_root = test_root.join(".cortex/.session");
-    fs::create_dir_all(&session_root)?;
-    let clean = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/assert-cortex-session-clean.sh"))
-        .env("NOOK_REPO_ROOT", &test_root)
-        .output()?;
-    assert!(
-        clean.status.success(),
-        "an empty session directory is ready"
-    );
-
-    fs::write(session_root.join("active.md"), "# Active session\n")?;
-    let active = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/assert-cortex-session-clean.sh"))
-        .env("NOOK_REPO_ROOT", &test_root)
-        .output()?;
-    fs::remove_dir_all(&test_root)?;
-    assert!(
-        !active.status.success()
-            && String::from_utf8_lossy(&active.stderr)
-                .contains("PR readiness requires removing temporary Cortex session memory"),
-        "readiness must reject active session memory"
     );
     Ok(())
 }

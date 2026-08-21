@@ -2,6 +2,7 @@
 export enum RequestFamily {
   PrePush = 'prePush',
   CortexAudit = 'cortexAudit',
+  CortexSessionClean = 'cortexSessionClean',
   SkillScaffold = 'skillScaffold',
   AgentStats = 'agentStats',
   PrLand = 'prLand',

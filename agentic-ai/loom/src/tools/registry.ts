@@ -3,6 +3,7 @@ import {
   AGENT_STATS_FILE_INPUT_SCHEMA,
 } from '../codec/args/agent-stats.ts';
 import { CORTEX_AUDIT_INPUT_SCHEMA } from '../codec/args/cortex-audit.ts';
+import { CORTEX_SESSION_CLEAN_INPUT_SCHEMA } from '../codec/args/cortex-session-clean.ts';
 import { DEPENDENCY_POPULARITY_INPUT_SCHEMA } from '../codec/args/dependency-popularity.ts';
 import { PRE_PUSH_INPUT_SCHEMA } from '../codec/args/pre-push.ts';
 import {
@@ -35,6 +36,10 @@ import {
   runCortexAudit,
   type CortexAuditReport,
 } from '../commands/cortex-audit.ts';
+import {
+  runCortexSessionClean,
+  type CortexSessionCleanReport,
+} from '../commands/cortex-session-clean.ts';
 import {
   runDependencyPopularity,
   type DependencyPopularityReport,
@@ -73,6 +78,7 @@ export type DiscoverableRequest = {
 export type LoomCommandResult =
   | PrePushReport
   | CortexAuditReport
+  | CortexSessionCleanReport
   | SkillScaffoldReport
   | AgentStatsReport
   | PrLandReport
@@ -100,6 +106,12 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     description: 'Audit .cortex links and dynamic-skill index sync.',
     exampleRequest: 'task loom:cortex-audit',
     inputSchema: CORTEX_AUDIT_INPUT_SCHEMA,
+  },
+  {
+    family: RequestFamily.CortexSessionClean,
+    description: 'Assert that temporary Cortex session memory is absent.',
+    exampleRequest: 'task loom:cortex-session-clean',
+    inputSchema: CORTEX_SESSION_CLEAN_INPUT_SCHEMA,
   },
   {
     family: RequestFamily.SkillScaffold,
@@ -224,6 +236,8 @@ export async function executeRequest(
       return runPrePush(request.prePush);
     case RequestFamily.CortexAudit:
       return runCortexAudit(request.cortexAudit);
+    case RequestFamily.CortexSessionClean:
+      return runCortexSessionClean(request.cortexSessionClean);
     case RequestFamily.SkillScaffold:
       return runSkillScaffold(request.skillScaffold);
     case RequestFamily.AgentStats: {

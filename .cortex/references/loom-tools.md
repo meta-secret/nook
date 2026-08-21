@@ -46,6 +46,14 @@ That workflow contains:
 - one finding-synthesis task;
 - the existing `cortexAudit` leaf.
 
+The workflow audit lane also classifies:
+
+- duplicated procedure prose;
+- deterministic leaf candidates;
+- compiled workflow candidates;
+- safe parallel evidence lanes; and
+- policy that must remain semantic judgment.
+
 - **Attempt gate:** Fail closed unless `HEAD` matches the requested baseline and
   the worktree is clean before and after execution.
   - Include untracked files in cleanliness.
@@ -63,6 +71,7 @@ Defaultable tools use a Task alias and an in-code example:
 task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
+task loom:cortex-session-clean
 task loom:dependency-popularity
 ```
 
@@ -182,6 +191,15 @@ task loom:pre-push
 ```bash
 task loom:cortex-audit
 ```
+
+### cortexSessionClean
+
+```bash
+task loom:cortex-session-clean
+```
+
+This deterministic readiness check rejects any non-directory entry under
+ignored `.cortex/.session/` memory.
 
 ### skillScaffold
 

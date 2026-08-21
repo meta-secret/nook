@@ -241,6 +241,88 @@ Protocol changes must be:
 Do not add self-justifying rules. Do not weaken a safeguard merely because one
 unusual task required an exception.
 
+## Workflow improvement review
+
+Use reflection to find repeated workflow policy that can become reliable
+execution.
+
+Run this review when session evidence reveals:
+
+- duplicated workflow prose;
+- repeated manual mechanical steps;
+- recurring independent investigations;
+- unclear ownership between Cortex, Task, and Loom; or
+- workflow friction that increased delivery cost or risk.
+
+Do not run a broad workflow audit for every substantial task. Keep a local
+review to the touched workflow and its one-hop authorities. Use the compiled
+Cortex full-garbage-collection workflow when two or more document families need
+independent evidence.
+
+### Instruction classification
+
+Classify each candidate instruction before changing its owner.
+
+- **Semantic policy or judgment:** Keep it in the owning Cortex authority.
+  - Examples include tradeoffs, classification, architectural synthesis, and
+    exception handling.
+- **Deterministic leaf:** Move it to Loom, Task, or another typed tool.
+  - Its output must follow entirely from declared inputs.
+  - Do not create an agent task for a mechanical assertion.
+- **Bounded semantic task:** Delegate it when the generic delegation criteria
+  are satisfied.
+  - Give each worker the same exact baseline.
+  - Keep the worker read-only or give it an isolated disjoint write scope.
+  - Define inputs, typed or structured output, acceptance evidence, and the
+    parent-owned join before dispatch.
+- **Compiled workflow candidate:** Consider it only when task identities,
+  dependencies, parallel groups, joins, resources, timeouts, results, and
+  terminal routes are stable.
+- **Delivery-owner-only action:** Keep shared edits, synthesis, Workbench,
+  GitHub, readiness, and merge with one task owner.
+- **Ephemeral instruction:** Reject it when it is task-specific, speculative,
+  or insufficiently evidenced.
+
+Follow [Subagent delegation](../workflows/subagent-delegation.md) for the full
+worker contract and safe parallelism rules.
+
+### Loom extraction procedure
+
+1. Find the owning workflow through `.cortex/knowledge-graph.md`.
+2. Inspect its linked skill, Loom reference, Task entrypoint, tests, and current
+   implementation evidence.
+3. Search the existing Loom leaf tools and compiled workflow catalog before
+   proposing new machinery.
+4. Record duplicated steps and classify each instruction using the categories
+   above.
+5. Identify independent semantic lanes.
+   - Parallelize only lanes with the same immutable baseline.
+   - Require non-overlapping resources and independent acceptance evidence.
+   - Define the join before dispatch.
+6. Move deterministic assertions into a typed leaf.
+7. Use bounded subagents for semantic evidence collection.
+8. Promote a repeated stable graph only as a reviewed TypeScript catalog
+   change.
+   - Define fixed task IDs and dependency edges.
+   - Define explicit parallel targets and joins.
+   - Define read and write resource claims.
+   - Define timeouts, result types, terminal routes, and skipped results.
+9. Keep runtime inputs bounded to a reviewed catalog entry, an exact source
+   commit, and declared scalar values.
+10. Replace duplicated procedural prose with links to the canonical Cortex
+    authority and Loom entrypoint.
+11. Validate graph structure, dry-run projection, execution behavior, Cortex
+    coherence, and the updated exact head.
+
+The audit may propose a graph. The delivery owner reviews and authors it.
+
+Never parse Markdown, YAML, prompts, session notes, or model output into
+executable topology. Never let a workflow rewrite its own compiled graph at
+runtime.
+
+The static graph boundary is defined in
+[Agent workflow orchestration](../design-docs/agent-workflow-orchestration.md).
+
 ## Task lifecycle
 
 For every substantial task:
@@ -252,13 +334,14 @@ For every substantial task:
 5. Validate the implementation enough to evaluate the lessons.
 6. Capture meaningful discoveries throughout work, review, and CI.
 7. Complete the self-improvement review.
-8. Promote only evidence-backed durable knowledge.
-9. Synchronize skills, workflows, and the knowledge graph when their contracts
+8. Run the workflow improvement review when the evidence triggers it.
+9. Promote only evidence-backed durable knowledge.
+10. Synchronize skills, workflows, and the knowledge graph when their contracts
    changed.
-10. Validate Cortex consistency and the updated exact head.
-11. Delete the session file.
-12. Confirm no `.cortex/.session/` file is tracked.
-13. Finish readiness, merge, or the requested handoff.
+11. Validate Cortex consistency and the updated exact head.
+12. Delete the session file.
+13. Confirm no `.cortex/.session/` file is tracked.
+14. Finish readiness, merge, or the requested handoff.
 
 If promotion changes the pushed head, repeat exact-head validation before
 readiness.
@@ -319,6 +402,20 @@ Record stale, missing, misleading, duplicated, or contradictory guidance.
 
 Record workflow behavior that caused avoidable cost or risk.
 
+## Workflow Improvement Candidates
+
+For each candidate, record:
+
+- the owning Markdown authority;
+- the repeated instruction;
+- its instruction classification;
+- fixed inputs and outputs;
+- dependencies and possible parallel lanes;
+- resource claims;
+- the proposed Loom leaf, compiled workflow, or retained prose;
+- evidence and acceptance checks; and
+- why a rejected candidate should remain prose or ephemeral.
+
 ## Self-Improvement Review
 
 ### Durable project knowledge
@@ -344,7 +441,16 @@ Before final readiness:
 
 1. Run the focused checks for every promoted Cortex authority.
 2. Run `task loom:cortex-audit`.
-3. Run `task loom:pre-push` before each push.
-4. Confirm `git ls-files .cortex/.session` prints nothing.
-5. Delete the local session file.
-6. Repeat exact-head hosted validation when promotion changed the PR head.
+3. For a broad multi-family review, run the compiled audit against the exact
+   clean baseline:
+
+   ```bash
+   task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
+   ```
+
+4. For a compiled workflow change, validate its dry run and focused behavior.
+5. Run `task loom:pre-push` before each push.
+6. Delete the local session file.
+7. Run `task loom:cortex-session-clean`.
+8. Confirm `git ls-files .cortex/.session` prints nothing.
+9. Repeat exact-head hosted validation when promotion changed the PR head.

@@ -97,7 +97,7 @@ source of truth.
 - **[docker-container-harness.md](docker-container-harness.md)**
   - Purpose: Prohibit Dockerfile cache mounts and killing the Docker daemon; enforce exact dependency pinning and Bun lockfiles
 - **[self-improvement.md](self-improvement.md)**
-  - Purpose: Capture provisional task discoveries in ignored session memory, then promote only evidence-backed durable knowledge after reflection
+  - Purpose: Capture provisional discoveries, promote durable knowledge, and extract stable workflow mechanics into reviewed Loom tools and graphs
   - Executable skill: [`.agents/skills/self-improvement/SKILL.md`](../../.agents/skills/self-improvement/SKILL.md)
 
 ## How to add one

@@ -55,7 +55,7 @@ function parseDefaultFamily(argv: readonly string[]): CliInvocation {
     return {
       kind: CliInvocationKind.UsageError,
       message:
-        'expected loom --default <prePush|toolsList|cortexAudit|dependencyPopularity>',
+        'expected loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
     };
   }
   const family = argv[1];
@@ -63,7 +63,7 @@ function parseDefaultFamily(argv: readonly string[]): CliInvocation {
     return {
       kind: CliInvocationKind.UsageError,
       message:
-        'expected loom --default <prePush|toolsList|cortexAudit|dependencyPopularity>',
+        'expected loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
     };
   }
   const lookupDefaultableExampleArgs: LookupDefaultableExampleArgs = {
@@ -76,6 +76,6 @@ function parseDefaultFamily(argv: readonly string[]): CliInvocation {
   return {
     kind: CliInvocationKind.UsageError,
     message:
-      'expected loom --default <prePush|toolsList|cortexAudit|dependencyPopularity>',
+      'expected loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>',
   };
 }

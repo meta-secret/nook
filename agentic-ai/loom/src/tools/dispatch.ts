@@ -207,6 +207,13 @@ function buildSuccessResponse(args: BuildSuccessResponseArgs): SuccessResponse {
       };
       return successResponseForFamily(successResponseForFamilyArgs4);
     }
+    case RequestFamily.CortexSessionClean: {
+      const successResponseForFamilyArgs: SuccessResponseForFamilyArgs = {
+        family: RequestFamily.CortexSessionClean,
+        result,
+      };
+      return successResponseForFamily(successResponseForFamilyArgs);
+    }
     case RequestFamily.SkillScaffold: {
       const successResponseForFamilyArgs3: SuccessResponseForFamilyArgs = {
         family: RequestFamily.SkillScaffold,
@@ -274,6 +281,14 @@ function buildExecuteErrorResponse(
           errors,
         };
       return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs4);
+    }
+    case RequestFamily.CortexSessionClean: {
+      const executeErrorResponseForFamilyArgs: ExecuteErrorResponseForFamilyArgs =
+        {
+          family: RequestFamily.CortexSessionClean,
+          errors,
+        };
+      return executeErrorResponseForFamily(executeErrorResponseForFamilyArgs);
     }
     case RequestFamily.SkillScaffold: {
       const executeErrorResponseForFamilyArgs3: ExecuteErrorResponseForFamilyArgs =

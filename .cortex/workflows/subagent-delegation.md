@@ -193,36 +193,16 @@ Keep one owner when work is:
 
 ## Machine-managed workflows
 
-Repeated and stable graphs should become compiled Loom workflows.
+During reflection, apply the
+[workflow improvement review](../dynamic-skills/self-improvement.md#workflow-improvement-review)
+to repeated and stable procedures.
 
-- Each workflow is a fixed TypeScript definition.
-- The definition owns:
+This delegation workflow still owns the worker boundary:
 
-- task IDs;
-- dependencies;
-- explicit parallel groups;
-- read and write resource scopes;
-- retries and timeouts;
-- result schemas;
-- join rules;
-- skipped-task reporting.
-
-- Do not accept workflow topology from YAML, prompts, or Cortex prose.
-- Do not ask an agent to invent tasks or edges at runtime.
-- Runtime input may:
-  - select a reviewed catalog entry; and
-  - bind the exact source commit and bounded scalar inputs.
-- Runtime input must not change compiled topology.
-- Do not infer parallelism from collection order.
-- Execute only reachable tasks.
-  - Give every declared but unreached branch an explicit skipped result.
-- Use one lifecycle authority:
-  - local runs use Loom's append-only event journal;
-  - Hive-backed runs use Neo4j; and
-  - no workflow runs two authoritative schedulers.
-- The first compiled workflow is `cortex-full-garbage-collection`.
-  - It contains one fixed parallel evidence wave, one join, one synthesis task,
-    and the existing mechanical Cortex audit leaf.
+- semantic work uses bounded child workers;
+- deterministic work uses tools;
+- one delivery owner defines and reviews the join; and
+- child workers do not acquire delivery authority.
 
 The architecture boundary is defined in
 [agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).

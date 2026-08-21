@@ -86,10 +86,6 @@ Agents must follow this navigation and search protocol:
   - Another active agent's work is read-only.
   - When ownership is missing or ambiguous, wait for an explicit user, owner, or orchestrator handoff.
   - See [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
-- **Self-improvement boundary:** Use ignored session memory for every substantial
-  task. Promote only durable knowledge after reflection. Never treat working
-  memory as authoritative. See
-  [dynamic-skills/self-improvement.md](dynamic-skills/self-improvement.md).
 - **Source file size limit (1,000 lines):** Every authored file, including Rust, stays at or below 1,000 lines. Oversized Rust signals excessive domain responsibility and requires cohesive domain or architectural decomposition; extracting unit tests alone is prohibited while integration tests remain separate. See [dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
 - **Format on host before every push:** Always run `task loom:pre-push` before pushing to apply host formatting and check the UI demo contract. See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
 - **Heavy work runs remotely on GitHub Actions:** Heavy builds, tests, and product gates run on GitHub-hosted workers, not locally. See [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) and [workflows/remote-execution.md](workflows/remote-execution.md).
@@ -103,15 +99,13 @@ Agents must follow this navigation and search protocol:
 
 Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) from start to finish:
 
-1. **Branch & plan:** Fetch `origin/main`. Read owning product specs for product tasks. Publish the task plan, branch, and create ignored session memory. Target <= 5,000 authored changed lines per PR.
+1. **Branch & plan:** Fetch `origin/main`. Read owning product specs for product tasks. Publish the task plan and branch. Start [agent self-improvement](dynamic-skills/self-improvement.md) for substantial work. Target <= 5,000 authored changed lines per PR.
 2. **Implement:** Write focused code using canonical dynamic skills. Update `.cortex/product-specs/` when new product knowledge is gained.
 3. **Pre-push format:** Run `task loom:pre-push` to apply host formatting.
 4. **Commit & push:** Commit formatted changes and push to the feature branch.
 5. **Remote validation & review:** Run advisory local review before the first owner push; run complete PR validation and exact-head Cloud review via `task pr:validate`.
 6. **Address all feedback:** Inspect and resolve all active review comments. Update code, tests, and product specifications when review comments refine product behavior.
-7. **Reflect and curate:** When session memory was created, review its
-   discoveries. Promote only durable knowledge. Update the graph when required.
-   Delete session memory.
+7. **Reflect and curate:** Complete [agent self-improvement](dynamic-skills/self-improvement.md) before readiness.
 8. **Squash merge:** Once the updated exact head passes `task pr:ready`, squash-merge automatically (`gh pr merge --squash`).
 9. **Publish Workbench records:** Update the Workbench issue, add the completion worklog, and publish `stats/ai-agent/<pr>.yaml`.
 
