@@ -27,7 +27,7 @@ export function inspectCortexSession(
 ): CortexSessionInspection {
   const sessionRoot = path.join(request.repoRoot, '.cortex', '.session');
   const sessionRootStat = lstatSync(sessionRoot, noThrowStatOptions);
-  if (sessionRootStat === undefined) {
+  if (!sessionRootStat) {
     return { sessionClean: true };
   }
 
