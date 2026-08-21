@@ -83,9 +83,11 @@ tasks:
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
         grep -q 'moby/buildkit:v0.32.2@sha256:' "$runner_render"
         grep -q -- '--oci-worker-snapshotter' "$runner_render"
+        grep -q -- '- overlayfs' "$runner_render"
         grep -q 'restartPolicy: Always' "$runner_render"
         grep -q 'privileged: true' "$runner_render"
-        grep -q -- '- "160000"' "$runner_render"
+        grep -q -- '- "80000"' "$runner_render"
+        grep -q 'sizeLimit: 100Gi' "$runner_render"
         if grep -Eq 'docker:dind|dockerd|docker\.sock|hostPath:|sysbox|containerMode:' "$runner_render"; then
           echo "Rendered ARC runner violates the no-nested-engine contract" >&2
           exit 1

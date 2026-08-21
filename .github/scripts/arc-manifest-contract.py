@@ -58,15 +58,16 @@ require(
 require(
     RUNNERS,
     "--oci-worker-snapshotter",
-    "private BuildKit must use the portable native snapshotter",
+    "private BuildKit must select its guest-local snapshotter explicitly",
 )
-require(RUNNERS, "- native", "private BuildKit snapshotter value is missing")
+require(RUNNERS, "- overlayfs", "private BuildKit must avoid native layer copies")
 require(
     RUNNERS,
     'limits:\n            cpu: "6"\n            memory: 10Gi',
     "BuildKit limits must keep four 8-vCPU guests within node capacity",
 )
-require(RUNNERS, '- "160000"', "BuildKit argument values must remain strings")
+require(RUNNERS, '- "80000"', "BuildKit must retain an 80 GB GC target")
+require(RUNNERS, "sizeLimit: 100Gi", "BuildKit state must stay bounded to 100 GiB")
 require(RUNNERS, "name: buildkit", "each runner Pod must carry private BuildKit")
 require(RUNNERS, "restartPolicy: Always", "BuildKit must be a native sidecar")
 require(RUNNERS, "privileged: true", "BuildKit needs build privileges in the guest")
