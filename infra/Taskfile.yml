@@ -53,6 +53,10 @@ includes:
     taskfile: tasks/registry.yml
     dir: ..
     flatten: true
+  arc:
+    taskfile: tasks/arc.yml
+    dir: ..
+    flatten: true
   sccache:
     taskfile: tasks/sccache.yml
     dir: ..

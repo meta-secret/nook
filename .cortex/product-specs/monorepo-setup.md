@@ -93,6 +93,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - PR, main delivery, production release, long-running AI agents, and scheduled/manual validation use GitHub-hosted `ubuntu-latest`.
+  - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set; every job receives a fresh Kata QEMU microVM and private BuildKit worker.
   - Delivery jobs restore scoped BuildKit layers through private Zot.
   - The self-hosted `nook` label remains only for maintenance cleanup.
   - Do not use Blacksmith or other third-party runner labels.
@@ -103,7 +104,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
-  - It runs on an ephemeral GitHub-hosted runner.
+  - `preflight` and `rust:ci` may run on a fresh ARC Kata microVM. Other selections run on an ephemeral GitHub-hosted runner.
   - A batch shares one checkout, Docker setup, and cache connection.
   - Selected tasks run sequentially.
   - Each task retains its bounded timeout.

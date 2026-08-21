@@ -40,7 +40,7 @@ ownership until merge or a concrete blocked handoff:
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
    - Create ignored `.cortex/.session/` memory for substantial work.
-2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs on GitHub-hosted workers.
+2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs through the configured GitHub Actions runner.
 3. **Prepare a coherent commit:**
    - Run `task loom:pre-push`.
    - Commit the formatted change.
@@ -50,7 +50,7 @@ ownership until merge or a concrete blocked handoff:
 4. **Push and create or update the PR.**
 5. **Request review and validate on GitHub Actions:**
    - Run focused `task remote TASK_NAME=<name>` jobs as useful.
-   - Use focused hosted tasks while iterating.
+   - Use focused remote tasks while iterating.
    - When the coherent head is ready, run one complete-validation command:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
@@ -290,7 +290,7 @@ Prepare an exact remote commit:
 3. Commit and run advisory local review.
 4. Push and open or update the PR.
 
-This exposes the source to focused hosted tasks but does not start complete
+This exposes the source to focused remote tasks but does not start complete
 validation.
 
 - Never require `task check`, a full test suite, build, e2e, or post-fix
@@ -324,7 +324,11 @@ The feedback inspection and readiness audit replace any blind review-batching gr
 
 ### 5. Hosted iteration and explicit validation
 
-**GitHub-hosted execution is the normal build/test path.** `remote.yml` runs allowlisted focused tasks repeatedly against an exact pushed branch head. `pr.yml` is the sole merge-validation pipeline and runs only when an agent explicitly applies a validation label through `task pr:validate`.
+**GitHub Actions is the normal build/test path.** `remote.yml` runs allowlisted
+focused tasks on the configured ARC Kata scale set, with `ubuntu-latest` as its
+fallback. It always targets an exact pushed branch head. `pr.yml` remains the
+GitHub-hosted merge-validation pipeline and runs only when an agent explicitly
+applies a validation label through `task pr:validate`.
 
 ```text
 implement/fix → task loom:pre-push → commit → local review → push/update PR

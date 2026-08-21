@@ -177,6 +177,31 @@ tasks:
           echo "Restore credentials under ~/.nook/cache/, or set SCCACHE_OPTIONAL=1 only for an intentional cold build." >&2;
           exit 1;
         fi;
+        if [ "${GITHUB_ACTIONS:-}" = "true" ] &&
+           [ "${NOOK_ARC_RUNNER:-}" = "1" ] &&
+           [ "${NOOK_BUILDKIT_ADDR:-}" = "tcp://127.0.0.1:1234" ]; then
+          probe_context="$(mktemp -d)";
+          repo_root="$(git rev-parse --show-toplevel)";
+          cp "$repo_root/nook-app/nook-platform/docker/sccache-health.Dockerfile" "$probe_context/Dockerfile";
+          probe_status=0;
+          {{.DOCKER}} buildx build \
+            --no-cache \
+            --progress plain \
+            --file "$probe_context/Dockerfile" \
+            --secret "id=sccache_s3_access_key,src=$access_file" \
+            --secret "id=sccache_s3_secret_key,src=$secret_file" \
+            --build-arg "SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}" \
+            --build-arg "SCCACHE_BUCKET={{.SCCACHE_BUCKET}}" \
+            --output type=cacheonly \
+            "$probe_context" || probe_status=$?;
+          rm -r -- "$probe_context";
+          if [ "$probe_status" -ne 0 ]; then
+            echo "task sccache:ensure: SeaweedFS S3 is unavailable to the private ARC BuildKit worker" >&2;
+            exit 1;
+          fi;
+          echo "task sccache:ensure: SeaweedFS S3 sccache is healthy through private ARC BuildKit";
+          exit 0;
+        fi;
         if ! {{.DOCKER}} run --rm \
           -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
           -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \

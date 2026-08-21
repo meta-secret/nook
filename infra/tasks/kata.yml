@@ -33,6 +33,7 @@ tasks:
           --timeout=10m
         kubectl get runtimeclasses
         kubectl get runtimeclass kata-dragonball
+        kubectl get runtimeclass kata-qemu-runtime-rs
         REMOTE
       - task: kata:guest-seccomp:enable
 

@@ -1,0 +1,168 @@
+githubConfigUrl: https://github.com/meta-secret/nook
+githubConfigSecret: nook-arc-github
+
+runnerScaleSetName: nook-k0s
+minRunners: 0
+maxRunners: 4
+
+controllerServiceAccount:
+  namespace: arc-systems
+  name: nook-arc-gha-rs-controller
+
+listenerTemplate:
+  spec:
+    containers:
+      - name: listener
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          seccompProfile:
+            type: RuntimeDefault
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+
+template:
+  metadata:
+    labels:
+      nook.nokey.sh/role: arc-runner
+  spec:
+    runtimeClassName: kata-qemu-runtime-rs
+    automountServiceAccountToken: false
+    enableServiceLinks: false
+    terminationGracePeriodSeconds: 60
+    initContainers:
+      - name: install-docker-client
+        image: docker:29.1.3-cli@sha256:4fa0ee1f3a7e4354c4ea34558b6d4ee32859baf4973d4c8ccc8e7fe3dd730c04
+        command:
+          - /bin/sh
+          - -ceu
+          - |
+            install -m 0755 /usr/local/bin/docker /docker-client/docker
+            install -m 0755 \
+              /usr/local/libexec/docker/cli-plugins/docker-buildx \
+              /docker-client/docker-buildx
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+        volumeMounts:
+          - name: docker-client
+            mountPath: /docker-client
+          - name: temporary
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
+      - name: buildkit
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-v3
+        imagePullPolicy: Never
+        restartPolicy: Always
+        args:
+          - --addr
+          - tcp://127.0.0.1:1234
+          - --oci-worker-snapshotter
+          - overlayfs
+          - --oci-worker-gc
+          - --oci-worker-gc-keepstorage
+          - "80000"
+        securityContext:
+          privileged: true
+        startupProbe:
+          exec:
+            command:
+              - buildctl
+              - --addr
+              - tcp://127.0.0.1:1234
+              - debug
+              - workers
+          periodSeconds: 2
+          failureThreshold: 90
+        volumeMounts:
+          - name: buildkit-state
+            mountPath: /var/lib/nook-buildkit-backing
+          - name: temporary
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: "4"
+            memory: 6Gi
+            ephemeral-storage: 50Gi
+          limits:
+            cpu: "6"
+            memory: 10Gi
+            ephemeral-storage: 100Gi
+    containers:
+      - name: runner
+        image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+        command: ["/home/runner/run.sh"]
+        env:
+          - name: NOOK_ARC_RUNNER
+            value: "1"
+          - name: NOOK_BUILDKIT_REMOTE
+            value: "1"
+          - name: NOOK_BUILDKIT_ADDR
+            value: tcp://127.0.0.1:1234
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
+          - name: docker-config
+            mountPath: /home/runner/.docker
+          - name: docker-client
+            mountPath: /usr/local/bin/docker
+            subPath: docker
+            readOnly: true
+          - name: docker-client
+            mountPath: /usr/local/libexec/docker/cli-plugins/docker-buildx
+            subPath: docker-buildx
+            readOnly: true
+          - name: temporary
+            mountPath: /tmp
+          - name: tool-cache
+            mountPath: /opt/hostedtoolcache
+        resources:
+          requests:
+            cpu: "2"
+            memory: 4Gi
+            ephemeral-storage: 25Gi
+          limits:
+            cpu: "2"
+            memory: 6Gi
+            ephemeral-storage: 100Gi
+    volumes:
+      - name: work
+        emptyDir:
+          sizeLimit: 200Gi
+      - name: buildkit-state
+        emptyDir:
+          sizeLimit: 100Gi
+      - name: docker-config
+        emptyDir:
+          sizeLimit: 64Mi
+      - name: docker-client
+        emptyDir:
+          sizeLimit: 128Mi
+      - name: temporary
+        emptyDir:
+          sizeLimit: 50Gi
+      - name: tool-cache
+        emptyDir:
+          sizeLimit: 2Gi

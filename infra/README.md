@@ -10,6 +10,14 @@ This directory owns Nook's stateful server infrastructure:
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
+- A pinned Actions Runner Controller scale set runs focused Actions jobs in
+  single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM carries Docker
+  client tooling and its own privileged BuildKit sidecar on Pod loopback. Its
+  overlayfs builder state uses a guest-mounted ext4 image, is capped at 100 GiB,
+  and is discarded after the job. There is no Docker daemon, DinD, Sysbox,
+  shared builder, host socket, or hostPath.
+  No runners stay warm: ARC creates one fresh microVM per job. The four-runner
+  maximum is only a node-capacity concurrency bound.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
 expose anonymous S3 or registry access; every client authenticates with the
@@ -26,6 +34,13 @@ task infra:registry:credential:ensure
 task infra:registry:credential:sync
 task infra:registry:check
 task infra:registry:diagnose
+task infra:arc:render:check
+task infra:arc:deploy
+task infra:arc:status
+task infra:arc:diagnose
+task infra:arc:activate
+task infra:arc:fallback
+task infra:arc:smoke
 ```
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
@@ -67,6 +82,17 @@ deduplicates identical layer blobs shared with Main. Remote Rust compiler vertic
 read trusted Main SeaweedFS objects through a separate read-only identity and
 stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
+
+Daemon-free `preflight` and `rust:ci` Remote selections use the ARC scale set
+through the repository variable `NOOK_RUNS_ON=nook-k0s`. Tasks that require
+`type=docker` image loading or `docker run` stay on hosted runners.
+`task infra:arc:activate` sets the ARC route;
+`task infra:arc:fallback` immediately restores `ubuntu-latest`. ARC Buildx uses
+the remote driver against the private BuildKit sidecar. Builder state is
+discarded with the single-use microVM; durable cache state remains in Zot. Its
+authenticated Zot traffic resolves through the same node's TLS ingress,
+avoiding an external registry data path while preserving the public certificate
+and registry host.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

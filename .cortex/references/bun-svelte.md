@@ -79,7 +79,7 @@ and `preflight` sources. Unused-code ownership is split as follows:
 - Live sync Playwright (`sync-live` project): `task web:test:e2e:sync-live` — real GitHub API; explicit manual runs only. Requires `NOOK_GITHUB_PAT` in `nook-app/nook-web/.env.test.local`.
 - Vite `import.meta.env` values used by e2e are build-time constants; Task targets that serve `dist` must rebuild the e2e dist with the e2e env before Playwright runs.
 - Do not run `bun run test:e2e*` or `playwright test` directly on the host; use Taskfile so wasm is built and tooling matches CI.
-- Agent e2e runs on GitHub-hosted workers through `task remote`; humans may use
+- Agent e2e runs through the configured GitHub Actions worker via `task remote`; humans may use
   local single-spec Docker e2e for interactive debugging. Complete agent
   validation is explicit: Loom pre-push, commit, push, then `task pr:validate`
   when the head is ready for the final gate.

@@ -548,13 +548,50 @@ Deployment verification:
 - verifies that the guest applied seccomp; and
 - rejects the rollout if either boundary is unavailable.
 
-Worker Pods have no hostPath volume and never mount the host repository, host
-`CODEX_HOME`, or host Docker socket. They contain no privileged containers and
-run no Docker daemon. The worker image carries the pinned Rust, Bun, Node, and
-Task tools required by the repository. When `task format` detects the sealed
-guest marker it selects the native `hive:guest:format` Taskfile path, operating
-only on that task's disposable checkout. The image also carries npm so
-`hive:guest:pr:ready` can install and run the repository's existing read-only
+### ARC trusted-build boundary
+
+Actions Runner Controller runs focused, trusted GitHub Actions jobs as
+single-use Pods in the `kata-qemu-runtime-rs` RuntimeClass. The runner has no
+Kubernetes service-account token, hostPath, host runtime socket, or Docker
+daemon.
+
+The Kata runner contains Docker client tooling but no Docker daemon. Buildx
+connects over Pod loopback to a private BuildKit sidecar in the same microVM.
+BuildKit is privileged inside that disposable guest so it can create OCI build
+processes, but the Pod has no Kubernetes service-account token, hostPath, or
+host runtime socket. A pinned wrapper mounts a 96 GiB sparse ext4 image from the
+100 GiB `emptyDir` inside the guest, allowing BuildKit to use overlayfs without
+placing writable layers on Kata's virtiofs mount. The garbage-collection target
+is 80 GB; durable cache manifests and layers remain in Zot.
+
+Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
+guest lost its ttrpc sandbox again when the 16 GiB ARC job began exercising its
+private BuildKit daemon. ARC therefore uses the same release's QEMU runtime-rs
+backend. Hive remains on Dragonball, and QEMU is not the cluster default.
+
+The scale set keeps no warm runners. ARC creates a new Pod and microVM for each
+job and removes it afterward. `maxRunners: 4` limits simultaneous jobs so four
+8-vCPU, 16-GiB guests fit the current node; it is not a retained runner pool.
+
+The ARC deployment contract explicitly prohibits:
+
+- Docker-in-Docker and any `dockerd` process;
+- nested Docker or Podman engines;
+- Sysbox;
+- host Docker or containerd sockets; and
+- hostPath volumes.
+
+The runner image and its Docker CLI remain separate from BuildKit. The CLI does
+not create a Docker engine. A chart-render check verifies the final Helm output
+before deployment so chart defaults cannot silently weaken these boundaries.
+
+Hive worker Pods have no hostPath volume and never mount the host repository,
+host `CODEX_HOME`, or host Docker socket. They contain no privileged containers
+and run no Docker daemon. The Hive worker image carries the pinned Rust, Bun,
+Node, and Task tools required by the repository. When `task format` detects the
+sealed guest marker it selects the native `hive:guest:format` Taskfile path,
+operating only on that task's disposable checkout. The image also carries npm
+so `hive:guest:pr:ready` can install and run the repository's existing read-only
 TypeScript PR audit without Docker.
 
 ### Credential ownership
@@ -715,6 +752,11 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
   changes and rely on repository-owned GitHub verification, where the same
   SeaweedFS cache is attached by the workflow.
 
+ARC runners reach `registry.dev.nokey.sh` on the k0s node's local TLS ingress
+path. Buildx imports and exports the same authenticated Zot registry-cache refs
+as hosted runners. The per-job BuildKit process and state disappear with the
+ephemeral Kata Pod; Zot is the only durable Docker build cache.
+
 ## 10. Taskfile operations
 
 All automated lifecycle, mutation, CI, SSH, Kubernetes, and deployment
@@ -753,15 +795,26 @@ task infra:services:repair-network
 task infra:kata:install
 task infra:kata:diagnose
 task infra:kata:verify
+task infra:arc:render:check
+task infra:arc:deploy
+task infra:arc:status
+task infra:arc:diagnose
+task infra:arc:activate
+task infra:arc:fallback
+task infra:arc:smoke
 task infra:neo4j:deploy
 task infra:hive:deploy
 task infra:deploy
 ```
 
-- **Complete deployment:** `task infra:deploy` deploys private infrastructure,
-  syncs repository-owned k0s configuration, installs and verifies k0s/Kata,
-  deploys Neo4j, publishes the exact Hive image, preserves cluster-rotated
-  credentials, deploys the warm pool, and verifies Pod replacement.
+- **Complete deployment:** `task infra:deploy` performs the complete private
+  platform rollout.
+  - It syncs repository-owned k0s configuration.
+  - It installs and verifies k0s and Kata.
+  - It deploys ARC and the bounded Kata runner scale set.
+  - It deploys Neo4j and preserves cluster-rotated credentials.
+  - It publishes the exact Hive image, deploys the warm pool, and verifies Pod
+    replacement.
 - **Encryption-provider permissions:** Keep the file `root:root 0600`.
   - Grant the dedicated `kube-apiserver` user read-only access through a POSIX
     ACL without ownership or write authority.

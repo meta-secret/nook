@@ -201,8 +201,6 @@ tasks:
           --ignore-not-found=true
         kubectl apply -f "$rendered_manifest"
         for namespace in hive-data hive-system; do
-          kubectl create namespace "$namespace" --dry-run=client -o yaml |
-            kubectl apply -f -
           kubectl -n "$namespace" create secret docker-registry nook-registry \
             --docker-server="{{.NOOK_REGISTRY_HOST}}" \
             --docker-username="$(cat "$remote_dir/secrets/registry-username")" \
@@ -210,6 +208,9 @@ tasks:
             --dry-run=client -o yaml |
             kubectl apply -f -
         done
+        kubectl delete secret nook-registry \
+          --namespace arc-runners \
+          --ignore-not-found=true
         kubectl rollout restart deployment/nook-zot --namespace hive-data
         kubectl rollout status deployment/nook-zot \
           --namespace hive-data \

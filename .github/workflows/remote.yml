@@ -1,4 +1,4 @@
-# Focused, manually dispatched development tasks on GitHub-hosted runners.
+# Focused, manually dispatched development tasks on the configured runner pool.
 #
 # This workflow is an allowlisted remote execution surface, not an arbitrary
 # credential-bearing shell. Complete merge validation remains in pr.yml and is
@@ -47,7 +47,9 @@ jobs:
   batch:
     if: inputs.task != 'rust-cache:promote' || inputs.tasks != ''
     name: Remote / ${{ inputs.tasks || inputs.task }}
-    runs-on: ubuntu-latest
+    # Only selections that never need a Docker image runtime may use the
+    # daemon-free ARC pool. The remaining catalog stays on hosted runners.
+    runs-on: ${{ ((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
