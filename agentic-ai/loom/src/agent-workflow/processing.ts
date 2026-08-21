@@ -1,6 +1,7 @@
 import {
   MaterializedViewAuthorKind,
   TaskTerminalKind,
+  TaskProcessingKind,
   WorkflowResultKind,
 } from './domain.ts';
 import type {
@@ -64,5 +65,5 @@ export async function projectWorkflowTaskProcessing<TTask extends string>(
         : MaterializedViewAuthorKind.LoomRuntime,
   } as const;
   const view = await input.journal.projectTaskView(viewInput);
-  return { kind: 'workflow-task', result: input.result, view };
+  return { kind: TaskProcessingKind.WorkflowTask, result: input.result, view };
 }

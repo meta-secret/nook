@@ -10,6 +10,7 @@ import { dirname, join, resolve, sep } from 'node:path';
 import {
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
+  TaskProcessingKind,
 } from './domain.ts';
 import type {
   StaticAgentWorkflowName,
@@ -201,7 +202,7 @@ export class WorkflowJournal<TTask extends string> {
     processing: TaskProcessingReference,
   ): Promise<string> {
     await this.readVerifiedProjection(processing.result);
-    if (processing.kind === 'agent-attempt') {
+    if (processing.kind === TaskProcessingKind.AgentAttempt) {
       await this.readVerifiedProjection(processing.events);
     }
     if (processing.view.presence !== MaterializedViewPresence.Recorded) {

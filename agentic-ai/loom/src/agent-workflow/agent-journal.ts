@@ -11,6 +11,7 @@ import {
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
   TaskTerminalKind,
+  TaskProcessingKind,
 } from './domain.ts';
 import type {
   AgentAttemptParent,
@@ -168,7 +169,7 @@ export class AgentAttemptJournal<TTask extends string> {
       path: this.relativePath('events.jsonl'),
       sha256: sha256(eventsSerialized),
     };
-    return { kind: 'agent-attempt', events, result, view };
+    return { kind: TaskProcessingKind.AgentAttempt, events, result, view };
   }
 
   private async projectView(

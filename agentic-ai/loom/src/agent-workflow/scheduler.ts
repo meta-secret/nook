@@ -1,6 +1,7 @@
 import {
   TaskTargetKind,
   TaskTerminalKind,
+  TaskProcessingKind,
   WorkflowExecutorKind,
   WorkflowTerminalKind,
   AgentAttemptParentKind,
@@ -270,7 +271,7 @@ export async function runStaticWorkflow<
       resultPath: projection.path,
       resultSha256: projection.sha256,
       processing: {
-        kind: 'workflow-task',
+        kind: TaskProcessingKind.WorkflowTask,
         result: projection,
         view: {
           presence: MaterializedViewPresence.Unavailable,

@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 import {
   StaticAgentWorkflowName,
   TaskTerminalKind,
+  TaskProcessingKind,
   WorkflowResultKind,
   WorkflowTerminalKind,
   MaterializedViewAuthorKind,
@@ -113,7 +114,7 @@ describe('workflow journal', () => {
       };
       const taskView = await journal.projectTaskView(taskViewInput);
       const processing = {
-        kind: 'workflow-task',
+        kind: TaskProcessingKind.WorkflowTask,
         result: taskProjection,
         view: taskView,
       } as const;
@@ -225,7 +226,7 @@ describe('workflow journal', () => {
       resultPath: 'task-results/inspect-attempt-1.json',
       resultSha256: 'digest',
       processing: {
-        kind: 'workflow-task',
+        kind: TaskProcessingKind.WorkflowTask,
         result: {
           path: 'task-results/inspect-attempt-1.json',
           sha256: 'digest',
@@ -272,7 +273,7 @@ describe('workflow journal', () => {
       resultPath: 'task-results/inspect-attempt-1.json',
       resultSha256: 'digest',
       processing: {
-        kind: 'workflow-task',
+        kind: TaskProcessingKind.WorkflowTask,
         result: {
           path: 'task-results/inspect-attempt-1.json',
           sha256: 'digest',

@@ -477,15 +477,20 @@ export type ParentAgentAttempt = {
 
 export type AgentAttemptParent = WorkflowRootParent | ParentAgentAttempt;
 
+export enum TaskProcessingKind {
+  AgentAttempt = 'agent-attempt',
+  WorkflowTask = 'workflow-task',
+}
+
 export type AgentAttemptProcessingReference = {
-  readonly kind: 'agent-attempt';
+  readonly kind: TaskProcessingKind.AgentAttempt;
   readonly events: ProjectionReference;
   readonly result: ProjectionReference;
   readonly view: MaterializedViewReference;
 };
 
 export type WorkflowTaskProcessingReference = {
-  readonly kind: 'workflow-task';
+  readonly kind: TaskProcessingKind.WorkflowTask;
   readonly result: ProjectionReference;
   readonly view: MaterializedViewReference;
 };
