@@ -10,9 +10,10 @@ This directory owns Nook's stateful server infrastructure:
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
-- A pinned Actions Runner Controller scale set runs focused Actions jobs in
-  single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM carries Docker
-  client tooling and its own privileged BuildKit sidecar on Pod loopback. Its
+- A pinned Actions Runner Controller scale set runs focused and opted-in trusted
+  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM
+  carries Docker client tooling and its own privileged BuildKit sidecar on Pod
+  loopback. Its
   overlayfs builder state uses a guest-mounted ext4 image, is capped at 100 GiB,
   and is discarded after the job. There is no Docker daemon, DinD, Sysbox,
   shared builder, host socket, or hostPath.
