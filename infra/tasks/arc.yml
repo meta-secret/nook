@@ -78,7 +78,7 @@ tasks:
           --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           > "$runner_render"
 
-        grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-dragonball'
+        grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
         grep -q 'moby/buildkit:v0.32.2@sha256:' "$runner_render"
@@ -116,7 +116,7 @@ tasks:
         kubectl() { sudo -n k0s kubectl "$@"; }
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
-        kubectl get runtimeclass kata-dragonball >/dev/null
+        kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
 
         helm upgrade --install nook-arc \
@@ -316,7 +316,14 @@ tasks:
           sleep 2
         done
         test -n "$run_id"
+        cancel_run() {
+          gh api --method POST \
+            "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
+            >/dev/null 2>&1 ||
+            gh run cancel "$run_id" --repo meta-secret/nook || true
+        }
         runner_name=""
+        runner_uid=""
         missing_runner_samples=0
         for _ in $(seq 1 300); do
           run_state="$(
@@ -341,27 +348,55 @@ tasks:
           )"
           if test -n "$discovered_runner"; then
             runner_name="$discovered_runner"
-            pod_state="$(
+            case "$runner_name" in
+              nook-k0s-*) ;;
+              *)
+                echo "ARC smoke received an unexpected runner name: $runner_name" >&2
+                cancel_run
+                exit 1
+                ;;
+            esac
+            pod_identity="$(
               ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                "sudo -n k0s kubectl get pod --namespace arc-runners '$runner_name' -o jsonpath='{.status.phase}' 2>/dev/null" || true
+                "sudo -n k0s kubectl get pod --namespace arc-runners '$runner_name' -o jsonpath='{.metadata.uid}:{.status.phase}' 2>/dev/null" || true
             )"
-            if test -z "$pod_state"; then
+            current_uid="${pod_identity%%:*}"
+            pod_state="${pod_identity#*:}"
+            if test -z "$pod_identity"; then
               missing_runner_samples=$((missing_runner_samples + 1))
             else
               missing_runner_samples=0
+              if test -z "$runner_uid"; then
+                runner_uid="$current_uid"
+              elif test "$current_uid" != "$runner_uid"; then
+                echo "ARC replaced assigned runner $runner_name during smoke run $run_id" >&2
+                cancel_run
+                ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                  "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
+                exit 1
+              fi
             fi
             case "$pod_state" in
               Failed*)
                 echo "ARC runner $runner_name failed after accepting smoke run $run_id" >&2
-                gh run cancel "$run_id" --repo meta-secret/nook --force || true
+                cancel_run
                 ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
                   "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
                 exit 1
                 ;;
             esac
+            if ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                 "sudo -n k0s kubectl logs --namespace arc-runners '$runner_name' --container runner --tail=80 2>/dev/null" |
+               grep -Fq 'A session for this runner already exists.'; then
+              echo "ARC runner $runner_name hit a stale JIT session during smoke run $run_id" >&2
+              cancel_run
+              ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
+              exit 1
+            fi
             if test "$missing_runner_samples" -ge 3; then
               echo "ARC runner $runner_name disappeared after accepting smoke run $run_id" >&2
-              gh run cancel "$run_id" --repo meta-secret/nook --force || true
+              cancel_run
               ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
                 "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
               exit 1
@@ -374,7 +409,7 @@ tasks:
         )"
         if test "$final_status" != completed; then
           echo "ARC smoke run $run_id did not complete within 15 minutes" >&2
-          gh run cancel "$run_id" --repo meta-secret/nook --force || true
+          cancel_run
           exit 1
         fi
         if ! gh api \

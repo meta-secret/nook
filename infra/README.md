@@ -11,9 +11,9 @@ This directory owns Nook's stateful server infrastructure:
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - A pinned Actions Runner Controller scale set runs focused Actions jobs in
-  single-use `kata-dragonball` Pods. Each 16 GiB microVM carries Docker client
-  tooling and its own privileged BuildKit sidecar on Pod loopback. There is no
-  Docker daemon, DinD, Sysbox, shared builder, host socket, or hostPath.
+  single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM carries Docker
+  client tooling and its own privileged BuildKit sidecar on Pod loopback. There
+  is no Docker daemon, DinD, Sysbox, shared builder, host socket, or hostPath.
   No runners stay warm: ARC creates one fresh microVM per job. The four-runner
   maximum is only a node-capacity concurrency bound.
 

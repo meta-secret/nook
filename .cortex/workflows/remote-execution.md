@@ -79,8 +79,8 @@ Security and cache rules:
 - Grant remote jobs read-only repository and Actions permissions.
 - Select the runner through `NOOK_RUNS_ON`, with `ubuntu-latest` as the
   repository-safe fallback.
-- On ARC, run the job in a single-use `kata-dragonball` Pod and connect Buildx
-  to its private BuildKit sidecar over Pod loopback.
+- On ARC, run the job in a single-use `kata-qemu-runtime-rs` Pod and connect
+  Buildx to its private BuildKit sidecar over Pod loopback.
 - Prohibit Docker-in-Docker, Docker daemons, nested Docker or Podman engines,
   Sysbox, host runtime sockets, and hostPath volumes. BuildKit may be privileged
   only inside the isolated Kata guest.

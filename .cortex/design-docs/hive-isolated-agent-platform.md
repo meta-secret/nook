@@ -551,8 +551,8 @@ Deployment verification:
 ### ARC trusted-build boundary
 
 Actions Runner Controller runs focused, trusted GitHub Actions jobs as
-single-use Pods in the existing `kata-dragonball` RuntimeClass. The runner has
-no Kubernetes service-account token, hostPath, host runtime socket, or Docker
+single-use Pods in the `kata-qemu-runtime-rs` RuntimeClass. The runner has no
+Kubernetes service-account token, hostPath, host runtime socket, or Docker
 daemon.
 
 The Kata runner contains Docker client tooling but no Docker daemon. Buildx
@@ -562,10 +562,10 @@ processes, but the Pod has no Kubernetes service-account token, hostPath, or
 host runtime socket. It uses a native snapshotter and keeps disposable state in
 a 500 GiB `emptyDir`; durable cache manifests and layers remain in Zot.
 
-The current Kata 4.0 Dragonball guest previously lost its ttrpc sandbox during
-a nested OCI probe. The accepted rollout therefore retests the latest stable
-Dragonball stack with a 16 GiB guest. If that probe still fails, ARC alone moves
-to the Kata runtime-rs QEMU backend; Hive remains on Dragonball.
+Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
+guest lost its ttrpc sandbox again when the 16 GiB ARC job began exercising its
+private BuildKit daemon. ARC therefore uses the same release's QEMU runtime-rs
+backend. Hive remains on Dragonball, and QEMU is not the cluster default.
 
 The scale set keeps no warm runners. ARC creates a new Pod and microVM for each
 job and removes it afterward. `maxRunners: 4` limits simultaneous jobs so four

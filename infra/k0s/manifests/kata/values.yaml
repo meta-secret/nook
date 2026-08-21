@@ -12,6 +12,8 @@ shims:
   disableAll: true
   dragonball:
     enabled: true
+  qemu-runtime-rs:
+    enabled: true
 
 defaultShim:
   amd64: dragonball

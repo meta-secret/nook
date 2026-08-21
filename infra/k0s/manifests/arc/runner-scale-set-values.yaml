@@ -34,7 +34,7 @@ template:
     labels:
       nook.nokey.sh/role: arc-runner
   spec:
-    runtimeClassName: kata-dragonball
+    runtimeClassName: kata-qemu-runtime-rs
     automountServiceAccountToken: false
     enableServiceLinks: false
     terminationGracePeriodSeconds: 60

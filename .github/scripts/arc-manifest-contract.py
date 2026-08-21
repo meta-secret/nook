@@ -12,6 +12,7 @@ CONTROLLER = (
     ROOT / "infra/k0s/manifests/arc/controller-values.yaml"
 ).read_text()
 NETWORK = (ROOT / "infra/k0s/manifests/arc/network-policy.yaml").read_text()
+KATA_VALUES = (ROOT / "infra/k0s/manifests/kata/values.yaml").read_text()
 TASKS = (ROOT / "infra/tasks/arc.yml").read_text()
 REMOTE_WORKFLOW = (ROOT / ".github/workflows/remote.yml").read_text()
 DOCKER_SETUP = (ROOT / ".github/actions/nook-docker-setup/action.yml").read_text()
@@ -46,8 +47,13 @@ require(
 require(RUNNERS, "runAsNonRoot: true", "ARC listener must run as non-root")
 require(
     RUNNERS,
-    "runtimeClassName: kata-dragonball",
-    "runner Pods must use the Dragonball microVM runtime",
+    "runtimeClassName: kata-qemu-runtime-rs",
+    "runner Pods must use the QEMU runtime-rs microVM fallback",
+)
+require(
+    KATA_VALUES,
+    "qemu-runtime-rs:\n    enabled: true",
+    "Kata must install the ARC QEMU runtime-rs fallback",
 )
 require(
     RUNNERS,
@@ -117,8 +123,14 @@ require(
 )
 require(
     TASKS,
-    'gh run cancel "$run_id" --repo meta-secret/nook --force',
+    "actions/runs/$run_id/force-cancel",
     "ARC smoke must force-cancel a run whose assigned ephemeral runner fails",
+)
+require(TASKS, "runner_uid", "ARC smoke must detect replacement of an assigned Pod")
+require(
+    TASKS,
+    "A session for this runner already exists.",
+    "ARC smoke must detect the stale JIT-session failure mode",
 )
 require(
     TASKS,
