@@ -51,7 +51,7 @@ tasks:
         BASH
 
   arc:render:check:
-    desc: Render the pinned ARC charts and verify the Kata and no-Docker-daemon contract.
+    desc: Render pinned ARC and verify the microVM and rootless-builder contract.
     deps: [k0s:sync]
     silent: true
     cmds:
@@ -60,6 +60,7 @@ tasks:
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         chart_version="{{.ARC_CHART_VERSION}}"
+        buildkit_manifest="$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
         cleanup() { rm -f "$controller_render" "$runner_render"; }
@@ -80,17 +81,25 @@ tasks:
 
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-dragonball'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
-        grep -q 'restartPolicy: Always' "$runner_render"
-        grep -q 'tcp://127.0.0.1:1234' "$runner_render"
-        grep -q 'privileged: true' "$runner_render"
-        grep -q -- '- "80000"' "$runner_render"
+        grep -q 'nook-arc-buildkit.arc-runners.svc.cluster.local:1234' "$runner_render"
+        grep -q 'v0.32.2-rootless@sha256:' "$buildkit_manifest"
+        grep -q -- '--oci-worker-no-process-sandbox' "$buildkit_manifest"
+        grep -q -- '--oci-worker-snapshotter' "$buildkit_manifest"
+        grep -q 'runAsNonRoot: true' "$buildkit_manifest"
+        grep -q 'runAsUser: 1000' "$buildkit_manifest"
+        grep -q 'automountServiceAccountToken: false' "$buildkit_manifest"
+        if grep -Eqi 'docker:dind|dockerd|docker\.sock|containerd\.sock|hostPath:|sysbox|containerMode:|privileged: true' \
+          "$buildkit_manifest"; then
+          echo "ARC BuildKit violates the rootless remote-builder contract" >&2
+          exit 1
+        fi
         if grep -Eq 'docker:dind|dockerd|docker\.sock|hostPath:|sysbox|containerMode:' "$runner_render"; then
           echo "Rendered ARC runner violates the no-nested-engine contract" >&2
           exit 1
         fi
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
-        echo "Pinned ARC chart render satisfies the Kata and no-Docker-daemon contract"
+        echo "Pinned ARC render satisfies the microVM and rootless-builder contract"
         REMOTE
 
   arc:deploy:
@@ -133,6 +142,14 @@ tasks:
           --namespace arc-systems --timeout=10m
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/network-policy.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
+        kubectl rollout status deployment/nook-arc-buildkit \
+          --namespace arc-runners --timeout=10m
+        kubectl wait pod \
+          --namespace arc-runners \
+          -l nook.nokey.sh/role=arc-buildkit \
+          --for=condition=Ready \
+          --timeout=10m
 
         helm upgrade --install nook-k0s \
           "$runner_chart" \
@@ -228,6 +245,7 @@ tasks:
         set -euo pipefail
         kubectl() { sudo -n k0s kubectl "$@"; }
         kubectl get deployment --namespace arc-systems -o wide
+        kubectl get deployment,service,networkpolicy --namespace arc-runners -o wide
         kubectl get autoscalingrunnerset,ephemeralrunnerset \
           --namespace arc-runners -o wide
         kubectl get autoscalinglistener --namespace arc-systems -o wide
@@ -249,6 +267,8 @@ tasks:
           --sort-by=.metadata.creationTimestamp | tail -n 60
         kubectl logs deployment/nook-arc-gha-rs-controller \
           --namespace arc-systems --tail=120 || true
+        kubectl logs deployment/nook-arc-buildkit \
+          --namespace arc-runners --tail=120 || true
         listener="$(kubectl get pods --namespace arc-systems \
           -l app.kubernetes.io/component=runner-scale-set-listener \
           -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"

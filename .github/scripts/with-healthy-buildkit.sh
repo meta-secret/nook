@@ -135,7 +135,7 @@ else
   fi
 
   if [ "$remote_builder" = "1" ]; then
-    echo "ARC BuildKit sidecar is unhealthy; refusing Docker-daemon recovery" >&2
+    echo "ARC rootless BuildKit service is unhealthy; refusing Docker-daemon recovery" >&2
     exit 1
   fi
 

@@ -66,43 +66,6 @@ template:
           limits:
             cpu: 100m
             memory: 128Mi
-      - name: buildkit
-        image: moby/buildkit:v0.32.2@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
-        restartPolicy: Always
-        args:
-          - --addr
-          - tcp://127.0.0.1:1234
-          - --oci-worker-snapshotter
-          - native
-          - --oci-worker-gc
-          - --oci-worker-gc-keepstorage
-          - "80000"
-        securityContext:
-          privileged: true
-        startupProbe:
-          exec:
-            command:
-              - buildctl
-              - --addr
-              - tcp://127.0.0.1:1234
-              - debug
-              - workers
-          periodSeconds: 2
-          failureThreshold: 60
-        volumeMounts:
-          - name: buildkit-state
-            mountPath: /var/lib/buildkit
-          - name: temporary
-            mountPath: /tmp
-        resources:
-          requests:
-            cpu: "3"
-            memory: 6Gi
-            ephemeral-storage: 50Gi
-          limits:
-            cpu: "4"
-            memory: 10Gi
-            ephemeral-storage: 200Gi
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
@@ -113,7 +76,7 @@ template:
           - name: NOOK_BUILDKIT_REMOTE
             value: "1"
           - name: NOOK_BUILDKIT_ADDR
-            value: tcp://127.0.0.1:1234
+            value: tcp://nook-arc-buildkit.arc-runners.svc.cluster.local:1234
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -150,9 +113,6 @@ template:
       - name: work
         emptyDir:
           sizeLimit: 100Gi
-      - name: buildkit-state
-        emptyDir:
-          sizeLimit: 200Gi
       - name: docker-config
         emptyDir:
           sizeLimit: 64Mi

@@ -176,10 +176,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(
         platform_tasks.contains("${GITHUB_ACTIONS:-}")
             && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
-            && platform_tasks.contains("tcp://127.0.0.1:1234")
+            && platform_tasks
+                .contains("tcp://nook-arc-buildkit.arc-runners.svc.cluster.local:1234")
             && platform_tasks
                 .contains("the ARC BuildKit stages validate SeaweedFS without a Docker runtime"),
-        "ARC sccache preflight must avoid a Docker runtime only on the authenticated loopback BuildKit path"
+        "ARC sccache preflight must avoid a Docker runtime only on the cluster-local BuildKit path"
     );
     let git_scope = read(".github/scripts/git-cache-scope.sh");
     let publish_guard = read(".github/scripts/git-cache-scope-publish-guard.sh");

@@ -11,9 +11,10 @@ This directory owns Nook's stateful server infrastructure:
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - A pinned Actions Runner Controller scale set runs focused Actions jobs in
-  single-use `kata-dragonball` Pods. A native BuildKit sidecar is privileged
-  only inside each microVM and listens only on Pod loopback. There is no Docker
-  daemon, DinD, nested rootless engine, Sysbox, host socket, or hostPath.
+  single-use `kata-dragonball` Pods. Those microVMs carry only Docker client
+  tooling. Buildx reaches an unprivileged rootless BuildKit Service whose
+  ingress is limited to ARC runner Pods. There is no Docker daemon, DinD,
+  Sysbox, privileged builder, host socket, or hostPath.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
 expose anonymous S3 or registry access; every client authenticates with the
@@ -84,7 +85,8 @@ through the repository variable `NOOK_RUNS_ON=nook-k0s`. Tasks that require
 `type=docker` image loading or `docker run` stay on hosted runners.
 `task infra:arc:activate` sets the ARC route;
 `task infra:arc:fallback` immediately restores `ubuntu-latest`. ARC Buildx uses
-the remote driver against the Pod-local BuildKit sidecar. Its authenticated Zot
+the remote driver against the cluster-local rootless BuildKit Service. Builder
+state is disposable; durable cache state remains in Zot. Its authenticated Zot
 traffic resolves through the same node's TLS ingress, avoiding an external
 registry data path while preserving the public certificate and registry host.
 

@@ -555,23 +555,33 @@ single-use Pods in the existing `kata-dragonball` RuntimeClass. The runner has
 no Kubernetes service-account token, hostPath, host runtime socket, or Docker
 daemon.
 
-Buildx connects to a native BuildKit sidecar over
-`tcp://127.0.0.1:1234`. That sidecar is privileged only inside the Kata guest,
-so its kernel authority ends at the microVM boundary. It keeps disposable
-state in an `emptyDir`; durable cache manifests and layers remain in Zot.
+The Kata runner contains Docker client tooling but no Docker or BuildKit
+daemon. Buildx connects to `nook-arc-buildkit`, a cluster-local rootless
+BuildKit Service. A NetworkPolicy permits ingress only from ARC runner Pods.
+The builder has no Kubernetes service-account token, privileged security
+context, hostPath, or host runtime socket. It uses a native snapshotter and
+keeps disposable state in an `emptyDir`; durable cache manifests and layers
+remain in Zot.
+
+Dragonball's experimental guest cannot execute the nested OCI workloads that
+BuildKit launches: both sidecar and BuildKit-only microVM probes lost their
+ttrpc sandbox when a real build began. The runner therefore remains in the
+microVM trust boundary while the rootless builder uses the ordinary Kubernetes
+runtime and an isolated user namespace.
 
 The ARC deployment contract explicitly prohibits:
 
 - Docker-in-Docker and any `dockerd` process;
-- nested rootless Docker or Podman engines;
+- nested Docker or Podman engines;
 - Sysbox;
+- privileged BuildKit containers;
 - host Docker or containerd sockets; and
 - hostPath volumes.
 
-The runner image and its Docker CLI are separate from the BuildKit daemon. The
-CLI does not create a Docker engine. A chart-render check verifies the final
-Helm output before deployment so chart defaults cannot silently weaken these
-boundaries.
+The runner image and its Docker CLI are separate from the rootless BuildKit
+service. The CLI does not create a Docker engine. A chart-render check verifies
+the final Helm output and the builder manifest before deployment so chart
+defaults cannot silently weaken these boundaries.
 
 Worker Pods have no hostPath volume and never mount the host repository, host
 `CODEX_HOME`, or host Docker socket. They contain no privileged containers and

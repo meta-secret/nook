@@ -576,10 +576,10 @@ runs concurrently and waits only at the first WASM-consuming step. A successful
 run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
-The loopback-only OCI registry in [`infra/`](infra/) publishes the exact Hive
-worker image consumed by the local k0s containerd runtime. It remains
-unreachable from the public network. Other application images are reserved for a future
-Docker cache migration, and the registry remains intentionally unused by CI today. Details:
+The authenticated Zot registry in [`infra/`](infra/) publishes the exact Hive
+worker image and BuildKit cache manifests. ARC jobs run on the same k0s node;
+their cluster-local rootless builder therefore reaches Zot without an external
+data path while retaining the public TLS registry identity. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:
