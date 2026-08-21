@@ -185,6 +185,7 @@ tasks:
           cp "$repo_root/nook-app/nook-platform/docker/sccache-health.Dockerfile" "$probe_context/Dockerfile";
           probe_status=0;
           {{.DOCKER}} buildx build \
+            --no-cache \
             --progress plain \
             --file "$probe_context/Dockerfile" \
             --secret "id=sccache_s3_access_key,src=$access_file" \

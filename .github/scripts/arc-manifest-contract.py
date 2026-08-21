@@ -18,6 +18,7 @@ REMOTE_WORKFLOW = (ROOT / ".github/workflows/remote.yml").read_text()
 DOCKER_SETUP = (ROOT / ".github/actions/nook-docker-setup/action.yml").read_text()
 REMOTE_BATCH = (ROOT / ".github/scripts/remote-task-batch.sh").read_text()
 REGISTRY_TASKS = (ROOT / "infra/tasks/registry.yml").read_text()
+PLATFORM_TASKS = (ROOT / "nook-app/nook-platform/Taskfile.yml").read_text()
 
 
 def require(source: str, fragment: str, message: str) -> None:
@@ -180,6 +181,11 @@ require(
     DOCKER_SETUP,
     "driver remote",
     "ARC Buildx must use the private remote BuildKit driver",
+)
+require(
+    PLATFORM_TASKS,
+    "--no-cache",
+    "the signed ARC cache-health probe must execute on every check",
 )
 require(
     DOCKER_SETUP,

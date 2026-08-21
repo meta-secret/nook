@@ -2,9 +2,10 @@
 
 ## Purpose
 
-Minimize agent wall time by formatting locally, using focused GitHub-hosted
-tasks while iterating, explicitly spending the complete PR pipeline only on a
-ready head, and carrying ready PRs directly through squash merge.
+Minimize agent wall time by formatting locally and using the configured GitHub
+Actions runner for focused tasks while iterating. Spend the complete hosted PR
+pipeline only on a ready head, then carry ready PRs directly through squash
+merge.
 
 ## Problem Pattern
 
