@@ -4,6 +4,7 @@ import {
   taskResourcePatternsOverlap,
   TaskTargetKind,
   WorkflowExecutorKind,
+  JoinCompletionPolicy,
 } from './domain.ts';
 
 import type {
@@ -12,38 +13,24 @@ import type {
   TaskResourceClaims,
   TaskResourcePatternPair,
 } from './domain.ts';
-
-export enum WorkflowValidationStatus {
-  Valid = 'valid',
-  Invalid = 'invalid',
-}
-
-export enum WorkflowValidationIssueKind {
-  DuplicateRegistryName = 'duplicate-registry-name',
-  RegistryMismatch = 'registry-mismatch',
-  InvalidEntry = 'invalid-entry',
-  InvalidReference = 'invalid-reference',
-  InvalidParallelTarget = 'invalid-parallel-target',
-  InvalidResourceClaim = 'invalid-resource-claim',
-  InvalidJoin = 'invalid-join',
-  DuplicateScheduling = 'duplicate-scheduling',
-  ResourceConflict = 'resource-conflict',
-  UnsupportedCapability = 'unsupported-capability',
-  Cycle = 'cycle',
-  UnreachableNode = 'unreachable-node',
-}
-
-export type WorkflowValidationIssue = {
-  readonly kind: WorkflowValidationIssueKind;
-  readonly message: string;
-};
-
-export type WorkflowValidation =
-  | { readonly status: WorkflowValidationStatus.Valid }
-  | {
-      readonly status: WorkflowValidationStatus.Invalid;
-      readonly issues: readonly WorkflowValidationIssue[];
-    };
+import { materializerValidationMessages } from './materializer-validation.ts';
+import type { MaterializerValidationRequest } from './materializer-validation.ts';
+import {
+  WorkflowValidationIssueKind,
+  WorkflowValidationStatus,
+} from './validation-result.ts';
+import type {
+  WorkflowValidation,
+  WorkflowValidationIssue,
+} from './validation-result.ts';
+export {
+  WorkflowValidationIssueKind,
+  WorkflowValidationStatus,
+} from './validation-result.ts';
+export type {
+  WorkflowValidation,
+  WorkflowValidationIssue,
+} from './validation-result.ts';
 
 type WorkflowIssueList = WorkflowValidationIssue[];
 type WorkflowNameSequence = readonly string[];
@@ -263,6 +250,23 @@ export function validateStaticAgentWorkflow<
     const issue: WorkflowValidationIssue = {
       kind: WorkflowValidationIssueKind.InvalidEntry,
       message: `entry task does not exist: ${workflow.entry}`,
+    };
+    issues.push(issue);
+  }
+
+  const materializerRequest: MaterializerValidationRequest<
+    TTask,
+    TAgent,
+    TJoin
+  > = {
+    workflow,
+    declaredTaskNames: taskNames,
+    registryTaskNames: registryTaskNameSet,
+  };
+  for (const message of materializerValidationMessages(materializerRequest)) {
+    const issue: WorkflowValidationIssue = {
+      kind: WorkflowValidationIssueKind.InvalidMaterializedViewTask,
+      message,
     };
     issues.push(issue);
   }
@@ -585,7 +589,11 @@ function inspectJoinReference<
   TJoin extends string,
 >(inspection: JoinReferenceInspection<TTask, TAgent, TJoin>): void {
   const target = inspection.targetInspection;
-  if (target.outcome === WorkflowOutcomeKind.Failed) {
+  const join = target.workflow.joins[inspection.join];
+  if (
+    target.outcome === WorkflowOutcomeKind.Failed &&
+    join?.policy !== JoinCompletionPolicy.AllTerminal
+  ) {
     const issue: WorkflowValidationIssue = {
       kind: WorkflowValidationIssueKind.InvalidJoin,
       message: `failed outcome from ${target.sourceTask} cannot arrive at all-completed join ${inspection.join}`,
@@ -609,7 +617,10 @@ function inspectJoinReference<
     adjacency: target.topology.adjacency,
   };
   addEdge(registration);
-  if (target.outcome === WorkflowOutcomeKind.Completed) {
+  if (
+    target.outcome === WorkflowOutcomeKind.Completed ||
+    join?.policy === JoinCompletionPolicy.AllTerminal
+  ) {
     const arrivals = target.topology.joinArrivals.get(inspection.join);
     if (arrivals) {
       arrivals.add(target.sourceTask);

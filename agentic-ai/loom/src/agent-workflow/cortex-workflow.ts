@@ -92,6 +92,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
   name: StaticAgentWorkflowName.CortexFullGarbageCollection,
   version: '1.0.0',
   entry: CortexAuditTask.ResolveBaseline,
+  materializedViewTask: CortexAuditTask.SynthesizeFindings,
   taskNames: [
     CortexAuditTask.ResolveBaseline,
     CortexAuditTask.AuditWorkflowsAndReferences,
@@ -169,7 +170,10 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: TaskTargetKind.Join,
         join: CortexAuditJoin.EvidenceCollected,
       },
-      failed: noTasks,
+      failed: {
+        kind: TaskTargetKind.Join,
+        join: CortexAuditJoin.EvidenceCollected,
+      },
       resources: READ_ONLY_CORTEX,
       timeoutMs: 20 * 60_000,
     },
@@ -186,7 +190,10 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: TaskTargetKind.Join,
         join: CortexAuditJoin.EvidenceCollected,
       },
-      failed: noTasks,
+      failed: {
+        kind: TaskTargetKind.Join,
+        join: CortexAuditJoin.EvidenceCollected,
+      },
       resources: READ_ONLY_ARCHITECTURE,
       timeoutMs: 20 * 60_000,
     },
@@ -203,7 +210,10 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: TaskTargetKind.Join,
         join: CortexAuditJoin.EvidenceCollected,
       },
-      failed: noTasks,
+      failed: {
+        kind: TaskTargetKind.Join,
+        join: CortexAuditJoin.EvidenceCollected,
+      },
       resources: READ_ONLY_SKILLS,
       timeoutMs: 20 * 60_000,
     },
@@ -220,7 +230,10 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: TaskTargetKind.Join,
         join: CortexAuditJoin.EvidenceCollected,
       },
-      failed: noTasks,
+      failed: {
+        kind: TaskTargetKind.Join,
+        join: CortexAuditJoin.EvidenceCollected,
+      },
       resources: READ_ONLY_RUNTIME,
       timeoutMs: 20 * 60_000,
     },
@@ -230,7 +243,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.FindingSynthesizer,
         instruction:
-          'Reconcile the completed audit reports. Deduplicate findings, identify contradictions, classify workflow instructions as semantic policy, deterministic leaves, bounded agent tasks, compiled workflow candidates, delivery-owner actions, or ephemeral guidance, and propose the smallest consistent corrections. Name safe parallel groups and parent-owned joins. Do not edit files or mutate lifecycle state.',
+          'Reconcile every child materialized view into the root aggregate view. Deduplicate findings, preserve disagreements and failed-lane evidence, identify contradictions, classify workflow instructions as semantic policy, deterministic leaves, bounded agent tasks, compiled workflow candidates, delivery-owner actions, or ephemeral guidance, and propose the smallest consistent corrections. Name safe parallel groups and parent-owned joins. The authored Markdown is the parent read model. Do not edit files or mutate lifecycle state.',
         resultKind: WorkflowResultKind.CortexSynthesis,
       },
       completed: noTasks,
@@ -249,7 +262,10 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: TaskTargetKind.Join,
         join: CortexAuditJoin.EvidenceCollected,
       },
-      failed: noTasks,
+      failed: {
+        kind: TaskTargetKind.Join,
+        join: CortexAuditJoin.EvidenceCollected,
+      },
       resources: READ_ONLY_CORTEX,
       timeoutMs: 60_000,
     },
@@ -257,7 +273,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
   joins: {
     [CortexAuditJoin.EvidenceCollected]: {
       name: CortexAuditJoin.EvidenceCollected,
-      policy: JoinCompletionPolicy.AllCompleted,
+      policy: JoinCompletionPolicy.AllTerminal,
       arrivals: [
         CortexAuditTask.AuditWorkflowsAndReferences,
         CortexAuditTask.AuditDesignDocsAndProductSpecs,

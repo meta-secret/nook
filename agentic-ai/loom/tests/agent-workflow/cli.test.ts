@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   buildAgentWorkflowPlan,
   parseCommandLine,
+  processingRunRoot,
 } from '../../src/agent-workflow/cli.ts';
 import { CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW } from '../../src/agent-workflow/cortex-workflow.ts';
 import {
@@ -17,6 +18,9 @@ test('renders the complete validated static graph in plan output', () => {
 
   expect(plan.connectivity.validationStatus).toBe(
     WorkflowValidationStatus.Valid,
+  );
+  expect(plan.materializedViewTask).toBe(
+    CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.materializedViewTask,
   );
   expect(plan.tasks).toHaveLength(
     CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.taskNames.length,
@@ -39,6 +43,12 @@ test('renders the complete validated static graph in plan output', () => {
   expect(serialized).toContain('resources');
   expect(serialized).toContain(AgentWorkspacePolicy.ReadOnly);
   expect(serialized).toContain('reasoningEffort');
+});
+
+test('resolves the project-local ignored processing root', () => {
+  expect(processingRunRoot('/tmp/nook-repository-root')).toBe(
+    '/tmp/nook-repository-root/workflow/processing',
+  );
 });
 
 test('accepts an explicit repository working directory', () => {

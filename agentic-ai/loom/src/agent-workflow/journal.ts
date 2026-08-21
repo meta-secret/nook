@@ -1,6 +1,16 @@
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
+import {
+  MaterializedViewAuthorKind,
+  MaterializedViewPresence,
+} from './domain.ts';
 import type {
   StaticAgentWorkflowName,
   TaskTerminal,
@@ -10,6 +20,9 @@ import type {
   WorkflowVersion,
   GitCommit,
   IsoTimestamp,
+  MaterializedViewReference,
+  ProjectionReference,
+  TaskProcessingReference,
 } from './domain.ts';
 import type {
   WorkflowEvent,
@@ -44,6 +57,16 @@ export type WorkflowTerminalProjection = {
   readonly sha256: string;
 };
 
+export type WorkflowViewProjectionInput = {
+  readonly markdown: string;
+  readonly authorKind: MaterializedViewAuthorKind;
+};
+
+export type TaskViewProjectionInput = WorkflowViewProjectionInput & {
+  readonly task: string;
+  readonly attempt: number;
+};
+
 export class WorkflowJournal<TTask extends string> {
   readonly runDirectory: string;
   readonly eventsPath: string;
@@ -53,6 +76,8 @@ export class WorkflowJournal<TTask extends string> {
   private pendingAppend: Promise<void>;
 
   constructor(configuration: WorkflowJournalConfiguration) {
+    assertFilesystemIdentifier(configuration.identity.runId);
+    assertFilesystemIdentifier(configuration.identity.workflow);
     this.identity = configuration.identity;
     this.runDirectory = join(
       configuration.runRoot,
@@ -123,6 +148,89 @@ export class WorkflowJournal<TTask extends string> {
       path: relativePath,
       sha256: sha256(serialized),
     };
+  }
+
+  async projectWorkflowView(
+    input: WorkflowViewProjectionInput,
+  ): Promise<MaterializedViewReference> {
+    const relativePath = 'view.md';
+    const serialized = `${input.markdown.trim()}\n`;
+    const operation: AtomicWriteOperation = {
+      path: join(this.runDirectory, relativePath),
+      serialized,
+    };
+    await atomicWrite(operation);
+    const projection: ProjectionReference = {
+      path: relativePath,
+      sha256: sha256(serialized),
+    };
+    return {
+      presence: MaterializedViewPresence.Recorded,
+      authorKind: input.authorKind,
+      projection,
+      eventHighWaterMark: this.sequence,
+    };
+  }
+
+  async projectTaskView(
+    input: TaskViewProjectionInput,
+  ): Promise<MaterializedViewReference> {
+    assertFilesystemIdentifier(input.task);
+    const relativePath = join(
+      'task-results',
+      `${input.task}-attempt-${input.attempt}.md`,
+    );
+    const serialized = `${input.markdown.trim()}\n`;
+    const operation: AtomicWriteOperation = {
+      path: join(this.runDirectory, relativePath),
+      serialized,
+    };
+    await atomicWrite(operation);
+    return {
+      presence: MaterializedViewPresence.Recorded,
+      authorKind: input.authorKind,
+      projection: {
+        path: relativePath,
+        sha256: sha256(serialized),
+      },
+      eventHighWaterMark: this.sequence,
+    };
+  }
+
+  async readVerifiedProcessingView(
+    processing: TaskProcessingReference,
+  ): Promise<string> {
+    await this.readVerifiedProjection(processing.result);
+    if (processing.kind === 'agent-attempt') {
+      await this.readVerifiedProjection(processing.events);
+    }
+    if (processing.view.presence !== MaterializedViewPresence.Recorded) {
+      throw new Error('Upstream processing view is unavailable.');
+    }
+    return this.readVerifiedProjection(processing.view.projection);
+  }
+
+  private async readVerifiedProjection(
+    projection: ProjectionReference,
+  ): Promise<string> {
+    const runRoot = resolve(this.runDirectory);
+    const projectionPath = resolve(runRoot, projection.path);
+    if (!projectionPath.startsWith(`${runRoot}${sep}`)) {
+      throw new Error('Processing projection escapes its workflow run.');
+    }
+    const serialized = await readFile(projectionPath, 'utf8');
+    if (sha256(serialized) !== projection.sha256) {
+      throw new Error(
+        `Processing projection digest mismatch: ${projection.path}`,
+      );
+    }
+    return serialized;
+  }
+}
+
+function assertFilesystemIdentifier(identifier: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identifier)) {
+    throw new Error(`Unsafe workflow processing identifier: ${identifier}`);
   }
 }
 

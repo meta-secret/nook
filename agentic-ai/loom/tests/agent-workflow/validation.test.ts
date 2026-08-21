@@ -231,6 +231,7 @@ describe('static agent workflow validation', () => {
             CortexAuditTask.AuditRuntimeTaskAndCi
           ],
           completed: noTasks,
+          failed: noTasks,
         },
       },
     };
@@ -377,6 +378,7 @@ describe('static agent workflow validation', () => {
       name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
       version: 'exclusive-outcome-test',
       entry: ExclusiveBranchTask.Root,
+      materializedViewTask: ExclusiveBranchTask.CompletedDescendant,
       taskNames: [
         ExclusiveBranchTask.Root,
         ExclusiveBranchTask.CompletedBranch,
@@ -460,6 +462,7 @@ describe('static agent workflow validation', () => {
       name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
       version: 'shared-outcome-test',
       entry: SharedOutcomeTask.Root,
+      materializedViewTask: SharedOutcomeTask.CompletedOnly,
       taskNames: [
         SharedOutcomeTask.Root,
         SharedOutcomeTask.Shared,

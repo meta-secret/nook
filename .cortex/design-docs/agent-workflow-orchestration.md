@@ -43,6 +43,24 @@ Runtime inputs have bounded authority:
 - A conditional path uses a declared edge in the compiled graph.
 - An unused declared path receives an explicit skipped result.
 
+### Hierarchy semantics
+
+Hierarchy is declared by the reviewed graph.
+
+- Every child attempt records its parent lineage.
+- Every child attempt records its hierarchy depth.
+- A parent may itself be a materializer below another reviewed parent.
+- Each tier consumes child views and emits one higher-level semantic view.
+- The delivery owner is the root outside the worker fan-out.
+
+An agent may not create an unscheduled child or choose a new graph tier from its
+prompt.
+
+The current Cortex workflow has one worker tier and one synthesis tier. The
+lineage domain can represent a parent agent attempt, but nested local scheduling
+remains disabled until compiled ancestry, inherited resource budgets,
+concurrency, cancellation, and retry isolation are implemented together.
+
 ## Responsibilities
 
 ### Cortex Markdown
@@ -126,11 +144,13 @@ The authentication proof used the logged-in local Codex session.
 
 An opt-in automated integration test remains future work.
 
-### Local journal
+### Event store and materialized views
 
-A local Loom run writes an append-only event journal.
+A local Loom run writes an event-sourced processing hierarchy under
+`workflow/processing/`.
 
-The journal is the authority for that local run.
+The run-level `events.jsonl` journal is the scheduling authority for that local
+run.
 
 It records:
 
@@ -145,9 +165,38 @@ It records:
 - successor activation;
 - workflow termination.
 
+Every reached agent attempt also has its own append-only `events.jsonl` stream.
+
+- The child stream owns that attempt's observable action history.
+- It carries explicit parent lineage.
+- It does not own scheduling, joins, retries, or workflow completion.
+- A retry receives a new attempt directory and stream.
+
+Each completed agent authors a Markdown semantic materialized view as part of
+its typed terminal result.
+
+Loom validates and atomically persists that content as `view.md`.
+
+- The agent owns the view's conclusions.
+- Loom owns persistence, content hashes, event references, and source identity.
+- A failed attempt receives a clearly labeled Loom-authored failure view.
+- A run whose declared materializer does not complete receives a clearly
+  labeled Loom-authored root failure view.
+- Markdown is never parsed to decide workflow state.
+
+Parents consume child views by default and raw child streams only for
+diagnosis. A declared materializer agent reconciles child views and authors the
+next aggregate view. This repeats through every reviewed graph tier until the
+root aggregate is available to the delivery owner.
+
+The root delivery owner validates that aggregate against current state and
+authors the final user report. That report is the public semantic projection of
+the hierarchy. It does not become scheduling authority.
+
 - **Projection authority:** Task and workflow result files are projections.
-  - The journal and its content-hashed terminal projections form the local run
-    record.
+  - Agent result JSON, agent view Markdown, the root result, and the root view
+    are content-hashed projections.
+  - Root task-terminal events reference finalized child streams and views.
 - **Current replay:** The replay API validates identity, sequence, and terminal
   references.
   - It does not yet rebuild scheduler eligibility or join state.
@@ -169,7 +218,8 @@ Journal events are bounded and secret-sanitized. They must not contain:
   - Before adding it, a full reducer must rebuild eligibility and join state
     before scheduling new work.
 - **Terminal results:** A task attempt receives one terminal result.
-  - Terminal result projections are content-hashed and journal-referenced.
+  - A successful agent attempt is not terminal until its result, action stream,
+    and semantic view are finalized and journal-referenced.
 - **Durability boundary:** Do not treat the journal as durable distributed
   coordination.
 
@@ -244,8 +294,11 @@ The parallel wave contains these tasks:
     Codex attempt.
   - The cleanliness check includes untracked files.
 - **Evidence flow:** Every task returns typed evidence.
-  - The join waits for all declared arrivals.
-  - The synthesis task deduplicates findings and proposes corrections.
+  - The all-terminal join waits for every declared arrival, including failed
+    evidence lanes.
+  - Every lane exposes a Markdown view to synthesis.
+  - The synthesis task deduplicates findings and authors the root aggregate
+    view.
   - Workflow findings distinguish semantic policy, deterministic leaves,
     bounded agent tasks, compiled graph candidates, delivery-owner actions, and
     ephemeral guidance.

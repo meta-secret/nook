@@ -17,6 +17,8 @@ import {
   WorkflowExecutorKind,
   WorkflowResultKind,
   WorkflowTerminalKind,
+  MaterializedViewAuthorKind,
+  MaterializedViewPresence,
   noTasks,
 } from '../../src/agent-workflow/domain.ts';
 import type {
@@ -101,6 +103,7 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
     const output: WorkflowTaskOutput = {
       resultKind,
       summary: `${invocation.task} completed.`,
+      materializedViewMarkdown: `# ${invocation.task}\n\nCompleted.`,
       findings: [],
       notesForParent: [],
       artifacts: [],
@@ -171,6 +174,7 @@ class LeafOnlyRuntime implements WorkflowTaskRuntime<LeafOnlyTask, never> {
     const output: WorkflowTaskOutput = {
       resultKind: WorkflowResultKind.LoomLeafEvidence,
       summary: 'Leaf completed.',
+      materializedViewMarkdown: '# Leaf\n\nCompleted.',
       findings: [],
       notesForParent: [],
       artifacts: [],
@@ -238,6 +242,7 @@ function completedDrainTask(
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.LoomLeafEvidence,
     summary: `${invocation.task} completed.`,
+    materializedViewMarkdown: `# ${invocation.task}\n\nCompleted.`,
     findings: [],
     notesForParent: [],
     artifacts: [],
@@ -268,6 +273,7 @@ async function createTeardownDrainFixture(): Promise<{
     name: StaticAgentWorkflowName.CortexFullGarbageCollection,
     version: 'teardown-drain-test',
     entry: TeardownDrainTask.Entry,
+    materializedViewTask: TeardownDrainTask.Sibling,
     taskNames: [
       TeardownDrainTask.Entry,
       TeardownDrainTask.Unsafe,
@@ -424,6 +430,7 @@ function completedCancellationRaceTask(
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.LoomLeafEvidence,
     summary: `${invocation.task} completed.`,
+    materializedViewMarkdown: `# ${invocation.task}\n\nCompleted.`,
     findings: [],
     notesForParent: [],
     artifacts: [],
@@ -456,6 +463,7 @@ async function createCancellationRaceFixture(
     name: StaticAgentWorkflowName.CortexFullGarbageCollection,
     version: `cancellation-race-${ordering}`,
     entry: CancellationRaceTask.Entry,
+    materializedViewTask: CancellationRaceTask.Successor,
     taskNames: [CancellationRaceTask.Entry, CancellationRaceTask.Successor],
     agentNames: [],
     joinNames: [],
@@ -546,6 +554,7 @@ async function createLeafWorkflowFixture(
     name: StaticAgentWorkflowName.CortexFullGarbageCollection,
     version: 'leaf-only-test',
     entry: LeafOnlyTask.Inspect,
+    materializedViewTask: LeafOnlyTask.Inspect,
     taskNames: [LeafOnlyTask.Inspect],
     agentNames: [],
     joinNames: [],
@@ -719,6 +728,11 @@ describe('static workflow scheduler', () => {
         CortexAuditTask.AuditRuntimeTaskAndCi,
         CortexAuditTask.MechanicalCortexAudit,
       ]);
+      expect(
+        synthesisInputs?.every(
+          (entry) => entry.view.presence === MaterializedViewPresence.Recorded,
+        ),
+      ).toBe(true);
       const mechanicalInputs = fixture.runtime.upstreamByTask.get(
         CortexAuditTask.MechanicalCortexAudit,
       );
@@ -730,7 +744,7 @@ describe('static workflow scheduler', () => {
     }
   });
 
-  test('records unreached join successors as skipped after a failed lane', async () => {
+  test('aggregates a failed lane after the all-terminal evidence barrier', async () => {
     const runtimeConfiguration: ScriptedRuntimeConfiguration = {
       failedTask: CortexAuditTask.AuditRuntimeTaskAndCi,
     };
@@ -745,10 +759,20 @@ describe('static workflow scheduler', () => {
       const mechanical = terminal.taskTerminals.find(
         (task) => task.task === CortexAuditTask.MechanicalCortexAudit,
       );
-      expect(synthesis?.kind).toBe(TaskTerminalKind.Skipped);
+      expect(synthesis?.kind).toBe(TaskTerminalKind.Completed);
       expect(mechanical?.kind).toBe(TaskTerminalKind.Completed);
-      expect(fixture.runtime.started).not.toContain(
+      expect(fixture.runtime.started).toContain(
         CortexAuditTask.SynthesizeFindings,
+      );
+      const synthesisInputs = fixture.runtime.upstreamByTask.get(
+        CortexAuditTask.SynthesizeFindings,
+      );
+      const failedInput = synthesisInputs?.find(
+        (entry) => entry.task === CortexAuditTask.AuditRuntimeTaskAndCi,
+      );
+      expect(failedInput?.terminalKind).toBe(TaskTerminalKind.Failed);
+      expect(failedInput?.output.materializedViewMarkdown).toContain(
+        'Status: failed',
       );
     } finally {
       await rm(fixture.runRoot, removeOptions);
@@ -773,6 +797,24 @@ describe('static workflow scheduler', () => {
         (task) => task.task === CortexAuditTask.SynthesizeFindings,
       );
       expect(synthesis?.kind).toBe(TaskTerminalKind.Skipped);
+      expect(terminal.materializedView.presence).toBe(
+        MaterializedViewPresence.Recorded,
+      );
+      if (
+        terminal.materializedView.presence === MaterializedViewPresence.Recorded
+      ) {
+        expect(terminal.materializedView.authorKind).toBe(
+          MaterializedViewAuthorKind.LoomRuntime,
+        );
+        const rootView = await readFile(
+          join(
+            fixture.configuration.journal.runDirectory,
+            terminal.materializedView.projection.path,
+          ),
+          'utf8',
+        );
+        expect(rootView).toContain('Materializer task synthesize-findings');
+      }
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }

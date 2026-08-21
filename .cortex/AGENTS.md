@@ -82,6 +82,12 @@ Agents must follow this navigation and search protocol:
 
 ## ⛔ Agent Execution & Safety Boundaries
 
+- **Event-sourced subagent protocol:** Every delegated agent attempt must have
+  an immutable action stream, explicit parent lineage, and a bounded semantic
+  Markdown view. Parents aggregate child views into higher-level views until
+  the root delivery owner authors the final report. Treat bypasses as P1
+  violations. See [workflows/subagent-delegation.md](workflows/subagent-delegation.md)
+  and [the executable skill](../.agents/skills/subagent-delegation/SKILL.md).
 - **Feature ownership boundary:** Keep this rule: agents mutate only their owned feature.
   - Another active agent's work is read-only.
   - When ownership is missing or ambiguous, wait for an explicit user, owner, or orchestrator handoff.
@@ -112,6 +118,9 @@ Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) 
 ---
 
 ## Canonical Registries
+
+- [Subagent delegation](workflows/subagent-delegation.md) owns hierarchical
+  worker boundaries, event streams, semantic views, and parent aggregation.
 
 - **Dynamic Skills Registry:** [dynamic-skills/index.md](dynamic-skills/index.md) (executable rules for Rust, TypeScript, Svelte, Testing, UI Design, and Code Hygiene).
 - **Product Specifications:** [product-specs/index.md](product-specs/index.md) (living specifications for user-facing features, item schemas, and UX workflows).

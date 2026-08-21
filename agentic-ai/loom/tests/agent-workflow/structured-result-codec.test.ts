@@ -25,6 +25,7 @@ test('decodes a valid typed task output', () => {
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.CortexEvidence,
     summary: 'Audited.',
+    materializedViewMarkdown: '# Audit\n\nAudited.',
     findings: [],
     notesForParent: [],
     artifacts: [],
@@ -35,13 +36,33 @@ test('decodes a valid typed task output', () => {
 
 test('requires non-empty evidence on every structured finding', () => {
   const noEvidence =
-    '{"resultKind":"cortex-evidence","summary":"Audited.","findings":[{"severity":"error","title":"Missing evidence","summary":"No evidence was supplied.","evidence":[],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
+    '{"resultKind":"cortex-evidence","summary":"Audited.","materializedViewMarkdown":"# Audit","findings":[{"severity":"error","title":"Missing evidence","summary":"No evidence was supplied.","evidence":[],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
   const blankEvidence =
-    '{"resultKind":"cortex-evidence","summary":"Audited.","findings":[{"severity":"error","title":"Blank evidence","summary":"Only blank evidence was supplied.","evidence":["   "],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
+    '{"resultKind":"cortex-evidence","summary":"Audited.","materializedViewMarkdown":"# Audit","findings":[{"severity":"error","title":"Blank evidence","summary":"Only blank evidence was supplied.","evidence":["   "],"affectedPaths":[]}],"notesForParent":[],"artifacts":[]}';
   expect(() => decodeWorkflowTaskOutput(noEvidence)).toThrow(
     'at least one non-empty evidence string',
   );
   expect(() => decodeWorkflowTaskOutput(blankEvidence)).toThrow(
     'at least one non-empty evidence string',
   );
+});
+
+test('requires a bounded non-empty semantic materialized view', () => {
+  const blankView =
+    '{"resultKind":"cortex-evidence","summary":"Audited.","materializedViewMarkdown":"   ","findings":[],"notesForParent":[],"artifacts":[]}';
+  const oversizedOutput: WorkflowTaskOutput = {
+    resultKind: WorkflowResultKind.CortexEvidence,
+    summary: 'Audited.',
+    materializedViewMarkdown: 'x'.repeat(65_537),
+    findings: [],
+    notesForParent: [],
+    artifacts: [],
+  };
+
+  expect(() => decodeWorkflowTaskOutput(blankView)).toThrow(
+    'non-empty, bounded Markdown',
+  );
+  expect(() =>
+    decodeWorkflowTaskOutput(JSON.stringify(oversizedOutput)),
+  ).toThrow('non-empty, bounded Markdown');
 });

@@ -25,15 +25,23 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
   required: [
     'resultKind',
     'summary',
+    'materializedViewMarkdown',
     'findings',
     'notesForParent',
     'artifacts',
   ],
   properties: {
     resultKind: { type: 'string', enum: Object.values(WorkflowResultKind) },
-    summary: { type: 'string' },
+    summary: { type: 'string', minLength: 1, maxLength: 4096, pattern: '\\S' },
+    materializedViewMarkdown: {
+      type: 'string',
+      minLength: 1,
+      maxLength: 65_536,
+      pattern: '\\S',
+    },
     findings: {
       type: 'array',
+      maxItems: 100,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -44,19 +52,29 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
             enum: Object.values(WorkflowFindingSeverity),
           },
           title: { type: 'string' },
-          summary: { type: 'string' },
+          summary: { type: 'string', maxLength: 4096 },
           evidence: {
             type: 'array',
             minItems: 1,
+            maxItems: 100,
             items: { type: 'string', minLength: 1, pattern: '\\S' },
           },
-          affectedPaths: { type: 'array', items: { type: 'string' } },
+          affectedPaths: {
+            type: 'array',
+            maxItems: 100,
+            items: { type: 'string' },
+          },
         },
       },
     },
-    notesForParent: { type: 'array', items: { type: 'string' } },
+    notesForParent: {
+      type: 'array',
+      maxItems: 100,
+      items: { type: 'string' },
+    },
     artifacts: {
       type: 'array',
+      maxItems: 100,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -89,13 +107,23 @@ type RecordProperty = readonly [UntrustedYamlMap, string];
 export function decodeWorkflowTaskOutput(
   serialized: string,
 ): WorkflowTaskOutput {
+  if (Buffer.byteLength(serialized, 'utf8') > 131_072) {
+    invalidOutput('workflow structured result exceeds 131072 bytes');
+  }
   const node = JSON.parse(serialized) as UntrustedYamlNode;
   if (!isRecord(node)) {
     invalidOutput('workflow output must be an object');
   }
   assertExactKeys([
     node,
-    ['resultKind', 'summary', 'findings', 'notesForParent', 'artifacts'],
+    [
+      'resultKind',
+      'summary',
+      'materializedViewMarkdown',
+      'findings',
+      'notesForParent',
+      'artifacts',
+    ],
   ]);
   const resultKindValue = stringValue(readProperty([node, 'resultKind']));
   if (
@@ -105,13 +133,35 @@ export function decodeWorkflowTaskOutput(
   ) {
     invalidOutput('workflow resultKind is invalid');
   }
+  const materializedViewMarkdown = stringValue(
+    readProperty([node, 'materializedViewMarkdown']),
+  );
+  if (
+    materializedViewMarkdown.trim() === '' ||
+    materializedViewMarkdown.length > 65_536 ||
+    containsForbiddenControlCharacter(materializedViewMarkdown)
+  ) {
+    invalidOutput(
+      'workflow materialized view must be non-empty, bounded Markdown without control characters',
+    );
+  }
   return {
     resultKind: resultKindValue as WorkflowResultKind,
-    summary: stringValue(readProperty([node, 'summary'])),
+    summary: boundedNonBlankString(readProperty([node, 'summary'])),
+    materializedViewMarkdown,
     findings: decodeFindings(readProperty([node, 'findings'])),
     notesForParent: stringSequence(readProperty([node, 'notesForParent'])),
     artifacts: decodeArtifacts(readProperty([node, 'artifacts'])),
   };
+}
+
+function containsForbiddenControlCharacter(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return (
+      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+    );
+  });
 }
 
 function decodeFindings(node: UntrustedYamlNode): readonly WorkflowFinding[] {
@@ -200,6 +250,14 @@ function stringValue(node: UntrustedYamlNode): string {
     invalidOutput('workflow structured result expected a string');
   }
   return node;
+}
+
+function boundedNonBlankString(node: UntrustedYamlNode): string {
+  const value = stringValue(node);
+  if (value.trim() === '' || value.length > 4096) {
+    invalidOutput('workflow structured result expected a bounded string');
+  }
+  return value;
 }
 
 function stringSequence(node: UntrustedYamlNode): readonly string[] {

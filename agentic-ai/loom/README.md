@@ -77,13 +77,27 @@ It returns typed evidence and a typed synthesis.
 
 It does not edit files or mutate GitHub or Workbench state.
 
-### Local journal and Hive
+### Local event store, semantic views, and Hive
 
-A local workflow run writes an append-only `events.jsonl` journal.
+A local workflow run writes processing evidence beneath
+`workflow/processing/<workflow>/<run-id>/`.
 
-That journal is authoritative for the local run.
+The run `events.jsonl` journal is authoritative for local scheduling.
 
-Task result files and the final run result are projections.
+Each reached agent attempt has an isolated append-only action stream beneath
+`agents/<task>/attempt-<n>/events.jsonl`.
+
+Completed agents author bounded Markdown semantic views in their typed output.
+Loom persists and hashes those views without granting workers filesystem write
+access.
+
+Failed attempts receive explicitly Loom-authored failure views.
+
+Parents consume child views and typed artifacts, reconcile them, and author the
+next aggregate view. The declared root materializer produces the run `view.md`.
+
+Agent result files, agent views, the final run result, and the root view are
+projections.
 
 Current replay validates identity, sequence, and terminal references.
 

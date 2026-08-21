@@ -3,7 +3,13 @@ import {
   TaskTerminalKind,
   WorkflowExecutorKind,
   WorkflowTerminalKind,
+  AgentAttemptParentKind,
+  MaterializedViewPresence,
+  MaterializedViewAuthorKind,
 } from './domain.ts';
+import { AgentAttemptJournal } from './agent-journal.ts';
+import type { AgentAttemptJournalConfiguration } from './agent-journal.ts';
+import { runtimeActivityEvent } from './agent-events.ts';
 import { WorkflowEventKind } from './events.ts';
 import type {
   AgentProfile,
@@ -15,10 +21,17 @@ import type {
   WorkflowRunId,
   WorkflowRunTerminal,
   WorkflowTaskOutput,
+  MaterializedViewReference,
+  TaskProcessingReference,
 } from './domain.ts';
 import type { WorkflowEventWithoutMetadata } from './events.ts';
 import { WorkflowJournal } from './journal.ts';
 import { TaskStopReason, UnconfirmedTaskTeardownError } from './runtime.ts';
+import {
+  projectWorkflowTaskProcessing,
+  terminalFailureOutput,
+} from './processing.ts';
+import type { WorkflowTaskProcessingInput } from './processing.ts';
 import type {
   AgentWorkflowTaskInvocation,
   LoomLeafWorkflowTaskInvocation,
@@ -57,6 +70,7 @@ type TaskExecutionContext<TTask extends string, TAgent extends string> = {
   readonly upstreamOutputs: readonly WorkflowDependencyOutput<TTask>[];
   readonly signal: AbortSignal;
   readonly journal: WorkflowJournal<TTask>;
+  readonly processingReferences: Map<TTask, TaskProcessingReference>;
 };
 
 export async function runStaticWorkflow<
@@ -103,7 +117,9 @@ export async function runStaticWorkflow<
   const eligible: TTask[] = [];
   const scheduled = new Set<TTask>();
   const completedOutputs = new Map<TTask, WorkflowTaskOutput>();
+  const dependencyOutputs = new Map<TTask, WorkflowTaskOutput>();
   const terminals = new Map<TTask, TaskTerminal<TTask>>();
+  const processingReferences = new Map<TTask, TaskProcessingReference>();
   const joinArrivals = new Map<TJoin, Set<TTask>>();
   const dependencyTasks = new Map<TTask, readonly TTask[]>();
   const running: RunningTask<TTask>[] = [];
@@ -136,11 +152,22 @@ export async function runStaticWorkflow<
         };
         const upstreamOutputs: WorkflowDependencyOutput<TTask>[] = [];
         for (const upstreamTask of dependencyTasks.get(taskName) ?? []) {
-          const output = completedOutputs.get(upstreamTask);
-          if (output) {
+          const output = dependencyOutputs.get(upstreamTask);
+          const upstreamTerminal = terminals.get(upstreamTask);
+          const upstreamProcessing = processingReferences.get(upstreamTask);
+          if (output && upstreamTerminal && upstreamProcessing) {
+            const materializedViewMarkdown =
+              await configuration.journal.readVerifiedProcessingView(
+                upstreamProcessing,
+              );
             const dependencyOutput: WorkflowDependencyOutput<TTask> = {
               task: upstreamTask,
-              output,
+              terminalKind: upstreamTerminal.kind,
+              view: upstreamProcessing.view,
+              output: {
+                ...output,
+                materializedViewMarkdown: materializedViewMarkdown.trimEnd(),
+              },
             };
             upstreamOutputs.push(dependencyOutput);
           }
@@ -155,6 +182,7 @@ export async function runStaticWorkflow<
           upstreamOutputs,
           signal: cancellationGate.signal,
           journal: configuration.journal,
+          processingReferences,
         };
         const runningTask: RunningTask<TTask> = {
           task: taskName,
@@ -174,6 +202,9 @@ export async function runStaticWorkflow<
       terminals.set(terminal.task, terminal);
       if (terminal.kind === TaskTerminalKind.Completed) {
         completedOutputs.set(terminal.task, terminal.output);
+        dependencyOutputs.set(terminal.task, terminal.output);
+      } else {
+        dependencyOutputs.set(terminal.task, terminalFailureOutput(terminal));
       }
       let activated: ActivatedTargets<TTask, TJoin> = { tasks: [], joins: [] };
       const activationLease = cancellationGate.acquireActivationLease();
@@ -238,6 +269,14 @@ export async function runStaticWorkflow<
       terminalKind: TaskTerminalKind.Skipped,
       resultPath: projection.path,
       resultSha256: projection.sha256,
+      processing: {
+        kind: 'workflow-task',
+        result: projection,
+        view: {
+          presence: MaterializedViewPresence.Unavailable,
+          reason: 'Skipped workflow tasks do not have an executed view.',
+        },
+      },
     };
     await configuration.journal.append(skippedEvent);
   }
@@ -253,6 +292,34 @@ export async function runStaticWorkflow<
     terminals: orderedTerminals,
   };
   const terminalKind = resolveWorkflowTerminalKind(terminalResolution);
+  const materializedOutput = completedOutputs.get(
+    configuration.workflow.materializedViewTask,
+  );
+  const materializerExecution =
+    configuration.workflow.tasks[configuration.workflow.materializedViewTask]
+      .execution;
+  const viewProjectionInput = materializedOutput
+    ? {
+        markdown: materializedOutput.materializedViewMarkdown,
+        authorKind:
+          materializerExecution.kind === WorkflowExecutorKind.Agent
+            ? MaterializedViewAuthorKind.Agent
+            : MaterializedViewAuthorKind.LoomLeaf,
+      }
+    : {
+        markdown: [
+          '# Workflow terminal view',
+          '',
+          `Status: ${terminalKind}`,
+          '',
+          `Materializer task ${configuration.workflow.materializedViewTask} did not complete.`,
+          '',
+          'This root read model was produced by Loom. Inspect the terminal task projections and sanitized attempt streams before continuing.',
+        ].join('\n'),
+        authorKind: MaterializedViewAuthorKind.LoomRuntime,
+      };
+  const materializedView: MaterializedViewReference =
+    await configuration.journal.projectWorkflowView(viewProjectionInput);
   const runTerminal: WorkflowRunTerminal<TTask> = {
     kind: terminalKind,
     runId: configuration.runId,
@@ -260,6 +327,7 @@ export async function runStaticWorkflow<
     version: configuration.workflow.version,
     sourceCommit: configuration.sourceCommit,
     taskTerminals: orderedTerminals,
+    materializedView,
     startedAt,
     finishedAt: configuration.now(),
   };
@@ -270,6 +338,7 @@ export async function runStaticWorkflow<
     terminalKind,
     resultPath: projection.path,
     resultSha256: projection.sha256,
+    materializedView,
   };
   await configuration.journal.append(terminalEvent);
   return runTerminal;
@@ -418,6 +487,29 @@ async function executeTask<TTask extends string, TAgent extends string>(
     attempt: 1,
   };
   await context.journal.append(startedEvent);
+  const agentJournalConfiguration: AgentAttemptJournalConfiguration | false =
+    context.task.execution.kind === WorkflowExecutorKind.Agent &&
+    context.agentProfile
+      ? {
+          runDirectory: context.journal.runDirectory,
+          runId: context.runId,
+          workflow: context.journal.identity.workflow,
+          workflowVersion: context.journal.identity.workflowVersion,
+          sourceCommit: context.sourceCommit,
+          task: context.task.name,
+          agent: context.agentProfile.name,
+          attempt: 1,
+          depth: 1,
+          parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+          now: context.journal.now,
+        }
+      : false;
+  const agentJournal = agentJournalConfiguration
+    ? new AgentAttemptJournal<TTask>(agentJournalConfiguration)
+    : false;
+  if (agentJournal) {
+    await agentJournal.initialize();
+  }
   let acceptingActivity = true;
   const observe = async (
     observation: Parameters<
@@ -427,14 +519,18 @@ async function executeTask<TTask extends string, TAgent extends string>(
     if (!acceptingActivity) {
       return;
     }
-    const event: WorkflowEventWithoutMetadata<TTask> = {
-      kind: WorkflowEventKind.RuntimeActivity,
-      task: context.task.name,
-      attempt: 1,
-      activity: observation.activity,
-      detail: observation.detail,
-    };
-    await context.journal.append(event);
+    if (agentJournal) {
+      await agentJournal.append(runtimeActivityEvent(observation));
+    } else {
+      const event: WorkflowEventWithoutMetadata<TTask> = {
+        kind: WorkflowEventKind.RuntimeActivity,
+        task: context.task.name,
+        attempt: 1,
+        activity: observation.activity,
+        detail: observation.detail,
+      };
+      await context.journal.append(event);
+    }
   };
   const taskController = new AbortController();
   const forwardCancellation = (): void => taskController.abort();
@@ -499,12 +595,23 @@ async function executeTask<TTask extends string, TAgent extends string>(
         : TaskTerminalKind.Failed,
       task: context.task.name,
       attempt: 1,
-      summary: error instanceof Error ? error.message : 'Task runtime failed.',
+      summary: context.signal.aborted
+        ? 'Workflow cancellation stopped this task.'
+        : 'Task runtime failed. Inspect sanitized attempt events and local diagnostics.',
     };
   } finally {
     acceptingActivity = false;
   }
   const projection = await context.journal.projectTaskTerminal(terminal);
+  const workflowTaskProcessingInput: WorkflowTaskProcessingInput<TTask> = {
+    journal: context.journal,
+    terminal,
+    result: projection,
+  };
+  const processing: TaskProcessingReference = agentJournal
+    ? await agentJournal.finalize(terminal)
+    : await projectWorkflowTaskProcessing(workflowTaskProcessingInput);
+  context.processingReferences.set(terminal.task, processing);
   const terminalEvent: WorkflowEventWithoutMetadata<TTask> = {
     kind: WorkflowEventKind.TaskTerminalRecorded,
     task: terminal.task,
@@ -512,6 +619,7 @@ async function executeTask<TTask extends string, TAgent extends string>(
     terminalKind: terminal.kind,
     resultPath: projection.path,
     resultSha256: projection.sha256,
+    processing,
   };
   await context.journal.append(terminalEvent);
   return terminal;

@@ -26,6 +26,7 @@ export enum TaskTargetKind {
 
 export enum JoinCompletionPolicy {
   AllCompleted = 'all-completed',
+  AllTerminal = 'all-terminal',
 }
 
 export enum TaskTerminalKind {
@@ -366,7 +367,7 @@ export type StaticTaskDefinition<
 
 export type StaticJoinDefinition<TTask extends string, TJoin extends string> = {
   readonly name: TJoin;
-  readonly policy: JoinCompletionPolicy.AllCompleted;
+  readonly policy: JoinCompletionPolicy;
   readonly arrivals: readonly TTask[];
   readonly completed: TaskOutcomeTarget<TTask, TJoin>;
 };
@@ -395,6 +396,7 @@ export type StaticAgentWorkflowDefinition<
   readonly name: StaticAgentWorkflowName;
   readonly version: WorkflowVersion;
   readonly entry: TTask;
+  readonly materializedViewTask: TTask;
   readonly taskNames: readonly TTask[];
   readonly agentNames: readonly TAgent[];
   readonly joinNames: readonly TJoin[];
@@ -420,10 +422,76 @@ export type WorkflowArtifactReference = {
 export type WorkflowTaskOutput = {
   readonly resultKind: WorkflowResultKind;
   readonly summary: string;
+  readonly materializedViewMarkdown: string;
   readonly findings: readonly WorkflowFinding[];
   readonly notesForParent: readonly string[];
   readonly artifacts: readonly WorkflowArtifactReference[];
 };
+
+export type ProjectionReference = {
+  readonly path: string;
+  readonly sha256: string;
+};
+
+export enum MaterializedViewPresence {
+  Recorded = 'recorded',
+  Unavailable = 'unavailable',
+}
+
+export enum MaterializedViewAuthorKind {
+  Agent = 'agent',
+  LoomLeaf = 'loom-leaf',
+  LoomRuntime = 'loom-runtime',
+}
+
+export type RecordedMaterializedView = {
+  readonly presence: MaterializedViewPresence.Recorded;
+  readonly authorKind: MaterializedViewAuthorKind;
+  readonly projection: ProjectionReference;
+  readonly eventHighWaterMark: WorkflowEventSequence;
+};
+
+export type UnavailableMaterializedView = {
+  readonly presence: MaterializedViewPresence.Unavailable;
+  readonly reason: string;
+};
+
+export type MaterializedViewReference =
+  RecordedMaterializedView | UnavailableMaterializedView;
+
+export enum AgentAttemptParentKind {
+  WorkflowRoot = 'workflow-root',
+  AgentAttempt = 'agent-attempt',
+}
+
+export type WorkflowRootParent = {
+  readonly kind: AgentAttemptParentKind.WorkflowRoot;
+};
+
+export type ParentAgentAttempt = {
+  readonly kind: AgentAttemptParentKind.AgentAttempt;
+  readonly task: string;
+  readonly agent: string;
+  readonly attempt: WorkflowAttemptNumber;
+};
+
+export type AgentAttemptParent = WorkflowRootParent | ParentAgentAttempt;
+
+export type AgentAttemptProcessingReference = {
+  readonly kind: 'agent-attempt';
+  readonly events: ProjectionReference;
+  readonly result: ProjectionReference;
+  readonly view: MaterializedViewReference;
+};
+
+export type WorkflowTaskProcessingReference = {
+  readonly kind: 'workflow-task';
+  readonly result: ProjectionReference;
+  readonly view: MaterializedViewReference;
+};
+
+export type TaskProcessingReference =
+  AgentAttemptProcessingReference | WorkflowTaskProcessingReference;
 
 export type CompletedTaskTerminal<TTask extends string> = {
   readonly kind: TaskTerminalKind.Completed;
@@ -486,6 +554,7 @@ export type WorkflowRunTerminal<TTask extends string> = {
   readonly version: WorkflowVersion;
   readonly sourceCommit: GitCommit;
   readonly taskTerminals: WorkflowTaskTerminalSequence<TTask>;
+  readonly materializedView: MaterializedViewReference;
   readonly startedAt: IsoTimestamp;
   readonly finishedAt: IsoTimestamp;
 };

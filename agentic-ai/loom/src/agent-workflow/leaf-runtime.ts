@@ -162,6 +162,7 @@ function leafEvidenceOutput(summary: string): WorkflowTaskOutput {
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.LoomLeafEvidence,
     summary,
+    materializedViewMarkdown: `# Loom leaf evidence\n\n${summary}`,
     findings: [],
     notesForParent: [],
     artifacts: [
@@ -267,5 +268,17 @@ export function mechanicalCortexAuditOutput(
     ? 'Mechanical Cortex audit passed.'
     : `Mechanical Cortex audit found ${findings.length} inconsistencies.`;
   const output = leafEvidenceOutput(summary);
-  return { ...output, findings };
+  const evidence = findings.flatMap((finding) =>
+    finding.evidence.map((entry) => `- ${finding.title}: ${entry}`),
+  );
+  const materializedViewMarkdown = [
+    '# Mechanical Cortex audit',
+    '',
+    summary,
+    '',
+    '## Evidence',
+    '',
+    ...(evidence.length > 0 ? evidence : ['- No actionable findings.']),
+  ].join('\n');
+  return { ...output, materializedViewMarkdown, findings };
 }

@@ -131,7 +131,7 @@ tasks:
       - task loom:default FAMILY=cortexSessionClean
 
   loom:agent-workflow:cortex-audit:
-    desc: Run the compiled Cortex full-GC agent workflow (BASELINE=<40-char-sha>, PLAN=1 for dry-run).
+    desc: Run the event-sourced Cortex full-GC workflow under workflow/processing (BASELINE=<40-char-sha>, PLAN=1 for dry-run).
     deps: [loom:install]
     requires:
       vars: [BASELINE]

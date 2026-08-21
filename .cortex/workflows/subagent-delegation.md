@@ -111,6 +111,112 @@ A retry is a new attempt of the same logical task.
 - The parent validates the result against current task state.
 - The parent does not merge worker conclusions blindly.
 
+## Hierarchical event protocol
+
+Subagent work is an event-sourced hierarchy.
+
+The mandatory information flow is:
+
+1. An agent performs observable actions.
+2. Loom records those actions in that attempt's append-only JSONL stream.
+3. The agent authors a bounded Markdown semantic view from its full task
+   context.
+4. Loom validates, persists, and content-hashes that view.
+5. The parent consumes child views and authors a higher-level aggregate view.
+6. Each higher tier repeats that projection step.
+7. The root delivery owner validates the root aggregate and authors the final
+   user report.
+
+The final report is the public semantic projection of the completed hierarchy.
+It does not replace the run journal as lifecycle authority.
+
+### Agent action streams
+
+Each reached agent task attempt owns one immutable action stream.
+
+The stream records bounded observable actions and outcomes. It never records:
+
+- prompts;
+- hidden model reasoning;
+- credentials or secrets;
+- raw command output;
+- raw SDK errors or stack traces.
+
+Every event carries the exact workflow, version, source commit, task, agent,
+attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
+
+- Sequence is monotonic inside one stream.
+- Cross-stream global ordering is not claimed.
+- A retry creates a new attempt stream.
+- A terminal attempt accepts no later events.
+- Child streams do not decide eligibility, joins, retries, or completion.
+
+The run-level stream remains the single local scheduling authority.
+
+### Semantic materialized views
+
+An action stream is operational evidence. It does not contain enough semantic
+information to reconstruct the agent's conclusions.
+
+Therefore every completed agent must author `view.md` content in its typed
+result.
+
+- The agent owns semantic authorship because it has the complete task context.
+- Loom owns schema validation, bounded persistence, hashing, and event
+  references.
+- Read-only agents never write the processing store directly.
+- The view records its child-event high-water mark.
+- Markdown is a read model. Scheduler transitions never depend on parsing it.
+
+If an attempt fails before it can author a view, Loom writes a clearly labeled
+machine-authored failure view. A parent must not represent that view as an
+agent-authored conclusion.
+
+If the declared root materializer does not complete, Loom still writes a
+clearly labeled machine-authored root failure view. The delivery owner uses it
+to diagnose or retry the hierarchy. It is not an agent-authored aggregate.
+
+### Parent aggregation and continuation
+
+A parent normally reads child semantic views and typed artifact references.
+
+It reads raw child streams only when evidence is missing, disputed, or requires
+diagnosis.
+
+Before continuing or terminating, the parent must:
+
+1. wait for the declared terminal barrier;
+2. verify each accepted view reference and content hash;
+3. reconcile child conclusions, failures, and disagreements;
+4. author its own higher-level Markdown view;
+5. persist that view through Loom; and
+6. pass the aggregate view to the next reviewed tier.
+
+This rule applies recursively. A root agent receives aggregate child views,
+not an undifferentiated transcript of every descendant action.
+
+The compiled graph uses an all-terminal barrier when failed lanes still contain
+evidence that the parent must aggregate.
+
+### Processing storage and retention
+
+Local execution evidence lives under the ignored project root
+`workflow/processing/`.
+
+Path contracts are:
+
+- `workflow/processing/<workflow>/<run-id>/events.jsonl` for run authority;
+- `workflow/processing/<workflow>/<run-id>/agents/<task>/attempt-<n>/events.jsonl`
+  for one agent attempt;
+- `workflow/processing/<workflow>/<run-id>/agents/<task>/attempt-<n>/result.json`
+  for its typed terminal projection;
+- `workflow/processing/<workflow>/<run-id>/agents/<task>/attempt-<n>/view.md`
+  for its semantic projection; and
+- `workflow/processing/<workflow>/<run-id>/view.md` for the root aggregate.
+
+Keep processing evidence through aggregation and handoff. Cleanup is explicit.
+It is separate from disposable `.cortex/.session/` reflection memory.
+
 ## Safe delegation patterns
 
 ### Full Cortex garbage collection
@@ -213,6 +319,13 @@ Before integration, verify:
 
 - every worker used the same exact baseline;
 - every reached task has one terminal result;
+- every reached agent attempt has one continuous terminal action stream;
+- every terminal attempt has an agent-authored or explicitly machine-authored
+  view;
+- every projection path and digest matches its recorded bytes;
+- every child records the correct parent lineage;
+- every parent aggregate covers the declared child terminal barrier;
+- the root aggregate is the input to the delivery owner's final report;
 - skipped branches are recorded;
 - write scopes did not overlap;
 - the parent reviewed all evidence;

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
@@ -8,6 +8,8 @@ import {
   TaskTerminalKind,
   WorkflowResultKind,
   WorkflowTerminalKind,
+  MaterializedViewAuthorKind,
+  MaterializedViewPresence,
 } from '../../src/agent-workflow/domain.ts';
 import { WorkflowEventKind } from '../../src/agent-workflow/events.ts';
 import { WorkflowJournal } from '../../src/agent-workflow/journal.ts';
@@ -26,7 +28,10 @@ import type {
   WorkflowEvent,
   WorkflowEventWithoutMetadata,
 } from '../../src/agent-workflow/events.ts';
-import type { WorkflowJournalConfiguration } from '../../src/agent-workflow/journal.ts';
+import type {
+  TaskViewProjectionInput,
+  WorkflowJournalConfiguration,
+} from '../../src/agent-workflow/journal.ts';
 import type { ReplayWorkflowJournalRequest } from '../../src/agent-workflow/replay.ts';
 
 enum TestTask {
@@ -93,12 +98,28 @@ describe('workflow journal', () => {
         output: {
           resultKind: WorkflowResultKind.CortexEvidence,
           summary: 'Inspection complete.',
+          materializedViewMarkdown: '# Inspection\n\nComplete.',
           findings: [],
           notesForParent: [],
           artifacts: [],
         },
       };
       const taskProjection = await journal.projectTaskTerminal(taskTerminal);
+      const taskViewInput: TaskViewProjectionInput = {
+        task: TestTask.Inspect,
+        attempt: 1,
+        markdown: taskTerminal.output.materializedViewMarkdown,
+        authorKind: MaterializedViewAuthorKind.LoomLeaf,
+      };
+      const taskView = await journal.projectTaskView(taskViewInput);
+      const processing = {
+        kind: 'workflow-task',
+        result: taskProjection,
+        view: taskView,
+      } as const;
+      expect(await journal.readVerifiedProcessingView(processing)).toBe(
+        '# Inspection\n\nComplete.\n',
+      );
       const taskTerminalEvent: WorkflowEventWithoutMetadata<TestTask> = {
         kind: WorkflowEventKind.TaskTerminalRecorded,
         task: TestTask.Inspect,
@@ -106,8 +127,20 @@ describe('workflow journal', () => {
         terminalKind: TaskTerminalKind.Completed,
         resultPath: taskProjection.path,
         resultSha256: taskProjection.sha256,
+        processing,
       };
       await journal.append(taskTerminalEvent);
+
+      if (taskView.presence === MaterializedViewPresence.Recorded) {
+        await writeFile(
+          join(journal.runDirectory, taskView.projection.path),
+          '# Tampered view\n',
+          'utf8',
+        );
+        await expect(
+          journal.readVerifiedProcessingView(processing),
+        ).rejects.toThrow('Processing projection digest mismatch');
+      }
 
       const workflowTerminal: WorkflowRunTerminal<TestTask> = {
         kind: WorkflowTerminalKind.Completed,
@@ -116,6 +149,10 @@ describe('workflow journal', () => {
         version: '1.0.0',
         sourceCommit: SOURCE_COMMIT,
         taskTerminals: [taskTerminal],
+        materializedView: {
+          presence: MaterializedViewPresence.Unavailable,
+          reason: 'Test fixture omits a root view.',
+        },
         startedAt: STARTED_AT,
         finishedAt: FINISHED_AT,
       };
@@ -126,6 +163,7 @@ describe('workflow journal', () => {
         terminalKind: WorkflowTerminalKind.Completed,
         resultPath: workflowProjection.path,
         resultSha256: workflowProjection.sha256,
+        materializedView: workflowTerminal.materializedView,
       };
       await journal.append(workflowTerminalEvent);
 
@@ -186,6 +224,17 @@ describe('workflow journal', () => {
       terminalKind: TaskTerminalKind.Completed,
       resultPath: 'task-results/inspect-attempt-1.json',
       resultSha256: 'digest',
+      processing: {
+        kind: 'workflow-task',
+        result: {
+          path: 'task-results/inspect-attempt-1.json',
+          sha256: 'digest',
+        },
+        view: {
+          presence: MaterializedViewPresence.Unavailable,
+          reason: 'Test fixture omits a task view.',
+        },
+      },
     };
     const events: readonly WorkflowEvent<TestTask>[] = [
       started,
@@ -222,6 +271,17 @@ describe('workflow journal', () => {
       terminalKind: TaskTerminalKind.Completed,
       resultPath: 'task-results/inspect-attempt-1.json',
       resultSha256: 'digest',
+      processing: {
+        kind: 'workflow-task',
+        result: {
+          path: 'task-results/inspect-attempt-1.json',
+          sha256: 'digest',
+        },
+        view: {
+          presence: MaterializedViewPresence.Unavailable,
+          reason: 'Test fixture omits a task view.',
+        },
+      },
     };
     const events: readonly WorkflowEvent<TestTask>[] = [
       started,

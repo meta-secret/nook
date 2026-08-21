@@ -4,9 +4,11 @@ import type {
   GitCommit,
   LoomLeafTaskExecution,
   TaskTerminal,
+  TaskTerminalKind,
   WorkflowAttemptNumber,
   WorkflowRunId,
   WorkflowTaskOutput,
+  MaterializedViewReference,
 } from './domain.ts';
 import type { RuntimeActivityObservation } from './events.ts';
 
@@ -16,6 +18,8 @@ export type RuntimeActivityObserver = (
 
 export type WorkflowDependencyOutput<TTask extends string> = {
   readonly task: TTask;
+  readonly terminalKind: TaskTerminalKind;
+  readonly view: MaterializedViewReference;
   readonly output: WorkflowTaskOutput;
 };
 
