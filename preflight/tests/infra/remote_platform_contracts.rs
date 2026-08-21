@@ -124,6 +124,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "kata",
         "neo4j",
         "registry",
+        "arc",
         "sccache",
         "hive",
         "hive-queue",
