@@ -39,7 +39,18 @@ require(
     "ARC runner namespace ownership label is missing",
 )
 require(RUNNERS, "runnerScaleSetName: nook-k0s", "runner label must stay stable")
-require(RUNNERS, "maxRunners: 4", "runner concurrency must remain bounded")
+require(RUNNERS, "minRunners: 0", "runner scale set must retain scale-to-zero")
+require(RUNNERS, "maxRunners: 10", "runner concurrency must support ten jobs")
+require(
+    RUNNERS,
+    'requests:\n            cpu: 750m\n            memory: 4Gi',
+    "BuildKit requests must allow ten runner Pods to fit the current node",
+)
+require(
+    RUNNERS,
+    'requests:\n            cpu: 250m\n            memory: 1Gi',
+    "runner requests must allow ten runner Pods to fit the current node",
+)
 require(
     RUNNERS,
     'limits:\n            cpu: "2"\n            memory: 6Gi',
@@ -71,7 +82,7 @@ require(RUNNERS, "imagePullPolicy: Never", "the node-imported image must stay lo
 require(
     RUNNERS,
     'limits:\n            cpu: "6"\n            memory: 10Gi',
-    "BuildKit limits must keep four 8-vCPU guests within node capacity",
+    "BuildKit limits must retain its share of the 16 GiB Kata guest",
 )
 require(RUNNERS, '- "80000"', "BuildKit must retain an 80 GB GC target")
 require(RUNNERS, "sizeLimit: 100Gi", "BuildKit state must stay bounded to 100 GiB")

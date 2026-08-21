@@ -570,8 +570,12 @@ private BuildKit daemon. ARC therefore uses the same release's QEMU runtime-rs
 backend. Hive remains on Dragonball, and QEMU is not the cluster default.
 
 The scale set keeps no warm runners. ARC creates a new Pod and microVM for each
-job and removes it afterward. `maxRunners: 4` limits simultaneous jobs so four
-8-vCPU, 16-GiB guests fit the current node; it is not a retained runner pool.
+job and removes it afterward. `maxRunners: 10` permits ten simultaneous jobs;
+it is not a retained runner pool. Each Pod requests 1 CPU and 5 GiB so ten Pods
+fit the current 32-core node alongside the cluster baseline. Each disposable
+guest can burst to the unchanged aggregate limit of 8 CPUs and 16 GiB. This
+separates scheduler placement from the per-microVM resource envelope while
+keeping congestion from an artificially small runner scale set.
 
 The ARC deployment contract explicitly prohibits:
 
