@@ -12,16 +12,17 @@ description: >-
 Read and follow the canonical project skill at
 [`.cortex/dynamic-skills/self-improvement.md`](../../../.cortex/dynamic-skills/self-improvement.md).
 
-For every substantial task:
+For every substantial task, apply the canonical card in full before final
+readiness.
 
-1. Create `.cortex/.session/<task>.md` after loading relevant Cortex context.
-2. Capture meaningful discoveries and evidence during implementation, review,
-   and CI.
-3. Run the self-improvement review before final readiness.
-4. Promote only durable knowledge into existing Cortex authorities.
-5. Update `.cortex/knowledge-graph.md` when discoverability changes.
-6. Validate Cortex and the updated exact head.
-7. Delete the temporary session file before readiness or handoff.
+The canonical card owns:
 
-No Cortex promotion is a valid outcome when nothing meets the evidence and
-durability criteria.
+- temporary session memory;
+- evidence-based promotion;
+- workflow instruction classification;
+- safe subagent delegation and joins;
+- reviewed Loom leaf and static-graph extraction; and
+- cleanup plus updated exact-head validation.
+
+This executable skill is an invocation mirror. Do not duplicate or redefine
+the procedure here.

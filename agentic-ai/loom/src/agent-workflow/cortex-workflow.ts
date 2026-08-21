@@ -162,7 +162,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.WorkflowAuditor,
         instruction:
-          'Inspect .cortex/workflows and .cortex/references. Find obsolete rules, conflicting ordering, broken ownership boundaries, and commands that disagree with code. Return precise file and line evidence. Do not edit files.',
+          'Inspect .cortex/workflows and .cortex/references. Find obsolete rules, conflicting ordering, broken ownership boundaries, commands that disagree with code, duplicated procedures, deterministic leaf candidates, compiled workflow candidates, and safe parallel evidence lanes. Identify policy that must remain semantic judgment. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {
@@ -230,7 +230,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.FindingSynthesizer,
         instruction:
-          'Reconcile the completed audit reports. Deduplicate findings, identify contradictions between reports, and propose the smallest consistent corrections. Do not edit files or mutate lifecycle state.',
+          'Reconcile the completed audit reports. Deduplicate findings, identify contradictions, classify workflow instructions as semantic policy, deterministic leaves, bounded agent tasks, compiled workflow candidates, delivery-owner actions, or ephemeral guidance, and propose the smallest consistent corrections. Name safe parallel groups and parent-owned joins. Do not edit files or mutate lifecycle state.',
         resultKind: WorkflowResultKind.CortexSynthesis,
       },
       completed: noTasks,

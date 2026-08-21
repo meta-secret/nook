@@ -408,6 +408,7 @@ suites.
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
+task loom:cortex-session-clean # assert temporary agent memory is removed
 task remote:list           # allowlisted focused GitHub-hosted task catalog
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
 task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks

@@ -47,6 +47,7 @@ export type SuccessResponse =
       readonly family:
         | RequestFamily.PrePush
         | RequestFamily.CortexAudit
+        | RequestFamily.CortexSessionClean
         | RequestFamily.SkillScaffold
         | RequestFamily.DependencyPopularity
         | RequestFamily.ToolsList;
@@ -77,6 +78,7 @@ export type ExecuteErrorResponse =
       readonly family:
         | RequestFamily.PrePush
         | RequestFamily.CortexAudit
+        | RequestFamily.CortexSessionClean
         | RequestFamily.SkillScaffold
         | RequestFamily.DependencyPopularity
         | RequestFamily.ToolsList
@@ -115,6 +117,7 @@ export type SuccessResponseForFamilyArgs = {
   readonly family:
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
+    | RequestFamily.CortexSessionClean
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList;
@@ -183,6 +186,7 @@ export type ExecuteErrorResponseForFamilyArgs = {
   readonly family:
     | RequestFamily.PrePush
     | RequestFamily.CortexAudit
+    | RequestFamily.CortexSessionClean
     | RequestFamily.SkillScaffold
     | RequestFamily.DependencyPopularity
     | RequestFamily.ToolsList

@@ -23,7 +23,7 @@ const HELP = `Loom — mechanical cortex rites (domain YAML protocol)
 
 Usage:
   loom <request.yaml>
-  loom --default <prePush|toolsList|cortexAudit|dependencyPopularity>
+  loom --default <prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity>
   loom help
 
 Domain request example:

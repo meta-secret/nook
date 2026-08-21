@@ -9,6 +9,10 @@ import {
   type CortexAuditRequest,
 } from './args/cortex-audit.ts';
 import {
+  decodeCortexSessionCleanRequest,
+  type CortexSessionCleanRequest,
+} from './args/cortex-session-clean.ts';
+import {
   decodeDependencyPopularityRequest,
   type DependencyPopularityRequest,
 } from './args/dependency-popularity.ts';
@@ -56,6 +60,10 @@ export type LoomRequest =
       readonly cortexAudit: CortexAuditRequest;
     }
   | {
+      readonly family: RequestFamily.CortexSessionClean;
+      readonly cortexSessionClean: CortexSessionCleanRequest;
+    }
+  | {
       readonly family: RequestFamily.SkillScaffold;
       readonly skillScaffold: SkillScaffoldRequest;
     }
@@ -77,6 +85,7 @@ export type LoomRequest =
 const ROOT_FAMILIES: readonly RequestFamily[] = [
   RequestFamily.PrePush,
   RequestFamily.CortexAudit,
+  RequestFamily.CortexSessionClean,
   RequestFamily.SkillScaffold,
   RequestFamily.AgentStats,
   RequestFamily.PrLand,
@@ -195,6 +204,20 @@ function decodeFamily(args: DecodeFamilyArgs): DecodeOutcome<LoomRequest> {
         }),
       };
       return mapDecode(mapDecodeArgs5);
+    }
+    case RequestFamily.CortexSessionClean: {
+      const decoded = decodeCortexSessionCleanRequest(payload);
+      const mapDecodeArgs: MapDecodeArgs<
+        CortexSessionCleanRequest,
+        LoomRequest
+      > = {
+        outcome: decoded,
+        build: (cortexSessionClean) => ({
+          family: RequestFamily.CortexSessionClean,
+          cortexSessionClean,
+        }),
+      };
+      return mapDecode(mapDecodeArgs);
     }
     case RequestFamily.SkillScaffold: {
       const decoded = decodeSkillScaffoldRequest(payload);

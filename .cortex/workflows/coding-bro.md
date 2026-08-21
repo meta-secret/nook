@@ -96,11 +96,8 @@ Default PR-first loop:
    - Push the completed fix, then explicitly trigger complete validation again.
    - Use a focused remote task only when it shortens diagnosis of a known failure.
 8. **Reflect and curate before readiness:**
-   - When session memory was created, read the complete file.
-   - Promote only evidence-backed durable knowledge from that review.
-   - Update `.cortex/knowledge-graph.md` when discoverability changed.
-   - Delete the temporary file.
-   - Repeat exact-head validation when promotion changed the pushed head.
+   - Complete the canonical
+     [agent self-improvement](../dynamic-skills/self-improvement.md) contract.
 9. **Merge automatically when ready:**
    - Require `task pr:ready PR=<number>`.
    - Require a current branch, green repository-owned PR checks, and no active
@@ -225,12 +222,8 @@ Default agent flow:
    - Push required changes.
    - Repeat complete validation for the replacement head.
 9. **Reflect and curate:**
-   - When session memory exists, review the full file.
-   - Update existing Cortex authorities only for durable, evidence-backed
-     knowledge.
-   - Update the knowledge graph when required.
-   - Delete the session file.
-   - Revalidate when the resulting PR head changed.
+   - Complete the canonical
+     [agent self-improvement](../dynamic-skills/self-improvement.md) contract.
 10. **Resolve conflicts and merge:**
    - Verify the branch is current with `origin/main`.
    - Update and push it when stale.
@@ -304,12 +297,9 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Reply to threads, resolve them, and push when needed.
 9. **Repeat** — Return to step 7 until Nook's applicable PR checks are green and every actionable comment is resolved.
 10. **Run the self-improvement review:**
-    - When session memory exists, read the complete file.
-    - Promote only durable knowledge under
-      [Agent self-improvement](../dynamic-skills/self-improvement.md).
-    - Update the knowledge graph when required.
-    - Delete session memory.
-    - Repeat validation when promotion changed the pushed head.
+    - Complete
+      [Agent self-improvement](../dynamic-skills/self-improvement.md) before
+      readiness.
 11. **Squash merge** — run `gh pr merge <n> --squash` immediately after `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` succeeds.
 12. **Publish Workbench completion context and statistics:**
     - Update the associated Workbench issue.
@@ -482,14 +472,8 @@ task pr:ready PR=<number>
 
 Before final readiness:
 
-1. When session memory exists, read the complete `.cortex/.session/` file.
-2. Promote only evidence-backed durable knowledge.
-3. Update `.cortex/knowledge-graph.md` when discoverability changed.
-4. Run the relevant Cortex checks.
-5. Delete temporary session memory.
-6. Repeat exact-head validation when promotion changed the branch.
-
-See [Agent self-improvement](../dynamic-skills/self-improvement.md).
+Complete the full
+[Agent self-improvement](../dynamic-skills/self-improvement.md) contract.
 
 ### 11 — Merge
 
@@ -559,9 +543,7 @@ Create the YAML from current Nook `main`:
   through every planned slice until the requested feature is complete. See
   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 - **Workbench plan before implementation; summary and statistics after merge** — publish the public-safe task plan before edits, then publish the issue update, plan-linked worklog, and `stats/ai-agent/<pr-number>.yaml` directly to Workbench. See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
-- **Curated self-improvement before readiness** — use ignored session memory for
-  substantial tasks. Promote only evidence-backed durable knowledge. Delete the
-  session file before readiness. See
+- **Curated self-improvement before readiness** — complete
   [self-improvement.md](../dynamic-skills/self-improvement.md).
 - **Duration report** on every completed implementation task. See [pull-requests.md §10](pull-requests.md#10-task-completion-report).
 

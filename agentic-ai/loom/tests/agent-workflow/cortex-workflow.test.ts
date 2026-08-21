@@ -34,3 +34,31 @@ test('compares design and product claims with owning implementation', () => {
     'owning nook-app implementation',
   );
 });
+
+test('classifies workflow extraction candidates before synthesis', () => {
+  const workflowAudit =
+    CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+      CortexAuditTask.AuditWorkflowsAndReferences
+    ];
+  const synthesis =
+    CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+      CortexAuditTask.SynthesizeFindings
+    ];
+  if (
+    workflowAudit.execution.kind !== WorkflowExecutorKind.Agent ||
+    synthesis.execution.kind !== WorkflowExecutorKind.Agent
+  ) {
+    throw new Error('Workflow extraction review must use agent executors.');
+  }
+  expect(workflowAudit.execution.instruction).toContain(
+    'deterministic leaf candidates',
+  );
+  expect(workflowAudit.execution.instruction).toContain(
+    'compiled workflow candidates',
+  );
+  expect(workflowAudit.execution.instruction).toContain(
+    'safe parallel evidence lanes',
+  );
+  expect(synthesis.execution.instruction).toContain('delivery-owner actions');
+  expect(synthesis.execution.instruction).toContain('parent-owned joins');
+});

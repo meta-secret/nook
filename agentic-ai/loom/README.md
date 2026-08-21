@@ -64,6 +64,10 @@ resolve baseline
 
 The workflow is read-only.
 
+Its workflow lane reports duplicated prose, deterministic leaf candidates,
+compiled workflow candidates, safe parallel lanes, and policy that must remain
+semantic judgment.
+
 It uses one exact source commit.
 
 Before and after every Codex attempt, Loom verifies that `HEAD` still matches
@@ -242,6 +246,7 @@ package so agents can compare the closest blueprint with the received YAML.
 task loom:pre-push
 task loom:tools-list
 task loom:cortex-audit
+task loom:cortex-session-clean
 task loom:dependency-popularity
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 task loom:agent-stats CONFIG=path/to/assemble-request.yaml
@@ -268,6 +273,7 @@ There is no checked-in sample-file catalog.
 | `tools-call`            | Nested call helper                                |
 | `pre-push`              | Host `task format` + UI demo contract             |
 | `cortex-audit`          | Broken `.cortex` links / skill index sync         |
+| `cortex-session-clean`  | Temporary Cortex session readiness assertion      |
 | `skill-scaffold`        | Create a dynamic-skill card                       |
 | `agent-stats`           | Assemble / validate / publish AI-agent stats YAML |
 | `pr-land`               | Status / validate / ready / merge-check           |

@@ -3,6 +3,7 @@ import type {
   AgentStatsFileRequest,
 } from './args/agent-stats.ts';
 import type { CortexAuditRequest } from './args/cortex-audit.ts';
+import type { CortexSessionCleanRequest } from './args/cortex-session-clean.ts';
 import type { DependencyPopularityRequest } from './args/dependency-popularity.ts';
 import type { PrePushRequest } from './args/pre-push.ts';
 import type { PrLandPrRequest } from './args/pr-land.ts';
@@ -44,6 +45,10 @@ export type ToolsListExampleDocument = {
 
 export type CortexAuditExampleDocument = {
   readonly cortexAudit: CortexAuditRequest;
+};
+
+export type CortexSessionCleanExampleDocument = {
+  readonly cortexSessionClean: CortexSessionCleanRequest;
 };
 
 export type SkillScaffoldExampleDocument = {
@@ -109,6 +114,7 @@ export type ExampleDocument =
   | PrePushExampleDocument
   | ToolsListExampleDocument
   | CortexAuditExampleDocument
+  | CortexSessionCleanExampleDocument
   | SkillScaffoldExampleDocument
   | DependencyPopularityExampleDocument
   | AgentStatsAssembleExampleDocument
@@ -147,6 +153,11 @@ export const CORTEX_AUDIT_EXAMPLE_DOCUMENT: CortexAuditExampleDocument = {
     includeDensityLint: false,
   },
 };
+
+export const CORTEX_SESSION_CLEAN_EXAMPLE_DOCUMENT: CortexSessionCleanExampleDocument =
+  {
+    cortexSessionClean: {},
+  };
 
 export const SKILL_SCAFFOLD_EXAMPLE_DOCUMENT: SkillScaffoldExampleDocument = {
   skillScaffold: {
@@ -252,6 +263,12 @@ export const EXAMPLE_CATALOG: readonly ExampleCatalogEntry[] = [
     family: RequestFamily.CortexAudit,
     operation: ExampleOperationMarker.FamilyRoot,
     document: CORTEX_AUDIT_EXAMPLE_DOCUMENT,
+    dispatch: ExampleDispatchKind.Defaultable,
+  },
+  {
+    family: RequestFamily.CortexSessionClean,
+    operation: ExampleOperationMarker.FamilyRoot,
+    document: CORTEX_SESSION_CLEAN_EXAMPLE_DOCUMENT,
     dispatch: ExampleDispatchKind.Defaultable,
   },
   {

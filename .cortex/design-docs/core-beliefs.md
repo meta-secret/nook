@@ -110,20 +110,11 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 ## 10. Grow Cortex Dynamically
 
 - **`.cortex` is a living knowledge base**, not a frozen snapshot.
-- Agents must **update it when durable knowledge is gained**.
-- Sources include user prompts, design dialogues, test discoveries, CI/PR postmortems, and code archaeology.
-- **What to capture:** product requirements and constraints, testing gaps and fixes, sync/event-sourcing invariants, tooling quirks, CI behavior, architectural decisions, and "we tried X, Y worked" lessons.
-- Write concise, actionable prose.
-- Link to source files.
-- **How to write it:** follow [`../dynamic-skills/cortex-writer.md`](../dynamic-skills/cortex-writer.md).
-- Split long dense sentences into short sentences, bullets, and lists.
-- One sentence should carry one idea.
-- Dense multi-clause prose is a P1 documentation finding.
-- **How to keep it true:** follow [`../dynamic-skills/cortex-consistency.md`](../dynamic-skills/cortex-consistency.md).
-- Agents garbage-collect obsolete cortex facts.
-- Docs must agree with each other and with the code.
-- Conflicts and stale claims are P1 documentation findings.
-- **Where to put it:** extend the relevant existing doc (`product-specs/`, `dynamic-skills/`, `design-docs/`, `workflows/`, `references/`).
+- Apply [agent self-improvement](../dynamic-skills/self-improvement.md) when
+  substantial work produces reusable evidence.
+- Apply [Cortex Writer](../dynamic-skills/cortex-writer.md) to persistent prose.
+- Apply [Cortex consistency](../dynamic-skills/cortex-consistency.md) to every
+  promoted claim.
 - For user-facing requirements, item schemas, or UX flows, read and update the owning specification in `product-specs/` (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
 - For recurring refactor or code-organization lessons, add or update the canonical project skill registry under [`../dynamic-skills/`](../dynamic-skills/) and follow [dynamic-skills.md](../workflows/dynamic-skills.md).
 - Add a new file only when the topic is substantial and has no natural home.
@@ -132,7 +123,3 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - Keep the README a concise public summary.
 - Put depth in `.cortex`.
 - See [AGENTS.md — Keep the root README current](../AGENTS.md#keep-the-root-readme-current).
-- **What not to capture:** chat fluff, one-off task status, or secrets.
-- Do not duplicate large code blocks — point to modules and tests instead.
-- **When:** as part of the same PR that learns the fact, or in an immediate follow-up before the task is marked done.
-- If you fixed a bug because tests revealed a missing invariant, document that invariant in `.cortex`.

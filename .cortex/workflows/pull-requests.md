@@ -65,10 +65,8 @@ ownership until merge or a concrete blocked handoff:
 6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the
    failure, run pre-push hygiene, and push the complete fix. Request review and
    validate the replacement head together.
-7. **Run the self-improvement review when session memory was created.** Read the
-   complete file. Promote only evidence-backed durable knowledge. Update the
-   knowledge graph when required. Delete the session file. Repeat exact-head
-   validation when promotion changed the branch.
+7. **Complete agent self-improvement for substantial work.** Follow the
+   canonical [completion contract](../dynamic-skills/self-improvement.md#pull-request-completion-contract).
 8. **Merge automatically when ready.** Require a current branch, green
    repository-owned checks, resolved actionable comments, and the exact-head
    readiness audit. Then squash-merge without separate permission.
@@ -526,8 +524,6 @@ If the failure was obviously fmt-only, `task loom:pre-push` before re-push is en
 
 For a substantial task, complete the checklist in
 [Agent self-improvement](../dynamic-skills/self-improvement.md#pull-request-completion-contract).
-Delete temporary session memory. If promotion changed the branch, validate the
-new exact head.
 
 Merge only when all readiness conditions pass:
 
@@ -630,13 +626,12 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–13 checklist.
 11. Do not wait for review after checks finish.
 12. Do not request Claude, CodeRabbit, or other optional reviews.
 13. Address and resolve actionable comments.
-14. When session memory was created, run the self-improvement review.
-15. Curate durable knowledge and delete temporary session memory.
-16. On failure, fix the issue and repeat pre-push hygiene.
-17. Push the fix and explicitly validate the replacement head.
-18. Squash-merge after the exact-head readiness audit succeeds.
-19. Publish the Workbench completion records.
-20. Report task duration.
+14. Complete the canonical self-improvement contract for substantial work.
+15. On failure, fix the issue and repeat pre-push hygiene.
+16. Push the fix and explicitly validate the replacement head.
+17. Squash-merge after the exact-head readiness audit succeeds.
+18. Publish the Workbench completion records.
+19. Report task duration.
 
 ## CLI reference
 
