@@ -89,7 +89,7 @@ tasks:
         bun run --cwd agentic-ai/loom loom -- "$config"
 
   loom:default:
-    desc: Run a defaultable Loom family from in-code examples (FAMILY=prePush|toolsList|cortexAudit|dependencyPopularity).
+    desc: Run a defaultable Loom family from in-code examples (FAMILY=prePush|toolsList|cortexAudit|cortexSessionClean|dependencyPopularity).
     deps: [loom:install]
     requires:
       vars: [FAMILY]

@@ -81,6 +81,23 @@ describe('inspectCortexSession', () => {
       expect(inspectCortexSession(request)).toEqual(expected);
     });
   });
+
+  test('treats a dangling session root symlink as active memory', () => {
+    withRepositoryRoot((repoRoot) => {
+      const cortexRoot = path.join(repoRoot, '.cortex');
+      mkdirSync(cortexRoot, recursiveDirectoryOptions);
+      symlinkSync(
+        path.join(repoRoot, 'missing-session-target'),
+        path.join(cortexRoot, '.session'),
+      );
+      const request: InspectCortexSessionRequest = { repoRoot };
+      const expected: CortexSessionInspection = {
+        sessionClean: false,
+        activeEntry: path.join('.cortex', '.session'),
+      };
+      expect(inspectCortexSession(request)).toEqual(expected);
+    });
+  });
 });
 
 type RepositoryRootVisitor = (repoRoot: string) => void;

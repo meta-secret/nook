@@ -1,4 +1,4 @@
-import { existsSync, lstatSync, readdirSync } from 'node:fs';
+import { lstatSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import type { CortexSessionCleanRequest } from '../codec/args/cortex-session-clean.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -20,15 +20,18 @@ export type CortexSessionInspection =
   | { readonly sessionClean: true }
   | { readonly sessionClean: false; readonly activeEntry: string };
 
+const noThrowStatOptions = { throwIfNoEntry: false } as const;
+
 export function inspectCortexSession(
   request: InspectCortexSessionRequest,
 ): CortexSessionInspection {
   const sessionRoot = path.join(request.repoRoot, '.cortex', '.session');
-  if (!existsSync(sessionRoot)) {
+  const sessionRootStat = lstatSync(sessionRoot, noThrowStatOptions);
+  if (sessionRootStat === undefined) {
     return { sessionClean: true };
   }
 
-  if (!lstatSync(sessionRoot).isDirectory()) {
+  if (!sessionRootStat.isDirectory()) {
     return {
       sessionClean: false,
       activeEntry: path.relative(request.repoRoot, sessionRoot),
