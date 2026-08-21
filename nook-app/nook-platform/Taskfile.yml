@@ -180,15 +180,20 @@ tasks:
         if [ "${GITHUB_ACTIONS:-}" = "true" ] &&
            [ "${NOOK_ARC_RUNNER:-}" = "1" ] &&
            [ "${NOOK_BUILDKIT_ADDR:-}" = "tcp://127.0.0.1:1234" ]; then
-          if ! {{.DOCKER}} buildx build \
+          probe_context="$(mktemp -d)";
+          cp nook-app/nook-platform/docker/sccache-health.Dockerfile "$probe_context/Dockerfile";
+          probe_status=0;
+          {{.DOCKER}} buildx build \
             --progress plain \
-            --file "$PWD/nook-app/nook-platform/docker/sccache-health.Dockerfile" \
+            --file "$probe_context/Dockerfile" \
             --secret "id=sccache_s3_access_key,src=$access_file" \
             --secret "id=sccache_s3_secret_key,src=$secret_file" \
             --build-arg "SCCACHE_ENDPOINT={{.SCCACHE_ENDPOINT}}" \
             --build-arg "SCCACHE_BUCKET={{.SCCACHE_BUCKET}}" \
             --output type=cacheonly \
-            "$PWD"; then
+            "$probe_context" || probe_status=$?;
+          rm -r -- "$probe_context";
+          if [ "$probe_status" -ne 0 ]; then
             echo "task sccache:ensure: SeaweedFS S3 is unavailable to the private ARC BuildKit worker" >&2;
             exit 1;
           fi;
