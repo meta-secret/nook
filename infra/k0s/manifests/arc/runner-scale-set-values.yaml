@@ -67,7 +67,7 @@ template:
             cpu: 100m
             memory: 128Mi
       - name: buildkit
-        image: localhost/nook-arc-buildkit:0.32.2-ext4-v1
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-v2
         imagePullPolicy: Never
         restartPolicy: Always
         args:
