@@ -14,7 +14,7 @@ this order:
 1. **Test output** — failed focused or complete GitHub Actions job logs, Rust
    and web reports, Playwright report, and failure attachments.
 2. **Static analysis** — fmt, clippy, svelte-check, eslint, and type errors from
-   focused or complete hosted execution.
+   focused or complete GitHub Actions execution.
 3. **Persisted application logs** — **the most important source after steps
    1–2.**
 

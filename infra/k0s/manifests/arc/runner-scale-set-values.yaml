@@ -3,7 +3,7 @@ githubConfigSecret: nook-arc-github
 
 runnerScaleSetName: nook-k0s
 minRunners: 0
-maxRunners: 4
+maxRunners: 10
 
 controllerServiceAccount:
   namespace: arc-systems
@@ -97,8 +97,8 @@ template:
             mountPath: /tmp
         resources:
           requests:
-            cpu: "4"
-            memory: 6Gi
+            cpu: 750m
+            memory: 4Gi
             ephemeral-storage: 50Gi
           limits:
             cpu: "6"
@@ -140,8 +140,8 @@ template:
             mountPath: /opt/hostedtoolcache
         resources:
           requests:
-            cpu: "2"
-            memory: 4Gi
+            cpu: 250m
+            memory: 1Gi
             ephemeral-storage: 25Gi
           limits:
             cpu: "2"

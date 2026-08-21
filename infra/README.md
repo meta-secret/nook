@@ -10,14 +10,17 @@ This directory owns Nook's stateful server infrastructure:
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
-- A pinned Actions Runner Controller scale set runs focused Actions jobs in
-  single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM carries Docker
-  client tooling and its own privileged BuildKit sidecar on Pod loopback. Its
+- A pinned Actions Runner Controller scale set runs focused and opted-in trusted
+  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM
+  carries Docker client tooling and its own privileged BuildKit sidecar on Pod
+  loopback. Its
   overlayfs builder state uses a guest-mounted ext4 image, is capped at 100 GiB,
   and is discarded after the job. There is no Docker daemon, DinD, Sysbox,
   shared builder, host socket, or hostPath.
-  No runners stay warm: ARC creates one fresh microVM per job. The four-runner
-  maximum is only a node-capacity concurrency bound.
+  No runners stay warm: ARC creates one fresh microVM per job. The ten-runner
+  maximum prevents queue congestion. Each Pod requests 1 CPU and 5 GiB so ten
+  fit the current node, while its unchanged burst limit remains 8 CPUs and
+  16 GiB.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
 expose anonymous S3 or registry access; every client authenticates with the
@@ -26,6 +29,11 @@ generated credentials.
 Deploy and inspect the stack from the repository root:
 
 ```sh
+# First deployment only: create a repository-scoped fine-grained token file
+# with Administration read/write, then bootstrap the controller Secret.
+ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token task infra:deploy
+
+# Routine deployments retain the installed Secret.
 task infra:deploy
 task infra:status
 task infra:sccache:credential:sync

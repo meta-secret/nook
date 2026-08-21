@@ -18,10 +18,6 @@ variable "FUZZ_SECONDS" {
   default = "20"
 }
 
-variable "DOCKER_POLICY_TOOLS_IMAGE" {
-  default = "nook-rust-policy-tools:local"
-}
-
 // Main and pull requests derive this immutable scope from every file that defines the WASM
 // dependency graph and compiler environment. A new graph gets a new registry ref instead of
 // overwriting the last complete dependency export with a different lineage.
@@ -98,7 +94,8 @@ rust_ecosystem_fuzz_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
 // import rust-base or the short chain steals the parent and tools RUNs miss.
 // v4 rotates past thin indexes. A present exact ref is imported alone. A cold
 // isolated scope uses the fat Main policy-tools index as its trusted seed.
-// Workspace deny/audit runs via Task against the loaded image, not a Bake leaf.
+// Workspace deny/audit runs as a cache-only child target. This avoids exporting
+// the tools image to a Docker tarball and loading it into a daemon.
 rust_ecosystem_policy_tools_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
 ] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
@@ -296,10 +293,25 @@ target "rust-ecosystem-policy-tools" {
   contexts = {
     rust-base = "target:rust-base"
   }
-  tags       = [DOCKER_POLICY_TOOLS_IMAGE]
   cache-from = rust_ecosystem_policy_tools_cache_from
   cache-to   = rust_ecosystem_policy_tools_cache_to
-  output     = ["type=docker"]
+  output     = ["type=cacheonly"]
+}
+
+target "rust-ecosystem-dependency-policy" {
+  context    = "."
+  dockerfile = "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile"
+  target     = "rust-ecosystem-dependency-policy"
+  platforms  = ["linux/amd64"]
+  args = {
+    WORKSPACE        = ""
+    POLICY_RUN_NONCE = ""
+  }
+  contexts = {
+    rust-base = "target:rust-base"
+  }
+  cache-from = rust_ecosystem_policy_tools_cache_from
+  output     = ["type=cacheonly"]
 }
 
 target "rust-fuzz-smoke" {

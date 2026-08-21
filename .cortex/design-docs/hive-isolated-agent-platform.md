@@ -570,8 +570,12 @@ private BuildKit daemon. ARC therefore uses the same release's QEMU runtime-rs
 backend. Hive remains on Dragonball, and QEMU is not the cluster default.
 
 The scale set keeps no warm runners. ARC creates a new Pod and microVM for each
-job and removes it afterward. `maxRunners: 4` limits simultaneous jobs so four
-8-vCPU, 16-GiB guests fit the current node; it is not a retained runner pool.
+job and removes it afterward. `maxRunners: 10` permits ten simultaneous jobs;
+it is not a retained runner pool. Each Pod requests 1 CPU and 5 GiB so ten Pods
+fit the current 32-core node alongside the cluster baseline. Each disposable
+guest can burst to the unchanged aggregate limit of 8 CPUs and 16 GiB. This
+separates scheduler placement from the per-microVM resource envelope while
+keeping congestion from an artificially small runner scale set.
 
 The ARC deployment contract explicitly prohibits:
 
@@ -596,13 +600,35 @@ TypeScript PR audit without Docker.
 
 ### Credential ownership
 
-| Credential                          | Mounted into                                                    | Exposed to worker/Codex                                   |
-| ----------------------------------- | --------------------------------------------------------------- | --------------------------------------------------------- |
-| Neo4j password and private CA trust | Coordinator; dispatcher has its own bounded database access     | No password or raw graph connection                       |
-| Codex `auth.json`                   | Auth broker only                                                | Short-lived tokens on one pre-established private channel |
-| Repository-scoped GitHub token      | Main-repair worker                                              | Yes, as `GH_TOKEN` for standard `git` and `gh` operations |
-| Reaper controller credential        | Pod reaper, Workbench dispatcher, and dedicated controller only | No                                                        |
-| Kubernetes auth-refresh token       | Auth broker only                                                | No                                                        |
+- **Neo4j password and private CA trust:** Mount into the coordinator.
+  - Give the dispatcher its own bounded database access.
+  - Do not expose the password or raw graph connection to workers or Codex.
+- **Codex `auth.json`:** Mount into the auth broker only.
+  - Expose only short-lived tokens on one pre-established private channel.
+- **Repository-scoped GitHub token:** Mount into the Main-repair worker.
+  - Expose it as `GH_TOKEN` for standard `git` and `gh` operations.
+- **ARC GitHub token:** Store in `arc-runners/nook-arc-github` for the ARC
+  controller and listener.
+  - Never mount it into an ephemeral runner Pod.
+  - Use a fine-grained personal access token limited to `meta-secret/nook`.
+  - Grant only repository Administration read/write, which ARC needs to create
+    registration and just-in-time runner configuration tokens.
+  - Grant no organization permissions.
+  - The infrastructure operator owns rotation and revocation.
+  - On the first deployment, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file
+    outside the checkout and run `task infra:deploy` to bootstrap the Secret.
+  - Routine `infra:deploy` retains the installed Secret.
+  - To rotate it, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file outside the
+    checkout and run `task infra:arc:deploy`.
+  - Verify `task infra:arc:status` and `task infra:arc:smoke`, then revoke the
+    replaced token.
+  - For emergency revocation, run `task infra:arc:fallback`, revoke the token
+    on GitHub, and delete `nook-arc-github` from the `arc-runners` namespace.
+- **Reaper controller credential:** Mount into the Pod reaper, Workbench
+  dispatcher, and dedicated controller only.
+  - Do not expose it to workers or Codex.
+- **Kubernetes auth-refresh token:** Mount into the auth broker only.
+  - Do not expose it to workers or Codex.
 
 - **Service-account tokens:** Disable automatic mounting.
   - The service account may patch only the Codex-auth Secret.

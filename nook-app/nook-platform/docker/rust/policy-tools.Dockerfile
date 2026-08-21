@@ -38,3 +38,16 @@ RUN curl -fsSL \
     && rm -rf /tmp/cargo-audit.tgz \
       "/tmp/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}" \
     && cargo-audit --version
+
+FROM rust-ecosystem-policy-tools AS rust-ecosystem-dependency-policy
+
+ARG WORKSPACE
+ARG POLICY_RUN_NONCE
+WORKDIR /meta-secret/nook
+
+RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
+    test -n "$WORKSPACE" \
+    && test -n "$POLICY_RUN_NONCE" \
+    && cargo-deny --manifest-path "$WORKSPACE/Cargo.toml" --log-level error check --hide-inclusion-graph \
+    && cd "$WORKSPACE" \
+    && cargo-audit audit --quiet

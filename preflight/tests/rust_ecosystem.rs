@@ -55,6 +55,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Main must call the shared Rust ecosystem checks in its own run"
     );
     assert!(
+        main.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+            && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && pr.contains("(vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest'")
+            && checks
+                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .count()
+                == 5,
+        "trusted native/ecosystem Rust jobs must use configured ARC while forks fall back hosted"
+    );
+    assert!(
         !entry.contains("\n  push:"),
         "Thin rust-ecosystem.yml must not start a second Main-push run"
     );
@@ -126,8 +136,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "docker:ecosystem:policy-tools:",
         "docker:ecosystem:dependency-policy:",
         "docker:ecosystem:dependency-policy:run:",
-        "bash -c \"set -euo pipefail;",
-        "rust-ecosystem-policy-tools.output=type=cacheonly",
+        "rust-ecosystem-dependency-policy.args.WORKSPACE=",
+        "rust-ecosystem-dependency-policy.args.POLICY_RUN_NONCE=",
         "docker:ecosystem:deterministic:",
         "docker:ecosystem:kani:",
         "docker:ecosystem:fuzz:",
@@ -140,6 +150,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-dylint",
         "sccache:ensure",
         "GHA_CACHE_WRITE_ENABLED=",
+        "NOOK_REGISTRY_CACHE_LOCAL_PUBLISH",
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ci:cache:publish:rust-base",
@@ -149,9 +160,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "task: minds:dependency-policy",
         "preflight-test",
         "GHA_CACHE_WRITE_ENABLED",
-        "DOCKER_POLICY_TOOLS_IMAGE",
-        "cargo-deny --manifest-path",
-        "cargo-audit audit --quiet",
     ] {
         assert!(
             docker_tasks.contains(marker),
@@ -159,8 +167,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(
-        !docker_tasks.contains("bash -lc \""),
-        "policy-tools docker run must not use a login shell that resets PATH"
+        !docker_tasks.contains("docker run") && !docker_tasks.contains("type=docker"),
+        "dependency policy must remain BuildKit-only without daemon image export/load"
+    );
+    assert!(
+        docker_tasks.contains(
+            "if [ -n \"${GHA_CACHE_WRITE_ENABLED:-}\" ] || [ \"${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}\" = \"1\" ]"
+        ) && docker_tasks.contains("GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake"),
+        "policy-tools must translate explicit local publication into a cache-only Zot write"
     );
     assert!(
         platform_tasks.contains("rust:dependency-policy:")
@@ -173,11 +187,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "each Rust workspace must own dependency-policy in its Taskfile"
     );
     assert!(
-        !docker_tasks.contains("rust-dependency-policy")
+        docker_tasks.contains("rust-ecosystem-dependency-policy")
             && !repository_root()
                 .join("nook-app/nook-platform/docker/rust/dependency-policy.Dockerfile")
                 .exists(),
-        "aggregate dependency-policy Dockerfile/Bake leaf must be removed"
+        "dependency policy must use the parameterized policy-tools Dockerfile target"
     );
     for forbidden in [
         "rustsec/audit-check",
@@ -204,6 +218,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 
     for marker in [
         "AS rust-ecosystem-policy-tools",
+        "AS rust-ecosystem-dependency-policy",
+        "ARG POLICY_RUN_NONCE",
         "AS rust-ecosystem-nightly",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
@@ -239,9 +255,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "one nightly Dockerfile must own the shared tools and both source leaves"
     );
     assert!(
-        docker_tasks.contains("--hide-inclusion-graph")
-            && docker_tasks.contains("--log-level error"),
-        "per-workspace dependency-policy runner must keep deny flags"
+        rust_dockerfile.contains("--hide-inclusion-graph")
+            && rust_dockerfile.contains("--log-level error")
+            && rust_dockerfile.contains("cargo-audit audit --quiet")
+            && rust_dockerfile.contains("test -n \"$POLICY_RUN_NONCE\""),
+        "BuildKit dependency-policy target must refresh deny and audit checks"
     );
     // Ecosystem CLIs stay in sibling Dockerfiles so rust-base product builds stay lean.
     for forbidden in [
@@ -258,6 +276,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 
     for target in [
         "rust-ecosystem-policy-tools",
+        "rust-ecosystem-dependency-policy",
         "rust-fuzz-smoke",
         "rust-dylint",
         "rust-ecosystem-deterministic",
@@ -269,15 +288,19 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         );
     }
     assert!(
-        !rust_bake.contains("target \"rust-dependency-policy\"")
+        rust_bake.contains("target \"rust-ecosystem-dependency-policy\"")
             && rust_bake.contains("cache-to   = rust_ecosystem_policy_tools_cache_to")
             && rust_bake
                 .matches("cache-to   = rust_ecosystem_policy_tools_cache_to")
                 .count()
                 == 1
-            && rust_bake.contains("tags       = [DOCKER_POLICY_TOOLS_IMAGE]")
-            && rust_bake.contains("output     = [\"type=docker\"]"),
-        "policy-tools must be the only deny/audit Bake target and load a runnable image"
+            && rust_bake
+                .matches("output     = [\"type=cacheonly\"]")
+                .count()
+                >= 2
+            && !rust_bake.contains("type=docker")
+            && !rust_bake.contains("DOCKER_POLICY_TOOLS_IMAGE"),
+        "policy tools and dependency checks must stay cache-only without Docker export/load"
     );
     assert!(
         !rust_bake.contains("target \"rust-ecosystem-nightly")
@@ -363,7 +386,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake
                 .matches("rust-base = \"target:rust-base\"")
                 .count()
-                == 3
+                == 4
             && rust_bake.contains("target \"rust-base-publish\"")
             && docker_tasks.contains("rust-base-publish")
             && !docker_tasks.contains("cache-from=\"")

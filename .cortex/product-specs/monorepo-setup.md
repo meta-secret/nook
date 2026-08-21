@@ -44,14 +44,17 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - It then passes that directory as the web solve's named context.
   - Commit and invocation scoping prevent concurrent builds from consuming each other's artifacts.
   - `builder-wasm` is never a parent or context of `nook-web`.
-- **Delivery BuildKit is remote-cached on hosted runners.**
-  - PR, main, and release use ephemeral `ubuntu-latest` VMs.
+- **Delivery BuildKit is remote-cached across isolated runners.**
+  - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs
+    use fresh ARC Kata microVMs.
+  - Fork PRs and runtime-dependent, browser, WASM, deployment, and release jobs
+    use ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.
   - Parallel targets cannot overwrite one another.
   - Main seeds the default-branch cache visible to new PRs.
   - Remote writes git-commit refs (`-git-<sha>`).
-  - Hosted setup probes each exact ref before selecting its restore inputs.
+  - Docker setup probes each exact ref before selecting its restore inputs.
   - A present exact ref is imported alone.
   - Native and WASM source restores import a present Main source graph alone.
   - Shorter dependency indexes join that solve only while Main source is absent.
@@ -92,8 +95,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Use `task format:diff` only when you need the raw patch.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
-  - PR, main delivery, production release, long-running AI agents, and scheduled/manual validation use GitHub-hosted `ubuntu-latest`.
+  - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the configured ARC scale set.
   - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set; every job receives a fresh Kata QEMU microVM and private BuildKit worker.
+  - Fork PRs and runtime-dependent, browser, WASM, deployment, release,
+    long-running AI, and scheduled/manual validation use GitHub-hosted
+    `ubuntu-latest`.
   - Delivery jobs restore scoped BuildKit layers through private Zot.
   - The self-hosted `nook` label remains only for maintenance cleanup.
   - Do not use Blacksmith or other third-party runner labels.

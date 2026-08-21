@@ -39,7 +39,18 @@ require(
     "ARC runner namespace ownership label is missing",
 )
 require(RUNNERS, "runnerScaleSetName: nook-k0s", "runner label must stay stable")
-require(RUNNERS, "maxRunners: 4", "runner concurrency must remain bounded")
+require(RUNNERS, "minRunners: 0", "runner scale set must retain scale-to-zero")
+require(RUNNERS, "maxRunners: 10", "runner concurrency must support ten jobs")
+require(
+    RUNNERS,
+    'requests:\n            cpu: 750m\n            memory: 4Gi',
+    "BuildKit requests must allow ten runner Pods to fit the current node",
+)
+require(
+    RUNNERS,
+    'requests:\n            cpu: 250m\n            memory: 1Gi',
+    "runner requests must allow ten runner Pods to fit the current node",
+)
 require(
     RUNNERS,
     'limits:\n            cpu: "2"\n            memory: 6Gi',
@@ -71,7 +82,7 @@ require(RUNNERS, "imagePullPolicy: Never", "the node-imported image must stay lo
 require(
     RUNNERS,
     'limits:\n            cpu: "6"\n            memory: 10Gi',
-    "BuildKit limits must keep four 8-vCPU guests within node capacity",
+    "BuildKit limits must retain its share of the 16 GiB Kata guest",
 )
 require(RUNNERS, '- "80000"', "BuildKit must retain an 80 GB GC target")
 require(RUNNERS, "sizeLimit: 100Gi", "BuildKit state must stay bounded to 100 GiB")
@@ -154,6 +165,56 @@ require(
     TASKS,
     'tr -d "\\r\\n"',
     "streamed GitHub credentials must not retain transport newlines",
+)
+require(
+    TASKS,
+    "Existing ARC repository credential retained; set ARC_GITHUB_TOKEN_FILE to rotate it",
+    "routine ARC deployment must retain the installed repository credential",
+)
+require(
+    TASKS,
+    "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it",
+    "first ARC deployment must explain how to bootstrap its credential",
+)
+require(
+    TASKS,
+    'test -s "$token_file"',
+    "explicit ARC credential rotation must reject an empty credential file",
+)
+forbid(
+    TASKS,
+    "gh auth token",
+    "ARC deployment must not persist an implicit operator CLI credential",
+)
+require(
+    TASKS,
+    "gh workflow run remote.yml",
+    "ARC smoke must dispatch independently from the branch-only remote helper",
+)
+require(
+    TASKS,
+    "bash <<'BASH'\n        set -euo pipefail\n        smoke_ref=",
+    "ARC smoke monitoring must use Bash rather than Task's embedded shell interpreter",
+)
+require(
+    TASKS,
+    '--raw-field "tasks=preflight"',
+    "ARC smoke must dispatch only the preflight selector",
+)
+forbid(
+    TASKS,
+    "task remote TASK_NAME=preflight",
+    "ARC smoke must remain usable from a pushed Main checkout",
+)
+require(
+    TASKS,
+    "for _ in $(seq 1 500)",
+    "ARC smoke must outlive cold setup plus the preflight command timeout",
+)
+require(
+    TASKS,
+    "did not complete within 25 minutes",
+    "ARC smoke timeout diagnostics must match the polling budget",
 )
 require(
     REMOTE_WORKFLOW,

@@ -33,6 +33,18 @@ fn assert_hosted_workflow_runtime_contract(root: &Path) {
             );
         }
     }
+    let pr = read(root, ".github/workflows/pr.yml");
+    let main = read(root, ".github/workflows/main.yml");
+    let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
+    assert!(
+        main.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+            && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && ecosystem
+                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .count()
+                == 5,
+        "trusted Rust jobs must select configured ARC and preserve fork fallback"
+    );
 }
 
 fn assert_docker_setup_contract(root: &Path) {

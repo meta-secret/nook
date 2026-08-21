@@ -20,8 +20,9 @@ The job runs `task setup` before you start (sealed **nook-web:local**). You run 
 **nook-ci-agent** container with the repo bind-mounted and the host Docker socket mounted
 (`/var/run/docker.sock` — sibling containers, not Docker-in-Docker).
 
-**Product validation runs on GitHub-hosted workers after the harness opens the
-PR.** Your required local action is host-applied formatting only. Do not run
+**Product validation runs on configured GitHub Actions workers after the harness
+opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
+hosted.** Your required local action is host-applied formatting only. Do not run
 `task check` / `task ci:pr` before finishing. The harness assigns the PR to the
 continuing task owner and posts a direct mention. That owner runs advisory local
 review after handoff. The owner may use `task remote` for focused execution,

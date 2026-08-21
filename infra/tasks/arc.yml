@@ -18,6 +18,17 @@ tasks:
         ssh_target="{{.INFRA_SSH_TARGET}}"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         token_file="${ARC_GITHUB_TOKEN_FILE:-}"
+        if test -z "$token_file"; then
+          if ! ssh -o BatchMode=yes "$ssh_target" \
+            "sudo -n k0s kubectl get secret nook-arc-github --namespace arc-runners >/dev/null"; then
+            echo "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it" >&2
+            exit 2
+          fi
+          echo "Existing ARC repository credential retained; set ARC_GITHUB_TOKEN_FILE to rotate it"
+          exit 0
+        fi
+        test -f "$token_file"
+        test -s "$token_file"
         remote_command='set -euo pipefail
         remote_dir="$1"
         raw_credential_file="$(mktemp)"
@@ -41,12 +52,7 @@ tasks:
         encoded_dir="$(printf '%s' "$remote_dir" | base64 | tr -d '\n')"
         printf -v ssh_command 'bash -c "$(printf %%s %s | base64 -d)" -- "$(printf %%s %s | base64 -d)"' \
           "$encoded_program" "$encoded_dir"
-        if test -n "$token_file"; then
-          test -s "$token_file"
-          ssh -o BatchMode=yes "$ssh_target" "$ssh_command" < "$token_file"
-        else
-          gh auth token | ssh -o BatchMode=yes "$ssh_target" "$ssh_command"
-        fi
+        ssh -o BatchMode=yes "$ssh_target" "$ssh_command" < "$token_file"
         echo "ARC repository credential synchronized to the encrypted k0s Secret"
         BASH
 
@@ -309,19 +315,38 @@ tasks:
           exit 2
         fi
       - |
+        bash <<'BASH'
         set -euo pipefail
+        smoke_ref="$(git branch --show-current)"
+        if test -z "$smoke_ref"; then
+          echo "ARC smoke requires a named, pushed branch." >&2
+          exit 2
+        fi
         head_sha="$(git rev-parse HEAD)"
+        remote_sha="$(
+          git ls-remote --refs origin "refs/heads/$smoke_ref" |
+            awk 'NR == 1 { print $1 }'
+        )"
+        if test "$remote_sha" != "$head_sha"; then
+          echo "ARC smoke requires $smoke_ref to be pushed at the local HEAD." >&2
+          echo "local:  $head_sha" >&2
+          echo "remote: ${remote_sha:-missing}" >&2
+          exit 2
+        fi
         known_run_ids="$(
           gh run list \
             --repo meta-secret/nook \
             --workflow remote.yml \
-            --commit "$head_sha" \
+            --branch "$smoke_ref" \
             --event workflow_dispatch \
             --limit 100 \
             --json databaseId \
             --jq '.[].databaseId'
         )"
-        task remote TASK_NAME=preflight
+        gh workflow run remote.yml \
+          --repo meta-secret/nook \
+          --ref "$smoke_ref" \
+          --raw-field "tasks=preflight"
         run_id=""
         for _ in $(seq 1 30); do
           while IFS= read -r candidate; do
@@ -334,7 +359,7 @@ tasks:
             gh run list \
               --repo meta-secret/nook \
               --workflow remote.yml \
-              --commit "$head_sha" \
+              --branch "$smoke_ref" \
               --event workflow_dispatch \
               --limit 100 \
               --json databaseId \
@@ -344,6 +369,19 @@ tasks:
           sleep 2
         done
         test -n "$run_id"
+        dispatched_sha="$(
+          gh run view "$run_id" \
+            --repo meta-secret/nook \
+            --json headSha \
+            --jq .headSha
+        )"
+        if test "$dispatched_sha" != "$head_sha"; then
+          echo "ARC smoke branch moved before dispatch: expected $head_sha, got $dispatched_sha" >&2
+          gh api --method POST \
+            "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
+            >/dev/null 2>&1 || true
+          exit 1
+        fi
         cancel_run() {
           gh api --method POST \
             "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
@@ -353,7 +391,7 @@ tasks:
         runner_name=""
         runner_uid=""
         missing_runner_samples=0
-        for _ in $(seq 1 300); do
+        for _ in $(seq 1 500); do
           run_state="$(
             gh run view "$run_id" \
               --repo meta-secret/nook \
@@ -436,7 +474,7 @@ tasks:
           gh run view "$run_id" --repo meta-secret/nook --json status --jq .status
         )"
         if test "$final_status" != completed; then
-          echo "ARC smoke run $run_id did not complete within 15 minutes" >&2
+          echo "ARC smoke run $run_id did not complete within 25 minutes" >&2
           cancel_run
           exit 1
         fi
@@ -448,3 +486,4 @@ tasks:
           exit 1
         fi
         echo "ARC smoke run $run_id completed on {{.ARC_RUNNER_LABEL}}"
+        BASH

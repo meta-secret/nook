@@ -158,7 +158,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
 - Classifies changed paths and skips the product job chain for minds-only pushes.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
-- On `ubuntu-latest`: native Rust → WASM → browser-free web verify read-only.
+- Native Rust uses the configured ARC scale set. WASM and browser-free web
+  verification use fresh `ubuntu-latest` runners.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
 - Each browser solve is read-only.
@@ -380,10 +381,11 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-PR, main, release, AI, scheduled, manual e2e, and research jobs use
-GitHub-hosted `ubuntu-latest`. Daemon-free `preflight` and `rust:ci` selections
-use the configured ARC Kata scale set, with `ubuntu-latest` as the explicit
-fallback. Other focused tasks retain hosted Docker image execution. ARC scales
+Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the
+configured ARC Kata scale set. Daemon-free `preflight` and `rust:ci` selections
+use the same scale set, with `ubuntu-latest` as the explicit fallback. Fork PRs
+and runtime-dependent, browser, WASM, deployment, release, AI, scheduled,
+manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`. ARC scales
 single-use Pods instead of queueing work on one persistent Docker host.
 
 **Zot cache policy:**
@@ -414,7 +416,8 @@ single-use Pods instead of queueing work on one persistent Docker host.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
-- Complete PR/Main/release graphs are unchanged.
+- Complete PR and Main graphs place only their trusted daemon-free Rust jobs on
+  ARC. Their remaining jobs and the release graph stay hosted.
 
 **BuildKit cache propagation:**
 
@@ -795,11 +798,18 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 ## Agent host vs GitHub-hosted execution
 
-**Delivery CI uses GitHub-hosted runners with remote BuildKit layers.**
+**Delivery CI uses isolated ARC or GitHub-hosted runners with remote BuildKit layers.**
 
-- PR, main, and release run on fresh `ubuntu-latest` VMs.
-- The shared Docker setup creates a `docker-container` builder and exposes GitHub's cache-service runtime.
-- It enables separate v2 scopes for stable and source-sensitive Rust/WASM layers, web dependencies, browser-free web, and e2e web.
+- Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs run
+  in fresh ARC Kata microVMs.
+- Fork PRs and all runtime-dependent, browser, WASM, deployment, and release
+  jobs run on fresh `ubuntu-latest` VMs.
+- On ARC, the shared setup creates a `remote` Buildx builder connected to that
+  microVM's private BuildKit sidecar over Pod loopback.
+- On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
+- Both placements restore separate Zot scopes for stable and source-sensitive
+  Rust/WASM layers, web dependencies, browser-free web, and e2e web.
+- Neither placement uses GitHub Actions cache storage for BuildKit layers.
 - PR CI assigns native Rust to one runner and WASM to another.
 - The small generated WASM package feeds parallel browser-free preview validation as soon as clippy/build finishes.
 - Required Node tests continue on the producer; preview deployment is blocked until that producer succeeds.
@@ -837,7 +847,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- PR verification, main, and release use GitHub-hosted runners.
+- Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use
+  ARC. Fork PRs and all other PR, Main, and release jobs use GitHub-hosted
+  runners.
 - Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
 - WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
 - Main then verifies the fingerprint from a fresh builder.
@@ -845,7 +857,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
 - PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
-- Hosted setup probes each full-graph exact ref separately.
+- Docker setup probes each full-graph exact ref separately.
 - Existing exact refs are imported alone. Missing refs use dependency
   fingerprints and trusted Main.
 - Fork pull requests receive no registry credentials.

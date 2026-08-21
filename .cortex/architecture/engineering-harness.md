@@ -104,10 +104,11 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Web checks consume only web dependencies plus the generated WASM package.
 - They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
 
-Complete PR, Main, release, and browser validation executes on ephemeral
-GitHub-hosted runners. Daemon-free `preflight` and `rust:ci` focused jobs may run
-in fresh Kata QEMU microVMs through ARC. The self-hosted `nook` pool remains
-maintenance-only.
+Trusted same-repository PR and Main native Rust plus Rust ecosystem validation
+executes in fresh Kata QEMU microVMs through ARC. Daemon-free `preflight` and
+`rust:ci` focused jobs may use the same scale set. Fork PRs and runtime-dependent,
+browser, WASM, deployment, and release validation execute on ephemeral
+GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 
 ---
 
@@ -117,7 +118,8 @@ maintenance-only.
 
 - `rust-base` plus manifest-only chef cooking exposes a lightweight WASM dependency boundary.
 - Native verification extends it with nextest, clippy, and coverage profiles.
-- Hosted PR CI runs native coverage independently.
+- Trusted same-repository PR CI runs native coverage independently on ARC.
+- Fork PR native coverage remains GitHub-hosted and secret-free.
 - It verifies WASM once on a dedicated producer.
 - Web verification and opt-in browser jobs download that producer's small run-stable artifact.
 - They do not rebuild Rust/WASM locally.
@@ -256,7 +258,7 @@ maintenance-only.
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
 - Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
-- Hosted CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
+- Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
 - Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
 

@@ -39,10 +39,10 @@ source of truth.
   - Purpose: Capture user feedback as durable `.cortex` skill cards and optional project skills
   - Executable skill: [`.agents/skills/dynamic-skill/SKILL.md`](../../.agents/skills/dynamic-skill/SKILL.md)
 - **[efficient-pr-delivery.md](efficient-pr-delivery.md)**
-  - Purpose: Ship PRs with focused configured-runner execution, hosted complete validation, and exact-head readiness
+  - Purpose: Ship PRs with focused configured-runner execution, complete exact-head validation, and readiness
   - Executable skill: [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../.agents/skills/efficient-pr-delivery/SKILL.md)
 - **[github-actions-only-validation.md](github-actions-only-validation.md)**
-  - Purpose: Format locally; run focused tasks on the configured Actions runner and complete gates on GitHub-hosted workers
+  - Purpose: Format locally; run focused tasks and trusted Rust gates on the configured Actions runner while runtime-dependent gates stay GitHub-hosted
   - Executable skill: [`.agents/skills/github-actions-only-validation/SKILL.md`](../../.agents/skills/github-actions-only-validation/SKILL.md)
 - **[pre-push-hygiene.md](pre-push-hygiene.md)**
   - Purpose: Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses

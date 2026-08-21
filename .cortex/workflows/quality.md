@@ -96,11 +96,13 @@ Use this workflow for quality, CI, and deployment changes.
    - `vite build`
    - `task preflight` — repository-wide Rust invariant tests, before app setup
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
-     `task docker:ecosystem:dependency-policy` loads pinned `cargo-deny` +
-     `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each
-     workspace task (`rust:dependency-policy`, `preflight:dependency-policy`,
-     `fuzz:dependency-policy`, `minds:dependency-policy`) in that image.
+     `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
+     `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
+     task (`rust:dependency-policy`, `preflight:dependency-policy`,
+     `fuzz:dependency-policy`, `minds:dependency-policy`) through the cache-only
+     `rust-ecosystem-dependency-policy` BuildKit target.
      Never aggregate multiple workspaces into one Dockerfile RUN.
+     Never export or load the policy-tools image into a Docker daemon.
      Tools Bake must not list `rust-base` in its own cache-from.
      Never `cargo install` those tools on the runner host. Advisory exceptions
      must name the RustSec IDs, identify the exact pinned upstream graph, and
@@ -156,7 +158,9 @@ Use this workflow for quality, CI, and deployment changes.
 10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
-    - `.github/workflows/pr.yml`, `.github/workflows/main.yml`, and `.github/workflows/release.yml` run on GitHub-hosted `ubuntu-latest`.
+    - Trusted native Rust and Rust ecosystem jobs in PR and Main may use ARC.
+    - Fork PRs and runtime-dependent, browser, WASM, deployment, and release
+      jobs use GitHub-hosted `ubuntu-latest`.
     - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
       instance selected with `docker buildx use` before Task runs.
     - Taskfiles and Bake callers must never pass `--builder`.
@@ -175,7 +179,7 @@ Use this workflow for quality, CI, and deployment changes.
     - GitHub Actions cache is forbidden.
     - Delivery Bake restores private Zot registry scopes for:
       - Rust toolchain
-      - Rust ecosystem dylint leaf, fuzz leaf, policy-tools, policy leaf,
+      - Rust ecosystem dylint leaf, fuzz leaf, policy-tools,
         deterministic, and Kani proof graph
       - preflight chef/test
       - stable Rust dependencies
@@ -186,7 +190,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Product native deps scopes must not import rust-base at all.
     - Native source may import cooked native deps.
     - Native source must not import rust-base.
-    - Ecosystem nightly/policy-tools/policy and preflight scopes must not
+    - Ecosystem nightly/policy-tools and preflight scopes must not
       import rust-base at all.
     - Dylint/fuzz do not use a linked `rust-ecosystem-nightly` context.
     - Their own mode=max scopes embed the shared tool stage.
@@ -236,10 +240,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
       dedicated parent scope that is never thin.
     - BuildKit merges cache importers. List order is not fallback precedence.
-    - Hosted setup probes every full-graph exact scope separately.
+    - Docker setup probes every full-graph exact scope separately.
     - A present exact scope is the only importer for that graph.
     - Exact PR writers publish `mode=max`, so replay keeps the full leaf lineage.
-    - Hosted setup also probes trusted Main native and WASM source refs.
+    - Docker setup also probes trusted Main native and WASM source refs.
     - A present Main source graph is the only importer for that solve.
     - Shorter dependency indexes join only while that Main source ref is absent.
     - A missing exact and Main source scope falls back to source-free
@@ -334,7 +338,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-    - PR runs native Rust and verified WASM on independent hosted producer runners.
+    - Trusted same-repository PRs run native Rust on a fresh ARC Kata producer.
+    - Fork PR native Rust and every verified WASM producer remain GitHub-hosted.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
     - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.

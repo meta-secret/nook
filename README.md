@@ -452,10 +452,10 @@ task pr:review PR=410      # optional idempotent exact-head Codex or Cursor revi
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
-task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, Neo4j, and Hive
-task infra:arc:deploy       # deploy the Kata-isolated, daemon-free ARC runner scale set
-task infra:arc:activate     # route daemon-free remote selections to ARC
-task infra:arc:fallback     # route every remote selection to GitHub-hosted capacity
+task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
+task infra:arc:deploy       # targeted redeploy of the Kata-isolated, daemon-free ARC scale set
+task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
+task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
@@ -494,7 +494,7 @@ Labeled PR validation and merged-head verification run the shared **Rust
 ecosystem** gates through `pr.yml` and `main.yml`. Each lifecycle therefore
 shows product and ecosystem checks on one Actions run.
 `task docker:ecosystem:*` runs dependency policy (per-workspace Taskfile
-checks in the loaded `rust-ecosystem-policy-tools` image), RustSec,
+checks in the cache-only `rust-ecosystem-dependency-policy` BuildKit target), RustSec,
 Proptest/Insta/Loom, cargo-fuzz, and Dylint from sibling Dockerfiles under
 `nook-app/nook-platform/docker/rust/` as separate images off `rust-base`
 (`rust-ecosystem-policy-tools`, `rust-ecosystem-nightly`) so the product base
@@ -535,15 +535,17 @@ change, update this README in the same change (see
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
-GitHub Actions runs PR, main, and release validation on `ubuntu-latest`; each
-fresh VM restores distinct BuildKit cache refs from the authenticated OCI
-registry at `registry.dev.nokey.sh`. Main refreshes those refs after lane
-verification. Every PR job reads only that complete Main lineage and never
-exports PR-local caches. The WASM producer restores Main's dedicated, complete
-WASM dependency boundary so it does not compete with the larger native
-dependency lineage. Main explicitly publishes the native source target as well
-as both dependency targets; merely consuming those targets as BuildKit contexts
-does not run their cache exporters.
+Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs run in
+fresh ARC Kata microVMs. Fork PRs and runtime-dependent, browser, WASM,
+deployment, and release jobs run on fresh GitHub-hosted VMs. Each isolated
+runner restores distinct BuildKit cache refs from the authenticated OCI registry
+at `registry.dev.nokey.sh`. Main refreshes the shared refs after lane
+verification. Same-repository PR jobs may publish only exact-SHA generations
+under `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
+producer restores Main's dedicated, complete WASM dependency boundary so it
+does not compete with the larger native dependency lineage. Main explicitly
+publishes the native source target as well as both dependency targets; merely
+consuming those targets as BuildKit contexts does not run their cache exporters.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
