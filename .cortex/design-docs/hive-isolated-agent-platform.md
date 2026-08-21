@@ -555,41 +555,41 @@ single-use Pods in the existing `kata-dragonball` RuntimeClass. The runner has
 no Kubernetes service-account token, hostPath, host runtime socket, or Docker
 daemon.
 
-The Kata runner contains Docker client tooling but no Docker or BuildKit
-daemon. Buildx connects to `nook-arc-buildkit`, a cluster-local rootless
-BuildKit Service. A NetworkPolicy permits ingress only from ARC runner Pods.
-The builder has no Kubernetes service-account token, privileged security
-context, hostPath, or host runtime socket. It uses a native snapshotter and
-keeps disposable state in an `emptyDir`; durable cache manifests and layers
-remain in Zot.
+The Kata runner contains Docker client tooling but no Docker daemon. Buildx
+connects over Pod loopback to a private BuildKit sidecar in the same microVM.
+BuildKit is privileged inside that disposable guest so it can create OCI build
+processes, but the Pod has no Kubernetes service-account token, hostPath, or
+host runtime socket. It uses a native snapshotter and keeps disposable state in
+a 500 GiB `emptyDir`; durable cache manifests and layers remain in Zot.
 
-Dragonball's experimental guest cannot execute the nested OCI workloads that
-BuildKit launches: both sidecar and BuildKit-only microVM probes lost their
-ttrpc sandbox when a real build began. The runner therefore remains in the
-microVM trust boundary while the rootless builder uses the ordinary Kubernetes
-runtime and an isolated user namespace.
+The current Kata 4.0 Dragonball guest previously lost its ttrpc sandbox during
+a nested OCI probe. The accepted rollout therefore retests the latest stable
+Dragonball stack with a 16 GiB guest. If that probe still fails, ARC alone moves
+to the Kata runtime-rs QEMU backend; Hive remains on Dragonball.
+
+The scale set keeps no warm runners. ARC creates a new Pod and microVM for each
+job and removes it afterward. `maxRunners: 4` limits simultaneous jobs so four
+8-vCPU, 16-GiB guests fit the current node; it is not a retained runner pool.
 
 The ARC deployment contract explicitly prohibits:
 
 - Docker-in-Docker and any `dockerd` process;
 - nested Docker or Podman engines;
 - Sysbox;
-- privileged BuildKit containers;
 - host Docker or containerd sockets; and
 - hostPath volumes.
 
-The runner image and its Docker CLI are separate from the rootless BuildKit
-service. The CLI does not create a Docker engine. A chart-render check verifies
-the final Helm output and the builder manifest before deployment so chart
-defaults cannot silently weaken these boundaries.
+The runner image and its Docker CLI remain separate from BuildKit. The CLI does
+not create a Docker engine. A chart-render check verifies the final Helm output
+before deployment so chart defaults cannot silently weaken these boundaries.
 
-Worker Pods have no hostPath volume and never mount the host repository, host
-`CODEX_HOME`, or host Docker socket. They contain no privileged containers and
-run no Docker daemon. The worker image carries the pinned Rust, Bun, Node, and
-Task tools required by the repository. When `task format` detects the sealed
-guest marker it selects the native `hive:guest:format` Taskfile path, operating
-only on that task's disposable checkout. The image also carries npm so
-`hive:guest:pr:ready` can install and run the repository's existing read-only
+Hive worker Pods have no hostPath volume and never mount the host repository,
+host `CODEX_HOME`, or host Docker socket. They contain no privileged containers
+and run no Docker daemon. The Hive worker image carries the pinned Rust, Bun,
+Node, and Task tools required by the repository. When `task format` detects the
+sealed guest marker it selects the native `hive:guest:format` Taskfile path,
+operating only on that task's disposable checkout. The image also carries npm
+so `hive:guest:pr:ready` can install and run the repository's existing read-only
 TypeScript PR audit without Docker.
 
 ### Credential ownership

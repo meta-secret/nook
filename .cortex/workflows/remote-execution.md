@@ -63,8 +63,9 @@ Batch behavior:
   4. continue to later selections after marking the timed-out task failed.
 - On GitHub-hosted runners, timeout recovery also removes task-created Docker
   containers and restarts the job-scoped BuildKit container.
-- On ARC, the remote rootless BuildKit Service is probed but never treated as a
-  Docker container. Its local state is disposable; Zot holds durable caches.
+- On ARC, the private BuildKit sidecar is probed but never treated as a Docker
+  container. Its local state is discarded with the microVM; Zot holds durable
+  caches.
 - After every task, reselect the job-scoped Buildx builder.
   - This prevents temporary builders from affecting later selections.
 - Report every task result in the GitHub job summary.
@@ -79,9 +80,10 @@ Security and cache rules:
 - Select the runner through `NOOK_RUNS_ON`, with `ubuntu-latest` as the
   repository-safe fallback.
 - On ARC, run the job in a single-use `kata-dragonball` Pod and connect Buildx
-  to the network-policy-restricted rootless BuildKit Service.
+  to its private BuildKit sidecar over Pod loopback.
 - Prohibit Docker-in-Docker, Docker daemons, nested Docker or Podman engines,
-  Sysbox, privileged builders, host runtime sockets, and hostPath volumes.
+  Sysbox, host runtime sockets, and hostPath volumes. BuildKit may be privileged
+  only inside the isolated Kata guest.
 - Import an exact BuildKit lineage alone when it exists.
 - When the exact scope is absent, seed it from source-free dependency scopes
   and trusted Main.

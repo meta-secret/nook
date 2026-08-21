@@ -8,7 +8,6 @@ NAMESPACES = (ROOT / "infra/k0s/manifests/namespaces.yaml").read_text()
 RUNNERS = (
     ROOT / "infra/k0s/manifests/arc/runner-scale-set-values.yaml"
 ).read_text()
-BUILDKIT = (ROOT / "infra/k0s/manifests/arc/buildkit.yaml").read_text()
 CONTROLLER = (
     ROOT / "infra/k0s/manifests/arc/controller-values.yaml"
 ).read_text()
@@ -41,8 +40,8 @@ require(RUNNERS, "runnerScaleSetName: nook-k0s", "runner label must stay stable"
 require(RUNNERS, "maxRunners: 4", "runner concurrency must remain bounded")
 require(
     RUNNERS,
-    'limits:\n            cpu: "2"\n            memory: 4Gi',
-    "runner limits must keep the Kata guest within node capacity",
+    'limits:\n            cpu: "2"\n            memory: 6Gi',
+    "runner limits must retain its share of the 16 GiB Kata guest",
 )
 require(RUNNERS, "runAsNonRoot: true", "ARC listener must run as non-root")
 require(
@@ -51,48 +50,29 @@ require(
     "runner Pods must use the Dragonball microVM runtime",
 )
 require(
-    BUILDKIT,
+    RUNNERS,
     "--oci-worker-snapshotter",
-    "rootless BuildKit must use the portable native snapshotter",
+    "private BuildKit must use the portable native snapshotter",
 )
-require(BUILDKIT, "- native", "rootless BuildKit snapshotter value is missing")
+require(RUNNERS, "- native", "private BuildKit snapshotter value is missing")
 require(
-    BUILDKIT,
-    "--oci-worker-no-process-sandbox",
-    "rootless BuildKit must use its container-compatible process mode",
+    RUNNERS,
+    'limits:\n            cpu: "6"\n            memory: 10Gi',
+    "BuildKit limits must keep four 8-vCPU guests within node capacity",
 )
-require(BUILDKIT, '- "80000"', "BuildKit argument values must remain strings")
-require(BUILDKIT, "runAsNonRoot: true", "BuildKit must remain rootless")
-require(BUILDKIT, "runAsUser: 1000", "BuildKit must use the rootless image user")
-require(
-    BUILDKIT,
-    "automountServiceAccountToken: false",
-    "BuildKit must not receive a Kubernetes API credential",
-)
-require(
-    BUILDKIT,
-    "appArmorProfile:\n              type: Unconfined",
-    "rootless BuildKit must retain the profile required by newuidmap",
-)
-require(
-    BUILDKIT,
-    "moby/buildkit:v0.32.2-rootless@sha256:504731e577c20559c00f968f33219f30115e70be29ab96728d1d06e963fc494b",
-    "rootless BuildKit image must be versioned and digest-pinned",
-)
-require(
-    BUILDKIT,
-    "nook.nokey.sh/role: arc-runner",
-    "only ARC runner Pods may reach BuildKit",
-)
+require(RUNNERS, '- "160000"', "BuildKit argument values must remain strings")
+require(RUNNERS, "name: buildkit", "each runner Pod must carry private BuildKit")
+require(RUNNERS, "restartPolicy: Always", "BuildKit must be a native sidecar")
+require(RUNNERS, "privileged: true", "BuildKit needs build privileges in the guest")
 require(
     RUNNERS,
     "NOOK_BUILDKIT_ADDR",
-    "runner must receive the cluster-local BuildKit endpoint",
+    "runner must receive the private BuildKit endpoint",
 )
 require(
     RUNNERS,
-    "tcp://nook-arc-buildkit.arc-runners.svc.cluster.local:1234",
-    "runner must use the rootless BuildKit Service",
+    "tcp://127.0.0.1:1234",
+    "runner must use Pod loopback for private BuildKit",
 )
 require(
     RUNNERS,
@@ -118,15 +98,7 @@ for prohibited in (
     "sysbox",
     "containermode:",
 ):
-    for source in (RUNNERS, BUILDKIT):
-        forbid(source.lower(), prohibited, f"prohibited runner pattern: {prohibited}")
-forbid(RUNNERS, "name: buildkit", "BuildKit must not nest inside the Kata runner")
-forbid(BUILDKIT, "privileged: true", "rootless BuildKit must not be privileged")
-forbid(
-    BUILDKIT,
-    "runtimeClassName: kata-dragonball",
-    "Dragonball cannot execute BuildKit nested OCI workloads",
-)
+    forbid(RUNNERS.lower(), prohibited, f"prohibited runner pattern: {prohibited}")
 
 require(CONTROLLER, "updateStrategy: eventual", "ARC upgrades must drain jobs")
 require(NETWORK, "policyTypes:\n    - Ingress", "ARC ingress must default deny")
@@ -138,12 +110,20 @@ require(
     "ARC runner image must pin the accepted GitHub runner release",
 )
 require(TASKS, "helm upgrade --install", "ARC deployment must be declarative")
-require(TASKS, "manifests/arc/buildkit.yaml", "ARC deployment must apply BuildKit")
-require(TASKS, "nook-arc-buildkit", "ARC deployment must wait for BuildKit")
 require(
     TASKS,
     "ARC scale set is dispatch-ready",
     "ARC deployment must wait for listener and runner-set readiness",
+)
+require(
+    TASKS,
+    'gh run cancel "$run_id" --repo meta-secret/nook --force',
+    "ARC smoke must force-cancel a run whose assigned ephemeral runner fails",
+)
+require(
+    TASKS,
+    'kubectl delete ephemeralrunner --namespace arc-runners',
+    "ARC smoke must remove a failed ephemeral-runner registration",
 )
 require(
     TASKS,
@@ -180,14 +160,14 @@ forbid(
 require(
     DOCKER_SETUP,
     "driver remote",
-    "ARC Buildx must use the cluster-local remote BuildKit driver",
+    "ARC Buildx must use the private remote BuildKit driver",
 )
 require(
     DOCKER_SETUP,
     "startsWith(runner.name, 'nook-k0s-')",
     "ARC Buildx selection must use an Actions expression-visible runner identity",
 )
-for source in (RUNNERS, BUILDKIT, TASKS, DOCKER_SETUP):
+for source in (RUNNERS, TASKS, DOCKER_SETUP):
     forbid(source.lower(), "docker-in-docker", "DinD wording must not become config")
 
 print("ARC manifest contract passed")

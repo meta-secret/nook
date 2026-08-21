@@ -11,10 +11,11 @@ This directory owns Nook's stateful server infrastructure:
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - A pinned Actions Runner Controller scale set runs focused Actions jobs in
-  single-use `kata-dragonball` Pods. Those microVMs carry only Docker client
-  tooling. Buildx reaches an unprivileged rootless BuildKit Service whose
-  ingress is limited to ARC runner Pods. There is no Docker daemon, DinD,
-  Sysbox, privileged builder, host socket, or hostPath.
+  single-use `kata-dragonball` Pods. Each 16 GiB microVM carries Docker client
+  tooling and its own privileged BuildKit sidecar on Pod loopback. There is no
+  Docker daemon, DinD, Sysbox, shared builder, host socket, or hostPath.
+  No runners stay warm: ARC creates one fresh microVM per job. The four-runner
+  maximum is only a node-capacity concurrency bound.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
 expose anonymous S3 or registry access; every client authenticates with the
@@ -85,10 +86,11 @@ through the repository variable `NOOK_RUNS_ON=nook-k0s`. Tasks that require
 `type=docker` image loading or `docker run` stay on hosted runners.
 `task infra:arc:activate` sets the ARC route;
 `task infra:arc:fallback` immediately restores `ubuntu-latest`. ARC Buildx uses
-the remote driver against the cluster-local rootless BuildKit Service. Builder
-state is disposable; durable cache state remains in Zot. Its authenticated Zot
-traffic resolves through the same node's TLS ingress, avoiding an external
-registry data path while preserving the public certificate and registry host.
+the remote driver against the private BuildKit sidecar. Builder state is
+discarded with the single-use microVM; durable cache state remains in Zot. Its
+authenticated Zot traffic resolves through the same node's TLS ingress,
+avoiding an external registry data path while preserving the public certificate
+and registry host.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

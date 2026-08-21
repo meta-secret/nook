@@ -14,9 +14,9 @@ metadata:
   name: arc-runners
   labels:
     nook.nokey.sh/role: arc-runners
-    # Rootless BuildKit needs unconfined seccomp/AppArmor so newuidmap can
-    # establish its user namespace. Repository contracts still prohibit
-    # privileged containers, Docker daemons, host sockets, and host paths.
+    # BuildKit needs build privileges inside each Kata guest. Repository
+    # contracts require every job Pod to select a microVM runtime and prohibit
+    # Docker daemons, host sockets, host paths, and Sysbox.
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted
