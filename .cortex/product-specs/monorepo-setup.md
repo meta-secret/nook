@@ -54,7 +54,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Parallel targets cannot overwrite one another.
   - Main seeds the default-branch cache visible to new PRs.
   - Remote writes git-commit refs (`-git-<sha>`).
-  - Hosted setup probes each exact ref before selecting its restore inputs.
+  - Docker setup probes each exact ref before selecting its restore inputs.
   - A present exact ref is imported alone.
   - Native and WASM source restores import a present Main source graph alone.
   - Shorter dependency indexes join that solve only while Main source is absent.

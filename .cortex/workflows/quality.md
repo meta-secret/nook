@@ -240,10 +240,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Prefer own-scope leaf `cache-from`, same-Dockerfile stage lineage, or a
       dedicated parent scope that is never thin.
     - BuildKit merges cache importers. List order is not fallback precedence.
-    - Hosted setup probes every full-graph exact scope separately.
+    - Docker setup probes every full-graph exact scope separately.
     - A present exact scope is the only importer for that graph.
     - Exact PR writers publish `mode=max`, so replay keeps the full leaf lineage.
-    - Hosted setup also probes trusted Main native and WASM source refs.
+    - Docker setup also probes trusted Main native and WASM source refs.
     - A present Main source graph is the only importer for that solve.
     - Shorter dependency indexes join only while that Main source ref is absent.
     - A missing exact and Main source scope falls back to source-free

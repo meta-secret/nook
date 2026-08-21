@@ -258,7 +258,7 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
 - Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
-- Hosted CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
+- Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
 - Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
 

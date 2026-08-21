@@ -158,7 +158,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
 - Classifies changed paths and skips the product job chain for minds-only pushes.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
-- On `ubuntu-latest`: native Rust → WASM → browser-free web verify read-only.
+- Native Rust uses the configured ARC scale set. WASM and browser-free web
+  verification use fresh `ubuntu-latest` runners.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
 - Each browser solve is read-only.
@@ -856,7 +857,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
 - PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
-- Hosted setup probes each full-graph exact ref separately.
+- Docker setup probes each full-graph exact ref separately.
 - Existing exact refs are imported alone. Missing refs use dependency
   fingerprints and trusted Main.
 - Fork pull requests receive no registry credentials.
