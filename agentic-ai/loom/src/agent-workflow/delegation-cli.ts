@@ -9,6 +9,7 @@ import {
   TaskTerminalKind,
 } from './domain.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
+import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
 import type { AgentAttemptEventWithoutMetadata } from './agent-events.ts';
 import type { AgentAttemptJournalConfiguration } from './agent-journal.ts';
 import type {
@@ -63,6 +64,7 @@ async function main(): Promise<number> {
   const serialized = await readFile(commandLine.requestPath, 'utf8');
   const request = JSON.parse(serialized) as DelegationRecordRequest;
   assertRequest(request);
+  const terminal = normalizedTerminal(request.terminal);
   const runDirectory = resolve(
     commandLine.workingDirectory,
     'workflow',
@@ -93,7 +95,7 @@ async function main(): Promise<number> {
     };
     await journal.append(event);
   }
-  const processing = await journal.finalize(request.terminal);
+  const processing = await journal.finalize(terminal);
   const response = { runDirectory, processing };
   console.log(JSON.stringify(response));
   return 0;
@@ -127,7 +129,7 @@ function assertRequest(request: DelegationRecordRequest): void {
   if (
     !request ||
     typeof request.runId !== 'string' ||
-    request.runId.trim() === '' ||
+    !safeFilesystemIdentifier(request.runId) ||
     !/^[0-9a-f]{40}$/.test(request.sourceCommit) ||
     !Array.isArray(request.activities) ||
     !request.terminal ||
@@ -160,6 +162,20 @@ function assertRequest(request: DelegationRecordRequest): void {
   ) {
     throw new Error('Delegation journal request parent is invalid.');
   }
+}
+
+function normalizedTerminal(
+  terminal: TaskTerminal<string>,
+): TaskTerminal<string> {
+  if (terminal.kind !== TaskTerminalKind.Completed) return terminal;
+  return {
+    ...terminal,
+    output: decodeWorkflowTaskOutput(JSON.stringify(terminal.output)),
+  };
+}
+
+function safeFilesystemIdentifier(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
 }
 
 if (import.meta.main) {

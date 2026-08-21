@@ -13,6 +13,7 @@ import {
   MaterializedViewPresence,
 } from '../../src/agent-workflow/domain.ts';
 import { WorkflowEventKind } from '../../src/agent-workflow/events.ts';
+import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
 import { WorkflowJournal } from '../../src/agent-workflow/journal.ts';
 import {
   ReplayedWorkflowTerminalPresence,
@@ -31,6 +32,7 @@ import type {
 } from '../../src/agent-workflow/events.ts';
 import type {
   TaskViewProjectionInput,
+  WorkflowViewProjectionInput,
   WorkflowJournalConfiguration,
 } from '../../src/agent-workflow/journal.ts';
 import type { ReplayWorkflowJournalRequest } from '../../src/agent-workflow/replay.ts';
@@ -91,6 +93,17 @@ describe('workflow journal', () => {
       };
       await journal.append(startedEvent);
 
+      const oversizedRuntimeActivity: WorkflowEventWithoutMetadata<TestTask> = {
+        kind: WorkflowEventKind.RuntimeActivity,
+        task: TestTask.Inspect,
+        attempt: 1,
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'x'.repeat(1025),
+      };
+      await expect(journal.append(oversizedRuntimeActivity)).rejects.toThrow(
+        'runtime activity detail must be bounded',
+      );
+
       const taskTerminal: CompletedTaskTerminal<TestTask> = {
         kind: TaskTerminalKind.Completed,
         task: TestTask.Inspect,
@@ -141,8 +154,17 @@ describe('workflow journal', () => {
         await expect(
           journal.readVerifiedProcessingView(processing),
         ).rejects.toThrow('Processing projection digest mismatch');
+        await writeFile(
+          join(journal.runDirectory, taskView.projection.path),
+          '# Inspection\n\nComplete.\n',
+          'utf8',
+        );
       }
 
+      const rootViewInput: WorkflowViewProjectionInput = {
+        markdown: '# Root view\n\nComplete.',
+        authorKind: MaterializedViewAuthorKind.LoomLeaf,
+      };
       const workflowTerminal: WorkflowRunTerminal<TestTask> = {
         kind: WorkflowTerminalKind.Completed,
         runId: 'run-1',
@@ -150,10 +172,7 @@ describe('workflow journal', () => {
         version: '1.0.0',
         sourceCommit: SOURCE_COMMIT,
         taskTerminals: [taskTerminal],
-        materializedView: {
-          presence: MaterializedViewPresence.Unavailable,
-          reason: 'Test fixture omits a root view.',
-        },
+        materializedView: await journal.projectWorkflowView(rootViewInput),
         startedAt: STARTED_AT,
         finishedAt: FINISHED_AT,
       };
@@ -173,7 +192,10 @@ describe('workflow journal', () => {
         .trim()
         .split('\n')
         .map((line) => JSON.parse(line) as WorkflowEvent<TestTask>);
-      const replayRequest: ReplayWorkflowJournalRequest<TestTask> = { events };
+      const replayRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events,
+        runDirectory: journal.runDirectory,
+      };
       const replay = replayWorkflowJournal(replayRequest);
 
       expect(replay.eventCount).toBe(3);
@@ -221,6 +243,7 @@ describe('workflow journal', () => {
       );
       const malformedRootViewRequest: ReplayWorkflowJournalRequest<TestTask> = {
         events: malformedRootViewEvents,
+        runDirectory: journal.runDirectory,
       };
       expect(() => replayWorkflowJournal(malformedRootViewRequest)).toThrow(
         'invalid materialized view reference',
@@ -239,6 +262,7 @@ describe('workflow journal', () => {
       ) as readonly WorkflowEvent<TestTask>[];
       const unknownRootViewRequest: ReplayWorkflowJournalRequest<TestTask> = {
         events: unknownRootViewEvents,
+        runDirectory: journal.runDirectory,
       };
       expect(() => replayWorkflowJournal(unknownRootViewRequest)).toThrow(
         'unknown materialized view presence',
@@ -280,6 +304,48 @@ describe('workflow journal', () => {
         'invalid processing result reference',
       );
 
+      const unavailableExecutedViewEvents = events.map((event) =>
+        event.kind === WorkflowEventKind.TaskTerminalRecorded
+          ? {
+              ...event,
+              processing: {
+                ...event.processing,
+                view: {
+                  presence: MaterializedViewPresence.Unavailable,
+                  reason: 'Corrupted executed-task view.',
+                },
+              },
+            }
+          : event,
+      ) as readonly WorkflowEvent<TestTask>[];
+      const unavailableExecutedViewRequest = {
+        events: unavailableExecutedViewEvents,
+        runDirectory: journal.runDirectory,
+      };
+      expect(() =>
+        replayWorkflowJournal(unavailableExecutedViewRequest),
+      ).toThrow('invalid executed-task view');
+
+      const oversizedActivity: WorkflowEvent<TestTask> = {
+        ...events[0]!,
+        kind: WorkflowEventKind.RuntimeActivity,
+        task: TestTask.Inspect,
+        attempt: 1,
+        activity: WorkflowRuntimeActivityKind.TurnCompleted,
+        detail: 'x'.repeat(1025),
+        sequence: 2,
+      };
+      const shiftedAfterActivity = events
+        .slice(1)
+        .map((event) => ({ ...event, sequence: event.sequence + 1 }));
+      const oversizedActivityRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events: [events[0]!, oversizedActivity, ...shiftedAfterActivity],
+        runDirectory: journal.runDirectory,
+      };
+      expect(() => replayWorkflowJournal(oversizedActivityRequest)).toThrow(
+        'unknown runtime activity',
+      );
+
       const taskResultPath = join(journal.runDirectory, taskProjection.path);
       const taskResultText = await readFile(taskResultPath, 'utf8');
       const expectedTaskDigest = createHash('sha256')
@@ -293,6 +359,10 @@ describe('workflow journal', () => {
         .update(runResultText)
         .digest('hex');
       expect(workflowProjection.sha256).toBe(expectedRunDigest);
+      await writeFile(runResultPath, '{}\n', 'utf8');
+      expect(() => replayWorkflowJournal(replayRequest)).toThrow(
+        'projection digest does not match',
+      );
     } finally {
       await rm(runRoot, removeOptions);
     }

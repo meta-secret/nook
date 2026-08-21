@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -85,6 +85,42 @@ describe('delegated agent journal CLI', () => {
           .trim()
           .split('\n'),
       ).toHaveLength(5);
+
+      const unsafeRequest = {
+        ...request,
+        runId: '../../../../escaped-delegation-run',
+      };
+      await writeFile(requestPath, JSON.stringify(unsafeRequest), 'utf8');
+      const unsafeProcess = Bun.spawn(command, spawnOptions);
+      expect(await unsafeProcess.exited).not.toBe(0);
+      await new Response(unsafeProcess.stderr).text();
+
+      const malformedOutputRequest = {
+        ...request,
+        runId: 'malformed-output-run',
+        terminal: {
+          ...request.terminal,
+          output: {
+            materializedViewMarkdown: '# Incomplete output',
+          },
+        },
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(malformedOutputRequest),
+        'utf8',
+      );
+      const malformedProcess = Bun.spawn(command, spawnOptions);
+      expect(await malformedProcess.exited).not.toBe(0);
+      await new Response(malformedProcess.stderr).text();
+      const malformedRunDirectory = join(
+        workingDirectory,
+        'workflow',
+        'processing',
+        DelegatedAgentWorkflowName.AgentWork,
+        malformedOutputRequest.runId,
+      );
+      await expect(stat(malformedRunDirectory)).rejects.toThrow();
     } finally {
       await rm(workingDirectory, removeOptions);
     }

@@ -30,6 +30,7 @@ import type {
   WorkflowEventMetadata,
   WorkflowEventWithoutMetadata,
 } from './events.ts';
+import { WorkflowEventKind } from './events.ts';
 
 const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
   recursive: true,
@@ -79,6 +80,13 @@ export class WorkflowJournal<TTask extends string> {
   constructor(configuration: WorkflowJournalConfiguration) {
     assertFilesystemIdentifier(configuration.identity.runId);
     assertFilesystemIdentifier(configuration.identity.workflow);
+    if (
+      configuration.identity.workflowVersion.trim() === '' ||
+      configuration.identity.workflowVersion.length > 128 ||
+      !/^[0-9a-f]{40}$/.test(configuration.identity.sourceCommit)
+    ) {
+      throw new Error('Workflow processing source identity must be bounded.');
+    }
     this.identity = configuration.identity;
     this.runDirectory = join(
       configuration.runRoot,
@@ -101,13 +109,23 @@ export class WorkflowJournal<TTask extends string> {
   async append(
     event: WorkflowEventWithoutMetadata<TTask>,
   ): Promise<WorkflowEvent<TTask>> {
+    if (
+      event.kind === WorkflowEventKind.RuntimeActivity &&
+      (event.detail.length > 1024 || containsForbiddenControl(event.detail))
+    ) {
+      throw new Error('Workflow runtime activity detail must be bounded.');
+    }
     this.sequence += 1;
+    const occurredAt = this.now();
+    if (Number.isNaN(Date.parse(occurredAt))) {
+      throw new Error('Workflow event timestamp is invalid.');
+    }
     const metadata: WorkflowEventMetadata = {
       runId: this.identity.runId,
       workflow: this.identity.workflow,
       workflowVersion: this.identity.workflowVersion,
       sequence: this.sequence,
-      occurredAt: this.now(),
+      occurredAt,
       sourceCommit: this.identity.sourceCommit,
     };
     const completeEvent = { ...metadata, ...event } as WorkflowEvent<TTask>;
@@ -249,4 +267,13 @@ async function atomicWrite(operation: AtomicWriteOperation): Promise<void> {
 
 function sha256(serialized: string): string {
   return createHash('sha256').update(serialized).digest('hex');
+}
+
+function containsForbiddenControl(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return (
+      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+    );
+  });
 }

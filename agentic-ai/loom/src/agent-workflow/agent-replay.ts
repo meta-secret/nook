@@ -1,8 +1,10 @@
 import { AgentAttemptEventKind } from './agent-events.ts';
 import {
   AgentAttemptParentKind,
+  DelegatedAgentWorkflowName,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
+  StaticAgentWorkflowName,
   TaskTerminalKind,
 } from './domain.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
@@ -34,6 +36,10 @@ const VIEW_AUTHOR_KINDS = new Set<string>(
   Object.values(MaterializedViewAuthorKind),
 );
 const PARENT_KINDS = new Set<string>(Object.values(AgentAttemptParentKind));
+const PROCESSING_WORKFLOW_NAMES = new Set<string>([
+  ...Object.values(StaticAgentWorkflowName),
+  ...Object.values(DelegatedAgentWorkflowName),
+]);
 const MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH = 1024;
 
 export function replayAgentAttemptJournal(
@@ -166,6 +172,12 @@ function assertValidIdentity(event: AgentAttemptEventMetadata): void {
   if (
     !safeIdentifier(event.task) ||
     !safeIdentifier(event.agent) ||
+    !safeIdentifier(event.runId) ||
+    !PROCESSING_WORKFLOW_NAMES.has(event.workflow) ||
+    event.workflowVersion.trim() === '' ||
+    event.workflowVersion.length > 128 ||
+    !/^[0-9a-f]{40}$/.test(event.sourceCommit) ||
+    Number.isNaN(Date.parse(event.occurredAt)) ||
     !Number.isSafeInteger(event.attempt) ||
     event.attempt < 1 ||
     !Number.isSafeInteger(event.depth) ||

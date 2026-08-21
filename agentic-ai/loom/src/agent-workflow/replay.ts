@@ -3,11 +3,11 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 import { replayAgentAttemptJournal } from './agent-replay.ts';
+import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
 import type { AgentAttemptEvent } from './agent-events.ts';
 import { WorkflowEventKind, WorkflowRuntimeActivityKind } from './events.ts';
 
 import type {
-  StaticAgentWorkflowName,
   WorkflowAttemptNumber,
   WorkflowRunId,
   WorkflowVersion,
@@ -16,9 +16,12 @@ import type {
   TaskProcessingReference,
   ProjectionReference,
   TaskTerminal,
+  WorkflowRunTerminal,
 } from './domain.ts';
 import {
+  MaterializedViewAuthorKind,
   MaterializedViewPresence,
+  StaticAgentWorkflowName,
   TaskProcessingKind,
   TaskTerminalKind,
   WorkflowTerminalKind,
@@ -76,6 +79,7 @@ const WORKFLOW_TERMINAL_KINDS = new Set<string>(
 const RUNTIME_ACTIVITY_KINDS = new Set<string>(
   Object.values(WorkflowRuntimeActivityKind),
 );
+const MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH = 1024;
 
 export function replayWorkflowJournal<TTask extends string>(
   request: ReplayWorkflowJournalRequest<TTask>,
@@ -104,6 +108,7 @@ export function replayWorkflowJournal<TTask extends string>(
     if (!WORKFLOW_EVENT_KINDS.has(event.kind)) {
       invalidJournal('workflow journal contains an unknown event kind');
     }
+    assertEventCoordinates(event);
     const expectedSequence = eventIndex + 1;
     if (event.sequence !== expectedSequence) {
       invalidJournal(
@@ -164,7 +169,9 @@ export function replayWorkflowJournal<TTask extends string>(
 
     if (
       event.kind === WorkflowEventKind.RuntimeActivity &&
-      !RUNTIME_ACTIVITY_KINDS.has(event.activity)
+      (!RUNTIME_ACTIVITY_KINDS.has(event.activity) ||
+        event.detail.length > MAX_RUNTIME_ACTIVITY_DETAIL_LENGTH ||
+        containsForbiddenControl(event.detail))
     ) {
       invalidJournal('workflow journal contains unknown runtime activity');
     }
@@ -181,6 +188,17 @@ export function replayWorkflowJournal<TTask extends string>(
         invalidJournal('workflow journal has an invalid terminal reference');
       }
       assertMaterializedViewReference(event.materializedView);
+      if (!request.runDirectory) {
+        invalidJournal(
+          'workflow journal terminal requires its run directory for projection verification',
+        );
+      }
+      const terminalVerification: VerifyWorkflowTerminalRequest<TTask> = {
+        event,
+        runDirectory: request.runDirectory,
+        taskTerminals,
+      };
+      verifyWorkflowTerminal(terminalVerification);
       workflowTerminal = {
         presence: ReplayedWorkflowTerminalPresence.Recorded,
         terminalKind: event.terminalKind,
@@ -258,19 +276,181 @@ function assertProcessingReference<TTask extends string>(
     );
   }
   assertMaterializedViewReference(processing.view);
+  if (!request.runDirectory) {
+    invalidJournal(
+      `workflow journal task ${event.task} requires its run directory to verify processing`,
+    );
+  }
   if (processing.kind === TaskProcessingKind.AgentAttempt) {
-    if (!request.runDirectory) {
-      invalidJournal(
-        `workflow journal task ${event.task} requires its run directory to verify agent processing`,
-      );
-    }
     const verificationRequest: VerifyAgentProcessingRequest<TTask> = {
       event,
       runDirectory: request.runDirectory,
       processing,
     };
     verifyAgentProcessing(verificationRequest);
+    return;
   }
+  const verificationRequest: VerifyWorkflowTaskProcessingRequest<TTask> = {
+    event,
+    runDirectory: request.runDirectory,
+    processing,
+  };
+  verifyWorkflowTaskProcessing(verificationRequest);
+}
+
+type VerifyWorkflowTaskProcessingRequest<TTask extends string> = {
+  readonly event: TaskTerminalRecordedEvent<TTask>;
+  readonly runDirectory: string;
+  readonly processing: Extract<
+    TaskProcessingReference,
+    { readonly kind: TaskProcessingKind.WorkflowTask }
+  >;
+};
+
+function verifyWorkflowTaskProcessing<TTask extends string>(
+  request: VerifyWorkflowTaskProcessingRequest<TTask>,
+): void {
+  const expectedBase = join(
+    'task-results',
+    `${request.event.task}-attempt-${request.event.attempt}`,
+  );
+  if (request.processing.result.path !== `${expectedBase}.json`) {
+    invalidJournal(
+      `workflow journal task ${request.event.task} has a noncanonical result path`,
+    );
+  }
+  const resultRequest: ReadVerifiedProjectionRequest = {
+    runDirectory: request.runDirectory,
+    projection: request.processing.result,
+  };
+  const resultText = readVerifiedProjection(resultRequest);
+  let result: TaskTerminal<string>;
+  try {
+    result = JSON.parse(resultText) as TaskTerminal<string>;
+  } catch {
+    invalidJournal(
+      `workflow journal task ${request.event.task} has an unreadable result projection`,
+    );
+  }
+  assertTerminalResult(result);
+  if (
+    result.task !== request.event.task ||
+    result.attempt !== request.event.attempt ||
+    result.kind !== request.event.terminalKind
+  ) {
+    invalidJournal(
+      `workflow journal task ${request.event.task} differs from its result projection`,
+    );
+  }
+  if (request.event.attempt === 0) {
+    if (
+      request.event.terminalKind !== TaskTerminalKind.Skipped ||
+      request.processing.view.presence !== MaterializedViewPresence.Unavailable
+    ) {
+      invalidJournal(
+        'only skipped attempt zero may omit its materialized view',
+      );
+    }
+    return;
+  }
+  if (
+    request.processing.view.presence !== MaterializedViewPresence.Recorded ||
+    request.processing.view.projection.path !== `${expectedBase}.md` ||
+    request.processing.view.eventHighWaterMark !== request.event.sequence - 1 ||
+    (request.event.terminalKind === TaskTerminalKind.Completed
+      ? request.processing.view.authorKind !==
+        MaterializedViewAuthorKind.LoomLeaf
+      : request.processing.view.authorKind !==
+        MaterializedViewAuthorKind.LoomRuntime)
+  ) {
+    invalidJournal(
+      `workflow journal task ${request.event.task} has an invalid executed-task view`,
+    );
+  }
+  const viewRequest: ReadVerifiedProjectionRequest = {
+    runDirectory: request.runDirectory,
+    projection: request.processing.view.projection,
+  };
+  readVerifiedProjection(viewRequest);
+}
+
+type VerifyWorkflowTerminalRequest<TTask extends string> = {
+  readonly event: Extract<
+    WorkflowEvent<TTask>,
+    { readonly kind: WorkflowEventKind.WorkflowTerminalRecorded }
+  >;
+  readonly runDirectory: string;
+  readonly taskTerminals: readonly ReplayedTaskTerminalReference<TTask>[];
+};
+
+function verifyWorkflowTerminal<TTask extends string>(
+  request: VerifyWorkflowTerminalRequest<TTask>,
+): void {
+  const resultProjection: ProjectionReference = {
+    path: request.event.resultPath,
+    sha256: request.event.resultSha256,
+  };
+  if (resultProjection.path !== 'run-result.json') {
+    invalidJournal('workflow journal terminal result path is noncanonical');
+  }
+  const resultRequest: ReadVerifiedProjectionRequest = {
+    runDirectory: request.runDirectory,
+    projection: resultProjection,
+  };
+  const resultText = readVerifiedProjection(resultRequest);
+  let result: WorkflowRunTerminal<TTask>;
+  try {
+    result = JSON.parse(resultText) as WorkflowRunTerminal<TTask>;
+  } catch {
+    invalidJournal('workflow journal terminal result cannot be decoded');
+  }
+  if (
+    result.runId !== request.event.runId ||
+    result.workflow !== request.event.workflow ||
+    result.version !== request.event.workflowVersion ||
+    result.sourceCommit !== request.event.sourceCommit ||
+    result.kind !== request.event.terminalKind ||
+    JSON.stringify(result.materializedView) !==
+      JSON.stringify(request.event.materializedView)
+  ) {
+    invalidJournal(
+      'workflow journal terminal differs from its result projection',
+    );
+  }
+  const replayedTerminals = request.taskTerminals
+    .map((terminal) =>
+      [terminal.task, terminal.attempt, terminal.terminalKind].join('\u0000'),
+    )
+    .sort();
+  const projectedTerminals = result.taskTerminals
+    .map((terminal) =>
+      [terminal.task, terminal.attempt, terminal.kind].join('\u0000'),
+    )
+    .sort();
+  if (
+    JSON.stringify(replayedTerminals) !== JSON.stringify(projectedTerminals)
+  ) {
+    invalidJournal(
+      'workflow journal terminal task set differs from its result projection',
+    );
+  }
+  const rootView = request.event.materializedView;
+  if (
+    rootView.presence !== MaterializedViewPresence.Recorded ||
+    rootView.projection.path !== 'view.md' ||
+    rootView.eventHighWaterMark !== request.event.sequence - 1 ||
+    (request.event.terminalKind === WorkflowTerminalKind.Completed ||
+    request.event.terminalKind === WorkflowTerminalKind.CompletedWithFailures
+      ? rootView.authorKind === MaterializedViewAuthorKind.LoomRuntime
+      : rootView.authorKind !== MaterializedViewAuthorKind.LoomRuntime)
+  ) {
+    invalidJournal('workflow journal root view is invalid');
+  }
+  const viewRequest: ReadVerifiedProjectionRequest = {
+    runDirectory: request.runDirectory,
+    projection: rootView.projection,
+  };
+  readVerifiedProjection(viewRequest);
 }
 
 type VerifyAgentProcessingRequest<TTask extends string> = {
@@ -303,6 +483,7 @@ function verifyAgentProcessing<TTask extends string>(
       `workflow journal task ${request.event.task} has an unreadable result projection`,
     );
   }
+  assertTerminalResult(result);
   if (request.processing.view.presence === MaterializedViewPresence.Recorded) {
     const viewProjectionRequest: ReadVerifiedProjectionRequest = {
       runDirectory: request.runDirectory,
@@ -374,6 +555,67 @@ type ReadVerifiedProjectionRequest = {
   readonly projection: ProjectionReference;
 };
 
+function assertTerminalResult(terminal: TaskTerminal<string>): void {
+  if (terminal.kind === TaskTerminalKind.Completed) {
+    decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
+    return;
+  }
+  if (
+    typeof terminal.summary !== 'string' ||
+    terminal.summary.trim() === '' ||
+    terminal.summary.length > 4096 ||
+    containsForbiddenControl(terminal.summary)
+  ) {
+    invalidJournal('workflow journal terminal summary is invalid');
+  }
+}
+
+function assertEventCoordinates<TTask extends string>(
+  event: WorkflowEvent<TTask>,
+): void {
+  if (
+    !safeIdentifier(event.runId) ||
+    !Object.values(StaticAgentWorkflowName).includes(event.workflow) ||
+    event.workflowVersion.trim() === '' ||
+    event.workflowVersion.length > 128 ||
+    !/^[0-9a-f]{40}$/.test(event.sourceCommit) ||
+    Number.isNaN(Date.parse(event.occurredAt))
+  ) {
+    invalidJournal('workflow journal event identity is invalid');
+  }
+  if (event.kind === WorkflowEventKind.WorkflowStarted) {
+    if (!safeIdentifier(event.entry)) {
+      invalidJournal('workflow journal entry task is invalid');
+    }
+    return;
+  }
+  if (event.kind === WorkflowEventKind.SuccessorsActivated) {
+    if (
+      !safeIdentifier(event.sourceTask) ||
+      event.activatedTasks.some((task) => !safeIdentifier(task)) ||
+      event.arrivedJoins.some((joinName) => !safeIdentifier(joinName))
+    ) {
+      invalidJournal('workflow journal successor coordinates are invalid');
+    }
+    return;
+  }
+  if (event.kind === WorkflowEventKind.WorkflowTerminalRecorded) return;
+  if (
+    !safeIdentifier(event.task) ||
+    !Number.isSafeInteger(event.attempt) ||
+    event.attempt < 0 ||
+    (event.attempt === 0 &&
+      (event.kind !== WorkflowEventKind.TaskTerminalRecorded ||
+        event.terminalKind !== TaskTerminalKind.Skipped))
+  ) {
+    invalidJournal('workflow journal task coordinates are invalid');
+  }
+}
+
+function safeIdentifier(value: string): boolean {
+  return /^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(value);
+}
+
 function readVerifiedProjection(
   request: ReadVerifiedProjectionRequest,
 ): string {
@@ -418,4 +660,13 @@ function invalidJournal(message: string): never {
     text: message,
   };
   loomFailureDetail(failure);
+}
+
+function containsForbiddenControl(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return (
+      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+    );
+  });
 }

@@ -34,6 +34,7 @@ import type {
   AgentAttemptEventMetadata,
   AgentAttemptEventWithoutMetadata,
 } from './agent-events.ts';
+import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
 
 const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
   recursive: true,
@@ -64,6 +65,8 @@ export class AgentAttemptJournal<TTask extends string> {
   constructor(configuration: AgentAttemptJournalConfiguration) {
     assertFilesystemIdentifier(configuration.task);
     assertFilesystemIdentifier(configuration.agent);
+    assertFilesystemIdentifier(configuration.runId);
+    assertFilesystemIdentifier(configuration.workflow);
     if (
       !Number.isSafeInteger(configuration.attempt) ||
       configuration.attempt < 1 ||
@@ -72,6 +75,13 @@ export class AgentAttemptJournal<TTask extends string> {
       configuration.depth > 64
     ) {
       throw new Error('Agent attempt and hierarchy depth must be bounded.');
+    }
+    if (
+      configuration.workflowVersion.trim() === '' ||
+      configuration.workflowVersion.length > 128 ||
+      !/^[0-9a-f]{40}$/.test(configuration.sourceCommit)
+    ) {
+      throw new Error('Agent attempt source identity must be bounded.');
     }
     assertParentLineage(configuration);
     this.configuration = configuration;
@@ -113,6 +123,10 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent runtime activity detail must be bounded.');
     }
     this.sequence += 1;
+    const occurredAt = this.configuration.now();
+    if (Number.isNaN(Date.parse(occurredAt))) {
+      throw new Error('Agent attempt event timestamp is invalid.');
+    }
     const metadata: AgentAttemptEventMetadata = {
       runId: this.configuration.runId,
       workflow: this.configuration.workflow,
@@ -124,7 +138,7 @@ export class AgentAttemptJournal<TTask extends string> {
       depth: this.configuration.depth,
       parent: this.configuration.parent,
       sequence: this.sequence,
-      occurredAt: this.configuration.now(),
+      occurredAt,
     };
     const completeEvent = { ...metadata, ...event } as AgentAttemptEvent;
     const serialized = `${JSON.stringify(completeEvent)}\n`;
@@ -183,6 +197,7 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent terminal identity differs from its journal.');
     }
     if (terminal.kind === TaskTerminalKind.Completed) {
+      decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
       const view = terminal.output?.materializedViewMarkdown;
       if (
         typeof terminal.threadId !== 'string' ||
