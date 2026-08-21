@@ -27,6 +27,7 @@ import type {
   WorkflowTaskRuntime,
 } from './runtime.ts';
 import type { TaskStopRequest } from './runtime.ts';
+import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from './structured-result-codec.ts';
 
 export class LocalWorkflowTaskRuntime<
   TTask extends string,
@@ -162,6 +163,7 @@ function leafEvidenceOutput(summary: string): WorkflowTaskOutput {
   const output: WorkflowTaskOutput = {
     resultKind: WorkflowResultKind.LoomLeafEvidence,
     summary,
+    materializedViewMarkdown: `# Loom leaf evidence\n\n${summary}`,
     findings: [],
     notesForParent: [],
     artifacts: [
@@ -267,5 +269,36 @@ export function mechanicalCortexAuditOutput(
     ? 'Mechanical Cortex audit passed.'
     : `Mechanical Cortex audit found ${findings.length} inconsistencies.`;
   const output = leafEvidenceOutput(summary);
-  return { ...output, findings };
+  const evidence = findings.flatMap((finding) =>
+    finding.evidence.map((entry) => `- ${finding.title}: ${entry}`),
+  );
+  const completeMaterializedViewMarkdown = [
+    '# Mechanical Cortex audit',
+    '',
+    summary,
+    '',
+    '## Evidence',
+    '',
+    ...(evidence.length > 0 ? evidence : ['- No actionable findings.']),
+  ].join('\n');
+  const materializedViewMarkdown = boundedLoomMaterializedView(
+    completeMaterializedViewMarkdown,
+  );
+  return { ...output, materializedViewMarkdown, findings };
+}
+
+function boundedLoomMaterializedView(markdown: string): string {
+  if (markdown.length <= MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH) {
+    return markdown;
+  }
+  const truncationNotice = [
+    '',
+    '',
+    '## Truncation',
+    '',
+    '- Additional mechanical evidence was omitted from this bounded read model. Read the verified `resultArtifact` supplied with this view for the complete typed findings.',
+  ].join('\n');
+  const retainedLength =
+    MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH - truncationNotice.length;
+  return `${markdown.slice(0, retainedLength).trimEnd()}${truncationNotice}`;
 }

@@ -18,6 +18,7 @@ import {
   LocalWorkflowTaskRuntime,
   mechanicalCortexAuditOutput,
 } from '../../src/agent-workflow/leaf-runtime.ts';
+import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from '../../src/agent-workflow/structured-result-codec.ts';
 
 const REMOVE_TREE_OPTIONS: RmOptions = { recursive: true, force: true };
 const CREATE_TREE_OPTIONS: MakeDirectoryOptions = { recursive: true };
@@ -70,6 +71,31 @@ test('allows a clean mechanical report with zero findings', () => {
 
   expect(output.findings).toEqual([]);
   expect(output.summary).toBe('Mechanical Cortex audit passed.');
+});
+
+test('bounds Loom-authored mechanical materialized views', () => {
+  const arrayLength = { length: 2_000 };
+  const report: CortexAuditReport = {
+    brokenLinks: [],
+    missingFromIndex: Array.from(
+      arrayLength,
+      () => `documents/${'x'.repeat(100)}.md`,
+    ),
+    orphanIndexRows: [],
+    missingExecutableSkills: [],
+    densityFindings: [],
+    structureFindings: [],
+    articleStructureFindings: [],
+    auditOk: false,
+  };
+  const output = mechanicalCortexAuditOutput(report);
+
+  expect(output.materializedViewMarkdown.length).toBeLessThanOrEqual(
+    MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH,
+  );
+  expect(output.materializedViewMarkdown).toContain('## Truncation');
+  expect(output.materializedViewMarkdown).toContain('`resultArtifact`');
+  expect(output.findings).toHaveLength(2_000);
 });
 
 test('runs the mechanical audit from the invocation working directory', async () => {

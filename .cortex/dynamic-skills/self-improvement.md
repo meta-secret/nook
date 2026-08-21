@@ -314,6 +314,17 @@ worker contract and safe parallelism rules.
 11. Validate graph structure, dry-run projection, execution behavior, Cortex
     coherence, and the updated exact head.
 
+Workflow processing views may inform reflection after their hashes and source
+identity are verified.
+
+They are execution evidence, not durable Cortex authority by themselves.
+
+- `workflow/processing/` keeps run events and semantic projections through
+  aggregation and handoff.
+- `.cortex/.session/` keeps disposable task reflection memory.
+- Promote a processing discovery only after the delivery owner validates it
+  against code, tests, and the owning Cortex documents.
+
 The audit may propose a graph. The delivery owner reviews and authors it.
 
 Never parse Markdown, YAML, prompts, session notes, or model output into

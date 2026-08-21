@@ -1,6 +1,17 @@
 import { createHash } from 'node:crypto';
-import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import {
+  appendFile,
+  mkdir,
+  readFile,
+  rename,
+  writeFile,
+} from 'node:fs/promises';
+import { dirname, join, resolve, sep } from 'node:path';
+import {
+  MaterializedViewAuthorKind,
+  MaterializedViewPresence,
+  TaskProcessingKind,
+} from './domain.ts';
 import type {
   StaticAgentWorkflowName,
   TaskTerminal,
@@ -10,12 +21,16 @@ import type {
   WorkflowVersion,
   GitCommit,
   IsoTimestamp,
+  MaterializedViewReference,
+  ProjectionReference,
+  TaskProcessingReference,
 } from './domain.ts';
 import type {
   WorkflowEvent,
   WorkflowEventMetadata,
   WorkflowEventWithoutMetadata,
 } from './events.ts';
+import { WorkflowEventKind } from './events.ts';
 
 const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
   recursive: true,
@@ -44,6 +59,16 @@ export type WorkflowTerminalProjection = {
   readonly sha256: string;
 };
 
+export type WorkflowViewProjectionInput = {
+  readonly markdown: string;
+  readonly authorKind: MaterializedViewAuthorKind;
+};
+
+export type TaskViewProjectionInput = WorkflowViewProjectionInput & {
+  readonly task: string;
+  readonly attempt: number;
+};
+
 export class WorkflowJournal<TTask extends string> {
   readonly runDirectory: string;
   readonly eventsPath: string;
@@ -53,6 +78,15 @@ export class WorkflowJournal<TTask extends string> {
   private pendingAppend: Promise<void>;
 
   constructor(configuration: WorkflowJournalConfiguration) {
+    assertFilesystemIdentifier(configuration.identity.runId);
+    assertFilesystemIdentifier(configuration.identity.workflow);
+    if (
+      configuration.identity.workflowVersion.trim() === '' ||
+      configuration.identity.workflowVersion.length > 128 ||
+      !/^[0-9a-f]{40}$/.test(configuration.identity.sourceCommit)
+    ) {
+      throw new Error('Workflow processing source identity must be bounded.');
+    }
     this.identity = configuration.identity;
     this.runDirectory = join(
       configuration.runRoot,
@@ -75,13 +109,23 @@ export class WorkflowJournal<TTask extends string> {
   async append(
     event: WorkflowEventWithoutMetadata<TTask>,
   ): Promise<WorkflowEvent<TTask>> {
+    if (
+      event.kind === WorkflowEventKind.RuntimeActivity &&
+      (event.detail.length > 1024 || containsForbiddenControl(event.detail))
+    ) {
+      throw new Error('Workflow runtime activity detail must be bounded.');
+    }
     this.sequence += 1;
+    const occurredAt = this.now();
+    if (Number.isNaN(Date.parse(occurredAt))) {
+      throw new Error('Workflow event timestamp is invalid.');
+    }
     const metadata: WorkflowEventMetadata = {
       runId: this.identity.runId,
       workflow: this.identity.workflow,
       workflowVersion: this.identity.workflowVersion,
       sequence: this.sequence,
-      occurredAt: this.now(),
+      occurredAt,
       sourceCommit: this.identity.sourceCommit,
     };
     const completeEvent = { ...metadata, ...event } as WorkflowEvent<TTask>;
@@ -124,6 +168,89 @@ export class WorkflowJournal<TTask extends string> {
       sha256: sha256(serialized),
     };
   }
+
+  async projectWorkflowView(
+    input: WorkflowViewProjectionInput,
+  ): Promise<MaterializedViewReference> {
+    const relativePath = 'view.md';
+    const serialized = `${input.markdown.trim()}\n`;
+    const operation: AtomicWriteOperation = {
+      path: join(this.runDirectory, relativePath),
+      serialized,
+    };
+    await atomicWrite(operation);
+    const projection: ProjectionReference = {
+      path: relativePath,
+      sha256: sha256(serialized),
+    };
+    return {
+      presence: MaterializedViewPresence.Recorded,
+      authorKind: input.authorKind,
+      projection,
+      eventHighWaterMark: this.sequence,
+    };
+  }
+
+  async projectTaskView(
+    input: TaskViewProjectionInput,
+  ): Promise<MaterializedViewReference> {
+    assertFilesystemIdentifier(input.task);
+    const relativePath = join(
+      'task-results',
+      `${input.task}-attempt-${input.attempt}.md`,
+    );
+    const serialized = `${input.markdown.trim()}\n`;
+    const operation: AtomicWriteOperation = {
+      path: join(this.runDirectory, relativePath),
+      serialized,
+    };
+    await atomicWrite(operation);
+    return {
+      presence: MaterializedViewPresence.Recorded,
+      authorKind: input.authorKind,
+      projection: {
+        path: relativePath,
+        sha256: sha256(serialized),
+      },
+      eventHighWaterMark: this.sequence,
+    };
+  }
+
+  async readVerifiedProcessingView(
+    processing: TaskProcessingReference,
+  ): Promise<string> {
+    await this.readVerifiedProjection(processing.result);
+    if (processing.kind === TaskProcessingKind.AgentAttempt) {
+      await this.readVerifiedProjection(processing.events);
+    }
+    if (processing.view.presence !== MaterializedViewPresence.Recorded) {
+      throw new Error('Upstream processing view is unavailable.');
+    }
+    return this.readVerifiedProjection(processing.view.projection);
+  }
+
+  private async readVerifiedProjection(
+    projection: ProjectionReference,
+  ): Promise<string> {
+    const runRoot = resolve(this.runDirectory);
+    const projectionPath = resolve(runRoot, projection.path);
+    if (!projectionPath.startsWith(`${runRoot}${sep}`)) {
+      throw new Error('Processing projection escapes its workflow run.');
+    }
+    const serialized = await readFile(projectionPath, 'utf8');
+    if (sha256(serialized) !== projection.sha256) {
+      throw new Error(
+        `Processing projection digest mismatch: ${projection.path}`,
+      );
+    }
+    return serialized;
+  }
+}
+
+function assertFilesystemIdentifier(identifier: string): void {
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(identifier)) {
+    throw new Error(`Unsafe workflow processing identifier: ${identifier}`);
+  }
 }
 
 type AtomicWriteOperation = {
@@ -140,4 +267,13 @@ async function atomicWrite(operation: AtomicWriteOperation): Promise<void> {
 
 function sha256(serialized: string): string {
   return createHash('sha256').update(serialized).digest('hex');
+}
+
+function containsForbiddenControl(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return (
+      code === 127 || (code < 32 && code !== 9 && code !== 10 && code !== 13)
+    );
+  });
 }

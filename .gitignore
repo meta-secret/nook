@@ -51,6 +51,7 @@ recipe.json
 .impeccable/live/server.json
 .impeccable/live/sessions/
 .cortex/.session/
+/workflow/processing/
 .impeccable/live/previews/
 .impeccable/live/annotations/
 .impeccable/live/cache/

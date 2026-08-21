@@ -4,9 +4,11 @@ import type {
   GitCommit,
   LoomLeafTaskExecution,
   TaskTerminal,
+  TaskTerminalKind,
   WorkflowAttemptNumber,
   WorkflowRunId,
   WorkflowTaskOutput,
+  MaterializedViewReference,
 } from './domain.ts';
 import type { RuntimeActivityObservation } from './events.ts';
 
@@ -16,7 +18,15 @@ export type RuntimeActivityObserver = (
 
 export type WorkflowDependencyOutput<TTask extends string> = {
   readonly task: TTask;
-  readonly output: WorkflowTaskOutput;
+  readonly terminalKind: TaskTerminalKind;
+  readonly view: MaterializedViewReference;
+  readonly materializedViewMarkdown: string;
+  readonly resultArtifact: VerifiedWorkflowResultArtifact;
+};
+
+export type VerifiedWorkflowResultArtifact = {
+  readonly location: string;
+  readonly sha256: string;
 };
 
 type WorkflowTaskInvocationBase<TTask extends string> = {
@@ -83,9 +93,12 @@ export interface WorkflowTaskAttempt<TTask extends string> {
 }
 
 export class UnconfirmedTaskTeardownError extends Error {
+  readonly task: string;
+
   constructor(task: string) {
     super(`Task ${task} did not confirm teardown before its hard deadline.`);
     this.name = 'UnconfirmedTaskTeardownError';
+    this.task = task;
   }
 }
 

@@ -17,6 +17,11 @@ description: >-
 
 # Coding Bro
 
+When delegating any part of this workflow outside a compiled Loom graph, follow
+the `subagent-delegation` skill and finalize every reached attempt with
+`task loom:agent-delegation:record REQUEST=<request.json>` before consuming its
+semantic view.
+
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
 Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting.
@@ -25,15 +30,17 @@ Follow the delivery sequence in the cortex workflow:
 
 1. Fetch repo, read owning product specs, and publish the Workbench task plan.
 2. Branch and create ignored session memory for substantial work.
-3. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
-4. Commit and run advisory local Codex review.
-5. Push and use focused hosted execution when useful.
-6. Trigger complete validation and exact-head Cloud review through Loom.
-7. Resolve actionable feedback while repository-owned checks run.
-8. Fix until exact-head checks pass.
-9. When session memory was created, reflect, promote durable knowledge, remove the file, and verify readiness.
-10. Squash-merge and publish the Workbench completion records.
-11. Report duration.
+3. Apply [subagent-delegation](../subagent-delegation/SKILL.md) when delegating.
+   Require attempt streams and recursive view aggregation before integration.
+4. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
+5. Commit and run advisory local Codex review.
+6. Push and use focused hosted execution when useful.
+7. Trigger complete validation and exact-head Cloud review through Loom.
+8. Resolve actionable feedback while repository-owned checks run.
+9. Fix until exact-head checks pass.
+10. When session memory was created, reflect, promote durable knowledge, remove the file, and verify readiness.
+11. Squash-merge and publish the Workbench completion records.
+12. Report duration.
 
 Never wait for a Codex or Cursor result after repository-owned checks finish.
 `task pr:review` may request Cursor Bugbot when Codex reports a usage limit.

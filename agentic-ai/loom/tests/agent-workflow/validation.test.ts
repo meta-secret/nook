@@ -6,9 +6,12 @@ import {
   CortexAuditTask,
 } from '../../src/agent-workflow/cortex-workflow.ts';
 import {
+  AgentReasoningEffort,
+  AgentWorkspacePolicy,
   LoomLeafKind,
   TaskTargetKind,
   WorkflowExecutorKind,
+  WorkflowResultKind,
   isValidTaskResourceClaim,
   noTasks,
   taskResourcePatternsOverlap,
@@ -19,7 +22,10 @@ import {
   validateStaticAgentWorkflow,
 } from '../../src/agent-workflow/validation.ts';
 
-import type { StaticAgentWorkflowDefinition } from '../../src/agent-workflow/domain.ts';
+import type {
+  StaticAgentWorkflowDefinition,
+  StaticTaskDefinition,
+} from '../../src/agent-workflow/domain.ts';
 import type {
   WorkflowValidation,
   WorkflowValidationIssue,
@@ -55,10 +61,50 @@ type SharedOutcomeWorkflow = StaticAgentWorkflowDefinition<
   never
 >;
 
+enum NestedAgentTask {
+  Leaf = 'leaf',
+  Intermediate = 'intermediate',
+  Root = 'root',
+}
+
+enum NestedAgent {
+  Leaf = 'leaf-agent',
+  Intermediate = 'intermediate-agent',
+  Root = 'root-agent',
+}
+
 type WorkflowIssueAssertion = {
   readonly validation: WorkflowValidation;
   readonly kind: WorkflowValidationIssueKind;
 };
+
+type NestedAgentTaskRequest = {
+  readonly task: NestedAgentTask;
+  readonly agent: NestedAgent;
+  readonly successor: NestedAgentTask | false;
+};
+
+function nestedAgentTask(
+  request: NestedAgentTaskRequest,
+): StaticTaskDefinition<NestedAgentTask, NestedAgent, never> {
+  return {
+    name: request.task,
+    execution: {
+      kind: WorkflowExecutorKind.Agent,
+      agent: request.agent,
+      instruction: 'Produce a bounded semantic materialized view.',
+      resultKind: WorkflowResultKind.CortexEvidence,
+    },
+    completed: request.successor
+      ? { kind: TaskTargetKind.Task, task: request.successor }
+      : noTasks,
+    failed: request.successor
+      ? { kind: TaskTargetKind.Task, task: request.successor }
+      : noTasks,
+    resources: { read: [], write: [] },
+    timeoutMs: 1_000,
+  };
+}
 
 function expectIssue(assertion: WorkflowIssueAssertion): void {
   expect(assertion.validation.status).toBe(WorkflowValidationStatus.Invalid);
@@ -231,6 +277,7 @@ describe('static agent workflow validation', () => {
             CortexAuditTask.AuditRuntimeTaskAndCi
           ],
           completed: noTasks,
+          failed: noTasks,
         },
       },
     };
@@ -241,6 +288,35 @@ describe('static agent workflow validation', () => {
     };
 
     expectIssue(assertion);
+  });
+
+  test('rejects an all-terminal arrival with only one outcome edge', () => {
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.AuditRuntimeTaskAndCi]: {
+          ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+            CortexAuditTask.AuditRuntimeTaskAndCi
+          ],
+          failed: noTasks,
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.InvalidJoin,
+    };
+
+    expectIssue(assertion);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('requires both outcomes'),
+        ),
+      ).toBe(true);
+    }
   });
 
   test('rejects a task with two scheduling sources', () => {
@@ -266,6 +342,40 @@ describe('static agent workflow validation', () => {
     };
 
     expectIssue(assertion);
+  });
+
+  test('rejects all-terminal arrivals from mutually exclusive waves', () => {
+    const baseline =
+      CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+        CortexAuditTask.ResolveBaseline
+      ];
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      version: 'exclusive-arrivals-test',
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.ResolveBaseline]: {
+          ...baseline,
+          completed: {
+            kind: TaskTargetKind.Task,
+            task: CortexAuditTask.AuditWorkflowsAndReferences,
+          },
+          failed: {
+            kind: TaskTargetKind.Task,
+            task: CortexAuditTask.AuditDesignDocsAndProductSpecs,
+          },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('one explicit parallel scheduling wave'),
+        ),
+      ).toBe(true);
+    }
   });
 
   test('rejects overlapping write and read claims in one parallel wave', () => {
@@ -368,7 +478,7 @@ describe('static agent workflow validation', () => {
     expectIssue(assertion);
   });
 
-  test('accepts conflicting claims on mutually exclusive outcome branches', () => {
+  test('rejects a materializer that is absent from one terminal route', () => {
     const leafExecution = {
       kind: WorkflowExecutorKind.LoomLeaf,
       leaf: LoomLeafKind.VerifyGitBaseline,
@@ -377,6 +487,7 @@ describe('static agent workflow validation', () => {
       name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
       version: 'exclusive-outcome-test',
       entry: ExclusiveBranchTask.Root,
+      materializedViewTask: ExclusiveBranchTask.CompletedDescendant,
       taskNames: [
         ExclusiveBranchTask.Root,
         ExclusiveBranchTask.CompletedBranch,
@@ -444,11 +555,144 @@ describe('static agent workflow validation', () => {
       joins: {},
     };
     const validation = validateStaticAgentWorkflow(workflow);
-    const expectedValidation: WorkflowValidation = {
-      status: WorkflowValidationStatus.Valid,
+    const assertion: WorkflowIssueAssertion = {
+      validation,
+      kind: WorkflowValidationIssueKind.InvalidMaterializedViewTask,
     };
 
-    expect(validation).toEqual(expectedValidation);
+    expectIssue(assertion);
+  });
+
+  test('rejects a successful outcome that bypasses the materializer', () => {
+    const baseline =
+      CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+        CortexAuditTask.ResolveBaseline
+      ];
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      version: 'successful-bypass-test',
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.ResolveBaseline]: {
+          ...baseline,
+          completed: baseline.failed,
+          failed: baseline.completed,
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('successful terminal route that bypasses'),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test('rejects a leaf materializer for upstream agent evidence', () => {
+    const materializer =
+      CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+        CortexAuditTask.SynthesizeFindings
+      ];
+    const workflow: CortexWorkflow = {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+      version: 'leaf-materializer-test',
+      tasks: {
+        ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+        [CortexAuditTask.SynthesizeFindings]: {
+          ...materializer,
+          execution: {
+            kind: WorkflowExecutorKind.LoomLeaf,
+            leaf: LoomLeafKind.VerifyGitBaseline,
+          },
+        },
+      },
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('require an agent materialized view task'),
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test('rejects nested agent tiers until recursive scheduling is enabled', () => {
+    const leafRequest: NestedAgentTaskRequest = {
+      task: NestedAgentTask.Leaf,
+      agent: NestedAgent.Leaf,
+      successor: NestedAgentTask.Intermediate,
+    };
+    const intermediateRequest: NestedAgentTaskRequest = {
+      task: NestedAgentTask.Intermediate,
+      agent: NestedAgent.Intermediate,
+      successor: NestedAgentTask.Root,
+    };
+    const rootRequest: NestedAgentTaskRequest = {
+      task: NestedAgentTask.Root,
+      agent: NestedAgent.Root,
+      successor: false,
+    };
+    const workflow: StaticAgentWorkflowDefinition<
+      NestedAgentTask,
+      NestedAgent,
+      never
+    > = {
+      name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
+      version: 'nested-agent-test',
+      entry: NestedAgentTask.Leaf,
+      materializedViewTask: NestedAgentTask.Root,
+      taskNames: [
+        NestedAgentTask.Leaf,
+        NestedAgentTask.Intermediate,
+        NestedAgentTask.Root,
+      ],
+      agentNames: [
+        NestedAgent.Leaf,
+        NestedAgent.Intermediate,
+        NestedAgent.Root,
+      ],
+      joinNames: [],
+      agents: {
+        [NestedAgent.Leaf]: {
+          name: NestedAgent.Leaf,
+          instructionPrefix: 'Inspect leaf evidence.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Medium,
+        },
+        [NestedAgent.Intermediate]: {
+          name: NestedAgent.Intermediate,
+          instructionPrefix: 'Aggregate leaf evidence.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Medium,
+        },
+        [NestedAgent.Root]: {
+          name: NestedAgent.Root,
+          instructionPrefix: 'Aggregate intermediate evidence.',
+          workspacePolicy: AgentWorkspacePolicy.ReadOnly,
+          reasoningEffort: AgentReasoningEffort.Medium,
+        },
+      },
+      tasks: {
+        [NestedAgentTask.Leaf]: nestedAgentTask(leafRequest),
+        [NestedAgentTask.Intermediate]: nestedAgentTask(intermediateRequest),
+        [NestedAgentTask.Root]: nestedAgentTask(rootRequest),
+      },
+      joins: {},
+    };
+    const validation = validateStaticAgentWorkflow(workflow);
+    expect(validation.status).toBe(WorkflowValidationStatus.Invalid);
+    if (validation.status === WorkflowValidationStatus.Invalid) {
+      expect(
+        validation.issues.some((issue) =>
+          issue.message.includes('intermediate executors cannot preserve'),
+        ),
+      ).toBe(true);
+    }
   });
 
   test('rejects conflicts when one outcome shares a descendant', () => {
@@ -460,6 +704,7 @@ describe('static agent workflow validation', () => {
       name: CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.name,
       version: 'shared-outcome-test',
       entry: SharedOutcomeTask.Root,
+      materializedViewTask: SharedOutcomeTask.CompletedOnly,
       taskNames: [
         SharedOutcomeTask.Root,
         SharedOutcomeTask.Shared,

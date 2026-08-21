@@ -345,6 +345,13 @@ See [architecture/engineering-harness.md](architecture/engineering-harness.md) f
   run authority.
   - The current static workflow implementation runs locally.
   - It does not materialize Hive tasks.
+  - Every agent attempt owns a child action stream with explicit parent
+    lineage.
+  - Every completed agent authors a Markdown semantic view that Loom persists
+    and hashes.
+  - Parent materializers aggregate child views recursively until the root view
+    reaches the delivery owner.
+  - Local processing evidence lives under ignored `workflow/processing/`.
 - **Future authority:** A future Hive adapter will use Neo4j for durable
   lifecycle authority.
   - The local journal must not compete with Neo4j for scheduling authority.

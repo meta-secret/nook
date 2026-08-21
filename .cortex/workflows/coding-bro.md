@@ -6,6 +6,12 @@
 
 Use this pipeline for **every coding request** unless the user explicitly wants a read-only answer, review-only feedback, or a question with no code changes.
 
+Delegated work follows
+[`subagent-delegation.md`](subagent-delegation.md). Outside a compiled Loom
+graph, finalize every reached child attempt with
+`task loom:agent-delegation:record REQUEST=<request.json>` and consume its
+verified semantic view before continuing the parent workflow.
+
 ## PR-first mandate
 
 AI agents must treat every implementation task as PR-bound from the start.
@@ -44,7 +50,11 @@ Default PR-first loop:
    - Write the important requirements in the agent's own words.
    - For user-facing features, item types, or UX flows, find and read the owning specification in [`.cortex/product-specs/`](../product-specs/) (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
    - Apply [subagent-delegation.md](subagent-delegation.md).
-   - Record the delegation decision and planned joins.
+   - Record the delegation decision, processing identity, parent lineage,
+     terminal barriers, and planned joins.
+   - Require every reached agent to produce an attempt action stream and
+     semantic Markdown view.
+   - Aggregate child views before continuation, integration, or completion.
    - Estimate authored changed lines.
    - Identify module and interface boundaries.
    - Publish the public-safe start snapshot to Nook Workbench.

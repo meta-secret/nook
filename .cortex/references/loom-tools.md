@@ -42,7 +42,7 @@ That workflow contains:
 
 - an exact-baseline task;
 - four fixed read-only agent audits and one mechanical audit in parallel;
-- an all-completed evidence join;
+  - an all-terminal evidence join;
 - one finding-synthesis task;
 - the existing `cortexAudit` leaf.
 
@@ -57,8 +57,16 @@ The workflow audit lane also classifies:
 - **Attempt gate:** Fail closed unless `HEAD` matches the requested baseline and
   the worktree is clean before and after execution.
   - Include untracked files in cleanliness.
-- **Local authority:** Write `events.jsonl` as the append-only authority.
-  - Treat task terminal files and final run result as journal projections.
+- **Local authority:** Write the run journal under
+  `workflow/processing/<workflow>/<run-id>/events.jsonl`.
+  - It alone owns local scheduling state.
+  - Write one action stream per reached agent attempt under `agents/<task>/`.
+  - Persist agent-authored Markdown as the attempt `view.md`.
+  - Persist the declared materializer's Markdown as the run `view.md`.
+  - Content-hash streams and projections before referencing them from the run
+    journal.
+  - Parents consume views and typed artifacts by default. Raw streams are
+    diagnostic evidence.
 - **Durability:** The current workflow implementation is local-only.
   - Future Hive-backed execution uses Neo4j as durable authority.
 - **Protocol scope:** The YAML rules below apply only to Loom leaf tools.

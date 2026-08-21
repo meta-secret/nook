@@ -8,6 +8,8 @@ import type {
   WorkflowRunId,
   WorkflowTerminalKind,
   WorkflowVersion,
+  MaterializedViewReference,
+  TaskProcessingReference,
 } from './domain.ts';
 
 export enum WorkflowEventKind {
@@ -77,6 +79,7 @@ export type TaskTerminalRecordedEvent<TTask extends string> =
     readonly terminalKind: TaskTerminalKind;
     readonly resultPath: string;
     readonly resultSha256: string;
+    readonly processing: TaskProcessingReference;
   };
 
 export type SuccessorsActivatedEvent<TTask extends string> =
@@ -92,6 +95,7 @@ export type WorkflowTerminalRecordedEvent = WorkflowEventMetadata & {
   readonly terminalKind: WorkflowTerminalKind;
   readonly resultPath: string;
   readonly resultSha256: string;
+  readonly materializedView: MaterializedViewReference;
 };
 
 export type WorkflowEvent<TTask extends string> =

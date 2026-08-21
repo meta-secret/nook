@@ -1,6 +1,5 @@
 #!/usr/bin/env bun
 import { randomUUID } from 'node:crypto';
-import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import {
   STATIC_AGENT_WORKFLOW_CATALOG,
@@ -75,6 +74,7 @@ export type AgentWorkflowPlan = {
   readonly workflow: StaticAgentWorkflowName;
   readonly version: string;
   readonly entry: string;
+  readonly materializedViewTask: string;
   readonly agents: readonly AgentWorkflowPlanAgent[];
   readonly tasks: readonly AgentWorkflowPlanTask[];
   readonly joins: readonly AgentWorkflowPlanJoin[];
@@ -102,7 +102,7 @@ async function main(): Promise<number> {
   const runId = randomUUID();
   const now = (): string => new Date().toISOString();
   const journalConfiguration: WorkflowJournalConfiguration = {
-    runRoot: resolve(tmpdir(), 'nook-loom-runs'),
+    runRoot: processingRunRoot(commandLine.workingDirectory),
     identity: {
       runId,
       workflow: workflow.name,
@@ -182,6 +182,10 @@ export function parseCommandLine(
   };
 }
 
+export function processingRunRoot(workingDirectory: string): string {
+  return resolve(workingDirectory, 'workflow', 'processing');
+}
+
 export function buildAgentWorkflowPlan(
   workflow: typeof CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
 ): AgentWorkflowPlan {
@@ -217,6 +221,7 @@ export function buildAgentWorkflowPlan(
     workflow: workflow.name,
     version: workflow.version,
     entry: workflow.entry,
+    materializedViewTask: workflow.materializedViewTask,
     agents: workflow.agentNames.map((name) => workflow.agents[name]),
     tasks: workflow.taskNames.map((name) => workflow.tasks[name]),
     joins: workflow.joinNames.map((name) => workflow.joins[name]),
