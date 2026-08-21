@@ -33,7 +33,59 @@ test.describe('persistent workspace routing', () => {
     expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
       initialHistoryLength + 4,
     )
+
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          const timeout = window.setTimeout(
+            () => reject(new Error('popstate did not fire after history.back')),
+            10_000,
+          )
+          window.addEventListener(
+            'popstate',
+            () => {
+              window.clearTimeout(timeout)
+              resolve()
+            },
+            { once: true },
+          )
+          history.back()
+        }),
+    )
+    await expect(page).toHaveURL(/\/settings$/)
+    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
     expect(new URL(page.url()).search).toBe('')
+  })
+
+  test('restores a locked Access deep link after authentication', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.getByTestId('vault-devices-access-tab').click()
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+
+    await page.getByTestId('header-lock-vault-btn').click()
+    await expect(
+      page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await page.evaluate(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    // Navigate the current canonical URL as a fresh document. Supplying the
+    // deep-link target explicitly keeps Playwright from losing the SPA URL
+    // while the locked WASM session tears down during reload.
+    await page.goto('/devices-access')
+    await expect(
+      page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await authorizeDeviceProtection(page)
+
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(page).toHaveURL(/\/devices-access$/)
   })
 
   test('applies a direct workspace route after authentication', async ({

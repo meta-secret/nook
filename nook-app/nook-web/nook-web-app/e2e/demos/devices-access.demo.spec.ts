@@ -127,6 +127,10 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await page.getByTestId('header-lock-vault-btn').click()
   // Locking from /devices-access keeps that URL, so login opens Access directly.
   await expect(page).toHaveURL(/\/devices-access$/)
+  await page.goto('/devices-access')
+  await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity locked',
   )
