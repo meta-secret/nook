@@ -141,6 +141,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
     );
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml");
+    let platform_tasks = read("nook-app/nook-platform/Taskfile.yml");
     let wasm_cache_verifier = read(".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
@@ -171,6 +172,14 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && docker_tasks.contains("login \"$host\"")
             && docker_tasks.contains("task: registry-cache:publish:wasm"),
         "Task Bake must enable clean git-commit publication plus dirty-safe formatter dependency publication"
+    );
+    assert!(
+        platform_tasks.contains("${GITHUB_ACTIONS:-}")
+            && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
+            && platform_tasks.contains("tcp://127.0.0.1:1234")
+            && platform_tasks
+                .contains("the ARC BuildKit stages validate SeaweedFS without a Docker runtime"),
+        "ARC sccache preflight must avoid a Docker runtime only on the authenticated loopback BuildKit path"
     );
     let git_scope = read(".github/scripts/git-cache-scope.sh");
     let publish_guard = read(".github/scripts/git-cache-scope-publish-guard.sh");

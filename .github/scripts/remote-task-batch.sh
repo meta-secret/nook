@@ -6,6 +6,7 @@ readonly MAX_REMOTE_TASKS=8
 catalog() {
   cat <<'EOF'
 preflight
+rust:ci
 bake-cache:prove
 rust:test
 rust:lint
@@ -74,6 +75,7 @@ normalize_tasks() {
 task_command() {
   case "$1" in
     preflight) echo "task preflight" ;;
+    rust:ci) echo "task ci:pr:rust" ;;
     bake-cache:prove) echo "task infra:bake-cache:prove" ;;
     rust:test) echo "task remote:rust:test" ;;
     rust:lint) echo "task remote:rust:lint" ;;
@@ -98,7 +100,7 @@ task_command() {
 task_timeout_minutes() {
   case "$1" in
     preflight) echo 15 ;;
-    bake-cache:prove|rust:test|rust:lint|wasm:build|wasm:test|web:check|web:test|extension:check|hive:verify) echo 20 ;;
+    bake-cache:prove|rust:ci|rust:test|rust:lint|wasm:build|wasm:test|web:check|web:test|extension:check|hive:verify) echo 20 ;;
     wasm:test:browser|web:build) echo 25 ;;
     rust:coverage|web:e2e|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
@@ -121,6 +123,9 @@ restore_hosted_builder() {
 }
 
 snapshot_daemon_containers() {
+  if [[ "${NOOK_BUILDKIT_REMOTE:-}" == "1" ]]; then
+    return 0
+  fi
   docker ps -aq | sort
 }
 
@@ -129,6 +134,13 @@ cleanup_timed_out_daemon_work() {
   local snapshot="$1"
   local builder="${NOOK_PR_BUILDX_BUILDER:-}"
   local cleanup_status=0
+
+  if [[ "${NOOK_BUILDKIT_REMOTE:-}" == "1" ]]; then
+    if [[ -n "$builder" ]]; then
+      docker buildx inspect --bootstrap "$builder" >/dev/null || cleanup_status=1
+    fi
+    return "$cleanup_status"
+  fi
 
   while IFS= read -r container; do
     if [[ -n "$container" ]] && ! grep -Fxq "$container" "$snapshot"; then
@@ -160,6 +172,7 @@ run_task() {
 
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
+    rust:ci) run_with_timeout "$timeout_minutes" task ci:pr:rust ;;
     bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
     rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;
     rust:lint) run_with_timeout "$timeout_minutes" task remote:rust:lint ;;

@@ -1,8 +1,12 @@
-# GitHub-Hosted Remote Execution
+# Configured GitHub Actions Remote Execution
 
 ## Overview
 
-GitHub-hosted runners are the normal execution environment for agent builds, tests, linting, coverage, and browser suites. Agent machines remain responsive for editing, repository inspection, host-applied formatting, the UI demo contract, and interactive development servers.
+Daemon-free focused tasks run on Nook's ephemeral ARC scale set in the k0s
+cluster. Tasks that load and execute Docker images remain on GitHub-hosted
+runners. Complete PR validation also remains hosted. Agent machines remain
+responsive for editing, repository inspection, host-applied formatting, the UI
+demo contract, and interactive development servers.
 
 ## Two remote surfaces
 
@@ -11,7 +15,10 @@ Nook intentionally separates iterative investigation from merge authorization:
 1. **Focused remote tasks** run through the manually dispatched [`.github/workflows/remote.yml`](../../.github/workflows/remote.yml). They are repeatable debugging evidence and do not authorize merge.
 2. **Complete PR validation** runs through [`.github/workflows/pr.yml`](../../.github/workflows/pr.yml) only after an agent explicitly applies a validation label. Its exact-head checks and deployment are required for readiness.
 
-Ordinary PR pushes do not start complete validation. This lets an agent commit and push several experimental iterations, use focused hosted tasks between iterations, and spend the full parallel PR pipeline only when the head is ready.
+Ordinary PR pushes do not start complete validation. This lets an agent commit
+and push several experimental iterations, use focused remote tasks between
+iterations, and spend the full parallel hosted PR pipeline only when the head
+is ready.
 
 ## Focused remote tasks
 
@@ -27,7 +34,13 @@ Dispatch one task:
 task remote TASK_NAME=rust:test
 ```
 
-Dispatch several tasks in one hosted job:
+Use the BuildKit-native Rust validation lane on ARC:
+
+```bash
+task remote TASK_NAME=rust:ci
+```
+
+Dispatch several tasks in one remote job:
 
 ```bash
 task remote TASK_NAMES=rust:test,web:check,web:test
@@ -36,18 +49,23 @@ task remote TASK_NAMES=rust:test,web:check,web:test
 Batch behavior:
 
 - Provision one runner and perform Docker setup once.
+- Route single `preflight` and `rust:ci` selections to ARC when
+  `NOOK_RUNS_ON=nook-k0s`.
+- Keep batches and every Docker-runtime selection on `ubuntu-latest`.
 - Run tasks sequentially in the requested order.
 - Accept at most eight tasks.
 - Continue after a task fails and fail the final job when any selection failed.
 - Keep each task's 15-to-45-minute timeout.
-- On timeout:
+- On timeout, every runner:
   1. send `TERM` to the task and its process group;
   2. force termination after a one-minute grace period;
-  3. remove Docker containers created by the task;
-  4. restart the job-scoped BuildKit container;
-  5. restore tracked source and remove non-ignored untracked files; and
-  6. continue to later selections after marking the timed-out task failed.
-- After every task, reselect the job-scoped hosted Buildx builder.
+  3. restore tracked source and remove non-ignored untracked files; and
+  4. continue to later selections after marking the timed-out task failed.
+- On GitHub-hosted runners, timeout recovery also removes task-created Docker
+  containers and restarts the job-scoped BuildKit container.
+- On ARC, the remote BuildKit sidecar is probed but never restarted as a Docker
+  container. The sidecar and all of its state are discarded with the Kata Pod.
+- After every task, reselect the job-scoped Buildx builder.
   - This prevents temporary builders from affecting later selections.
 - Report every task result in the GitHub job summary.
 
@@ -58,6 +76,12 @@ Security and cache rules:
     `.github/scripts/remote-task-batch.sh`.
   - Never evaluate user input as shell.
 - Grant remote jobs read-only repository and Actions permissions.
+- Select the runner through `NOOK_RUNS_ON`, with `ubuntu-latest` as the
+  repository-safe fallback.
+- On ARC, run the job in a single-use `kata-dragonball` Pod and connect Buildx
+  to the native BuildKit sidecar over Pod loopback.
+- Prohibit Docker-in-Docker, Docker daemons, nested rootless engines, Sysbox,
+  host runtime sockets, and hostPath volumes.
 - Import an exact BuildKit lineage alone when it exists.
 - When the exact scope is absent, seed it from source-free dependency scopes
   and trusted Main.
@@ -91,10 +115,19 @@ Credentials enter compiler vertices only through fixed optional BuildKit secret 
 
 The most frequently used checks have remote-only narrow orchestration:
 
+- `rust:ci` runs Rust format, Clippy, tests, and coverage entirely in BuildKit
+  stages. It exports portable coverage files and never requests a Docker image
+  runtime.
 - `rust:test` loads a source-sealed native dependency image.
 - `web:check`, `web:test`, and `extension:check` load a source-sealed web dependency + generated WASM image.
 
 This avoids building full coverage, WASM test, browser, verification, and production-dist branches before a focused command. It does not change the local task semantics or move branch execution onto persistent infrastructure.
+
+Only `preflight` and `rust:ci` currently satisfy the daemon-free ARC contract.
+Every task that uses a Bake `type=docker` output or invokes `docker run` remains
+hosted until it has a BuildKit-native execution path. Do not broaden the ARC
+selector merely because the Docker CLI is present; the runner intentionally has
+no Docker API or image runtime.
 
 Every remote result is tied to source GitHub can reproduce. Before dispatch, `task remote` requires:
 

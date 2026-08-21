@@ -81,8 +81,8 @@ Default PR-first loop:
    - Push the coherent commit and open the PR.
    - Later coherent commits update the same PR.
    - A push does not start complete validation.
-6. **Request review and validate on hosted workers:**
-   - Use focused hosted tasks while iterating.
+6. **Request review and validate through GitHub Actions:**
+   - Use focused remote tasks while iterating.
    - At the final boundary, run `task pr:preflight PR=<number>` and
      `task pr:validate PR=<number>` once.
    - The command dispatches repository-owned checks immediately.
@@ -133,7 +133,7 @@ Never use `task extension:format` alone before push.
 
 See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
 
-### ⛔ Format, push, execute on GitHub-hosted workers
+### ⛔ Format, push, execute through GitHub Actions
 
 Once the current change is coherent and checkable, run pre-push hygiene and
 commit. Run local review before the first owner-authored push. Then push or
@@ -189,7 +189,8 @@ If Actions fails:
 
 **Focused Task commands run remotely.** Use `task remote:list` first. Use
 `task remote TASK_NAME=<name>` for one task. Use
-`task remote TASK_NAMES=<name>,<name>` to reuse one hosted job for a batch.
+`task remote TASK_NAMES=<name>,<name>` to reuse one configured remote job for a
+batch.
 Interactive local servers remain appropriate when the investigation needs
 retained local state. See [remote-execution.md](remote-execution.md).
 
@@ -206,7 +207,7 @@ Default agent flow:
      completion evidence.
    - Do not copy raw prompts or transcripts.
 2. **Prepare the PR path** — branch from `origin/main` and plan the PR title/scope.
-3. **Implement** — use the focused hosted catalog when build/test feedback is useful. Capture meaningful discoveries in session memory.
+3. **Implement** — use the focused remote catalog when build/test feedback is useful. Capture meaningful discoveries in session memory.
 4. **Prepare the coherent commit:**
    - Always run `task loom:pre-push`.
    - Commit the formatted change.
@@ -225,7 +226,7 @@ Default agent flow:
    - Read CI and app logs.
    - Fix the failure and run `task loom:pre-push`.
    - Commit and push the complete fix.
-   - Use focused hosted diagnosis when useful.
+   - Use focused remote diagnosis when useful.
    - Trigger and monitor refreshed complete PR checks.
 8. **Address actionable PR comments:**
    - Reply with the fix, validation, or no-change rationale.
@@ -528,7 +529,7 @@ Create the YAML from current Nook `main`:
   and checks the UI demo contract. Never rely on sealed-only
   `task extension:format`. See
   [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
-- **Never stop after push.** Use focused hosted tasks for experimental
+- **Never stop after push.** Use focused remote tasks for experimental
   diagnosis. Trigger complete PR validation when the head is ready for the
   final gate. Then own failures, comments, conflicts, and readiness through
   squash merge.

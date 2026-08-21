@@ -1,0 +1,31 @@
+replicaCount: 1
+
+flags:
+  logLevel: info
+  logFormat: json
+  runnerMaxConcurrentReconciles: 4
+  updateStrategy: eventual
+
+podLabels:
+  nook.nokey.sh/role: arc-controller
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: ["ALL"]
+  readOnlyRootFilesystem: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

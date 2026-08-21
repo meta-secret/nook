@@ -211,6 +211,7 @@ tasks:
       - task: registry:deploy
       - task: kata:install
       - task: kata:verify
+      - task: arc:deploy
       - task: neo4j:deploy
       - task: hive:deploy
 

@@ -4,8 +4,8 @@
 
 Keep agent machines on the lightest possible local work.
 
-Use GitHub-hosted runners for iterative builds/tests and complete merge
-validation.
+Use the configured GitHub Actions runner for iterative builds and tests. Use
+GitHub-hosted runners for complete merge validation.
 
 ## Problem Pattern
 

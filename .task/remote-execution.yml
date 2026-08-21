@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run allowlisted tasks in one GitHub-hosted job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
+    desc: Run allowlisted tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
     env:
       REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
     preconditions:
@@ -53,7 +53,7 @@ tasks:
         echo "gh run list --workflow=remote.yml --branch=\"$branch\" --commit=\"$local_sha\" --event=workflow_dispatch"
 
   remote:list:
-    desc: Print the allowlisted GitHub-hosted remote task catalog.
+    desc: Print the allowlisted remote task catalog.
     silent: true
     cmds:
       - .github/scripts/remote-task-batch.sh --list

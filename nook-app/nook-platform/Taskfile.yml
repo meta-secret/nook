@@ -177,6 +177,12 @@ tasks:
           echo "Restore credentials under ~/.nook/cache/, or set SCCACHE_OPTIONAL=1 only for an intentional cold build." >&2;
           exit 1;
         fi;
+        if [ "${GITHUB_ACTIONS:-}" = "true" ] &&
+           [ "${NOOK_ARC_RUNNER:-}" = "1" ] &&
+           [ "${NOOK_BUILDKIT_ADDR:-}" = "tcp://127.0.0.1:1234" ]; then
+          echo "task sccache:ensure: credentials present; the ARC BuildKit stages validate SeaweedFS without a Docker runtime";
+          exit 0;
+        fi;
         if ! {{.DOCKER}} run --rm \
           -e AWS_ACCESS_KEY_ID="$(cat "$access_file")" \
           -e AWS_SECRET_ACCESS_KEY="$(cat "$secret_file")" \

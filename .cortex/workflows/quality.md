@@ -398,7 +398,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Main publishes shared verified Zot BuildKit layers.
     - Pull requests restore them read-only.
 
-11. **GitHub-hosted agent execution:**
+11. **GitHub Actions agent execution:**
     - When an iteration is coherent, agents run `task loom:pre-push`, commit,
       and push the exact head.
     - Focused diagnostics use `task remote TASK_NAME=<name>` when they are faster than complete validation.
@@ -409,7 +409,7 @@ Use this workflow for quality, CI, and deployment changes.
     - See [remote-execution.md](remote-execution.md), [coding-bro.md](coding-bro.md), and [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation).
 12. Prove the final pushed head with explicitly triggered green repository-owned
     checks before merge or handoff. After a complete-gate failure, fix, run Loom
-    pre-push, commit, push, and validate the replacement head. Use focused hosted
+    pre-push, commit, push, and validate the replacement head. Use focused remote
     proof only when it shortens diagnosis.
 13. **Docker:** Killing the Docker daemon is **strictly prohibited** — only stop individual containers (`docker stop <id>`). Never `killall docker`, `pkill docker`, etc. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 14. **NEVER pipe a long-running command through `| grep`/`| tail`/`| head`/`| sed` (or any filter).** This is a hard rule, not a suggestion.

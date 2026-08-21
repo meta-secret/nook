@@ -399,8 +399,9 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
-with **`task remote TASK_NAMES=<name>,<name>`** on
-GitHub-hosted workers; then explicitly start complete PR validation with
+with **`task remote TASK_NAMES=<name>,<name>`**. Daemon-free single `preflight`
+and `rust:ci` selections use ephemeral Kata-isolated ARC runners in k0s;
+Docker-runtime selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
 **`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
 not start the complete pipeline. Local Task mirrors below remain available for
 humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
@@ -420,7 +421,8 @@ task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
-task remote:list           # allowlisted focused GitHub-hosted task catalog
+task remote:list           # allowlisted focused remote task catalog
+task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
 task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks
 task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
@@ -451,6 +453,9 @@ task pr:ready PR=410       # read-only exact-head readiness assertion; never mer
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, Neo4j, and Hive
+task infra:arc:deploy       # deploy the Kata-isolated, daemon-free ARC runner scale set
+task infra:arc:activate     # route daemon-free remote selections to ARC
+task infra:arc:fallback     # route every remote selection to GitHub-hosted capacity
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads

@@ -1,0 +1,316 @@
+version: '3'
+
+vars:
+  ARC_CHART_VERSION: 0.14.2
+  ARC_CONTROLLER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
+  ARC_RUNNER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
+  ARC_RUNNER_LABEL: nook-k0s
+
+tasks:
+  arc:auth:sync:
+    internal: true
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        token_file="${ARC_GITHUB_TOKEN_FILE:-}"
+        remote_command='set -euo pipefail
+        remote_dir="$1"
+        raw_credential_file="$(mktemp)"
+        credential_file="$(mktemp)"
+        cleanup() { rm -f "$raw_credential_file" "$credential_file"; }
+        trap cleanup EXIT
+        cat > "$raw_credential_file"
+        tr -d "\r\n" < "$raw_credential_file" > "$credential_file"
+        test -s "$credential_file"
+        test "$(wc -c < "$credential_file" | tr -d " ")" -ge 20
+        if grep -q "[[:space:]]" "$credential_file"; then
+          echo "ARC GitHub credential contains whitespace" >&2
+          exit 1
+        fi
+        sudo -n k0s kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml" >/dev/null
+        sudo -n k0s kubectl create secret generic nook-arc-github \
+          --namespace arc-runners \
+          --from-file=github_token="$credential_file" \
+          --dry-run=client -o yaml | sudo -n k0s kubectl apply -f - >/dev/null'
+        encoded_program="$(printf '%s' "$remote_command" | base64 | tr -d '\n')"
+        encoded_dir="$(printf '%s' "$remote_dir" | base64 | tr -d '\n')"
+        printf -v ssh_command 'bash -c "$(printf %%s %s | base64 -d)" -- "$(printf %%s %s | base64 -d)"' \
+          "$encoded_program" "$encoded_dir"
+        if test -n "$token_file"; then
+          test -s "$token_file"
+          ssh -o BatchMode=yes "$ssh_target" "$ssh_command" < "$token_file"
+        else
+          gh auth token | ssh -o BatchMode=yes "$ssh_target" "$ssh_command"
+        fi
+        echo "ARC repository credential synchronized to the encrypted k0s Secret"
+        BASH
+
+  arc:render:check:
+    desc: Render the pinned ARC charts and verify the Kata and no-Docker-daemon contract.
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        chart_version="{{.ARC_CHART_VERSION}}"
+        controller_render="$(mktemp)"
+        runner_render="$(mktemp)"
+        cleanup() { rm -f "$controller_render" "$runner_render"; }
+        trap cleanup EXIT
+
+        helm template nook-arc \
+          "{{.ARC_CONTROLLER_CHART}}" \
+          --version "$chart_version" \
+          --namespace arc-systems \
+          --values "$remote_dir/infra/k0s/manifests/arc/controller-values.yaml" \
+          > "$controller_render"
+        helm template nook-k0s \
+          "{{.ARC_RUNNER_CHART}}" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
+          > "$runner_render"
+
+        grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-dragonball'
+        grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
+        grep -q 'restartPolicy: Always' "$runner_render"
+        grep -q 'tcp://127.0.0.1:1234' "$runner_render"
+        grep -q 'privileged: true' "$runner_render"
+        grep -q -- '- "80000"' "$runner_render"
+        if grep -Eq 'docker:dind|dockerd|docker\.sock|hostPath:|sysbox|containerMode:' "$runner_render"; then
+          echo "Rendered ARC runner violates the no-nested-engine contract" >&2
+          exit 1
+        fi
+        grep -q 'kind: Deployment' "$controller_render"
+        grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
+        echo "Pinned ARC chart render satisfies the Kata and no-Docker-daemon contract"
+        REMOTE
+
+  arc:deploy:
+    desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
+    silent: true
+    cmds:
+      - task: arc:render:check
+      - task: arc:auth:sync
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        chart_version="{{.ARC_CHART_VERSION}}"
+        controller_chart="{{.ARC_CONTROLLER_CHART}}"
+        runner_chart="{{.ARC_RUNNER_CHART}}"
+        kubeconfig="$(mktemp)"
+        trap 'rm -f "$kubeconfig"' EXIT
+        sudo -n k0s kubeconfig admin > "$kubeconfig"
+        chmod 0600 "$kubeconfig"
+        export KUBECONFIG="$kubeconfig"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
+        kubectl get runtimeclass kata-dragonball >/dev/null
+        kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
+
+        helm upgrade --install nook-arc \
+          "$controller_chart" \
+          --version "$chart_version" \
+          --namespace arc-systems \
+          --values "$remote_dir/infra/k0s/manifests/arc/controller-values.yaml" \
+          --wait \
+          --timeout 10m
+
+        # The controller caches its GitHub client. Restart after credential sync
+        # so rotation cannot leave an old Authorization value in memory.
+        kubectl rollout restart deployment/nook-arc-gha-rs-controller \
+          --namespace arc-systems
+        kubectl rollout status deployment/nook-arc-gha-rs-controller \
+          --namespace arc-systems --timeout=10m
+
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/network-policy.yaml"
+
+        helm upgrade --install nook-k0s \
+          "$runner_chart" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
+          --wait \
+          --timeout 10m
+
+        # Helm --wait covers the chart-owned AutoscalingRunnerSet, but not the
+        # listener and EphemeralRunnerSet that ARC creates asynchronously. An
+        # eventual update deliberately drains the old scale set first, so do
+        # not return while GitHub jobs could still target that transition.
+        # Require six consecutive samples so a transient Running phase cannot
+        # pass the gate while reconciliation is still converging.
+        arc_ready=false
+        ready_samples=0
+        for _ in $(seq 1 120); do
+          phase="$(
+            kubectl get autoscalingrunnerset nook-k0s \
+              --namespace arc-runners \
+              -o jsonpath='{.status.phase}' 2>/dev/null || true
+          )"
+          listener="$(
+            kubectl get autoscalinglistener \
+              --namespace arc-systems \
+              -l actions.github.com/scale-set-name=nook-k0s \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+          )"
+          ephemeral_runner_set="$(
+            kubectl get ephemeralrunnerset \
+              --namespace arc-runners \
+              -l actions.github.com/scale-set-name=nook-k0s \
+              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+          )"
+          if test "$phase" = Running &&
+             test -n "$listener" &&
+             test -n "$ephemeral_runner_set" &&
+             kubectl wait pod \
+               --namespace arc-systems \
+               -l actions.github.com/scale-set-name=nook-k0s,app.kubernetes.io/component=runner-scale-set-listener \
+               --for=condition=Ready \
+               --timeout=1s >/dev/null 2>&1; then
+            ready_samples=$((ready_samples + 1))
+            if test "$ready_samples" -ge 6; then
+              arc_ready=true
+              break
+            fi
+          else
+            ready_samples=0
+          fi
+          sleep 5
+        done
+        if test "$arc_ready" != true; then
+          echo "ARC scale set did not become dispatch-ready within 10 minutes" >&2
+          kubectl get autoscalingrunnerset,ephemeralrunnerset \
+            --namespace arc-runners -o wide >&2 || true
+          kubectl get autoscalinglistener,pods \
+            --namespace arc-systems -o wide >&2 || true
+          exit 1
+        fi
+
+        kubectl get autoscalingrunnerset nook-k0s \
+          --namespace arc-runners \
+          -o jsonpath='{.metadata.name}{" max="}{.spec.maxRunners}{"\n"}'
+        echo "ARC scale set is dispatch-ready"
+        REMOTE
+
+  arc:activate:
+    desc: Route opted-in workflows to the Nook ARC scale set.
+    preconditions:
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
+      - echo "Opted-in workflows now target {{.ARC_RUNNER_LABEL}}"
+
+  arc:fallback:
+    desc: Route opted-in workflows back to GitHub-hosted capacity.
+    preconditions:
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
+      - echo "Opted-in workflows now target ubuntu-latest"
+
+  arc:status:
+    desc: Show bounded ARC controller, listener, scale-set, and runner state.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get deployment --namespace arc-systems -o wide
+        kubectl get autoscalingrunnerset,ephemeralrunnerset \
+          --namespace arc-runners -o wide
+        kubectl get autoscalinglistener --namespace arc-systems -o wide
+        kubectl get pods --namespace arc-systems -o wide
+        kubectl get pods --namespace arc-runners -o wide
+        REMOTE
+
+  arc:diagnose:
+    desc: Show bounded ARC events and recent controller/listener logs.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get events --namespace arc-systems \
+          --sort-by=.metadata.creationTimestamp | tail -n 40
+        kubectl get events --namespace arc-runners \
+          --sort-by=.metadata.creationTimestamp | tail -n 60
+        kubectl logs deployment/nook-arc-gha-rs-controller \
+          --namespace arc-systems --tail=120 || true
+        listener="$(kubectl get pods --namespace arc-systems \
+          -l app.kubernetes.io/component=runner-scale-set-listener \
+          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+        if test -n "$listener"; then
+          kubectl logs "$listener" --namespace arc-systems --tail=120 || true
+        fi
+        REMOTE
+
+  arc:smoke:
+    desc: Run repository preflight on the exact branch through ARC.
+    cmds:
+      - |
+        selected_runner="$(
+          gh variable get NOOK_RUNS_ON \
+            --repo meta-secret/nook
+        )"
+        if test "$selected_runner" != "{{.ARC_RUNNER_LABEL}}"; then
+          echo "ARC smoke requires NOOK_RUNS_ON={{.ARC_RUNNER_LABEL}}; got $selected_runner" >&2
+          exit 2
+        fi
+      - |
+        set -euo pipefail
+        head_sha="$(git rev-parse HEAD)"
+        known_run_ids="$(
+          gh run list \
+            --repo meta-secret/nook \
+            --workflow remote.yml \
+            --commit "$head_sha" \
+            --event workflow_dispatch \
+            --limit 100 \
+            --json databaseId \
+            --jq '.[].databaseId'
+        )"
+        task remote TASK_NAME=preflight
+        run_id=""
+        for _ in $(seq 1 30); do
+          while IFS= read -r candidate; do
+            if test -n "$candidate" &&
+               ! printf '%s\n' "$known_run_ids" | grep -Fxq "$candidate"; then
+              run_id="$candidate"
+              break
+            fi
+          done < <(
+            gh run list \
+              --repo meta-secret/nook \
+              --workflow remote.yml \
+              --commit "$head_sha" \
+              --event workflow_dispatch \
+              --limit 100 \
+              --json databaseId \
+              --jq '.[].databaseId'
+          )
+          test -n "$run_id" && break
+          sleep 2
+        done
+        test -n "$run_id"
+        gh run watch "$run_id" --repo meta-secret/nook --exit-status
+        if ! gh api \
+          "repos/meta-secret/nook/actions/runs/$run_id/jobs" \
+          --jq '.jobs[] | select(.name == "Remote / preflight") | .labels[]' |
+          grep -Fxq "{{.ARC_RUNNER_LABEL}}"; then
+          echo "Successful smoke run did not report the ARC scale-set label" >&2
+          exit 1
+        fi
+        echo "ARC smoke run $run_id completed on {{.ARC_RUNNER_LABEL}}"

@@ -84,7 +84,9 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`remote.yml`**
 
-- One or more selected Taskfile commands on one GitHub-hosted runner.
+- One or more selected Taskfile commands on one configured GitHub Actions
+  runner. Single `preflight` and `rust:ci` selections use the ephemeral ARC Kata
+  scale set. The repository variable can fall back to `ubuntu-latest`.
 - Checkout, Docker setup, and cache connection happen once per batch.
 - Selected tasks run sequentially and report individual results.
 - Git-commit-scoped Zot writes (`-git-<sha>`), with Main used only while the
@@ -378,7 +380,11 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-PR, main, release, AI, scheduled, manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`. Concurrent work scales across the repository's hosted-runner allowance instead of queueing on one Docker host.
+PR, main, release, AI, scheduled, manual e2e, and research jobs use
+GitHub-hosted `ubuntu-latest`. Daemon-free `preflight` and `rust:ci` selections
+use the configured ARC Kata scale set, with `ubuntu-latest` as the explicit
+fallback. Other focused tasks retain hosted Docker image execution. ARC scales
+single-use Pods instead of queueing work on one persistent Docker host.
 
 **Zot cache policy:**
 

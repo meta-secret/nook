@@ -77,12 +77,37 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # Registry cache exporters need the docker-container driver. setup-buildx
-    # owns this ephemeral builder on GitHub-hosted VMs. Taskfiles never pass
-    # --builder; the health wrapper runs `docker buildx use` first.
-    - name: Setup Buildx
-      id: buildx
+    # GitHub-hosted VMs use their job-scoped BuildKit container. ARC runners
+    # use the BuildKit native sidecar on loopback inside the Kata guest. The ARC
+    # runner carries only Docker client tooling and never receives a daemon
+    # socket. Taskfiles never pass --builder; the health wrapper selects it.
+    - name: Setup hosted Buildx
+      id: hosted-buildx
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
       uses: docker/setup-buildx-action@v4
+
+    - name: Connect ARC Buildx to the Kata sidecar
+      id: arc-buildx
+      if: ${{ startsWith(runner.name, 'nook-k0s-') }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "${NOOK_BUILDKIT_ADDR:-}" in
+          tcp://127.0.0.1:1234) ;;
+          *)
+            echo "ARC BuildKit must use the runner Pod loopback endpoint" >&2
+            exit 2
+            ;;
+        esac
+        builder="nook-arc-${GITHUB_RUN_ID}-${GITHUB_JOB}-${GITHUB_RUN_ATTEMPT}"
+        builder="$(printf '%s' "$builder" | tr -c 'a-zA-Z0-9_.-' '-')"
+        docker buildx create \
+          --name "$builder" \
+          --driver remote \
+          --use \
+          "$NOOK_BUILDKIT_ADDR"
+        docker buildx inspect "$builder" --bootstrap
+        echo "name=$builder" >> "$GITHUB_OUTPUT"
 
     - name: Login to Nook OCI registry
       uses: docker/login-action@v4
@@ -103,13 +128,15 @@ runs:
       shell: bash
       env:
         NOOK_REMOTE_TASK_SELECTION: ${{ github.event.inputs.tasks || github.event.inputs.task }}
+        NOOK_SELECTED_BUILDER: ${{ steps.arc-buildx.outputs.name || steps.hosted-buildx.outputs.name }}
       run: |
         set -euo pipefail
 
         pr_number="${{ github.event.pull_request.number }}"
         event_name="${{ github.event_name }}"
         git_ref="${{ github.ref }}"
-        echo "NOOK_PR_BUILDX_BUILDER=${{ steps.buildx.outputs.name }}" >> "$GITHUB_ENV"
+        test -n "$NOOK_SELECTED_BUILDER"
+        echo "NOOK_PR_BUILDX_BUILDER=$NOOK_SELECTED_BUILDER" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
         echo "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}" >> "$GITHUB_ENV"
 
