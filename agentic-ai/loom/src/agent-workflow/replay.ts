@@ -185,6 +185,8 @@ function assertProcessingReference<TTask extends string>(
   const processing = event.processing;
   if (
     !processing ||
+    (processing.kind !== TaskProcessingKind.AgentAttempt &&
+      processing.kind !== TaskProcessingKind.WorkflowTask) ||
     !validProjection(processing.result) ||
     processing.result.path !== event.resultPath ||
     processing.result.sha256 !== event.resultSha256
@@ -201,14 +203,7 @@ function assertProcessingReference<TTask extends string>(
       `workflow journal task ${event.task} has an invalid attempt stream reference`,
     );
   }
-  if (
-    processing.view.presence === MaterializedViewPresence.Recorded &&
-    !validProjection(processing.view.projection)
-  ) {
-    invalidJournal(
-      `workflow journal task ${event.task} has an invalid materialized view reference`,
-    );
-  }
+  assertMaterializedViewReference(processing.view);
 }
 
 function validProjection(projection: ProjectionReference | false): boolean {

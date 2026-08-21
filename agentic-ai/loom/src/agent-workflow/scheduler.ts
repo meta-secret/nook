@@ -46,6 +46,8 @@ import {
   validateStaticAgentWorkflow,
   WorkflowValidationStatus,
 } from './validation.ts';
+import { drainRunningTasks } from './task-drain.ts';
+import type { RunningTask } from './task-drain.ts';
 
 export type StaticWorkflowRunConfiguration<
   TTask extends string,
@@ -272,7 +274,16 @@ export async function runStaticWorkflow<
     }
   } catch (error) {
     cancellationGate.cancel();
-    await drainRunningTasks(running);
+    const drainedTerminals = await drainRunningTasks(running);
+    for (const terminal of drainedTerminals) {
+      terminals.set(terminal.task, terminal);
+      if (terminal.kind === TaskTerminalKind.Completed) {
+        completedOutputs.set(terminal.task, terminal.output);
+        dependencyOutputs.set(terminal.task, terminal.output);
+      } else {
+        dependencyOutputs.set(terminal.task, terminalFailureOutput(terminal));
+      }
+    }
     fatalError =
       error instanceof Error
         ? error
@@ -466,11 +477,6 @@ async function makeEligible<TTask extends string>(
   }
 }
 
-type RunningTask<TTask extends string> = {
-  readonly task: TTask;
-  readonly completion: Promise<TaskTerminal<TTask>>;
-};
-
 type SettledTask<TTask extends string> = {
   readonly task: TTask;
   readonly terminal: TaskTerminal<TTask>;
@@ -485,12 +491,6 @@ async function waitForFirstCompletion<TTask extends string>(
     return settled;
   });
   return Promise.race(candidates);
-}
-
-async function drainRunningTasks<TTask extends string>(
-  running: readonly RunningTask<TTask>[],
-): Promise<void> {
-  await Promise.allSettled(running.map((entry) => entry.completion));
 }
 
 type AgentResolution<

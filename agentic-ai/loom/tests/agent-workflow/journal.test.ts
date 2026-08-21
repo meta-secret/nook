@@ -251,6 +251,21 @@ describe('workflow journal', () => {
         'invalid processing result reference',
       );
 
+      const unknownProcessingKindEvents = events.map((event) =>
+        event.kind === WorkflowEventKind.TaskTerminalRecorded
+          ? {
+              ...event,
+              processing: { ...event.processing, kind: 'future-kind' },
+            }
+          : event,
+      ) as readonly WorkflowEvent<TestTask>[];
+      const unknownProcessingRequest: ReplayWorkflowJournalRequest<TestTask> = {
+        events: unknownProcessingKindEvents,
+      };
+      expect(() => replayWorkflowJournal(unknownProcessingRequest)).toThrow(
+        'invalid processing result reference',
+      );
+
       const taskResultPath = join(journal.runDirectory, taskProjection.path);
       const taskResultText = await readFile(taskResultPath, 'utf8');
       const expectedTaskDigest = createHash('sha256')

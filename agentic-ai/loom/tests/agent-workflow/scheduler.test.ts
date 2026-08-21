@@ -26,6 +26,7 @@ import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts
 import type {
   StaticAgentWorkflowDefinition,
   TaskTerminal,
+  WorkflowRunTerminal,
   WorkflowTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
 import { WorkflowEventKind } from '../../src/agent-workflow/events.ts';
@@ -769,11 +770,27 @@ describe('static workflow scheduler', () => {
       expect(events).not.toContain(
         '"task":"unsafe","attempt":1,"terminalKind"',
       );
+      expect(events).toContain(
+        '"task":"sibling","attempt":1,"terminalKind":"cancelled"',
+      );
+      expect(events).not.toContain('"task":"sibling","attempt":0');
       const rootView = await readFile(
         join(fixture.configuration.journal.runDirectory, 'view.md'),
         'utf8',
       );
       expect(rootView).toContain('Status: failed');
+      const resultPath = join(
+        fixture.configuration.journal.runDirectory,
+        'run-result.json',
+      );
+      const runResult = JSON.parse(
+        await readFile(resultPath, 'utf8'),
+      ) as WorkflowRunTerminal<TeardownDrainTask>;
+      expect(
+        runResult.taskTerminals.find(
+          (terminal) => terminal.task === TeardownDrainTask.Sibling,
+        )?.kind,
+      ).toBe(TaskTerminalKind.Cancelled);
     } finally {
       await rm(fixture.runRoot, removeOptions);
     }
