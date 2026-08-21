@@ -346,6 +346,7 @@ tasks:
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "rust-ecosystem-dependency-policy.args.WORKSPACE={{.WORKSPACE}}"
+        --set "rust-ecosystem-dependency-policy.args.POLICY_RUN_NONCE=$(od -An -N16 -tx1 /dev/urandom | tr -d '[:space:]')"
         rust-ecosystem-dependency-policy
 
   docker:ecosystem:dependency-policy:

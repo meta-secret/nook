@@ -304,7 +304,8 @@ target "rust-ecosystem-dependency-policy" {
   target     = "rust-ecosystem-dependency-policy"
   platforms  = ["linux/amd64"]
   args = {
-    WORKSPACE = ""
+    WORKSPACE        = ""
+    POLICY_RUN_NONCE = ""
   }
   contexts = {
     rust-base = "target:rust-base"

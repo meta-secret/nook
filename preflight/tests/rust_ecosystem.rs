@@ -137,6 +137,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "docker:ecosystem:dependency-policy:",
         "docker:ecosystem:dependency-policy:run:",
         "rust-ecosystem-dependency-policy.args.WORKSPACE=",
+        "rust-ecosystem-dependency-policy.args.POLICY_RUN_NONCE=",
         "docker:ecosystem:deterministic:",
         "docker:ecosystem:kani:",
         "docker:ecosystem:fuzz:",
@@ -211,6 +212,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     for marker in [
         "AS rust-ecosystem-policy-tools",
         "AS rust-ecosystem-dependency-policy",
+        "ARG POLICY_RUN_NONCE",
         "AS rust-ecosystem-nightly",
         "AS rust-fuzz-smoke",
         "AS rust-dylint",
@@ -248,8 +250,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(
         rust_dockerfile.contains("--hide-inclusion-graph")
             && rust_dockerfile.contains("--log-level error")
-            && rust_dockerfile.contains("cargo-audit audit --quiet"),
-        "BuildKit dependency-policy target must keep deny and audit flags"
+            && rust_dockerfile.contains("cargo-audit audit --quiet")
+            && rust_dockerfile.contains("test -n \"$POLICY_RUN_NONCE\""),
+        "BuildKit dependency-policy target must refresh deny and audit checks"
     );
     // Ecosystem CLIs stay in sibling Dockerfiles so rust-base product builds stay lean.
     for forbidden in [
