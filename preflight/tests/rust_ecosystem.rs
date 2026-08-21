@@ -376,7 +376,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && rust_bake
                 .matches("rust-base = \"target:rust-base\"")
                 .count()
-                == 3
+                == 4
             && rust_bake.contains("target \"rust-base-publish\"")
             && docker_tasks.contains("rust-base-publish")
             && !docker_tasks.contains("cache-from=\"")
