@@ -396,6 +396,8 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "kubectl.*port-forward.*nook-zot",
         "NOOK_REGISTRY_CLUSTER_IP",
         "docker-registry nook-registry",
+        "kubectl delete secret nook-registry",
+        "--namespace arc-runners",
         "certs.d/{{.NOOK_REGISTRY_HOST}}",
         "s/__NOOK_REGISTRY_USERNAME__/$username/g",
         "s/__NOOK_REGISTRY_REMOTE_USERNAME__/$remote_username/g",
@@ -412,6 +414,10 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
             && !deploy.contains("NodePort")
             && !deploy.contains("kind: Ingress"),
         "Zot deployment must not recreate loopback port-forward or NodePort/Ingress paths"
+    );
+    assert!(
+        !deploy.contains("hive-data hive-system arc-runners"),
+        "ARC must not receive the Main-writer Zot credential"
     );
 
     let check = tasks

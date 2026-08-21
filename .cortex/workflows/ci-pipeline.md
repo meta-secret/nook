@@ -407,7 +407,10 @@ single-use Pods instead of queueing work on one persistent Docker host.
 
 **Focused remote jobs:**
 
-- `remote.yml` jobs retain the same hosted placement.
+- `preflight` and `rust:ci` may use fresh Kata QEMU microVMs in the configured
+  ARC scale set. Each job owns a private BuildKit sidecar and disposable state.
+- Every other `remote.yml` selection retains GitHub-hosted placement because it
+  needs a Docker image runtime or broader hosted tooling.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.

@@ -92,7 +92,7 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 
 ## 4. Remote Execution and Validation
 
-- Extension iteration and other heavy agent feedback use the allowlisted GitHub-hosted remote task catalog.
+- Extension iteration and other heavy agent feedback use the allowlisted GitHub Actions remote task catalog.
 - Required product validation runs on GitHub Actions only.
 - Validation starts after the coherent pushed iteration is explicitly selected with a validation label.
 - Agents do not run local `task check` or `task ci:pr` gates.
@@ -104,7 +104,10 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Web checks consume only web dependencies plus the generated WASM package.
 - They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
 
-All branch code executes on ephemeral GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
+Complete PR, Main, release, and browser validation executes on ephemeral
+GitHub-hosted runners. Daemon-free `preflight` and `rust:ci` focused jobs may run
+in fresh Kata QEMU microVMs through ARC. The self-hosted `nook` pool remains
+maintenance-only.
 
 ---
 

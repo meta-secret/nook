@@ -415,6 +415,9 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
         workflow.contains("group: remote-${{ github.ref }}-${{ inputs.tasks || inputs.task }}")
     );
     assert!(workflow.contains("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\""));
+    assert!(batch_script.contains(
+        "rust:ci) run_with_timeout \"$timeout_minutes\" env CI_ARTIFACT_DIR=\"$artifact_root/rust-ci\" task ci:pr:rust"
+    ));
     assert!(batch_script.contains("docker buildx use \"$builder\""));
     assert!(batch_script.contains("if ! restore_hosted_builder; then"));
     let docker_setup = read(".github/actions/nook-docker-setup/action.yml");

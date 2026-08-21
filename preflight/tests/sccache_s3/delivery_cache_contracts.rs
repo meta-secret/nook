@@ -173,13 +173,17 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             && docker_tasks.contains("task: registry-cache:publish:wasm"),
         "Task Bake must enable clean git-commit publication plus dirty-safe formatter dependency publication"
     );
+    let arc_sccache_health = read("nook-app/nook-platform/docker/sccache-health.Dockerfile");
     assert!(
         platform_tasks.contains("${GITHUB_ACTIONS:-}")
             && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
             && platform_tasks.contains("tcp://127.0.0.1:1234")
-            && platform_tasks
-                .contains("the ARC BuildKit stages validate SeaweedFS without a Docker runtime"),
-        "ARC sccache preflight must avoid a Docker runtime only on the private BuildKit path"
+            && platform_tasks.contains("docker/sccache-health.Dockerfile")
+            && platform_tasks.contains("--output type=cacheonly")
+            && arc_sccache_health.contains("s3api head-bucket")
+            && arc_sccache_health.contains("type=secret,id=sccache_s3_access_key")
+            && arc_sccache_health.contains("type=secret,id=sccache_s3_secret_key"),
+        "ARC sccache preflight must fail closed through private BuildKit without a Docker runtime"
     );
     let git_scope = read(".github/scripts/git-cache-scope.sh");
     let publish_guard = read(".github/scripts/git-cache-scope-publish-guard.sh");

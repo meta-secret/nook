@@ -172,7 +172,7 @@ run_task() {
 
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
-    rust:ci) run_with_timeout "$timeout_minutes" task ci:pr:rust ;;
+    rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
     rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;
     rust:lint) run_with_timeout "$timeout_minutes" task remote:rust:lint ;;
