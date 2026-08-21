@@ -361,8 +361,15 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
 
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
-        2,
-        "Remote must use one reusable batch job plus one internal cache promoter"
+        1,
+        "the internal cache promoter must stay on GitHub-hosted capacity"
+    );
+    assert!(
+        workflow.contains(
+            "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci')"
+        ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
+            && workflow.contains("|| 'ubuntu-latest' }}"),
+        "only daemon-free preflight and rust:ci selections may opt into ARC"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")
