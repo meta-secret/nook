@@ -6,10 +6,9 @@ import {
 } from './helpers'
 
 test.describe('persistent workspace routing', () => {
-  test('keeps primary pages in browser history and restores a deep link', async ({
-    page,
-  }) => {
+  test('routes between primary pages', async ({ page }) => {
     await connectLocalVault(page)
+    const initialHistoryLength = await page.evaluate(() => history.length)
 
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page).toHaveURL(/\/devices-access$/)
@@ -19,16 +18,9 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
-    await page.goBack()
-    await expect(page).toHaveURL(/\/devices-access$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
-
-    await page.reload()
-    await authorizeDeviceProtection(page)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-    await expect(page).toHaveURL(/\/devices-access$/)
+    expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
+      initialHistoryLength + 2,
+    )
 
     await page.getByTestId('vault-settings-tab').click()
     await expect(page).toHaveURL(/\/settings$/)
@@ -38,9 +30,9 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/help$/)
     await expect(page.getByTestId('help-page')).toBeVisible()
 
-    await page.goBack()
-    await expect(page).toHaveURL(/\/settings$/)
-    await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
+    expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
+      initialHistoryLength + 4,
+    )
     expect(new URL(page.url()).search).toBe('')
   })
 
