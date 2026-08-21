@@ -331,10 +331,19 @@ tasks:
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
       - task: docker:rust-base
+      # Restore/build first without publishing. A second cache-only Bake below
+      # owns writes for trusted CI or explicitly enabled local publication.
       - >-
+        GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         rust-ecosystem-policy-tools
+      - |
+        if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
+          GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
+            {{.NOOK_BAKE_FILES}} \
+            rust-ecosystem-policy-tools
+        fi
 
   docker:ecosystem:dependency-policy:run:
     internal: true

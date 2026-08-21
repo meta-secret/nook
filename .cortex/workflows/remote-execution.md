@@ -4,7 +4,8 @@
 
 Daemon-free focused tasks run on Nook's ephemeral ARC scale set in the k0s
 cluster. Tasks that load and execute Docker images remain on GitHub-hosted
-runners. Complete PR validation also remains hosted. Agent machines remain
+runners. Complete PR validation uses ARC for trusted native and ecosystem Rust
+jobs while its runtime-dependent jobs remain hosted. Agent machines remain
 responsive for editing, repository inspection, host-applied formatting, the UI
 demo contract, and interactive development servers.
 

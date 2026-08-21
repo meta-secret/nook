@@ -150,6 +150,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "rust-dylint",
         "sccache:ensure",
         "GHA_CACHE_WRITE_ENABLED=",
+        "NOOK_REGISTRY_CACHE_LOCAL_PUBLISH",
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ci:cache:publish:rust-base",
@@ -168,6 +169,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     assert!(
         !docker_tasks.contains("docker run") && !docker_tasks.contains("type=docker"),
         "dependency policy must remain BuildKit-only without daemon image export/load"
+    );
+    assert!(
+        docker_tasks.contains(
+            "if [ -n \"${GHA_CACHE_WRITE_ENABLED:-}\" ] || [ \"${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}\" = \"1\" ]"
+        ) && docker_tasks.contains("GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake"),
+        "policy-tools must translate explicit local publication into a cache-only Zot write"
     );
     assert!(
         platform_tasks.contains("rust:dependency-policy:")

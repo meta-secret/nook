@@ -615,6 +615,8 @@ TypeScript PR audit without Docker.
     registration and just-in-time runner configuration tokens.
   - Grant no organization permissions.
   - The infrastructure operator owns rotation and revocation.
+  - On the first deployment, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file
+    outside the checkout and run `task infra:deploy` to bootstrap the Secret.
   - Routine `infra:deploy` retains the installed Secret.
   - To rotate it, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file outside the
     checkout and run `task infra:arc:deploy`.

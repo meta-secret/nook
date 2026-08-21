@@ -173,6 +173,11 @@ require(
 )
 require(
     TASKS,
+    "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it",
+    "first ARC deployment must explain how to bootstrap its credential",
+)
+require(
+    TASKS,
     'test -s "$token_file"',
     "explicit ARC credential rotation must reject an empty credential file",
 )

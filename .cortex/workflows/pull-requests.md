@@ -394,7 +394,8 @@ Agents do not run full e2e locally. Use the remote catalog for focused browser f
 
 ### 6. Monitor only Nook's applicable PR test checks until green
 
-`pr.yml` runs native Rust and WASM on independent hosted runners.
+`pr.yml` runs native Rust and WASM independently. Trusted same-repository native
+Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 
 **Producer and consumer split:**
 

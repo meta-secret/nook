@@ -19,8 +19,11 @@ tasks:
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         token_file="${ARC_GITHUB_TOKEN_FILE:-}"
         if test -z "$token_file"; then
-          ssh -o BatchMode=yes "$ssh_target" \
-            "sudo -n k0s kubectl get secret nook-arc-github --namespace arc-runners >/dev/null"
+          if ! ssh -o BatchMode=yes "$ssh_target" \
+            "sudo -n k0s kubectl get secret nook-arc-github --namespace arc-runners >/dev/null"; then
+            echo "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it" >&2
+            exit 2
+          fi
           echo "Existing ARC repository credential retained; set ARC_GITHUB_TOKEN_FILE to rotate it"
           exit 0
         fi

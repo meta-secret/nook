@@ -454,8 +454,8 @@ task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
 task infra:arc:deploy       # targeted redeploy of the Kata-isolated, daemon-free ARC scale set
-task infra:arc:activate     # route daemon-free remote selections to ARC
-task infra:arc:fallback     # route every remote selection to GitHub-hosted capacity
+task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
+task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
