@@ -56,6 +56,11 @@ require(
 )
 require(RUNNERS, "restartPolicy: Always", "BuildKit must be a native sidecar")
 require(RUNNERS, "name: buildkit", "runner Pod must carry BuildKit")
+require(
+    RUNNERS,
+    "--oci-worker-snapshotter\n          - native",
+    "BuildKit must avoid nested overlayfs on Kata virtio-fs",
+)
 require(RUNNERS, '- "80000"', "BuildKit argument values must remain strings")
 require(RUNNERS, "privileged: true", "BuildKit needs build privileges in the guest")
 require(

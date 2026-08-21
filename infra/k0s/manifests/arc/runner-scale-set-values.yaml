@@ -72,6 +72,8 @@ template:
         args:
           - --addr
           - tcp://127.0.0.1:1234
+          - --oci-worker-snapshotter
+          - native
           - --oci-worker-gc
           - --oci-worker-gc-keepstorage
           - "80000"
