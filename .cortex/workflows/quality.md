@@ -338,7 +338,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-    - PR runs native Rust and verified WASM on independent hosted producer runners.
+    - Trusted same-repository PRs run native Rust on a fresh ARC Kata producer.
+    - Fork PR native Rust and every verified WASM producer remain GitHub-hosted.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
     - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.

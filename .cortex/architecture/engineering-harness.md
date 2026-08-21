@@ -118,7 +118,8 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 
 - `rust-base` plus manifest-only chef cooking exposes a lightweight WASM dependency boundary.
 - Native verification extends it with nextest, clippy, and coverage profiles.
-- Hosted PR CI runs native coverage independently.
+- Trusted same-repository PR CI runs native coverage independently on ARC.
+- Fork PR native coverage remains GitHub-hosted and secret-free.
 - It verifies WASM once on a dedicated producer.
 - Web verification and opt-in browser jobs download that producer's small run-stable artifact.
 - They do not rebuild Rust/WASM locally.

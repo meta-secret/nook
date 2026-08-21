@@ -44,8 +44,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - It then passes that directory as the web solve's named context.
   - Commit and invocation scoping prevent concurrent builds from consuming each other's artifacts.
   - `builder-wasm` is never a parent or context of `nook-web`.
-- **Delivery BuildKit is remote-cached on hosted runners.**
-  - PR, main, and release use ephemeral `ubuntu-latest` VMs.
+- **Delivery BuildKit is remote-cached across isolated runners.**
+  - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs
+    use fresh ARC Kata microVMs.
+  - Fork PRs and runtime-dependent, browser, WASM, deployment, and release jobs
+    use ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.
   - Parallel targets cannot overwrite one another.
