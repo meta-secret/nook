@@ -8,6 +8,7 @@ import {
 test.describe('persistent workspace routing', () => {
   test('routes between primary pages', async ({ page }) => {
     await connectLocalVault(page)
+    const initialHistoryLength = await page.evaluate(() => history.length)
 
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page).toHaveURL(/\/devices-access$/)
@@ -17,6 +18,10 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
+    expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
+      initialHistoryLength + 2,
+    )
+
     await page.getByTestId('vault-settings-tab').click()
     await expect(page).toHaveURL(/\/settings$/)
     await expect(page.getByTestId('storage-settings-panel')).toBeVisible()
@@ -25,6 +30,9 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/help$/)
     await expect(page.getByTestId('help-page')).toBeVisible()
 
+    expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
+      initialHistoryLength + 4,
+    )
     expect(new URL(page.url()).search).toBe('')
   })
 
