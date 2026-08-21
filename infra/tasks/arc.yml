@@ -81,7 +81,7 @@ tasks:
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
-        grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-v2' "$runner_render"
+        grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-v3' "$runner_render"
         grep -q 'imagePullPolicy: Never' "$runner_render"
         grep -q -- '--oci-worker-snapshotter' "$runner_render"
         grep -q -- '- overlayfs' "$runner_render"
@@ -113,7 +113,7 @@ tasks:
         docker buildx build \
           --platform linux/amd64 \
           --provenance=false \
-          --tag localhost/nook-arc-buildkit:0.32.2-ext4-v2 \
+          --tag localhost/nook-arc-buildkit:0.32.2-ext4-v3 \
           --output "type=oci,dest=$artifact" \
           infra/k0s/images/arc-buildkit
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
