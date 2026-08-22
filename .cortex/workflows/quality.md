@@ -158,9 +158,12 @@ Use this workflow for quality, CI, and deployment changes.
 10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
-    - Trusted native Rust and Rust ecosystem jobs in PR and Main may use ARC.
-    - Fork PRs and runtime-dependent, browser, WASM, deployment, and release
-      jobs use GitHub-hosted `ubuntu-latest`.
+    - Trusted native Rust and Rust ecosystem PR jobs and every explicit Main
+      job use ARC.
+    - General ARC exposes a job-scoped Podman API only inside each disposable
+      Kata guest for Main runtime and browser jobs.
+    - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
+      browser, WASM, and deployment jobs use GitHub-hosted `ubuntu-latest`.
     - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
       instance selected with `docker buildx use` before Task runs.
     - Taskfiles and Bake callers must never pass `--builder`.

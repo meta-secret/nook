@@ -14,6 +14,9 @@ source of truth.
 
 ## Skill catalog
 
+- **[typescript-rust-automation-only.md](typescript-rust-automation-only.md)**
+  - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
+  - Executable skill: [`.agents/skills/typescript-rust-automation-only/SKILL.md`](../../.agents/skills/typescript-rust-automation-only/SKILL.md)
 - **[source-file-size.md](source-file-size.md)**
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition
   - Executable skill: [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md)

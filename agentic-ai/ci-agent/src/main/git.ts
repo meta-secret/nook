@@ -39,7 +39,6 @@ const AUTHORED_TEXT_EXTENSIONS = new Set([
   ".md",
   ".mjs",
   ".proto",
-  ".py",
   ".rb",
   ".rs",
   ".scss",

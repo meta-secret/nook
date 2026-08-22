@@ -735,20 +735,17 @@ tasks:
         if test -n "$api_endpoint"; then
           kubectl exec -i deployment/hive-reaper-controller \
             --namespace hive-system \
-            -- python3 - "$api_endpoint" <<'PY' || true
-        import socket
-        import sys
-
-        for host, port in (
-            ("kubernetes.default.svc", 443),
-            (sys.argv[1], 6443),
-        ):
-            try:
-                with socket.create_connection((host, port), timeout=5):
-                    print(f"connected to {host}:{port}")
-            except OSError as error:
-                print(f"failed to connect to {host}:{port}: {error}")
-        PY
+            -- /bin/bash -c '
+              for destination in "kubernetes.default.svc:443" "$1:6443"; do
+                host="${destination%:*}"
+                port="${destination##*:}"
+                if timeout 5 bash -c "exec 3<>/dev/tcp/$host/$port"; then
+                  printf "connected to %s:%s\n" "$host" "$port"
+                else
+                  printf "failed to connect to %s:%s\n" "$host" "$port"
+                fi
+              done
+            ' diagnostic "$api_endpoint" || true
         fi
         probe_pod="$(
           kubectl get pods \
@@ -765,17 +762,15 @@ tasks:
         kubectl exec -i "$probe_pod" \
           --namespace hive-system \
           --container hive \
-          -- python3 - <<'PY' || true
-        import socket
-
-        host = "hive-neo4j.hive-data.svc.cluster.local"
-        port = 7687
-        try:
-            with socket.create_connection((host, port), timeout=5):
-                print(f"connected to {host}:{port}")
-        except OSError as error:
-            print(f"failed to connect to {host}:{port}: {error}")
-        PY
+          -- /bin/bash -c '
+            host=hive-neo4j.hive-data.svc.cluster.local
+            port=7687
+            if timeout 5 bash -c "exec 3<>/dev/tcp/$host/$port"; then
+              printf "connected to %s:%s\n" "$host" "$port"
+            else
+              printf "failed to connect to %s:%s\n" "$host" "$port"
+            fi
+          ' || true
         kubectl exec deployment/hive-workbench-dispatcher \
           --namespace hive-system \
           --container dispatcher \

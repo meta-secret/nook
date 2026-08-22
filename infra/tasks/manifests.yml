@@ -6,9 +6,9 @@ tasks:
     desc: Validate Hive isolation and TLS invariants in repository manifests.
     cmds:
       - ruby .github/scripts/hive-manifest-contract.rb
-      - python3 .github/scripts/hive-reaper-controller-test.py
-      - python3 .github/scripts/k0s-firewall-rollback-test.py
-      - python3 .github/scripts/k0s-cni-migration-test.py
-      - python3 .github/scripts/services-network-repair-test.py
-      - python3 .github/scripts/zot-registry-public-contract-test.py
-      - python3 .github/scripts/arc-manifest-contract.py
+      - bun test agentic-ai/minds/hive/controller/reaper.test.ts
+      - bun .github/scripts/k0s-firewall-rollback-test.ts
+      - bun .github/scripts/k0s-cni-migration-test.ts
+      - bun .github/scripts/services-network-repair-test.ts
+      - bun .github/scripts/zot-registry-public-contract-test.ts
+      - bun .github/scripts/arc-manifest-contract.ts

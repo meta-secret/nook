@@ -32,9 +32,9 @@ for the implemented/target boundary.
 
 ## Choose a vault
 
-| Vault | Best for | URL |
-| ----- | -------- | --- |
-| **Simple** | Everyday passwords and secrets | [simple.nokey.sh](https://simple.nokey.sh) |
+| Vault        | Best for                            | URL                                            |
+| ------------ | ----------------------------------- | ---------------------------------------------- |
+| **Simple**   | Everyday passwords and secrets      | [simple.nokey.sh](https://simple.nokey.sh)     |
 | **Sentinel** | Quorum-protected high-value secrets | [sentinel.nokey.sh](https://sentinel.nokey.sh) |
 
 They are independent applications and browser origins, not modes in one app.
@@ -72,14 +72,14 @@ configured), you lose the vault. Approve at least two devices.
 
 ## What you can store
 
-| Type | Fields |
-| ---- | ------ |
-| Login | Website URL, username, password, optional notes |
-| API key | Website URL, key, optional expiration date |
-| BIP39 seed phrase | Account name, seed phrase |
-| Secure note | Title, note (Markdown) |
-| Passkey | Website/RP and account metadata; encrypted ES256 credential |
-| Authenticator | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented settings-page QR and attach reviewed backup codes |
+| Type              | Fields                                                                                                                                                         |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Login             | Website URL, username, password, optional notes                                                                                                                |
+| API key           | Website URL, key, optional expiration date                                                                                                                     |
+| BIP39 seed phrase | Account name, seed phrase                                                                                                                                      |
+| Secure note       | Title, note (Markdown)                                                                                                                                         |
+| Passkey           | Website/RP and account metadata; encrypted ES256 credential                                                                                                    |
+| Authenticator     | Service, account, and TOTP setup key or `otpauth://` URI; browser extension can also enroll from a consented settings-page QR and attach reviewed backup codes |
 
 Items are searchable through a browser-local encrypted catalog of list fields.
 The catalog is decrypted into WASM memory only while the vault is unlocked.
@@ -119,16 +119,16 @@ instructions; see [Deployments](#deployments).
 
 ## Import from other managers
 
-| Source | Format | What imports |
-| ------ | ------ | ------------ |
-| Bitwarden | JSON (plaintext or password-protected) | Logins, secure notes, credit cards |
-| LastPass | Unencrypted generic CSV | Logins, secure notes |
-| Keeper | Unencrypted CSV | Logins, secure notes |
-| 1Password | Unencrypted 1PUX | Logins, passwords, secure notes, credit cards |
-| Apple Passwords | Unencrypted CSV | Website logins, TOTP |
-| Chrome / Chromium / Brave / Edge | Unencrypted password CSV | Website logins |
-| Proton Pass | Unencrypted ZIP or decrypted `data.json` | Logins, secure notes, credit cards |
-| Google Authenticator | Migration QR codes (camera or images) | TOTP accounts |
+| Source                           | Format                                   | What imports                                  |
+| -------------------------------- | ---------------------------------------- | --------------------------------------------- |
+| Bitwarden                        | JSON (plaintext or password-protected)   | Logins, secure notes, credit cards            |
+| LastPass                         | Unencrypted generic CSV                  | Logins, secure notes                          |
+| Keeper                           | Unencrypted CSV                          | Logins, secure notes                          |
+| 1Password                        | Unencrypted 1PUX                         | Logins, passwords, secure notes, credit cards |
+| Apple Passwords                  | Unencrypted CSV                          | Website logins, TOTP                          |
+| Chrome / Chromium / Brave / Edge | Unencrypted password CSV                 | Website logins                                |
+| Proton Pass                      | Unencrypted ZIP or decrypted `data.json` | Logins, secure notes, credit cards            |
+| Google Authenticator             | Migration QR codes (camera or images)    | TOTP accounts                                 |
 
 Unsupported item types and attachments are skipped. Account-restricted Bitwarden
 exports are not portable. PGP-encrypted Proton Pass exports must be decrypted
@@ -197,12 +197,12 @@ passkey-provider visibility.
 
 ### Current shipped architecture layers
 
-| Layer | What it does |
-| ----- | ------------ |
+| Layer           | What it does                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
 | Device identity | Each authorized device holds a protected X25519 identity. Plaintext identity material exists only in an unlocked session. |
-| Key envelopes | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority. |
-| Sync transport | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets. |
-| Event log | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer. |
+| Key envelopes   | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority.                    |
+| Sync transport  | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets.                         |
+| Event log       | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer.                      |
 
 The target architecture keeps these vault and event-log boundaries while
 introducing virtual identity records and explicit identity-to-vault grants.
@@ -251,22 +251,22 @@ nook-auth2 ─┬─> nook-authenticator-domain
 `nook-app-common` is a leaf dependency used directly by both `nook-auth2` and
 `nook-core`; it does not sit between the event-log and replication layers.
 
-| Package | Role |
-| ------- | ---- |
-| `nook-app-common` | Dependency-light shared Rust primitives, locale catalogs, translation behavior, and the single generated Rust i18n key registry |
+| Package                     | Role                                                                                                                                                              |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nook-app-common`           | Dependency-light shared Rust primitives, locale catalogs, translation behavior, and the single generated Rust i18n key registry                                   |
 | `nook-authenticator-domain` | Dependency-light closed values for passkey protection, TOTP metadata, and backup-code update policy shared across authentication, vault, and extension boundaries |
-| `nook-auth2` | Portable key access: device identities, age envelopes, recovery helpers |
-| `nook-replication` | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning |
-| `nook-event-log` | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs |
-| `nook-core` | Vault application domain: typed plaintext secrets, encryption workflows, provider-neutral sync and session policy |
-| `nook-companion-core` | Portable extension policy: authentication workflow, pairing records and migration, host and field classification |
-| `nook-companion-wasm` | Small `wasm-bindgen` bridge exposing companion policy to extension contexts |
-| `nook-wasm` | Full `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager; depends on both vault and companion domain crates |
-| `nook-vault-simple` | Independent Svelte 5 Simple Vault application |
-| `nook-vault-sentinel` | Independent Svelte 5 Sentinel Vault application |
-| `nook-web-app` | Public site and unified local e2e harness |
-| `nook-web-extension` | Simple-only Manifest V3 companion (Nook Pilot: login HUD, credential fill, takeover) |
-| `nook-web-shared` | Presentation/browser glue safe to share between vault apps |
+| `nook-auth2`                | Portable key access: device identities, age envelopes, recovery helpers                                                                                           |
+| `nook-replication`          | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning                                                                   |
+| `nook-event-log`            | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs                                                        |
+| `nook-core`                 | Vault application domain: typed plaintext secrets, encryption workflows, provider-neutral sync and session policy                                                 |
+| `nook-companion-core`       | Portable extension policy: authentication workflow, pairing records and migration, host and field classification                                                  |
+| `nook-companion-wasm`       | Small `wasm-bindgen` bridge exposing companion policy to extension contexts                                                                                       |
+| `nook-wasm`                 | Full `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager; depends on both vault and companion domain crates                                            |
+| `nook-vault-simple`         | Independent Svelte 5 Simple Vault application                                                                                                                     |
+| `nook-vault-sentinel`       | Independent Svelte 5 Sentinel Vault application                                                                                                                   |
+| `nook-web-app`              | Public site and unified local e2e harness                                                                                                                         |
+| `nook-web-extension`        | Simple-only Manifest V3 companion (Nook Pilot: login HUD, credential fill, takeover)                                                                              |
+| `nook-web-shared`           | Presentation/browser glue safe to share between vault apps                                                                                                        |
 
 Inside `nook-web-shared/src/vault-app/lib`, browser-owned modules are grouped by
 capability (`app`, `auth`, `content`, `enrollment`, `extension`, `runtime`, and
@@ -290,11 +290,11 @@ instead of this repository's GitHub Issues or source tree.
 
 ## Deployments
 
-| Channel | Site | Simple | Sentinel |
-| ------- | ---- | ------ | -------- |
-| Production | [nokey.sh](https://nokey.sh) | [simple.nokey.sh](https://simple.nokey.sh) | [sentinel.nokey.sh](https://sentinel.nokey.sh) |
-| Main (dev) | [dev.nokey.sh](https://dev.nokey.sh) | [simple.dev.nokey.sh](https://simple.dev.nokey.sh) | [sentinel.dev.nokey.sh](https://sentinel.dev.nokey.sh) |
-| Pull requests | Cloudflare `pr-<number>.<project>.pages.dev` branch aliases | matching Simple alias | matching Sentinel alias |
+| Channel       | Site                                                        | Simple                                             | Sentinel                                               |
+| ------------- | ----------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------ |
+| Production    | [nokey.sh](https://nokey.sh)                                | [simple.nokey.sh](https://simple.nokey.sh)         | [sentinel.nokey.sh](https://sentinel.nokey.sh)         |
+| Main (dev)    | [dev.nokey.sh](https://dev.nokey.sh)                        | [simple.dev.nokey.sh](https://simple.dev.nokey.sh) | [sentinel.dev.nokey.sh](https://sentinel.dev.nokey.sh) |
+| Pull requests | Cloudflare `pr-<number>.<project>.pages.dev` branch aliases | matching Simple alias                              | matching Sentinel alias                                |
 
 Each PR site and `dev.nokey.sh` publish a browser-extension ZIP under
 `/downloads/`. Immutable production releases publish the versioned ZIP at
@@ -314,6 +314,12 @@ package installs run inside the project container. Infrastructure commands use
 domain-owned modules from [`infra/tasks/`](infra/tasks/) into the public
 `infra:*` command surface; standalone infrastructure shell scripts and orphan
 domain Taskfiles are prohibited.
+
+Repository automation has one hard language boundary: do not add Python source,
+runtime invocations, packages, or inline programs. Use Bun/TypeScript for
+scripts and controllers, Rust for compiled behavior, and Taskfiles for
+orchestration. `task preflight:source-architecture` enforces the complete
+tracked tree.
 
 ```sh
 task web:dev
@@ -399,9 +405,9 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
-with **`task remote TASK_NAMES=<name>,<name>`**. Daemon-free single `preflight`
-and `rust:ci` selections use ephemeral Kata-isolated ARC runners in k0s;
-Docker-runtime selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
+with **`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`,
+and `arc:runtime` selections use ephemeral Kata-isolated ARC runners in k0s;
+other selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
 **`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
 not start the complete pipeline. Local Task mirrors below remain available for
 humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
@@ -453,7 +459,7 @@ task pr:ready PR=410       # read-only exact-head readiness assertion; never mer
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
-task infra:arc:deploy       # targeted redeploy of the Kata-isolated, daemon-free ARC scale set
+task infra:arc:deploy       # targeted redeploy of the Kata-isolated ARC scale sets
 task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
 task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
@@ -535,11 +541,13 @@ change, update this README in the same change (see
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
-Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs run in
-fresh ARC Kata microVMs. Hive Rust uses a dedicated ARC set with private Neo4j
+Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
+explicit Main job run in fresh ARC Kata microVMs. The general set provides a
+job-scoped Podman API on guest loopback for runtime jobs, without Docker-in-
+Docker or a host socket. Hive Rust uses a dedicated ARC set with private Neo4j
 and pinned Trixie test-runtime native sidecars; its browser lane stays hosted.
-Fork PRs and other runtime-dependent, browser, WASM, deployment, and release
-jobs run on fresh GitHub-hosted VMs. Each ARC runner
+Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
+WASM, and deployment jobs run on fresh GitHub-hosted VMs. Each ARC runner
 starts from a private 32 GiB reflinked BuildKit seed and restores distinct
 cache refs from the authenticated OCI registry at
 `registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
