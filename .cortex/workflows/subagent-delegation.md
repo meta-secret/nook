@@ -111,6 +111,31 @@ A retry is a new attempt of the same logical task.
 - The parent validates the result against current task state.
 - The parent does not merge worker conclusions blindly.
 
+## Module-oriented feature development
+
+Module-oriented work follows
+[module-oriented-development.md](module-oriented-development.md).
+
+- Keep the feature dependency DAG separate from agent parent lineage.
+- Use the named read-only profiles in the
+  [module expert registry](../architecture/module-experts.md).
+- Invoke `internal_api_expert` when a changed contract crosses a module
+  boundary.
+- Freeze provider-consumer edges before implementation.
+- Continue from accepted providers to immediate consumers.
+- Keep shared files and lifecycle state with the delivery owner.
+
+The hierarchy has a hard maximum depth of three.
+
+- Depth 1 is feature synthesis or materialization.
+- Depth 2 contains named module and internal API experts.
+- Depth 3 is exceptional and must be declared before dispatch.
+- Depth greater than three is invalid.
+
+Children cannot freely create grandchildren.
+No agent may add a task, create a new tier, or schedule a successor.
+Only the reviewed parent graph may declare a bounded depth-three specialist.
+
 ## Hierarchical event protocol
 
 Subagent work is an event-sourced hierarchy.
@@ -358,6 +383,8 @@ Before integration, verify:
   view;
 - every projection path and digest matches its recorded bytes;
 - every child records the correct parent lineage;
+- every attempt depth is at most three;
+- no child dynamically created a task or tier;
 - every parent aggregate covers the declared child terminal barrier;
 - the root aggregate is the input to the delivery owner's final report;
 - skipped branches are recorded;

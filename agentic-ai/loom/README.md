@@ -77,7 +77,7 @@ It returns typed evidence and a typed synthesis.
 
 It does not edit files or mutate GitHub or Workbench state.
 
-### Local event store, semantic views, and Hive
+### Local event store and semantic views
 
 A local workflow run writes processing evidence beneath
 `workflow/processing/<workflow>/<run-id>/`.
@@ -118,17 +118,25 @@ Every event carries the workflow version and exact source commit.
 
 Terminal projections are content-hashed and referenced by journal events.
 
-The current implementation runs locally and does not enqueue Hive tasks.
+Local software-development workflows remain local.
+Hive is outside this workflow architecture.
 
-Future Hive-backed execution has a different authority boundary.
+## Module expert catalog
 
-Neo4j owns durable readiness, claims, leases, attempts, cancellation, and
-results.
+Named read-only project agents live under `.codex/agents/module-experts/`.
 
-Loom must map the static graph onto Hive tasks without running a competing
-authoritative local scheduler.
+The typed catalog owns production module routes, external scope, authorities,
+skills, entry points, and focused validation selectors.
 
-One Hive task remains one Pod and one Codex thread.
+Validate the catalog from the repository root:
+
+```bash
+task loom:module-experts:validate
+```
+
+The audit verifies all production Rust and web modules are routed exactly once.
+It also enforces the research exclusion and the single `internal_api_expert`
+boundary for both WASM crates and generated bindings.
 
 ## Prerequisites
 

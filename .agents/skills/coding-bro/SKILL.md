@@ -63,6 +63,14 @@ Continue through every slice until the complete feature is delivered. Full
 contract:
 [`.cortex/workflows/pull-requests.md`](../../../.cortex/workflows/pull-requests.md#pull-request-size-and-modularity).
 
+For cross-module work, also load
+[module-oriented development](../../../.cortex/workflows/module-oriented-development.md)
+and the
+[module expert registry](../../../.cortex/architecture/module-experts.md).
+Record the feature module DAG and external contracts top-down. Implement and
+validate accepted providers before their consumers. Keep agent depth at three
+or less, and never let a child add tasks or tiers.
+
 ## Quick reference
 
 | Step | Action                                                                                                                                                          |

@@ -145,6 +145,14 @@ describe('agent attempt journal', () => {
       expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
         'lineage',
       );
+      const excessiveDepthEvents = parsedEvents.map((event) => ({
+        ...event,
+        depth: 4,
+      }));
+      const excessiveDepthRequest = { events: excessiveDepthEvents };
+      expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
+        'identity is invalid',
+      );
       const wrongAuthorEvents = parsedEvents.map((event) => {
         if (
           event.kind !== AgentAttemptEventKind.ViewProjected &&
@@ -217,6 +225,13 @@ describe('agent attempt journal', () => {
     const unsafe = { ...configuration('/tmp'), task: '../escape' };
     expect(() => new AgentAttemptJournal(unsafe)).toThrow(
       'Unsafe agent processing identifier',
+    );
+  });
+
+  test('rejects hierarchy depth greater than three', () => {
+    const excessiveDepth = { ...configuration('/tmp'), depth: 4 };
+    expect(() => new AgentAttemptJournal(excessiveDepth)).toThrow(
+      'hierarchy depth must be bounded',
     );
   });
 });

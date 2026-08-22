@@ -8,7 +8,11 @@ Nook separates semantic instructions from deterministic scheduling.
 
 - **Cortex** documents what a workflow means.
 - **Loom** executes reviewed static workflow graphs.
-- **Hive** owns durable distributed execution when a workflow moves onto Hive.
+- **Codex** supplies local bounded expert threads selected by Loom.
+
+This design governs local software development only.
+Hive is a separate product and infrastructure feature.
+It does not represent, schedule, or persist local module-development work.
 
 ## Static graph decision
 
@@ -53,13 +57,32 @@ Hierarchy is declared by the reviewed graph.
 - Each tier consumes child views and emits one higher-level semantic view.
 - The delivery owner is the root outside the worker fan-out.
 
+The hierarchy has a hard maximum depth of three.
+
+- Depth 1 is feature synthesis or materialization.
+- Depth 2 contains named module and internal API experts.
+- Depth 3 is exceptional and predeclared by the reviewed parent.
+- Depth greater than three is invalid.
+
 An agent may not create an unscheduled child or choose a new graph tier from its
 prompt.
 
-The current Cortex workflow has one worker tier and one synthesis tier. The
-lineage domain can represent a parent agent attempt, but nested local scheduling
-remains disabled until compiled ancestry, inherited resource budgets,
-concurrency, cancellation, and retry isolation are implemented together.
+The current Cortex workflow has one worker tier and one synthesis tier.
+Children cannot freely create grandchildren.
+No agent may dynamically add a task or another tier.
+
+### Local feature-development boundary
+
+Feature planning uses the
+[module-oriented development workflow](../workflows/module-oriented-development.md).
+
+- The feature dependency DAG controls readiness.
+- The agent hierarchy records semantic parentage.
+- Dependency chains do not increase hierarchy depth.
+- Named profiles come from the
+  [module expert registry](../architecture/module-experts.md).
+- `internal_api_expert` owns changed inter-module and WASM consumer contracts.
+- Expert catalog paths route knowledge and do not grant write authority.
 
 ## Responsibilities
 
@@ -232,31 +255,6 @@ Journal events are bounded and secret-sanitized. They must not contain:
 - **Durability boundary:** Do not treat the journal as durable distributed
   coordination.
 
-### Hive
-
-Hive owns durable distributed workflow authority.
-
-Neo4j already owns:
-
-- task readiness;
-- dependency state;
-- claims and leases;
-- attempts;
-- cancellation barriers;
-- results;
-- dependency artifacts.
-
-- **Current state:** The implementation is local-only and does not enqueue Hive
-  tasks.
-- **Future authority:** When a Hive adapter materializes a static workflow,
-  Neo4j replaces the local journal as lifecycle authority.
-  - Loom's event model may map into Hive records.
-  - It must not create a second authoritative scheduler beside Neo4j.
-- **Execution unit:** One Hive task runs in one disposable Kata-backed Pod.
-  - One Pod runs one embedded Codex thread.
-  - Durable graph nodes become separate Hive tasks.
-  - Nested subagents inside one Hive worker remain disabled.
-
 ### Delivery owner
 
 Exactly one delivery owner remains outside the worker fan-out.
@@ -344,7 +342,8 @@ Do not create a general graph language outside TypeScript.
 7. Execute the read-only Cortex workflow.
 8. Delete Lace and remove it from the Minds workspace.
 9. Add the fixed Coding Bro delivery workflow.
-10. Map selected compiled workflows onto separate Hive tasks.
+10. Add reviewed module-oriented workflows only after their read-only expert
+    contracts and depth bounds are proven.
 
 Write-capable worker execution is not the starting point.
 
@@ -368,9 +367,10 @@ This decision does not:
 - execute graphs supplied by YAML;
 - generate graphs from prompts or Markdown;
 - make Loom a durable distributed task store;
+- map local software development onto Hive;
 - allow concurrent writers in one worktree;
 - transfer lifecycle ownership to child workers;
-- enable nested Hive workers.
+- allow a child to create an unscheduled agent tier.
 
 ## External evidence
 

@@ -35,6 +35,7 @@ import type {
   AgentAttemptEventWithoutMetadata,
 } from './agent-events.ts';
 import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
+import { MAX_AGENT_HIERARCHY_DEPTH } from './hierarchy.ts';
 
 const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
   recursive: true,
@@ -72,7 +73,7 @@ export class AgentAttemptJournal<TTask extends string> {
       configuration.attempt < 1 ||
       !Number.isSafeInteger(configuration.depth) ||
       configuration.depth < 1 ||
-      configuration.depth > 64
+      configuration.depth > MAX_AGENT_HIERARCHY_DEPTH
     ) {
       throw new Error('Agent attempt and hierarchy depth must be bounded.');
     }

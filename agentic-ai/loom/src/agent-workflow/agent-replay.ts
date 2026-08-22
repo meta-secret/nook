@@ -12,6 +12,7 @@ import type {
   AgentAttemptEvent,
   AgentAttemptEventMetadata,
 } from './agent-events.ts';
+import { MAX_AGENT_HIERARCHY_DEPTH } from './hierarchy.ts';
 import type {
   MaterializedViewReference,
   ProjectionReference,
@@ -182,7 +183,7 @@ function assertValidIdentity(event: AgentAttemptEventMetadata): void {
     event.attempt < 1 ||
     !Number.isSafeInteger(event.depth) ||
     event.depth < 1 ||
-    event.depth > 64
+    event.depth > MAX_AGENT_HIERARCHY_DEPTH
   ) {
     throw new Error('Agent attempt journal identity is invalid.');
   }

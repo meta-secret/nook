@@ -68,6 +68,15 @@ tasks:
       - task: loom:lint
       - task: loom:check
       - task: loom:test
+      - task: loom:module-experts:validate
+
+  loom:module-experts:validate:
+    desc: Validate named read-only module experts and complete production-module routing.
+    deps: [loom:install]
+    cmds:
+      - >-
+        bun run --cwd agentic-ai/loom module-experts --
+        validate --working-directory "{{.REPO_ROOT}}"
 
   loom:run:
     desc: Run Loom with a domain YAML request (CONFIG=<request.yaml>).

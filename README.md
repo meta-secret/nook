@@ -422,11 +422,18 @@ bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
 
+Project-scoped module experts are read-only Codex roles backed by one typed
+registry. Run **`task loom:module-experts:validate`** to verify complete
+production-module routing, the `internal_api_expert` WASM and binding boundary,
+and research exclusions. Loom journal creation and replay reject agent lineage
+deeper than three levels.
+
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
+task loom:module-experts:validate # named read-only expert and production-module routing audit
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD

@@ -16,6 +16,12 @@ For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.m
 - **Localization source of truth:** Owns locale catalogs, translation behavior, and the single generated Rust translation-key registry. `nook-auth2` and `nook-core` consume it; `nook-core` may re-export the API for compatibility.
 - **Strict scope:** Authentication policy stays in `nook-auth2`, vault semantics stay in `nook-core`, and browser behavior stays in `nook-wasm` or the web packages.
 
+### Authenticator Domain: `nook-authenticator-domain`
+
+- **Portable closed values:** Owns passkey-protection values, TOTP metadata, and backup-code update policy shared across authentication, vault, and extension boundaries.
+- **Dependency-light boundary:** Has no dependency on another Nook crate.
+- **Strict scope:** Browser ceremonies, persistence, extension lifecycle, and presentation remain in consumers and adapters.
+
 ### Identity and Authorization: `nook-auth2`
 
 - **Identity and app-key foundations:** `IdentityId`, identity control records, app keys (`AppKey` / `AppId`), passkey bindings, and identity-owned per-vault DEK envelopes belong here. Legacy `DeviceIdentity` / `device_id` names are migration aliases only.
@@ -44,6 +50,12 @@ For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.m
 - **No plaintext or provider I/O:** No plaintext secret models, key encryption, GitHub, Drive, iCloud, IndexedDB, OAuth, browser APIs, or network transport.
 - **Portability:** Depends only on `nook-auth2` wire/key-access types and `nook-replication` mechanics. Has no dependency on `nook-core`, `nook-wasm`, or `nook-web`.
 
+### Extension Companion Domain: `nook-companion-core`
+
+- **Portable extension policy:** Owns authentication workflow, pairing records and migrations, host classification, and form-field classification.
+- **Shared domain inputs:** Depends on `nook-authenticator-domain` and `nook-event-log` without importing browser APIs.
+- **Strict scope:** Chrome lifecycle, DOM observation, WASM adaptation, and presentation stay outside this crate.
+
 ### Application Domain Core: `nook-core`
 
 - **`src/auth/`:** Compatibility re-exports for `nook-auth2` plus the core-only adapter that replays vault event operations into auth metadata state.
@@ -63,6 +75,15 @@ For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.m
 ---
 
 ## 2. WebAssembly Bridge Layer
+
+These crates and their generated consumer bindings are routed through
+`internal_api_expert`. No separate WASM or bridge expert exists.
+
+### Companion Bridge: `nook-companion-wasm`
+
+- **Size-sensitive bridge:** Exposes `nook-companion-core` policy to extension contexts through `wasm-bindgen`.
+- **Generated binding boundary:** Generated TypeScript and WASM artifacts live under `nook-web-shared/src/extension/nook-companion-wasm`.
+- **No duplicated policy:** Authentication, pairing, host, and form-field rules remain in `nook-companion-core`.
 
 ### Bridge: `nook-wasm`
 
@@ -106,3 +127,4 @@ For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.m
 ### `nook-web-research`
 
 - **Disposable UI experiment catalog:** Svelte 5 + Vite catalog for isolated UI experiments under `src/experiments/`. Has no production coupling, WASM dependency, or build pipeline ties.
+- **Expert-routing exclusion:** This package is non-production and receives no module expert.

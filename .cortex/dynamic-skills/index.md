@@ -58,6 +58,12 @@ source of truth.
 - **[issue-scope-management.md](issue-scope-management.md)**
   - Purpose: Preserve deferred, risky, or too-large work in existing Workbench feature/issue records and task worklogs without disrupting other agents
   - Executable skill: [`.agents/skills/issue-scope-management/SKILL.md`](../../.agents/skills/issue-scope-management/SKILL.md)
+- **[module-expert.md](module-expert.md)**
+  - Purpose: Route exact-baseline production-module analysis through one named read-only expert without granting write or scheduling authority
+  - Executable skill: [`.agents/skills/module-expert/SKILL.md`](../../.agents/skills/module-expert/SKILL.md)
+- **[internal-api-expert.md](internal-api-expert.md)**
+  - Purpose: Design the smallest provider-consumer contract across Rust crates, both WASM bridges, generated bindings, and TypeScript adapters
+  - Executable skill: [`.agents/skills/internal-api-expert/SKILL.md`](../../.agents/skills/internal-api-expert/SKILL.md)
 - **[rust-coding.md](rust-coding.md)**
   - Purpose: Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs
   - Executable skill: [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md)
