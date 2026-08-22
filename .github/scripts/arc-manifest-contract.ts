@@ -478,7 +478,13 @@ interface WorkflowJob {
   uses?: string;
 }
 
+interface WorkflowEventTrigger {
+  branches?: string[];
+  paths?: string[];
+}
+
 interface WorkflowManifest {
+  on: Record<string, WorkflowEventTrigger>;
   jobs: Record<string, WorkflowJob>;
 }
 
@@ -636,6 +642,25 @@ async function validateWorkflowPlacement(
     throw new Error(
       `${input.workflow} job inventory changed; actual=${actualJobs.join(",")} classified=${classifiedJobs.join(",")}`,
     );
+  }
+
+  if (Object.values(input.jobs).includes(RunnerPlacement.ArcGeneralMain)) {
+    const eventNames = Object.keys(manifest.on).sort();
+    const pushTrigger = manifest.on.push;
+    const pushBranches = pushTrigger?.branches ?? [];
+    const pushFields = pushTrigger ? Object.keys(pushTrigger) : [];
+    const unsupportedPushFields = pushFields.filter(
+      (field) => field !== "branches" && field !== "paths",
+    );
+    if (
+      eventNames.join("\n") !== "push" ||
+      pushBranches.join("\n") !== "main" ||
+      unsupportedPushFields.length > 0
+    ) {
+      throw new Error(
+        `${input.workflow} ARC Main jobs require an exclusive push trigger on the main branch`,
+      );
+    }
   }
 
   for (const jobName of actualJobs) {
