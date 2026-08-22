@@ -439,6 +439,13 @@ attempt journal and returns its content-addressed evidence references, but does
 not schedule a successor or mutate lifecycle state. Direct named experts are
 agent-attempt children at depth two or three; they never use workflow-root
 lineage.
+Each expert reads an immutable, catalog-scoped commit snapshot through bounded
+loopback list, read, and literal-search tools. The credential is redeemed once
+through a trusted runtime helper and is absent from the Codex process
+environment and persisted evidence. Model-controlled process, write, general
+network, web-search, and delegation paths remain disabled. Successful experts
+return a typed `ModuleExpertEvidence` continuation; parent actions are evidence,
+not scheduler authority.
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)

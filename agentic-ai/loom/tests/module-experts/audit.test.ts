@@ -32,10 +32,14 @@ import type {
 } from '../../src/module-experts/catalog.ts';
 import {
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+  MODULE_EXPERT_AUTH_PROVIDER,
   MODULE_EXPERT_CODEX_OPTIONS,
+  MODULE_EXPERT_CONTEXT_MCP,
   MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-  moduleExpertThreadOptions,
+  buildModuleExpertCodexOptions,
+  moduleExpertIsolatedThreadOptions,
 } from '../../src/module-experts/runtime-contract.ts';
+import type { ModuleExpertCodexOptionsRequest } from '../../src/module-experts/runtime-contract.ts';
 import {
   CargoWorkspaceInventoryKind,
   decodeCargoWorkspaceMetadata,
@@ -58,6 +62,22 @@ type ModuleExpertRuntimePolicyDrift = {
   readonly codexOptions: CodexOptions;
 };
 
+const SAFE_CODEX_OPTIONS_REQUEST: ModuleExpertCodexOptionsRequest = {
+  authenticationCommandArgs: [
+    'agentic-ai/loom/src/module-experts/auth-broker-client.ts',
+    '/isolated/authentication.sock',
+    'test-nonce',
+  ],
+  contextServerUrl: 'http://127.0.0.1:1/test-context',
+  processEnvironment: {
+    CODEX_HOME: '/isolated/codex-home',
+    PATH: '/usr/bin',
+  },
+};
+const SAFE_CODEX_OPTIONS = buildModuleExpertCodexOptions(
+  SAFE_CODEX_OPTIONS_REQUEST,
+);
+
 const internalApiProfile = MODULE_EXPERT_CATALOG.find(
   (profile) => profile.name === 'internal_api_expert',
 );
@@ -79,7 +99,7 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
     description: 'non-file authentication storage',
     codexOptions: {
       config: {
-        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        ...SAFE_CODEX_OPTIONS.config,
         cli_auth_credentials_store: 'auto',
       },
     },
@@ -88,7 +108,7 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
     description: 'login-shell enablement',
     codexOptions: {
       config: {
-        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        ...SAFE_CODEX_OPTIONS.config,
         allow_login_shell: true,
       },
     },
@@ -97,9 +117,9 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
     description: 'inherited shell environment',
     codexOptions: {
       config: {
-        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        ...SAFE_CODEX_OPTIONS.config,
         shell_environment_policy: {
-          ...MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy,
+          ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
           inherit: 'all',
         },
       },
@@ -109,9 +129,9 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
     description: 'ignored default shell exclusions',
     codexOptions: {
       config: {
-        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        ...SAFE_CODEX_OPTIONS.config,
         shell_environment_policy: {
-          ...MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy,
+          ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
           ignore_default_excludes: true,
         },
       },
@@ -121,11 +141,107 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
     description: 'skill MCP dependency installation',
     codexOptions: {
       config: {
-        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        ...SAFE_CODEX_OPTIONS.config,
         features: {
-          ...MODULE_EXPERT_CODEX_OPTIONS.config.features,
+          ...SAFE_CODEX_OPTIONS.config.features,
           skill_mcp_dependency_install: true,
         },
+      },
+    },
+  },
+  {
+    description: 'model-controlled process tool',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        features: {
+          ...SAFE_CODEX_OPTIONS.config.features,
+          shell_tool: true,
+        },
+      },
+    },
+  },
+  {
+    description: 'image reader enablement',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        features: {
+          ...SAFE_CODEX_OPTIONS.config.features,
+          view_image: true,
+        },
+      },
+    },
+  },
+  {
+    description: 'untrusted authentication helper',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        model_providers: {
+          [MODULE_EXPERT_AUTH_PROVIDER]: {
+            ...SAFE_CODEX_OPTIONS.config.model_providers[
+              MODULE_EXPERT_AUTH_PROVIDER
+            ],
+            auth: {
+              ...SAFE_CODEX_OPTIONS.config.model_providers[
+                MODULE_EXPERT_AUTH_PROVIDER
+              ].auth,
+              command: '/bin/sh',
+            },
+          },
+        },
+      },
+    },
+  },
+  {
+    description: 'additional MCP server',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        mcp_servers: {
+          ...SAFE_CODEX_OPTIONS.config.mcp_servers,
+          untrusted_context: {
+            command: '/bin/sh',
+          },
+        },
+      },
+    },
+  },
+  {
+    description: 'expanded repository tool allowlist',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        mcp_servers: {
+          [MODULE_EXPERT_CONTEXT_MCP]: {
+            ...SAFE_CODEX_OPTIONS.config.mcp_servers[MODULE_EXPERT_CONTEXT_MCP],
+            enabled_tools: [
+              'list_files',
+              'read_file',
+              'search_text',
+              'write_file',
+            ],
+          },
+        },
+      },
+    },
+  },
+  {
+    description: 'missing authentication provider',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        model_providers: {},
+      },
+    },
+  },
+  {
+    description: 'missing context server',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        mcp_servers: {},
       },
     },
   },
@@ -256,7 +372,7 @@ describe('module expert audit', () => {
 
   test('uses an isolated non-delegating Codex runtime', () => {
     const threadOptionsArgs = { workingDirectory: REPO_ROOT };
-    const threadOptions = moduleExpertThreadOptions(threadOptionsArgs);
+    const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
 
     expect(threadOptions.sandboxMode).toBe('read-only');
     expect(threadOptions.approvalPolicy).toBe('never');
@@ -280,6 +396,13 @@ describe('module expert audit', () => {
       MODULE_EXPERT_CODEX_OPTIONS.config.features.skill_mcp_dependency_install,
     ).toBe(false);
     expect(MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS).toEqual(['CODEX_API_KEY']);
+    const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
+      authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+      codexOptions: SAFE_CODEX_OPTIONS,
+      processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+      threadOptions,
+    };
+    expect(auditModuleExpertRuntimePolicy(auditArgs)).toEqual([]);
   });
 
   for (const drift of RUNTIME_POLICY_DRIFTS) {
@@ -289,7 +412,7 @@ describe('module expert audit', () => {
         authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
         codexOptions: drift.codexOptions,
         processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
-        threadOptions: moduleExpertThreadOptions(threadOptionsArgs),
+        threadOptions: moduleExpertIsolatedThreadOptions(threadOptionsArgs),
       };
       const findings = auditModuleExpertRuntimePolicy(auditArgs);
 
@@ -301,19 +424,19 @@ describe('module expert audit', () => {
 
   test('rejects authentication and process environment allowlist drift', () => {
     const threadOptionsArgs = { workingDirectory: REPO_ROOT };
-    const threadOptions = moduleExpertThreadOptions(threadOptionsArgs);
+    const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
     const authDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
       authEnvironmentKeys: [
         ...MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
         'CODEX_ACCESS_TOKEN',
       ],
-      codexOptions: MODULE_EXPERT_CODEX_OPTIONS,
+      codexOptions: SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
       threadOptions,
     };
     const processDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
       authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-      codexOptions: MODULE_EXPERT_CODEX_OPTIONS,
+      codexOptions: SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: [
         ...MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
         'GITHUB_TOKEN',

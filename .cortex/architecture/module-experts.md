@@ -31,14 +31,26 @@ The executable catalog lives in
 `agentic-ai/loom/src/module-experts/catalog.ts`.
 Project role files live under `.codex/agents/module-experts/`.
 
-Every role must report:
+Every successful role completion uses the dedicated
+`ModuleExpertEvidence` result kind.
+Its structured continuation contains exactly these non-empty evidence lists:
 
-- the external API relevant to the task;
-- dependencies and consumers;
-- security and compatibility invariants;
-- owning tests and focused validation;
-- risks and unresolved decisions;
-- actions required from the parent.
+- `externalApi`;
+- `dependencies`;
+- `consumers`;
+- `behaviorInvariants`;
+- `securityInvariants`;
+- `compatibilityInvariants`;
+- `owningTests`;
+- `focusedValidation`;
+- `risks`;
+- `unresolvedDecisions`;
+- `parentActions`.
+
+An explicit none-with-reason entry represents an empty category.
+The lists are bounded, unique, and free of control characters.
+`parentActions` is evidence for the delivery owner.
+It does not grant scheduling or mutation authority.
 
 Every role is read-only.
 Role files contain thin routing instructions instead of copied domain facts.
@@ -51,13 +63,36 @@ That runtime enforces:
 
 - read-only filesystem access;
 - no approval escalation;
-- no network or web search;
+- no model-controlled process, general network, or web-search path;
 - disabled apps and plugins;
 - disabled multi-agent tools and zero child depth;
 - one disposable Codex home with no inherited configuration or MCP servers;
-- one brokered `CODEX_API_KEY` excluded from expert tool-shell environments;
+- an empty working directory;
+- one catalog-scoped snapshot materialized from the exact source commit;
+- physical removal of catalog exclusions before the snapshot is served;
+- one in-process numeric-loopback context server with bounded list, read, and
+  literal-search tools;
+- one trusted, runtime-owned authentication helper outside the analyzed source
+  snapshot;
+- one nonce-bound, one-shot `CODEX_API_KEY` redemption over a disposable Unix
+  socket;
+- exclusion of the raw credential from Codex environment, configuration,
+  arguments, files, journals, views, and errors;
 - exact process and login-shell environment allowlists that exclude unrelated
   parent credentials and capability-bearing variables.
+
+Pinned Codex `0.147` retains a JavaScript composition wrapper and non-process
+helpers.
+The wrapper exposes only the bounded context tools and inert host helpers.
+It cannot start a process.
+Patch attempts remain blocked by the read-only sandbox and approval policy.
+Image access is disabled.
+
+This boundary prevents model-controlled credential recovery.
+It does not claim protection from a separate hostile process already running
+under the same operating-system account or from memory forensics.
+That stronger boundary requires managed workload identity or operating-system
+account isolation.
 
 This isolation belongs only to the module-expert adapter.
 Generic Loom workflows retain the ordinary Codex home and authentication store,

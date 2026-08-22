@@ -1,392 +1,834 @@
 import {
+  access,
   mkdir,
   mkdtemp,
   readFile,
   readdir,
   rm,
-  stat,
   writeFile,
 } from 'node:fs/promises';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, test } from 'bun:test';
+import { Codex } from '@openai/codex-sdk';
+import type { CodexOptions, TurnOptions } from '@openai/codex-sdk';
+import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
+import type { ModuleExpertProfile } from '../../src/module-experts/catalog.ts';
+import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../../src/module-experts/read-context-mcp.ts';
 import {
+  MODULE_EXPERT_AUTH_PROVIDER,
+  MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
   MODULE_EXPERT_CODEX_OPTIONS,
+  MODULE_EXPERT_CONTEXT_MCP,
   createModuleExpertRuntimeIsolation,
   withModuleExpertRuntimeIsolation,
 } from '../../src/module-experts/runtime-contract.ts';
 import type {
+  ModuleExpertRuntimeIsolation,
   ModuleExpertRuntimeIsolationRequest,
   ModuleExpertRuntimeIsolationUse,
 } from '../../src/module-experts/runtime-contract.ts';
 import { runCommand } from '../../src/lib/run.ts';
 import type { RunCommandArgs } from '../../src/lib/run.ts';
 
-const CODEX_EXECUTABLE = resolve(
+const EXPERT_NAME = 'app_common_expert';
+const API_KEY_SENTINEL = 'codex-api-key-must-not-persist';
+const AUTH_CLIENT_SOURCE_PATH = resolve(
   import.meta.dir,
-  '../../node_modules/@openai/codex/bin/codex.js',
+  '../../src/module-experts/auth-broker-client.ts',
 );
-const REFRESHABLE_PARENT_AUTH =
-  '{"auth_mode":"chatgpt","tokens":{"access_token":"parent-access-token","refresh_token":"parent-refresh-token"}}\n';
-
-type CodexMcpListEntry = {
-  readonly name: string;
-  readonly enabled: boolean;
-};
-
-type CodexMcpInventoryRequest = {
-  readonly environment: NodeJS.ProcessEnv;
-  readonly workingDirectory: string;
-};
 
 const DECOY_ENVIRONMENT: NodeJS.ProcessEnv = {
   AWS_SECRET_ACCESS_KEY: 'aws-secret',
   AWS_SESSION_TOKEN: 'aws-session',
+  CODEX_ACCESS_TOKEN: 'unsupported-access-token',
   DATABASE_URL: 'postgres://credential@example.test/database',
   DOCKER_HOST: 'ssh://privileged-docker.example.test',
   GH_TOKEN: 'gh-token',
   GITHUB_TOKEN: 'github-token',
   KUBECONFIG: '/sensitive/kubeconfig',
-  NOOK_GITHUB_PAT: 'nook-token',
   NPM_TOKEN: 'npm-token',
+  OPENAI_API_KEY: 'unsupported-openai-key',
   PROJECT_SECRET: 'project-secret',
   SSH_AUTH_SOCK: '/sensitive/ssh-agent.sock',
 };
 
+type RepositoryFixture = {
+  readonly committedEntryContent: string;
+  readonly root: string;
+  readonly sourceCommit: string;
+};
+
+type AuthenticationCommand = {
+  readonly args: readonly string[];
+  readonly command: string;
+};
+
 describe('module expert runtime isolation', () => {
-  test('excludes inherited MCP servers and parent authentication state', async () => {
-    const fixtureRoot = await mkdtemp(
-      join(tmpdir(), 'loom-module-expert-isolation-'),
-    );
+  test('isolates credentials, capabilities, repository scope, and working state', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-expert-runtime-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const parentCodexHome = join(fixtureRoot, 'parent-codex-home');
-      const projectRoot = join(fixtureRoot, 'project');
+      const repository = await createRepositoryFixture(fixtureRoot);
       const isolationRoot = join(fixtureRoot, 'isolated');
-      const recursiveDirectoryOptions: MakeDirectoryOptions = {
-        recursive: true,
-      };
-      await mkdir(parentCodexHome, recursiveDirectoryOptions);
-      await mkdir(projectRoot, recursiveDirectoryOptions);
-      await mkdir(join(projectRoot, '.codex'), recursiveDirectoryOptions);
-      await mkdir(isolationRoot, recursiveDirectoryOptions);
-      const gitInitCommand: RunCommandArgs = {
-        command: 'git',
-        args: ['init'],
-        cwd: projectRoot,
-      };
-      expect(runCommand(gitInitCommand).exitCode).toBe(0);
-      const parentAuthPath = join(parentCodexHome, 'auth.json');
-      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
-      const parentAuthBefore = await stat(parentAuthPath);
-      const quotedProjectRoot = JSON.stringify(projectRoot);
-      await writeFile(
-        join(parentCodexHome, 'config.toml'),
-        [
-          `[projects.${quotedProjectRoot}]`,
-          'trust_level = "trusted"',
-          '',
-          '[mcp_servers.arbitrary_inherited_user_mcp]',
-          'command = "fixture-user-mcp"',
-          '',
-        ].join('\n'),
-        'utf8',
-      );
-      await writeFile(
-        join(projectRoot, '.codex/config.toml'),
-        [
-          '[mcp_servers.arbitrary_inherited_project_mcp]',
-          'command = "fixture-project-mcp"',
-          '',
-        ].join('\n'),
-        'utf8',
-      );
-      const parentInventoryRequest: CodexMcpInventoryRequest = {
-        environment: {
-          CODEX_HOME: parentCodexHome,
-          PATH: process.env.PATH ?? '',
-        },
-        workingDirectory: projectRoot,
-      };
-      const inheritedNames = await codexMcpNames(parentInventoryRequest);
-      expect(inheritedNames).toContain('arbitrary_inherited_user_mcp');
-
+      await mkdir(isolationRoot);
       const parentEnvironment: NodeJS.ProcessEnv = {
         ...DECOY_ENVIRONMENT,
-        CODEX_ACCESS_TOKEN: 'ambient-access-token',
-        CODEX_API_KEY: 'ambient-api-key',
-        CODEX_HOME: parentCodexHome,
-        OPENAI_API_KEY: 'ambient-openai-key',
+        CODEX_API_KEY: API_KEY_SENTINEL,
+        CODEX_HOME: join(fixtureRoot, 'parent-codex-home'),
         PATH: process.env.PATH ?? '',
       };
       const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+        expertName: EXPERT_NAME,
         parentEnvironment,
+        sourceCommit: repository.sourceCommit,
         temporaryRoot: isolationRoot,
+        workingDirectory: repository.root,
       };
       const isolation = createModuleExpertRuntimeIsolation(isolationRequest);
       try {
-        expect(
-          MODULE_EXPERT_CODEX_OPTIONS.config.cli_auth_credentials_store,
-        ).toBe('file');
-        expect(MODULE_EXPERT_CODEX_OPTIONS.config.allow_login_shell).toBe(
-          false,
-        );
-        expect(
-          MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy.inherit,
-        ).toBe('none');
-        expect(
-          MODULE_EXPERT_CODEX_OPTIONS.config.features
-            .skill_mcp_dependency_install,
-        ).toBe(false);
-        expect(isolation.codexHome).not.toBe(parentCodexHome);
         expect(Object.keys(isolation.codexOptions.env).sort()).toEqual([
-          'CODEX_API_KEY',
           'CODEX_HOME',
           'PATH',
         ]);
-        const expectedShellEnvironment: Readonly<Record<string, string>> = {
-          PATH: process.env.PATH ?? '',
+        const serializedOptions = JSON.stringify(isolation.codexOptions);
+        expect(serializedOptions).not.toContain(API_KEY_SENTINEL);
+        expect(serializedOptions).not.toContain('CODEX_API_KEY');
+        const treeSearch: TreeContainsRequest = {
+          root: isolation.codexHome,
+          sentinel: API_KEY_SENTINEL,
         };
+        expect(await treeContains(treeSearch)).toBe(false);
+        expect(isolation.threadOptions.workingDirectory).toBe(
+          join(isolation.codexHome, 'workspace'),
+        );
+        expect(isolation.threadOptions.skipGitRepoCheck).toBe(true);
         expect(
-          isolation.codexOptions.config.shell_environment_policy.set,
-        ).toEqual(expectedShellEnvironment);
-        expect(await readdir(isolation.codexHome)).toEqual([]);
-        expect(await readFile(parentAuthPath, 'utf8')).toBe(
-          REFRESHABLE_PARENT_AUTH,
+          await readdir(isolation.threadOptions.workingDirectory ?? ''),
+        ).toEqual([]);
+        expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.shell_tool).toBe(
+          false,
         );
-        const parentAuthAfter = await stat(parentAuthPath);
-        expect(parentAuthAfter.mtimeMs).toBe(parentAuthBefore.mtimeMs);
-        expect(parentAuthAfter.size).toBe(parentAuthBefore.size);
-        expect(isolation.codexOptions.env?.CODEX_HOME).toBe(
-          isolation.codexHome,
+        expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.unified_exec).toBe(
+          false,
         );
-        const isolatedInventoryRequest: CodexMcpInventoryRequest = {
-          environment: isolation.codexOptions.env,
-          workingDirectory: projectRoot,
-        };
-        expect(await codexMcpNames(isolatedInventoryRequest)).toEqual([]);
-        expect(await readdir(isolation.codexHome)).not.toContain('auth.json');
-        expect(await readFile(parentAuthPath, 'utf8')).toBe(
-          REFRESHABLE_PARENT_AUTH,
+        expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.shell_snapshot).toBe(
+          false,
         );
+        expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.hooks).toBe(false);
+        expect(
+          MODULE_EXPERT_CODEX_OPTIONS.config.features.code_mode.enabled,
+        ).toBe(false);
+        expect(MODULE_EXPERT_CODEX_OPTIONS.config.agents.enabled).toBe(false);
+        expect(
+          isolation.codexOptions.config.mcp_servers[MODULE_EXPERT_CONTEXT_MCP]
+            .required,
+        ).toBe(true);
+        expect(
+          isolation.codexOptions.config.mcp_servers[MODULE_EXPERT_CONTEXT_MCP]
+            .enabled_tools,
+        ).toEqual(['list_files', 'read_file', 'search_text']);
+        const authentication = authenticationCommand(isolation);
+        expect(authentication.args[0]).toBe(AUTH_CLIENT_SOURCE_PATH);
+        await expect(
+          access(
+            join(
+              isolation.repositorySnapshot,
+              MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
+            ),
+          ),
+        ).rejects.toThrow();
+
+        const snapshotEntry = join(
+          isolation.repositorySnapshot,
+          profile().publicEntryPoints[0] ?? '',
+        );
+        expect(await readFile(snapshotEntry, 'utf8')).toBe(
+          repository.committedEntryContent,
+        );
+        const unrelatedPath = join(
+          isolation.repositorySnapshot,
+          'unrelated-module/private.txt',
+        );
+        await expect(access(unrelatedPath)).rejects.toThrow();
       } finally {
-        isolation.dispose();
+        await isolation.dispose();
       }
+      expect(await readdir(isolationRoot)).toEqual([]);
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
-  test('brokers only the API key outside the expert tool-shell environment', async () => {
-    const fixtureRoot = await mkdtemp(
-      join(tmpdir(), 'loom-module-expert-environment-auth-'),
-    );
+  test('redeems the command-backed credential exactly once', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-expert-auth-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const parentCodexHome = join(fixtureRoot, 'parent-codex-home');
+      const repository = await createRepositoryFixture(fixtureRoot);
       const isolationRoot = join(fixtureRoot, 'isolated');
-      const recursiveDirectoryOptions: MakeDirectoryOptions = {
-        recursive: true,
+      await mkdir(isolationRoot);
+      const fixtureRequest: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
       };
-      await mkdir(parentCodexHome, recursiveDirectoryOptions);
-      await mkdir(isolationRoot, recursiveDirectoryOptions);
-      const parentAuthPath = join(parentCodexHome, 'auth.json');
-      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
-      const parentEnvironment: NodeJS.ProcessEnv = {
-        ...DECOY_ENVIRONMENT,
-        CODEX_ACCESS_TOKEN: 'access-token',
-        CODEX_API_KEY: 'api-key',
-        CODEX_HOME: parentCodexHome,
-        OPENAI_API_KEY: 'openai-key',
-        PATH: '/usr/bin:/bin',
-      };
-      const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
-        parentEnvironment,
-        temporaryRoot: isolationRoot,
-      };
+      const isolationRequest = runtimeIsolationRequest(fixtureRequest);
       const isolation = createModuleExpertRuntimeIsolation(isolationRequest);
       try {
-        const expectedProcessEnvironment: Readonly<Record<string, string>> = {
-          CODEX_API_KEY: 'api-key',
-          CODEX_HOME: isolation.codexHome,
-          PATH: '/usr/bin:/bin',
-        };
-        expect(isolation.codexOptions.env).toEqual(expectedProcessEnvironment);
-        const expectedShellEnvironment: Readonly<Record<string, string>> = {
-          PATH: '/usr/bin:/bin',
-        };
-        expect(
-          isolation.codexOptions.config.shell_environment_policy.set,
-        ).toEqual(expectedShellEnvironment);
-        expect(await readdir(isolation.codexHome)).toEqual([]);
-        expect(await readFile(parentAuthPath, 'utf8')).toBe(
-          REFRESHABLE_PARENT_AUTH,
-        );
+        const command = authenticationCommand(isolation);
+        expect(command.args.join(' ')).not.toContain(API_KEY_SENTINEL);
+        const firstRun: AuthenticationCommandRun = { command, isolation };
+        const first = await runAuthenticationCommand(firstRun);
+        expect(first.exitCode).toBe(0);
+        expect(first.stdout.trim()).toBe(API_KEY_SENTINEL);
+        const secondRun: AuthenticationCommandRun = { command, isolation };
+        const second = await runAuthenticationCommand(secondRun);
+        expect(second.exitCode).not.toBe(0);
+        expect(second.stdout).not.toContain(API_KEY_SENTINEL);
       } finally {
-        isolation.dispose();
+        await isolation.dispose();
+      }
+      expect(await readdir(isolationRoot)).toEqual([]);
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('accepts fragmented nonces without letting invalid requests consume auth', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-expert-auth-stream-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const repository = await createRepositoryFixture(fixtureRoot);
+      const isolationRoot = join(fixtureRoot, 'isolated');
+      await mkdir(isolationRoot);
+      const fixtureRequest: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
+      };
+      const isolation = createModuleExpertRuntimeIsolation(
+        runtimeIsolationRequest(fixtureRequest),
+      );
+      try {
+        const command = authenticationCommand(isolation);
+        const invalidRequest: BrokerSocketRequest = {
+          nonce: 'invalid-nonce',
+          socketPath: command.args[1] ?? '',
+        };
+        expect(await redeemBrokerSocket(invalidRequest)).toBe('');
+        const validRequest: BrokerSocketRequest = {
+          nonce: command.args[2] ?? '',
+          socketPath: command.args[1] ?? '',
+        };
+        expect((await redeemBrokerSocket(validRequest)).trim()).toBe(
+          API_KEY_SENTINEL,
+        );
+        expect(await redeemBrokerSocket(validRequest)).toBe('');
+      } finally {
+        await isolation.dispose();
       }
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
-  test('keeps concurrent isolated homes and process environment independent', async () => {
+  test('keeps concurrent brokers, snapshots, and cleanup independent', async () => {
     const fixtureRoot = await mkdtemp(
-      join(tmpdir(), 'loom-module-expert-concurrency-'),
+      join(tmpdir(), 'loom-expert-concurrent-'),
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const parentCodexHome = join(fixtureRoot, 'parent-codex-home');
+      const repository = await createRepositoryFixture(fixtureRoot);
       const isolationRoot = join(fixtureRoot, 'isolated');
-      const recursiveDirectoryOptions: MakeDirectoryOptions = {
-        recursive: true,
+      await mkdir(isolationRoot);
+      const fixtureRequest: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
       };
-      await mkdir(parentCodexHome, recursiveDirectoryOptions);
-      await mkdir(isolationRoot, recursiveDirectoryOptions);
-      const parentAuthPath = join(parentCodexHome, 'auth.json');
-      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
-      const parentEnvironment: NodeJS.ProcessEnv = {
-        CODEX_API_KEY: 'api-key',
-        CODEX_HOME: parentCodexHome,
-        PATH: '/usr/bin:/bin',
-        PROJECT_SECRET: 'must-not-leak',
-      };
-      const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
-        parentEnvironment,
-        temporaryRoot: isolationRoot,
-      };
+      const isolationRequest = runtimeIsolationRequest(fixtureRequest);
       const first = createModuleExpertRuntimeIsolation(isolationRequest);
       const second = createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         expect(first.codexHome).not.toBe(second.codexHome);
-        const expectedParentEnvironment: NodeJS.ProcessEnv = {
-          CODEX_API_KEY: 'api-key',
-          CODEX_HOME: parentCodexHome,
-          PATH: '/usr/bin:/bin',
-          PROJECT_SECRET: 'must-not-leak',
+        expect(first.repositorySnapshot).not.toBe(second.repositorySnapshot);
+        const firstMcp =
+          first.codexOptions.config.mcp_servers[MODULE_EXPERT_CONTEXT_MCP];
+        const secondMcp =
+          second.codexOptions.config.mcp_servers[MODULE_EXPERT_CONTEXT_MCP];
+        expect(firstMcp.url).not.toBe(secondMcp.url);
+        const firstRun: AuthenticationCommandRun = {
+          command: authenticationCommand(first),
+          isolation: first,
         };
-        expect(parentEnvironment).toEqual(expectedParentEnvironment);
-        first.dispose();
-        expect(await readdir(isolationRoot)).toEqual([
-          second.codexHome.slice(isolationRoot.length + 1),
-        ]);
-        expect(await readdir(second.codexHome)).toEqual([]);
-        expect(await readFile(parentAuthPath, 'utf8')).toBe(
-          REFRESHABLE_PARENT_AUTH,
-        );
+        const firstResult = await runAuthenticationCommand(firstRun);
+        const secondRun: AuthenticationCommandRun = {
+          command: authenticationCommand(second),
+          isolation: second,
+        };
+        const secondResult = await runAuthenticationCommand(secondRun);
+        expect(firstResult.stdout.trim()).toBe(API_KEY_SENTINEL);
+        expect(secondResult.stdout.trim()).toBe(API_KEY_SENTINEL);
+        await first.dispose();
+        expect((await readdir(isolationRoot)).length).toBe(1);
+        expect(
+          await readFile(
+            join(
+              second.repositorySnapshot,
+              profile().publicEntryPoints[0] ?? '',
+            ),
+            'utf8',
+          ),
+        ).toBe(repository.committedEntryContent);
       } finally {
-        first.dispose();
-        second.dispose();
+        await first.dispose();
+        await second.dispose();
       }
+      expect(await readdir(isolationRoot)).toEqual([]);
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
-  test('rejects parent OAuth and access-token authentication', async () => {
+  test('removes catalog exclusions from broad module snapshots', async () => {
     const fixtureRoot = await mkdtemp(
-      join(tmpdir(), 'loom-module-expert-auth-'),
+      join(tmpdir(), 'loom-expert-exclusions-'),
     );
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const parentCodexHome = join(fixtureRoot, 'parent-codex-home');
-      const isolationRoot = join(fixtureRoot, 'isolated');
-      const recursiveDirectoryOptions: MakeDirectoryOptions = {
-        recursive: true,
+      const fixtureRequest: ProfileRepositoryFixtureRequest = {
+        expertName: 'web_expert',
+        fixtureRoot,
       };
-      await mkdir(parentCodexHome, recursiveDirectoryOptions);
-      await mkdir(isolationRoot, recursiveDirectoryOptions);
-      const parentAuthPath = join(parentCodexHome, 'auth.json');
-      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
-      const parentEnvironment: NodeJS.ProcessEnv = {
-        CODEX_ACCESS_TOKEN: 'unsupported-access-token',
-        CODEX_API_KEY: '',
-        CODEX_HOME: parentCodexHome,
-        OPENAI_API_KEY: 'unsupported-openai-api-key',
-        PATH: process.env.PATH ?? '',
+      const repository = await createProfileRepositoryFixture(fixtureRequest);
+      const isolationRoot = join(fixtureRoot, 'isolated');
+      await mkdir(isolationRoot);
+      const requestFixture: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
       };
       const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
-        parentEnvironment,
-        temporaryRoot: isolationRoot,
+        ...runtimeIsolationRequest(requestFixture),
+        expertName: 'web_expert',
       };
-
-      expect(() =>
-        createModuleExpertRuntimeIsolation(isolationRequest),
-      ).toThrow('requires CODEX_API_KEY authentication');
-      expect(await readdir(isolationRoot)).toEqual([]);
-      expect(await readFile(parentAuthPath, 'utf8')).toBe(
-        REFRESHABLE_PARENT_AUTH,
-      );
+      const isolation = createModuleExpertRuntimeIsolation(isolationRequest);
+      try {
+        const webProfile = profile('web_expert');
+        for (const excludedPath of webProfile.excludedPaths) {
+          await expect(
+            access(join(isolation.repositorySnapshot, excludedPath)),
+          ).rejects.toThrow();
+        }
+        expect(
+          await readFile(
+            join(
+              isolation.repositorySnapshot,
+              'nook-app/nook-web/nook-web-shared/fixture.txt',
+            ),
+            'utf8',
+          ),
+        ).toContain('committed:');
+      } finally {
+        await isolation.dispose();
+      }
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
-  test('removes isolated state when guarded work fails', async () => {
-    for (const failurePhase of ['source stability', 'agent turn']) {
-      const fixtureRoot = await mkdtemp(
-        join(tmpdir(), 'loom-module-expert-cleanup-'),
-      );
-      const removeOptions: RmOptions = { recursive: true, force: true };
-      try {
-        const parentCodexHome = join(fixtureRoot, 'parent-codex-home');
-        const isolationRoot = join(fixtureRoot, 'isolated');
-        const recursiveDirectoryOptions: MakeDirectoryOptions = {
-          recursive: true,
-        };
-        await mkdir(parentCodexHome, recursiveDirectoryOptions);
-        await mkdir(isolationRoot, recursiveDirectoryOptions);
-        await writeFile(
-          join(parentCodexHome, 'auth.json'),
-          REFRESHABLE_PARENT_AUTH,
-          'utf8',
-        );
-        const parentEnvironment: NodeJS.ProcessEnv = {
-          CODEX_API_KEY: 'api-key',
-          CODEX_HOME: parentCodexHome,
+  test('fails closed for unsupported auth, experts, commits, and guarded failures', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-expert-fail-closed-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const repository = await createRepositoryFixture(fixtureRoot);
+      const isolationRoot = join(fixtureRoot, 'isolated');
+      await mkdir(isolationRoot);
+      const fixtureRequest: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
+      };
+      const baseRequest = runtimeIsolationRequest(fixtureRequest);
+      const unsupportedAuthRequest: ModuleExpertRuntimeIsolationRequest = {
+        ...baseRequest,
+        parentEnvironment: {
+          CODEX_ACCESS_TOKEN: 'unsupported',
+          OPENAI_API_KEY: 'unsupported',
           PATH: process.env.PATH ?? '',
+        },
+      };
+      expect(() =>
+        createModuleExpertRuntimeIsolation(unsupportedAuthRequest),
+      ).toThrow('requires CODEX_API_KEY authentication');
+      const unsupportedExpertRequest: ModuleExpertRuntimeIsolationRequest = {
+        ...baseRequest,
+        expertName: 'unregistered_expert',
+      };
+      expect(() =>
+        createModuleExpertRuntimeIsolation(unsupportedExpertRequest),
+      ).toThrow('requires a registered expert');
+      const invalidCommitRequest: ModuleExpertRuntimeIsolationRequest = {
+        ...baseRequest,
+        sourceCommit: 'HEAD',
+      };
+      expect(() =>
+        createModuleExpertRuntimeIsolation(invalidCommitRequest),
+      ).toThrow('must be a full Git SHA');
+
+      const isolationUse: ModuleExpertRuntimeIsolationUse<never> = {
+        isolationRequest: baseRequest,
+        run: () => Promise.reject(new Error('agent turn failed')),
+      };
+      await expect(
+        withModuleExpertRuntimeIsolation(isolationUse),
+      ).rejects.toThrow('agent turn failed');
+      expect(await readdir(isolationRoot)).toEqual([]);
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('excludes model-controlled process tools from the pinned Codex CLI', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-expert-toolset-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    const requestBodies: string[] = [];
+    let providerRequestCount = 0;
+    const providerServerOptions: Bun.Serve.Options<never> = {
+      hostname: '127.0.0.1',
+      port: 0,
+      fetch: async (request) => {
+        const body = await request.text();
+        if (!body) {
+          const responseOptions: ResponseInit = { status: 404 };
+          return new Response(
+            'fixture endpoint requires a body',
+            responseOptions,
+          );
+        }
+        requestBodies[requestBodies.length] = body;
+        providerRequestCount += 1;
+        const toolAttemptRequest: ToolAttemptEventsRequest = {
+          originalRepository: fixtureRoot,
         };
-        const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
-          parentEnvironment,
-          temporaryRoot: isolationRoot,
-        };
-        let isolatedCodexHome = '';
-        const isolationUse: ModuleExpertRuntimeIsolationUse<never> = {
-          isolationRequest,
-          run: (isolation) => {
-            isolatedCodexHome = isolation.codexHome;
-            return Promise.reject(new Error(failurePhase));
+        const events =
+          providerRequestCount === 1
+            ? toolAttemptEvents(toolAttemptRequest)
+            : completedResponseEvents();
+        const headers = new Headers();
+        headers.set('content-type', 'text/event-stream');
+        const responseOptions: ResponseInit = { headers, status: 200 };
+        return new Response(serializeSse(events), responseOptions);
+      },
+    };
+    const providerServer = Bun.serve(providerServerOptions);
+    try {
+      const repository = await createRepositoryFixture(fixtureRoot);
+      const isolationRoot = join(fixtureRoot, 'isolated');
+      await mkdir(isolationRoot);
+      const fixtureRequest: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
+      };
+      const isolation = createModuleExpertRuntimeIsolation(
+        runtimeIsolationRequest(fixtureRequest),
+      );
+      try {
+        const provider =
+          isolation.codexOptions.config.model_providers[
+            MODULE_EXPERT_AUTH_PROVIDER
+          ];
+        const codexOptions: CodexOptions = {
+          ...isolation.codexOptions,
+          config: {
+            ...isolation.codexOptions.config,
+            model_providers: {
+              [MODULE_EXPERT_AUTH_PROVIDER]: {
+                ...provider,
+                base_url: `http://127.0.0.1:${providerServer.port}/v1`,
+              },
+            },
           },
         };
-
-        await expect(
-          withModuleExpertRuntimeIsolation(isolationUse),
-        ).rejects.toThrow(failurePhase);
-        expect(isolatedCodexHome).not.toBe('');
-        expect(await readdir(isolationRoot)).toEqual([]);
+        const codex = new Codex(codexOptions);
+        const thread = codex.startThread(isolation.threadOptions);
+        const turnOptions: TurnOptions = {
+          signal: AbortSignal.timeout(15_000),
+        };
+        await thread.run('Inspect the assigned module.', turnOptions);
+        const requestBody = requestBodies[0] ?? '';
+        expect(requestBody).not.toBe('');
+        const capturedRequest = JSON.parse(requestBody) as CapturedCodexRequest;
+        const encodedMetadata =
+          capturedRequest.client_metadata?.['x-codex-turn-metadata'];
+        expect(encodedMetadata).toBeString();
+        const metadata = JSON.parse(
+          encodedMetadata ?? '{}',
+        ) as CapturedCodexTurnMetadata;
+        const emptyToolNames: CapturedCodexTurnMetadata['code_mode_tool_names'] =
+          {};
+        const toolNames = Object.keys(
+          metadata.code_mode_tool_names ?? emptyToolNames,
+        ).sort();
+        for (const toolName of MODULE_EXPERT_READ_CONTEXT_TOOLS) {
+          expect(toolNames).toContain(
+            `mcp__${MODULE_EXPERT_CONTEXT_MCP}__${toolName}`,
+          );
+        }
+        for (const forbiddenTool of [
+          'exec_command',
+          'shell',
+          'spawn_agent',
+          'unified_exec',
+          'view_image',
+          'web_search',
+        ]) {
+          expect(toolNames).not.toContain(forbiddenTool);
+        }
+        expect(requestBodies.length).toBeGreaterThanOrEqual(2);
+        const emptyWorkspaceMutation = join(
+          isolation.threadOptions.workingDirectory ?? '',
+          'forbidden.txt',
+        );
+        const snapshotMutation = join(
+          isolation.repositorySnapshot,
+          'forbidden.txt',
+        );
+        const originalMutation = join(repository.root, 'forbidden.txt');
+        await expect(access(emptyWorkspaceMutation)).rejects.toThrow();
+        await expect(access(snapshotMutation)).rejects.toThrow();
+        await expect(access(originalMutation)).rejects.toThrow();
+        const toolOutputRequest = requestBodies[1] ?? '';
+        expect(toolOutputRequest).toContain('read-only');
+        expect(toolOutputRequest).toContain(
+          'tools.view_image is not a function',
+        );
+        expect(toolOutputRequest).not.toContain(API_KEY_SENTINEL);
       } finally {
-        await rm(fixtureRoot, removeOptions);
+        await isolation.dispose();
       }
+    } finally {
+      await providerServer.stop(true);
+      await rm(fixtureRoot, removeOptions);
     }
   });
 });
 
-async function codexMcpNames(
-  request: CodexMcpInventoryRequest,
-): Promise<readonly string[]> {
-  const command = [CODEX_EXECUTABLE, 'mcp', 'list', '--json'];
+type RuntimeIsolationFixtureRequest = {
+  readonly isolationRoot: string;
+  readonly repository: RepositoryFixture;
+};
+
+type CapturedCodexRequest = {
+  readonly client_metadata?: Readonly<Record<string, string>>;
+};
+
+type CapturedCodexTurnMetadata = {
+  readonly code_mode_tool_names?: Readonly<
+    Record<string, { readonly name: string; readonly namespace?: string }>
+  >;
+};
+
+type SseEvent = {
+  readonly type: string;
+  readonly response?: {
+    readonly id: string;
+    readonly usage?: {
+      readonly input_tokens: number;
+      readonly output_tokens: number;
+      readonly total_tokens: number;
+    };
+  };
+  readonly item?: {
+    readonly call_id?: string;
+    readonly content?: readonly [
+      { readonly text: string; readonly type: string },
+    ];
+    readonly id?: string;
+    readonly input?: string;
+    readonly name?: string;
+    readonly role?: string;
+    readonly type: string;
+  };
+};
+
+type ToolAttemptEventsRequest = {
+  readonly originalRepository: string;
+};
+
+function toolAttemptEvents(
+  request: ToolAttemptEventsRequest,
+): readonly SseEvent[] {
+  const code = [
+    'const results = [];',
+    'try { results.push(await tools.apply_patch(`*** Begin Patch\\n*** Add File: forbidden.txt\\n+blocked\\n*** End Patch`)); } catch (error) { results.push(String(error)); }',
+    'try { results.push(await tools.apply_patch(`*** Begin Patch\\n*** Add File: ../repository/forbidden.txt\\n+blocked\\n*** End Patch`)); } catch (error) { results.push(String(error)); }',
+    `try { results.push(await tools.apply_patch(\`*** Begin Patch\\n*** Add File: ${request.originalRepository}/repository/forbidden.txt\\n+blocked\\n*** End Patch\`)); } catch (error) { results.push(String(error)); }`,
+    'try { results.push(await tools.view_image({ path: "../repository/nook-app/nook-platform/nook-app-common/src/lib.rs" })); } catch (error) { results.push(String(error)); }',
+    'text(JSON.stringify(results));',
+  ].join('\n');
+  return [
+    { type: 'response.created', response: { id: 'response-1' } },
+    {
+      type: 'response.output_item.done',
+      item: {
+        type: 'custom_tool_call',
+        call_id: 'call-1',
+        name: 'exec',
+        input: code,
+      },
+    },
+    completedEvent('response-1'),
+  ];
+}
+
+function completedResponseEvents(): readonly SseEvent[] {
+  return [
+    { type: 'response.created', response: { id: 'response-2' } },
+    {
+      type: 'response.output_item.done',
+      item: {
+        type: 'message',
+        role: 'assistant',
+        id: 'message-1',
+        content: [{ type: 'output_text', text: 'done' }],
+      },
+    },
+    completedEvent('response-2'),
+  ];
+}
+
+function completedEvent(id: string): SseEvent {
+  return {
+    type: 'response.completed',
+    response: {
+      id,
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        total_tokens: 0,
+      },
+    },
+  };
+}
+
+function serializeSse(events: readonly SseEvent[]): string {
+  return events
+    .map((event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`)
+    .join('');
+}
+
+function runtimeIsolationRequest(
+  request: RuntimeIsolationFixtureRequest,
+): ModuleExpertRuntimeIsolationRequest {
+  return {
+    expertName: EXPERT_NAME,
+    parentEnvironment: {
+      ...DECOY_ENVIRONMENT,
+      CODEX_API_KEY: API_KEY_SENTINEL,
+      PATH: process.env.PATH ?? '',
+    },
+    sourceCommit: request.repository.sourceCommit,
+    temporaryRoot: request.isolationRoot,
+    workingDirectory: request.repository.root,
+  };
+}
+
+function profile(expertName = EXPERT_NAME): ModuleExpertProfile {
+  const selected = MODULE_EXPERT_CATALOG.find(
+    (candidate) => candidate.name === expertName,
+  );
+  if (!selected) throw new Error('Test module expert profile is missing.');
+  return selected;
+}
+
+async function createRepositoryFixture(
+  fixtureRoot: string,
+): Promise<RepositoryFixture> {
+  const fixtureRequest: ProfileRepositoryFixtureRequest = {
+    expertName: EXPERT_NAME,
+    fixtureRoot,
+  };
+  return createProfileRepositoryFixture(fixtureRequest);
+}
+
+type ProfileRepositoryFixtureRequest = {
+  readonly expertName: string;
+  readonly fixtureRoot: string;
+};
+
+async function createProfileRepositoryFixture(
+  request: ProfileRepositoryFixtureRequest,
+): Promise<RepositoryFixture> {
+  const root = join(request.fixtureRoot, 'repository');
+  await mkdir(root);
+  const selected = profile(request.expertName);
+  const generatedPaths = selected.generatedScopePaths.flatMap((scope) => [
+    scope.path,
+    scope.producerPath,
+  ]);
+  const paths = [
+    '.cortex/knowledge-graph.md',
+    MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
+    selected.agentDefinitionPath,
+    ...selected.moduleRoots.map((moduleRoot) =>
+      join(moduleRoot, 'fixture.txt'),
+    ),
+    ...selected.scopePaths,
+    ...generatedPaths,
+    ...selected.publicEntryPoints,
+    ...selected.authorityPaths,
+    ...selected.skillPaths,
+    ...selected.excludedPaths.map((excludedPath) =>
+      join(excludedPath, 'excluded.txt'),
+    ),
+  ];
+  for (const path of new Set(paths)) {
+    const directoryOptions: MakeDirectoryOptions = { recursive: true };
+    await mkdir(dirname(join(root, path)), directoryOptions);
+    const content =
+      path === MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH
+        ? 'process.stdout.write(process.env.CODEX_API_KEY ?? "stolen");\n'
+        : `committed:${path}\n`;
+    await writeFile(join(root, path), content, 'utf8');
+  }
+  const unrelatedDirectory = join(root, 'unrelated-module');
+  const directoryOptions: MakeDirectoryOptions = { recursive: true };
+  await mkdir(unrelatedDirectory, directoryOptions);
+  await writeFile(
+    join(unrelatedDirectory, 'private.txt'),
+    'unrelated\n',
+    'utf8',
+  );
+  const gitInit: RunCommandArgs = { command: 'git', args: ['init'], cwd: root };
+  expect(runCommand(gitInit).exitCode).toBe(0);
+  const gitAdd: RunCommandArgs = {
+    command: 'git',
+    args: ['add', '.'],
+    cwd: root,
+  };
+  expect(runCommand(gitAdd).exitCode).toBe(0);
+  const gitCommit: RunCommandArgs = {
+    command: 'git',
+    args: [
+      '-c',
+      'user.name=Nook Test',
+      '-c',
+      'user.email=nook-test@example.test',
+      'commit',
+      '-m',
+      'fixture',
+    ],
+    cwd: root,
+  };
+  expect(runCommand(gitCommit).exitCode).toBe(0);
+  const gitRevision: RunCommandArgs = {
+    command: 'git',
+    args: ['rev-parse', 'HEAD'],
+    cwd: root,
+  };
+  const sourceCommit = runCommand(gitRevision).stdout.trim();
+  const entryPoint = selected.publicEntryPoints[0] ?? '';
+  const committedEntryContent = `committed:${entryPoint}\n`;
+  await writeFile(join(root, entryPoint), 'mutable worktree content\n', 'utf8');
+  await writeFile(
+    join(root, MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH),
+    'process.stdout.write("mutable helper executed\\n");\n',
+    'utf8',
+  );
+  return { committedEntryContent, root, sourceCommit };
+}
+
+function authenticationCommand(
+  isolation: ModuleExpertRuntimeIsolation,
+): AuthenticationCommand {
+  const provider =
+    isolation.codexOptions.config.model_providers[MODULE_EXPERT_AUTH_PROVIDER];
+  return { args: provider.auth.args, command: provider.auth.command };
+}
+
+type AuthenticationCommandRun = {
+  readonly command: AuthenticationCommand;
+  readonly isolation: ModuleExpertRuntimeIsolation;
+};
+
+type BrokerSocketRequest = {
+  readonly nonce: string;
+  readonly socketPath: string;
+};
+
+type BrokerSocketClientData = [Bun.Socket, Buffer];
+
+function redeemBrokerSocket(request: BrokerSocketRequest): Promise<string> {
+  return new Promise((resolveRedemption) => {
+    let response = '';
+    const socketOptions: Bun.UnixSocketOptions = {
+      unix: request.socketPath,
+      socket: {
+        binaryType: 'buffer',
+        data: (...parameters: BrokerSocketClientData) => {
+          const [socket, data] = parameters;
+          response += data.toString('utf8');
+          socket.close();
+        },
+        close: () => resolveRedemption(response),
+        error: () => resolveRedemption(response),
+        open: (socket) => {
+          const midpoint = Math.floor(request.nonce.length / 2);
+          socket.write(request.nonce.slice(0, midpoint));
+          setTimeout(() => {
+            socket.write(`${request.nonce.slice(midpoint)}\n`);
+          }, 1);
+        },
+      },
+    };
+    void Bun.connect(socketOptions);
+  });
+}
+
+type AuthenticationCommandResult = {
+  readonly exitCode: number;
+  readonly stdout: string;
+};
+
+async function runAuthenticationCommand(
+  run: AuthenticationCommandRun,
+): Promise<AuthenticationCommandResult> {
   const spawnOptions = {
-    cwd: request.workingDirectory,
-    env: request.environment,
+    env: run.isolation.codexOptions.env,
     stderr: 'pipe',
     stdout: 'pipe',
   } as const;
-  const child = Bun.spawn(command, spawnOptions);
+  const child = Bun.spawn(
+    [run.command.command, ...run.command.args],
+    spawnOptions,
+  );
   const exitCode = await child.exited;
   const stdout = await new Response(child.stdout).text();
   await new Response(child.stderr).text();
-  expect(exitCode).toBe(0);
-  const entries = JSON.parse(stdout) as readonly CodexMcpListEntry[];
-  return entries.filter((entry) => entry.enabled).map((entry) => entry.name);
+  return { exitCode, stdout };
+}
+
+type TreeContainsRequest = {
+  readonly root: string;
+  readonly sentinel: string;
+};
+
+async function treeContains(request: TreeContainsRequest): Promise<boolean> {
+  const directoryOptions = { withFileTypes: true } as const;
+  for (const entry of await readdir(request.root, directoryOptions)) {
+    const path = join(request.root, entry.name);
+    if (entry.isDirectory()) {
+      const nestedRequest: TreeContainsRequest = {
+        root: path,
+        sentinel: request.sentinel,
+      };
+      if (await treeContains(nestedRequest)) return true;
+      continue;
+    }
+    if (!entry.isFile()) continue;
+    const bytes = await readFile(path);
+    if (bytes.includes(Buffer.from(request.sentinel, 'utf8'))) return true;
+  }
+  return false;
 }

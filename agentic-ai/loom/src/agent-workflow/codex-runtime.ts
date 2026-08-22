@@ -66,7 +66,10 @@ export class ModuleExpertCodexSdkAgentRuntime<
     invocation: AgentExecutionInvocation<TTask, TAgent>,
   ): Promise<AgentExecutionCompletion> {
     const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+      expertName: invocation.agentProfile.name,
       parentEnvironment: process.env,
+      sourceCommit: invocation.sourceCommit,
+      workingDirectory: invocation.workingDirectory,
     };
     const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
       {
@@ -75,6 +78,7 @@ export class ModuleExpertCodexSdkAgentRuntime<
           const execution: GuardedAgentExecution<TTask, TAgent> = {
             codex: new Codex(isolation.codexOptions),
             invocation,
+            threadOptions: isolation.threadOptions,
           };
           return executeGuardedAgent(execution);
         },
@@ -86,6 +90,7 @@ export class ModuleExpertCodexSdkAgentRuntime<
 type GuardedAgentExecution<TTask extends string, TAgent extends string> = {
   readonly codex: Codex;
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly threadOptions?: ThreadOptions;
 };
 
 export type CollectCodexTurnArgs = {
@@ -127,9 +132,9 @@ async function executeStableAgent<TTask extends string, TAgent extends string>(
   const moduleExpertThreadOptionsArgs = {
     workingDirectory: execution.invocation.workingDirectory,
   };
-  const baseThreadOptions = moduleExpertThreadOptions(
-    moduleExpertThreadOptionsArgs,
-  );
+  const baseThreadOptions =
+    execution.threadOptions ??
+    moduleExpertThreadOptions(moduleExpertThreadOptionsArgs);
   const threadOptions: ThreadOptions = {
     ...baseThreadOptions,
     modelReasoningEffort: reasoningEffort(

@@ -314,7 +314,7 @@ export async function invokeModuleExpert(
     kind: WorkflowExecutorKind.Agent,
     agent: profile.name,
     instruction: moduleExpertInstruction(promptContext),
-    resultKind: WorkflowResultKind.CortexEvidence,
+    resultKind: WorkflowResultKind.ModuleExpertEvidence,
   };
   const invocation: AgentExecutionInvocation<string, string> = {
     task: request.task,
@@ -630,6 +630,8 @@ function moduleExpertInstruction(context: ModuleExpertPromptContext): string {
     `Authority paths: ${JSON.stringify(profile.authorityPaths)}`,
     `Skill paths: ${JSON.stringify(profile.skillPaths)}`,
     `Focused validation selectors: ${JSON.stringify(profile.validationSelectors)}`,
+    'Structured continuation: populate externalApi, dependencies, consumers, behaviorInvariants, securityInvariants, compatibilityInvariants, owningTests, focusedValidation, risks, unresolvedDecisions, and parentActions with at least one concrete entry each. Use an explicit none-with-reason entry when a category has no items.',
+    'Parent actions are evidence for the delivery owner. They do not authorize scheduling, writes, or further delegation.',
     `Requested analysis:\n${context.instruction}`,
   ].join('\n\n');
 }

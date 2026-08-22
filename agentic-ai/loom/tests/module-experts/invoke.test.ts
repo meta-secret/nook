@@ -6,7 +6,11 @@ import { join, resolve } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { replayAgentAttemptJournal } from '../../src/agent-workflow/agent-replay.ts';
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
-import type { FailedTaskTerminal } from '../../src/agent-workflow/domain.ts';
+import type {
+  FailedTaskTerminal,
+  ModuleExpertContinuation,
+  TaskTerminal,
+} from '../../src/agent-workflow/domain.ts';
 import {
   AgentAttemptParentKind,
   AgentWorkspacePolicy,
@@ -62,12 +66,13 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
     return {
       threadId: 'module-expert-thread',
       output: {
-        resultKind: WorkflowResultKind.CortexEvidence,
+        resultKind: WorkflowResultKind.ModuleExpertEvidence,
         summary: 'Core contract inspected.',
         materializedViewMarkdown: '# Core contract\n\nInspected.',
         findings: [],
         notesForParent: [],
         artifacts: [],
+        continuation: moduleExpertContinuation(),
       },
     };
   }
@@ -104,14 +109,45 @@ class InvalidCompletionAgentRuntime implements AgentTaskRuntime<
     return {
       threadId: '',
       output: {
-        resultKind: WorkflowResultKind.CortexEvidence,
+        resultKind: WorkflowResultKind.ModuleExpertEvidence,
         summary: 'Invalid completion must not escape.',
         materializedViewMarkdown: '# Invalid completion\n\nMust fail.',
         findings: [],
         notesForParent: [],
         artifacts: [],
+        continuation: moduleExpertContinuation(),
       },
     };
+  }
+}
+
+class MissingContinuationAgentRuntime implements AgentTaskRuntime<
+  string,
+  string
+> {
+  async executeAgent(
+    invocation: AgentExecutionInvocation<string, string>,
+  ): Promise<AgentExecutionCompletion> {
+    const observation: RuntimeActivityObservation = {
+      activity: WorkflowRuntimeActivityKind.TurnCompleted,
+      detail: 'Codex turn completed.',
+    };
+    await invocation.observe(observation);
+    const incompleteCompletion = {
+      threadId: 'incomplete-module-expert-thread',
+      output: {
+        resultKind: WorkflowResultKind.ModuleExpertEvidence,
+        summary: 'Prompt-compliant prose without continuation data.',
+        materializedViewMarkdown:
+          '# Complete-looking report\n\nAll requested headings are present.',
+        findings: [],
+        notesForParent: [],
+        artifacts: [],
+      },
+    };
+    return JSON.parse(
+      JSON.stringify(incompleteCompletion),
+    ) as AgentExecutionCompletion;
   }
 }
 
@@ -255,7 +291,10 @@ describe('module expert invocation', () => {
       }
       expect(result.terminal.threadId).toBe('module-expert-thread');
       expect(result.terminal.output.resultKind).toBe(
-        WorkflowResultKind.CortexEvidence,
+        WorkflowResultKind.ModuleExpertEvidence,
+      );
+      expect(result.terminal.output.continuation).toEqual(
+        moduleExpertContinuation(),
       );
       expect(runtime.invocation).not.toBe(false);
       if (!runtime.invocation) throw new Error('Expected captured invocation.');
@@ -269,13 +308,16 @@ describe('module expert invocation', () => {
         WorkflowExecutorKind.Agent,
       );
       expect(runtime.invocation.execution.resultKind).toBe(
-        WorkflowResultKind.CortexEvidence,
+        WorkflowResultKind.ModuleExpertEvidence,
       );
       expect(runtime.invocation.execution.instruction).toContain(
         'nook-app/nook-platform/nook-core',
       );
       expect(runtime.invocation.execution.instruction).toContain(
         request.instruction,
+      );
+      expect(runtime.invocation.execution.instruction).toContain(
+        'unresolvedDecisions',
       );
       const eventsPath = join(
         result.runDirectory,
@@ -315,6 +357,20 @@ describe('module expert invocation', () => {
           MaterializedViewAuthorKind.Agent,
         );
       }
+      const resultPath = join(
+        result.runDirectory,
+        result.processing.result.path,
+      );
+      const projectedTerminal = JSON.parse(
+        await readFile(resultPath, 'utf8'),
+      ) as TaskTerminal<string>;
+      expect(projectedTerminal).toEqual(result.terminal);
+      if (projectedTerminal.kind !== TaskTerminalKind.Completed) {
+        throw new Error('Expected projected completed module expert terminal.');
+      }
+      expect(projectedTerminal.output.continuation).toEqual(
+        moduleExpertContinuation(),
+      );
     } finally {
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
@@ -434,6 +490,39 @@ describe('module expert invocation', () => {
             event.terminalKind === TaskTerminalKind.Failed,
         ),
       ).toHaveLength(1);
+    } finally {
+      await rm(runDirectory, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('finalizes replayable failure when expert evidence omits typed continuation', async () => {
+    const runtime = new MissingContinuationAgentRuntime();
+    const request = directRequest(uniqueRunId('module-expert-incomplete'));
+    const runDirectory = processingRunDirectory(request.runId);
+    const controller = new AbortController();
+    const invokeArgs: InvokeModuleExpertArgs = {
+      repoRoot: REPO_ROOT,
+      request,
+      runtime,
+      signal: controller.signal,
+    };
+    try {
+      const result = await invokeModuleExpert(invokeArgs);
+
+      expect(result.terminal.kind).toBe(TaskTerminalKind.Failed);
+      const eventsPath = join(
+        result.runDirectory,
+        result.processing.events.path,
+      );
+      const events = await readEvents(eventsPath);
+      const replayRequest = { events };
+      expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
+        TaskTerminalKind.Failed,
+      );
+      expect(
+        events.filter((event) => event.kind === 'attempt-terminal-recorded'),
+      ).toHaveLength(1);
+      expect(JSON.stringify(events)).not.toContain('Complete-looking report');
     } finally {
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
@@ -668,6 +757,26 @@ function directRequest(runId: string): ModuleExpertInvocationRequest {
 
 function uniqueRunId(prefix: string): string {
   return `${prefix}-${randomUUID()}`;
+}
+
+function moduleExpertContinuation(): ModuleExpertContinuation {
+  return {
+    externalApi: ['VaultService exposes typed vault operations.'],
+    dependencies: ['nook-crypto supplies protected cryptographic primitives.'],
+    consumers: ['nook-wasm consumes the public Rust facade.'],
+    behaviorInvariants: ['Vault operations preserve domain state transitions.'],
+    securityInvariants: [
+      'Protected material never crosses the public projection.',
+    ],
+    compatibilityInvariants: ['The existing WASM DTO remains stable.'],
+    owningTests: ['The nook-core suite owns domain behavior.'],
+    focusedValidation: ['Run the focused nook-core behavior tests.'],
+    risks: ['No new implementation risk was found.'],
+    unresolvedDecisions: ['No unresolved decisions remain.'],
+    parentActions: [
+      'Use the facade contract when planning the consumer slice.',
+    ],
+  };
 }
 
 function processingRunDirectory(runId: string): string {

@@ -164,14 +164,21 @@ task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
 
 Invocation requires a non-empty `CODEX_API_KEY`. The isolated runtime never
 copies `auth.json` or accepts refreshable ChatGPT authentication state.
+The credential is redeemed once through a trusted runtime helper and is absent
+from the Codex process environment, configuration, arguments, files, and Loom
+evidence.
 
 The command validates the complete catalog and selected TOML definition before
 starting one isolated Codex thread. The request accepts no runtime permissions,
 tools, model, successors, or graph. It must declare the run, attempt, depth, and
 parent agent-attempt lineage. Direct named experts run only at depth two or
 three; workflow-root, depth-one, self-parent, and invalid parent-attempt
-lineage are rejected before runtime. The expert is read-only and offline;
-native delegation, apps, and plugins remain disabled. Before the command
+lineage are rejected before runtime. The expert receives an immutable,
+catalog-scoped snapshot of the exact commit through three bounded loopback
+tools: file listing, file reading, and literal text search. Catalog exclusions
+are removed from the snapshot. No model-controlled process, write, general
+network, web-search, native delegation, app, or plugin path is enabled. Before
+the command
 returns, Loom finalizes the immutable attempt stream, result, and materialized
 view under
 `workflow/processing/delegated-agent-work/<runId>/agents/<task>/attempt-<n>/`.
@@ -181,6 +188,17 @@ their digests and exact identity, and replays the terminal stream. Runtime
 errors and invalid resolved completions produce a sanitized failed terminal and
 a Loom-authored failure view. The delivery owner remains responsible for
 aggregation, continuation, and lifecycle state.
+
+A successful expert must return the dedicated `ModuleExpertEvidence` result.
+Its exact structured continuation covers external API, dependencies, consumers,
+behavior, security, and compatibility invariants, owning tests, focused
+validation, risks, unresolved decisions, and parent actions. Parent actions are
+evidence only and never schedule work.
+
+The pinned Codex runtime retains inert non-process helpers in addition to the
+three repository tools. The enforced security claim is that the model has no
+process or write path. It is not a defense against a separate hostile process
+already running under the same operating-system account.
 
 ## Prerequisites
 
