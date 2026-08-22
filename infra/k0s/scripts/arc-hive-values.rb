@@ -21,7 +21,7 @@ pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/role"] = "arc-hive
 pod = pod_template.fetch("spec")
 pod["runtimeClassName"] = "kata-qemu-runtime-rs"
 pod.fetch("initContainers").reject! do |container|
-  container["name"] == "container-runtime"
+  %w[prepare-container-runtime-state container-runtime].include?(container["name"])
 end
 pod.fetch("volumes").reject! do |volume|
   volume["name"] == "container-runtime-state"

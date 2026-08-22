@@ -5,7 +5,8 @@
 Trusted focused tasks run on Nook's ephemeral ARC scale sets in the k0s
 cluster. General `nook-k0s` runners provide private BuildKit and rootful Podman
 services inside each Kata microVM. This supports Docker-compatible image loading
-and execution without DinD, Sysbox, or a host runtime socket. Complete PR
+and execution without DinD, Sysbox, or a host runtime socket. Podman uses a
+sparse 24 GiB ext4 image and native overlay inside the guest. Complete PR
 validation uses ARC for trusted native and ecosystem Rust jobs while unsupported
 or untrusted lanes remain hosted. Agent machines remain responsive for editing,
 repository inspection, host-applied formatting, the UI demo contract, and
@@ -100,6 +101,8 @@ Security and cache rules:
   broad hostPath volumes.
 - Permit the general scale set's job-scoped Podman API only on Pod loopback
   inside the disposable Kata guest. Hive omits it.
+- Back Podman with a sparse 24 GiB ext4 image inside the guest. Native overlay
+  must not fall back to `fuse-overlayfs` on the Kata shared volume.
 - Permit only the Task-managed ARC BuildKit request and job hostPaths.
   - A trusted init container sees only the request directory.
   - It submits its Kubernetes Pod UID.
@@ -159,7 +162,8 @@ its cache exporter.
 The general ARC scale set has a job-scoped Podman Docker-compatible API. Its
 rootful service binds only to Pod loopback and shares the runner work volume so
 `type=docker`, `docker run`, and bind-mounted UI artifacts remain inside the
-same Kata guest. Do not expose that API through the Pod IP or attach a host
+same Kata guest. Its sparse 24 GiB ext4 store grows on demand and is discarded
+with the job; it is not copied from a 24 GiB template. Do not expose that API through the Pod IP or attach a host
 runtime socket. Focused task routing remains an explicit allowlist even when the
 runtime can execute a task.
 

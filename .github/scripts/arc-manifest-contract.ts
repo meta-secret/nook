@@ -172,8 +172,15 @@ runners.requireAll([
   "NOOK_BUILDKIT_ADDR",
   "tcp://127.0.0.1:1234",
   "name: container-runtime",
+  "name: prepare-container-runtime-state",
   "quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750",
   "tcp://127.0.0.1:2375",
+  "truncate -s 24G",
+  "mkfs.ext4 -F -m 0",
+  "mount -t ext4 -o noatime",
+  "/dev/loop1",
+  "--storage-driver overlay",
+  "mountPath: /var/lib/nook-container-runtime-backing",
   "- /usr/bin/podman\n              - --url\n              - tcp://127.0.0.1:2375\n              - info",
   "NOOK_CONTAINER_RUNTIME",
   "sizeLimit: 24Gi",
@@ -193,6 +200,7 @@ for (const prohibited of [
   "containerd.sock",
   "sysbox",
   "containermode:",
+  "/dev/fuse",
 ]) {
   runners.forbid(prohibited);
 }
@@ -384,7 +392,9 @@ runtimeSmoke.requireAll([
   "NOOK_CONTAINER_RUNTIME",
   "tcp://127.0.0.1:2375",
   "docker buildx build --load",
-  'docker run --rm "$image"',
+  "docker info --format '{{.Driver}}'",
+  'docker run --rm \\',
+  '--volume "$shared_dir:/nook-output"',
   "ARC BuildKit-to-Podman runtime smoke passed",
 ]);
 buildkitPrepare.require("printf '%s\\n' \"$pod_uid\"");

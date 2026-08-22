@@ -140,15 +140,56 @@ template:
             cpu: "6"
             memory: 8Gi
             ephemeral-storage: 32Gi
+      - name: prepare-container-runtime-state
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
+        imagePullPolicy: Never
+        command: ["/bin/sh", "-ceu"]
+        args:
+          - |
+            backing_file=/var/lib/nook-container-runtime-backing/podman.ext4
+            truncate -s 24G "$backing_file"
+            mkfs.ext4 -F -m 0 "$backing_file"
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - name: container-runtime-state
+            mountPath: /var/lib/nook-container-runtime-backing
+          - name: temporary
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
       - name: container-runtime
         image: quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750
         restartPolicy: Always
-        command: ["/usr/bin/podman"]
+        command: ["/bin/sh", "-ceu"]
         args:
-          - system
-          - service
-          - --time=0
-          - tcp://127.0.0.1:2375
+          - |
+            backing_file=/var/lib/nook-container-runtime-backing/podman.ext4
+            state_dir=/var/lib/containers
+            loop_device=/dev/loop1
+            expected_bytes=25769803776
+
+            test "$(stat -c %s "$backing_file")" = "$expected_bytes"
+            mkdir -p "$state_dir"
+            if [ ! -b "$loop_device" ]; then
+              mknod -m 0660 "$loop_device" b 7 1
+            fi
+            losetup -d "$loop_device" 2>/dev/null || true
+            losetup "$loop_device" "$backing_file"
+            mount -t ext4 -o noatime "$loop_device" "$state_dir"
+
+            exec /usr/bin/podman --storage-driver overlay system service \
+              --time=0 tcp://127.0.0.1:2375
         securityContext:
           privileged: true
         startupProbe:
@@ -164,7 +205,7 @@ template:
           - name: work
             mountPath: /home/runner/_work
           - name: container-runtime-state
-            mountPath: /var/lib/containers
+            mountPath: /var/lib/nook-container-runtime-backing
           - name: temporary
             mountPath: /tmp
         resources:

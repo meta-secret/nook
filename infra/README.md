@@ -14,6 +14,8 @@ This directory owns Nook's stateful server infrastructure:
   Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM
   carries Docker client tooling and its own privileged BuildKit sidecar on Pod
   loopback. Its overlayfs builder state uses a private 32 GiB ext4 image.
+  General runners also give Podman a sparse, private 24 GiB ext4 image so its
+  native overlay driver does not depend on FUSE over the Kata shared volume.
   The image is a metadata-only reflink clone of a trusted seed in the
   Task-managed Btrfs pool. There is no full-size copy at runner startup. There
   is no Docker daemon, DinD, Sysbox, shared builder, or host runtime socket.
@@ -99,7 +101,8 @@ through the repository variable `NOOK_RUNS_ON`. Trusted Main jobs also select
 that scale set. Each general Kata guest has private loopback BuildKit and
 Podman services plus a shared runner work volume, so `type=docker`, `docker
 run`, and bind-mounted artifacts stay job-scoped without DinD or a host runtime
-socket. Trusted Hive Rust verification uses `nook-k0s-hive` through
+socket. The Podman image is sparse, grows only with runtime data, and is
+discarded with the job. Trusted Hive Rust verification uses `nook-k0s-hive` through
 `NOOK_HIVE_RUNS_ON`; its browser job stays hosted. Unsupported focused tasks,
 forks, and Dependabot retain hosted routing.
 `task infra:arc:activate` sets the ARC route;

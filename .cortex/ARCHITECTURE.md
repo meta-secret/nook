@@ -325,6 +325,7 @@ All development tasks and builds in Nook run containerized via a unified `Taskfi
   execute in ephemeral ARC Kata Pods. Each general runner gets private
   loopback-only BuildKit and Podman services inside its microVM, so image-backed
   jobs have a Docker-compatible API without DinD or a host runtime socket.
+  Podman uses a sparse 24 GiB ext4 store with native overlay inside the guest.
   Untrusted and unsupported lanes retain ephemeral GitHub-hosted fallback
   capacity.
 
