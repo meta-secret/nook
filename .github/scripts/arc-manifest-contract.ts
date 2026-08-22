@@ -457,20 +457,21 @@ hiveNeo4jWait.require("http://127.0.0.1:7474/db/neo4j/tx/commit");
 hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");
 
-type RunnerPlacement =
-  | "arc-general-main"
-  | "arc-general-pr"
-  | "arc-general-remote"
-  | "arc-general-rust-reusable"
-  | "arc-hive"
-  | "hosted-ai"
-  | "hosted-control"
-  | "hosted-deployment"
-  | "hosted-runtime"
-  | "hosted-scheduled"
-  | "hosted-untrusted"
-  | "legacy-cleanup"
-  | "reusable";
+enum RunnerPlacement {
+  ArcGeneralMain = "arc-general-main",
+  ArcGeneralPr = "arc-general-pr",
+  ArcGeneralRemote = "arc-general-remote",
+  ArcGeneralRustReusable = "arc-general-rust-reusable",
+  ArcHive = "arc-hive",
+  HostedAi = "hosted-ai",
+  HostedControl = "hosted-control",
+  HostedDeployment = "hosted-deployment",
+  HostedRuntime = "hosted-runtime",
+  HostedScheduled = "hosted-scheduled",
+  HostedUntrusted = "hosted-untrusted",
+  LegacyCleanup = "legacy-cleanup",
+  Reusable = "reusable",
+}
 
 interface WorkflowJob {
   "runs-on"?: string;
@@ -487,123 +488,138 @@ interface WorkflowPlacementContract {
 }
 
 const hostedRunnerPlacements = new Set<RunnerPlacement>([
-  "hosted-ai",
-  "hosted-control",
-  "hosted-deployment",
-  "hosted-runtime",
-  "hosted-scheduled",
-  "hosted-untrusted",
+  RunnerPlacement.HostedAi,
+  RunnerPlacement.HostedControl,
+  RunnerPlacement.HostedDeployment,
+  RunnerPlacement.HostedRuntime,
+  RunnerPlacement.HostedScheduled,
+  RunnerPlacement.HostedUntrusted,
 ]);
 
 const runnerPlacementReasons: Record<RunnerPlacement, string> = {
-  "arc-general-main": "trusted Main job with a disposable general Kata guest",
-  "arc-general-pr": "trusted same-repository PR native job with hosted fork fallback",
-  "arc-general-remote": "explicitly allowlisted focused task with hosted fallback",
-  "arc-general-rust-reusable": "trusted push or same-repository PR Rust job with hosted fallback",
-  "arc-hive": "trusted Hive job with isolated native service sidecars",
-  "hosted-ai": "AI credentials and agent execution stay outside the private cluster",
-  "hosted-control": "small orchestration work avoids consuming scarce ARC build capacity",
-  "hosted-deployment": "release or deployment credentials stay outside the private cluster",
-  "hosted-runtime": "non-Main browser, WASM, coverage, or arbitrary-ref runtime",
-  "hosted-scheduled": "scheduled maintenance avoids consuming ARC build capacity",
-  "hosted-untrusted": "fork or Dependabot code must not enter the private cluster",
-  "legacy-cleanup": "maintenance only for the separately registered persistent Docker pool",
-  reusable: "caller-owned placement for a reusable workflow",
+  [RunnerPlacement.ArcGeneralMain]: "trusted Main job with a disposable general Kata guest",
+  [RunnerPlacement.ArcGeneralPr]: "trusted same-repository PR native job with hosted fork fallback",
+  [RunnerPlacement.ArcGeneralRemote]: "explicitly allowlisted focused task with hosted fallback",
+  [RunnerPlacement.ArcGeneralRustReusable]: "trusted push or same-repository PR Rust job with hosted fallback",
+  [RunnerPlacement.ArcHive]: "trusted Hive job with isolated native service sidecars",
+  [RunnerPlacement.HostedAi]: "AI credentials and agent execution stay outside the private cluster",
+  [RunnerPlacement.HostedControl]: "small orchestration work avoids consuming scarce ARC build capacity",
+  [RunnerPlacement.HostedDeployment]: "release or deployment credentials stay outside the private cluster",
+  [RunnerPlacement.HostedRuntime]: "non-Main browser, WASM, coverage, or arbitrary-ref runtime",
+  [RunnerPlacement.HostedScheduled]: "scheduled maintenance avoids consuming ARC build capacity",
+  [RunnerPlacement.HostedUntrusted]: "fork or Dependabot code must not enter the private cluster",
+  [RunnerPlacement.LegacyCleanup]: "maintenance only for the separately registered persistent Docker pool",
+  [RunnerPlacement.Reusable]: "caller-owned placement for a reusable workflow",
 };
 
 const workflowPlacementContracts: WorkflowPlacementContract[] = [
-  { workflow: "agent-implement.yml", jobs: { "agent-implement": "hosted-ai" } },
-  { workflow: "ci-agent-smoke.yml", jobs: { smoke: "hosted-ai" } },
-  { workflow: "e2e-pr.yml", jobs: { e2e: "hosted-runtime" } },
+  { workflow: "agent-implement.yml", jobs: { "agent-implement": RunnerPlacement.HostedAi } },
+  { workflow: "ci-agent-smoke.yml", jobs: { smoke: RunnerPlacement.HostedAi } },
+  { workflow: "e2e-pr.yml", jobs: { e2e: RunnerPlacement.HostedRuntime } },
   {
     workflow: "hive.yml",
     jobs: {
-      console: "hosted-control",
-      verify: "arc-hive",
-      "verify-hosted": "hosted-runtime",
-      "verify-fork": "hosted-untrusted",
+      console: RunnerPlacement.HostedControl,
+      verify: RunnerPlacement.ArcHive,
+      "verify-hosted": RunnerPlacement.HostedRuntime,
+      "verify-fork": RunnerPlacement.HostedUntrusted,
     },
   },
   {
     workflow: "linear-ui-demo.yml",
-    jobs: { publish: "hosted-deployment", close: "hosted-deployment" },
+    jobs: {
+      publish: RunnerPlacement.HostedDeployment,
+      close: RunnerPlacement.HostedDeployment,
+    },
   },
-  { workflow: "main-build-stats.yml", jobs: { record: "hosted-control" } },
-  { workflow: "main-failure-handoff.yml", jobs: { record: "hosted-control" } },
+  { workflow: "main-build-stats.yml", jobs: { record: RunnerPlacement.HostedControl } },
+  { workflow: "main-failure-handoff.yml", jobs: { record: RunnerPlacement.HostedControl } },
   {
     workflow: "main.yml",
     jobs: {
-      "product-paths": "arc-general-main",
-      "rust-ecosystem": "reusable",
-      rust: "arc-general-main",
-      wasm: "arc-general-main",
-      web: "arc-general-main",
-      "web-e2e": "arc-general-main",
-      "extension-e2e": "arc-general-main",
-      "ui-demos": "arc-general-main",
-      deploy: "arc-general-main",
+      "product-paths": RunnerPlacement.ArcGeneralMain,
+      "rust-ecosystem": RunnerPlacement.Reusable,
+      rust: RunnerPlacement.ArcGeneralMain,
+      wasm: RunnerPlacement.ArcGeneralMain,
+      web: RunnerPlacement.ArcGeneralMain,
+      "web-e2e": RunnerPlacement.ArcGeneralMain,
+      "extension-e2e": RunnerPlacement.ArcGeneralMain,
+      "ui-demos": RunnerPlacement.ArcGeneralMain,
+      deploy: RunnerPlacement.ArcGeneralMain,
     },
   },
-  { workflow: "pr-coverage.yml", jobs: { coverage: "hosted-runtime" } },
-  { workflow: "pr-validation-handoff.yml", jobs: { promote: "hosted-control" } },
+  { workflow: "pr-coverage.yml", jobs: { coverage: RunnerPlacement.HostedRuntime } },
+  { workflow: "pr-validation-handoff.yml", jobs: { promote: RunnerPlacement.HostedControl } },
   {
     workflow: "pr.yml",
     jobs: {
-      "validation-request": "hosted-control",
-      "rust-ecosystem": "reusable",
-      rust: "arc-general-pr",
-      wasm: "hosted-runtime",
-      "wasm-node-test": "hosted-runtime",
-      verify: "hosted-runtime",
-      "ui-demo": "hosted-runtime",
-      preview: "hosted-deployment",
-      coverage: "reusable",
-      "full-e2e": "hosted-runtime",
-      "full-extension-e2e": "hosted-runtime",
+      "validation-request": RunnerPlacement.HostedControl,
+      "rust-ecosystem": RunnerPlacement.Reusable,
+      rust: RunnerPlacement.ArcGeneralPr,
+      wasm: RunnerPlacement.HostedRuntime,
+      "wasm-node-test": RunnerPlacement.HostedRuntime,
+      verify: RunnerPlacement.HostedRuntime,
+      "ui-demo": RunnerPlacement.HostedRuntime,
+      preview: RunnerPlacement.HostedDeployment,
+      coverage: RunnerPlacement.Reusable,
+      "full-e2e": RunnerPlacement.HostedRuntime,
+      "full-extension-e2e": RunnerPlacement.HostedRuntime,
     },
   },
-  { workflow: "release.yml", jobs: { deploy: "hosted-deployment" } },
+  { workflow: "release.yml", jobs: { deploy: RunnerPlacement.HostedDeployment } },
   {
     workflow: "remote.yml",
-    jobs: { batch: "arc-general-remote", "rust-cache-promote": "hosted-control" },
+    jobs: {
+      batch: RunnerPlacement.ArcGeneralRemote,
+      "rust-cache-promote": RunnerPlacement.HostedControl,
+    },
   },
-  { workflow: "repository-policy.yml", jobs: { verify: "hosted-untrusted" } },
-  { workflow: "runner-cleanup.yml", jobs: { "docker-prune": "legacy-cleanup" } },
+  { workflow: "repository-policy.yml", jobs: { verify: RunnerPlacement.HostedUntrusted } },
+  { workflow: "runner-cleanup.yml", jobs: { "docker-prune": RunnerPlacement.LegacyCleanup } },
   {
     workflow: "rust-dependency-updates.yml",
-    jobs: { audit: "hosted-scheduled", update: "hosted-ai" },
+    jobs: {
+      audit: RunnerPlacement.HostedScheduled,
+      update: RunnerPlacement.HostedAi,
+    },
   },
   {
     workflow: "rust-ecosystem-checks.yml",
     jobs: {
-      "dependency-policy": "arc-general-rust-reusable",
-      "deterministic-tests": "arc-general-rust-reusable",
-      "fuzz-smoke": "arc-general-rust-reusable",
-      kani: "arc-general-rust-reusable",
-      dylint: "arc-general-rust-reusable",
+      "dependency-policy": RunnerPlacement.ArcGeneralRustReusable,
+      "deterministic-tests": RunnerPlacement.ArcGeneralRustReusable,
+      "fuzz-smoke": RunnerPlacement.ArcGeneralRustReusable,
+      kani: RunnerPlacement.ArcGeneralRustReusable,
+      dylint: RunnerPlacement.ArcGeneralRustReusable,
     },
   },
   {
     workflow: "rust-ecosystem.yml",
-    jobs: { "validation-request": "hosted-control", ecosystem: "reusable" },
+    jobs: {
+      "validation-request": RunnerPlacement.HostedControl,
+      ecosystem: RunnerPlacement.Reusable,
+    },
   },
-  { workflow: "web-research.yml", jobs: { deploy: "hosted-deployment" } },
+  {
+    workflow: "web-research.yml",
+    jobs: { deploy: RunnerPlacement.HostedDeployment },
+  },
 ];
 
 function expectedRunner(placement: RunnerPlacement): string {
   if (hostedRunnerPlacements.has(placement)) return "ubuntu-latest";
-  if (placement === "legacy-cleanup") return "nook";
-  if (placement === "arc-hive") return "nook-k0s-hive";
-  if (placement === "arc-general-main") {
+  if (placement === RunnerPlacement.LegacyCleanup) return "nook";
+  if (placement === RunnerPlacement.ArcHive) return "nook-k0s-hive";
+  if (placement === RunnerPlacement.ArcGeneralMain) {
     return "${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}";
   }
-  if (placement === "arc-general-pr") {
+  if (placement === RunnerPlacement.ArcGeneralPr) {
     return "${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}";
   }
-  if (placement === "arc-general-remote") {
+  if (placement === RunnerPlacement.ArcGeneralRemote) {
     return "${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}";
   }
-  if (placement === "arc-general-rust-reusable") {
+  if (placement === RunnerPlacement.ArcGeneralRustReusable) {
     return "${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}";
   }
   throw new Error(`Runner placement ${placement} does not own runs-on`);
@@ -626,7 +642,7 @@ async function validateWorkflowPlacement(
     const job = manifest.jobs[jobName];
     const placement = input.jobs[jobName];
     if (!job || !placement) throw new Error(`${input.workflow}/${jobName} is unclassified`);
-    if (placement === "reusable") {
+    if (placement === RunnerPlacement.Reusable) {
       if (!job.uses?.startsWith("./.github/workflows/")) {
         throw new Error(`${input.workflow}/${jobName} must call a local reusable workflow`);
       }
