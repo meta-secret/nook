@@ -76,6 +76,28 @@ test.describe('authenticated shell height', () => {
     await expect(page.getByTestId('theme-toggle-btn')).toBeInViewport()
   })
 
+  test('keeps every expanded security recommendation reachable in a short viewport', async ({
+    page,
+  }) => {
+    const viewport = { width: 1280, height: 600 }
+    await page.setViewportSize(viewport)
+    await page.getByTestId('security-guide-toggle').click()
+
+    const shellScroll = page.locator('.shell-scroll')
+    const scrollRange = await shellScroll.evaluate(
+      (element) => element.scrollHeight - element.clientHeight,
+    )
+    expect(scrollRange).toBeGreaterThan(0)
+
+    const addDevice = page.getByTestId('security-guide-add-device')
+    await addDevice.scrollIntoViewIfNeeded()
+    await expect(addDevice).toBeInViewport()
+    await expect
+      .poll(() => shellScroll.evaluate((element) => element.scrollTop))
+      .toBeGreaterThan(0)
+    await expect(page.getByTestId('vault-bottom-nav')).toBeInViewport()
+  })
+
   test('keeps secure-note editing and navigation usable above the mobile keyboard', async ({
     page,
   }) => {
