@@ -13,6 +13,24 @@ fn read(relative_path: &str) -> anyhow::Result<String> {
 }
 
 #[test]
+fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
+    let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
+    let dependency_policy = checks
+        .split_once("  dependency-policy:")
+        .and_then(|(_, jobs)| jobs.split_once("\n  deterministic-tests:"))
+        .map(|(job, _)| job)
+        .ok_or_else(|| anyhow::anyhow!("dependency-policy job block is missing"))?;
+
+    assert!(
+        dependency_policy.contains("timeout-minutes: 30")
+            && dependency_policy.contains("task docker:ecosystem:dependency-policy"),
+        "dependency policy must retain its command and allow Main cache-seed latency"
+    );
+
+    Ok(())
+}
+
+#[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let entry = read(".github/workflows/rust-ecosystem.yml")?;
     let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
