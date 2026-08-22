@@ -48,7 +48,8 @@ flowchart TD
    - After device authorization, the vault may auto-unlock when device keys work.
    - See [auth-providers.md](../design-docs/auth-providers.md) §3.
 5. **Authenticated navigation:** **Vault** lists saved items. **Onboard** is a standalone page that generates a QR/link from two dropdowns: auth provider and vault password. **Settings** lists storage providers, reconnect, and vault password management.
-   - The fixed authenticated shell owns vertical content scrolling.
+   - On desktop, the fixed authenticated shell owns vertical content scrolling.
+     On mobile, the min-height shell may use document scrolling.
    - Expanded security guidance keeps its full content height.
    - Every recommendation and action remains reachable while bottom navigation stays visible.
 6. **Encryption keys (auto-managed):**
