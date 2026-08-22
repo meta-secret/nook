@@ -145,24 +145,16 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await expect(
     extensionPage.getByTestId('login-create-vault-chooser'),
   ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
+  await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
+  await expect(extensionPage.getByTestId('vault-panel')).toBeVisible()
   const extensionDevice = await extensionPage.evaluate(async () => {
     const manager = (
       window as Window & { __nookVault: DebugVault }
     ).__nookVault.requireManager()
-    let lastError = 'Extension device identity unavailable'
-    for (let attempt = 0; attempt < 50; attempt += 1) {
-      try {
-        const deviceId = manager.device_id
-        const devicePublicKey = manager.device_public_key
-        const deviceSigningPublicKey =
-          await manager.device_signing_public_key_js()
-        return { deviceId, devicePublicKey, deviceSigningPublicKey }
-      } catch (caught) {
-        lastError = caught instanceof Error ? caught.message : String(caught)
-        await new Promise((resolve) => setTimeout(resolve, 100))
-      }
-    }
-    throw new Error(lastError)
+    const deviceId = manager.device_id
+    const devicePublicKey = manager.device_public_key
+    const deviceSigningPublicKey = await manager.device_signing_public_key_js()
+    return { deviceId, devicePublicKey, deviceSigningPublicKey }
   })
   await extensionContext.close()
   await page.getByTestId('header-lock-vault-btn').click()
