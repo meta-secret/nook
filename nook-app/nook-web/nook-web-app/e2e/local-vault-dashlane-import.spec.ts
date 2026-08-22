@@ -104,8 +104,9 @@ test.describe('local vault Dashlane import', () => {
     await expect(page.getByTestId('vault-group-secure-note')).toContainText(
       'Private',
     )
-    await expect(page.getByTestId('vault-group-credit-card')).toContainText(
-      'Travel',
-    )
+    const creditCardGroup = page.getByTestId('vault-group-credit-card')
+    await expect(creditCardGroup).toContainText('Travel')
+    await expect(creditCardGroup).not.toContainText('4111111111111111')
+    await expect(creditCardGroup).not.toContainText('123')
   })
 })
