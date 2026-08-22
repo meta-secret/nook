@@ -184,7 +184,8 @@ tasks:
           repo_root="$(git rev-parse --show-toplevel)";
           cp "$repo_root/nook-app/nook-platform/docker/sccache-health.Dockerfile" "$probe_context/Dockerfile";
           probe_status=0;
-          {{.DOCKER}} buildx build \
+          bash "$repo_root/.github/scripts/bake-with-frontend-flake-retry.sh" \
+            "sccache:ensure" {{.DOCKER}} buildx build \
             --no-cache \
             --progress plain \
             --file "$probe_context/Dockerfile" \

@@ -37,6 +37,27 @@ if ! bash "$retry_script" frontend-disconnect "$frontend_command" "$frontend_cou
 fi
 assert_equals "$(<"$frontend_count")" 2 'frontend retry count'
 
+authorization_count="$test_dir/authorization-count"
+authorization_command="$test_dir/authorization-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'if [ "$count" -eq 1 ]; then' \
+  '  printf "%s\n" "#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.4" "#2 ERROR: failed to authorize: failed to fetch anonymous token: TLS handshake timeout"' \
+  '  exit 1' \
+  'fi' >"$authorization_command"
+chmod +x "$authorization_command"
+if ! bash "$retry_script" frontend-authorization "$authorization_command" "$authorization_count"; then
+  echo 'frontend authorization timeout should retry' >&2
+  exit 1
+fi
+assert_equals "$(<"$authorization_count")" 2 'frontend authorization retry count'
+
 application_count="$test_dir/application-count"
 application_command="$test_dir/application-command"
 printf '%s\n' \
@@ -55,3 +76,22 @@ if bash "$retry_script" application-failure "$application_command" "$application
   exit 1
 fi
 assert_equals "$(<"$application_count")" 1 'application retry count'
+
+application_network_count="$test_dir/application-network-count"
+application_network_command="$test_dir/application-network-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'printf "%s\n" "Dockerfile:24" ">>> RUN curl https://example.invalid" "curl: TLS handshake timeout"' \
+  'exit 1' >"$application_network_command"
+chmod +x "$application_network_command"
+if bash "$retry_script" application-network-failure "$application_network_command" "$application_network_count"; then
+  echo 'application network timeout must not retry or succeed' >&2
+  exit 1
+fi
+assert_equals "$(<"$application_network_count")" 1 'application network retry count'
