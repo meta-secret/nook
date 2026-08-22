@@ -94,11 +94,14 @@ read trusted Main SeaweedFS objects through a separate read-only identity and
 stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
-Daemon-free `preflight` and `rust:ci` Remote selections use `nook-k0s` through
-the repository variable `NOOK_RUNS_ON`. Trusted Hive Rust verification uses
-`nook-k0s-hive` through `NOOK_HIVE_RUNS_ON`; its browser job stays hosted.
-Other tasks that require
-`type=docker` image loading or `docker run` stay on hosted runners.
+`preflight`, `rust:ci`, and `arc:runtime` Remote selections use `nook-k0s`
+through the repository variable `NOOK_RUNS_ON`. Trusted Main jobs also select
+that scale set. Each general Kata guest has private loopback BuildKit and
+Podman services plus a shared runner work volume, so `type=docker`, `docker
+run`, and bind-mounted artifacts stay job-scoped without DinD or a host runtime
+socket. Trusted Hive Rust verification uses `nook-k0s-hive` through
+`NOOK_HIVE_RUNS_ON`; its browser job stays hosted. Unsupported focused tasks,
+forks, and Dependabot retain hosted routing.
 `task infra:arc:activate` sets the ARC route;
 `task infra:arc:fallback` immediately restores both routes to `ubuntu-latest`.
 ARC Buildx uses

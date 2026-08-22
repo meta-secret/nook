@@ -2,12 +2,14 @@
 
 ## Overview
 
-Daemon-free focused tasks run on Nook's ephemeral ARC scale set in the k0s
-cluster. Tasks that load and execute Docker images remain on GitHub-hosted
-runners. Complete PR validation uses ARC for trusted native and ecosystem Rust
-jobs while its runtime-dependent jobs remain hosted. Agent machines remain
-responsive for editing, repository inspection, host-applied formatting, the UI
-demo contract, and interactive development servers.
+Trusted focused tasks run on Nook's ephemeral ARC scale sets in the k0s
+cluster. General `nook-k0s` runners provide private BuildKit and rootful Podman
+services inside each Kata microVM. This supports Docker-compatible image loading
+and execution without DinD, Sysbox, or a host runtime socket. Complete PR
+validation uses ARC for trusted native and ecosystem Rust jobs while unsupported
+or untrusted lanes remain hosted. Agent machines remain responsive for editing,
+repository inspection, host-applied formatting, the UI demo contract, and
+interactive development servers.
 
 ## Two remote surfaces
 
@@ -50,9 +52,10 @@ task remote TASK_NAMES=rust:test,web:check,web:test
 Batch behavior:
 
 - Provision one runner and perform Docker setup once.
-- Route single `preflight` and `rust:ci` selections to ARC when
+- Route single `preflight`, `rust:ci`, and `arc:runtime` selections to ARC when
   `NOOK_RUNS_ON=nook-k0s`.
-- Keep batches and every Docker-runtime selection on `ubuntu-latest`.
+- Keep batches and catalog selections not explicitly approved for ARC on
+  `ubuntu-latest`.
 - Run tasks sequentially in the requested order.
 - Accept at most eight tasks.
 - Continue after a task fails and fail the final job when any selection failed.
@@ -146,17 +149,19 @@ The most frequently used checks have remote-only narrow orchestration:
 
 This avoids building full coverage, WASM test, browser, verification, and production-dist branches before a focused command. It does not change the local task semantics or move branch execution onto persistent infrastructure.
 
-`preflight`, `rust:ci`, and trusted `hive:verify` currently satisfy the
-daemon-free ARC contract. Hive uses its dedicated `nook-k0s-hive` scale set,
+`preflight`, `rust:ci`, `arc:runtime`, and trusted `hive:verify` currently
+satisfy the ARC contract. Hive uses its dedicated `nook-k0s-hive` scale set,
 private Neo4j native sidecar, and pinned test-runtime native sidecar.
 An exact standalone `hive:verify` dispatch reuses its COW seed without a
 per-branch Hive registry export. A mixed batch remains hosted. Its non-Hive
 tasks retain their exact-SHA handoffs, while the Hive task explicitly clears
 its cache exporter.
-Every task that uses a Bake `type=docker` output or invokes `docker run` remains
-hosted until it has a BuildKit-native execution path. Do not broaden the ARC
-selector merely because the Docker CLI is present; the runner intentionally has
-no Docker API or image runtime.
+The general ARC scale set has a job-scoped Podman Docker-compatible API. Its
+rootful service binds only to Pod loopback and shares the runner work volume so
+`type=docker`, `docker run`, and bind-mounted UI artifacts remain inside the
+same Kata guest. Do not expose that API through the Pod IP or attach a host
+runtime socket. Focused task routing remains an explicit allowlist even when the
+runtime can execute a task.
 
 Every remote result is tied to source GitHub can reproduce. Before dispatch, `task remote` requires:
 

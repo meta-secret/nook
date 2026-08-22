@@ -148,12 +148,16 @@ template:
           - system
           - service
           - --time=0
-          - tcp://0.0.0.0:2375
+          - tcp://127.0.0.1:2375
         securityContext:
           privileged: true
         startupProbe:
-          tcpSocket:
-            port: 2375
+          exec:
+            command:
+              - /usr/bin/podman
+              - --url
+              - tcp://127.0.0.1:2375
+              - info
           periodSeconds: 2
           failureThreshold: 90
         volumeMounts:

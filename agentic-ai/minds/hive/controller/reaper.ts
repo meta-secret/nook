@@ -5,6 +5,9 @@ const kubernetesApi = "https://kubernetes.default.svc";
 const tokenPath = "/run/kubernetes/token";
 const certificatePath = "/run/kubernetes/ca.crt";
 const reaperTokenPath = "/run/reaper-auth/token";
+const kubernetesRequestTimeoutMs = 10_000;
+const reapPollAttempts = 60;
+const reapPollIntervalMs = 2_000;
 
 export interface ApiRequest {
   method: ApiMethod;
@@ -87,9 +90,15 @@ export class LiveKubernetesApi implements KubernetesApi {
             method: input.method,
             headers,
             body: JSON.stringify(input.payload),
+            signal: AbortSignal.timeout(kubernetesRequestTimeoutMs),
             tls: { ca: certificate },
           }
-        : { method: input.method, headers, tls: { ca: certificate } };
+        : {
+            method: input.method,
+            headers,
+            signal: AbortSignal.timeout(kubernetesRequestTimeoutMs),
+            tls: { ca: certificate },
+          };
     const response = await fetch(
       `${kubernetesApi}${input.path}`,
       requestOptions,
@@ -131,8 +140,22 @@ function destinationsEqual(input: {
   return JSON.stringify(input.left) === JSON.stringify(input.right);
 }
 
+export interface ReaperControllerOptions {
+  api: KubernetesApi;
+  pollAttempts: number;
+  sleep(milliseconds: number): Promise<void>;
+}
+
 export class ReaperController {
-  constructor(private readonly api: KubernetesApi) {}
+  private readonly api: KubernetesApi;
+  private readonly pollAttempts: number;
+  private readonly sleep: ReaperControllerOptions["sleep"];
+
+  constructor(input: ReaperControllerOptions) {
+    this.api = input.api;
+    this.pollAttempts = input.pollAttempts;
+    this.sleep = input.sleep;
+  }
 
   async reconcileNeo4jPolicy(): Promise<void> {
     const serviceRequest: ApiRequest = {
@@ -228,7 +251,7 @@ export class ReaperController {
         path: podPath,
       };
       await this.api.request(deleteRequest);
-      for (let attempt = 0; attempt < 60; attempt += 1) {
+      for (let attempt = 0; attempt < this.pollAttempts; attempt += 1) {
         try {
           await this.api.request(readRequest);
         } catch (error) {
@@ -237,7 +260,7 @@ export class ReaperController {
           }
           throw error;
         }
-        await Bun.sleep(2_000);
+        await this.sleep(reapPollIntervalMs);
       }
       return responseWithStatus(504);
     } catch (error) {
@@ -272,28 +295,48 @@ async function reconcileLoop(controller: ReaperController): Promise<void> {
   }
 }
 
+export interface ReaperRequestHandlerOptions {
+  controller: ReaperController;
+  readExpectedToken(): Promise<string>;
+}
+
+export function createReaperRequestHandler(
+  input: ReaperRequestHandlerOptions,
+): (request: Request) => Promise<Response> {
+  return async (request: Request): Promise<Response> => {
+    if (request.method !== "POST") {
+      return responseWithStatus(404);
+    }
+    const supplied =
+      request.headers.get("Authorization")?.replace(/^Bearer /, "") ?? "";
+    const expected = (await input.readExpectedToken()).trim();
+    const match = new URL(request.url).pathname.match(
+      /^\/reap\/(hive-[a-z0-9-]+)$/,
+    );
+    const credentials = { supplied, expected };
+    if (!match || !secureEqual(credentials)) {
+      return responseWithStatus(403);
+    }
+    return input.controller.reap(match.at(1) ?? "");
+  };
+}
+
 export async function serve(): Promise<void> {
-  const controller = new ReaperController(new LiveKubernetesApi());
+  const controllerOptions: ReaperControllerOptions = {
+    api: new LiveKubernetesApi(),
+    pollAttempts: reapPollAttempts,
+    sleep: Bun.sleep,
+  };
+  const controller = new ReaperController(controllerOptions);
   void reconcileLoop(controller);
+  const handlerOptions: ReaperRequestHandlerOptions = {
+    controller,
+    readExpectedToken: () => Bun.file(reaperTokenPath).text(),
+  };
   Bun.serve({
     hostname: "0.0.0.0",
     port: 8080,
-    async fetch(request) {
-      if (request.method !== "POST") {
-        return responseWithStatus(404);
-      }
-      const supplied =
-        request.headers.get("Authorization")?.replace(/^Bearer /, "") ?? "";
-      const expected = (await Bun.file(reaperTokenPath).text()).trim();
-      const match = new URL(request.url).pathname.match(
-        /^\/reap\/(hive-[a-z0-9-]+)$/,
-      );
-      const credentials = { supplied, expected };
-      if (!match || !secureEqual(credentials)) {
-        return responseWithStatus(403);
-      }
-      return controller.reap(match.at(1) ?? "");
-    },
+    fetch: createReaperRequestHandler(handlerOptions),
   });
 }
 

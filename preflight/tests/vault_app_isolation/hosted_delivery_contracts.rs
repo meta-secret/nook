@@ -105,7 +105,7 @@ fn assert_docker_setup_contract(root: &Path) {
     for required in [
         "name: container-runtime",
         "quay.io/podman/stable:v5.8.4@sha256:",
-        "tcp://0.0.0.0:2375",
+        "- /usr/bin/podman\n              - --url\n              - tcp://127.0.0.1:2375\n              - info",
         "name: NOOK_CONTAINER_RUNTIME",
         "value: podman",
         "value: tcp://127.0.0.1:2375",

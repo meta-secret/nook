@@ -668,6 +668,7 @@ fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Resu
             && workflow.contains("Connect hosted BuildKit cache")
             && workflow.contains("verify-fork:")
             && workflow.contains("Set up untrusted cache-free BuildKit")
+            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 3
             && workflow.matches("HIVE_CACHE_FROM: \"\"").count() == 1,
         "trusted Main must publish from ARC or hosted fallback, while untrusted PRs remain cache-free"
     );

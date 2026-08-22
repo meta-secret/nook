@@ -731,7 +731,8 @@ tasks:
           trap 'rm -f "$secret_backup" "$encrypted_backup" "$backup_mac" "$recovery_key"' EXIT
           umask 077
           sudo -n awk '/secret:/ {print $2; exit}' \
-            /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
+            /var/lib/k0s/pki/hive-encryption-provider.yaml |
+            tr -d '\r\n' > "$recovery_key"
           test -s "$recovery_key"
           openssl enc -aes-256-cbc -salt -pbkdf2 \
             -pass "file:$recovery_key" \

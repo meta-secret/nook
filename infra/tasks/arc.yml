@@ -105,7 +105,8 @@ tasks:
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
-        grep -q 'tcp://127.0.0.1:2375' "$runner_render"
+        test "$(grep -c 'tcp://127.0.0.1:2375' "$runner_render")" -ge 3
+        grep -A5 'startupProbe:' "$runner_render" | grep -q -- '- /usr/bin/podman'
         grep -q 'quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750' "$runner_render"
         grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1' "$runner_render"
         grep -q 'imagePullPolicy: Never' "$runner_render"

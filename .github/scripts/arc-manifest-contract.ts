@@ -173,8 +173,8 @@ runners.requireAll([
   "tcp://127.0.0.1:1234",
   "name: container-runtime",
   "quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750",
-  "tcp://0.0.0.0:2375",
   "tcp://127.0.0.1:2375",
+  "- /usr/bin/podman\n              - --url\n              - tcp://127.0.0.1:2375\n              - info",
   "NOOK_CONTAINER_RUNTIME",
   "sizeLimit: 24Gi",
   "mountPath: /home/runner/_work",
@@ -432,6 +432,8 @@ hiveWorkflow.requireAll([
 ]);
 const publishCount = { fragment: "Publish verified Hive cache", expected: 2 };
 hiveWorkflow.count(publishCount);
+const bunSetupCount = { fragment: "uses: oven-sh/setup-bun@v2", expected: 3 };
+hiveWorkflow.count(bunSetupCount);
 hiveNeo4jWait.require("http://127.0.0.1:7474/db/neo4j/tx/commit");
 hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");

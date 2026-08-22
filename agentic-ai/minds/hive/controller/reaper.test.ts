@@ -1,11 +1,15 @@
 import { expect, test } from "bun:test";
 import {
+  ApiMethod,
+  createReaperRequestHandler,
   KubernetesApiError,
   ReaperController,
   type ApiRequest,
   type KubernetesApi,
   type NetworkPolicy,
   type NetworkPolicyPatch,
+  type ReaperControllerOptions,
+  type ReaperRequestHandlerOptions,
 } from "./reaper";
 
 const oldEndpoint = "10.244.0.7/32";
@@ -93,7 +97,12 @@ function cidrs(payload: NetworkPolicyPatch): string[] {
 
 test("reconciles service and endpoint CIDRs without losing concurrent policy edits", async () => {
   const api = new MockApi();
-  const controller = new ReaperController(api);
+  const controllerOptions: ReaperControllerOptions = {
+    api,
+    pollAttempts: 1,
+    sleep: async () => {},
+  };
+  const controller = new ReaperController(controllerOptions);
   await controller.reconcileNeo4jPolicy();
 
   expect(api.patches).toHaveLength(4);
@@ -127,4 +136,184 @@ test("reconciles service and endpoint CIDRs without losing concurrent policy edi
   await controller.reconcileNeo4jPolicy();
   expect(api.patches).toHaveLength(3);
   expect(cidrs(api.patches[0].payload!)).toEqual([serviceCidr]);
+});
+
+enum ReapReadResult {
+  Error = "error",
+  Hive = "hive",
+  Missing = "missing",
+  Other = "other",
+}
+
+enum DeletionResult {
+  Error = "error",
+  Missing = "missing",
+  Present = "present",
+}
+
+interface ReapApiOptions {
+  deletionResult: DeletionResult;
+  initialRead: ReapReadResult;
+}
+
+class ReapApi implements KubernetesApi {
+  readonly requests: ApiRequest[] = [];
+  pollCount = 0;
+  private readonly deletionResult: ReapApiOptions["deletionResult"];
+  private readonly initialRead: ReapReadResult;
+
+  constructor(input: ReapApiOptions) {
+    this.deletionResult = input.deletionResult;
+    this.initialRead = input.initialRead;
+  }
+
+  async json<T>(input: ApiRequest): Promise<T> {
+    this.requests.push(structuredClone(input));
+    if (this.initialRead === ReapReadResult.Missing) {
+      throw new KubernetesApiError(404);
+    }
+    if (this.initialRead === ReapReadResult.Error) {
+      throw new KubernetesApiError(500);
+    }
+    const name = this.initialRead === ReapReadResult.Hive ? "hive" : "not-hive";
+    return {
+      metadata: { labels: { "app.kubernetes.io/name": name } },
+    } as T;
+  }
+
+  async request(input: ApiRequest): Promise<string> {
+    this.requests.push(structuredClone(input));
+    if (input.method === ApiMethod.Delete) {
+      return "{}";
+    }
+    this.pollCount += 1;
+    if (this.deletionResult === DeletionResult.Missing) {
+      throw new KubernetesApiError(404);
+    }
+    if (this.deletionResult === DeletionResult.Error) {
+      throw new KubernetesApiError(500);
+    }
+    return "{}";
+  }
+}
+
+function reaperController(input: {
+  api: KubernetesApi;
+  pollAttempts?: number;
+  sleeps?: number[];
+}): ReaperController {
+  const sleeps = input.sleeps ?? [];
+  const options: ReaperControllerOptions = {
+    api: input.api,
+    pollAttempts: input.pollAttempts ?? 2,
+    sleep: async (milliseconds) => {
+      sleeps.push(milliseconds);
+    },
+  };
+  return new ReaperController(options);
+}
+
+function reaperHandler(input: {
+  controller: ReaperController;
+  expectedToken?: string;
+}): (request: Request) => Promise<Response> {
+  const options: ReaperRequestHandlerOptions = {
+    controller: input.controller,
+    readExpectedToken: async () => input.expectedToken ?? "secret-token",
+  };
+  return createReaperRequestHandler(options);
+}
+
+function reapRequest(token = "secret-token"): Request {
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${token}`);
+  return new Request("http://reaper/reap/hive-worker-abc123", {
+    method: "POST",
+    headers,
+  });
+}
+
+test("rejects unauthenticated reaping before contacting Kubernetes", async () => {
+  const apiOptions: ReapApiOptions = {
+    deletionResult: DeletionResult.Missing,
+    initialRead: ReapReadResult.Hive,
+  };
+  const api = new ReapApi(apiOptions);
+  const controllerInput = { api };
+  const handlerInput = { controller: reaperController(controllerInput) };
+  const handler = reaperHandler(handlerInput);
+
+  expect((await handler(reapRequest("wrong-token"))).status).toBe(403);
+  expect(api.requests).toHaveLength(0);
+});
+
+test("reaps only Hive-labeled pods and polls until Kubernetes returns 404", async () => {
+  const apiOptions: ReapApiOptions = {
+    deletionResult: DeletionResult.Missing,
+    initialRead: ReapReadResult.Hive,
+  };
+  const api = new ReapApi(apiOptions);
+  const controllerInput = { api };
+  const handlerInput = { controller: reaperController(controllerInput) };
+  const handler = reaperHandler(handlerInput);
+
+  expect((await handler(reapRequest())).status).toBe(204);
+  expect(api.requests.map((request) => request.method)).toEqual([
+    ApiMethod.Get,
+    ApiMethod.Delete,
+    ApiMethod.Get,
+  ]);
+
+  const unauthorizedApiOptions: ReapApiOptions = {
+    deletionResult: DeletionResult.Missing,
+    initialRead: ReapReadResult.Other,
+  };
+  const unauthorizedApi = new ReapApi(unauthorizedApiOptions);
+  const unauthorizedControllerInput = { api: unauthorizedApi };
+  const unauthorizedController = reaperController(unauthorizedControllerInput);
+  expect((await unauthorizedController.reap("hive-worker-abc123")).status).toBe(
+    403,
+  );
+  expect(unauthorizedApi.requests).toHaveLength(1);
+});
+
+test("treats an already missing pod as a successful reap", async () => {
+  const apiOptions: ReapApiOptions = {
+    deletionResult: DeletionResult.Missing,
+    initialRead: ReapReadResult.Missing,
+  };
+  const api = new ReapApi(apiOptions);
+  const controllerInput = { api };
+  expect(
+    (await reaperController(controllerInput).reap("hive-worker-gone")).status,
+  ).toBe(204);
+});
+
+test("bounds deletion polling and reports Kubernetes API failures", async () => {
+  const sleeps: number[] = [];
+  const presentApiOptions: ReapApiOptions = {
+    deletionResult: DeletionResult.Present,
+    initialRead: ReapReadResult.Hive,
+  };
+  const presentApi = new ReapApi(presentApiOptions);
+  const timeoutControllerInput = {
+    api: presentApi,
+    pollAttempts: 2,
+    sleeps,
+  };
+  const timeoutController = reaperController(timeoutControllerInput);
+  expect((await timeoutController.reap("hive-worker-slow")).status).toBe(504);
+  expect(presentApi.pollCount).toBe(2);
+  expect(sleeps).toEqual([2_000, 2_000]);
+
+  const failedApiOptions: ReapApiOptions = {
+    deletionResult: DeletionResult.Missing,
+    initialRead: ReapReadResult.Error,
+  };
+  const failedApi = new ReapApi(failedApiOptions);
+  const failedControllerInput = { api: failedApi };
+  expect(
+    (await reaperController(failedControllerInput).reap("hive-worker-bad"))
+      .status,
+  ).toBe(502);
 });

@@ -499,9 +499,10 @@ unless infra_taskfile.include?(
        infra_taskfile.include?("nook-app/nook-platform/docker/sccache-wrapper.sh")
   raise "Hive deployment build is missing its named nook-sccache-helpers context"
 end
+normalized_recovery_key = "tr -d '\\r\\n' > \"$recovery_key\""
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
        infra_taskfile.include?("openssl dgst -sha256 -mac HMAC") &&
-       infra_taskfile.include?("tr -d '\\r\\n' > \"$recovery_key\"") &&
+       infra_taskfile.scan(normalized_recovery_key).length == 2 &&
        infra_taskfile.include?('test "$actual_mac" = "$expected_mac_value"') &&
        infra_taskfile.include?("hive-system/hive-codex-auth") &&
        infra_taskfile.include?("hive-system/hive-github-publication")
