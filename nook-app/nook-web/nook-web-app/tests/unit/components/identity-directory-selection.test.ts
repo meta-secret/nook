@@ -48,6 +48,8 @@ const identities = [
   },
 ] as const
 
+let personalLocalAccess = NookIdentityLocalAccessKind.CurrentBrowser
+
 function free(): void {}
 
 function unknownText() {
@@ -62,7 +64,10 @@ function identitySnapshot(identity: (typeof identities)[number]) {
   return {
     identityId: identity.identityId,
     label: identity.label,
-    localAccess: identity.localAccess,
+    localAccess:
+      identity.identityId === 'personal'
+        ? personalLocalAccess
+        : identity.localAccess,
     members: () =>
       identity.members.map((member) => ({
         appId: member.appId,
@@ -130,15 +135,15 @@ const vaultFields = {
   localVaults: [],
   requireManager: () => manager,
 }
-const vault: VaultState = Object.assign(
-  Object.create(VaultState.prototype),
-  vaultFields,
-)
+function createVault(): VaultState {
+  return Object.assign(Object.create(VaultState.prototype), vaultFields)
+}
 
 describe('identity directory selection', () => {
   test('switches the key inventory to an identity from another installation', async () => {
+    personalLocalAccess = NookIdentityLocalAccessKind.CurrentBrowser
     const renderProps = {
-      vault,
+      vault: createVault(),
       onBack: free,
       onManageVaultDevices: free,
       onManageVaultPasswords: free,
@@ -158,9 +163,52 @@ describe('identity directory selection', () => {
     ).toBeTruthy()
     expect(
       rendered
-        .getByTestId('devices-access-identity-details')
+        .getByTestId('devices-access-layout-graph')
         .hasAttribute('disabled'),
     ).toBe(true)
+    expect(
+      rendered
+        .getByTestId('devices-access-layout-list')
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
     expect(() => rendered.getByText('MacBook app key')).toThrow()
+  })
+
+  test('returns to list when refreshed access makes the selected identity remote', async () => {
+    personalLocalAccess = NookIdentityLocalAccessKind.CurrentBrowser
+    const renderProps = {
+      vault: createVault(),
+      onBack: free,
+      onManageVaultDevices: free,
+      onManageVaultPasswords: free,
+    }
+    const rendered = render(DevicesAccessDashboard, renderProps)
+
+    await waitFor(() =>
+      expect(rendered.getByTestId('devices-access-layout-graph')).toBeTruthy(),
+    )
+    await fireEvent.click(rendered.getByTestId('devices-access-layout-graph'))
+    expect(
+      rendered
+        .getByTestId('devices-access-layout-graph')
+        .getAttribute('aria-pressed'),
+    ).toBe('true')
+
+    personalLocalAccess = NookIdentityLocalAccessKind.OtherInstallation
+    await rendered.rerender({ ...renderProps, vault: createVault() })
+
+    await waitFor(() =>
+      expect(
+        rendered
+          .getByTestId('devices-access-layout-list')
+          .getAttribute('aria-pressed'),
+      ).toBe('true'),
+    )
+    expect(
+      rendered
+        .getByTestId('devices-access-layout-graph')
+        .hasAttribute('disabled'),
+    ).toBe(true)
+    expect(rendered.getByTestId('devices-access-key-inventory')).toBeTruthy()
   })
 })
