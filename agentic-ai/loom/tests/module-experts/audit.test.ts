@@ -25,13 +25,23 @@ import type {
   AuditModuleExpertRuntimeRoutingArgs,
   AuditModuleExpertsArgs,
 } from '../../src/module-experts/audit.ts';
-import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
+import {
+  auditInternalApiExpertConsumerScope,
+  discoverInternalApiConsumerPaths,
+} from '../../src/module-experts/consumer-scope-audit.ts';
+import type { AuditInternalApiExpertConsumerScopeArgs } from '../../src/module-experts/consumer-scope-audit.ts';
+import {
+  INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
+  MODULE_EXPERT_CATALOG,
+} from '../../src/module-experts/catalog.ts';
 import type {
   ModuleExpertGeneratedMarker,
   ModuleExpertGeneratedScope,
+  ModuleExpertProfile,
 } from '../../src/module-experts/catalog.ts';
 import {
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+  MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
   MODULE_EXPERT_AUTH_PROVIDER,
   MODULE_EXPERT_CODEX_OPTIONS,
   MODULE_EXPERT_CONTEXT_MCP,
@@ -64,7 +74,9 @@ type ModuleExpertRuntimePolicyDrift = {
 
 const SAFE_CODEX_OPTIONS_REQUEST: ModuleExpertCodexOptionsRequest = {
   authenticationCommandArgs: [
-    'agentic-ai/loom/src/module-experts/auth-broker-client.ts',
+    '-e',
+    MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+    '--',
     '/isolated/authentication.sock',
     'test-nonce',
   ],
@@ -195,6 +207,33 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
     },
   },
   {
+    description: 'mutated authentication helper source',
+    codexOptions: {
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        model_providers: {
+          [MODULE_EXPERT_AUTH_PROVIDER]: {
+            ...SAFE_CODEX_OPTIONS.config.model_providers[
+              MODULE_EXPERT_AUTH_PROVIDER
+            ],
+            auth: {
+              ...SAFE_CODEX_OPTIONS.config.model_providers[
+                MODULE_EXPERT_AUTH_PROVIDER
+              ].auth,
+              args: [
+                '-e',
+                'console.log("untrusted")',
+                '--',
+                '/tmp/socket',
+                'nonce',
+              ],
+            },
+          },
+        },
+      },
+    },
+  },
+  {
     description: 'additional MCP server',
     codexOptions: {
       config: {
@@ -256,6 +295,76 @@ describe('module expert audit', () => {
     expect(report.profileCount).toBe(9);
     expect(report.productionModuleCount).toBe(14);
     expect(report.auditOk).toBe(true);
+  });
+
+  test('rejects missing, broad, generated, or reordered internal API consumer scope', () => {
+    const discoveredConsumerPaths = discoverInternalApiConsumerPaths(REPO_ROOT);
+    expect(discoveredConsumerPaths).toEqual(
+      INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
+    );
+    expect(discoveredConsumerPaths).toContain(
+      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/provider-types.ts',
+    );
+    expect(discoveredConsumerPaths).toContain(
+      'nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts',
+    );
+    const missingScopeProfiles = INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS.map(
+      (omittedPath): ModuleExpertProfile => ({
+        ...internalApiProfile,
+        scopePaths: internalApiProfile.scopePaths.filter(
+          (scopePath) => scopePath !== omittedPath,
+        ),
+      }),
+    );
+    const driftedProfiles: readonly ModuleExpertProfile[] = [
+      ...missingScopeProfiles,
+      {
+        ...internalApiProfile,
+        scopePaths: [...internalApiProfile.scopePaths, 'nook-app/nook-web'],
+      },
+      {
+        ...internalApiProfile,
+        scopePaths: [
+          ...internalApiProfile.scopePaths,
+          internalApiProfile.generatedScopePaths[0]?.path ?? '',
+        ],
+      },
+      {
+        ...internalApiProfile,
+        scopePaths: [...internalApiProfile.scopePaths].reverse(),
+      },
+    ];
+
+    const catalogAuditArgs: AuditInternalApiExpertConsumerScopeArgs = {
+      discoveredConsumerPaths,
+      profile: internalApiProfile,
+    };
+    expect(auditInternalApiExpertConsumerScope(catalogAuditArgs)).toEqual([]);
+    for (const profile of driftedProfiles) {
+      const auditArgs: AuditInternalApiExpertConsumerScopeArgs = {
+        discoveredConsumerPaths,
+        profile,
+      };
+      expect(
+        auditInternalApiExpertConsumerScope(auditArgs).map(
+          (finding) => finding.code,
+        ),
+      ).toEqual(['invalid-internal-api-consumer-scope']);
+    }
+    const discoveredDrifts: readonly (readonly string[])[] = [
+      [
+        ...discoveredConsumerPaths,
+        'nook-app/nook-web/nook-web-shared/src/new-direct-consumer.ts',
+      ],
+      discoveredConsumerPaths.slice(1),
+    ];
+    for (const driftedDiscovery of discoveredDrifts) {
+      const auditArgs: AuditInternalApiExpertConsumerScopeArgs = {
+        discoveredConsumerPaths: driftedDiscovery,
+        profile: internalApiProfile,
+      };
+      expect(auditInternalApiExpertConsumerScope(auditArgs)).toHaveLength(1);
+    }
   });
 
   test('rejects writable roles and a separate WASM expert', async () => {

@@ -109,7 +109,10 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
       invocation.execution.kind === WorkflowExecutorKind.Agent
         ? invocation.execution.resultKind
         : WorkflowResultKind.LoomLeafEvidence;
-    if (resultKind === WorkflowResultKind.ModuleExpertEvidence) {
+    if (
+      resultKind === WorkflowResultKind.ModuleDevelopmentPlan ||
+      resultKind === WorkflowResultKind.ModuleExpertEvidence
+    ) {
       throw new Error(
         'The generic scheduler fixture cannot synthesize module expert continuation evidence.',
       );

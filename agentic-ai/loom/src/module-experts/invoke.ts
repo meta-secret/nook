@@ -55,6 +55,11 @@ import {
   MODULE_EXPERT_CATALOG,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
+import { verifyModuleExpertParentAuthorization } from './parent-authorization.ts';
+import type {
+  ModuleExpertChildRequest,
+  VerifyModuleExpertParentAuthorizationArgs,
+} from './parent-authorization.ts';
 
 const MAX_REQUEST_BYTES = 65_536;
 const MAX_INSTRUCTION_LENGTH = 16_384;
@@ -284,6 +289,25 @@ export async function invokeModuleExpert(
     DelegatedAgentWorkflowName.AgentWork,
     request.runId,
   );
+  if (request.parent.kind !== AgentAttemptParentKind.AgentAttempt) {
+    invalidRequest();
+  }
+  const childRequest: ModuleExpertChildRequest = {
+    runId: request.runId,
+    sourceCommit: request.sourceCommit,
+    task: request.task,
+    expert: request.expert,
+    attempt: request.attempt,
+    depth: request.depth,
+    parent: request.parent,
+  };
+  const authorizationArgs: VerifyModuleExpertParentAuthorizationArgs = {
+    runDirectory,
+    workflowVersion: MODULE_EXPERT_WORKFLOW_VERSION,
+    request: childRequest,
+    expertNames: MODULE_EXPERT_CATALOG.map((expert) => expert.name),
+  };
+  await verifyModuleExpertParentAuthorization(authorizationArgs);
   const journalConfiguration: AgentAttemptJournalConfiguration = {
     runDirectory,
     runId: request.runId,

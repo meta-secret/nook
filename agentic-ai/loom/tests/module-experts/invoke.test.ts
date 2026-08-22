@@ -38,6 +38,7 @@ import type {
   InvokeModuleExpertArgs,
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
+import { createAuthorizedDirectParent } from './invoke-parent-fixture.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -274,6 +275,7 @@ describe('module expert invocation', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       const result = await invokeModuleExpert(invokeArgs);
 
       expect(result.expert).toBe('core_expert');
@@ -388,6 +390,7 @@ describe('module expert invocation', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       await invokeModuleExpert(invokeArgs);
 
       await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow();
@@ -409,6 +412,7 @@ describe('module expert invocation', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       const result = await invokeModuleExpert(invokeArgs);
 
       const expectedTerminal: FailedTaskTerminal<string> = {
@@ -470,6 +474,7 @@ describe('module expert invocation', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       const result = await invokeModuleExpert(invokeArgs);
 
       expect(runtime.executionCount).toBe(1);
@@ -507,6 +512,7 @@ describe('module expert invocation', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       const result = await invokeModuleExpert(invokeArgs);
 
       expect(result.terminal.kind).toBe(TaskTerminalKind.Failed);
@@ -540,6 +546,7 @@ describe('module expert invocation', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       const result = await invokeModuleExpert(invokeArgs);
       if (
         result.processing.view.presence !== MaterializedViewPresence.Recorded

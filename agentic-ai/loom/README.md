@@ -140,6 +140,28 @@ boundary for both WASM crates and generated bindings.
 
 Invoke one registered expert with an agent-owned JSON request:
 
+First finalize a depth-one parent attempt whose structured output uses
+`ModuleDevelopmentPlan` and includes an exact authorization such as:
+
+```json
+{
+  "task": "inspect-core-contract",
+  "expert": "core_expert",
+  "attempt": 1,
+  "depth": 2,
+  "parent": {
+    "kind": "agent-attempt",
+    "task": "feature-synthesis",
+    "agent": "delivery-owner",
+    "attempt": 1
+  }
+}
+```
+
+The authorization is an entry in `moduleExpertAuthorizations`; it is not a
+standalone request or Markdown instruction. Record the completed parent through
+the ordinary Loom delegation journal before invoking the child.
+
 ```json
 {
   "runId": "feature-vault-api-20260822",
@@ -165,18 +187,26 @@ task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
 Invocation requires a non-empty `CODEX_API_KEY`. The isolated runtime never
 copies `auth.json` or accepts refreshable ChatGPT authentication state.
 The credential is redeemed once through a trusted runtime helper and is absent
-from the Codex process environment, configuration, arguments, files, and Loom
-evidence.
+from the Codex process environment, provider configuration, arguments, and
+disposable repository snapshot. The helper source is embedded in the running
+Loom module instead of loaded from the analyzed commit or live worktree.
 
 The command validates the complete catalog and selected TOML definition before
 starting one isolated Codex thread. The request accepts no runtime permissions,
 tools, model, successors, or graph. It must declare the run, attempt, depth, and
 parent agent-attempt lineage. Direct named experts run only at depth two or
 three; workflow-root, depth-one, self-parent, and invalid parent-attempt
-lineage are rejected before runtime. The expert receives an immutable,
+lineage are rejected before runtime. Loom replay-verifies the completed parent,
+its source commit and projections, and the exact typed child authorization
+before creating the child journal. A depth-three child must also have a
+completed immediate parent named by the depth-one plan. Expert evidence and
+`parentActions` cannot authorize descendants. The expert receives an immutable,
 catalog-scoped snapshot of the exact commit through three bounded loopback
 tools: file listing, file reading, and literal text search. Catalog exclusions
-are removed from the snapshot. No model-controlled process, write, general
+are removed from the snapshot. Generated scopes are included only when their
+entries are tracked at that exact commit; otherwise the expert receives their
+tracked producer contract instead of mutable workspace output. No
+model-controlled process, write, general
 network, web-search, native delegation, app, or plugin path is enabled. Before
 the command
 returns, Loom finalizes the immutable attempt stream, result, and materialized

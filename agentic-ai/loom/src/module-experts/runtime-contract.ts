@@ -15,12 +15,48 @@ import {
 import type { ModuleExpertReadContextServer } from './read-context-mcp.ts';
 
 const ISOLATED_CODEX_HOME_PREFIX = 'nook-module-expert-codex-';
-export const MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH =
-  'agentic-ai/loom/src/module-experts/auth-broker-client.ts';
-const MODULE_EXPERT_AUTH_BROKER_RUNTIME_PATH = join(
-  import.meta.dir,
-  'auth-broker-client.ts',
-);
+export const MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE = [
+  'const socketPath = process.argv[1];',
+  'const nonce = process.argv[2];',
+  'if (!socketPath || !nonce) process.exit(1);',
+  "let credential = '';",
+  'const socketOptions = {',
+  '  unix: socketPath,',
+  '  socket: {',
+  "    binaryType: 'buffer',",
+  '    data: (socket, data) => {',
+  "      credential += data.toString('utf8');",
+  '      if (credential.length > 16384) {',
+  "        credential = '';",
+  '        socket.close();',
+  '        process.exitCode = 1;',
+  '      }',
+  '    },',
+  '    end: () => {',
+  '      const normalizedCredential = credential.trim();',
+  "      credential = '';",
+  '      if (!normalizedCredential) {',
+  '        process.exitCode = 1;',
+  '        return;',
+  '      }',
+  '      process.stdout.write(`${normalizedCredential}\\n`);',
+  '    },',
+  '    error: () => {',
+  "      credential = '';",
+  '      process.exitCode = 1;',
+  '    },',
+  '    open: (socket) => {',
+  '      socket.write(`${nonce}\\n`);',
+  '    },',
+  '  },',
+  '};',
+  'try {',
+  '  await Bun.connect(socketOptions);',
+  '} catch {',
+  "  credential = '';",
+  '  process.exitCode = 1;',
+  '}',
+].join('\n');
 const AUTH_BROKER_SOCKET_NAME = 'authentication.sock';
 const REPOSITORY_ARCHIVE_NAME = 'repository.tar';
 const REPOSITORY_SNAPSHOT_NAME = 'repository';
@@ -50,7 +86,7 @@ export const MODULE_EXPERT_CODEX_OPTIONS = {
         wire_api: 'responses',
         auth: {
           command: process.execPath,
-          args: [MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH],
+          args: ['-e', MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE, '--'],
           refresh_interval_ms: 0,
           timeout_ms: 5_000,
         },
@@ -115,7 +151,6 @@ type ModuleExpertAuthenticationBroker = {
 };
 
 type ModuleExpertAuthenticationBrokerRequest = {
-  readonly authenticationClientPath: string;
   readonly codexHome: string;
   readonly credential: string;
 };
@@ -141,9 +176,9 @@ export type ModuleExpertCodexOptions = ReturnType<
   typeof buildModuleExpertCodexOptions
 >;
 
-export function createModuleExpertRuntimeIsolation(
+export async function createModuleExpertRuntimeIsolation(
   request: ModuleExpertRuntimeIsolationRequest,
-): ModuleExpertRuntimeIsolation {
+): Promise<ModuleExpertRuntimeIsolation> {
   assertSourceCommit(request.sourceCommit);
   const temporaryRoot = request.temporaryRoot ?? tmpdir();
   const codexHome = mkdtempSync(
@@ -162,6 +197,9 @@ export function createModuleExpertRuntimeIsolation(
       environment: processEnvironment,
       sourceCommit: request.sourceCommit,
       excludedPaths: profile.excludedPaths,
+      optionalScopePaths: profile.generatedScopePaths.map(
+        (scope) => scope.path,
+      ),
       scopePaths: moduleExpertSnapshotPaths(profile),
       workingDirectory: request.workingDirectory,
     };
@@ -172,7 +210,6 @@ export function createModuleExpertRuntimeIsolation(
     mkdirSync(isolatedWorkspace);
     const authenticationBrokerRequest: ModuleExpertAuthenticationBrokerRequest =
       {
-        authenticationClientPath: MODULE_EXPERT_AUTH_BROKER_RUNTIME_PATH,
         codexHome,
         credential,
       };
@@ -216,10 +253,18 @@ export function createModuleExpertRuntimeIsolation(
       },
     };
   } catch (error) {
-    if (authenticationBroker) authenticationBroker.dispose();
-    if (contextServer) void contextServer.dispose();
-    const removeOptions: RmOptions = { recursive: true, force: true };
-    rmSync(codexHome, removeOptions);
+    try {
+      if (authenticationBroker) authenticationBroker.dispose();
+    } catch {
+      // Preserve the setup failure while continuing fail-safe cleanup.
+    } finally {
+      try {
+        if (contextServer) await contextServer.dispose();
+      } finally {
+        const removeOptions: RmOptions = { recursive: true, force: true };
+        rmSync(codexHome, removeOptions);
+      }
+    }
     throw error;
   }
 }
@@ -227,7 +272,9 @@ export function createModuleExpertRuntimeIsolation(
 export async function withModuleExpertRuntimeIsolation<TResult>(
   use: ModuleExpertRuntimeIsolationUse<TResult>,
 ): Promise<TResult> {
-  const isolation = createModuleExpertRuntimeIsolation(use.isolationRequest);
+  const isolation = await createModuleExpertRuntimeIsolation(
+    use.isolationRequest,
+  );
   try {
     return await use.run(isolation);
   } finally {
@@ -351,7 +398,13 @@ function createAuthenticationBroker(
   const listener = Bun.listen(listenerOptions);
   let disposed = false;
   return {
-    commandArgs: [request.authenticationClientPath, socketPath, state.nonce],
+    commandArgs: [
+      '-e',
+      MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+      '--',
+      socketPath,
+      state.nonce,
+    ],
     dispose: () => {
       if (disposed) return;
       disposed = true;
@@ -413,6 +466,7 @@ type RepositorySnapshotRequest = {
   readonly codexHome: string;
   readonly environment: NonNullable<CodexOptions['env']>;
   readonly excludedPaths: readonly string[];
+  readonly optionalScopePaths: readonly string[];
   readonly sourceCommit: string;
   readonly scopePaths: readonly string[];
   readonly workingDirectory: string;
@@ -424,6 +478,7 @@ function materializeRepositorySnapshot(
   const archivePath = join(request.codexHome, REPOSITORY_ARCHIVE_NAME);
   const snapshotPath = join(request.codexHome, REPOSITORY_SNAPSHOT_NAME);
   mkdirSync(snapshotPath);
+  const optionalScopePaths = trackedOptionalSnapshotPaths(request);
   const archiveArguments = [
     'archive',
     '--format=tar',
@@ -431,6 +486,7 @@ function materializeRepositorySnapshot(
     request.sourceCommit,
     '--',
     ...request.scopePaths,
+    ...optionalScopePaths,
   ];
   const archiveCommand: IsolatedCommandRequest = {
     args: archiveArguments,
@@ -455,6 +511,33 @@ function materializeRepositorySnapshot(
   const removeOptions: RmOptions = { force: true };
   rmSync(archivePath, removeOptions);
   return snapshotPath;
+}
+
+function trackedOptionalSnapshotPaths(
+  request: RepositorySnapshotRequest,
+): readonly string[] {
+  if (request.optionalScopePaths.length === 0) return [];
+  const treeCommand: IsolatedCommandRequest = {
+    args: [
+      'ls-tree',
+      '--name-only',
+      '-z',
+      request.sourceCommit,
+      '--',
+      ...request.optionalScopePaths,
+    ],
+    command: 'git',
+    cwd: request.workingDirectory,
+    environment: request.environment,
+  };
+  const trackedPaths = captureIsolatedCommand(treeCommand)
+    .split('\u0000')
+    .filter((path) => path.length > 0);
+  return [
+    ...new Set(
+      trackedPaths.filter((path) => request.optionalScopePaths.includes(path)),
+    ),
+  ];
 }
 
 function removeExcludedSnapshotPaths(request: RepositorySnapshotRequest): void {
@@ -482,6 +565,10 @@ type IsolatedCommandRequest = {
 };
 
 function runIsolatedCommand(request: IsolatedCommandRequest): void {
+  captureIsolatedCommand(request);
+}
+
+function captureIsolatedCommand(request: IsolatedCommandRequest): string {
   const options: SpawnSyncOptionsWithStringEncoding = {
     cwd: request.cwd,
     encoding: 'utf8',
@@ -493,6 +580,7 @@ function runIsolatedCommand(request: IsolatedCommandRequest): void {
       'Module expert repository snapshot materialization failed.',
     );
   }
+  return result.stdout;
 }
 
 function assertSourceCommit(sourceCommit: string): void {

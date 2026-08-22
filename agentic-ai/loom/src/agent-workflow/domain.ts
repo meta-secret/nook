@@ -67,6 +67,7 @@ export enum WorkflowResultKind {
   CortexEvidence = 'cortex-evidence',
   CortexSynthesis = 'cortex-synthesis',
   LoomLeafEvidence = 'loom-leaf-evidence',
+  ModuleDevelopmentPlan = 'module-development-plan',
   ModuleExpertEvidence = 'module-expert-evidence',
 }
 
@@ -441,6 +442,14 @@ export type ModuleExpertContinuation = {
   readonly parentActions: readonly string[];
 };
 
+export type ModuleExpertAuthorization = {
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: WorkflowAttemptNumber;
+  readonly depth: number;
+  readonly parent: ParentAgentAttempt;
+};
+
 type WorkflowTaskOutputFields = {
   readonly summary: string;
   readonly materializedViewMarkdown: string;
@@ -455,15 +464,25 @@ export type StandardWorkflowTaskOutput = WorkflowTaskOutputFields & {
     | WorkflowResultKind.CortexSynthesis
     | WorkflowResultKind.LoomLeafEvidence;
   readonly continuation?: never;
+  readonly moduleExpertAuthorizations?: never;
+};
+
+export type ModuleDevelopmentPlanTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.ModuleDevelopmentPlan;
+  readonly continuation?: never;
+  readonly moduleExpertAuthorizations: readonly ModuleExpertAuthorization[];
 };
 
 export type ModuleExpertTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.ModuleExpertEvidence;
   readonly continuation: ModuleExpertContinuation;
+  readonly moduleExpertAuthorizations?: never;
 };
 
 export type WorkflowTaskOutput =
-  StandardWorkflowTaskOutput | ModuleExpertTaskOutput;
+  | StandardWorkflowTaskOutput
+  | ModuleDevelopmentPlanTaskOutput
+  | ModuleExpertTaskOutput;
 
 export type ProjectionReference = {
   readonly path: string;

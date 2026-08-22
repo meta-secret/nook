@@ -37,6 +37,7 @@ import type {
   InvokeModuleExpertArgs,
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
+import { createAuthorizedDirectParent } from '../module-experts/invoke-parent-fixture.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -225,6 +226,7 @@ describe('Codex streamed turn terminal state', () => {
       signal: controller.signal,
     };
     try {
+      await createAuthorizedDirectParent(request);
       const result = await invokeModuleExpert(invokeArgs);
 
       expect(result.terminal.kind).toBe(TaskTerminalKind.Failed);

@@ -137,7 +137,13 @@ The hierarchy has a hard maximum depth of three.
 
 Children cannot freely create grandchildren.
 No agent may add a task, create a new tier, or schedule a successor.
-Only the reviewed parent graph may declare a bounded depth-three specialist.
+The completed depth-one parent publishes a typed `ModuleDevelopmentPlan` with
+the exact task, expert, attempt, depth, and immediate-parent identity before a
+named expert is invoked.
+Loom replay-verifies that plan before creating the child journal.
+Only this parent plan may predeclare a bounded depth-three specialist.
+The immediate depth-two parent must also be completed before depth three runs.
+`ModuleExpertEvidence` and `parentActions` are never scheduling authority.
 
 ## Hierarchical event protocol
 

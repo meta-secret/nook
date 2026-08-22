@@ -52,6 +52,26 @@ The lists are bounded, unique, and free of control characters.
 `parentActions` is evidence for the delivery owner.
 It does not grant scheduling or mutation authority.
 
+Every invocation also requires a replay-verified parent declaration.
+A completed depth-one planning attempt uses the dedicated
+`ModuleDevelopmentPlan` result kind.
+Its `moduleExpertAuthorizations` entries declare the exact child:
+
+- task;
+- expert;
+- attempt;
+- depth;
+- immediate parent task, agent, and attempt.
+
+Depth-two experts require a matching declaration from their immediate
+depth-one plan.
+Depth-three experts require both a completed immediate parent and a matching
+declaration from that parent's depth-one plan.
+The invocation adapter verifies the parent journal, result and view hashes,
+source commit, identity, completion, and exact authorization before it creates
+the child journal or starts Codex.
+`ModuleExpertEvidence` and `parentActions` cannot authorize descendants.
+
 Every role is read-only.
 Role files contain thin routing instructions instead of copied domain facts.
 
@@ -70,14 +90,17 @@ That runtime enforces:
 - an empty working directory;
 - one catalog-scoped snapshot materialized from the exact source commit;
 - physical removal of catalog exclusions before the snapshot is served;
+- tracked generated-scope entries from that commit, with untracked workspace
+  output represented only by its tracked producer contract;
 - one in-process numeric-loopback context server with bounded list, read, and
   literal-search tools;
-- one trusted, runtime-owned authentication helper outside the analyzed source
-  snapshot;
+- one runtime-owned authentication helper embedded in the already-running Loom
+  module, rather than loaded from the analyzed commit or live worktree;
 - one nonce-bound, one-shot `CODEX_API_KEY` redemption over a disposable Unix
   socket;
-- exclusion of the raw credential from Codex environment, configuration,
-  arguments, files, journals, views, and errors;
+- exclusion of the raw credential from the Codex environment, provider
+  configuration, arguments, repository snapshot, and disposable Codex home
+  before redemption;
 - exact process and login-shell environment allowlists that exclude unrelated
   parent credentials and capability-bearing variables.
 
@@ -102,8 +125,9 @@ Direct custom-agent spawning from a write-capable delivery session is not an
 authorized module-expert invocation.
 
 The invocation boundary treats the SDK completion as untrusted transport data.
-It validates the result, finalizes the immutable attempt journal, and then
-rereads, hashes, and replay-verifies `events.jsonl`, `result.json`, and
+It first verifies the completed parent plan and exact child authorization.
+It then validates the expert result, finalizes the immutable attempt journal,
+and rereads, hashes, and replay-verifies `events.jsonl`, `result.json`, and
 `view.md` before processing references can reach the parent.
 
 ## Portable Rust module experts

@@ -1,6 +1,10 @@
 import { expect, test } from 'bun:test';
-import { WorkflowResultKind } from '../../src/agent-workflow/domain.ts';
+import {
+  AgentAttemptParentKind,
+  WorkflowResultKind,
+} from '../../src/agent-workflow/domain.ts';
 import type {
+  ModuleDevelopmentPlanTaskOutput,
   ModuleExpertContinuation,
   ModuleExpertTaskOutput,
   WorkflowTaskOutput,
@@ -31,6 +35,47 @@ test('requires typed continuation fields for module expert evidence', () => {
   expect(JSON.stringify(schema.properties)).toContain('focusedValidation');
   expect(JSON.stringify(schema.properties)).toContain('unresolvedDecisions');
   expect(JSON.stringify(schema.properties)).not.toContain('cortex-evidence');
+});
+
+test('requires typed child authorizations for a module development plan', () => {
+  const schema = workflowTaskOutputSchema(
+    WorkflowResultKind.ModuleDevelopmentPlan,
+  );
+  expect(schema.required).toContain('moduleExpertAuthorizations');
+  expect(JSON.stringify(schema.properties)).toContain('parent');
+
+  const output = moduleDevelopmentPlanOutput();
+  expect(decodeWorkflowTaskOutput(JSON.stringify(output))).toEqual(output);
+});
+
+test('rejects missing, duplicate, or invalid module expert authorizations', () => {
+  const output = moduleDevelopmentPlanOutput();
+  const missingAuthorization = jsonMap(output);
+  delete missingAuthorization.moduleExpertAuthorizations;
+  const duplicateAuthorization: ModuleDevelopmentPlanTaskOutput = {
+    ...output,
+    moduleExpertAuthorizations: [
+      ...output.moduleExpertAuthorizations,
+      ...output.moduleExpertAuthorizations,
+    ],
+  };
+  const invalidDepth = jsonMap(output);
+  const authorizationNode = invalidDepth.moduleExpertAuthorizations;
+  if (!Array.isArray(authorizationNode) || !isRecord(authorizationNode[0])) {
+    throw new Error('Expected an authorization in the test fixture.');
+  }
+  const authorization = authorizationNode[0] as MutableYamlMap;
+  authorization.depth = 4;
+
+  expect(() =>
+    decodeWorkflowTaskOutput(JSON.stringify(missingAuthorization)),
+  ).toThrow('missing or extra fields');
+  expect(() =>
+    decodeWorkflowTaskOutput(JSON.stringify(duplicateAuthorization)),
+  ).toThrow('must be unique');
+  expect(() => decodeWorkflowTaskOutput(JSON.stringify(invalidDepth))).toThrow(
+    'identity is invalid',
+  );
 });
 
 test('rejects extra fields at the structured output boundary', () => {
@@ -229,6 +274,31 @@ function moduleExpertContinuation(): ModuleExpertContinuation {
     risks: ['No material implementation risks were found.'],
     unresolvedDecisions: ['No unresolved decisions were found.'],
     parentActions: ['Implement the consumer against PublicFacade only.'],
+  };
+}
+
+function moduleDevelopmentPlanOutput(): ModuleDevelopmentPlanTaskOutput {
+  return {
+    resultKind: WorkflowResultKind.ModuleDevelopmentPlan,
+    summary: 'Reviewed module plan.',
+    materializedViewMarkdown: '# Module plan\n\nReviewed.',
+    findings: [],
+    notesForParent: [],
+    artifacts: [],
+    moduleExpertAuthorizations: [
+      {
+        task: 'inspect-core-contract',
+        expert: 'core_expert',
+        attempt: 1,
+        depth: 2,
+        parent: {
+          kind: AgentAttemptParentKind.AgentAttempt,
+          task: 'feature-synthesis',
+          agent: 'delivery-owner',
+          attempt: 1,
+        },
+      },
+    ],
   };
 }
 

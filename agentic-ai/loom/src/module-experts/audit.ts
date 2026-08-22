@@ -19,7 +19,12 @@ import type {
   ModuleExpertProfile,
 } from './catalog.ts';
 import {
-  MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
+  auditInternalApiExpertConsumerScope,
+  discoverInternalApiConsumerPaths,
+} from './consumer-scope-audit.ts';
+import type { AuditInternalApiExpertConsumerScopeArgs } from './consumer-scope-audit.ts';
+import {
+  MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
   MODULE_EXPERT_AUTH_PROVIDER,
   MODULE_EXPERT_CONTEXT_MCP,
@@ -223,7 +228,7 @@ function unsafeRuntimeFinding(): ModuleExpertAuditFinding {
     code: 'unsafe-module-expert-runtime',
     path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
     message:
-      'Module experts require an isolated read-only, offline, non-delegating Codex runtime.',
+      'Module experts require an isolated read-only, bounded-context, non-delegating Codex runtime.',
   };
 }
 
@@ -247,9 +252,12 @@ function validAuthenticationProvider(
     provider.wire_api === 'responses' &&
     auth.command === process.execPath &&
     Array.isArray(auth.args) &&
-    auth.args.length === 3 &&
-    typeof auth.args[0] === 'string' &&
-    auth.args[0]?.endsWith(MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH) === true &&
+    auth.args.length === 5 &&
+    auth.args[0] === '-e' &&
+    auth.args[1] === MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE &&
+    auth.args[2] === '--' &&
+    typeof auth.args[3] === 'string' &&
+    typeof auth.args[4] === 'string' &&
     auth.refresh_interval_ms === 0 &&
     auth.timeout_ms === 5_000
   );
@@ -563,6 +571,13 @@ function validateInternalApiProfile(
     };
     return;
   }
+  const consumerScopeArgs: AuditInternalApiExpertConsumerScopeArgs = {
+    discoveredConsumerPaths: discoverInternalApiConsumerPaths(context.repoRoot),
+    profile,
+  };
+  context.findings.push(
+    ...auditInternalApiExpertConsumerScope(consumerScopeArgs),
+  );
   const requiredScopes = [
     'nook-app/nook-platform/nook-companion-wasm',
     'nook-app/nook-platform/nook-wasm',
@@ -785,7 +800,9 @@ function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
   const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
   const codexOptionsRequest = {
     authenticationCommandArgs: [
-      MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
+      '-e',
+      MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+      '--',
       '/isolated/authentication.sock',
       'audit-nonce',
     ],

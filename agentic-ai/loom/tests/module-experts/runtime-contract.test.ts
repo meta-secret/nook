@@ -9,7 +9,7 @@ import {
 } from 'node:fs/promises';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { Codex } from '@openai/codex-sdk';
 import type { CodexOptions, TurnOptions } from '@openai/codex-sdk';
@@ -17,8 +17,8 @@ import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
 import type { ModuleExpertProfile } from '../../src/module-experts/catalog.ts';
 import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../../src/module-experts/read-context-mcp.ts';
 import {
+  MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
   MODULE_EXPERT_AUTH_PROVIDER,
-  MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
   MODULE_EXPERT_CODEX_OPTIONS,
   MODULE_EXPERT_CONTEXT_MCP,
   createModuleExpertRuntimeIsolation,
@@ -34,10 +34,10 @@ import type { RunCommandArgs } from '../../src/lib/run.ts';
 
 const EXPERT_NAME = 'app_common_expert';
 const API_KEY_SENTINEL = 'codex-api-key-must-not-persist';
-const AUTH_CLIENT_SOURCE_PATH = resolve(
-  import.meta.dir,
-  '../../src/module-experts/auth-broker-client.ts',
-);
+const ANALYZED_HELPER_DECOY_PATH =
+  'agentic-ai/loom/src/module-experts/auth-broker-client.ts';
+const UNRELATED_WEB_CONSUMER_PATH =
+  'nook-app/nook-web/nook-web-shared/src/private/unrelated-consumer.ts';
 
 const DECOY_ENVIRONMENT: NodeJS.ProcessEnv = {
   AWS_SECRET_ACCESS_KEY: 'aws-secret',
@@ -86,7 +86,8 @@ describe('module expert runtime isolation', () => {
         temporaryRoot: isolationRoot,
         workingDirectory: repository.root,
       };
-      const isolation = createModuleExpertRuntimeIsolation(isolationRequest);
+      const isolation =
+        await createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         expect(Object.keys(isolation.codexOptions.env).sort()).toEqual([
           'CODEX_HOME',
@@ -130,13 +131,14 @@ describe('module expert runtime isolation', () => {
             .enabled_tools,
         ).toEqual(['list_files', 'read_file', 'search_text']);
         const authentication = authenticationCommand(isolation);
-        expect(authentication.args[0]).toBe(AUTH_CLIENT_SOURCE_PATH);
+        expect(authentication.args.slice(0, 3)).toEqual([
+          '-e',
+          MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
+          '--',
+        ]);
         await expect(
           access(
-            join(
-              isolation.repositorySnapshot,
-              MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
-            ),
+            join(isolation.repositorySnapshot, ANALYZED_HELPER_DECOY_PATH),
           ),
         ).rejects.toThrow();
 
@@ -173,7 +175,8 @@ describe('module expert runtime isolation', () => {
         repository,
       };
       const isolationRequest = runtimeIsolationRequest(fixtureRequest);
-      const isolation = createModuleExpertRuntimeIsolation(isolationRequest);
+      const isolation =
+        await createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         const command = authenticationCommand(isolation);
         expect(command.args.join(' ')).not.toContain(API_KEY_SENTINEL);
@@ -207,19 +210,19 @@ describe('module expert runtime isolation', () => {
         isolationRoot,
         repository,
       };
-      const isolation = createModuleExpertRuntimeIsolation(
+      const isolation = await createModuleExpertRuntimeIsolation(
         runtimeIsolationRequest(fixtureRequest),
       );
       try {
         const command = authenticationCommand(isolation);
         const invalidRequest: BrokerSocketRequest = {
           nonce: 'invalid-nonce',
-          socketPath: command.args[1] ?? '',
+          socketPath: command.args[3] ?? '',
         };
         expect(await redeemBrokerSocket(invalidRequest)).toBe('');
         const validRequest: BrokerSocketRequest = {
-          nonce: command.args[2] ?? '',
-          socketPath: command.args[1] ?? '',
+          nonce: command.args[4] ?? '',
+          socketPath: command.args[3] ?? '',
         };
         expect((await redeemBrokerSocket(validRequest)).trim()).toBe(
           API_KEY_SENTINEL,
@@ -247,8 +250,8 @@ describe('module expert runtime isolation', () => {
         repository,
       };
       const isolationRequest = runtimeIsolationRequest(fixtureRequest);
-      const first = createModuleExpertRuntimeIsolation(isolationRequest);
-      const second = createModuleExpertRuntimeIsolation(isolationRequest);
+      const first = await createModuleExpertRuntimeIsolation(isolationRequest);
+      const second = await createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         expect(first.codexHome).not.toBe(second.codexHome);
         expect(first.repositorySnapshot).not.toBe(second.repositorySnapshot);
@@ -311,7 +314,8 @@ describe('module expert runtime isolation', () => {
         ...runtimeIsolationRequest(requestFixture),
         expertName: 'web_expert',
       };
-      const isolation = createModuleExpertRuntimeIsolation(isolationRequest);
+      const isolation =
+        await createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         const webProfile = profile('web_expert');
         for (const excludedPath of webProfile.excludedPaths) {
@@ -328,6 +332,93 @@ describe('module expert runtime isolation', () => {
             'utf8',
           ),
         ).toContain('committed:');
+      } finally {
+        await isolation.dispose();
+      }
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('includes generated scope entries tracked at the selected commit', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-expert-generated-scope-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const fixtureRequest: ProfileRepositoryFixtureRequest = {
+        expertName: 'internal_api_expert',
+        fixtureRoot,
+      };
+      const repository = await createProfileRepositoryFixture(fixtureRequest);
+      const isolationRoot = join(fixtureRoot, 'isolated');
+      await mkdir(isolationRoot);
+      const requestFixture: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
+      };
+      const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+        ...runtimeIsolationRequest(requestFixture),
+        expertName: 'internal_api_expert',
+      };
+      const isolation =
+        await createModuleExpertRuntimeIsolation(isolationRequest);
+      try {
+        const selected = profile('internal_api_expert');
+        for (const generatedScope of selected.generatedScopePaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, generatedScope.path),
+              'utf8',
+            ),
+          ).toBe(`committed:${generatedScope.path}\n`);
+        }
+      } finally {
+        await isolation.dispose();
+      }
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('materializes exact authored internal API consumers without unrelated web code', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-expert-consumer-scope-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const fixtureRequest: ProfileRepositoryFixtureRequest = {
+        expertName: 'internal_api_expert',
+        fixtureRoot,
+      };
+      const repository = await createProfileRepositoryFixture(fixtureRequest);
+      const isolationRoot = join(fixtureRoot, 'isolated');
+      await mkdir(isolationRoot);
+      const requestFixture: RuntimeIsolationFixtureRequest = {
+        isolationRoot,
+        repository,
+      };
+      const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+        ...runtimeIsolationRequest(requestFixture),
+        expertName: 'internal_api_expert',
+      };
+      const isolation =
+        await createModuleExpertRuntimeIsolation(isolationRequest);
+      try {
+        const selected = profile('internal_api_expert');
+        for (const consumerPath of selected.scopePaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, consumerPath),
+              'utf8',
+            ),
+          ).toBe(`committed:${consumerPath}\n`);
+        }
+        await expect(
+          access(
+            join(isolation.repositorySnapshot, UNRELATED_WEB_CONSUMER_PATH),
+          ),
+        ).rejects.toThrow();
       } finally {
         await isolation.dispose();
       }
@@ -358,23 +449,23 @@ describe('module expert runtime isolation', () => {
           PATH: process.env.PATH ?? '',
         },
       };
-      expect(() =>
+      await expect(
         createModuleExpertRuntimeIsolation(unsupportedAuthRequest),
-      ).toThrow('requires CODEX_API_KEY authentication');
+      ).rejects.toThrow('requires CODEX_API_KEY authentication');
       const unsupportedExpertRequest: ModuleExpertRuntimeIsolationRequest = {
         ...baseRequest,
         expertName: 'unregistered_expert',
       };
-      expect(() =>
+      await expect(
         createModuleExpertRuntimeIsolation(unsupportedExpertRequest),
-      ).toThrow('requires a registered expert');
+      ).rejects.toThrow('requires a registered expert');
       const invalidCommitRequest: ModuleExpertRuntimeIsolationRequest = {
         ...baseRequest,
         sourceCommit: 'HEAD',
       };
-      expect(() =>
+      await expect(
         createModuleExpertRuntimeIsolation(invalidCommitRequest),
-      ).toThrow('must be a full Git SHA');
+      ).rejects.toThrow('must be a full Git SHA');
 
       const isolationUse: ModuleExpertRuntimeIsolationUse<never> = {
         isolationRequest: baseRequest,
@@ -430,7 +521,7 @@ describe('module expert runtime isolation', () => {
         isolationRoot,
         repository,
       };
-      const isolation = createModuleExpertRuntimeIsolation(
+      const isolation = await createModuleExpertRuntimeIsolation(
         runtimeIsolationRequest(fixtureRequest),
       );
       try {
@@ -669,7 +760,8 @@ async function createProfileRepositoryFixture(
   ]);
   const paths = [
     '.cortex/knowledge-graph.md',
-    MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH,
+    ANALYZED_HELPER_DECOY_PATH,
+    UNRELATED_WEB_CONSUMER_PATH,
     selected.agentDefinitionPath,
     ...selected.moduleRoots.map((moduleRoot) =>
       join(moduleRoot, 'fixture.txt'),
@@ -687,7 +779,7 @@ async function createProfileRepositoryFixture(
     const directoryOptions: MakeDirectoryOptions = { recursive: true };
     await mkdir(dirname(join(root, path)), directoryOptions);
     const content =
-      path === MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH
+      path === ANALYZED_HELPER_DECOY_PATH
         ? 'process.stdout.write(process.env.CODEX_API_KEY ?? "stolen");\n'
         : `committed:${path}\n`;
     await writeFile(join(root, path), content, 'utf8');
@@ -732,10 +824,13 @@ async function createProfileRepositoryFixture(
   const committedEntryContent = `committed:${entryPoint}\n`;
   await writeFile(join(root, entryPoint), 'mutable worktree content\n', 'utf8');
   await writeFile(
-    join(root, MODULE_EXPERT_AUTH_BROKER_CLIENT_PATH),
+    join(root, ANALYZED_HELPER_DECOY_PATH),
     'process.stdout.write("mutable helper executed\\n");\n',
     'utf8',
   );
+  for (const scopePath of selected.scopePaths) {
+    await writeFile(join(root, scopePath), 'mutable scope content\n', 'utf8');
+  }
   return { committedEntryContent, root, sourceCommit };
 }
 

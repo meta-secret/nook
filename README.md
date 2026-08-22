@@ -436,16 +436,21 @@ interactive ChatGPT login state.
 The request binds an exact source commit, registered expert, stable run/task
 identity, attempt, parent lineage, and bounded instruction. Loom finalizes the
 attempt journal and returns its content-addressed evidence references, but does
-not schedule a successor or mutate lifecycle state. Direct named experts are
-agent-attempt children at depth two or three; they never use workflow-root
-lineage.
+not schedule a successor or mutate lifecycle state. Before invocation, Loom
+replay-verifies a completed depth-one `ModuleDevelopmentPlan` with an exact
+typed authorization for that child. Depth-three work also requires its
+completed immediate parent. Direct named experts are agent-attempt children at
+depth two or three; they never use workflow-root lineage, and their evidence
+cannot authorize descendants.
 Each expert reads an immutable, catalog-scoped commit snapshot through bounded
 loopback list, read, and literal-search tools. The credential is redeemed once
-through a trusted runtime helper and is absent from the Codex process
-environment and persisted evidence. Model-controlled process, write, general
-network, web-search, and delegation paths remain disabled. Successful experts
-return a typed `ModuleExpertEvidence` continuation; parent actions are evidence,
-not scheduler authority.
+through helper source embedded in the running Loom module, rather than loaded
+from the analyzed commit or live worktree. It is absent from the Codex process
+environment, provider configuration, arguments, and repository snapshot.
+Model-controlled process, write, general network, web-search, and delegation
+paths remain disabled. Successful experts return a typed
+`ModuleExpertEvidence` continuation; parent actions are evidence, not scheduler
+authority.
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)

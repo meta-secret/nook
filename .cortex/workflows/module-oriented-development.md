@@ -105,7 +105,13 @@ Normal work uses depths one and two.
 Depth greater than three is invalid.
 
 An agent cannot freely create a child.
-Only the reviewed parent plan may declare a depth-three task.
+Before any named expert runs, the completed depth-one parent must publish a
+typed `ModuleDevelopmentPlan` with the exact child identity in
+`moduleExpertAuthorizations`.
+The authorization binds task, expert, attempt, depth, and immediate parent.
+Only that replay-verified parent plan may declare a depth-three task.
+The depth-three immediate parent must also be completed and replay-valid.
+Expert evidence and `parentActions` never authorize another task.
 No task may dynamically create another tier.
 
 Module dependency chains affect readiness.
