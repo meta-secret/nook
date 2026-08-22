@@ -7,7 +7,8 @@ on:
     branches: [main]
     paths:
       - .cortex/**
-      - .github/workflows/repository-policy.yml
+      - .github/scripts/arc-manifest-contract.ts
+      - .github/workflows/**
       - .task/agentic-ai.yml
       - agentic-ai/loom/**
       - preflight/**
@@ -37,19 +38,26 @@ jobs:
         run: |
           if [ "$EVENT_NAME" = "push" ]; then
             echo "loom=true" >> "$GITHUB_OUTPUT"
+            echo "runner_placement=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           loom_changed=false
+          runner_placement_changed=false
           while IFS= read -r changed_file; do
             case "$changed_file" in
               .cortex/* | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | agentic-ai/loom/* | preflight/*)
                 loom_changed=true
-                break
+                ;;
+            esac
+            case "$changed_file" in
+              .github/scripts/arc-manifest-contract.ts | .github/workflows/*)
+                runner_placement_changed=true
                 ;;
             esac
           done < <(git diff --no-renames --name-only HEAD^1 HEAD^2)
           echo "loom=$loom_changed" >> "$GITHUB_OUTPUT"
+          echo "runner_placement=$runner_placement_changed" >> "$GITHUB_OUTPUT"
 
       - name: Install Task
         uses: go-task/setup-task@v2
@@ -70,10 +78,14 @@ jobs:
         run: task preflight:source-architecture
 
       - name: Install Bun
-        if: steps.policy-paths.outputs.loom == 'true'
+        if: steps.policy-paths.outputs.loom == 'true' || steps.policy-paths.outputs.runner_placement == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
+      - name: Enforce Actions runner placement inventory
+        if: steps.policy-paths.outputs.runner_placement == 'true'
+        run: bun .github/scripts/arc-manifest-contract.ts
 
       - name: Verify Loom package quality
         if: steps.policy-paths.outputs.loom == 'true'
