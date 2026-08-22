@@ -13,12 +13,19 @@ Add **secure notes** as a first-class vault item type alongside login, API key, 
 
 ## Implemented scope
 
-| Area                     | Notes                                                                               |
-| ------------------------ | ----------------------------------------------------------------------------------- |
-| Core (`secret_types.rs`) | `SecretType::SecureNote`, `SecureNoteSecret { title, note }`                        |
-| Wasm bridge              | Serialize/deserialize + validation in Rust                                          |
-| Web UI                   | Type picker, create/edit form, list and detail rendering, reveal, copy, and delete  |
-| Tests                    | Rust validation and replacement coverage plus browser create/reveal/delete coverage |
+- **Core**
+  - `SecretType::SecureNote` identifies the item.
+  - `SecureNoteSecret { title, note }` owns the plaintext payload.
+- **WASM bridge**
+  - Rust owns serialization, deserialization, and validation.
+- **Web UI**
+  - The type picker opens the secure-note editor.
+  - The vault renders list and detail states.
+  - Users can reveal, copy, edit, and delete a note.
+- **Imports**
+  - Bitwarden, 1Password, LastPass, Proton Pass, Dashlane, Keeper, and
+    KeePassXC exports may produce secure notes.
+  - Re-importing the same supported item is idempotent.
 
 ## Editing behavior
 
@@ -28,6 +35,15 @@ Rust-owned `replace_secret` operation through `nook-wasm`.
 Replacement keeps mutation, validation, encryption, and persistence on the
 Rust/WASM side. TypeScript and Svelte own the editor lifecycle and rendering,
 not replacement policy.
+
+## Executable scenarios
+
+- Rust tests own validation, encrypted replacement, and safe list projection.
+- Playwright creates and previews Markdown, reveals the note, edits it through
+  the Rust replacement path, reloads the vault, and verifies the replacement
+  persisted.
+- Import scenarios verify supported providers and duplicate reconciliation.
+- Short-viewport coverage keeps editing usable above a mobile keyboard.
 
 ## Out of scope (for now)
 
