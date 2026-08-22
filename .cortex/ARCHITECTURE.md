@@ -280,7 +280,7 @@ YAML payload sections:
 | `nook-companion-core`         | `task rust:coverage:check`                         |
 | `nook-core`                   | `task rust:coverage:check`                         |
 | `nook-web/nook-web-app`       | Playwright e2e                                     |
-| `nook-wasm`                   | Covered via `nook-core` + e2e                      |
+| `nook-wasm`                   | `task wasm:test:browser` + `nook-core` + e2e       |
 | `nook-web/nook-web-extension` | `task extension:check` + `task extension:test:e2e` |
 
 `preflight` detail:
@@ -321,8 +321,8 @@ Scenario coverage is bidirectional.
 - Durable behavior discovered in strong tests must enrich the owning Cortex
   specification when it affects future product decisions.
 - UI demos communicate behavior. They do not replace regression evidence.
-- Every top-level non-demo Playwright specification must belong to a default or
-  explicit manual-only project.
+- Every non-demo Playwright specification must appear exactly once in the
+  shared gate manifest consumed by its repository-owned project.
 
 ---
 

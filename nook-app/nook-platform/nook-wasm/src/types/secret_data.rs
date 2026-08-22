@@ -293,3 +293,29 @@ pub(crate) fn members_to_vec(members: Vec<nook_core::VaultMember>) -> Vec<NookVa
         .map(NookVaultMember::from_core)
         .collect()
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod wasm_tests {
+    use super::NookSecretFormFields;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn file_attachment_builder_preserves_the_typed_payload() {
+        let fields = NookSecretFormFields::file_attachment(
+            "Recovery codes".to_owned(),
+            "recovery.txt".to_owned(),
+            "text/plain".to_owned(),
+            17,
+            "cmVjb3ZlcnkgY29kZXM=".to_owned(),
+        );
+
+        let nook_core::SecretFormFields::FileAttachment(attachment) = fields.inner else {
+            panic!("file attachment constructor must preserve its variant");
+        };
+        assert_eq!(attachment.title, "Recovery codes");
+        assert_eq!(attachment.file_name, "recovery.txt");
+        assert_eq!(attachment.mime_type, "text/plain");
+        assert_eq!(attachment.size_bytes, 17);
+        assert_eq!(attachment.content_base64, "cmVjb3ZlcnkgY29kZXM=");
+    }
+}
