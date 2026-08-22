@@ -14,8 +14,8 @@ Pinned platform:
 - k9s `v0.51.0`
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
-- Kata runtime-rs classes `kata-dragonball` for Hive and
-  `kata-qemu-runtime-rs` for ARC builds
+- Kata runtime-rs classes `kata-dragonball` for persistent Hive workers and
+  `kata-qemu-runtime-rs` for ARC builds, including the dedicated Hive scale set
 - A loop-backed Btrfs ARC pool with private 32 GiB reflinked BuildKit images
 
 Install the pinned operator console and its credential-free kubeconfig through

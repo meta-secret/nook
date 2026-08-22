@@ -87,6 +87,8 @@ if hive_values["runnerScaleSetName"] != "nook-k0s-hive":
 if hive_values["minRunners"] != 0 or hive_values["maxRunners"] != 10:
     raise AssertionError("Hive ARC must scale from zero through ten fresh runners")
 hive_pod = hive_values["template"]["spec"]
+if hive_pod["runtimeClassName"] != "kata-qemu-runtime-rs":
+    raise AssertionError("Hive ARC must use the qualified Kata QEMU runtime-rs fallback")
 hive_init_containers = {
     item["name"]: item for item in hive_pod["initContainers"]
 }

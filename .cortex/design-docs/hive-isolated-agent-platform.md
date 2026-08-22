@@ -598,9 +598,11 @@ operator matches both that nonce and the exact head SHA before monitoring or
 cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.
 
 Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
-guest lost its ttrpc sandbox again when the 16 GiB ARC job began exercising its
-private BuildKit daemon. ARC therefore uses the same release's QEMU runtime-rs
-backend. Hive remains on Dragonball, and QEMU is not the cluster default.
+guest lost its ttrpc sandbox when ARC jobs exercised private BuildKit and again
+when the dedicated Hive scale set ran its normal multi-sidecar verification.
+Both ARC scale sets therefore use the same release's QEMU runtime-rs backend.
+Persistent Hive workers remain on Dragonball, and QEMU is not the cluster
+default.
 
 Neither scale set keeps warm runners. ARC creates a new Pod and microVM for
 each job and removes it afterward. `nook-k0s` serves ordinary trusted Rust
