@@ -6,6 +6,7 @@ readonly MAX_REMOTE_TASKS=8
 catalog() {
   cat <<'EOF'
 preflight
+arc:runtime
 rust:ci
 bake-cache:prove
 rust:test
@@ -68,6 +69,10 @@ normalize_tasks() {
     echo "A remote batch may contain at most $MAX_REMOTE_TASKS tasks." >&2
     return 2
   fi
+  if (( count > 1 )) && [[ "$seen" == *",arc:runtime,"* ]]; then
+    echo "arc:runtime must be dispatched as a single ARC task." >&2
+    return 2
+  fi
 
   printf '%s\n' "$normalized"
 }
@@ -75,6 +80,7 @@ normalize_tasks() {
 task_command() {
   case "$1" in
     preflight) echo "task preflight" ;;
+    arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
     rust:ci) echo "task ci:pr:rust" ;;
     bake-cache:prove) echo "task infra:bake-cache:prove" ;;
     rust:test) echo "task remote:rust:test" ;;
@@ -99,6 +105,7 @@ task_command() {
 
 task_timeout_minutes() {
   case "$1" in
+    arc:runtime) echo 15 ;;
     preflight) echo 15 ;;
     bake-cache:prove|rust:ci|rust:test|rust:lint|wasm:build|wasm:test|web:check|web:test|extension:check|hive:verify) echo 20 ;;
     wasm:test:browser|web:build) echo 25 ;;
@@ -172,6 +179,7 @@ run_task() {
 
   case "$1" in
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
+    arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
     rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;

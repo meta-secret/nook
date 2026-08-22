@@ -41,21 +41,11 @@ validate_setup_selection() {
 }
 
 pick_free_port() {
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - <<'PY'
-import socket
-sock = socket.socket()
-sock.bind(("127.0.0.1", 0))
-print(sock.getsockname()[1])
-sock.close()
-PY
+  if command -v bun >/dev/null 2>&1; then
+    bun -e 'const socket = Bun.listen({ hostname: "127.0.0.1", port: 0, socket: { data() {} } }); process.stdout.write(String(socket.port)); socket.stop();'
     return 0
   fi
-  if command -v node >/dev/null 2>&1; then
-    node -e 'const net=require("net"); const s=net.createServer(); s.listen(0,"127.0.0.1",()=>{process.stdout.write(String(s.address().port)); s.close();});'
-    return 0
-  fi
-  fail 'python3 or node is required to allocate a CDP port'
+  fail 'bun is required to allocate a CDP port'
 }
 
 wait_for_cdp() {

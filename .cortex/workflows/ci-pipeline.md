@@ -381,14 +381,16 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the
-configured ARC Kata scale set. Daemon-free `preflight` and `rust:ci` selections
-use the same scale set. Trusted `hive:verify` uses the dedicated
+Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
+explicit Main job use the configured ARC Kata scale set. Focused `preflight`,
+`rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
+`hive:verify` uses the dedicated
 `nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
-Both routes use `ubuntu-latest` as the explicit fallback. Fork PRs and
-runtime-dependent, browser, WASM, deployment, release, AI, scheduled, manual
-e2e, and research jobs use GitHub-hosted `ubuntu-latest`. ARC scales single-use
-Pods instead of queueing work on one persistent Docker host.
+Both routes use `ubuntu-latest` as the explicit fallback. Fork PRs, Dependabot
+PRs, release jobs, and non-Main runtime-dependent, browser, WASM, deployment,
+AI, scheduled, manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`.
+ARC scales single-use Pods instead of queueing work on one persistent Docker
+host.
 
 **Zot cache policy:**
 
@@ -421,16 +423,20 @@ Pods instead of queueing work on one persistent Docker host.
 
 **Focused remote jobs:**
 
-- `preflight` and `rust:ci` may use fresh Kata QEMU microVMs in the configured
-  general ARC scale set. Trusted `hive:verify` may use the dedicated Hive ARC
-  scale set. Each job owns a private BuildKit sidecar and writable COW clone.
-- Every other `remote.yml` selection retains GitHub-hosted placement because it
-  needs a Docker image runtime or broader hosted tooling.
+- `preflight`, `rust:ci`, and `arc:runtime` may use fresh Kata QEMU microVMs in
+  the configured general ARC scale set. Trusted `hive:verify` may use the
+  dedicated Hive ARC scale set. Each job owns a private BuildKit sidecar and
+  writable COW clone.
+- The general scale set's Podman API is reachable only inside the disposable
+  Kata guest. `arc:runtime` proves a remote BuildKit image can be loaded and
+  executed through that API without Docker-in-Docker or a host socket.
+- Every other `remote.yml` selection retains GitHub-hosted placement.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
-- Complete PR and Main graphs place only their trusted daemon-free Rust jobs on
-  ARC. Their remaining jobs and the release graph stay hosted.
+- Complete PR graphs place only their trusted native Rust jobs on ARC. Every
+  explicit Main job uses ARC. Remaining PR jobs and the release graph stay
+  hosted.
 
 **BuildKit cache propagation:**
 
@@ -816,12 +822,14 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Delivery CI uses isolated ARC or GitHub-hosted runners with remote BuildKit layers.**
 
-- Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs run
-  in fresh ARC Kata microVMs.
-- Fork PRs and all runtime-dependent, browser, WASM, deployment, and release
-  jobs run on fresh `ubuntu-latest` VMs.
+- Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
+  explicit Main job run in fresh ARC Kata microVMs.
+- Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
+  WASM, and deployment jobs run on fresh `ubuntu-latest` VMs.
 - On ARC, the shared setup creates a `remote` Buildx builder connected to that
   microVM's private BuildKit sidecar over Pod loopback.
+- General ARC jobs execute loaded images through a job-scoped Podman API on Pod
+  loopback inside the same Kata guest. Hive ARC omits this runtime.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
 - Both placements restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web.
@@ -863,9 +871,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use
-  ARC. Fork PRs and all other PR, Main, and release jobs use GitHub-hosted
-  runners.
+- Trusted same-repository PR jobs and every explicit Main job use ARC. Fork PRs,
+  other PR jobs, and release jobs use GitHub-hosted runners.
 - Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
 - WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
 - Main then verifies the fingerprint from a fresh builder.

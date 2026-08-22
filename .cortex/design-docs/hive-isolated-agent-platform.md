@@ -556,9 +556,10 @@ Kubernetes service-account token, host runtime socket, or Docker daemon.
 
 The Kata runner contains Docker client tooling but no Docker daemon. Buildx
 connects over Pod loopback to a private BuildKit sidecar in the same microVM.
-BuildKit is privileged inside that disposable guest so it can create OCI build
-processes. The Pod has no Kubernetes service-account token or host runtime
-socket.
+The general scale set also exposes a rootful Podman Docker-compatible API over
+Pod loopback. It executes images loaded by Main browser and runtime jobs inside
+that job's disposable Kata guest. BuildKit and Podman are privileged inside the
+guest. The Pod has no Kubernetes service-account token or host runtime socket.
 
 The host maintains one loop-backed Btrfs pool on its existing ext4 filesystem.
 This avoids repartitioning the production node. The sparse pool has 768 GiB of
@@ -617,23 +618,28 @@ service container with a Kubernetes-native sidecar. A second non-root sidecar
 executes exported Hive test binaries in their pinned Debian Trixie runtime.
 Both helpers are restartable init sidecars, so Kubernetes stops them when the
 runner exits and the single-use Pod can terminate. The exchange directory is
-private to the job Pod. No Docker daemon is introduced.
+private to the job Pod. The Hive scale set omits Podman. No Docker daemon is
+introduced in either scale set.
 
 The ARC deployment contract explicitly prohibits:
 
 - Docker-in-Docker and any `dockerd` process;
-- nested Docker or Podman engines;
 - Sysbox;
 - host Docker or containerd sockets; and
 - broad hostPath volumes.
+
+The only image runtime is the general scale set's job-scoped Podman API. It is
+reachable only on Pod loopback inside the Kata guest and uses disposable
+`emptyDir` state. It is not Docker-in-Docker and it cannot reach a host engine.
 
 Two narrow hostPaths are permitted for the Task-managed BuildKit pool. The
 trusted preparation container sees only the request directory. The BuildKit
 sidecar sees only its Pod UID job subpath. The runner sees neither path.
 
-The runner image and its Docker CLI remain separate from BuildKit. The CLI does
-not create a Docker engine. A chart-render check verifies the final Helm output
-before deployment so chart defaults cannot silently weaken these boundaries.
+The runner image and its Docker CLI remain separate from BuildKit and Podman.
+The CLI does not create an engine. A chart-render check verifies the final Helm
+output before deployment so chart defaults cannot silently weaken these
+boundaries.
 
 Hive worker Pods have no hostPath volume and never mount the host repository,
 host `CODEX_HOME`, or host Docker socket. They contain no privileged containers

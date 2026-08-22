@@ -310,14 +310,22 @@ reaper_command = reaper_deployment
   .dig("spec", "template", "spec", "containers")
   .find { |container| container["name"] == "controller" }
   .fetch("command")
-  .last
-unless reaper_command.include?("token('/run/kubernetes/token')") &&
-       reaper_command.include?('expected = token("/run/reaper-auth/token")') &&
-       reaper_command.include?("def reconcile_neo4j_policy():") &&
-       reaper_command.include?('"hive-observer-egress"') &&
-       reaper_command.include?('"resourceVersion": policy["metadata"][') &&
-       reaper_command.include?("if error.code != 409:") &&
-       reaper_command.include?("time.sleep(10)")
+unless reaper_command == [
+  "/usr/local/bin/bun",
+  "/usr/local/share/nook/hive-reaper-controller.ts"
+]
+  raise "Hive reaper controller must run through the pinned Bun runtime"
+end
+reaper_source = File.read(
+  File.join(root, "agentic-ai/minds/hive/controller/reaper.ts")
+)
+unless reaper_source.include?('const tokenPath = "/run/kubernetes/token"') &&
+       reaper_source.include?('const reaperTokenPath = "/run/reaper-auth/token"') &&
+       reaper_source.include?("async reconcileNeo4jPolicy()") &&
+       reaper_source.include?('"hive-observer-egress"') &&
+       reaper_source.include?("resourceVersion: policy.metadata.resourceVersion") &&
+       reaper_source.include?("error.status !== 409") &&
+       reaper_source.include?("Bun.sleep(10_000)")
   raise "Hive reaper controller must reload credentials and reject stale policy writes"
 end
 
@@ -491,8 +499,11 @@ unless infra_taskfile.include?(
        infra_taskfile.include?("nook-app/nook-platform/docker/sccache-wrapper.sh")
   raise "Hive deployment build is missing its named nook-sccache-helpers context"
 end
+normalized_recovery_key = "tr -d '\\r\\n' > \"$recovery_key\""
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
-       infra_taskfile.include?("hmac.compare_digest") &&
+       infra_taskfile.include?("openssl dgst -sha256 -mac HMAC") &&
+       infra_taskfile.scan(normalized_recovery_key).length == 2 &&
+       infra_taskfile.include?('test "$actual_mac" = "$expected_mac_value"') &&
        infra_taskfile.include?("hive-system/hive-codex-auth") &&
        infra_taskfile.include?("hive-system/hive-github-publication")
   raise "Hive recovery snapshots are not authenticated before restore"
@@ -750,6 +761,11 @@ unless infra_taskfile.include?("hive:queue:status:") &&
   raise "Hive queue inspection, cancellation, and bounded failed-task recovery must remain Taskfile-owned"
 end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
+unless hive_dockerfile.include?(
+  "COPY hive/controller/reaper.ts /usr/local/share/nook/hive-reaper-controller.ts"
+)
+  raise "Hive runtime must copy the reaper controller from the minds build context"
+end
 hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
@@ -839,10 +855,10 @@ unless root_agentic_taskfile.include?("hive:guest:format:") &&
 end
 
 hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
-unless hive_workflow.scan(".github/scripts/hive-reaper-controller-test.py").length == 2
+unless hive_workflow.scan("agentic-ai/minds/hive/controller/reaper.test.ts").length == 2
   raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end
-unless hive_workflow.scan(".github/scripts/k0s-firewall-rollback-test.py").length == 2
+unless hive_workflow.scan(".github/scripts/k0s-firewall-rollback-test.ts").length == 2
   raise "k0s firewall rollback-test changes must trigger PR and Main verification"
 end
 unless hive_workflow.include?("run: task hive:verify") &&

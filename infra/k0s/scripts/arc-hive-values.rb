@@ -20,6 +20,12 @@ pod_template = hive_values.fetch("template")
 pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/role"] = "arc-hive-runner"
 pod = pod_template.fetch("spec")
 pod["runtimeClassName"] = "kata-qemu-runtime-rs"
+pod.fetch("initContainers").reject! do |container|
+  %w[prepare-container-runtime-state container-runtime].include?(container["name"])
+end
+pod.fetch("volumes").reject! do |volume|
+  volume["name"] == "container-runtime-state"
+end
 
 buildkit = named(pod.fetch("initContainers"), "buildkit")
 buildkit.fetch("resources").fetch("requests")["memory"] = "3Gi"
@@ -69,6 +75,9 @@ pod.fetch("initContainers").concat(
 )
 
 runner = named(pod.fetch("containers"), "runner")
+runner.fetch("env").reject! do |item|
+  %w[DOCKER_HOST NOOK_CONTAINER_RUNTIME].include?(item["name"])
+end
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
 runner.fetch("resources").fetch("limits")["memory"] = "5Gi"
 runner.fetch("volumeMounts") << {

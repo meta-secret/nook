@@ -105,6 +105,10 @@ tasks:
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
+        test "$(grep -c 'tcp://127.0.0.1:2375' "$runner_render")" -ge 3
+        grep -A5 'startupProbe:' "$runner_render" | grep -q -- '- /usr/bin/podman'
+        grep -q -- '--storage-driver overlay' "$runner_render"
+        grep -q 'quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750' "$runner_render"
         grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1' "$runner_render"
         grep -q 'imagePullPolicy: Never' "$runner_render"
         grep -q -- '--oci-worker-snapshotter' "$runner_render"
@@ -162,7 +166,23 @@ tasks:
           pod
         end
 
-        rendered_pod(ARGV[0], "nook-k0s")
+        general_pod = rendered_pod(ARGV[0], "nook-k0s")
+        general_init_containers = general_pod.fetch("initContainers").to_h do |container|
+          [container["name"], container]
+        end
+        unless general_init_containers.fetch("container-runtime", {})["restartPolicy"] == "Always"
+          raise "general ARC Podman API is not a native sidecar"
+        end
+        general_runner = general_pod.fetch("containers").find do |container|
+          container["name"] == "runner"
+        end
+        general_env = general_runner.fetch("env", []).to_h do |item|
+          [item["name"], item["value"]]
+        end
+        unless general_env["DOCKER_HOST"] == "tcp://127.0.0.1:2375" &&
+            general_env["NOOK_CONTAINER_RUNTIME"] == "podman"
+          raise "general ARC runner lacks its private Podman API"
+        end
         hive_pod = rendered_pod(ARGV[1], "nook-k0s-hive")
         unless hive_pod["runtimeClassName"] == "kata-qemu-runtime-rs"
           raise "Hive ARC scale set must use Kata QEMU runtime-rs"
@@ -172,6 +192,9 @@ tasks:
         end
         hive_init_containers = hive_pod.fetch("initContainers").to_h do |container|
           [container["name"], container]
+        end
+        if hive_init_containers.key?("container-runtime")
+          raise "Hive ARC must not carry the general Podman runtime"
         end
         neo4j_image = hive_init_containers.fetch("neo4j", {}).fetch("image", "")
         unless neo4j_image.split("@", 2).first == "neo4j:2026.06.0-community"
@@ -188,9 +211,12 @@ tasks:
         unless runner_env["NOOK_ARC_HIVE"] == "1"
           raise "Hive ARC runner lacks its direct-test marker"
         end
+        if runner_env.key?("DOCKER_HOST") || runner_env.key?("NOOK_CONTAINER_RUNTIME")
+          raise "Hive ARC runner must not target the general Podman API"
+        end
         RUBY
         if grep -Eq 'docker:dind|dockerd|docker\.sock|sysbox|containerMode:' "$runner_render"; then
-          echo "Rendered ARC runner violates the no-nested-engine contract" >&2
+          echo "Rendered ARC runner violates the no-DinD or host-engine contract" >&2
           exit 1
         fi
         grep -q 'kind: Deployment' "$controller_render"
