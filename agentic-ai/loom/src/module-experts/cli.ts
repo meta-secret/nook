@@ -1,23 +1,60 @@
 #!/usr/bin/env bun
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import { CodexSdkAgentRuntime } from '../agent-workflow/codex-runtime.ts';
 import { auditModuleExperts } from './audit.ts';
 import type { AuditModuleExpertsArgs } from './audit.ts';
+import {
+  decodeModuleExpertInvocationRequest,
+  invokeModuleExpert,
+} from './invoke.ts';
+import type { InvokeModuleExpertArgs } from './invoke.ts';
 
-const HELP = `Loom module expert catalog audit
+const HELP = `Loom named module experts
 
 Usage:
   loom-module-experts validate --working-directory <repo-root>
+  loom-module-experts invoke --request <request.json> --working-directory <repo-root>
 `;
 
-type ModuleExpertCommandLine = {
+enum ModuleExpertCommandKind {
+  Validate = 'validate',
+  Invoke = 'invoke',
+}
+
+export type ValidateModuleExpertCommandLine = {
+  readonly kind: ModuleExpertCommandKind.Validate;
   readonly workingDirectory: string;
 };
 
-function main(): number {
-  const commandLine = parseCommandLine(process.argv.slice(2));
+export type InvokeModuleExpertCommandLine = {
+  readonly kind: ModuleExpertCommandKind.Invoke;
+  readonly requestPath: string;
+  readonly workingDirectory: string;
+};
+
+export type ModuleExpertCommandLine =
+  ValidateModuleExpertCommandLine | InvokeModuleExpertCommandLine;
+
+async function main(): Promise<number> {
+  const commandLine = parseModuleExpertCommandLine(process.argv.slice(2));
   if (!commandLine) {
     console.error(HELP);
     return 2;
+  }
+  if (commandLine.kind === ModuleExpertCommandKind.Invoke) {
+    const serialized = await readFile(commandLine.requestPath, 'utf8');
+    const request = decodeModuleExpertInvocationRequest(serialized);
+    const runtime = new CodexSdkAgentRuntime<string, string>();
+    const invokeArgs: InvokeModuleExpertArgs = {
+      repoRoot: commandLine.workingDirectory,
+      request,
+      runtime,
+      signal: AbortSignal.timeout(300_000),
+    };
+    const result = await invokeModuleExpert(invokeArgs);
+    console.log(JSON.stringify(result));
+    return 0;
   }
   const auditArgs: AuditModuleExpertsArgs = {
     repoRoot: commandLine.workingDirectory,
@@ -27,19 +64,45 @@ function main(): number {
   return report.auditOk ? 0 : 1;
 }
 
-function parseCommandLine(
+export function parseModuleExpertCommandLine(
   argv: readonly string[],
 ): ModuleExpertCommandLine | false {
   if (
+    argv.length === 5 &&
+    argv[0] === ModuleExpertCommandKind.Invoke &&
+    argv[1] === '--request' &&
+    argv[2] &&
+    !argv[2].startsWith('--') &&
+    argv[3] === '--working-directory' &&
+    argv[4] &&
+    !argv[4].startsWith('--')
+  ) {
+    return {
+      kind: ModuleExpertCommandKind.Invoke,
+      requestPath: resolve(argv[2]),
+      workingDirectory: resolve(argv[4]),
+    };
+  }
+  if (
     argv.length !== 3 ||
-    argv[0] !== 'validate' ||
+    argv[0] !== ModuleExpertCommandKind.Validate ||
     argv[1] !== '--working-directory' ||
     !argv[2] ||
     argv[2].startsWith('--')
   ) {
     return false;
   }
-  return { workingDirectory: resolve(argv[2]) };
+  return {
+    kind: ModuleExpertCommandKind.Validate,
+    workingDirectory: resolve(argv[2]),
+  };
 }
 
-process.exit(await Promise.resolve(main()));
+if (import.meta.main) {
+  try {
+    process.exit(await main());
+  } catch {
+    console.error('Module expert command failed.');
+    process.exit(1);
+  }
+}

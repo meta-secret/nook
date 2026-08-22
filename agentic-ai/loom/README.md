@@ -138,6 +138,29 @@ The audit verifies all production Rust and web modules are routed exactly once.
 It also enforces the research exclusion and the single `internal_api_expert`
 boundary for both WASM crates and generated bindings.
 
+Invoke one registered expert with an agent-owned JSON request:
+
+```json
+{
+  "expert": "core_expert",
+  "sourceCommit": "<40-character-commit-sha>",
+  "task": "inspect-core-contract",
+  "instruction": "Describe the smallest external API required by nook-wasm."
+}
+```
+
+```bash
+task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
+```
+
+The command validates the complete catalog and selected TOML definition before
+starting one isolated Codex thread. The request accepts no runtime permissions,
+tools, model, parent, successors, or graph. The expert is read-only and offline;
+native delegation, apps, and plugins remain disabled. The JSON result contains
+the selected role, definition digest, bounded runtime activities, thread ID, and
+typed `cortex-evidence` output. The delivery owner remains responsible for
+recording the attempt, aggregation, continuation, and lifecycle state.
+
 ## Prerequisites
 
 Bun must be installed (`bun --version`). Stop and install Bun if it is missing.

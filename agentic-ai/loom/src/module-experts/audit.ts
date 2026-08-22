@@ -12,7 +12,10 @@ import {
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_RESEARCH_ROOT,
 } from './catalog.ts';
-import type { ModuleExpertProfile } from './catalog.ts';
+import type {
+  ModuleExpertGeneratedScope,
+  ModuleExpertProfile,
+} from './catalog.ts';
 import {
   MODULE_EXPERT_CODEX_OPTIONS,
   moduleExpertThreadOptions,
@@ -82,6 +85,27 @@ type ModuleExpertValidationContext = {
   readonly findings: ModuleExpertAuditFinding[];
   readonly repoRoot: string;
 };
+
+export type AuditGeneratedScopeProducerContractArgs = {
+  readonly repoRoot: string;
+  readonly generatedScope: ModuleExpertGeneratedScope;
+};
+
+export function auditGeneratedScopeProducerContract(
+  args: AuditGeneratedScopeProducerContractArgs,
+): readonly ModuleExpertAuditFinding[] {
+  const findings: ModuleExpertAuditFinding[] = [];
+  const context: ModuleExpertValidationContext = {
+    findings,
+    repoRoot: args.repoRoot,
+  };
+  const validationArgs: ValidateGeneratedScopeProducerArgs = {
+    context,
+    generatedScope: args.generatedScope,
+  };
+  validateGeneratedScopeProducer(validationArgs);
+  return findings;
+}
 
 function validateProfiles(context: ModuleExpertValidationContext): void {
   const names = new Set<string>();
@@ -187,7 +211,11 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
     const validMarkers =
       generatedScope.requiredMarkers.length > 0 &&
       generatedScope.requiredMarkers.every(
-        (marker) => safeRepoPath(marker) && !marker.includes('/'),
+        (marker) =>
+          safeRepoPath(marker.path) &&
+          !marker.path.includes('/') &&
+          marker.producerEvidence.length > 0 &&
+          marker.producerEvidence.every(validProducerEvidence),
       );
     if (!validMarkers) {
       args.context.findings[args.context.findings.length] = {
@@ -209,34 +237,65 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
           'WASM generated scopes require sealed, workspace-materializer, and production selectors.',
       };
     }
-    const producerPath = join(
-      args.context.repoRoot,
-      generatedScope.producerPath,
-    );
-    if (!existsSync(producerPath)) {
+    const producerValidationArgs: ValidateGeneratedScopeProducerArgs = {
+      context: args.context,
+      generatedScope,
+    };
+    validateGeneratedScopeProducer(producerValidationArgs);
+  }
+}
+
+type ValidateGeneratedScopeProducerArgs = {
+  readonly context: ModuleExpertValidationContext;
+  readonly generatedScope: ModuleExpertGeneratedScope;
+};
+
+function validateGeneratedScopeProducer(
+  args: ValidateGeneratedScopeProducerArgs,
+): void {
+  const producerPath = join(
+    args.context.repoRoot,
+    args.generatedScope.producerPath,
+  );
+  if (!existsSync(producerPath)) {
+    args.context.findings[args.context.findings.length] = {
+      code: 'missing-generated-scope-producer',
+      path: args.generatedScope.producerPath,
+      message: `Generated scope producer does not exist: ${args.generatedScope.producerPath}`,
+    };
+    return;
+  }
+  const producer = readFileSync(producerPath, 'utf8');
+  if (!producer.includes(args.generatedScope.producerContains)) {
+    args.context.findings[args.context.findings.length] = {
+      code: 'generated-scope-producer-drift',
+      path: args.generatedScope.producerPath,
+      message: `Generated scope producer no longer declares ${args.generatedScope.path}.`,
+    };
+  }
+  const selectors = [
+    args.generatedScope.sealedSelector,
+    args.generatedScope.workspaceMaterializerSelector,
+    args.generatedScope.productionSelector,
+  ];
+  for (const selector of selectors) {
+    if (!producer.includes(`\n  ${selector}:`)) {
       args.context.findings[args.context.findings.length] = {
-        code: 'missing-generated-scope-producer',
-        path: generatedScope.producerPath,
-        message: `Generated scope producer does not exist: ${generatedScope.producerPath}`,
+        code: 'generated-scope-selector-drift',
+        path: args.generatedScope.producerPath,
+        message: `Generated scope producer no longer declares ${selector}.`,
       };
-      continue;
     }
-    const producer = readFileSync(producerPath, 'utf8');
-    if (!producer.includes(generatedScope.producerContains)) {
+  }
+  for (const marker of args.generatedScope.requiredMarkers) {
+    if (
+      marker.producerEvidence.some((evidence) => !producer.includes(evidence))
+    ) {
       args.context.findings[args.context.findings.length] = {
-        code: 'generated-scope-producer-drift',
-        path: generatedScope.producerPath,
-        message: `Generated scope producer no longer declares ${generatedScope.path}.`,
+        code: 'generated-scope-marker-producer-drift',
+        path: args.generatedScope.producerPath,
+        message: `Generated scope producer no longer proves output marker ${marker.path} for ${args.generatedScope.path}.`,
       };
-    }
-    for (const selector of selectors) {
-      if (!producer.includes(`\n  ${selector}:`)) {
-        args.context.findings[args.context.findings.length] = {
-          code: 'generated-scope-selector-drift',
-          path: generatedScope.producerPath,
-          message: `Generated scope producer no longer declares ${selector}.`,
-        };
-      }
     }
   }
 }
@@ -300,7 +359,12 @@ function validateInternalApiProfile(
     );
     if (
       !generatedScope ||
-      markers.some((marker) => !generatedScope.requiredMarkers.includes(marker))
+      markers.some(
+        (marker) =>
+          !generatedScope.requiredMarkers.some(
+            (requiredMarker) => requiredMarker.path === marker,
+          ),
+      )
     ) {
       context.findings[context.findings.length] = {
         code: 'incomplete-generated-scope-contract',
@@ -573,6 +637,18 @@ function parseAgentDefinition(source: string): ParsedAgentDefinition | false {
 
 function safeIdentifier(value: string): boolean {
   return value.length <= 64 && /^[a-z][a-z0-9_]*$/u.test(value);
+}
+
+function validProducerEvidence(value: string): boolean {
+  return (
+    value.length > 0 &&
+    value.length <= 512 &&
+    value.trim() === value &&
+    !Array.from(value).some((character) => {
+      const code = character.charCodeAt(0);
+      return code < 32 || code === 127;
+    })
+  );
 }
 
 function safeRepoPath(value: string): boolean {

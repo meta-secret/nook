@@ -78,6 +78,16 @@ tasks:
         bun run --cwd agentic-ai/loom module-experts --
         validate --working-directory "{{.REPO_ROOT}}"
 
+  loom:module-experts:invoke:
+    desc: Invoke one registered module expert through the isolated read-only Codex runtime.
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - >-
+        bun agentic-ai/loom/src/module-experts/cli.ts
+        invoke --request "{{.REQUEST}}" --working-directory "{{.REPO_ROOT}}"
+
   loom:run:
     desc: Run Loom with a domain YAML request (CONFIG=<request.yaml>).
     deps: [loom:install]

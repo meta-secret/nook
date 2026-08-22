@@ -20,8 +20,13 @@ import type { RuntimeActivityObservation } from './events.ts';
 import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
 import {
-  MODULE_EXPERT_CODEX_OPTIONS,
   moduleExpertThreadOptions,
+  withModuleExpertRuntimeIsolation,
+} from '../module-experts/runtime-contract.ts';
+import type {
+  ModuleExpertRuntimeIsolation,
+  ModuleExpertRuntimeIsolationRequest,
+  ModuleExpertRuntimeIsolationUse,
 } from '../module-experts/runtime-contract.ts';
 
 export enum AgentSourceStabilityPhase {
@@ -39,12 +44,6 @@ export class CodexSdkAgentRuntime<
   TTask extends string,
   TAgent extends string,
 > implements AgentTaskRuntime<TTask, TAgent> {
-  readonly codex: Codex;
-
-  constructor() {
-    this.codex = new Codex(MODULE_EXPERT_CODEX_OPTIONS);
-  }
-
   async executeAgent(
     invocation: AgentExecutionInvocation<TTask, TAgent>,
   ): Promise<AgentExecutionCompletion> {
@@ -53,73 +52,102 @@ export class CodexSdkAgentRuntime<
     ) {
       throw new Error('Write-capable Codex workflow workers are not enabled.');
     }
-    const beforeAttempt: AgentSourceStabilityCheck = {
-      workingDirectory: invocation.workingDirectory,
-      sourceCommit: invocation.sourceCommit,
-      phase: AgentSourceStabilityPhase.BeforeAttempt,
+    const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+      parentEnvironment: process.env,
     };
-    assertAgentSourceStable(beforeAttempt);
-    try {
-      const moduleExpertThreadOptionsArgs = {
-        workingDirectory: invocation.workingDirectory,
+    const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
+      {
+        isolationRequest,
+        run: async (isolation) => {
+          const beforeAttempt: AgentSourceStabilityCheck = {
+            workingDirectory: invocation.workingDirectory,
+            sourceCommit: invocation.sourceCommit,
+            phase: AgentSourceStabilityPhase.BeforeAttempt,
+          };
+          assertAgentSourceStable(beforeAttempt);
+          try {
+            const isolatedExecution: IsolatedAgentExecution<TTask, TAgent> = {
+              invocation,
+              isolation,
+            };
+            return await executeIsolatedAgent(isolatedExecution);
+          } finally {
+            const afterAttempt: AgentSourceStabilityCheck = {
+              workingDirectory: invocation.workingDirectory,
+              sourceCommit: invocation.sourceCommit,
+              phase: AgentSourceStabilityPhase.AfterAttempt,
+            };
+            assertAgentSourceStable(afterAttempt);
+          }
+        },
       };
-      const baseThreadOptions = moduleExpertThreadOptions(
-        moduleExpertThreadOptionsArgs,
-      );
-      const threadOptions: ThreadOptions = {
-        ...baseThreadOptions,
-        modelReasoningEffort: reasoningEffort(
-          invocation.agentProfile.reasoningEffort,
-        ),
-      };
-      const thread = this.codex.startThread(threadOptions);
-      const prompt = buildPrompt(invocation);
-      const outputSchema = workflowTaskOutputSchema(
-        invocation.execution.resultKind,
-      );
-      const turnOptions: TurnOptions = {
-        outputSchema,
-        signal: invocation.signal,
-      };
-      const streamedTurn = await thread.runStreamed(prompt, turnOptions);
-      let threadId = '';
-      let serializedOutput = '';
-      for await (const event of streamedTurn.events) {
-        if (event.type === 'thread.started') {
-          threadId = event.thread_id;
-        }
-        if (
-          event.type === 'item.completed' &&
-          event.item.type === 'agent_message'
-        ) {
-          serializedOutput = event.item.text;
-        }
-        const observation = normalizeEvent(event);
-        if (observation) {
-          await invocation.observe(observation);
-        }
-      }
-      if (threadId.length === 0 || serializedOutput.length === 0) {
-        throw new Error(
-          'Codex completed without a thread identity or structured result.',
-        );
-      }
-      const output = decodeWorkflowTaskOutput(serializedOutput);
-      if (output.resultKind !== invocation.execution.resultKind) {
-        throw new Error(
-          `Codex result kind ${output.resultKind} does not match ${invocation.execution.resultKind}.`,
-        );
-      }
-      return { threadId, output };
-    } finally {
-      const afterAttempt: AgentSourceStabilityCheck = {
-        workingDirectory: invocation.workingDirectory,
-        sourceCommit: invocation.sourceCommit,
-        phase: AgentSourceStabilityPhase.AfterAttempt,
-      };
-      assertAgentSourceStable(afterAttempt);
+    return withModuleExpertRuntimeIsolation(isolationUse);
+  }
+}
+
+type IsolatedAgentExecution<TTask extends string, TAgent extends string> = {
+  readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly isolation: ModuleExpertRuntimeIsolation;
+};
+
+async function executeIsolatedAgent<
+  TTask extends string,
+  TAgent extends string,
+>(
+  execution: IsolatedAgentExecution<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
+  const codex = new Codex(execution.isolation.codexOptions);
+  const moduleExpertThreadOptionsArgs = {
+    workingDirectory: execution.invocation.workingDirectory,
+  };
+  const baseThreadOptions = moduleExpertThreadOptions(
+    moduleExpertThreadOptionsArgs,
+  );
+  const threadOptions: ThreadOptions = {
+    ...baseThreadOptions,
+    modelReasoningEffort: reasoningEffort(
+      execution.invocation.agentProfile.reasoningEffort,
+    ),
+  };
+  const thread = codex.startThread(threadOptions);
+  const prompt = buildPrompt(execution.invocation);
+  const outputSchema = workflowTaskOutputSchema(
+    execution.invocation.execution.resultKind,
+  );
+  const turnOptions: TurnOptions = {
+    outputSchema,
+    signal: execution.invocation.signal,
+  };
+  const streamedTurn = await thread.runStreamed(prompt, turnOptions);
+  let threadId = '';
+  let serializedOutput = '';
+  for await (const event of streamedTurn.events) {
+    if (event.type === 'thread.started') {
+      threadId = event.thread_id;
+    }
+    if (
+      event.type === 'item.completed' &&
+      event.item.type === 'agent_message'
+    ) {
+      serializedOutput = event.item.text;
+    }
+    const observation = normalizeEvent(event);
+    if (observation) {
+      await execution.invocation.observe(observation);
     }
   }
+  if (threadId.length === 0 || serializedOutput.length === 0) {
+    throw new Error(
+      'Codex completed without a thread identity or structured result.',
+    );
+  }
+  const output = decodeWorkflowTaskOutput(serializedOutput);
+  if (output.resultKind !== execution.invocation.execution.resultKind) {
+    throw new Error(
+      `Codex result kind ${output.resultKind} does not match ${execution.invocation.execution.resultKind}.`,
+    );
+  }
+  return { threadId, output };
 }
 
 export function assertAgentSourceStable(

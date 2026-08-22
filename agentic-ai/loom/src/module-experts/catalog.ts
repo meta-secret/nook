@@ -25,7 +25,12 @@ export type ModuleExpertGeneratedScope = {
   readonly sealedSelector: string;
   readonly workspaceMaterializerSelector: string;
   readonly productionSelector: string;
-  readonly requiredMarkers: readonly string[];
+  readonly requiredMarkers: readonly ModuleExpertGeneratedMarker[];
+};
+
+export type ModuleExpertGeneratedMarker = {
+  readonly path: string;
+  readonly producerEvidence: readonly string[];
 };
 
 const PACKAGE_AUTHORITY_PATH = '.cortex/architecture/packages.md';
@@ -56,9 +61,26 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
         workspaceMaterializerSelector: 'wasm:build:fast',
         productionSelector: 'wasm:build:prod',
         requiredMarkers: [
-          '.wasm-source-sha256',
-          'nook_companion_wasm.js',
-          'nook_companion_wasm_bg.wasm',
+          {
+            path: '.wasm-source-sha256',
+            producerEvidence: [
+              'companion_stamp="{{.WEB_SHARED_ROOT}}/src/extension/nook-companion-wasm/.wasm-source-sha256"',
+              'echo "$desired" > "$companion_stamp"',
+            ],
+          },
+          {
+            path: 'nook_companion_wasm.js',
+            producerEvidence: [
+              'wasm-pack build nook-companion-wasm --target web --out-dir "../../nook-web/nook-web-shared/src/extension/nook-companion-wasm" --out-name nook_companion_wasm',
+            ],
+          },
+          {
+            path: 'nook_companion_wasm_bg.wasm',
+            producerEvidence: [
+              'wasm-pack build nook-companion-wasm --target web --out-dir "../../nook-web/nook-web-shared/src/extension/nook-companion-wasm" --out-name nook_companion_wasm',
+              'companion_output="{{.WEB_SHARED_ROOT}}/src/extension/nook-companion-wasm/nook_companion_wasm_bg.wasm"',
+            ],
+          },
         ],
       },
       {
@@ -70,10 +92,33 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
         workspaceMaterializerSelector: 'wasm:build:fast',
         productionSelector: 'wasm:build:prod',
         requiredMarkers: [
-          '.wasm-source-sha256',
-          'nook-wasm-build-mode',
-          'nook_wasm.js',
-          'nook_wasm_bg.wasm',
+          {
+            path: '.wasm-source-sha256',
+            producerEvidence: [
+              'vault_stamp="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/.wasm-source-sha256"',
+              'echo "$desired" > "$vault_stamp"',
+            ],
+          },
+          {
+            path: 'nook-wasm-build-mode',
+            producerEvidence: [
+              'vault_build_mode="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook-wasm-build-mode"',
+              'echo "$stamp_mode" > "$vault_build_mode"',
+            ],
+          },
+          {
+            path: 'nook_wasm.js',
+            producerEvidence: [
+              'wasm-pack build nook-wasm --target web --out-dir "../../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" --out-name nook_wasm',
+            ],
+          },
+          {
+            path: 'nook_wasm_bg.wasm',
+            producerEvidence: [
+              'wasm-pack build nook-wasm --target web --out-dir "../../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm" --out-name nook_wasm',
+              'vault_output="{{.WEB_SHARED_ROOT}}/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm"',
+            ],
+          },
         ],
       },
     ],

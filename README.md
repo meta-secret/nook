@@ -429,6 +429,11 @@ Run **`task loom:module-experts:validate`** to verify complete production-module
 routing, runtime isolation, generated WASM binding contracts, the
 `internal_api_expert` boundary, and research exclusions. Loom journal creation
 and replay reject agent lineage deeper than three levels.
+Invoke one selected role with
+**`task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json`**.
+The request binds an exact source commit, registered expert, stable task ID, and
+bounded instruction. Loom returns typed evidence but does not schedule a
+successor or mutate lifecycle state.
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
@@ -436,6 +441,7 @@ task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit
+task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD

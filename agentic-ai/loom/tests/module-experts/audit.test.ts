@@ -10,10 +10,21 @@ import {
 } from 'node:fs/promises';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { describe, expect, test } from 'bun:test';
-import { auditModuleExperts } from '../../src/module-experts/audit.ts';
-import type { AuditModuleExpertsArgs } from '../../src/module-experts/audit.ts';
+import {
+  auditGeneratedScopeProducerContract,
+  auditModuleExperts,
+} from '../../src/module-experts/audit.ts';
+import type {
+  AuditGeneratedScopeProducerContractArgs,
+  AuditModuleExpertsArgs,
+} from '../../src/module-experts/audit.ts';
+import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
+import type {
+  ModuleExpertGeneratedMarker,
+  ModuleExpertGeneratedScope,
+} from '../../src/module-experts/catalog.ts';
 import {
   MODULE_EXPERT_CODEX_OPTIONS,
   moduleExpertThreadOptions,
@@ -28,6 +39,29 @@ import type {
 } from '../../src/module-experts/cargo-workspace.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
+
+type GeneratedMarkerEvidenceMutation = {
+  readonly generatedScope: ModuleExpertGeneratedScope;
+  readonly marker: ModuleExpertGeneratedMarker;
+  readonly evidence: string;
+};
+
+const internalApiProfile = MODULE_EXPERT_CATALOG.find(
+  (profile) => profile.name === 'internal_api_expert',
+);
+if (!internalApiProfile) {
+  throw new Error('The internal API expert profile is required by this test.');
+}
+const GENERATED_MARKER_MUTATIONS: readonly GeneratedMarkerEvidenceMutation[] =
+  internalApiProfile.generatedScopePaths.flatMap((generatedScope) =>
+    generatedScope.requiredMarkers.flatMap((marker) =>
+      marker.producerEvidence.map((evidence) => ({
+        generatedScope,
+        marker,
+        evidence,
+      })),
+    ),
+  );
 
 describe('module expert audit', () => {
   test('accepts the complete read-only project catalog', () => {
@@ -167,6 +201,48 @@ describe('module expert audit', () => {
       false,
     );
   });
+
+  for (const mutation of GENERATED_MARKER_MUTATIONS) {
+    test(`rejects producer drift for ${mutation.marker.path} in ${mutation.generatedScope.path}`, async () => {
+      const fixtureRoot = await mkdtemp(
+        join(tmpdir(), 'loom-generated-scope-'),
+      );
+      const removeOptions: RmOptions = { recursive: true, force: true };
+      try {
+        const sourceProducerPath = join(
+          REPO_ROOT,
+          mutation.generatedScope.producerPath,
+        );
+        const fixtureProducerPath = join(
+          fixtureRoot,
+          mutation.generatedScope.producerPath,
+        );
+        const directoryOptions: MakeDirectoryOptions = { recursive: true };
+        await mkdir(dirname(fixtureProducerPath), directoryOptions);
+        const producerSource = await readFile(sourceProducerPath, 'utf8');
+        expect(producerSource.includes(mutation.evidence)).toBe(true);
+        const driftedProducerSource = producerSource.replace(
+          mutation.evidence,
+          `drifted-${mutation.marker.path}`,
+        );
+        await writeFile(fixtureProducerPath, driftedProducerSource, 'utf8');
+        const auditArgs: AuditGeneratedScopeProducerContractArgs = {
+          repoRoot: fixtureRoot,
+          generatedScope: mutation.generatedScope,
+        };
+        const findings = auditGeneratedScopeProducerContract(auditArgs);
+        const markerFinding = findings.find(
+          (finding) =>
+            finding.code === 'generated-scope-marker-producer-drift' &&
+            finding.message.includes(mutation.marker.path),
+        );
+
+        expect(markerFinding?.message).toContain(mutation.marker.path);
+      } finally {
+        await rm(fixtureRoot, removeOptions);
+      }
+    });
+  }
 });
 
 async function moduleExpertFixture(): Promise<string> {
