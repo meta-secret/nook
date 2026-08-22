@@ -23,6 +23,38 @@ fn read_fallible(path: &str) -> anyhow::Result<String> {
 }
 
 #[test]
+fn arc_smoke_refreshes_the_current_sandbox_before_persisting_teardown_state() -> anyhow::Result<()>
+{
+    let tasks = read("infra/tasks/arc.yml");
+    let completion = tasks
+        .split("if test \"$status\" = completed; then")
+        .nth(1)
+        .and_then(|tail| tail.split("discovered_runner=\"$(").next())
+        .context("ARC smoke must define its completed-run branch")?;
+    let refresh = completion
+        .find("completion_sandbox_id=\"$(")
+        .context("ARC smoke completion must refresh the current sandbox")?;
+    let identity_check = completion
+        .find("test \"$completion_sandbox_id\" != \"$runner_sandbox_id\"")
+        .context("ARC smoke completion must reject a changed sandbox")?;
+    let persist = completion
+        .find("\"$run_id\" \"$runner_uid\" \"$runner_sandbox_id\" > \"$state_file\"")
+        .context("ARC smoke completion must persist teardown state")?;
+
+    assert!(
+        completion.contains("lost its current Kata sandbox before teardown tracking")
+            && completion.contains("invalid or ambiguous current Kata sandbox")
+            && completion.contains("changed Kata sandboxes before teardown tracking"),
+        "ARC smoke completion must fail closed on missing, ambiguous, or changed sandboxes"
+    );
+    assert!(
+        refresh < identity_check && identity_check < persist,
+        "ARC smoke must refresh and verify the current sandbox before persisting teardown state"
+    );
+    Ok(())
+}
+
+#[test]
 fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
     let root = repository_root();
     let output = Command::new("bash")
