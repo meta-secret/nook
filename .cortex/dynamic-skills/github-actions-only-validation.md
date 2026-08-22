@@ -1,12 +1,13 @@
-# GitHub-Hosted Execution and Validation
+# GitHub Actions Execution and Validation
 
 ## Purpose
 
 Keep agent machines on the lightest possible local work.
 
 Use the configured GitHub Actions runner for iterative builds and tests.
-Trusted native Rust and Rust ecosystem merge gates may use ARC. Fork PRs and
-runtime-dependent gates stay GitHub-hosted.
+Trusted native Rust and Rust ecosystem PR gates plus every explicit Main job
+use ARC. Fork PRs, Dependabot PRs, releases, and other non-Main runtime-
+dependent gates stay GitHub-hosted.
 
 ## Problem Pattern
 
@@ -26,9 +27,12 @@ Validation has three layers:
   feedback than complete validation.
   - Do not batch broad gates sequentially before complete validation.
 - **Required remotely:** explicitly trigger complete exact-head PR validation.
-  - Trusted same-repository native Rust and Rust ecosystem jobs may select ARC.
-  - Fork PRs and runtime-dependent, browser, WASM, deployment, and release jobs
-    stay on GitHub-hosted workers.
+  - Trusted same-repository native Rust and Rust ecosystem PR jobs and every
+    explicit Main job select ARC.
+  - General ARC provides Main's job-scoped image runtime inside the disposable
+    Kata guest.
+  - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
+    browser, WASM, and deployment jobs stay on GitHub-hosted workers.
 
 Validate request example:
 

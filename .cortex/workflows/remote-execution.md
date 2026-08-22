@@ -93,15 +93,18 @@ Security and cache rules:
   - Execute exported Hive tests in a pinned Trixie runtime sidecar inside the
     guest.
   - Keep fork and Dependabot PR verification on GitHub-hosted capacity.
-- Prohibit Docker-in-Docker, Docker daemons, nested Docker or Podman engines,
-  Sysbox, host runtime sockets, and broad hostPath volumes.
+- Prohibit Docker-in-Docker, Docker daemons, Sysbox, host runtime sockets, and
+  broad hostPath volumes.
+- Permit the general scale set's job-scoped Podman API only on Pod loopback
+  inside the disposable Kata guest. Hive omits it.
 - Permit only the Task-managed ARC BuildKit request and job hostPaths.
   - A trusted init container sees only the request directory.
   - It submits its Kubernetes Pod UID.
   - The host helper creates a reflink clone from the trusted seed.
   - The BuildKit sidecar mounts only its `jobs/<Pod UID>` subpath.
   - The runner container never mounts the pool.
-- BuildKit may be privileged only inside the isolated Kata guest.
+- BuildKit and the general Podman sidecar may be privileged only inside the
+  isolated Kata guest.
 - Import an exact BuildKit lineage alone when it exists.
 - Do not pass a probed, absent exact preflight ref to BuildKit.
 - Seed that scope from trusted Main when it exists.

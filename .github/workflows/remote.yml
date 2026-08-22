@@ -52,9 +52,9 @@ jobs:
   batch:
     if: inputs.task != 'rust-cache:promote' || inputs.tasks != ''
     name: Remote / ${{ inputs.tasks || inputs.task }}
-    # Only selections that never need a Docker image runtime may use the
-    # daemon-free ARC pool. The remaining catalog stays on hosted runners.
-    runs-on: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}
+    # Focused ARC selections use the private BuildKit worker. The explicit
+    # runtime smoke also proves the job-scoped Podman Docker API in Kata.
+    runs-on: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}

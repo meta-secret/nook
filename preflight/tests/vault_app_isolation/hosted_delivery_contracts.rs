@@ -56,6 +56,7 @@ fn assert_workflow_runtime_contract(root: &Path) {
 fn assert_docker_setup_contract(root: &Path) {
     let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
     let pr = read(root, ".github/workflows/pr.yml");
+    let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
         "docker/login-action@v4",
@@ -78,6 +79,9 @@ fn assert_docker_setup_contract(root: &Path) {
         "[ \"$event_name\" != \"push\" ] || [ \"$git_ref\" != \"refs/heads/main\" ]",
         "main-cache-only",
         "main-cache-only requires cache-write=false",
+        "Verify ARC container runtime",
+        "tcp://127.0.0.1:2375",
+        "docker info >/dev/null",
     ] {
         assert!(
             setup.contains(required),
@@ -98,6 +102,32 @@ fn assert_docker_setup_contract(root: &Path) {
             && !setup.contains("/etc/docker/daemon.json"),
         "delivery setup must login to registry.dev.nokey.sh and must not reconfigure or restart Docker"
     );
+    for required in [
+        "name: container-runtime",
+        "quay.io/podman/stable:v5.8.4@sha256:",
+        "tcp://0.0.0.0:2375",
+        "name: NOOK_CONTAINER_RUNTIME",
+        "value: podman",
+        "value: tcp://127.0.0.1:2375",
+        "sizeLimit: 24Gi",
+    ] {
+        assert!(
+            arc_values.contains(required),
+            "general ARC runtime contract is missing: {required}"
+        );
+    }
+    for prohibited in [
+        "docker:dind",
+        "dockerd",
+        "docker.sock",
+        "containerd.sock",
+        "sysbox",
+    ] {
+        assert!(
+            !arc_values.contains(prohibited),
+            "general ARC runtime must not expose prohibited engine boundary: {prohibited}"
+        );
+    }
 }
 
 fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {

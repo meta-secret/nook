@@ -133,13 +133,43 @@ template:
             mountPath: /tmp
         resources:
           requests:
-            cpu: 750m
-            memory: 4Gi
+            cpu: 500m
+            memory: 3Gi
             ephemeral-storage: 4Gi
           limits:
             cpu: "6"
-            memory: 10Gi
+            memory: 8Gi
             ephemeral-storage: 32Gi
+      - name: container-runtime
+        image: quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750
+        restartPolicy: Always
+        command: ["/usr/bin/podman"]
+        args:
+          - system
+          - service
+          - --time=0
+          - tcp://0.0.0.0:2375
+        securityContext:
+          privileged: true
+        startupProbe:
+          tcpSocket:
+            port: 2375
+          periodSeconds: 2
+          failureThreshold: 90
+        volumeMounts:
+          - name: container-runtime-state
+            mountPath: /var/lib/containers
+          - name: temporary
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: 250m
+            memory: 1Gi
+            ephemeral-storage: 1Gi
+          limits:
+            cpu: "4"
+            memory: 6Gi
+            ephemeral-storage: 24Gi
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
@@ -151,6 +181,10 @@ template:
             value: "1"
           - name: NOOK_BUILDKIT_ADDR
             value: tcp://127.0.0.1:1234
+          - name: DOCKER_HOST
+            value: tcp://127.0.0.1:2375
+          - name: NOOK_CONTAINER_RUNTIME
+            value: podman
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -181,7 +215,7 @@ template:
             ephemeral-storage: 25Gi
           limits:
             cpu: "2"
-            memory: 6Gi
+            memory: 2Gi
             ephemeral-storage: 100Gi
     volumes:
       - name: work
@@ -201,6 +235,9 @@ template:
       - name: docker-client
         emptyDir:
           sizeLimit: 128Mi
+      - name: container-runtime-state
+        emptyDir:
+          sizeLimit: 24Gi
       - name: temporary
         emptyDir:
           sizeLimit: 50Gi

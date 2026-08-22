@@ -45,14 +45,16 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Commit and invocation scoping prevent concurrent builds from consuming each other's artifacts.
   - `builder-wasm` is never a parent or context of `nook-web`.
 - **Delivery BuildKit is remote-cached across isolated runners.**
-  - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs
-    use fresh ARC Kata microVMs.
+  - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
+    explicit Main job use fresh ARC Kata microVMs.
   - Hive Rust verification uses a dedicated scale-to-zero ARC set with ten-job
     concurrency and a private Neo4j native sidecar.
   - Hive test binaries execute through a pinned Trixie native sidecar inside
     the Kata guest, without Docker run. Both helpers stop with the runner.
-  - Fork PRs, Dependabot PRs, and runtime-dependent, browser, WASM, deployment,
-    and release jobs use ephemeral GitHub-hosted VMs.
+  - The general ARC set exposes a job-scoped Podman Docker-compatible API only
+    inside each disposable Kata guest for Main runtime and browser jobs.
+  - Fork PRs, Dependabot PRs, release jobs, and non-Main runtime-dependent,
+    browser, WASM, and deployment jobs use ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
   - Each fresh ARC guest starts from a private reflink clone of a trusted
     32 GiB BuildKit seed.
@@ -109,15 +111,15 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Use `task format:diff` only when you need the raw patch.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
-  - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the configured ARC scale set.
-  - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set.
+  - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every explicit Main job use the configured ARC scale set.
+  - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use the configured ARC scale set.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set with its native service runtime.
   - Every ARC job receives a fresh Kata microVM and private BuildKit worker.
-  - The general pool uses the approved QEMU fallback; the Hive pool keeps Dragonball.
+  - Both ARC scale sets use the approved QEMU fallback.
   - The private worker mounts only its Pod UID reflink state.
-  - Fork PRs and runtime-dependent, browser, WASM, deployment, release,
-    long-running AI, and scheduled/manual validation use GitHub-hosted
-    `ubuntu-latest`.
+  - Fork PRs, Dependabot PRs, release jobs, and non-Main runtime-dependent,
+    browser, WASM, deployment, long-running AI, and scheduled/manual validation
+    use GitHub-hosted `ubuntu-latest`.
   - Delivery jobs restore scoped BuildKit layers through private Zot.
   - The self-hosted `nook` label remains only for maintenance cleanup.
   - Do not use Blacksmith or other third-party runner labels.
@@ -128,7 +130,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
-  - `preflight` and `rust:ci` may run on a fresh general ARC Kata microVM.
+  - `preflight`, `rust:ci`, and `arc:runtime` may run on a fresh general ARC Kata microVM.
   - `hive:verify` may run on a fresh dedicated Hive ARC Kata microVM.
   - Other selections run on an ephemeral GitHub-hosted runner.
   - A batch shares one checkout, Docker setup, and cache connection.

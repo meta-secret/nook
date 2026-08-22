@@ -103,6 +103,10 @@ const remoteBatch = contract({
   label: "remote task batch",
   source: await read(".github/scripts/remote-task-batch.sh"),
 });
+const runtimeSmoke = contract({
+  label: "ARC runtime smoke",
+  source: await read(".github/scripts/arc-runtime-smoke.sh"),
+});
 const registryTasks = contract({
   label: "registry tasks",
   source: await read("infra/tasks/registry.yml"),
@@ -145,16 +149,17 @@ runners.requireAll([
   "runnerScaleSetName: nook-k0s",
   "minRunners: 0",
   "maxRunners: 10",
-  "requests:\n            cpu: 750m\n            memory: 4Gi",
+  "requests:\n            cpu: 500m\n            memory: 3Gi",
+  "requests:\n            cpu: 250m\n            memory: 1Gi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 250m\n            memory: 1Gi",
-  'limits:\n            cpu: "2"\n            memory: 6Gi',
+  'limits:\n            cpu: "2"\n            memory: 2Gi',
   "runAsNonRoot: true",
   "runtimeClassName: kata-qemu-runtime-rs",
   "--oci-worker-snapshotter",
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
-  'limits:\n            cpu: "6"\n            memory: 10Gi',
+  'limits:\n            cpu: "6"\n            memory: 8Gi',
   '- "24000"',
   'value: "34359738368"',
   "path: /var/lib/nook-arc-buildkit/pool/requests",
@@ -166,6 +171,12 @@ runners.requireAll([
   "privileged: true",
   "NOOK_BUILDKIT_ADDR",
   "tcp://127.0.0.1:1234",
+  "name: container-runtime",
+  "quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750",
+  "tcp://0.0.0.0:2375",
+  "tcp://127.0.0.1:2375",
+  "NOOK_CONTAINER_RUNTIME",
+  "sizeLimit: 24Gi",
   "automountServiceAccountToken: false",
   "ghcr.io/actions/actions-runner:2.336.0@sha256:",
   "docker:29.1.3-cli@sha256:",
@@ -218,6 +229,10 @@ try {
           image: string;
           restartPolicy?: string;
         }>;
+        containers: Array<{
+          name: string;
+          env?: Array<{ name: string; value?: string }>;
+        }>;
         volumes: Array<{ hostPath?: { path: string } }>;
       };
     };
@@ -236,6 +251,17 @@ try {
   const sidecars = new Map(
     hivePod.initContainers.map((item) => [item.name, item]),
   );
+  if (sidecars.has("container-runtime")) {
+    throw new Error("Hive ARC must not carry the general Podman runtime");
+  }
+  const hiveRunner = hivePod.containers.find((item) => item.name === "runner");
+  if (
+    hiveRunner?.env?.some((item) =>
+      ["DOCKER_HOST", "NOOK_CONTAINER_RUNTIME"].includes(item.name),
+    )
+  ) {
+    throw new Error("Hive ARC runner must not target the general Podman API");
+  }
   for (const name of ["neo4j", "hive-test-runtime"]) {
     const sidecar = sidecars.get(name);
     if (sidecar?.restartPolicy !== "Always")
@@ -326,6 +352,7 @@ tasks.count(stateCount);
 
 remoteWorkflow.requireAll([
   "(inputs.tasks || inputs.task) == 'preflight'",
+  "(inputs.tasks || inputs.task) == 'arc:runtime'",
   "runs-on: ubuntu-latest",
   "run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}",
   "vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest'",
@@ -342,12 +369,25 @@ mainWorkflow.count(mainCount);
 remoteBatch.require(
   'rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust',
 );
+remoteBatch.require(
+  'arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh',
+);
 registryTasks.forbid('kubectl create namespace "$namespace" --dry-run=client');
 dockerSetup.requireAll([
   "driver remote",
   "startsWith(runner.name, 'nook-k0s-')",
+  "Verify ARC container runtime",
+  "tcp://127.0.0.1:2375",
+  "docker info >/dev/null",
 ]);
 dockerSetup.forbid("docker-in-docker");
+runtimeSmoke.requireAll([
+  "NOOK_CONTAINER_RUNTIME",
+  "tcp://127.0.0.1:2375",
+  "docker buildx build --load",
+  'docker run --rm "$image"',
+  "ARC BuildKit-to-Podman runtime smoke passed",
+]);
 buildkitPrepare.require("printf '%s\\n' \"$pod_uid\"");
 buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-34359738368");
 buildkitCloner.requireAll([
