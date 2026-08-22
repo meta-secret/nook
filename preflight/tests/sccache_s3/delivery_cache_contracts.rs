@@ -119,7 +119,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(rust_bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
     assert!(rust_bake.contains("rust_wasm_deps_write_scope"));
     assert!(rust_bake.contains(
-        "${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=max,timeout=10m"
+        "${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},timeout=10m"
     ));
     let wasm_source_cache = rust_bake
         .split_once("rust_wasm_source_cache_from =")

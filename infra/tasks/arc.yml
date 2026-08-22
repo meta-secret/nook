@@ -614,42 +614,36 @@ tasks:
           echo "remote: ${remote_sha:-missing}" >&2
           exit 2
         fi
-        known_run_ids="$(
-          gh run list \
-            --repo meta-secret/nook \
-            --workflow remote.yml \
-            --branch "$smoke_ref" \
-            --event workflow_dispatch \
-            --limit 100 \
-            --json databaseId \
-            --jq '.[].databaseId'
-        )"
+        dispatch_nonce="$(openssl rand -hex 16)"
+        expected_run_name="Remote / $smoke_task / $dispatch_nonce"
         gh workflow run remote.yml \
           --repo meta-secret/nook \
           --ref "$smoke_ref" \
-          --raw-field "tasks=$smoke_task"
+          --raw-field "tasks=$smoke_task" \
+          --raw-field "dispatch_nonce=$dispatch_nonce"
         run_id=""
         for _ in $(seq 1 30); do
-          while IFS= read -r candidate; do
-            if test -n "$candidate" &&
-               ! printf '%s\n' "$known_run_ids" | grep -Fxq "$candidate"; then
-              run_id="$candidate"
-              break
-            fi
-          done < <(
+          run_id="$(
             gh run list \
               --repo meta-secret/nook \
               --workflow remote.yml \
               --branch "$smoke_ref" \
               --event workflow_dispatch \
               --limit 100 \
-              --json databaseId \
-              --jq '.[].databaseId'
-          )
+              --json databaseId,displayTitle,headSha |
+              jq -r \
+                --arg title "$expected_run_name" \
+                --arg sha "$head_sha" \
+                '.[] | select(.displayTitle == $title and .headSha == $sha) | .databaseId' |
+              head -n 1
+          )"
           test -n "$run_id" && break
           sleep 2
         done
-        test -n "$run_id"
+        if test -z "$run_id"; then
+          echo "ARC smoke could not find dispatch nonce $dispatch_nonce" >&2
+          exit 1
+        fi
         dispatched_sha="$(
           gh run view "$run_id" \
             --repo meta-secret/nook \

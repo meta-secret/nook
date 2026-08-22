@@ -5,6 +5,7 @@
 # explicitly requested with task pr:validate.
 
 name: Remote task
+run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}
 
 on:
   workflow_dispatch:
@@ -27,6 +28,10 @@ on:
         type: string
       cache_source_sha:
         description: Exact committed source for fingerprint verification (promotion task only)
+        required: false
+        type: string
+      dispatch_nonce:
+        description: Caller correlation nonce for an exact workflow dispatch
         required: false
         type: string
 

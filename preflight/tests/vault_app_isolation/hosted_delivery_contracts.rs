@@ -63,7 +63,8 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}",
         "cache_write_enabled=1",
-        "ARC persistent BuildKit state suppresses isolated registry cache export",
+        "GHA_CACHE_EXPORT_MODE=min",
+        "ARC publishes a minimal exact-SHA handoff",
         "${NOOK_ARC_RUNNER:-}",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
         "event_name=\"${{ github.event_name }}\"",
@@ -78,9 +79,10 @@ fn assert_docker_setup_contract(root: &Path) {
         );
     }
     assert!(
-        pr.contains("ARC persistent BuildKit state retains the verified native graph; registry export skipped")
-            && pr.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then"),
-        "trusted ARC PR native verification must not export a redundant exact-SHA registry cache"
+        pr.contains("name: Publish git-scoped native BuildKit cache")
+            && pr.contains("run: task ci:main:publish-native-cache")
+            && !pr.contains("registry export skipped"),
+        "trusted ARC PR native verification must publish its minimal exact-SHA retry handoff"
     );
     assert!(
         !setup.contains("crazy-max/ghaction-github-runtime")

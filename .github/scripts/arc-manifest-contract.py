@@ -408,7 +408,22 @@ require(
     "runtime-dependent remote jobs must retain hosted capacity",
 )
 require(TASKS, "Successful smoke run did not report", "ARC smoke must verify its runner label")
-require(TASKS, "known_run_ids", "ARC smoke must ignore pre-existing exact-head runs")
+for dispatch_marker in [
+    'dispatch_nonce="$(openssl rand -hex 16)"',
+    '--raw-field "dispatch_nonce=$dispatch_nonce"',
+    '--json databaseId,displayTitle,headSha',
+    ".displayTitle == $title and .headSha == $sha",
+]:
+    require(
+        TASKS,
+        dispatch_marker,
+        "ARC smoke must correlate exactly with its nonce-qualified dispatch",
+    )
+require(
+    REMOTE_WORKFLOW,
+    "run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}",
+    "remote dispatches must expose their caller correlation nonce",
+)
 require(
     REMOTE_BATCH,
     'rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust',

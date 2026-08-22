@@ -396,8 +396,10 @@ Pods instead of queueing work on one persistent Docker host.
 - Main refreshes the default-branch scopes that new PRs may access.
 - Hosted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
-- Trusted ARC PR verification is the exception: each fresh Kata guest reuses a
-  private node-local COW seed and does not export an exact-SHA registry cache.
+- Trusted ARC PR verification reuses a private node-local COW seed for the full
+  writable graph.
+- It exports only a `mode=min` exact-SHA handoff for retries after the disposable
+  guest is removed.
 - A cold PR scope restores trusted Main or a dependency-fingerprint scope.
 - Once an exact PR scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.

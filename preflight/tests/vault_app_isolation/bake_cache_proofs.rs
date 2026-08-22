@@ -459,8 +459,9 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     ] {
         let body = assignment_body(bake, name)?;
         assert!(
-            body.contains("mode=max") && body.contains("${write_cache_repository}"),
-            "{name} must write mode=max under write_cache_repository"
+            body.contains("mode=${GHA_CACHE_EXPORT_MODE}")
+                && body.contains("${write_cache_repository}"),
+            "{name} must use the selected export mode under write_cache_repository"
         );
         assert!(
             !body.contains("ignore-error"),
@@ -473,6 +474,12 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
             "write_cache_repository = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook/remote-buildcache\" : \"nook/buildcache\""
         ),
         "write_cache_repository must map empty suffix to Main buildcache and isolated writes to remote-buildcache"
+    );
+    assert!(
+        app_bake.contains("variable \"GHA_CACHE_EXPORT_MODE\"")
+            && app_bake.contains("default = \"max\"")
+            && rust_bake.matches("mode=${GHA_CACHE_EXPORT_MODE}").count() == 11,
+        "trusted publishers must default to full exports while ARC may select minimal exact-SHA handoffs"
     );
     Ok(())
 }

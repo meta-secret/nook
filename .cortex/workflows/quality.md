@@ -242,7 +242,10 @@ Use this workflow for quality, CI, and deployment changes.
     - BuildKit merges cache importers. List order is not fallback precedence.
     - Docker setup probes every full-graph exact scope separately.
     - A present exact scope is the only importer for that graph.
-    - Exact PR writers publish `mode=max`, so replay keeps the full leaf lineage.
+    - Hosted exact PR writers publish `mode=max`, so replay keeps the full leaf
+      lineage.
+    - ARC exact PR writers publish `mode=min` retry handoffs because their full
+      working graph already lives in private node-local state during the job.
     - Docker setup also probes trusted Main native and WASM source refs.
     - A present Main source graph is the only importer for that solve.
     - Shorter dependency indexes join only while that Main source ref is absent.
@@ -334,7 +337,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Forks stay secret-free and cold-compile.
     - Hosted PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
-      into private job-local BuildKit state without registry export.
+      into private job-local BuildKit state.
+    - They publish minimal exact-SHA retry handoffs before the disposable state
+      is removed.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow

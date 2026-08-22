@@ -593,6 +593,9 @@ by clone creation. The host never parses guest-controlled ext4 metadata;
 journal recovery occurs when a later Kata guest mounts its private clone.
 Failed or active jobs cannot refresh the seed. `task infra:arc:hive:smoke`
 applies the same promotion gate to the dedicated Hive scale set.
+Every smoke dispatch carries a unique nonce in the workflow run name. The
+operator matches both that nonce and the exact head SHA before monitoring or
+cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.
 
 Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
 guest lost its ttrpc sandbox again when the 16 GiB ARC job began exercising its

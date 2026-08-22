@@ -37,6 +37,14 @@ variable "GHA_CACHE_WRITE_ENABLED" {
   default = ""
 }
 
+// Main and hosted publishers retain complete mode=max graphs. ARC jobs already
+// keep the full writable graph in their private local state, so their exact-SHA
+// registry handoff may use mode=min to preserve retries without re-exporting
+// every intermediate record.
+variable "GHA_CACHE_EXPORT_MODE" {
+  default = "max"
+}
+
 // Main keeps this empty. Isolated PR/Remote/local writes use -git-<40-char-sha> so each
 // commit owns a distinct remote-buildcache index and cannot replace trusted Main refs.
 variable "GHA_CACHE_SCOPE_SUFFIX" {
