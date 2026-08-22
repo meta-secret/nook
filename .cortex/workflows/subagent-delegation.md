@@ -119,6 +119,9 @@ Module-oriented work follows
 - Keep the feature dependency DAG separate from agent parent lineage.
 - Use the named read-only profiles in the
   [module expert registry](../architecture/module-experts.md).
+- Run module experts only through Loom's isolated non-delegating SDK runtime.
+  Native child spawning inherits the delivery session's live permissions and
+  is not an authorized read-only boundary.
 - Invoke `internal_api_expert` when a changed contract crosses a module
   boundary.
 - Freeze provider-consumer edges before implementation.

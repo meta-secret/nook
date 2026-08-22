@@ -67,6 +67,12 @@ The delivery owner dispatches named experts with:
 - expected semantic result fields;
 - a terminal barrier and parent-owned join.
 
+Loom launches each expert in a separate SDK process.
+The launch contract fixes read-only filesystem access, disables external
+network and web search, and removes multi-agent tools.
+Do not use an ordinary native child spawn from the delivery session because
+that child inherits the delivery session's live permissions.
+
 Experts return evidence and recommendations.
 They do not edit files or mutate lifecycle state in this initial foundation.
 
@@ -129,6 +135,7 @@ Before implementation, verify:
 - dependency order is acyclic;
 - all task depth values are at most three;
 - no child can add tasks or tiers;
+- the isolated expert runtime remains read-only and non-delegating;
 - the delivery owner owns the join.
 
 Run:

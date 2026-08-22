@@ -14,6 +14,18 @@ import { join, resolve } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { auditModuleExperts } from '../../src/module-experts/audit.ts';
 import type { AuditModuleExpertsArgs } from '../../src/module-experts/audit.ts';
+import {
+  MODULE_EXPERT_CODEX_OPTIONS,
+  moduleExpertThreadOptions,
+} from '../../src/module-experts/runtime-contract.ts';
+import {
+  CargoWorkspaceInventoryKind,
+  decodeCargoWorkspaceMetadata,
+} from '../../src/module-experts/cargo-workspace.ts';
+import type {
+  CargoWorkspaceInventory,
+  DecodeCargoWorkspaceMetadataArgs,
+} from '../../src/module-experts/cargo-workspace.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 
@@ -45,8 +57,11 @@ describe('module expert audit', () => {
         ),
         'utf8',
       );
+      const hiddenDirectory = join(fixtureRoot, '.codex/agents/hidden/deep');
+      const directoryOptions: MakeDirectoryOptions = { recursive: true };
+      await mkdir(hiddenDirectory, directoryOptions);
       await writeFile(
-        join(fixtureRoot, '.codex/agents/module-experts/wasm_expert.toml'),
+        join(hiddenDirectory, 'wasm_expert.toml'),
         'name = "wasm_expert"\n',
         'utf8',
       );
@@ -60,6 +75,97 @@ describe('module expert audit', () => {
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
+  });
+
+  test('rejects recursively discovered uncataloged roles', async () => {
+    const fixtureRoot = await moduleExpertFixture();
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const nestedDirectory = join(
+        fixtureRoot,
+        '.codex/agents/module-experts/nested',
+      );
+      const directoryOptions: MakeDirectoryOptions = { recursive: true };
+      await mkdir(nestedDirectory, directoryOptions);
+      await writeFile(
+        join(nestedDirectory, 'shadow_expert.toml'),
+        'name = "shadow_expert"\n',
+        'utf8',
+      );
+      const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
+      const report = auditModuleExperts(auditArgs);
+
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'uncataloged-agent-definition',
+      );
+      expect(report.auditOk).toBe(false);
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('rejects symlinked custom-agent entries', async () => {
+    const fixtureRoot = await moduleExpertFixture();
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      await symlink(
+        join(fixtureRoot, '.codex/agents/module-experts/core_expert.toml'),
+        join(fixtureRoot, '.codex/agents/shadow.toml'),
+      );
+      const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
+      const report = auditModuleExperts(auditArgs);
+
+      expect(report.findings.map((finding) => finding.code)).toContain(
+        'unsafe-agent-definition-entry',
+      );
+      expect(report.auditOk).toBe(false);
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('uses Cargo workspace identities instead of manifest text matches', () => {
+    const liveManifest = join(
+      REPO_ROOT,
+      'nook-app/nook-platform/live-crate/Cargo.toml',
+    );
+    const decoyManifest = join(
+      REPO_ROOT,
+      'nook-app/nook-platform/retired-crate/Cargo.toml',
+    );
+    const metadata = {
+      packages: [
+        { id: 'live 1.0.0', manifest_path: liveManifest },
+        { id: 'retired 1.0.0', manifest_path: decoyManifest },
+      ],
+      workspace_members: ['live 1.0.0'],
+    };
+    const decodeArgs: DecodeCargoWorkspaceMetadataArgs = {
+      repoRoot: REPO_ROOT,
+      source: JSON.stringify(metadata),
+    };
+
+    const expected: CargoWorkspaceInventory = {
+      kind: CargoWorkspaceInventoryKind.Complete,
+      roots: ['nook-app/nook-platform/live-crate'],
+    };
+    expect(decodeCargoWorkspaceMetadata(decodeArgs)).toEqual(expected);
+  });
+
+  test('uses an isolated non-delegating Codex runtime', () => {
+    const threadOptionsArgs = { workingDirectory: REPO_ROOT };
+    const threadOptions = moduleExpertThreadOptions(threadOptionsArgs);
+
+    expect(threadOptions.sandboxMode).toBe('read-only');
+    expect(threadOptions.approvalPolicy).toBe('never');
+    expect(threadOptions.networkAccessEnabled).toBe(false);
+    expect(threadOptions.webSearchMode).toBe('disabled');
+    expect(MODULE_EXPERT_CODEX_OPTIONS.config.agents.enabled).toBe(false);
+    expect(MODULE_EXPERT_CODEX_OPTIONS.config.agents.max_depth).toBe(0);
+    expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.multi_agent).toBe(false);
+    expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.multi_agent_v2).toBe(
+      false,
+    );
   });
 });
 

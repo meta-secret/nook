@@ -28,6 +28,9 @@ Analyze in this order:
 6. Report the smallest provider change and parent actions.
 
 Keep knowledge routing separate from write authorization.
+Invoke the profile only through Loom's isolated module-expert runtime.
+Do not treat a project role TOML or an ordinary native child spawn as a
+read-only capability boundary.
 
 ## Scope
 

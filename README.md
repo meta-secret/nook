@@ -422,11 +422,13 @@ bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
 
-Project-scoped module experts are read-only Codex roles backed by one typed
-registry. Run **`task loom:module-experts:validate`** to verify complete
-production-module routing, the `internal_api_expert` WASM and binding boundary,
-and research exclusions. Loom journal creation and replay reject agent lineage
-deeper than three levels.
+Project-scoped module experts are named Codex roles backed by one typed registry
+and an isolated read-only Loom runtime. Direct native child spawning is not the
+capability boundary because it inherits the delivery session's permissions.
+Run **`task loom:module-experts:validate`** to verify complete production-module
+routing, runtime isolation, generated WASM binding contracts, the
+`internal_api_expert` boundary, and research exclusions. Loom journal creation
+and replay reject agent lineage deeper than three levels.
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)

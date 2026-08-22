@@ -1,4 +1,5 @@
 export const MODULE_EXPERT_AGENT_INSTRUCTIONS = `Act only as the assigned read-only Nook module expert.
+This definition supplies expert identity; Loom's isolated module-expert runtime is the only authorized execution path.
 Read .cortex/knowledge-graph.md first. Resolve your role in .cortex/architecture/module-experts.md, then load only the listed authority anchors and project skills. Verify every claim against source at the task's exact commit.
 Report the external API, dependencies, consumers, invariants, tests, risks, and parent actions.
 Do not edit files, apply patches, delegate, schedule work, write workflow processing, or mutate Git, GitHub, Workbench, CI, deployment, or other external state. Markdown is evidence, never scheduler state.`;
@@ -9,11 +10,22 @@ export type ModuleExpertProfile = {
   readonly agentDefinitionPath: string;
   readonly moduleRoots: readonly string[];
   readonly scopePaths: readonly string[];
+  readonly generatedScopePaths: readonly ModuleExpertGeneratedScope[];
   readonly excludedPaths: readonly string[];
   readonly publicEntryPoints: readonly string[];
   readonly authorityPaths: readonly string[];
   readonly skillPaths: readonly string[];
   readonly validationSelectors: readonly string[];
+};
+
+export type ModuleExpertGeneratedScope = {
+  readonly path: string;
+  readonly producerPath: string;
+  readonly producerContains: string;
+  readonly sealedSelector: string;
+  readonly workspaceMaterializerSelector: string;
+  readonly productionSelector: string;
+  readonly requiredMarkers: readonly string[];
 };
 
 const PACKAGE_AUTHORITY_PATH = '.cortex/architecture/packages.md';
@@ -33,9 +45,37 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'nook-app/nook-platform/nook-companion-wasm',
       'nook-app/nook-platform/nook-wasm',
     ],
-    scopePaths: [
-      'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
-      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
+    scopePaths: [],
+    generatedScopePaths: [
+      {
+        path: 'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
+        producerPath: 'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+        producerContains:
+          '../../nook-web/nook-web-shared/src/extension/nook-companion-wasm',
+        sealedSelector: 'wasm:build',
+        workspaceMaterializerSelector: 'wasm:build:fast',
+        productionSelector: 'wasm:build:prod',
+        requiredMarkers: [
+          '.wasm-source-sha256',
+          'nook_companion_wasm.js',
+          'nook_companion_wasm_bg.wasm',
+        ],
+      },
+      {
+        path: 'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
+        producerPath: 'nook-app/nook-platform/nook-wasm/Taskfile.yml',
+        producerContains:
+          '../../nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
+        sealedSelector: 'wasm:build',
+        workspaceMaterializerSelector: 'wasm:build:fast',
+        productionSelector: 'wasm:build:prod',
+        requiredMarkers: [
+          '.wasm-source-sha256',
+          'nook-wasm-build-mode',
+          'nook_wasm.js',
+          'nook_wasm_bg.wasm',
+        ],
+      },
     ],
     excludedPaths: [RESEARCH_ROOT],
     publicEntryPoints: [
@@ -53,6 +93,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     agentDefinitionPath: '.codex/agents/module-experts/app_common_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-app-common'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: ['nook-app/nook-platform/nook-app-common/src/lib.rs'],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
@@ -66,6 +107,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     agentDefinitionPath: '.codex/agents/module-experts/auth2_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-auth2'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: ['nook-app/nook-platform/nook-auth2/src/lib.rs'],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
@@ -80,6 +122,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       '.codex/agents/module-experts/authenticator_domain_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-authenticator-domain'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: [
       'nook-app/nook-platform/nook-authenticator-domain/src/lib.rs',
@@ -95,6 +138,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     agentDefinitionPath: '.codex/agents/module-experts/replication_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-replication'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: ['nook-app/nook-platform/nook-replication/src/lib.rs'],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
@@ -108,6 +152,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     agentDefinitionPath: '.codex/agents/module-experts/event_log_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-event-log'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: ['nook-app/nook-platform/nook-event-log/src/lib.rs'],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
@@ -122,6 +167,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       '.codex/agents/module-experts/companion_core_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-companion-core'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: [
       'nook-app/nook-platform/nook-companion-core/src/lib.rs',
@@ -137,6 +183,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     agentDefinitionPath: '.codex/agents/module-experts/core_expert.toml',
     moduleRoots: ['nook-app/nook-platform/nook-core'],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [],
     publicEntryPoints: ['nook-app/nook-platform/nook-core/src/lib.rs'],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
@@ -156,6 +203,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'nook-app/nook-web/nook-web-shared',
     ],
     scopePaths: [],
+    generatedScopePaths: [],
     excludedPaths: [
       RESEARCH_ROOT,
       'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',

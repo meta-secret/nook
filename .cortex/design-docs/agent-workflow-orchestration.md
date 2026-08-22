@@ -152,6 +152,18 @@ The Codex SDK is the local worker adapter.
 
 The adapter starts one Codex thread for one reached agent task attempt.
 
+It starts that thread in an isolated SDK process.
+Constructor overrides disable agents, both multi-agent implementations, apps,
+and plugins.
+Thread overrides enforce read-only filesystem access, never-approve behavior,
+disabled network access, and disabled web search.
+
+Project role TOMLs name experts and provide thin instructions.
+They are not capability boundaries because native children reapply the parent
+turn's live permissions after role selection.
+Module experts therefore cannot run as ordinary children of a write-capable
+delivery session.
+
 The adapter has proven:
 
 - local ChatGPT subscription reuse without an API key;
@@ -160,6 +172,7 @@ The adapter has proven:
 - streamed lifecycle events;
 - structured results;
 - one worker per reached task attempt.
+- no worker-owned child or successor spawning.
 
 The official Codex SDK can start, continue, and resume local Codex threads.
 

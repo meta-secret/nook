@@ -121,6 +121,24 @@ describe('delegated agent journal CLI', () => {
         malformedOutputRequest.runId,
       );
       await expect(stat(malformedRunDirectory)).rejects.toThrow();
+
+      const depthFourRequest = {
+        ...request,
+        runId: 'depth-four-run',
+        depth: 4,
+      };
+      await writeFile(requestPath, JSON.stringify(depthFourRequest), 'utf8');
+      const depthFourProcess = Bun.spawn(command, spawnOptions);
+      expect(await depthFourProcess.exited).not.toBe(0);
+      await new Response(depthFourProcess.stderr).text();
+      const depthFourRunDirectory = join(
+        workingDirectory,
+        'workflow',
+        'processing',
+        DelegatedAgentWorkflowName.AgentWork,
+        depthFourRequest.runId,
+      );
+      await expect(stat(depthFourRunDirectory)).rejects.toThrow();
     } finally {
       await rm(workingDirectory, removeOptions);
     }

@@ -19,6 +19,10 @@ import { WorkflowRuntimeActivityKind } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
 import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
+import {
+  MODULE_EXPERT_CODEX_OPTIONS,
+  moduleExpertThreadOptions,
+} from '../module-experts/runtime-contract.ts';
 
 export enum AgentSourceStabilityPhase {
   BeforeAttempt = 'before attempt',
@@ -38,7 +42,7 @@ export class CodexSdkAgentRuntime<
   readonly codex: Codex;
 
   constructor() {
-    this.codex = new Codex();
+    this.codex = new Codex(MODULE_EXPERT_CODEX_OPTIONS);
   }
 
   async executeAgent(
@@ -56,14 +60,17 @@ export class CodexSdkAgentRuntime<
     };
     assertAgentSourceStable(beforeAttempt);
     try {
-      const threadOptions: ThreadOptions = {
+      const moduleExpertThreadOptionsArgs = {
         workingDirectory: invocation.workingDirectory,
-        sandboxMode: 'read-only',
-        approvalPolicy: 'never',
+      };
+      const baseThreadOptions = moduleExpertThreadOptions(
+        moduleExpertThreadOptionsArgs,
+      );
+      const threadOptions: ThreadOptions = {
+        ...baseThreadOptions,
         modelReasoningEffort: reasoningEffort(
           invocation.agentProfile.reasoningEffort,
         ),
-        networkAccessEnabled: false,
       };
       const thread = this.codex.startThread(threadOptions);
       const prompt = buildPrompt(invocation);

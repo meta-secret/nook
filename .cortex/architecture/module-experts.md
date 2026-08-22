@@ -18,6 +18,8 @@ Each profile names:
 
 - production module roots;
 - extra read-only evidence paths;
+- generated output scopes with their producers, materializers, and required
+  markers;
 - explicit exclusions;
 - public entry points;
 - authority anchors;
@@ -40,6 +42,21 @@ Every role must report:
 
 Every role is read-only.
 Role files contain thin routing instructions instead of copied domain facts.
+
+The role TOML is an identity and behavioral default.
+It is not the capability boundary because a native child inherits the parent
+turn's live permissions.
+An expert runs only through Loom's isolated Codex SDK runtime.
+That runtime enforces:
+
+- read-only filesystem access;
+- no approval escalation;
+- no network or web search;
+- disabled apps and plugins;
+- disabled multi-agent tools and zero child depth.
+
+Direct custom-agent spawning from a write-capable delivery session is not an
+authorized module-expert invocation.
 
 ## Portable Rust module experts
 
@@ -120,7 +137,10 @@ It replaces a narrow WASM-boundary role.
 No separate WASM or bridge expert is allowed.
 
 - **Module roots:** `nook-wasm` and `nook-companion-wasm`.
-- **Extra scope:** Both generated binding directories in `nook-web-shared`.
+- **Generated output scope:** Both binding directories in `nook-web-shared`.
+  `nook-app/nook-platform/nook-wasm/Taskfile.yml` owns their build contract.
+  `wasm:build` is sealed, `wasm:build:fast` materializes workspace outputs,
+  and `wasm:build:prod` is the production selector.
 - **Consumers:** All Rust or TypeScript modules that cross these boundaries.
 - **Entry points:** Both bridge crates' `src/lib.rs` files.
 - **Skills:** `module-expert` and `internal-api-expert`.
@@ -175,10 +195,11 @@ task loom:module-experts:validate
 
 The audit rejects:
 
-- malformed or write-capable role definitions;
+- malformed role definitions or runtime capability drift;
 - missing or duplicate production-module routes;
-- missing authority, skill, scope, or entry-point paths;
+- missing authority, skill, authored scope, or entry-point paths;
+- generated scope producer, selector, or marker drift;
 - production routing for `nook-web-research`;
-- an uncataloged role in the module-expert directory;
+- any recursively discovered uncataloged or symlinked project role;
 - a separate WASM or bridge role;
 - incomplete `internal_api_expert` scope.

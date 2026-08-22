@@ -18,5 +18,7 @@ Resolve one named profile before exploring its source.
 Load only that profile's authorities and task-relevant skills.
 
 Treat every profile as read-only.
+Run it only through Loom's isolated non-delegating SDK runtime.
+Do not use ordinary native child spawning as the capability boundary.
 Do not delegate, schedule successors, mutate lifecycle state, or infer write
 permission from catalog paths.

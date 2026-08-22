@@ -13,6 +13,15 @@ import {
   MODULE_EXPERT_RESEARCH_ROOT,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
+import {
+  MODULE_EXPERT_CODEX_OPTIONS,
+  moduleExpertThreadOptions,
+} from './runtime-contract.ts';
+import {
+  CargoWorkspaceInventoryKind,
+  discoverCargoWorkspace,
+} from './cargo-workspace.ts';
+import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
 
 export type ModuleExpertAuditFinding = {
   readonly code: string;
@@ -39,7 +48,8 @@ type ParsedAgentDefinition = {
   readonly developerInstructions: string;
 };
 
-const AGENT_DIRECTORY = '.codex/agents/module-experts';
+const CODEX_AGENT_DIRECTORY = '.codex/agents';
+const AGENT_DIRECTORY = `${CODEX_AGENT_DIRECTORY}/module-experts`;
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 const WEB_ROOT = 'nook-app/nook-web';
 
@@ -52,12 +62,18 @@ export function auditModuleExperts(
     repoRoot: args.repoRoot,
   };
   validateProfiles(context);
-  validateProductionCoverage(context);
+  const liveRoots = liveProductionModuleRoots(context);
+  const coverageArgs: ValidateProductionCoverageArgs = {
+    context,
+    liveRoots,
+  };
+  validateProductionCoverage(coverageArgs);
   validateAgentDefinitions(context);
+  validateRuntimePolicy(context);
   return {
     findings,
     profileCount: MODULE_EXPERT_CATALOG.length,
-    productionModuleCount: liveProductionModuleRoots(args.repoRoot).length,
+    productionModuleCount: liveRoots.length,
     auditOk: findings.length === 0,
   };
 }
@@ -116,6 +132,10 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
     args.profile.agentDefinitionPath,
     ...args.profile.moduleRoots,
     ...args.profile.scopePaths,
+    ...args.profile.generatedScopePaths.flatMap((scope) => [
+      scope.path,
+      scope.producerPath,
+    ]),
     ...args.profile.excludedPaths,
     ...args.profile.publicEntryPoints,
     ...args.profile.authorityPaths,
@@ -144,6 +164,7 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
   const requiredPaths = [
     args.profile.agentDefinitionPath,
     ...args.profile.moduleRoots,
+    ...args.profile.scopePaths,
     ...args.profile.publicEntryPoints,
     ...args.profile.authorityPaths,
     ...args.profile.skillPaths,
@@ -155,6 +176,67 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
         path: requiredPath,
         message: `Module expert catalog path does not exist: ${requiredPath}`,
       };
+    }
+  }
+  for (const generatedScope of args.profile.generatedScopePaths) {
+    const selectors = [
+      generatedScope.sealedSelector,
+      generatedScope.workspaceMaterializerSelector,
+      generatedScope.productionSelector,
+    ];
+    const validMarkers =
+      generatedScope.requiredMarkers.length > 0 &&
+      generatedScope.requiredMarkers.every(
+        (marker) => safeRepoPath(marker) && !marker.includes('/'),
+      );
+    if (!validMarkers) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'invalid-generated-scope-markers',
+        path: generatedScope.path,
+        message:
+          'Generated scopes require safe, non-empty relative output markers.',
+      };
+    }
+    if (
+      generatedScope.sealedSelector !== 'wasm:build' ||
+      generatedScope.workspaceMaterializerSelector !== 'wasm:build:fast' ||
+      generatedScope.productionSelector !== 'wasm:build:prod'
+    ) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'invalid-generated-scope-selectors',
+        path: generatedScope.path,
+        message:
+          'WASM generated scopes require sealed, workspace-materializer, and production selectors.',
+      };
+    }
+    const producerPath = join(
+      args.context.repoRoot,
+      generatedScope.producerPath,
+    );
+    if (!existsSync(producerPath)) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'missing-generated-scope-producer',
+        path: generatedScope.producerPath,
+        message: `Generated scope producer does not exist: ${generatedScope.producerPath}`,
+      };
+      continue;
+    }
+    const producer = readFileSync(producerPath, 'utf8');
+    if (!producer.includes(generatedScope.producerContains)) {
+      args.context.findings[args.context.findings.length] = {
+        code: 'generated-scope-producer-drift',
+        path: generatedScope.producerPath,
+        message: `Generated scope producer no longer declares ${generatedScope.path}.`,
+      };
+    }
+    for (const selector of selectors) {
+      if (!producer.includes(`\n  ${selector}:`)) {
+        args.context.findings[args.context.findings.length] = {
+          code: 'generated-scope-selector-drift',
+          path: generatedScope.producerPath,
+          message: `Generated scope producer no longer declares ${selector}.`,
+        };
+      }
     }
   }
 }
@@ -179,7 +261,11 @@ function validateInternalApiProfile(
     'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
     'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
   ];
-  const ownedScopes = new Set([...profile.moduleRoots, ...profile.scopePaths]);
+  const ownedScopes = new Set([
+    ...profile.moduleRoots,
+    ...profile.scopePaths,
+    ...profile.generatedScopePaths.map((scope) => scope.path),
+  ]);
   for (const requiredScope of requiredScopes) {
     if (!ownedScopes.has(requiredScope)) {
       context.findings[context.findings.length] = {
@@ -189,20 +275,58 @@ function validateInternalApiProfile(
       };
     }
   }
+  const requiredGeneratedMarkers = new Map<string, readonly string[]>([
+    [
+      'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm',
+      [
+        '.wasm-source-sha256',
+        'nook_companion_wasm.js',
+        'nook_companion_wasm_bg.wasm',
+      ],
+    ],
+    [
+      'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm',
+      [
+        '.wasm-source-sha256',
+        'nook-wasm-build-mode',
+        'nook_wasm.js',
+        'nook_wasm_bg.wasm',
+      ],
+    ],
+  ]);
+  for (const [path, markers] of requiredGeneratedMarkers) {
+    const generatedScope = profile.generatedScopePaths.find(
+      (candidate) => candidate.path === path,
+    );
+    if (
+      !generatedScope ||
+      markers.some((marker) => !generatedScope.requiredMarkers.includes(marker))
+    ) {
+      context.findings[context.findings.length] = {
+        code: 'incomplete-generated-scope-contract',
+        path,
+        message: `internal_api_expert must declare all required generated outputs for ${path}.`,
+      };
+    }
+  }
 }
 
+type ValidateProductionCoverageArgs = {
+  readonly context: ModuleExpertValidationContext;
+  readonly liveRoots: readonly string[];
+};
+
 function validateProductionCoverage(
-  context: ModuleExpertValidationContext,
+  args: ValidateProductionCoverageArgs,
 ): void {
   const catalogRoots = MODULE_EXPERT_CATALOG.flatMap(
     (profile) => profile.moduleRoots,
   );
   const catalogSet = new Set(catalogRoots);
-  const liveRoots = liveProductionModuleRoots(context.repoRoot);
-  const liveSet = new Set(liveRoots);
-  for (const liveRoot of liveRoots) {
+  const liveSet = new Set(args.liveRoots);
+  for (const liveRoot of args.liveRoots) {
     if (!catalogSet.has(liveRoot)) {
-      context.findings[context.findings.length] = {
+      args.context.findings[args.context.findings.length] = {
         code: 'unrouted-production-module',
         path: liveRoot,
         message: `Production module has no module expert: ${liveRoot}`,
@@ -211,7 +335,7 @@ function validateProductionCoverage(
   }
   for (const catalogRoot of catalogRoots) {
     if (!liveSet.has(catalogRoot)) {
-      context.findings[context.findings.length] = {
+      args.context.findings[args.context.findings.length] = {
         code: 'stale-module-route',
         path: catalogRoot,
         message: `Catalog route is not a live production module: ${catalogRoot}`,
@@ -219,7 +343,7 @@ function validateProductionCoverage(
     }
   }
   if (catalogSet.has(MODULE_EXPERT_RESEARCH_ROOT)) {
-    context.findings[context.findings.length] = {
+    args.context.findings[args.context.findings.length] = {
       code: 'research-module-routed',
       path: MODULE_EXPERT_RESEARCH_ROOT,
       message:
@@ -228,20 +352,31 @@ function validateProductionCoverage(
   }
 }
 
-function liveProductionModuleRoots(repoRoot: string): readonly string[] {
-  const manifestPath = join(repoRoot, PLATFORM_MANIFEST);
-  const manifest = readFileSync(manifestPath, 'utf8');
-  const membersBlock =
-    manifest.match(/members\s*=\s*\[([\s\S]*?)\]/u)?.[1] ?? '';
-  const rustRoots = [...membersBlock.matchAll(/"([^"]+)"/gu)].map(
-    (match) => `nook-app/nook-platform/${match[1] ?? ''}`,
-  );
-  const webDirectory = join(repoRoot, WEB_ROOT);
+function liveProductionModuleRoots(
+  context: ModuleExpertValidationContext,
+): readonly string[] {
+  const discoveryArgs: DiscoverCargoWorkspaceArgs = {
+    repoRoot: context.repoRoot,
+    manifestPath: PLATFORM_MANIFEST,
+  };
+  const cargoInventory = discoverCargoWorkspace(discoveryArgs);
+  const rustRoots =
+    cargoInventory.kind === CargoWorkspaceInventoryKind.Complete
+      ? cargoInventory.roots
+      : [];
+  if (cargoInventory.kind === CargoWorkspaceInventoryKind.Failed) {
+    context.findings[context.findings.length] = {
+      code: cargoInventory.code,
+      path: PLATFORM_MANIFEST,
+      message: cargoInventory.message,
+    };
+  }
+  const webDirectory = join(context.repoRoot, WEB_ROOT);
   const directoryOptions = { withFileTypes: true } as const;
   const webRoots = readdirSync(webDirectory, directoryOptions)
     .filter((entry) => entry.isDirectory())
     .map((entry) => `${WEB_ROOT}/${entry.name}`)
-    .filter((root) => existsSync(join(repoRoot, root, 'package.json')))
+    .filter((root) => existsSync(join(context.repoRoot, root, 'package.json')))
     .filter((root) => root !== MODULE_EXPERT_RESEARCH_ROOT);
   return [...rustRoots, ...webRoots].sort();
 }
@@ -249,11 +384,11 @@ function liveProductionModuleRoots(repoRoot: string): readonly string[] {
 function validateAgentDefinitions(
   context: ModuleExpertValidationContext,
 ): void {
-  const agentDirectory = join(context.repoRoot, AGENT_DIRECTORY);
+  const agentDirectory = join(context.repoRoot, CODEX_AGENT_DIRECTORY);
   if (!existsSync(agentDirectory)) {
     context.findings[context.findings.length] = {
       code: 'missing-agent-directory',
-      path: AGENT_DIRECTORY,
+      path: CODEX_AGENT_DIRECTORY,
       message: 'Module expert agent definition directory is missing.',
     };
     return;
@@ -261,11 +396,19 @@ function validateAgentDefinitions(
   const expectedPaths = new Set(
     MODULE_EXPERT_CATALOG.map((profile) => profile.agentDefinitionPath),
   );
-  const directoryOptions = { withFileTypes: true } as const;
-  const actualPaths = readdirSync(agentDirectory, directoryOptions)
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.toml'))
-    .map((entry) => `${AGENT_DIRECTORY}/${entry.name}`)
-    .sort();
+  const collectArgs: CollectAgentDefinitionPathsArgs = {
+    directory: agentDirectory,
+    repoRoot: context.repoRoot,
+  };
+  const discovery = collectAgentDefinitionPaths(collectArgs);
+  for (const unsafePath of discovery.unsafePaths) {
+    context.findings[context.findings.length] = {
+      code: 'unsafe-agent-definition-entry',
+      path: unsafePath,
+      message: `Custom-agent discovery does not permit symbolic links: ${unsafePath}`,
+    };
+  }
+  const actualPaths = discovery.paths;
   for (const actualPath of actualPaths) {
     if (!expectedPaths.has(actualPath)) {
       const roleName = basename(actualPath, '.toml');
@@ -287,6 +430,65 @@ function validateAgentDefinitions(
       profile,
     };
     validateAgentDefinition(validateAgentDefinitionArgs);
+  }
+}
+
+type CollectAgentDefinitionPathsArgs = {
+  readonly directory: string;
+  readonly repoRoot: string;
+};
+
+type AgentDefinitionDiscovery = {
+  readonly paths: readonly string[];
+  readonly unsafePaths: readonly string[];
+};
+
+function collectAgentDefinitionPaths(
+  args: CollectAgentDefinitionPathsArgs,
+): AgentDefinitionDiscovery {
+  const paths: string[] = [];
+  const unsafePaths: string[] = [];
+  const directories = [args.directory];
+  const directoryOptions = { withFileTypes: true } as const;
+  while (directories.length > 0) {
+    const directory = directories.pop();
+    if (!directory) continue;
+    for (const entry of readdirSync(directory, directoryOptions)) {
+      const absolutePath = join(directory, entry.name);
+      if (entry.isSymbolicLink()) {
+        unsafePaths[unsafePaths.length] = relative(args.repoRoot, absolutePath);
+      } else if (entry.isDirectory()) {
+        directories[directories.length] = absolutePath;
+      } else if (entry.isFile() && entry.name.endsWith('.toml')) {
+        paths[paths.length] = relative(args.repoRoot, absolutePath);
+      }
+    }
+  }
+  return { paths: paths.sort(), unsafePaths: unsafePaths.sort() };
+}
+
+function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
+  const threadOptionsArgs = { workingDirectory: context.repoRoot };
+  const threadOptions = moduleExpertThreadOptions(threadOptionsArgs);
+  const config = MODULE_EXPERT_CODEX_OPTIONS.config;
+  const valid =
+    threadOptions.sandboxMode === 'read-only' &&
+    threadOptions.approvalPolicy === 'never' &&
+    threadOptions.networkAccessEnabled === false &&
+    threadOptions.webSearchMode === 'disabled' &&
+    config.agents.enabled === false &&
+    config.agents.max_depth === 0 &&
+    config.features.apps === false &&
+    config.features.multi_agent === false &&
+    config.features.multi_agent_v2 === false &&
+    config.features.plugins === false;
+  if (!valid) {
+    context.findings[context.findings.length] = {
+      code: 'unsafe-module-expert-runtime',
+      path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
+      message:
+        'Module experts require an isolated read-only, offline, non-delegating Codex runtime.',
+    };
   }
 }
 
