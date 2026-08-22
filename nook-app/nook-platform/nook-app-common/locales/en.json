@@ -844,7 +844,7 @@
     "transport_nfc": "NFC security key",
     "transport_usb": "USB security key",
     "aaguid": "Authenticator AAGUID",
-    "layout_group": "Relationship layout",
+    "layout_group": "Identity representation",
     "layout_graph": "Graph",
     "layout_list": "List",
     "identity_keys_heading": "Keys for this identity",

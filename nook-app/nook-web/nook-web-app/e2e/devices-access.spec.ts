@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
 import {
   DeviceAccessProtectionKind,
@@ -21,6 +22,14 @@ type DeviceAccessSnapshotRequestOwner = Pick<
   NookVaultManager,
   'device_access_snapshot_request'
 >
+
+async function openRelationshipGraph(page: Page): Promise<void> {
+  const graphView = page.getByTestId('devices-access-layout-graph')
+  await expect(graphView).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await graphView.click()
+}
 
 test.describe('devices and access dashboard', () => {
   test.beforeEach(async ({ page }) => {
@@ -127,6 +136,7 @@ test.describe('devices and access dashboard', () => {
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await page.getByTestId('devices-access-layout-graph').click()
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Passkey')
     await expect(bridge).toContainText('Passkey · recoverable identity')
@@ -172,6 +182,34 @@ test.describe('devices and access dashboard', () => {
     )
     expect(accessShellWidth).toBeGreaterThan(vaultShellWidth + 200)
 
+    const identityRail = page.getByTestId('devices-access-identity-rail')
+    const keyInventory = page.getByTestId('devices-access-key-inventory')
+    const keyRows = page.getByTestId('devices-access-key-row')
+    const relationshipDetails = page.getByTestId(
+      'devices-access-relationship-details',
+    )
+    const listView = page.getByTestId('devices-access-layout-list')
+    const graphView = page.getByTestId('devices-access-layout-graph')
+    await expect(identityRail).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-identity-option'),
+    ).toHaveCount(1)
+    await expect(keyInventory).toBeVisible()
+    await expect(keyRows).toHaveCount(2)
+    await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
+    await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
+    await expect(keyInventory).toContainText('Passkey')
+    await expect(keyInventory).toContainText('App key')
+    await expect(listView).toHaveAttribute('aria-pressed', 'true')
+    await expect(graphView).toHaveAttribute('aria-pressed', 'false')
+    await expect(relationshipDetails).toHaveCount(0)
+
+    await graphView.click()
+    await expect(keyInventory).toHaveCount(0)
+    await expect(relationshipDetails).toBeVisible()
+    await expect(listView).toHaveAttribute('aria-pressed', 'false')
+    await expect(graphView).toHaveAttribute('aria-pressed', 'true')
+
     const browse = page.getByRole('navigation', { name: 'Browse by' })
     await expect(
       browse.getByRole('button', { name: 'Identity', exact: true }),
@@ -193,23 +231,25 @@ test.describe('devices and access dashboard', () => {
     )
     expect(browseBottom).toBeLessThan(headingTop)
 
-    const identityRail = page.getByTestId('devices-access-identity-rail')
-    const keyInventory = page.getByTestId('devices-access-key-inventory')
-    const keyRows = page.getByTestId('devices-access-key-row')
-    await expect(identityRail).toBeVisible()
-    await expect(
-      page.getByTestId('devices-access-identity-option'),
-    ).toHaveCount(1)
-    await expect(keyInventory).toBeVisible()
-    await expect(keyRows).toHaveCount(2)
-    await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
-    await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
-    await expect(keyInventory).toContainText('Passkey')
-    await expect(keyInventory).toContainText('App key')
-
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
     await page.getByTestId('devices-access-node-device-key').click()
+    await expect(page.getByTestId('devices-access-panel')).toContainText(
+      'App key',
+    )
+
+    await page.getByTestId('devices-access-perspective-vaults').click()
+    await listView.click()
+    await expect(keyInventory).toBeVisible()
+    await expect(relationshipDetails).toHaveCount(0)
+    await keyRows.nth(1).click()
+    await expect(relationshipDetails).toBeVisible()
+    await expect(
+      page.getByTestId('devices-access-perspective-identities'),
+    ).toHaveAttribute('aria-pressed', 'true')
+    await expect(
+      page.getByTestId('devices-access-node-device-key'),
+    ).toBeFocused()
     await expect(page.getByTestId('devices-access-panel')).toContainText(
       'App key',
     )
@@ -237,6 +277,24 @@ test.describe('devices and access dashboard', () => {
     await expect(dashboard).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    const identityRail = page.getByTestId('devices-access-identity-rail')
+    const identityOptions = page.getByTestId('devices-access-identity-option')
+    const identityKeys = page.getByTestId('devices-access-key-inventory')
+    const keyRows = page.getByTestId('devices-access-key-row')
+    await expect(identityRail).toBeVisible()
+    await expect(identityOptions).toHaveCount(1)
+    await expect(identityOptions.filter({ hasText: 'Personal' })).toContainText(
+      '2 keys',
+    )
+    await expect(identityKeys).toBeVisible()
+    await expect(keyRows).toHaveCount(2)
+    await expect(identityKeys).toContainText('Passkey')
+    await expect(identityKeys).toContainText('App key')
+    await expect(
+      page.getByTestId('devices-access-relationship-details'),
+    ).toHaveCount(0)
+
+    await page.getByTestId('devices-access-layout-graph').click()
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity unlocked')
@@ -284,20 +342,6 @@ test.describe('devices and access dashboard', () => {
     await expect(strengthVaults).toHaveCount(1)
     await expect(strengthVaults).toContainText('Verified way in')
 
-    const identityRail = page.getByTestId('devices-access-identity-rail')
-    const identityOptions = page.getByTestId('devices-access-identity-option')
-    const identityKeys = page.getByTestId('devices-access-key-inventory')
-    const keyRows = page.getByTestId('devices-access-key-row')
-    await expect(identityRail).toBeVisible()
-    await expect(identityOptions).toHaveCount(1)
-    await expect(identityOptions.filter({ hasText: 'Personal' })).toContainText(
-      '2 keys',
-    )
-    await expect(identityKeys).toBeVisible()
-    await expect(keyRows).toHaveCount(2)
-    await expect(identityKeys).toContainText('Passkey')
-    await expect(identityKeys).toContainText('App key')
-
     await expect(page.getByTestId('devices-access-add-identity')).toBeDisabled()
     await expect(identityRail).toContainText(
       'Another identity needs its own protected app key',
@@ -306,7 +350,7 @@ test.describe('devices and access dashboard', () => {
 
     await page.setViewportSize({ width: 390, height: 844 })
     await expect(identityRail).toBeVisible()
-    await expect(identityKeys).toBeVisible()
+    await expect(identityKeys).toHaveCount(0)
     await expect(
       bridge.getByRole('img', {
         name: /This identity holds the DEK for Test vault/i,
@@ -445,6 +489,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await openRelationshipGraph(page)
     const remountedVaultsNode = page.getByTestId('devices-access-node-vaults')
     await expect(remountedVaultsNode).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -479,6 +524,7 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
+    await openRelationshipGraph(page)
     await page.setViewportSize({ width: 320, height: 844 })
     await page.getByTestId('header-language-select').click()
     await page.getByTestId('header-language-option-ru').click()
@@ -569,6 +615,7 @@ test.describe('devices and access dashboard', () => {
     }, NookDeviceAccessTextKind.Unknown)
 
     await page.getByTestId('vault-devices-access-tab').click()
+    await openRelationshipGraph(page)
     const panel = page.getByTestId('devices-access-panel')
     await expect(panel).toContainText('Unnamed passkey', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -614,6 +661,7 @@ test.describe('devices and access dashboard', () => {
     }, DeviceAccessProtectionKind.CompanionSession)
 
     await page.getByTestId('vault-devices-access-tab').click()
+    await openRelationshipGraph(page)
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Paired device identity', {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
@@ -639,6 +687,7 @@ test.describe('devices and access dashboard', () => {
   }, testInfo) => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
+    await openRelationshipGraph(page)
     await page.getByTestId('devices-access-node-vaults').click()
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
@@ -730,6 +779,7 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
+    await openRelationshipGraph(page)
     const vaultsNode = page.getByTestId('devices-access-node-vaults')
     await expect(
       page.getByTestId('devices-access-strength-vaults'),
@@ -773,6 +823,7 @@ test.describe('devices and access dashboard', () => {
     // The dashboard reads the snapshot when it mounts, so leave and come back.
     await page.getByTestId('vault-secrets-tab').click()
     await page.getByTestId('vault-devices-access-tab').click()
+    await openRelationshipGraph(page)
 
     const chain = page.getByTestId('devices-access-chain')
     await expect(chain).toContainText('0 vaults')
@@ -797,6 +848,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await openRelationshipGraph(page)
 
     await page
       .getByTestId('devices-access-provider-label')
@@ -885,6 +937,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await openRelationshipGraph(page)
     // Wait for persisted passkey evidence — Identity unlocked alone can appear
     // from the in-memory session before the wrapped app key is durable, and
     // locking then leaves Access on the Missing-protection preview.
@@ -904,6 +957,7 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('header-lock-vault-btn').click()
     // Locking from /devices-access keeps that URL, so login opens Access directly.
     await expect(page).toHaveURL(/\/devices-access$/)
+    await openRelationshipGraph(page)
     await expect(
       page.getByTestId('devices-access-identity-state'),
     ).toContainText('Identity locked', {

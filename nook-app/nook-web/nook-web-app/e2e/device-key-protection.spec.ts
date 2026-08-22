@@ -502,6 +502,7 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    await page.getByTestId('devices-access-layout-graph').click()
     await page.getByTestId('devices-access-node-device-key').click()
     await expect(page.getByTestId('devices-access-device-id')).toContainText(
       pinDeviceId,

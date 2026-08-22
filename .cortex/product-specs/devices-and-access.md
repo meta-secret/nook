@@ -181,14 +181,20 @@ Current dashboard requirements:
 - **Add identity** remains visible but unavailable until Nook can create and
   protect an independent app key for the new identity.
 - An unprepared browser may start passkey or PIN protection from the dashboard.
-- The selected identity uses a flat key inventory as its primary view.
+- The selected identity defaults to a flat key inventory.
   - The current protector and current app key appear as separate rows.
   - Every other public app-key member also appears.
   - Protector provenance and last-used evidence remain explicit.
   - App keys from another installation are read-only.
   - They never open the current browser's detail evidence.
-- The relationship graph remains available below the key inventory.
-  - It is supporting access detail rather than the primary identity selector.
+- A List/Graph control switches between the flat key inventory and relationship
+  graph for the same selected identity.
+  - The representations are mutually exclusive and never appear one after the
+    other in the same content area.
+  - Selecting inspectable key evidence from the list opens the graph at that
+    evidence.
+  - The graph is supporting access detail rather than the primary identity
+    selector.
   - Vault browsing remains available inside that relationship detail.
   - It renders only when the browsed identity owns the current browser app key.
   - Another installation receives an explicit unavailable-evidence state.

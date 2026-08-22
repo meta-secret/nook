@@ -2,8 +2,8 @@
 THESIS: Identity selection and key ownership must be clear before relationship details.
 OWN-WORLD: Nook's restrained security surfaces, semantic tokens, evidence-aware language, and real local state remain intact.
 STORY: Choose an identity from a persistent rail, scan its protector and app keys, then inspect its vault relationships and technical evidence below.
-FIRST VIEWPORT: The complete local identity directory and selected-identity key inventory appear before the relationship map.
-FORM: A quiet master-detail layout makes identity ownership primary while the existing graph and evidence panels remain available as progressive disclosure.
+FIRST VIEWPORT: The complete local identity directory and one selected-identity representation appear together.
+FORM: A quiet master-detail layout makes identity ownership primary while a compact switch chooses either the key inventory or relationship graph.
 -->
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
@@ -35,6 +35,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     type DashboardTimestamp,
     DashboardTimestampKind,
     type DashboardView,
+    DevicesAccessRepresentationKind,
     providerSaveFocus,
     ProviderSaveFocusKind,
     ProviderSaveKind,
@@ -43,6 +44,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
   import DevicesAccessDetailPanel from './devices-access/DevicesAccessDetailPanel.svelte'
   import IdentityDirectoryRail from './devices-access/IdentityDirectoryRail.svelte'
   import IdentityKeyInventory from './devices-access/IdentityKeyInventory.svelte'
+  import IdentityRepresentationSwitch from './devices-access/IdentityRepresentationSwitch.svelte'
   import {
     AccessChainStage,
     accessChainTab,
@@ -60,6 +62,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     IdentityDirectoryLoadKind,
     type IdentityDirectoryLoadState,
     IdentityDirectorySelectionKind,
+    type IdentityDirectoryView,
     loadIdentityDirectoryView,
     selectedIdentity,
   } from './devices-access/identity-directory-view'
@@ -90,6 +93,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     kind: IdentityDirectoryLoadKind.Loading,
   })
   let selectedStage = $state(AccessChainStage.Unlock)
+  let selectedRepresentation = $state(DevicesAccessRepresentationKind.List)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
   let selectedVault = $state<IdentityBridgeVaultSelection>({
     kind: IdentityBridgeVaultSelectionKind.Empty,
@@ -157,6 +161,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
 
   async function focusAfterProtectionReady(): Promise<void> {
     selectedStage = AccessChainStage.Unlock
+    selectedRepresentation = DevicesAccessRepresentationKind.Graph
     pendingFocusTarget = DashboardFocusTargetKind.ChainSelection
     await reloadSnapshots()
   }
@@ -282,7 +287,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
           ? directoryLoadState.view.selection.identityId
           : '',
       )
-      const preservedView =
+      const preservedView: IdentityDirectoryView =
         browsedIdentityId.length > 0 &&
         view.identities.some(
           (identity) => identity.identityId === browsedIdentityId,
@@ -298,6 +303,14 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
       directoryLoadState = {
         kind: IdentityDirectoryLoadKind.Ready,
         view: preservedView,
+      }
+      const identitySelection = selectedIdentity(preservedView)
+      if (
+        identitySelection.kind === IdentityDirectorySelectionKind.Selected &&
+        identitySelection.identity.localAccess ===
+          NookIdentityLocalAccessKind.OtherInstallation
+      ) {
+        selectedRepresentation = DevicesAccessRepresentationKind.List
       }
       resetSelectedVaultForIdentity()
       return IdentityDirectoryLoadKind.Ready
@@ -330,7 +343,26 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
     selectedStage = AccessChainStage.Unlock
     selectedPerspective = IdentityBridgePerspective.Identities
     selectedVault = { kind: IdentityBridgeVaultSelectionKind.Empty }
+    const nextIdentity = directoryLoadState.view.identities.find(
+      (entry) => entry.identityId === identityId,
+    )
+    if (
+      nextIdentity?.localAccess ===
+      NookIdentityLocalAccessKind.OtherInstallation
+    ) {
+      selectedRepresentation = DevicesAccessRepresentationKind.List
+    }
     resetSelectedVaultForIdentity()
+  }
+
+  async function inspectIdentityStage(stage: AccessChainStage): Promise<void> {
+    selectedStage = stage
+    selectedPerspective = IdentityBridgePerspective.Identities
+    selectedRepresentation = DevicesAccessRepresentationKind.Graph
+    await tick()
+    const tab = accessChainTab(stage)
+    if (tab.kind === AccessChainTabKind.Missing) return
+    tab.element.focus()
   }
 
   function resetSelectedVaultForIdentity(): void {
@@ -622,15 +654,29 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
         {:else}
         {@const identity = identitySelection.identity}
         {@const view = { ...accessView, vaults: [...identity.vaults] }}
-        <IdentityKeyInventory
+        <IdentityRepresentationSwitch
           {vault}
-          {identity}
-          {view}
-          {selectedStage}
-          onSelectStage={(stage) => (selectedStage = stage)}
+          identityLabel={identity.label}
+          {selectedRepresentation}
+          graphDisabled={identity.localAccess ===
+            NookIdentityLocalAccessKind.OtherInstallation}
+          onSelectRepresentation={(representation) =>
+            (selectedRepresentation = representation)}
         />
-        {#if identity.localAccess ===
-        NookIdentityLocalAccessKind.OtherInstallation}
+
+        {#if selectedRepresentation === DevicesAccessRepresentationKind.List}
+          <div class="mt-6">
+            <IdentityKeyInventory
+              {vault}
+              {identity}
+              {view}
+              {selectedStage}
+              onSelectStage={inspectIdentityStage}
+            />
+          </div>
+        {/if}
+
+        {#if identity.localAccess === NookIdentityLocalAccessKind.OtherInstallation}
           <div
             class="mt-8 rounded-lg border border-border bg-muted/30 p-5"
             data-testid="devices-access-other-identity-notice"
@@ -644,7 +690,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
               )}
             </p>
           </div>
-        {:else}
+        {:else if selectedRepresentation === DevicesAccessRepresentationKind.Graph}
         {@const verifiedVaultCount = view.vaults.filter(
           (entry) => entry.verified,
         ).length}
@@ -739,7 +785,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while the ex
           unknown: vault.t(I18N_KEYS.DevicesAccessUnknown),
         } satisfies IdentityBridgeCopy}
         <div
-          class="mt-10 border-t border-border pt-8"
+          class="mt-8"
           data-testid="devices-access-relationship-details"
         >
         <div class="flex min-w-0 flex-col gap-6">
