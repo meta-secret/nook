@@ -392,6 +392,9 @@ test.describe('local vault', () => {
 
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
@@ -479,9 +482,17 @@ test.describe('local vault', () => {
     await editForm.getByTestId('secret-label').fill(updatedTitle)
     await editForm.getByTestId('credit-card-cvv').fill('9876')
     await editForm.getByTestId('save-secret-btn').click()
+    await expect(editForm).not.toBeVisible()
+    await expect(row).toHaveCount(0)
+    await expect(
+      page.getByTestId('secret-row').filter({ hasText: updatedTitle }),
+    ).toBeVisible()
 
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
