@@ -76,7 +76,7 @@ jobs:
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
