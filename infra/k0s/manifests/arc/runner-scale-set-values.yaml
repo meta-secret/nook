@@ -157,6 +157,8 @@ template:
           periodSeconds: 2
           failureThreshold: 90
         volumeMounts:
+          - name: work
+            mountPath: /home/runner/_work
           - name: container-runtime-state
             mountPath: /var/lib/containers
           - name: temporary

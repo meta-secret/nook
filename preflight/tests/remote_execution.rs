@@ -164,6 +164,11 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         String::from_utf8(commands.stdout)?,
         "task remote:rust:test\ntask remote:web:check\ntask wasm:test\n"
     );
+    let mixed_runtime = remote_batch_command(&["--validate", "arc:runtime,rust:test"])?;
+    assert!(
+        !mixed_runtime.status.success(),
+        "ARC runtime smoke must be dispatched alone so workflow placement selects ARC"
+    );
     for task in remote_catalog()? {
         let timeout = remote_batch_command(&["--timeout", &task])?;
         assert!(timeout.status.success(), "task timeout must exist: {task}");
@@ -208,6 +213,10 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     fs::write(&mock_docker, "#!/usr/bin/env bash\n[[ \"$1\" = \"ps\" ]]\n")?;
     fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
 
+    let mock_timeout = fixture.join("timeout");
+    fs::write(&mock_timeout, "#!/usr/bin/env bash\nshift 2\nexec \"$@\"\n")?;
+    fs::set_permissions(&mock_timeout, fs::Permissions::from_mode(0o755))?;
+
     let task_log = fixture.join("task.log");
     let summary = fixture.join("summary.md");
     let system_path = std::env::var("PATH")?;
@@ -222,6 +231,12 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     assert!(
         !output.status.success(),
         "one failed task must fail the batch"
+    );
+    assert!(
+        task_log.exists(),
+        "remote batch did not invoke the task shim; stdout={} stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
         fs::read_to_string(&task_log)?,
@@ -369,10 +384,10 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
             "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
         )
             && workflow.contains(
-            "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci')"
+            "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime')"
         ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
             && workflow.contains("|| 'ubuntu-latest') }}"),
-        "Hive must use its dedicated ARC scale set, while only daemon-free preflight and rust:ci selections may use the general ARC pool"
+        "Hive must use its dedicated ARC scale set, while focused preflight, rust:ci, and arc:runtime selections may use the general ARC pool"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")

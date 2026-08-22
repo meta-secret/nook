@@ -13,6 +13,9 @@ fn repository_root() -> PathBuf {
 }
 
 fn tracked_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    if !root.join(".git").exists() {
+        return filesystem_paths(root);
+    }
     let output = Command::new("git")
         .args([
             "ls-files",
@@ -31,6 +34,28 @@ fn tracked_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
         .map(|path| root.join(String::from_utf8_lossy(path).as_ref()))
         .filter(|path| path.is_file())
         .collect())
+}
+
+fn filesystem_paths(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let mut files = Vec::new();
+    let mut directories = vec![root.to_path_buf()];
+    while let Some(directory) = directories.pop() {
+        for entry in fs::read_dir(&directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                if !matches!(
+                    path.file_name().and_then(OsStr::to_str),
+                    Some(".git" | "node_modules" | "target")
+                ) {
+                    directories.push(path);
+                }
+            } else if path.is_file() {
+                files.push(path);
+            }
+        }
+    }
+    Ok(files)
 }
 
 fn is_documentation(path: &Path) -> bool {
@@ -115,5 +140,25 @@ fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()
         assert!(source.contains("Rust") && source.contains("Taskfile"));
         assert!(source.contains("P1") || source.contains("hard rule"));
     }
+    Ok(())
+}
+
+#[test]
+fn sealed_repository_scan_does_not_require_git_metadata() -> anyhow::Result<()> {
+    let fixture = std::env::temp_dir().join(format!(
+        "nook-language-scan-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::create_dir_all(fixture.join("nested"))?;
+    fs::write(
+        fixture.join("nested/contract.ts"),
+        "export const ok = true;\n",
+    )?;
+    let paths = tracked_paths(&fixture)?;
+    assert_eq!(paths, vec![fixture.join("nested/contract.ts")]);
+    fs::remove_dir_all(fixture)?;
     Ok(())
 }

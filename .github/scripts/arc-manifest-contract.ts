@@ -177,6 +177,7 @@ runners.requireAll([
   "tcp://127.0.0.1:2375",
   "NOOK_CONTAINER_RUNTIME",
   "sizeLimit: 24Gi",
+  "mountPath: /home/runner/_work",
   "automountServiceAccountToken: false",
   "ghcr.io/actions/actions-runner:2.336.0@sha256:",
   "docker:29.1.3-cli@sha256:",
@@ -366,6 +367,7 @@ mainWorkflow.count(mainCount);
 remoteBatch.require(
   'rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust',
 );
+remoteBatch.require("arc:runtime must be dispatched as a single ARC task.");
 remoteBatch.require(
   'arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh',
 );

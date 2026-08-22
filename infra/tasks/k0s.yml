@@ -469,7 +469,8 @@ tasks:
           expected_mac="$(mktemp)"
           umask 077
           sudo -n awk '/secret:/ {print $2; exit}' \
-            /var/lib/k0s/pki/hive-encryption-provider.yaml > "$recovery_key"
+            /var/lib/k0s/pki/hive-encryption-provider.yaml |
+            tr -d '\r\n' > "$recovery_key"
           sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.enc \
             > "$encrypted_backup"
           sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac \

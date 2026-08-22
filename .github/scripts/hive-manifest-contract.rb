@@ -501,6 +501,7 @@ unless infra_taskfile.include?(
 end
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
        infra_taskfile.include?("openssl dgst -sha256 -mac HMAC") &&
+       infra_taskfile.include?("tr -d '\\r\\n' > \"$recovery_key\"") &&
        infra_taskfile.include?('test "$actual_mac" = "$expected_mac_value"') &&
        infra_taskfile.include?("hive-system/hive-codex-auth") &&
        infra_taskfile.include?("hive-system/hive-github-publication")
@@ -759,6 +760,11 @@ unless infra_taskfile.include?("hive:queue:status:") &&
   raise "Hive queue inspection, cancellation, and bounded failed-task recovery must remain Taskfile-owned"
 end
 hive_dockerfile = File.read(File.join(root, "agentic-ai/minds/hive/Dockerfile"))
+unless hive_dockerfile.include?(
+  "COPY hive/controller/reaper.ts /usr/local/share/nook/hive-reaper-controller.ts"
+)
+  raise "Hive runtime must copy the reaper controller from the minds build context"
+end
 hive_sandbox_wrapper = File.read(
   File.join(root, "agentic-ai/minds/hive/docker/codex-linux-sandbox-no-proc.sh")
 )
