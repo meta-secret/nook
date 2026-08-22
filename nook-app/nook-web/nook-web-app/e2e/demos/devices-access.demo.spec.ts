@@ -22,6 +22,31 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(page).toHaveURL(/\/devices-access$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+  const identityRail = page.getByTestId('devices-access-identity-rail')
+  const identityOptions = page.getByTestId('devices-access-identity-option')
+  const keyInventory = page.getByTestId('devices-access-key-inventory')
+  const keyRows = page.getByTestId('devices-access-key-row')
+  await expect(identityRail).toBeVisible()
+  await expect(identityOptions).toHaveCount(1)
+  await expect(identityOptions).toHaveAttribute('data-selected', 'true')
+  await expect(keyInventory).toBeVisible()
+  await expect(keyRows).toHaveCount(2)
+  await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
+  await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
+  await expect(keyInventory).toContainText('Passkey')
+  await expect(keyInventory).toContainText('App key')
+  await expect(
+    page.getByTestId('devices-access-relationship-details'),
+  ).toHaveCount(0)
+
+  await expect(page.getByTestId('devices-access-add-identity')).toBeDisabled()
+  await expect(identityRail).toContainText(
+    'Another identity needs its own protected app key',
+  )
+  await page.waitForTimeout(BEAT_MS)
+
+  await page.getByTestId('devices-access-layout-graph').click()
+  await expect(keyInventory).toHaveCount(0)
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity unlocked',
   )
@@ -37,24 +62,6 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(chain).toContainText('App key')
   await expect(chain).toContainText('Identity')
   await expect(chain).toContainText('Vaults')
-  const identityRail = page.getByTestId('devices-access-identity-rail')
-  const identityOptions = page.getByTestId('devices-access-identity-option')
-  const keyInventory = page.getByTestId('devices-access-key-inventory')
-  const keyRows = page.getByTestId('devices-access-key-row')
-  await expect(identityRail).toBeVisible()
-  await expect(identityOptions).toHaveCount(1)
-  await expect(identityOptions).toHaveAttribute('data-selected', 'true')
-  await expect(keyInventory).toBeVisible()
-  await expect(keyRows).toHaveCount(2)
-  await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
-  await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
-  await expect(keyInventory).toContainText('Passkey')
-  await expect(keyInventory).toContainText('App key')
-
-  await expect(page.getByTestId('devices-access-add-identity')).toBeDisabled()
-  await expect(identityRail).toContainText(
-    'Another identity needs its own protected app key',
-  )
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
     1,
   )
@@ -131,6 +138,7 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
+  await page.getByTestId('devices-access-layout-graph').click()
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity locked',
   )

@@ -844,7 +844,7 @@
     "transport_nfc": "Ключ безопасности NFC",
     "transport_usb": "Ключ безопасности USB",
     "aaguid": "AAGUID аутентификатора",
-    "layout_group": "Вид связей",
+    "layout_group": "Представление идентификатора",
     "layout_graph": "Граф",
     "layout_list": "Список",
     "identity_keys_heading": "Ключи этой личности",

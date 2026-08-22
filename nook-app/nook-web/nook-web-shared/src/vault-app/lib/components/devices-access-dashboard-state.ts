@@ -20,6 +20,11 @@ export enum DashboardLoadKind {
   Failed = "failed",
 }
 
+export enum DevicesAccessRepresentationKind {
+  List = "list",
+  Graph = "graph",
+}
+
 export type DashboardLoadState<ReadyView> =
   | { kind: typeof DashboardLoadKind.Loading }
   | { kind: typeof DashboardLoadKind.Ready; view: ReadyView }
