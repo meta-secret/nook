@@ -64,7 +64,7 @@
 
 <aside
   role="alert"
-  class="overflow-hidden rounded-xl border border-amber-500/40 bg-amber-500/10 font-sans text-sm text-amber-900/80 animate-in fade-in slide-in-from-top-2 dark:text-amber-100/80"
+  class="shrink-0 overflow-hidden rounded-xl border border-amber-500/40 bg-amber-500/10 font-sans text-sm text-amber-900/80 animate-in fade-in slide-in-from-top-2 dark:text-amber-100/80"
   data-testid="vault-security-guide"
   data-folded={folded ? "true" : "false"}
   data-recommendations={recommendationCount}
