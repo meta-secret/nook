@@ -513,18 +513,18 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         echo "scenario U ok"
 
-        echo "== Scenario Q: inline PR verification publishes Hive-style exact leaf =="
+        echo "== Scenario Q: inline PR verification publishes a generic exact leaf =="
         # A standalone PR workflow first restores its unchanged dependency/tool
         # stages from trusted Main. The verified build writes only its isolated
         # exact-head scope. A fresh retry at that SHA must restore the source
         # leaf as well as the Main-seeded parent.
         printf '%s\n' "$parent_input_orig" >"$parent_input"
         printf 'hive-pr-source-edit\n' >"$leaf_input"
-        hive_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        exact_pr_suffix="-git-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
         BAKE_SIM_CACHE_ENABLED=1
         BAKE_SIM_CACHE_WRITE_ENABLED=1
         BAKE_SIM_CACHE_FALLBACK_ENABLED=1
-        BAKE_SIM_CACHE_SCOPE_SUFFIX="$hive_pr_suffix"
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$exact_pr_suffix"
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=1
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         BAKE_SIM_RUST_DEPS_INPUT_FINGERPRINT=
@@ -533,7 +533,7 @@ tasks:
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
-        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${hive_pr_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-nested-leaf-v1${exact_pr_suffix}"
 
         BAKE_SIM_CACHE_WRITE_ENABLED=
         BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE=1

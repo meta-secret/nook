@@ -383,16 +383,26 @@ provider, those handlers read and write real event files under a temp directory.
 
 Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the
 configured ARC Kata scale set. Daemon-free `preflight` and `rust:ci` selections
-use the same scale set, with `ubuntu-latest` as the explicit fallback. Fork PRs
-and runtime-dependent, browser, WASM, deployment, release, AI, scheduled,
-manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`. ARC scales
-single-use Pods instead of queueing work on one persistent Docker host.
+use the same scale set. Trusted `hive:verify` uses the dedicated
+`nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
+Both routes use `ubuntu-latest` as the explicit fallback. Fork PRs and
+runtime-dependent, browser, WASM, deployment, release, AI, scheduled, manual
+e2e, and research jobs use GitHub-hosted `ubuntu-latest`. ARC scales single-use
+Pods instead of queueing work on one persistent Docker host.
 
 **Zot cache policy:**
 
 - Delivery builds restore distinct private Zot BuildKit cache refs.
 - Main refreshes the default-branch scopes that new PRs may access.
-- Every PR job writes only immutable git-commit scopes and cannot replace Main.
+- Hosted PR jobs that publish registry cache write only immutable git-commit scopes
+  and cannot replace Main.
+- Trusted ARC PR verification reuses a private node-local COW seed for the full
+  writable graph.
+- It exports only a `mode=min` exact-SHA handoff for retries after the disposable
+  guest is removed.
+- Native ARC exports that handoff during the verified solves. A second
+  post-verification solve is prohibited because it reconstructs the same Rust
+  graphs before exporting them.
 - A cold PR scope restores trusted Main or a dependency-fingerprint scope.
 - Once an exact PR scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.
@@ -403,14 +413,17 @@ single-use Pods instead of queueing work on one persistent Docker host.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, and manual workflows are read-only unless they use an
   explicitly isolated git-commit publisher.
-- PR and Remote jobs write git-commit refs, use Main only while their exact
-  scope is absent, and cannot replace shared Main manifests.
+- Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
+  their exact scope is absent, and cannot replace shared Main manifests.
+- Hive ARC PR jobs use the local COW seed and may import Main when needed. Main
+  remains the only workflow writer of the shared Hive registry seed.
 - The self-hosted `nook` label is reserved for runner cleanup while that machine remains registered.
 
 **Focused remote jobs:**
 
 - `preflight` and `rust:ci` may use fresh Kata QEMU microVMs in the configured
-  ARC scale set. Each job owns a private BuildKit sidecar and disposable state.
+  general ARC scale set. Trusted `hive:verify` may use the dedicated Hive ARC
+  scale set. Each job owns a private BuildKit sidecar and writable COW clone.
 - Every other `remote.yml` selection retains GitHub-hosted placement because it
   needs a Docker image runtime or broader hosted tooling.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.

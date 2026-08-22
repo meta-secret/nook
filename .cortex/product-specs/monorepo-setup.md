@@ -47,9 +47,21 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **Delivery BuildKit is remote-cached across isolated runners.**
   - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs
     use fresh ARC Kata microVMs.
-  - Fork PRs and runtime-dependent, browser, WASM, deployment, and release jobs
-    use ephemeral GitHub-hosted VMs.
+  - Hive Rust verification uses a dedicated scale-to-zero ARC set with ten-job
+    concurrency and a private Neo4j native sidecar.
+  - Hive test binaries execute through a pinned Trixie native sidecar inside
+    the Kata guest, without Docker run. Both helpers stop with the runner.
+  - Fork PRs, Dependabot PRs, and runtime-dependent, browser, WASM, deployment,
+    and release jobs use ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
+  - Each fresh ARC guest starts from a private reflink clone of a trusted
+    32 GiB BuildKit seed.
+  - A 768 GiB sparse Btrfs pool covers twenty fully allocated 32 GiB job
+    images, the reusable seed, and metadata. The 24 GB BuildKit
+    garbage-collection target normally keeps physical use lower.
+  - Each job clone is a Btrfs subvolume with a 32 GiB exclusive quota.
+  - The reflink shares unchanged blocks without sharing a writable daemon or
+    writable filesystem.
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.
   - Parallel targets cannot overwrite one another.
   - Main seeds the default-branch cache visible to new PRs.
@@ -59,6 +71,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Native and WASM source restores import a present Main source graph alone.
   - Shorter dependency indexes join that solve only while Main source is absent.
   - Other missing exact refs use the source-free fingerprint and trusted Main as seeds.
+  - A known-absent exact preflight ref is not passed to BuildKit before its
+    trusted Main fallback.
   - Local Bake restores those git-commit refs when Remote credentials exist.
   - Commit-scoped local publish requires a clean worktree.
   - Local formatting may publish source-free dependency stages by content
@@ -96,7 +110,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the configured ARC scale set.
-  - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set; every job receives a fresh Kata QEMU microVM and private BuildKit worker.
+  - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set.
+  - Focused `hive:verify` jobs use the dedicated Hive ARC scale set with its native service runtime.
+  - Every ARC job receives a fresh Kata microVM and private BuildKit worker.
+  - The general pool uses the approved QEMU fallback; the Hive pool keeps Dragonball.
+  - The private worker mounts only its Pod UID reflink state.
   - Fork PRs and runtime-dependent, browser, WASM, deployment, release,
     long-running AI, and scheduled/manual validation use GitHub-hosted
     `ubuntu-latest`.
@@ -110,7 +128,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
-  - `preflight` and `rust:ci` may run on a fresh ARC Kata microVM. Other selections run on an ephemeral GitHub-hosted runner.
+  - `preflight` and `rust:ci` may run on a fresh general ARC Kata microVM.
+  - `hive:verify` may run on a fresh dedicated Hive ARC Kata microVM.
+  - Other selections run on an ephemeral GitHub-hosted runner.
   - A batch shares one checkout, Docker setup, and cache connection.
   - Selected tasks run sequentially.
   - Each task retains its bounded timeout.

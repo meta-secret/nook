@@ -536,10 +536,14 @@ change, update this README in the same change (see
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs run in
-fresh ARC Kata microVMs. Fork PRs and runtime-dependent, browser, WASM,
-deployment, and release jobs run on fresh GitHub-hosted VMs. Each isolated
-runner restores distinct BuildKit cache refs from the authenticated OCI registry
-at `registry.dev.nokey.sh`. Main refreshes the shared refs after lane
+fresh ARC Kata microVMs. Hive Rust uses a dedicated ARC set with private Neo4j
+and pinned Trixie test-runtime native sidecars; its browser lane stays hosted.
+Fork PRs and other runtime-dependent, browser, WASM, deployment, and release
+jobs run on fresh GitHub-hosted VMs. Each ARC runner
+starts from a private 32 GiB reflinked BuildKit seed and restores distinct
+cache refs from the authenticated OCI registry at
+`registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
+copy its full logical capacity. Main refreshes the shared refs after lane
 verification. Same-repository PR jobs may publish only exact-SHA generations
 under `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
 producer restores Main's dedicated, complete WASM dependency boundary so it

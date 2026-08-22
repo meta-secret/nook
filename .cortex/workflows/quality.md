@@ -242,20 +242,31 @@ Use this workflow for quality, CI, and deployment changes.
     - BuildKit merges cache importers. List order is not fallback precedence.
     - Docker setup probes every full-graph exact scope separately.
     - A present exact scope is the only importer for that graph.
-    - Exact PR writers publish `mode=max`, so replay keeps the full leaf lineage.
+    - Hosted exact PR writers publish `mode=max`, so replay keeps the full leaf
+      lineage.
+    - ARC exact PR writers publish `mode=min` retry handoffs because their full
+      working graph already lives in private node-local state during the job.
     - Docker setup also probes trusted Main native and WASM source refs.
     - A present Main source graph is the only importer for that solve.
     - Shorter dependency indexes join only while that Main source ref is absent.
     - A missing exact and Main source scope falls back to source-free
       dependencies without cold `cargo install`.
-    - Hive PR verification imports exact SHA alone when present.
-    - A missing Hive exact SHA uses trusted Main.
-    - Its verified solve publishes only the isolated exact-SHA Hive leaf.
-    - Main remains the only writer of the shared Hive seed.
+    - Trusted Hive PR verification runs on the dedicated `nook-k0s-hive` ARC
+      scale set.
+    - Each fresh Hive runner receives a reflink clone of the node-local,
+      validated BuildKit seed.
+    - Hive PRs may import the trusted Main registry seed when the local clone
+      does not already contain the needed graph.
+    - Hive PRs do not export an isolated exact-SHA registry cache. The guarded
+      ARC smoke workflow promotes a validated local seed instead.
+    - Main remains the only workflow writer of the shared Hive registry seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
-    - Native publishers stage `docker:ci:cache:publish:rust-base` before
-      deps/source scopes so one Bake cannot rewrite apt while cooking chef.
+    - Hosted and Main Native publishers stage
+      `docker:ci:cache:publish:rust-base` before deps/source scopes so one Bake
+      cannot rewrite apt while cooking chef.
+    - ARC Native publishes each minimal exact-SHA handoff from its verified
+      solve. It must not reconstruct the four graphs in a second publish pass.
     - WASM publishers stage deps-publish and source export before rust-base.
     - Staging rust-base first on WASM imports the shorter parent index and
       orphans local chef cook layers for the next bake.
@@ -282,7 +293,7 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_exact_scope_excludes_main_then_cold_scope_falls_back`
     - `theorem_context_parents_never_write_publishers_mode_max`
     - `theorem_github_actions_zot_parameter_matrix`
-    - `theorem_hive_pr_publishes_only_exact_head_cache`
+    - `theorem_hive_arc_pr_reuses_local_state_without_exact_export`
     - `theorem_local_formatter_and_pr_share_input_cache`
     - `theorem_source_leaf_solves_do_not_duplicate_linked_dependency_targets`
     - `theorem_wasm_fingerprint_closed_allowlist`
@@ -299,8 +310,11 @@ Use this workflow for quality, CI, and deployment changes.
     and do not replace Main `nook/buildcache/**`.
     Scenario P proves a hosted-verified local candidate and a fresh PR runner
     share the same source-free dependency graph without sharing a commit SHA.
-    Scenario Q proves standalone Hive-style verification restores Main,
-    publishes only its exact PR leaf, and replays that leaf on a fresh runner.
+    Scenario Q proves a generic standalone exact-scope verification restores
+    Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
+    runner. General trusted ARC verification reuses its private local BuildKit
+    state and publishes only a minimal per-PR retry handoff. Hive ARC keeps its
+    separate smoke-promoted seed contract without per-PR registry refs.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
     builders.
@@ -325,7 +339,11 @@ Use this workflow for quality, CI, and deployment changes.
     - Remote jobs restore Main's Zot lineage and write only git-commit refs under `nook/remote-buildcache/**`.
     - Same-repository PR Rust producers and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
     - Forks stay secret-free and cold-compile.
-    - PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
+    - Hosted PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
+    - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
+      into private job-local BuildKit state.
+    - They publish minimal exact-SHA retry handoffs before the disposable state
+      is removed.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow

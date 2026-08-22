@@ -366,10 +366,13 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
     );
     assert!(
         workflow.contains(
+            "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
+        )
+            && workflow.contains(
             "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci')"
         ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
-            && workflow.contains("|| 'ubuntu-latest' }}"),
-        "only daemon-free preflight and rust:ci selections may opt into ARC"
+            && workflow.contains("|| 'ubuntu-latest') }}"),
+        "Hive must use its dedicated ARC scale set, while only daemon-free preflight and rust:ci selections may use the general ARC pool"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")
@@ -377,7 +380,6 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
             && !remote_tasks.contains("rust-cache:promote"),
         "cache promotion must remain an internal parameterized broker, not an agent task"
     );
-    assert!(!workflow.contains("runs-on: nook"));
     assert!(
         workflow.contains("registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}")
             && workflow.contains("registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}")
@@ -427,10 +429,23 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
     assert!(docker_setup.contains("if [ -z \"$NOOK_REMOTE_TASK_SELECTION\" ]"));
     assert!(workflow.contains("cache-write: \"false\""));
     assert!(workflow.contains("main-cache-only: \"true\""));
+    assert!(workflow.contains(
+        "REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}"
+    ));
+    assert!(workflow.contains(
+        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
+    ), "Remote Docker batches must preserve git-commit handoffs unless the selection is exactly Hive");
+    assert!(batch_script.contains(
+        "hive:verify) run_with_timeout \"$timeout_minutes\" env HIVE_CACHE_TO= task hive:verify ;;"
+    ), "Hive must not publish a per-branch cache even when another task makes a mixed hosted batch writable");
+    assert!(workflow.contains("env.REQUEST_INCLUDES_HIVE == 'true'"));
+    assert!(workflow.contains("(inputs.tasks || inputs.task) != 'hive:verify' ||"));
     assert_eq!(
-        workflow.matches("isolated-cache-write: \"true\"").count(),
-        1,
-        "the Remote batch must write only its git-commit Zot namespace"
+        workflow
+            .matches("env.REQUEST_INCLUDES_HIVE == 'true'")
+            .count(),
+        3,
+        "Hive-containing batches must wait for and clean up the service they start"
     );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),

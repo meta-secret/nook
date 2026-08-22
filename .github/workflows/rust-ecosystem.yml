@@ -18,6 +18,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: >-
@@ -31,6 +32,8 @@ jobs:
     name: Validate explicit ecosystem request
     runs-on: ubuntu-latest
     timeout-minutes: 2
+    outputs:
+      should-run: ${{ steps.pr-scope.outputs.result }}
     steps:
       - name: Reject unsupported label events
         env:
@@ -48,13 +51,37 @@ jobs:
               ;;
           esac
 
+      - name: Keep mixed PRs in the product workflow
+        id: pr-scope
+        uses: actions/github-script@v9
+        with:
+          result-encoding: string
+          script: |
+            if (context.eventName !== 'pull_request') return 'true'
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              ...context.repo,
+              pull_number: context.issue.number,
+              per_page: 100,
+            })
+            const isIgnoredByProductWorkflow = (path) =>
+              path.startsWith('.cortex/') ||
+              path.startsWith('.cursor/') ||
+              path === '.github/workflows/web-research.yml' ||
+              path.startsWith('agentic-ai/') ||
+              path.startsWith('nook-app/nook-web/nook-web-research/')
+            return String(
+              files.length > 0 &&
+              files.every((file) => isIgnoredByProductWorkflow(file.filename)),
+            )
+
   ecosystem:
     name: Rust ecosystem
     needs: validation-request
     if: >-
       github.event_name != 'pull_request' ||
-      github.event.label.name == 'ci:validate' ||
-      github.event.label.name == 'ci:full-e2e'
+      ((github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e') &&
+      needs.validation-request.outputs.should-run == 'true')
     uses: ./.github/workflows/rust-ecosystem-checks.yml
     secrets: inherit
     with:

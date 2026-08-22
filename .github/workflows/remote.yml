@@ -5,6 +5,7 @@
 # explicitly requested with task pr:validate.
 
 name: Remote task
+run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}
 
 on:
   workflow_dispatch:
@@ -29,6 +30,10 @@ on:
         description: Exact committed source for fingerprint verification (promotion task only)
         required: false
         type: string
+      dispatch_nonce:
+        description: Caller correlation nonce for an exact workflow dispatch
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -49,12 +54,17 @@ jobs:
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Only selections that never need a Docker image runtime may use the
     # daemon-free ARC pool. The remaining catalog stays on hosted runners.
-    runs-on: ${{ ((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
+    runs-on: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
+      REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
+      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache' || '' }}
+      HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
+      HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
+      HIVE_NEO4J_TEST_PASSWORD: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'hive-integration-password' || '' }}
     steps:
       - uses: actions/checkout@v7
       - name: Validate batch request
@@ -77,7 +87,21 @@ jobs:
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
-          isolated-cache-write: "true"
+          isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+      - name: Start hosted Hive Neo4j service
+        if: >-
+          env.REQUEST_INCLUDES_HIVE == 'true' &&
+          ((inputs.tasks || inputs.task) != 'hive:verify' ||
+          (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') != 'nook-k0s-hive')
+        run: >-
+          docker run --detach --rm --name nook-hive-neo4j
+          --env NEO4J_AUTH=neo4j/hive-integration-password
+          --publish 127.0.0.1:7474:7474
+          --publish 7687:7687
+          neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+      - name: Wait for private Neo4j sidecar
+        if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
+        run: .github/scripts/wait-hive-neo4j.sh
       - name: Run allowlisted task batch
         shell: bash
         env:
@@ -91,6 +115,12 @@ jobs:
           path: ${{ runner.temp }}/nook-e2e-artifacts
           if-no-files-found: warn
           retention-days: 15
+      - name: Stop hosted Hive Neo4j service
+        if: >-
+          always() && env.REQUEST_INCLUDES_HIVE == 'true' &&
+          ((inputs.tasks || inputs.task) != 'hive:verify' ||
+          (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') != 'nook-k0s-hive')
+        run: docker rm --force nook-hive-neo4j
 
   rust-cache-promote:
     if: inputs.task == 'rust-cache:promote' && inputs.tasks == ''

@@ -552,30 +552,70 @@ Deployment verification:
 
 Actions Runner Controller runs focused, trusted GitHub Actions jobs as
 single-use Pods in the `kata-qemu-runtime-rs` RuntimeClass. The runner has no
-Kubernetes service-account token, hostPath, host runtime socket, or Docker
-daemon.
+Kubernetes service-account token, host runtime socket, or Docker daemon.
 
 The Kata runner contains Docker client tooling but no Docker daemon. Buildx
 connects over Pod loopback to a private BuildKit sidecar in the same microVM.
 BuildKit is privileged inside that disposable guest so it can create OCI build
-processes, but the Pod has no Kubernetes service-account token, hostPath, or
-host runtime socket. A pinned wrapper mounts a 96 GiB sparse ext4 image from the
-100 GiB `emptyDir` inside the guest, allowing BuildKit to use overlayfs without
-placing writable layers on Kata's virtiofs mount. The garbage-collection target
-is 80 GB; durable cache manifests and layers remain in Zot.
+processes. The Pod has no Kubernetes service-account token or host runtime
+socket.
+
+The host maintains one loop-backed Btrfs pool on its existing ext4 filesystem.
+This avoids repartitioning the production node. The sparse pool has 768 GiB of
+logical capacity for twenty fully allocated 32 GiB job images, one trusted
+32 GiB ext4 seed image, Btrfs metadata, and operational headroom. The 24 GB
+BuildKit garbage-collection target normally keeps physical use below that hard
+capacity envelope.
+
+Runner startup follows this ordered storage boundary:
+
+1. A trusted init container mounts only the request directory.
+2. It submits the Pod UID.
+3. A root-owned host helper validates the UID.
+4. The helper creates a metadata-only reflink clone of the seed.
+5. The private BuildKit sidecar receives only `jobs/<Pod UID>`.
+6. The sidecar loop-mounts that ext4 file inside the guest.
+7. BuildKit uses overlayfs on the guest-mounted ext4 filesystem.
+
+The runner container never mounts the pool. Concurrent jobs use different
+writable ext4 files and different BuildKit daemons. Unchanged blocks remain
+shared through Btrfs copy-on-write. Changed blocks consume physical storage
+only in the job clone. Each job directory is a Btrfs subvolume with a 32 GiB
+exclusive quota, so a compromised guest cannot consume the rest of the shared
+pool through files beside its state image. The garbage-collection target is
+24 GB.
+
+A successful trusted ARC smoke run may refresh the seed after its Pod stops.
+The promotion waits for API removal, kubelet volume teardown, containerd task
+removal, and Kata shim exit. It validates only the root-owned regular backing
+inode on the host, then replaces the seed atomically under the same lock used
+by clone creation. The host never parses guest-controlled ext4 metadata;
+journal recovery occurs when a later Kata guest mounts its private clone.
+Failed or active jobs cannot refresh the seed. `task infra:arc:hive:smoke`
+applies the same promotion gate to the dedicated Hive scale set.
+Every smoke dispatch carries a unique nonce in the workflow run name. The
+operator matches both that nonce and the exact head SHA before monitoring or
+cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.
 
 Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
 guest lost its ttrpc sandbox again when the 16 GiB ARC job began exercising its
 private BuildKit daemon. ARC therefore uses the same release's QEMU runtime-rs
 backend. Hive remains on Dragonball, and QEMU is not the cluster default.
 
-The scale set keeps no warm runners. ARC creates a new Pod and microVM for each
-job and removes it afterward. `maxRunners: 10` permits ten simultaneous jobs;
-it is not a retained runner pool. Each Pod requests 1 CPU and 5 GiB so ten Pods
-fit the current 32-core node alongside the cluster baseline. Each disposable
-guest can burst to the unchanged aggregate limit of 8 CPUs and 16 GiB. This
-separates scheduler placement from the per-microVM resource envelope while
-keeping congestion from an artificially small runner scale set.
+Neither scale set keeps warm runners. ARC creates a new Pod and microVM for
+each job and removes it afterward. `nook-k0s` serves ordinary trusted Rust
+jobs. `nook-k0s-hive` serves Hive Rust verification with a pinned Neo4j
+native sidecar in the same Pod. Both set `maxRunners: 10`; this is concurrency,
+not a retained pool.
+
+The ordinary Pod requests 1 CPU and 5 GiB. The Hive Pod requests 1.25 CPUs and
+5 GiB. Both retain a 16 GiB aggregate container limit. The dedicated Hive set
+keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed
+service container with a Kubernetes-native sidecar. A second non-root sidecar
+executes exported Hive test binaries in their pinned Debian Trixie runtime.
+Both helpers are restartable init sidecars, so Kubernetes stops them when the
+runner exits and the single-use Pod can terminate. The exchange directory is
+private to the job Pod. No Docker daemon is introduced.
 
 The ARC deployment contract explicitly prohibits:
 
@@ -583,7 +623,11 @@ The ARC deployment contract explicitly prohibits:
 - nested Docker or Podman engines;
 - Sysbox;
 - host Docker or containerd sockets; and
-- hostPath volumes.
+- broad hostPath volumes.
+
+Two narrow hostPaths are permitted for the Task-managed BuildKit pool. The
+trusted preparation container sees only the request directory. The BuildKit
+sidecar sees only its Pod UID job subpath. The runner sees neither path.
 
 The runner image and its Docker CLI remain separate from BuildKit. The CLI does
 not create a Docker engine. A chart-render check verifies the final Helm output
@@ -622,8 +666,9 @@ TypeScript PR audit without Docker.
     checkout and run `task infra:arc:deploy`.
   - Verify `task infra:arc:status` and `task infra:arc:smoke`, then revoke the
     replaced token.
-  - For emergency revocation, run `task infra:arc:fallback`, revoke the token
-    on GitHub, and delete `nook-arc-github` from the `arc-runners` namespace.
+  - For emergency revocation, run `task infra:arc:fallback`. It routes both
+    ordinary and Hive verification to hosted capacity. Then revoke the token
+    on GitHub and delete `nook-arc-github` from the `arc-runners` namespace.
 - **Reaper controller credential:** Mount into the Pod reaper, Workbench
   dispatcher, and dedicated controller only.
   - Do not expose it to workers or Codex.
@@ -780,8 +825,9 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
 
 ARC runners reach `registry.dev.nokey.sh` on the k0s node's local TLS ingress
 path. Buildx imports and exports the same authenticated Zot registry-cache refs
-as hosted runners. The per-job BuildKit process and state disappear with the
-ephemeral Kata Pod; Zot is the only durable Docker build cache.
+as hosted runners. Zot remains the authoritative cross-host cache. The local
+reflink seed avoids reconstructing unchanged snapshots for every new guest.
+Each job's writable clone is private and is removed after it becomes inactive.
 
 ## 10. Taskfile operations
 

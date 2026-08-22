@@ -95,7 +95,7 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
             rust_bake.contains(&stable)
                 && rust_bake.contains(&candidate)
                 && rust_bake.contains(&format!("{candidate},mode=max"))
-                && rust_bake.matches(&stable).count() == 2,
+                && rust_bake.matches(&stable).count() == 4,
             "quarantined dependency publication and verified restore are missing for {graph}"
         );
     }

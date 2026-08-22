@@ -16,7 +16,8 @@ tasks:
         download_dir="$remote_dir/downloads"
         install -d -m 0750 "$download_dir"
         sudo -n apt-get update -qq
-        sudo -n apt-get install -y -qq --no-install-recommends acl jq python3
+        sudo -n apt-get install -y -qq --no-install-recommends \
+          acl jq python3 python3-yaml ruby
 
         firewall_fragment="$(mktemp)"
         firewall_config="$(mktemp)"

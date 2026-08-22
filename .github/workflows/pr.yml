@@ -174,16 +174,29 @@ jobs:
 
       - name: Rust format, clippy, tests, and coverage
         if: steps.trusted-native.outputs.found != 'true'
-        run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            # ARC's private builder starts from a complete COW seed. Publish the
+            # mode=min handoff from each verified solve instead of reconstructing
+            # four graphs after verification only to export them.
+            GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+          else
+            # Hosted verification stays read-only, then publishes mode=max from
+            # local layers so a CACHED solve cannot replace the exact index with
+            # a thin export.
+            GHA_CACHE_WRITE_ENABLED="" task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+          fi
         env:
           CI: true
-          # Import only during verify. Export after from local layers so a
-          # CACHED solve cannot overwrite the PR registry index with a thin export.
-          GHA_CACHE_WRITE_ENABLED: ""
 
       - name: Publish git-scoped native BuildKit cache
         if: steps.trusted-native.outputs.found != 'true'
-        run: task ci:main:publish-native-cache
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            echo "ARC verified solves already published their minimal exact-SHA handoffs"
+            exit 0
+          fi
+          task ci:main:publish-native-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
 

@@ -186,7 +186,7 @@ run_task() {
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
     extension:check) run_with_timeout "$timeout_minutes" task remote:extension:check ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
-    hive:verify) run_with_timeout "$timeout_minutes" task hive:verify ;;
+    hive:verify) run_with_timeout "$timeout_minutes" env HIVE_CACHE_TO= task hive:verify ;;
     check) run_with_timeout "$timeout_minutes" task check ;;
     ci:pr) run_with_timeout "$timeout_minutes" task ci:pr ;;
     ci:pr:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/ci-pr-e2e" task ci:pr:e2e ;;

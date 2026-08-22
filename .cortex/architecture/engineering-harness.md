@@ -150,8 +150,11 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 - Persists the toolchain.
 - Persists stable native/WASM dependency boundaries.
 - Persists separate source-sensitive native/WASM snapshots as private Zot BuildKit refs.
-- Every PR job restores Main's complete lineage plus its PR remote-buildcache scope.
-- PR jobs and local Task Bake export only isolated remote-buildcache refs.
+- Every PR job restores Main's complete lineage plus any existing PR remote-buildcache scope.
+- Hosted PR jobs and local Task Bake export only isolated remote-buildcache refs.
+- Trusted ARC PR jobs reuse their full private node-local BuildKit state.
+- They publish a minimal exact-SHA registry handoff so retries remain reusable
+  after the disposable VM state is removed.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -259,6 +262,15 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
+- ARC keeps Zot as the authoritative cache and also starts each fresh Kata guest
+  from a private reflink clone of a trusted 32 GiB BuildKit seed.
+- Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
+  Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
+  so ARC remains daemon-free and the helpers stop with the runner.
+- Registry transfer time and local snapshot materialization time are separate
+  performance dimensions.
+- A manifest lookup proves index availability. It does not prove that a fresh
+  builder has hydrated content or extracted snapshots.
 - Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
 - Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
 - Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.
@@ -274,7 +286,10 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 ### Main Cache Visibility
 
 - Main alone refreshes shared refs under `nook/buildcache/**`.
-- PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
+- Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
+- Trusted ARC PR jobs read Main and exact-SHA refs.
+- They may write only minimal exact-SHA refs under `nook/remote-buildcache/**`.
+- Their fresh Kata guests start from the private node-local COW seed.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
 ### Docker Bake Orchestration

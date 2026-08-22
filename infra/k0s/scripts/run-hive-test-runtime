@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exchange_root="${NOOK_ARC_HIVE_TEST_EXCHANGE:-/var/run/nook-hive-tests}"
+shopt -s nullglob
+while true; do
+  for request in "$exchange_root"/*.request; do
+    test -f "$request" || continue
+    request_id="$(basename "$request" .request)"
+    request_value="$(tr -d '\r\n' < "$request")"
+    case "$request_id" in
+      *[!0-9-]*) rm -f -- "$request"; continue ;;
+    esac
+    if test "$request_value" != "$request_id"; then
+      rm -f -- "$request"
+      continue
+    fi
+    request_dir="$exchange_root/$request_id"
+    status=0
+    : > "$request_dir/output.log"
+    for test_binary in "$request_dir"/tests/*; do
+      "$test_binary" >> "$request_dir/output.log" 2>&1 || status=$?
+      test "$status" -eq 0 || break
+    done
+    printf '%s\n' "$status" > "$request_dir/status.tmp"
+    mv "$request_dir/status.tmp" "$request_dir/status"
+    rm -f -- "$request"
+  done
+  sleep 0.1
+done

@@ -17,6 +17,7 @@ on:
       - .github/scripts/k0s-cni-migration-test.py
       - .github/scripts/services-network-repair-test.py
       - .github/scripts/zot-registry-public-contract-test.py
+      - .github/scripts/wait-hive-neo4j.sh
       - .task/agentic-ai.yml
       - .task/ci-workflows.yml
       - .github/scripts/infra-surface-check.sh
@@ -39,6 +40,7 @@ on:
       - .github/scripts/k0s-cni-migration-test.py
       - .github/scripts/services-network-repair-test.py
       - .github/scripts/zot-registry-public-contract-test.py
+      - .github/scripts/wait-hive-neo4j.sh
       - .task/agentic-ai.yml
       - .task/ci-workflows.yml
       - .github/scripts/infra-surface-check.sh
@@ -62,8 +64,97 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  console:
+    name: Hive Control Center verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
+
+      - name: Install Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Validate Taskfile command surface
+        run: task infra:surface:check
+
+      - name: Install Hive Control Center dependencies
+        run: task hive:console:install
+
+      - name: Verify Hive Control Center source
+        run: task hive:console:check
+
+      - name: Install Hive Control Center browser
+        run: task hive:console:e2e:prepare
+
+      - name: Verify Hive Control Center journeys
+        run: task hive:console:e2e
+
   verify:
     name: Hive Rust and infrastructure verification
+    if: >-
+      vars.NOOK_HIVE_RUNS_ON == 'nook-k0s-hive' &&
+      (github.event_name == 'push' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'))
+    runs-on: nook-k0s-hive
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
+
+      - name: Connect private ARC BuildKit
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-write: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          isolated-cache-write: "false"
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+
+      - name: Report Rust compiler cache selection
+        run: >-
+          echo "Hive compiler cache:
+          ${NOOK_SCCACHE_BACKEND}
+          (${NOOK_SCCACHE_BACKEND_REASON})"
+
+      - name: Wait for private Neo4j sidecar
+        run: .github/scripts/wait-hive-neo4j.sh
+
+      - name: Hive Rust verification
+        env:
+          HIVE_NEO4J_TEST_URI: 127.0.0.1:7687
+          HIVE_NEO4J_TEST_USERNAME: neo4j
+          HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
+        run: task hive:verify
+
+      - name: Publish verified Hive cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max,timeout=15m
+        run: task hive:cache:publish
+
+  verify-hosted:
+    name: Hive Rust and infrastructure verification
+    if: >-
+      vars.NOOK_HIVE_RUNS_ON != 'nook-k0s-hive' &&
+      (github.event_name == 'push' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+      github.actor != 'dependabot[bot]'))
     runs-on: ubuntu-latest
     services:
       neo4j:
@@ -86,63 +177,18 @@ jobs:
         with:
           version: 3.52.0
 
-      - name: Install Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: 1.3.14
-
-      - name: Install Hive Control Center dependencies
-        run: task hive:console:install
-
-      - name: Verify Hive Control Center source
-        run: task hive:console:check
-
-      - name: Install Hive Control Center browser
-        run: task hive:console:e2e:prepare
-
-      - name: Verify Hive Control Center journeys
-        run: task hive:console:e2e
-
-      - name: Docker setup for isolated PR cache
-        if: github.event_name == 'pull_request'
+      - name: Connect hosted BuildKit cache
         uses: ./.github/actions/nook-docker-setup
         with:
-          cache-write: "false"
-          main-cache-only: "true"
-          isolated-cache-write: "true"
+          cache-write: ${{ github.event_name == 'push' && 'true' || 'false' }}
+          main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+          isolated-cache-write: "false"
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
           sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-
-      - name: Configure persistent Rust compiler cache on Main
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: ./.github/actions/nook-cache-connect
-        with:
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-
-      - name: Report Rust compiler cache selection
-        run: >-
-          echo "Hive compiler cache:
-          ${NOOK_SCCACHE_BACKEND}
-          (${NOOK_SCCACHE_BACKEND_REASON})"
-
-      - name: Login to Nook OCI registry
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/login-action@v3
-        with:
-          registry: registry.dev.nokey.sh
-          username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-
-      - name: Docker setup on Main
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: docker/setup-buildx-action@v4
 
       - name: Validate Taskfile command surface
         run: task infra:surface:check
@@ -159,3 +205,45 @@ jobs:
         env:
           HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max,timeout=15m
         run: task hive:cache:publish
+
+  verify-fork:
+    name: Hive Rust and infrastructure verification
+    if: >-
+      github.event_name == 'pull_request' &&
+      (github.event.pull_request.head.repo.full_name != github.repository ||
+      github.actor == 'dependabot[bot]')
+    runs-on: ubuntu-latest
+    services:
+      neo4j:
+        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        env:
+          NEO4J_AUTH: neo4j/hive-integration-password
+        ports:
+          - 7687:7687
+        options: >-
+          --health-cmd "cypher-shell -u neo4j -p hive-integration-password 'RETURN 1'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
+
+      - name: Set up untrusted cache-free BuildKit
+        uses: docker/setup-buildx-action@v4
+
+      - name: Validate Taskfile command surface
+        run: task infra:surface:check
+
+      - name: Hive Rust verification
+        env:
+          HIVE_CACHE_FROM: ""
+          HIVE_NEO4J_TEST_URI: 127.0.0.1:7687
+          HIVE_NEO4J_TEST_USERNAME: neo4j
+          HIVE_NEO4J_TEST_PASSWORD: hive-integration-password
+        run: task hive:verify

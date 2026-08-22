@@ -31,6 +31,8 @@ fn hive_materializes_test_and_clippy_dependency_graphs_in_parallel() -> anyhow::
         "COPY --from=clippy-dependencies /opt/nook/hive-clippy-dependencies",
         "cargo test --locked --workspace --no-run",
         "cargo clippy --locked --workspace --all-targets -- -D warnings",
+        "ENV CARGO_PROFILE_DEV_DEBUG=0",
+        "ENV CARGO_PROFILE_TEST_DEBUG=0",
         "COPY graph.yaml graph.yaml",
     ] {
         assert!(
@@ -357,16 +359,18 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         remote.matches("NOOK_SCCACHE_ENDPOINT").count(),
         compiler_jobs
     );
-    assert_eq!(
-        remote.matches("isolated-cache-write: \"true\"").count(),
-        compiler_jobs
-    );
+    assert!(remote.contains(
+        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
+    ));
+    let remote_batch = read(".github/scripts/remote-task-batch.sh");
+    assert!(remote_batch.contains("env HIVE_CACHE_TO= task hive:verify"));
 
     let hive = read(".github/workflows/hive.yml");
     assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));
     assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
     assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
-    assert!(hive.contains("isolated-cache-write: \"true\""));
+    assert!(hive.contains("runs-on: nook-k0s-hive"));
+    assert!(hive.contains("isolated-cache-write: \"false\""));
     assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
     Ok(())
 }
