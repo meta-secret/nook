@@ -523,6 +523,31 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
             ),
         "preflight must skip an exact ref only after hosted setup proves it absent"
     );
+    for (bake_file, cache_from) in [
+        (rust_bake.as_str(), "rust_base_cache_from"),
+        (rust_bake.as_str(), "rust_ecosystem_dylint_cache_from"),
+        (rust_bake.as_str(), "rust_ecosystem_fuzz_cache_from"),
+        (rust_bake.as_str(), "rust_ecosystem_policy_tools_cache_from"),
+        (
+            rust_bake.as_str(),
+            "rust_ecosystem_deterministic_cache_from",
+        ),
+        (rust_bake.as_str(), "rust_ecosystem_kani_cache_from"),
+        (rust_bake.as_str(), "rust_deps_cache_from"),
+        (rust_bake.as_str(), "rust_wasm_deps_cache_from"),
+        (rust_bake.as_str(), "rust_native_source_cache_from"),
+        (rust_bake.as_str(), "rust_wasm_source_cache_from"),
+        (rust_bake.as_str(), "rust_wasm_node_cache_from"),
+        (web_image.as_str(), "web_e2e_cache_from"),
+        (preflight_bake.as_str(), "preflight_cache_from"),
+    ] {
+        assert!(
+            assignment_body(bake_file, cache_from)?.contains(
+                "GHA_CACHE_EXACT_PROBES_COMPLETE != \"\" && GHA_CACHE_FALLBACK_ENABLED != \"\"",
+            ),
+            "{cache_from} must omit a git-scoped importer after the setup probe proves that ref absent"
+        );
+    }
     for availability in [
         "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE",
