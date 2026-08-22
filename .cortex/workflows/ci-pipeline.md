@@ -863,9 +863,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use
-  ARC. Fork PRs and all other PR, Main, and release jobs use GitHub-hosted
-  runners.
+- Trusted same-repository PR jobs and every explicit Main job use ARC. Fork PRs,
+  other PR jobs, and release jobs use GitHub-hosted runners.
 - Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
 - WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
 - Main then verifies the fingerprint from a fresh builder.

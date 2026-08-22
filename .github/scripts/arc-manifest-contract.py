@@ -34,6 +34,7 @@ BUILDKIT_CLONER = (
 ).read_text()
 HIVE_VALUES_RENDERER = ROOT / "infra/k0s/scripts/arc-hive-values.rb"
 HIVE_WORKFLOW = (ROOT / ".github/workflows/hive.yml").read_text()
+MAIN_WORKFLOW = (ROOT / ".github/workflows/main.yml").read_text()
 HIVE_TASKS = (ROOT / "agentic-ai/minds/hive/Taskfile.yml").read_text()
 REMOTE_WORKFLOW = (ROOT / ".github/workflows/remote.yml").read_text()
 
@@ -410,6 +411,13 @@ require(
     "runtime-dependent remote jobs must retain hosted capacity",
 )
 require(TASKS, "Successful smoke run did not report", "ARC smoke must verify its runner label")
+forbid(
+    MAIN_WORKFLOW,
+    "runs-on: ubuntu-latest",
+    "trusted Main jobs must not bypass the configured ARC route",
+)
+if MAIN_WORKFLOW.count("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}") != 8:
+    raise AssertionError("every explicit trusted Main job must use the ARC route")
 for dispatch_marker in [
     'dispatch_nonce="$(openssl rand -hex 16)"',
     '--raw-field "dispatch_nonce=$dispatch_nonce"',

@@ -78,7 +78,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Local formatting may publish source-free dependency stages by content
     fingerprint when cache recipes are clean.
   - Opt out with `NOOK_REGISTRY_CACHE=0`.
-- **Main owns the shared hosted BuildKit lineage.**
+- **Main owns the shared trusted BuildKit lineage.**
   - Main exports the Rust, WASM, web, and e2e caches.
   - Every PR job restores its exact SHA alone when that scope exists.
   - A new native or WASM source scope restores Main source alone when that ref exists.
@@ -153,6 +153,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Each Main-fix consumer builds only the browser image.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web lanes.
+  - Every explicit Main job selects `NOOK_RUNS_ON`, with `ubuntu-latest` only
+    as the configuration fallback.
   - Each lane verifies, then exports only its already-solved local builder graph.
   - Export happens only after every lane-specific check succeeds.
   - The WASM dependency scope keeps its no-import, forced-zstd export.
