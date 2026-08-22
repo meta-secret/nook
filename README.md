@@ -315,6 +315,12 @@ domain-owned modules from [`infra/tasks/`](infra/tasks/) into the public
 `infra:*` command surface; standalone infrastructure shell scripts and orphan
 domain Taskfiles are prohibited.
 
+Repository automation has one hard language boundary: do not add Python source,
+runtime invocations, packages, or inline programs. Use Bun/TypeScript for
+scripts and controllers, Rust for compiled behavior, and Taskfiles for
+orchestration. `task preflight:source-architecture` enforces the complete
+tracked tree.
+
 ```sh
 task web:dev
 ```

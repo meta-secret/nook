@@ -2,9 +2,9 @@ use super::*;
 use anyhow::Context;
 
 #[test]
-fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() -> anyhow::Result<()> {
+fn delivery_ci_uses_configured_runners_with_scoped_buildkit_caches() -> anyhow::Result<()> {
     let root = repository_root();
-    assert_hosted_workflow_runtime_contract(&root);
+    assert_workflow_runtime_contract(&root);
     assert_docker_setup_contract(&root);
     assert_pr_workflow_contract(&root)?;
     assert_artifact_backed_e2e_contract(&root)?;
@@ -12,17 +12,13 @@ fn delivery_ci_uses_github_hosted_runners_with_scoped_buildkit_caches() -> anyho
     Ok(())
 }
 
-fn assert_hosted_workflow_runtime_contract(root: &Path) {
+fn assert_workflow_runtime_contract(root: &Path) {
     for workflow in [
         ".github/workflows/pr.yml",
         ".github/workflows/main.yml",
         ".github/workflows/release.yml",
     ] {
         let content = read(root, workflow);
-        assert!(
-            content.contains("runs-on: ubuntu-latest"),
-            "{workflow} must use elastic GitHub-hosted capacity"
-        );
         for run_scoped_image in [
             "DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}",
             "DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
@@ -35,15 +31,25 @@ fn assert_hosted_workflow_runtime_contract(root: &Path) {
     }
     let pr = read(root, ".github/workflows/pr.yml");
     let main = read(root, ".github/workflows/main.yml");
+    let release = read(root, ".github/workflows/release.yml");
     let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
     assert!(
-        main.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+        pr.contains("runs-on: ubuntu-latest")
+            && release.contains("runs-on: ubuntu-latest")
             && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
                 == 5,
-        "trusted Rust jobs must select configured ARC and preserve fork fallback"
+        "trusted PR Rust jobs must select configured ARC and preserve hosted fork and release capacity"
+    );
+    assert!(
+        !main.contains("runs-on: ubuntu-latest")
+            && main
+                .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+                .count()
+                == 8,
+        "every explicit trusted Main job must select configured ARC with a hosted fallback"
     );
 }
 

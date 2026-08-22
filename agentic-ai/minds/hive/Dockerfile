@@ -39,7 +39,6 @@ RUN apt-get update \
         jq \
         openssh-client \
         patch \
-        python3 \
         ripgrep \
         rsync \
         xz-utils \
@@ -258,6 +257,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 FROM worker-runtime-toolchain AS runtime
 
 COPY --from=builder /build/target/release/hive /usr/local/bin/hive
+COPY controller/reaper.ts /usr/local/share/nook/hive-reaper-controller.ts
 COPY --from=console-builder /console/dist /usr/local/share/hive-console
 COPY hive/docker/codex-linux-sandbox-no-proc.sh /usr/local/bin/hive-codex-linux-sandbox
 RUN chmod 0755 /usr/local/bin/hive-codex-linux-sandbox

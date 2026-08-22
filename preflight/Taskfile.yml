@@ -91,7 +91,7 @@ tasks:
         vars: { WORKSPACE: preflight }
 
   preflight:source-architecture:
-    desc: Enforce authored source size limits and Rust unit-test colocation.
+    desc: Enforce source architecture and repository language boundaries.
     dir: '{{.ROOT_DIR}}'
     cmds:
       - >-
@@ -99,6 +99,11 @@ tasks:
         --locked
         --manifest-path preflight/Cargo.toml
         --test source_file_size
+      - >-
+        cargo test
+        --locked
+        --manifest-path preflight/Cargo.toml
+        --test repository_languages
 
   preflight:typescript-state:
     desc: Enforce authored TypeScript absence, enum, and state-modeling invariants.

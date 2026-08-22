@@ -17,7 +17,7 @@ tasks:
         install -d -m 0750 "$download_dir"
         sudo -n apt-get update -qq
         sudo -n apt-get install -y -qq --no-install-recommends \
-          acl jq python3 python3-yaml ruby
+          acl jq ruby
 
         firewall_fragment="$(mktemp)"
         firewall_config="$(mktemp)"
@@ -475,24 +475,21 @@ tasks:
           sudo -n cat /var/lib/hive/k0s-recovery/neo4j-secrets.yaml.hmac \
             > "$expected_mac"
           test -s "$recovery_key"
-          python3 - "$recovery_key" "$encrypted_backup" "$expected_mac" <<'PY'
-        import hashlib
-        import hmac
-        import pathlib
-        import sys
-
-        master = pathlib.Path(sys.argv[1]).read_bytes().strip()
-        ciphertext = pathlib.Path(sys.argv[2]).read_bytes()
-        expected = pathlib.Path(sys.argv[3]).read_text().strip()
-        mac_key = hmac.new(
-            master,
-            b"nook-hive-recovery-hmac-v1",
-            hashlib.sha256,
-        ).digest()
-        actual = hmac.new(mac_key, ciphertext, hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(actual, expected):
-            raise SystemExit("Neo4j recovery snapshot authentication failed")
-        PY
+          master_hex="$(od -An -vtx1 "$recovery_key" | tr -d ' \n')"
+          mac_key_hex="$(
+            printf '%s' 'nook-hive-recovery-hmac-v1' |
+              openssl dgst -sha256 -mac HMAC -macopt "hexkey:$master_hex" -binary |
+              od -An -vtx1 | tr -d ' \n'
+          )"
+          actual_mac="$(
+            openssl dgst -sha256 -mac HMAC -macopt "hexkey:$mac_key_hex" \
+              "$encrypted_backup" | awk '{print $NF}'
+          )"
+          expected_mac_value="$(tr -d '\r\n' < "$expected_mac")"
+          test "$actual_mac" = "$expected_mac_value" || {
+            printf '%s\n' 'Neo4j recovery snapshot authentication failed' >&2
+            exit 1
+          }
           sudo -n openssl enc -d -aes-256-cbc -pbkdf2 \
             -pass "file:$recovery_key" \
             -in "$encrypted_backup" |
@@ -739,23 +736,14 @@ tasks:
             -pass "file:$recovery_key" \
             -in "$secret_backup" \
             -out "$encrypted_backup"
-          python3 - "$recovery_key" "$encrypted_backup" "$backup_mac" <<'PY'
-        import hashlib
-        import hmac
-        import pathlib
-        import sys
-
-        master = pathlib.Path(sys.argv[1]).read_bytes().strip()
-        ciphertext = pathlib.Path(sys.argv[2]).read_bytes()
-        mac_key = hmac.new(
-            master,
-            b"nook-hive-recovery-hmac-v1",
-            hashlib.sha256,
-        ).digest()
-        pathlib.Path(sys.argv[3]).write_text(
-            hmac.new(mac_key, ciphertext, hashlib.sha256).hexdigest() + "\n"
-        )
-        PY
+          master_hex="$(od -An -vtx1 "$recovery_key" | tr -d ' \n')"
+          mac_key_hex="$(
+            printf '%s' 'nook-hive-recovery-hmac-v1' |
+              openssl dgst -sha256 -mac HMAC -macopt "hexkey:$master_hex" -binary |
+              od -An -vtx1 | tr -d ' \n'
+          )"
+          openssl dgst -sha256 -mac HMAC -macopt "hexkey:$mac_key_hex" \
+            "$encrypted_backup" | awk '{print $NF}' > "$backup_mac"
           sudo -n install -m 0600 \
             "$encrypted_backup" \
             "$recovery_dir/neo4j-secrets.yaml.enc"
