@@ -15,6 +15,13 @@ const EXCLUDED_CONSUMER_SCOPE_PREFIXES = [
   'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm/',
 ] as const;
+const EXCLUDED_CONSUMER_SCOPE_SEGMENTS = ['/e2e/', '/tests/'] as const;
+const EXCLUDED_CONSUMER_SCOPE_SUFFIXES = [
+  '.spec.svelte',
+  '.spec.ts',
+  '.test.svelte',
+  '.test.ts',
+] as const;
 
 export type InternalApiConsumerScopeFinding = {
   readonly code: string;
@@ -42,7 +49,7 @@ export function auditInternalApiExpertConsumerScope(
       code: 'invalid-internal-api-consumer-scope',
       path: args.profile.agentDefinitionPath,
       message:
-        'internal_api_expert must declare every authored production TypeScript file that directly imports, configures, or resolves a generated WASM binding, and no broader scope.',
+        'internal_api_expert must declare every authored production TypeScript or Svelte file that directly imports, configures, or resolves a generated WASM binding, and no broader scope.',
     },
   ];
 }
@@ -53,27 +60,51 @@ export function discoverInternalApiConsumerPaths(
   const webRoot = join(repoRoot, WEB_ROOT);
   const includes = [
     '**/src/**/*.ts',
+    '**/src/**/*.svelte',
     '**/scripts/build.ts',
     '**/scripts/verify-app-isolation.ts',
     '**/vite.config.ts',
     '**/vite-config.ts',
   ];
   return ts.sys
-    .readDirectory(webRoot, ['.ts'], [], includes)
-    .filter(
-      (path) =>
-        !EXCLUDED_CONSUMER_SCOPE_PREFIXES.some((prefix) =>
-          relative(repoRoot, path).replaceAll('\\', '/').startsWith(prefix),
-        ) && referencesGeneratedBinding(path),
-    )
+    .readDirectory(webRoot, ['.ts', '.svelte'], [], includes)
+    .filter((path) => {
+      const repoPath = relative(repoRoot, path).replaceAll('\\', '/');
+      return (
+        productionConsumerScopePath(repoPath) &&
+        referencesGeneratedBinding(path)
+      );
+    })
     .map((path) => relative(repoRoot, path).replaceAll('\\', '/'))
     .sort();
 }
 
+function productionConsumerScopePath(repoPath: string): boolean {
+  return (
+    !EXCLUDED_CONSUMER_SCOPE_PREFIXES.some((prefix) =>
+      repoPath.startsWith(prefix),
+    ) &&
+    !EXCLUDED_CONSUMER_SCOPE_SEGMENTS.some((segment) =>
+      repoPath.includes(segment),
+    ) &&
+    !EXCLUDED_CONSUMER_SCOPE_SUFFIXES.some((suffix) =>
+      repoPath.endsWith(suffix),
+    )
+  );
+}
+
 function referencesGeneratedBinding(sourcePath: string): boolean {
+  const source = readFileSync(sourcePath, 'utf8');
+  const typeScriptSources = sourcePath.endsWith('.svelte')
+    ? extractSvelteTypeScriptSources(source)
+    : [source];
+  return typeScriptSources.some(typeScriptSourceReferencesGeneratedBinding);
+}
+
+function typeScriptSourceReferencesGeneratedBinding(source: string): boolean {
   const sourceFile = ts.createSourceFile(
-    sourcePath,
-    readFileSync(sourcePath, 'utf8'),
+    'module-expert-consumer.ts',
+    source,
     ts.ScriptTarget.Latest,
     true,
   );
@@ -92,4 +123,26 @@ function referencesGeneratedBinding(sourcePath: string): boolean {
   };
   visit(sourceFile);
   return found;
+}
+
+function extractSvelteTypeScriptSources(source: string): readonly string[] {
+  const scripts: string[] = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const openingStart = source.indexOf('<script', cursor);
+    if (openingStart < 0) break;
+    const openingEnd = source.indexOf('>', openingStart + '<script'.length);
+    if (openingEnd < 0) break;
+    const closingStart = source.indexOf('</script>', openingEnd + 1);
+    if (closingStart < 0) break;
+    const attributes = source.slice(
+      openingStart + '<script'.length,
+      openingEnd,
+    );
+    if (/\blang\s*=\s*(?:"ts"|'ts')/.test(attributes)) {
+      scripts.push(source.slice(openingEnd + 1, closingStart));
+    }
+    cursor = closingStart + '</script>'.length;
+  }
+  return scripts;
 }

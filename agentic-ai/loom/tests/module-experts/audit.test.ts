@@ -292,6 +292,47 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
 ];
 
 describe('module expert audit', () => {
+  test('discovers bindings only inside production Svelte TypeScript scripts', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-svelte-scope-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    const fixtureFiles = new Map<string, string>([
+      [
+        'nook-app/nook-web/example/src/Included.svelte',
+        '<div>$app-wasm</div>\n<script>const ignored = "$app-wasm";</script>\n<script lang="ts">import type { NookVaultManager } from "$app-wasm";</script>\n',
+      ],
+      [
+        'nook-app/nook-web/example/src/OutsideScript.svelte',
+        '<div data-binding="$app-wasm">No TypeScript import</div>\n',
+      ],
+      [
+        'nook-app/nook-web/example/e2e/mock/src/Excluded.svelte',
+        '<script lang="ts">import type { NookVaultManager } from "$app-wasm";</script>\n',
+      ],
+      [
+        'nook-app/nook-web/nook-web-research/src/Excluded.svelte',
+        '<script lang="ts">import type { NookVaultManager } from "$app-wasm";</script>\n',
+      ],
+      [
+        'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/Excluded.svelte',
+        '<script lang="ts">const generated = "nook-companion-wasm/nook_companion_wasm";</script>\n',
+      ],
+    ]);
+    const directoryOptions: MakeDirectoryOptions = { recursive: true };
+    try {
+      for (const [path, source] of fixtureFiles) {
+        const absolutePath = join(fixtureRoot, path);
+        await mkdir(dirname(absolutePath), directoryOptions);
+        await writeFile(absolutePath, source, 'utf8');
+      }
+
+      expect(discoverInternalApiConsumerPaths(fixtureRoot)).toEqual([
+        'nook-app/nook-web/example/src/Included.svelte',
+      ]);
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
   test('accepts the complete read-only project catalog', () => {
     const auditArgs: AuditModuleExpertsArgs = { repoRoot: REPO_ROOT };
     const report = auditModuleExperts(auditArgs);
@@ -391,6 +432,12 @@ describe('module expert audit', () => {
     );
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts',
+    );
+    expect(
+      discoveredConsumerPaths.filter((path) => path.endsWith('.svelte')),
+    ).toHaveLength(41);
+    expect(discoveredConsumerPaths).toContain(
+      'nook-app/nook-web/nook-web-shared/src/vault-app/App.svelte',
     );
     const bindingConfigurationPaths = [
       'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
