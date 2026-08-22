@@ -203,7 +203,9 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 
 - Supplies the artifact directory as a named host context to `nook-web`.
 - It never passes either multi-GB Rust branch as a Docker context or parent.
-- Only this small final web solve is retried once after the known immediate BuildKit frontend/Dockerfile-load flake.
+- This small final web solve is retried once after the known immediate BuildKit frontend/Dockerfile-load flake.
+- On ARC, the separate uncached S3 health-probe solve also retries once when its Dockerfile frontend vertex reports a transient authorization TLS timeout.
+- The probe does not retry an application vertex or a genuine S3 health failure.
 - The expensive preparation graph is never repeated.
 - The final Dockerfile asserts that `/usr/local/cargo` and `nook-app/target` are absent.
 

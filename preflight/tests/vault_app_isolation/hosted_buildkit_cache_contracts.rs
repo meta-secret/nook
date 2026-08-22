@@ -185,9 +185,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     for required in [
         "is_buildkit_frontend_flake",
+        "is_frontend_authorization_timeout",
         "failed to read dockerfile",
-        "non-transient Bake failure; not retrying",
-        "transient Bake failure; retrying in 2s...",
+        "status=${PIPESTATUS[0]}",
+        "non-transient BuildKit failure; not retrying",
+        "transient BuildKit failure; retrying in 2s...",
         "for attempt in 1 2; do",
     ] {
         assert!(
