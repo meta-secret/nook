@@ -2,6 +2,7 @@ import { join, resolve } from 'node:path';
 import { AgentAttemptJournal } from '../../src/agent-workflow/agent-journal.ts';
 import type { AgentAttemptJournalConfiguration } from '../../src/agent-workflow/agent-journal.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
@@ -37,6 +38,11 @@ export type CreateFailedAttemptArgs = Omit<
   'output'
 >;
 
+export type CreateCompletedAttemptWithAdapterArgs =
+  CreateCompletedAttemptArgs & {
+    readonly adapter: AgentAttemptAdapterKind;
+  };
+
 export async function createAuthorizedDirectParent(
   request: ModuleExpertInvocationRequest,
 ): Promise<void> {
@@ -67,6 +73,16 @@ export async function createAuthorizedDirectParent(
 export async function createCompletedAttempt(
   args: CreateCompletedAttemptArgs,
 ): Promise<void> {
+  const adapterArgs: CreateCompletedAttemptWithAdapterArgs = {
+    ...args,
+    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+  };
+  await createCompletedAttemptWithAdapter(adapterArgs);
+}
+
+export async function createCompletedAttemptWithAdapter(
+  args: CreateCompletedAttemptWithAdapterArgs,
+): Promise<void> {
   const journal = await createJournal(args);
   const terminal: TaskTerminal<string> = {
     kind: TaskTerminalKind.Completed,
@@ -81,7 +97,11 @@ export async function createCompletedAttempt(
 export async function createFailedAttempt(
   args: CreateFailedAttemptArgs,
 ): Promise<void> {
-  const journal = await createJournal(args);
+  const adapterArgs: CreateJournalArgs = {
+    ...args,
+    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+  };
+  const journal = await createJournal(adapterArgs);
   const terminal: TaskTerminal<string> = {
     kind: TaskTerminalKind.Failed,
     task: args.task,
@@ -129,8 +149,12 @@ export function moduleExpertEvidenceOutput(): ModuleExpertTaskOutput {
   };
 }
 
+type CreateJournalArgs = CreateFailedAttemptArgs & {
+  readonly adapter: AgentAttemptAdapterKind;
+};
+
 async function createJournal(
-  args: CreateFailedAttemptArgs,
+  args: CreateJournalArgs,
 ): Promise<AgentAttemptJournal<string>> {
   const runDirectory = join(
     args.repoRoot,
@@ -140,6 +164,7 @@ async function createJournal(
     args.runId,
   );
   const configuration: AgentAttemptJournalConfiguration = {
+    adapter: args.adapter,
     runDirectory,
     runId: args.runId,
     workflow: DelegatedAgentWorkflowName.AgentWork,

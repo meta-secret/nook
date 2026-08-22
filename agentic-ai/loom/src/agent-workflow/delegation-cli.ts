@@ -4,9 +4,11 @@ import { resolve } from 'node:path';
 import { AgentAttemptJournal } from './agent-journal.ts';
 import { AgentAttemptEventKind } from './agent-events.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
+  WorkflowResultKind,
 } from './domain.ts';
 import { WorkflowRuntimeActivityKind } from './events.ts';
 import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
@@ -73,6 +75,7 @@ async function main(): Promise<number> {
     request.runId,
   );
   const journalConfiguration: AgentAttemptJournalConfiguration = {
+    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
     runDirectory,
     runId: request.runId,
     workflow: DelegatedAgentWorkflowName.AgentWork,
@@ -168,6 +171,11 @@ function normalizedTerminal(
   terminal: TaskTerminal<string>,
 ): TaskTerminal<string> {
   if (terminal.kind !== TaskTerminalKind.Completed) return terminal;
+  if (terminal.output.resultKind === WorkflowResultKind.ModuleExpertEvidence) {
+    throw new Error(
+      'Generic delegation cannot record isolated module expert evidence.',
+    );
+  }
   return {
     ...terminal,
     output: decodeWorkflowTaskOutput(JSON.stringify(terminal.output)),

@@ -8,11 +8,13 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
   TaskTerminalKind,
   TaskProcessingKind,
+  WorkflowResultKind,
 } from './domain.ts';
 import type {
   AgentAttemptParent,
@@ -42,6 +44,7 @@ const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
 };
 
 export type AgentAttemptJournalConfiguration = {
+  readonly adapter: AgentAttemptAdapterKind;
   readonly runDirectory: string;
   readonly runId: WorkflowRunId;
   readonly workflow: AgentProcessingWorkflowName;
@@ -64,6 +67,11 @@ export class AgentAttemptJournal<TTask extends string> {
   private finalized: boolean;
 
   constructor(configuration: AgentAttemptJournalConfiguration) {
+    if (
+      !Object.values(AgentAttemptAdapterKind).includes(configuration.adapter)
+    ) {
+      throw new Error('Agent attempt adapter provenance is invalid.');
+    }
     assertFilesystemIdentifier(configuration.task);
     assertFilesystemIdentifier(configuration.agent);
     assertFilesystemIdentifier(configuration.runId);
@@ -129,6 +137,7 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent attempt event timestamp is invalid.');
     }
     const metadata: AgentAttemptEventMetadata = {
+      adapter: this.configuration.adapter,
       runId: this.configuration.runId,
       workflow: this.configuration.workflow,
       workflowVersion: this.configuration.workflowVersion,
@@ -198,7 +207,16 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent terminal identity differs from its journal.');
     }
     if (terminal.kind === TaskTerminalKind.Completed) {
-      decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
+      const output = decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
+      if (
+        output.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
+        this.configuration.adapter !==
+          AgentAttemptAdapterKind.ModuleExpertInvocation
+      ) {
+        throw new Error(
+          'Module expert evidence requires the isolated invocation adapter.',
+        );
+      }
       const view = terminal.output?.materializedViewMarkdown;
       if (
         typeof terminal.threadId !== 'string' ||

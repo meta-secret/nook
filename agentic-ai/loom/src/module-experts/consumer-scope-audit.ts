@@ -42,7 +42,7 @@ export function auditInternalApiExpertConsumerScope(
       code: 'invalid-internal-api-consumer-scope',
       path: args.profile.agentDefinitionPath,
       message:
-        'internal_api_expert must declare every authored production TypeScript file that directly imports a generated WASM binding, and no broader scope.',
+        'internal_api_expert must declare every authored production TypeScript file that directly imports, configures, or resolves a generated WASM binding, and no broader scope.',
     },
   ];
 }
@@ -51,40 +51,45 @@ export function discoverInternalApiConsumerPaths(
   repoRoot: string,
 ): readonly string[] {
   const webRoot = join(repoRoot, WEB_ROOT);
-  const includes = ['**/src/**/*.ts', '**/scripts/build.ts'];
+  const includes = [
+    '**/src/**/*.ts',
+    '**/scripts/build.ts',
+    '**/scripts/verify-app-isolation.ts',
+    '**/vite.config.ts',
+    '**/vite-config.ts',
+  ];
   return ts.sys
     .readDirectory(webRoot, ['.ts'], [], includes)
     .filter(
       (path) =>
         !EXCLUDED_CONSUMER_SCOPE_PREFIXES.some((prefix) =>
           relative(repoRoot, path).replaceAll('\\', '/').startsWith(prefix),
-        ) && importsGeneratedBinding(path),
+        ) && referencesGeneratedBinding(path),
     )
     .map((path) => relative(repoRoot, path).replaceAll('\\', '/'))
     .sort();
 }
 
-function importsGeneratedBinding(sourcePath: string): boolean {
+function referencesGeneratedBinding(sourcePath: string): boolean {
   const sourceFile = ts.createSourceFile(
     sourcePath,
     readFileSync(sourcePath, 'utf8'),
     ts.ScriptTarget.Latest,
     true,
   );
-  return sourceFile.statements.some((statement) => {
+  let found = false;
+  const visit = (node: ts.Node): void => {
     if (
-      !ts.isImportDeclaration(statement) &&
-      !ts.isExportDeclaration(statement)
-    ) {
-      return false;
-    }
-    const moduleSpecifier = statement.moduleSpecifier;
-    if (!moduleSpecifier) return false;
-    return (
-      ts.isStringLiteralLike(moduleSpecifier) &&
+      ts.isStringLiteralLike(node) &&
       GENERATED_BINDING_REFERENCES.some((binding) =>
-        moduleSpecifier.text.includes(binding),
+        node.text.includes(binding),
       )
-    );
-  });
+    ) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return found;
 }

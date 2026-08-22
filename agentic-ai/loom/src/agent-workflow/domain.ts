@@ -18,6 +18,12 @@ export enum AgentWorkspacePolicy {
   ReadOnly = 'read-only',
 }
 
+export enum AgentAttemptAdapterKind {
+  GenericDelegationRecorder = 'generic-delegation-recorder',
+  ModuleExpertInvocation = 'module-expert-invocation',
+  StaticWorkflowScheduler = 'static-workflow-scheduler',
+}
+
 export enum AgentReasoningEffort {
   Low = 'low',
   Medium = 'medium',

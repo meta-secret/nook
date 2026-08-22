@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AgentAttemptEventKind } from '../agent-workflow/agent-events.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   MaterializedViewPresence,
@@ -87,6 +88,8 @@ export async function verifyModuleExpertParentAuthorization(
   if (
     authority.firstEvent.depth !== 1 ||
     authority.firstEvent.parent.kind !== AgentAttemptParentKind.WorkflowRoot ||
+    authority.firstEvent.adapter ===
+      AgentAttemptAdapterKind.ModuleExpertInvocation ||
     args.expertNames.includes(authority.firstEvent.agent) ||
     authority.terminal.output.resultKind !==
       WorkflowResultKind.ModuleDevelopmentPlan
@@ -241,6 +244,12 @@ async function readParentAttempt(
     authorizationFailed();
   }
   if (viewSerialized !== `${decodedOutput.materializedViewMarkdown.trim()}\n`) {
+    authorizationFailed();
+  }
+  if (
+    decodedOutput.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
+    firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation
+  ) {
     authorizationFailed();
   }
   return { firstEvent, terminal: { ...terminal, output: decodedOutput } };

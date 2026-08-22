@@ -31,14 +31,19 @@ import {
 } from '../../src/module-experts/consumer-scope-audit.ts';
 import type { AuditInternalApiExpertConsumerScopeArgs } from '../../src/module-experts/consumer-scope-audit.ts';
 import {
+  INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
   INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
+  INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
   MODULE_EXPERT_CATALOG,
+  MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
 } from '../../src/module-experts/catalog.ts';
 import type {
   ModuleExpertGeneratedMarker,
   ModuleExpertGeneratedScope,
   ModuleExpertProfile,
 } from '../../src/module-experts/catalog.ts';
+import { auditModuleExpertSnapshotScopes } from '../../src/module-experts/snapshot-scope-audit.ts';
+import type { AuditModuleExpertSnapshotScopesArgs } from '../../src/module-experts/snapshot-scope-audit.ts';
 import {
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
   MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
@@ -297,7 +302,86 @@ describe('module expert audit', () => {
     expect(report.auditOk).toBe(true);
   });
 
-  test('rejects missing, broad, generated, or reordered internal API consumer scope', () => {
+  test('requires exact canonical context and registered Rust boundary scope', () => {
+    expect(MODULE_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
+      '.cortex/dynamic-skills/module-expert.md',
+      '.cortex/workflows/module-oriented-development.md',
+    ]);
+    expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
+      '.cortex/dynamic-skills/internal-api-expert.md',
+      ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    ]);
+    expect(INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS).toEqual([
+      'nook-app/nook-platform/nook-app-common',
+      'nook-app/nook-platform/nook-auth2',
+      'nook-app/nook-platform/nook-authenticator-domain',
+      'nook-app/nook-platform/nook-companion-core',
+      'nook-app/nook-platform/nook-core',
+      'nook-app/nook-platform/nook-event-log',
+      'nook-app/nook-platform/nook-replication',
+    ]);
+    const acceptedArgs: AuditModuleExpertSnapshotScopesArgs = {
+      profiles: MODULE_EXPERT_CATALOG,
+    };
+    expect(auditModuleExpertSnapshotScopes(acceptedArgs)).toEqual([]);
+
+    const coreProfile = MODULE_EXPERT_CATALOG.find(
+      (profile) => profile.name === 'core_expert',
+    );
+    if (!coreProfile) throw new Error('core_expert test fixture is missing.');
+    const driftedProfiles: readonly ModuleExpertProfile[] = [
+      {
+        ...internalApiProfile,
+        canonicalContextPaths:
+          internalApiProfile.canonicalContextPaths.slice(1),
+      },
+      {
+        ...internalApiProfile,
+        boundaryScopePaths: internalApiProfile.boundaryScopePaths.slice(1),
+      },
+      {
+        ...internalApiProfile,
+        boundaryScopePaths: [
+          ...internalApiProfile.boundaryScopePaths,
+          'nook-app/nook-web',
+        ],
+      },
+      {
+        ...internalApiProfile,
+        boundaryScopePaths: [
+          ...internalApiProfile.boundaryScopePaths,
+        ].reverse(),
+      },
+      {
+        ...coreProfile,
+        boundaryScopePaths: ['nook-app/nook-platform/nook-auth2'],
+      },
+    ];
+    const expectedCodes = [
+      'invalid-canonical-expert-context',
+      'invalid-internal-api-rust-boundary-scope',
+      'invalid-internal-api-rust-boundary-scope',
+      'invalid-internal-api-rust-boundary-scope',
+      'unexpected-boundary-scope',
+    ];
+    for (const [index, driftedProfile] of driftedProfiles.entries()) {
+      const expectedCode = expectedCodes[index];
+      if (!expectedCode) {
+        throw new Error('Snapshot scope drift fixture is incomplete.');
+      }
+      const profiles = MODULE_EXPERT_CATALOG.map((profile) =>
+        profile.name === driftedProfile.name ? driftedProfile : profile,
+      );
+      const auditArgs: AuditModuleExpertSnapshotScopesArgs = { profiles };
+      expect(
+        auditModuleExpertSnapshotScopes(auditArgs).map(
+          (finding) => finding.code,
+        ),
+      ).toContain(expectedCode);
+    }
+  });
+
+  test('rejects missing, broad, generated, or reordered internal API binding scope', () => {
     const discoveredConsumerPaths = discoverInternalApiConsumerPaths(REPO_ROOT);
     expect(discoveredConsumerPaths).toEqual(
       INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
@@ -307,6 +391,22 @@ describe('module expert audit', () => {
     );
     expect(discoveredConsumerPaths).toContain(
       'nook-app/nook-web/nook-web-shared/src/extension/extension-connect-scope.ts',
+    );
+    const bindingConfigurationPaths = [
+      'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
+      'nook-app/nook-web/nook-vault-simple/vite.config.ts',
+      'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
+      'nook-app/nook-web/nook-web-app/vite.config.ts',
+      'nook-app/nook-web/nook-web-shared/vite-config.ts',
+    ] as const;
+    for (const configurationPath of bindingConfigurationPaths) {
+      expect(discoveredConsumerPaths).toContain(configurationPath);
+    }
+    expect(discoveredConsumerPaths).not.toContain(
+      'nook-app/nook-web/nook-web-app/tests/unit/setup-wasm.ts',
+    );
+    expect(discoveredConsumerPaths).not.toContain(
+      'nook-app/nook-web/nook-web-app/e2e/connect.spec.ts',
     );
     const missingScopeProfiles = INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS.map(
       (omittedPath): ModuleExpertProfile => ({

@@ -12,6 +12,7 @@ import type {
   TaskTerminal,
 } from '../../src/agent-workflow/domain.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   AgentWorkspacePolicy,
   DelegatedAgentWorkflowName,
@@ -328,6 +329,9 @@ describe('module expert invocation', () => {
       const eventsSerialized = await readFile(eventsPath, 'utf8');
       const events = await readEvents(eventsPath);
       for (const [index, event] of events.entries()) {
+        expect(event.adapter).toBe(
+          AgentAttemptAdapterKind.ModuleExpertInvocation,
+        );
         expect(event.runId).toBe(request.runId);
         expect(event.sourceCommit).toBe(request.sourceCommit);
         expect(event.task).toBe(request.task);

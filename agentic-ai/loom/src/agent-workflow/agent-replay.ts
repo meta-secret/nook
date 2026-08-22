@@ -1,5 +1,6 @@
 import { AgentAttemptEventKind } from './agent-events.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   MaterializedViewAuthorKind,
@@ -29,6 +30,9 @@ export type ReplayedAgentAttempt = {
 };
 
 const AGENT_EVENT_KINDS = new Set<string>(Object.values(AgentAttemptEventKind));
+const AGENT_ATTEMPT_ADAPTER_KINDS = new Set<string>(
+  Object.values(AgentAttemptAdapterKind),
+);
 const RUNTIME_ACTIVITY_KINDS = new Set<string>(
   Object.values(WorkflowRuntimeActivityKind),
 );
@@ -171,6 +175,7 @@ export function replayAgentAttemptJournal(
 
 function assertValidIdentity(event: AgentAttemptEventMetadata): void {
   if (
+    !AGENT_ATTEMPT_ADAPTER_KINDS.has(event.adapter) ||
     !safeIdentifier(event.task) ||
     !safeIdentifier(event.agent) ||
     !safeIdentifier(event.runId) ||
@@ -235,6 +240,7 @@ function assertSameIdentity(pair: AgentAttemptIdentityPair): void {
   const expected = pair.expected;
   const actual = pair.actual;
   if (
+    actual.adapter !== expected.adapter ||
     actual.runId !== expected.runId ||
     actual.workflow !== expected.workflow ||
     actual.workflowVersion !== expected.workflowVersion ||

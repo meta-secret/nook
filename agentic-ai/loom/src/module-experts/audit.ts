@@ -23,6 +23,8 @@ import {
   discoverInternalApiConsumerPaths,
 } from './consumer-scope-audit.ts';
 import type { AuditInternalApiExpertConsumerScopeArgs } from './consumer-scope-audit.ts';
+import { auditModuleExpertSnapshotScopes } from './snapshot-scope-audit.ts';
+import type { AuditModuleExpertSnapshotScopesArgs } from './snapshot-scope-audit.ts';
 import {
   MODULE_EXPERT_AUTH_BROKER_CLIENT_SOURCE,
   MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
@@ -399,6 +401,10 @@ function validateProfiles(context: ModuleExpertValidationContext): void {
     };
     validateProfilePaths(validateProfilePathsArgs);
   }
+  const snapshotScopeArgs: AuditModuleExpertSnapshotScopesArgs = {
+    profiles: MODULE_EXPERT_CATALOG,
+  };
+  context.findings.push(...auditModuleExpertSnapshotScopes(snapshotScopeArgs));
   validateInternalApiProfile(context);
 }
 
@@ -411,6 +417,8 @@ type ValidateProfilePathsArgs = {
 function validateProfilePaths(args: ValidateProfilePathsArgs): void {
   const paths = [
     args.profile.agentDefinitionPath,
+    ...args.profile.boundaryScopePaths,
+    ...args.profile.canonicalContextPaths,
     ...args.profile.moduleRoots,
     ...args.profile.scopePaths,
     ...args.profile.generatedScopePaths.flatMap((scope) => [
@@ -444,6 +452,8 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
   }
   const requiredPaths = [
     args.profile.agentDefinitionPath,
+    ...args.profile.boundaryScopePaths,
+    ...args.profile.canonicalContextPaths,
     ...args.profile.moduleRoots,
     ...args.profile.scopePaths,
     ...args.profile.publicEntryPoints,

@@ -443,7 +443,10 @@ completed immediate parent. Direct named experts are agent-attempt children at
 depth two or three; they never use workflow-root lineage, and their evidence
 cannot authorize descendants.
 Each expert reads an immutable, catalog-scoped commit snapshot through bounded
-loopback list, read, and literal-search tools. The credential is redeemed once
+loopback list, read, and literal-search tools. Every snapshot includes its
+canonical skill and workflow authorities. The internal API expert also receives
+the exact registered portable Rust roots needed for boundary inspection.
+The credential is redeemed once
 through helper source embedded in the running Loom module, rather than loaded
 from the analyzed commit or live worktree. It is absent from the Codex process
 environment, provider configuration, arguments, and repository snapshot.

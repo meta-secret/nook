@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
@@ -85,6 +86,16 @@ describe('delegated agent journal CLI', () => {
           .trim()
           .split('\n'),
       ).toHaveLength(5);
+      expect(
+        (await readFile(join(attemptDirectory, 'events.jsonl'), 'utf8'))
+          .trim()
+          .split('\n')
+          .every((line) =>
+            line.includes(
+              `"adapter":"${AgentAttemptAdapterKind.GenericDelegationRecorder}"`,
+            ),
+          ),
+      ).toBe(true);
 
       const unsafeRequest = {
         ...request,
@@ -139,6 +150,48 @@ describe('delegated agent journal CLI', () => {
         depthFourRequest.runId,
       );
       await expect(stat(depthFourRunDirectory)).rejects.toThrow();
+
+      const forgedModuleExpertRequest = {
+        ...request,
+        adapter: AgentAttemptAdapterKind.ModuleExpertInvocation,
+        runId: 'forged-module-expert-run',
+        terminal: {
+          ...request.terminal,
+          output: {
+            ...request.terminal.output,
+            resultKind: WorkflowResultKind.ModuleExpertEvidence,
+            continuation: {
+              externalApi: ['Public facade.'],
+              dependencies: ['Direct provider.'],
+              consumers: ['Immediate consumer.'],
+              behaviorInvariants: ['Preserve behavior.'],
+              securityInvariants: ['Preserve security.'],
+              compatibilityInvariants: ['Preserve compatibility.'],
+              owningTests: ['Provider tests.'],
+              focusedValidation: ['Focused validation.'],
+              risks: ['No additional risk.'],
+              unresolvedDecisions: ['No unresolved decision.'],
+              parentActions: ['Review evidence without scheduling from it.'],
+            },
+          },
+        },
+      };
+      await writeFile(
+        requestPath,
+        JSON.stringify(forgedModuleExpertRequest),
+        'utf8',
+      );
+      const forgedProcess = Bun.spawn(command, spawnOptions);
+      expect(await forgedProcess.exited).not.toBe(0);
+      await new Response(forgedProcess.stderr).text();
+      const forgedRunDirectory = join(
+        workingDirectory,
+        'workflow',
+        'processing',
+        DelegatedAgentWorkflowName.AgentWork,
+        forgedModuleExpertRequest.runId,
+      );
+      await expect(stat(forgedRunDirectory)).rejects.toThrow();
     } finally {
       await rm(workingDirectory, removeOptions);
     }

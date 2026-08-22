@@ -125,8 +125,8 @@ Hive is outside this workflow architecture.
 
 Named read-only project agents live under `.codex/agents/module-experts/`.
 
-The typed catalog owns production module routes, external scope, authorities,
-skills, entry points, and focused validation selectors.
+The typed catalog owns production module routes, boundary scope, canonical
+context, authorities, skills, entry points, and focused validation selectors.
 
 Validate the catalog from the repository root:
 
@@ -202,10 +202,13 @@ before creating the child journal. A depth-three child must also have a
 completed immediate parent named by the depth-one plan. Expert evidence and
 `parentActions` cannot authorize descendants. The expert receives an immutable,
 catalog-scoped snapshot of the exact commit through three bounded loopback
-tools: file listing, file reading, and literal text search. Catalog exclusions
-are removed from the snapshot. Generated scopes are included only when their
-entries are tracked at that exact commit; otherwise the expert receives their
-tracked producer contract instead of mutable workspace output. No
+tools: file listing, file reading, and literal text search. Every snapshot
+contains the canonical module-expert skill and workflow authorities.
+The internal API snapshot also contains every registered portable Rust module
+root for provider-consumer boundary inspection. Catalog exclusions are removed
+from the snapshot. Generated scopes are included only when their entries are
+tracked at that exact commit; otherwise the expert receives their tracked
+producer contract instead of mutable workspace output. No
 model-controlled process, write, general
 network, web-search, native delegation, app, or plugin path is enabled. Before
 the command

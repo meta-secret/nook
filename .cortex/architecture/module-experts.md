@@ -17,6 +17,7 @@ The delivery owner owns implementation, integration, and lifecycle state.
 Each profile names:
 
 - production module roots;
+- cross-module boundary scope when the role owns boundary analysis;
 - extra read-only evidence paths;
 - generated output scopes with their producers, materializers, and required
   markers;
@@ -24,6 +25,7 @@ Each profile names:
 - public entry points;
 - authority anchors;
 - project skills;
+- canonical skill and workflow context required by those project skills;
 - focused validation selectors;
 - expected semantic evidence.
 
@@ -72,6 +74,14 @@ source commit, identity, completion, and exact authorization before it creates
 the child journal or starts Codex.
 `ModuleExpertEvidence` and `parentActions` cannot authorize descendants.
 
+Every attempt event also records its typed Loom adapter identity.
+Replay rejects missing, unknown, or changing adapter identities.
+Only the isolated module-expert invocation adapter may finalize
+`ModuleExpertEvidence`.
+The generic delegation recorder rejects that result kind.
+Depth-three authorization requires replay-verified evidence from the isolated
+adapter, not merely an expert name in a generic journal.
+
 Every role is read-only.
 Role files contain thin routing instructions instead of copied domain facts.
 
@@ -89,6 +99,7 @@ That runtime enforces:
 - one disposable Codex home with no inherited configuration or MCP servers;
 - an empty working directory;
 - one catalog-scoped snapshot materialized from the exact source commit;
+- the canonical module-expert skill and workflow authorities in every snapshot;
 - physical removal of catalog exclusions before the snapshot is served;
 - tracked generated-scope entries from that commit, with untracked workspace
   output represented only by its tracked producer contract;
@@ -209,6 +220,8 @@ It replaces a narrow WASM-boundary role.
 No separate WASM or bridge expert is allowed.
 
 - **Module roots:** `nook-wasm` and `nook-companion-wasm`.
+- **Rust boundary scope:** Every registered portable Rust module root.
+  The catalog derives this exact sorted scope from registered module ownership.
 - **Generated output scope:** Both binding directories in `nook-web-shared`.
   `nook-app/nook-platform/nook-wasm/Taskfile.yml` owns their build contract.
   `wasm:build` is sealed, `wasm:build:fast` materializes workspace outputs,

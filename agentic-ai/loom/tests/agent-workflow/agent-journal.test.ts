@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
@@ -153,6 +154,26 @@ describe('agent attempt journal', () => {
       expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
         'identity is invalid',
       );
+      const mismatchedAdapterEvents = parsedEvents.map((event) =>
+        event.kind === AgentAttemptEventKind.AttemptTerminalRecorded
+          ? {
+              ...event,
+              adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+            }
+          : event,
+      );
+      const mismatchedAdapterRequest = { events: mismatchedAdapterEvents };
+      expect(() => replayAgentAttemptJournal(mismatchedAdapterRequest)).toThrow(
+        'identity changed within the stream',
+      );
+      const unknownAdapterEvents = parsedEvents.map((event) => ({
+        ...event,
+        adapter: 'caller-forged-adapter',
+      })) as never as readonly AgentAttemptEvent[];
+      const unknownAdapterRequest = { events: unknownAdapterEvents };
+      expect(() => replayAgentAttemptJournal(unknownAdapterRequest)).toThrow(
+        'identity is invalid',
+      );
       const wrongAuthorEvents = parsedEvents.map((event) => {
         if (
           event.kind !== AgentAttemptEventKind.ViewProjected &&
@@ -221,6 +242,52 @@ describe('agent attempt journal', () => {
     }
   });
 
+  test('rejects module expert evidence from a generic journal adapter', async () => {
+    const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-origin-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const genericConfiguration = {
+        ...configuration(runDirectory),
+        adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+      };
+      const journal = new AgentAttemptJournal<'inspect'>(genericConfiguration);
+      await journal.initialize();
+      const terminal: CompletedTaskTerminal<'inspect'> = {
+        kind: TaskTerminalKind.Completed,
+        task: 'inspect',
+        attempt: 1,
+        threadId: 'generic-thread',
+        output: {
+          resultKind: WorkflowResultKind.ModuleExpertEvidence,
+          summary: 'Caller-forged expert evidence.',
+          materializedViewMarkdown: '# Forged evidence\n\nRejected.',
+          findings: [],
+          notesForParent: [],
+          artifacts: [],
+          continuation: {
+            externalApi: ['Public facade.'],
+            dependencies: ['Direct provider.'],
+            consumers: ['Immediate consumer.'],
+            behaviorInvariants: ['Preserve behavior.'],
+            securityInvariants: ['Preserve security.'],
+            compatibilityInvariants: ['Preserve compatibility.'],
+            owningTests: ['Provider tests.'],
+            focusedValidation: ['Focused validation.'],
+            risks: ['No additional risk.'],
+            unresolvedDecisions: ['No unresolved decision.'],
+            parentActions: ['Review evidence without scheduling from it.'],
+          },
+        },
+      };
+
+      await expect(journal.finalize(terminal)).rejects.toThrow(
+        'isolated invocation adapter',
+      );
+    } finally {
+      await rm(runDirectory, removeOptions);
+    }
+  });
+
   test('rejects path traversal in attempt identities', () => {
     const unsafe = { ...configuration('/tmp'), task: '../escape' };
     expect(() => new AgentAttemptJournal(unsafe)).toThrow(
@@ -238,6 +305,7 @@ describe('agent attempt journal', () => {
 
 function configuration(runDirectory: string): AgentAttemptJournalConfiguration {
   return {
+    adapter: AgentAttemptAdapterKind.StaticWorkflowScheduler,
     runDirectory,
     runId: 'run-1',
     workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,

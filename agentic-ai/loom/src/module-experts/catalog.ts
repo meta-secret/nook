@@ -8,6 +8,8 @@ export type ModuleExpertProfile = {
   readonly name: string;
   readonly description: string;
   readonly agentDefinitionPath: string;
+  readonly boundaryScopePaths: readonly string[];
+  readonly canonicalContextPaths: readonly string[];
   readonly moduleRoots: readonly string[];
   readonly scopePaths: readonly string[];
   readonly generatedScopePaths: readonly ModuleExpertGeneratedScope[];
@@ -38,12 +40,44 @@ const EXPERT_AUTHORITY_PATH = '.cortex/architecture/module-experts.md';
 const MODULE_EXPERT_SKILL_PATH = '.agents/skills/module-expert/SKILL.md';
 const INTERNAL_API_SKILL_PATH = '.agents/skills/internal-api-expert/SKILL.md';
 const RESEARCH_ROOT = 'nook-app/nook-web/nook-web-research';
+const APP_COMMON_ROOT = 'nook-app/nook-platform/nook-app-common';
+const AUTH2_ROOT = 'nook-app/nook-platform/nook-auth2';
+const AUTHENTICATOR_DOMAIN_ROOT =
+  'nook-app/nook-platform/nook-authenticator-domain';
+const COMPANION_CORE_ROOT = 'nook-app/nook-platform/nook-companion-core';
+const CORE_ROOT = 'nook-app/nook-platform/nook-core';
+const EVENT_LOG_ROOT = 'nook-app/nook-platform/nook-event-log';
+const REPLICATION_ROOT = 'nook-app/nook-platform/nook-replication';
+
+export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
+  '.cortex/dynamic-skills/module-expert.md',
+  '.cortex/workflows/module-oriented-development.md',
+] as const;
+
+export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
+  '.cortex/dynamic-skills/internal-api-expert.md',
+  ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+] as const;
+
+export const INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS = [
+  APP_COMMON_ROOT,
+  AUTH2_ROOT,
+  AUTHENTICATOR_DOMAIN_ROOT,
+  COMPANION_CORE_ROOT,
+  CORE_ROOT,
+  EVENT_LOG_ROOT,
+  REPLICATION_ROOT,
+] as const;
 
 export const INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-vault-sentinel/src/extension-connect-disabled.ts',
   'nook-app/nook-web/nook-vault-sentinel/src/main.ts',
+  'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
   'nook-app/nook-web/nook-vault-simple/src/main.ts',
+  'nook-app/nook-web/nook-vault-simple/vite.config.ts',
+  'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',
   'nook-app/nook-web/nook-web-app/src/main.ts',
+  'nook-app/nook-web/nook-web-app/vite.config.ts',
   'nook-app/nook-web/nook-web-extension/scripts/build.ts',
   'nook-app/nook-web/nook-web-extension/src/background/pairing-grants.ts',
   'nook-app/nook-web/nook-web-extension/src/background/service-worker/login-session-response-adapter.ts',
@@ -154,6 +188,7 @@ export const INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/sync.svelte.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/lib/vault/ui.ts',
   'nook-app/nook-web/nook-web-shared/src/vault-app/main.ts',
+  'nook-app/nook-web/nook-web-shared/vite-config.ts',
 ] as const;
 
 export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
@@ -163,6 +198,8 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'Read-only expert for inter-module APIs, both WASM crates, generated bindings, TypeScript adapters, and consumer contracts.',
     agentDefinitionPath:
       '.codex/agents/module-experts/internal_api_expert.toml',
+    boundaryScopePaths: INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
+    canonicalContextPaths: INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
     moduleRoots: [
       'nook-app/nook-platform/nook-companion-wasm',
       'nook-app/nook-platform/nook-wasm',
@@ -253,7 +290,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     description:
       'Read-only expert for nook-app-common localization and dependency-light shared primitives.',
     agentDefinitionPath: '.codex/agents/module-experts/app_common_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-app-common'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [APP_COMMON_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -267,7 +306,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     description:
       'Read-only expert for nook-auth2 identity, authorization, app-key protection, and recovery contracts.',
     agentDefinitionPath: '.codex/agents/module-experts/auth2_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-auth2'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [AUTH2_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -282,7 +323,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'Read-only expert for nook-authenticator-domain portable authenticator policy and value types.',
     agentDefinitionPath:
       '.codex/agents/module-experts/authenticator_domain_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-authenticator-domain'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [AUTHENTICATOR_DOMAIN_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -298,7 +341,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     description:
       'Read-only expert for nook-replication provider-neutral causal and replica mechanics.',
     agentDefinitionPath: '.codex/agents/module-experts/replication_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-replication'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [REPLICATION_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -312,7 +357,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     description:
       'Read-only expert for nook-event-log signed history, authorization graph, projection, and storage bytes.',
     agentDefinitionPath: '.codex/agents/module-experts/event_log_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-event-log'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [EVENT_LOG_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -327,7 +374,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'Read-only expert for nook-companion-core extension companion policy and protocol-domain contracts.',
     agentDefinitionPath:
       '.codex/agents/module-experts/companion_core_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-companion-core'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [COMPANION_CORE_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -343,7 +392,9 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     description:
       'Read-only expert for nook-core vault, secrets, sync, crypto, and application-service contracts.',
     agentDefinitionPath: '.codex/agents/module-experts/core_expert.toml',
-    moduleRoots: ['nook-app/nook-platform/nook-core'],
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    moduleRoots: [CORE_ROOT],
     scopePaths: [],
     generatedScopePaths: [],
     excludedPaths: [],
@@ -357,6 +408,8 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     description:
       'Read-only expert for production Nook Svelte and TypeScript packages; excludes research and generated-binding adaptation.',
     agentDefinitionPath: '.codex/agents/module-experts/web_expert.toml',
+    boundaryScopePaths: [],
+    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
     moduleRoots: [
       'nook-app/nook-web/nook-vault-sentinel',
       'nook-app/nook-web/nook-vault-simple',

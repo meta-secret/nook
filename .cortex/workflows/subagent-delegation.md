@@ -176,8 +176,8 @@ The stream records bounded observable actions and outcomes. It never records:
 - raw command output;
 - raw SDK errors or stack traces.
 
-Every event carries the exact workflow, version, source commit, task, agent,
-attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
+Every event carries the exact adapter, workflow, version, source commit, task,
+agent, attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
 
 - Sequence is monotonic inside one stream.
 - Cross-stream global ordering is not claimed.
@@ -201,6 +201,9 @@ The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
 contract used by compiled workflows. It rejects reuse of an existing attempt
 directory. This gives collaboration-tool subagents a journal boundary without
 making their transcript or Markdown output into scheduling authority.
+The generic adapter cannot record `ModuleExpertEvidence`.
+Named module experts use their isolated invocation adapter and its separately
+verified authorization boundary.
 
 The record request contains:
 

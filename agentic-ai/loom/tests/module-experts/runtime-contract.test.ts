@@ -149,6 +149,14 @@ describe('module expert runtime isolation', () => {
         expect(await readFile(snapshotEntry, 'utf8')).toBe(
           repository.committedEntryContent,
         );
+        for (const contextPath of profile().canonicalContextPaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, contextPath),
+              'utf8',
+            ),
+          ).toBe(`committed:${contextPath}\n`);
+        }
         const unrelatedPath = join(
           isolation.repositorySnapshot,
           'unrelated-module/private.txt',
@@ -381,7 +389,7 @@ describe('module expert runtime isolation', () => {
     }
   });
 
-  test('materializes exact authored internal API consumers without unrelated web code', async () => {
+  test('materializes exact authored binding consumers and configs without unrelated web code', async () => {
     const fixtureRoot = await mkdtemp(
       join(tmpdir(), 'loom-expert-consumer-scope-'),
     );
@@ -406,6 +414,22 @@ describe('module expert runtime isolation', () => {
         await createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         const selected = profile('internal_api_expert');
+        for (const boundaryPath of selected.boundaryScopePaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, boundaryPath, 'fixture.txt'),
+              'utf8',
+            ),
+          ).toBe(`committed:${join(boundaryPath, 'fixture.txt')}\n`);
+        }
+        for (const contextPath of selected.canonicalContextPaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, contextPath),
+              'utf8',
+            ),
+          ).toBe(`committed:${contextPath}\n`);
+        }
         for (const consumerPath of selected.scopePaths) {
           expect(
             await readFile(
@@ -763,6 +787,10 @@ async function createProfileRepositoryFixture(
     ANALYZED_HELPER_DECOY_PATH,
     UNRELATED_WEB_CONSUMER_PATH,
     selected.agentDefinitionPath,
+    ...selected.boundaryScopePaths.map((boundaryRoot) =>
+      join(boundaryRoot, 'fixture.txt'),
+    ),
+    ...selected.canonicalContextPaths,
     ...selected.moduleRoots.map((moduleRoot) =>
       join(moduleRoot, 'fixture.txt'),
     ),

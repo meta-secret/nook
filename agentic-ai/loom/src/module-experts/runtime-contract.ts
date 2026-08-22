@@ -608,6 +608,8 @@ function moduleExpertSnapshotPaths(
     ...new Set([
       '.cortex/knowledge-graph.md',
       profile.agentDefinitionPath,
+      ...profile.boundaryScopePaths,
+      ...profile.canonicalContextPaths,
       ...profile.moduleRoots,
       ...profile.scopePaths,
       ...generatedProducerPaths,

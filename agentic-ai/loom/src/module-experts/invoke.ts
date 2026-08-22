@@ -8,6 +8,7 @@ import {
   runtimeActivityEvent,
 } from '../agent-workflow/agent-events.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   AgentReasoningEffort,
   AgentWorkspacePolicy,
@@ -309,6 +310,7 @@ export async function invokeModuleExpert(
   };
   await verifyModuleExpertParentAuthorization(authorizationArgs);
   const journalConfiguration: AgentAttemptJournalConfiguration = {
+    adapter: AgentAttemptAdapterKind.ModuleExpertInvocation,
     runDirectory,
     runId: request.runId,
     workflow: DelegatedAgentWorkflowName.AgentWork,

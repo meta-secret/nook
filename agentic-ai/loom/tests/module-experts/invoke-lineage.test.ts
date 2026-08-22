@@ -5,10 +5,12 @@ import type { RmOptions } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   TaskTerminalKind,
 } from '../../src/agent-workflow/domain.ts';
+import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
 import type {
   ModuleExpertAuthorization,
   ParentAgentAttempt,
@@ -25,6 +27,7 @@ import type {
 } from '../../src/module-experts/invoke.ts';
 import {
   createCompletedAttempt,
+  createCompletedAttemptWithAdapter,
   createFailedAttempt,
   moduleDevelopmentPlanOutput,
   moduleExpertEvidenceOutput,
@@ -92,8 +95,6 @@ test('runs a depth-three expert only when the root plan predeclares the exact ch
     const lineageArgs: CreateDepthThreeLineageArgs = {
       request,
       authorization: authorization(request),
-      immediateAgent: directParent(request).agent,
-      immediateOutput: moduleExpertEvidenceOutput(),
     };
     await createDepthThreeLineage(lineageArgs);
     const invocationInput: InvocationArgs = { request, runtime };
@@ -119,8 +120,6 @@ test('does not treat depth-two expert evidence as authority for a grandchild', a
     const lineageArgs: CreateDepthThreeLineageArgs = {
       request,
       authorization: unrelated,
-      immediateAgent: directParent(request).agent,
-      immediateOutput: moduleExpertEvidenceOutput(),
     };
     await createDepthThreeLineage(lineageArgs);
     const invocationInput: InvocationArgs = { request, runtime };
@@ -134,7 +133,36 @@ test('does not treat depth-two expert evidence as authority for a grandchild', a
   }
 });
 
-test('rejects a depth-three lineage without a registered expert evidence parent', async () => {
+test('generic journal construction cannot forge module expert parent provenance', async () => {
+  const request = depthThreeRequest(`generic-forgery-${randomUUID()}`);
+  const runDirectory = processingRunDirectory(request.runId);
+  const immediate = directParent(request);
+  const forgedArgs = {
+    repoRoot: REPO_ROOT,
+    runId: request.runId,
+    sourceCommit: request.sourceCommit,
+    task: immediate.task,
+    agent: immediate.agent,
+    attempt: immediate.attempt,
+    depth: 2,
+    parent: {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: 'feature-synthesis',
+      agent: 'delivery-owner',
+      attempt: 1,
+    },
+    output: moduleExpertEvidenceOutput(),
+  } as const;
+  try {
+    await expect(createCompletedAttempt(forgedArgs)).rejects.toThrow(
+      'isolated invocation adapter',
+    );
+  } finally {
+    await rm(runDirectory, REMOVE_RECURSIVELY);
+  }
+});
+
+test('rejects depth-three lineage without a registered expert evidence parent', async () => {
   const registeredRequest = depthThreeRequest(
     `depth-three-non-expert-result-${randomUUID()}`,
   );
@@ -164,13 +192,7 @@ test('rejects a depth-three lineage without a registered expert evidence parent'
     const runDirectory = processingRunDirectory(testCase.request.runId);
     const runtime = new CountingRuntime();
     try {
-      const lineageArgs: CreateDepthThreeLineageArgs = {
-        request: testCase.request,
-        authorization: authorization(testCase.request),
-        immediateAgent: directParent(testCase.request).agent,
-        immediateOutput: testCase.immediateOutput,
-      };
-      await createDepthThreeLineage(lineageArgs);
+      await createDepthThreeFixtureLineage(testCase);
       const invocationInput: InvocationArgs = {
         request: testCase.request,
         runtime,
@@ -185,12 +207,91 @@ test('rejects a depth-three lineage without a registered expert evidence parent'
   }
 });
 
+test('rejects depth-three evidence whose event provenance was downgraded', async () => {
+  const request = depthThreeRequest(`downgraded-origin-${randomUUID()}`);
+  const runDirectory = processingRunDirectory(request.runId);
+  const runtime = new CountingRuntime();
+  try {
+    const lineageArgs: CreateDepthThreeLineageArgs = {
+      request,
+      authorization: authorization(request),
+    };
+    await createDepthThreeLineage(lineageArgs);
+    const immediate = directParent(request);
+    const eventsPath = join(
+      runDirectory,
+      'agents',
+      immediate.task,
+      `attempt-${immediate.attempt}`,
+      'events.jsonl',
+    );
+    const events = (await readFile(eventsPath, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as AgentAttemptEvent);
+    const downgradedEvents = events.map((event) => ({
+      ...event,
+      adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+    }));
+    await writeFile(
+      eventsPath,
+      `${downgradedEvents.map((event) => JSON.stringify(event)).join('\n')}\n`,
+      'utf8',
+    );
+
+    const invocationInput: InvocationArgs = { request, runtime };
+    await expect(
+      invokeModuleExpert(invocationArgs(invocationInput)),
+    ).rejects.toThrow('parent authorization failed');
+    expect(runtime.executionCount).toBe(0);
+  } finally {
+    await rm(runDirectory, REMOVE_RECURSIVELY);
+  }
+});
+
 type InvalidDepthThreeParentCase = {
   readonly request: ModuleExpertInvocationRequest;
   readonly immediateOutput: ReturnType<
     typeof moduleDevelopmentPlanOutput | typeof moduleExpertEvidenceOutput
   >;
 };
+
+async function createDepthThreeFixtureLineage(
+  args: InvalidDepthThreeParentCase,
+): Promise<void> {
+  const immediate = directParent(args.request);
+  const root: ParentAgentAttempt = {
+    kind: AgentAttemptParentKind.AgentAttempt,
+    task: 'feature-synthesis',
+    agent: 'delivery-owner',
+    attempt: 1,
+  };
+  const rootPlanArgs = {
+    repoRoot: REPO_ROOT,
+    runId: args.request.runId,
+    sourceCommit: args.request.sourceCommit,
+    task: root.task,
+    agent: root.agent,
+    attempt: root.attempt,
+    depth: 1,
+    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+    output: moduleDevelopmentPlanOutput([authorization(args.request)]),
+  } as const;
+  await createCompletedAttempt(rootPlanArgs);
+  const immediateArgs = {
+    repoRoot: REPO_ROOT,
+    runId: args.request.runId,
+    sourceCommit: args.request.sourceCommit,
+    task: immediate.task,
+    agent: immediate.agent,
+    attempt: immediate.attempt,
+    depth: 2,
+    parent: root,
+    output: args.immediateOutput,
+    adapter: AgentAttemptAdapterKind.ModuleExpertInvocation,
+  } as const;
+  await createCompletedAttemptWithAdapter(immediateArgs);
+}
 
 type ParentSetupArgs = {
   readonly request: ModuleExpertInvocationRequest;
@@ -286,10 +387,6 @@ async function createDirectPlan(args: CreateDirectPlanArgs): Promise<void> {
 type CreateDepthThreeLineageArgs = {
   readonly request: ModuleExpertInvocationRequest;
   readonly authorization: ModuleExpertAuthorization;
-  readonly immediateAgent: string;
-  readonly immediateOutput: ReturnType<
-    typeof moduleDevelopmentPlanOutput | typeof moduleExpertEvidenceOutput
-  >;
 };
 
 async function createDepthThreeLineage(
@@ -302,6 +399,16 @@ async function createDepthThreeLineage(
     agent: 'delivery-owner',
     attempt: 1,
   };
+  const intermediateRequest: ModuleExpertInvocationRequest = {
+    runId: args.request.runId,
+    expert: immediate.agent,
+    sourceCommit: args.request.sourceCommit,
+    task: immediate.task,
+    attempt: immediate.attempt,
+    depth: 2,
+    parent: root,
+    instruction: 'Inspect the provider contract without writing files.',
+  };
   const rootPlanArgs = {
     repoRoot: REPO_ROOT,
     runId: args.request.runId,
@@ -311,21 +418,23 @@ async function createDepthThreeLineage(
     attempt: root.attempt,
     depth: 1,
     parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    output: moduleDevelopmentPlanOutput([args.authorization]),
+    output: moduleDevelopmentPlanOutput([
+      authorization(intermediateRequest),
+      args.authorization,
+    ]),
   } as const;
   await createCompletedAttempt(rootPlanArgs);
-  const immediateArgs = {
-    repoRoot: REPO_ROOT,
-    runId: args.request.runId,
-    sourceCommit: args.request.sourceCommit,
-    task: immediate.task,
-    agent: args.immediateAgent,
-    attempt: immediate.attempt,
-    depth: 2,
-    parent: root,
-    output: args.immediateOutput,
-  } as const;
-  await createCompletedAttempt(immediateArgs);
+  const runtime = new CountingRuntime();
+  const invocationInput: InvocationArgs = {
+    request: intermediateRequest,
+    runtime,
+  };
+  const intermediateResult = await invokeModuleExpert(
+    invocationArgs(invocationInput),
+  );
+  if (intermediateResult.terminal.kind !== TaskTerminalKind.Completed) {
+    throw new Error('Expected completed intermediate module expert fixture.');
+  }
 }
 
 type InvocationArgs = {

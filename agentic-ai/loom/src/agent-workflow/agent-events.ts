@@ -1,4 +1,5 @@
 import type {
+  AgentAttemptAdapterKind,
   AgentAttemptParent,
   AgentProcessingWorkflowName,
   GitCommit,
@@ -25,6 +26,7 @@ export enum AgentAttemptEventKind {
 }
 
 export type AgentAttemptEventMetadata = {
+  readonly adapter: AgentAttemptAdapterKind;
   readonly runId: WorkflowRunId;
   readonly workflow: AgentProcessingWorkflowName;
   readonly workflowVersion: WorkflowVersion;
