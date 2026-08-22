@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Retry a Bake command once only for the known immediate BuildKit
+# Retry a BuildKit command once only for the known immediate BuildKit
 # frontend/Dockerfile-load flake. Application/build failures fail closed.
 set -euo pipefail
 
@@ -45,6 +45,22 @@ is_unattributed_syntax_frontend_exit() {
     && grep -Eiq 'failed to solve: exit code: 2' "$log_file"
 }
 
+is_frontend_authorization_timeout() {
+  local log_file="$1"
+  # Docker Hub token lookup can fail before the pinned Dockerfile frontend is
+  # loaded. Require the transient transport error on that same BuildKit vertex
+  # so a later application vertex cannot reuse a successful frontend marker.
+  awk '
+    /resolve image config for docker-image:\/\/docker\.io\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
+      frontend_vertex = $1
+    }
+    /failed to authorize:.*TLS handshake timeout/ && frontend_vertex != "" && $1 == frontend_vertex {
+      found = 1
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$log_file"
+}
+
 # BSD/macOS mktemp requires the X template to end the path.
 log_file="$(mktemp "${TMPDIR:-/tmp}/nook-bake-flake.XXXXXX")"
 cleanup() {
@@ -54,8 +70,8 @@ trap cleanup EXIT
 
 for attempt in 1 2; do
   set +e
-  "$@" > >(tee -a "$log_file") 2> >(tee -a "$log_file" >&2)
-  status=$?
+  "$@" 2>&1 | tee -a "$log_file"
+  status=${PIPESTATUS[0]}
   set -e
   if [ "$status" -eq 0 ]; then
     exit 0
@@ -64,11 +80,12 @@ for attempt in 1 2; do
     exit "$status"
   fi
   if ! is_buildkit_frontend_flake "$log_file" \
-    && ! is_unattributed_syntax_frontend_exit "$log_file"; then
-    echo "task ${label}: non-transient Bake failure; not retrying" >&2
+    && ! is_unattributed_syntax_frontend_exit "$log_file" \
+    && ! is_frontend_authorization_timeout "$log_file"; then
+    echo "task ${label}: non-transient BuildKit failure; not retrying" >&2
     exit "$status"
   fi
-  echo "task ${label}: transient Bake failure; retrying in 2s..." >&2
+  echo "task ${label}: transient BuildKit failure; retrying in 2s..." >&2
   : >"$log_file"
   sleep 2
 done

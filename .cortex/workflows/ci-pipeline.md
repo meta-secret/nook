@@ -506,6 +506,9 @@ image layer (about 432 MB compressed) on cold runners.
 The preparation solve runs once. The small final web-image solve retries once
 after the known immediate BuildKit frontend/Dockerfile-load flake, without
 repeating the multi-minute Rust/WASM and dependency graph.
+The ARC S3 health probe is a separate uncached solve. It retries once only when
+the Dockerfile frontend vertex itself reports a transient authorization TLS
+timeout. Later build vertices and genuine S3 health failures fail closed.
 
 ### Browser validation for Main-fix PRs
 
