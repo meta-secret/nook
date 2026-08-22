@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
-import playwrightGates from './playwright.gates.json'
+import playwrightGates from './playwright.gates.json' with { type: 'json' }
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(rootDir, '.env.test.local') })

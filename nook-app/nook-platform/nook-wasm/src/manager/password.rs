@@ -757,6 +757,7 @@ mod wasm_tests {
         )?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];
         owner.bootstrap_event_log_genesis().await?;
@@ -800,6 +801,7 @@ mod wasm_tests {
         )?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];
         owner.bootstrap_event_log_genesis().await?;
