@@ -400,6 +400,9 @@ Pods instead of queueing work on one persistent Docker host.
   writable graph.
 - It exports only a `mode=min` exact-SHA handoff for retries after the disposable
   guest is removed.
+- Native ARC exports that handoff during the verified solves. A second
+  post-verification solve is prohibited because it reconstructs the same Rust
+  graphs before exporting them.
 - A cold PR scope restores trusted Main or a dependency-fingerprint scope.
 - Once an exact PR scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.

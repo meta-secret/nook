@@ -80,9 +80,11 @@ fn assert_docker_setup_contract(root: &Path) {
     }
     assert!(
         pr.contains("name: Publish git-scoped native BuildKit cache")
-            && pr.contains("run: task ci:main:publish-native-cache")
-            && !pr.contains("registry export skipped"),
-        "trusted ARC PR native verification must publish its minimal exact-SHA retry handoff"
+            && pr.contains("task ci:main:publish-native-cache")
+            && pr.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust")
+            && pr
+                .contains("ARC verified solves already published their minimal exact-SHA handoffs"),
+        "trusted ARC PR native verification must publish during verified solves without a redundant reconstruction pass"
     );
     assert!(
         !setup.contains("crazy-max/ghaction-github-runtime")

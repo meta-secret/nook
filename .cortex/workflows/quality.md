@@ -262,8 +262,11 @@ Use this workflow for quality, CI, and deployment changes.
     - Main remains the only workflow writer of the shared Hive registry seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
-    - Native publishers stage `docker:ci:cache:publish:rust-base` before
-      deps/source scopes so one Bake cannot rewrite apt while cooking chef.
+    - Hosted and Main Native publishers stage
+      `docker:ci:cache:publish:rust-base` before deps/source scopes so one Bake
+      cannot rewrite apt while cooking chef.
+    - ARC Native publishes each minimal exact-SHA handoff from its verified
+      solve. It must not reconstruct the four graphs in a second publish pass.
     - WASM publishers stage deps-publish and source export before rust-base.
     - Staging rust-base first on WASM imports the shorter parent index and
       orphans local chef cook layers for the next bake.

@@ -267,7 +267,9 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .context("PR full-e2e job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
-            && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust")
+            && pr[rust_verify..rust_publish]
+                .contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:pr:rust")
             && pr[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm_verify < wasm_publish
             && pr[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -284,7 +286,7 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && full_e2e[full_e2e_verify..full_e2e_publish]
                 .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && full_e2e[full_e2e_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
-        "PR producers must verify read-only, then publish from warm builders with writes enabled"
+        "hosted PR producers must verify read-only before publishing, while ARC Native must publish minimal handoffs inline without a second solve"
     );
     Ok(())
 }
