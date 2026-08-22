@@ -111,7 +111,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **CI runners:**
   - Trusted same-repository PR and Main native Rust plus Rust ecosystem jobs use the configured ARC scale set.
   - Focused daemon-free `preflight` and `rust:ci` jobs may use the configured ARC scale set.
-  - Every ARC job receives a fresh Kata QEMU microVM and private BuildKit worker.
+  - Focused `hive:verify` jobs use the dedicated Hive ARC scale set with its native service runtime.
+  - Every ARC job receives a fresh Kata microVM and private BuildKit worker.
+  - The general pool uses the approved QEMU fallback; the Hive pool keeps Dragonball.
   - The private worker mounts only its Pod UID reflink state.
   - Fork PRs and runtime-dependent, browser, WASM, deployment, release,
     long-running AI, and scheduled/manual validation use GitHub-hosted
@@ -126,7 +128,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
-  - `preflight` and `rust:ci` may run on a fresh ARC Kata microVM. Other selections run on an ephemeral GitHub-hosted runner.
+  - `preflight` and `rust:ci` may run on a fresh general ARC Kata microVM.
+  - `hive:verify` may run on a fresh dedicated Hive ARC Kata microVM.
+  - Other selections run on an ephemeral GitHub-hosted runner.
   - A batch shares one checkout, Docker setup, and cache connection.
   - Selected tasks run sequentially.
   - Each task retains its bounded timeout.

@@ -260,15 +260,15 @@ tasks:
         sudo -n systemctl daemon-reload
         sudo -n systemctl enable --now "$mount_unit" >/dev/null
         sudo -n mountpoint -q "$pool_mount"
-        if test "$current_pool_size" -lt "$pool_size_bytes"; then
-          pool_loop="$(sudo -n findmnt -n -o SOURCE --target "$pool_mount")"
-          case "$pool_loop" in
-            /dev/loop[0-9]*) ;;
-            *) echo "ARC BuildKit pool is not mounted through a loop device" >&2; exit 1 ;;
-          esac
-          sudo -n losetup -c "$pool_loop"
-          sudo -n btrfs filesystem resize max "$pool_mount" >/dev/null
-        fi
+        pool_loop="$(sudo -n findmnt -n -o SOURCE --target "$pool_mount")"
+        case "$pool_loop" in
+          /dev/loop[0-9]*) ;;
+          *) echo "ARC BuildKit pool is not mounted through a loop device" >&2; exit 1 ;;
+        esac
+        # Refresh both layers on every invocation so an interrupted earlier
+        # expansion converges when this task is retried.
+        sudo -n losetup -c "$pool_loop"
+        sudo -n btrfs filesystem resize max "$pool_mount" >/dev/null
         if test "$(sudo -n btrfs filesystem usage -b "$pool_mount" | awk '/Device size:/ {print $3; exit}')" -lt "$pool_size_bytes"; then
           echo "ARC BuildKit pool did not reach its required capacity" >&2
           exit 1

@@ -55,12 +55,18 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     for marker in [
         "github.rest.pulls.listFiles",
-        "file.filename.startsWith('agentic-ai/minds/')",
+        "const isIgnoredByProductWorkflow",
+        "path.startsWith('.cortex/')",
+        "path.startsWith('.cursor/')",
+        "path === '.github/workflows/web-research.yml'",
+        "path.startsWith('agentic-ai/')",
+        "path.startsWith('nook-app/nook-web/nook-web-research/')",
+        "files.every((file) => isIgnoredByProductWorkflow(file.filename))",
         "needs.validation-request.outputs.should-run == 'true'",
     ] {
         assert!(
             entry.contains(marker),
-            "Thin rust-ecosystem.yml must leave mixed PRs to pr.yml: missing {marker}"
+            "Thin rust-ecosystem.yml must defer only paths handled by pr.yml: missing {marker}"
         );
     }
     assert!(

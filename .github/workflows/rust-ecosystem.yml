@@ -63,9 +63,15 @@ jobs:
               pull_number: context.issue.number,
               per_page: 100,
             })
+            const isIgnoredByProductWorkflow = (path) =>
+              path.startsWith('.cortex/') ||
+              path.startsWith('.cursor/') ||
+              path === '.github/workflows/web-research.yml' ||
+              path.startsWith('agentic-ai/') ||
+              path.startsWith('nook-app/nook-web/nook-web-research/')
             return String(
               files.length > 0 &&
-              files.every((file) => file.filename.startsWith('agentic-ai/minds/')),
+              files.every((file) => isIgnoredByProductWorkflow(file.filename)),
             )
 
   ecosystem:
