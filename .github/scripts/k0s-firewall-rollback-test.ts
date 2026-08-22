@@ -47,7 +47,12 @@ const replaceInput = {
 };
 const replaceSource = functionSource(replaceInput);
 
-function rollbackCase(exitMode: "error" | "signal"): void {
+enum RollbackExitMode {
+  Error = "error",
+  Signal = "signal",
+}
+
+function rollbackCase(exitMode: RollbackExitMode): void {
   const work = mkdtempSync(join(tmpdir(), "nook-firewall-rollback-"));
   try {
     const mockBin = join(work, "bin");
@@ -121,7 +126,8 @@ fi
 `,
     };
     executable(sudoMock);
-    const trigger = exitMode === "error" ? "false" : "kill -TERM $$";
+    const trigger =
+      exitMode === RollbackExitMode.Error ? "false" : "kill -TERM $$";
     const harness = {
       path: join(work, "harness.sh"),
       source: `#!/usr/bin/env bash
@@ -282,8 +288,8 @@ replace_k0s_firewall_rules committed
   }
 }
 
-rollbackCase("error");
-rollbackCase("signal");
+rollbackCase(RollbackExitMode.Error);
+rollbackCase(RollbackExitMode.Signal);
 successfulReplacementCase();
 const nftablesConfig =
   'table inet bynull_filter {}\n  include   "/etc/nftables.d/nook-k0s.nft"   # managed\n' +

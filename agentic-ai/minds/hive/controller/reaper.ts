@@ -7,9 +7,15 @@ const certificatePath = "/run/kubernetes/ca.crt";
 const reaperTokenPath = "/run/reaper-auth/token";
 
 export interface ApiRequest {
-  method: "GET" | "PATCH" | "DELETE";
+  method: ApiMethod;
   path: string;
   payload?: NetworkPolicyPatch;
+}
+
+export enum ApiMethod {
+  Delete = "DELETE",
+  Get = "GET",
+  Patch = "PATCH",
 }
 
 export interface KubernetesApi {
@@ -75,13 +81,19 @@ export class LiveKubernetesApi implements KubernetesApi {
     const headers = new Headers();
     headers.set("Authorization", `Bearer ${token}`);
     headers.set("Content-Type", "application/merge-patch+json");
-    const response = await fetch(`${kubernetesApi}${input.path}`, {
-      method: input.method,
-      headers,
-      body:
-        input.payload === undefined ? undefined : JSON.stringify(input.payload),
-      tls: { ca: certificate },
-    });
+    const requestOptions =
+      "payload" in input
+        ? {
+            method: input.method,
+            headers,
+            body: JSON.stringify(input.payload),
+            tls: { ca: certificate },
+          }
+        : { method: input.method, headers, tls: { ca: certificate } };
+    const response = await fetch(
+      `${kubernetesApi}${input.path}`,
+      requestOptions,
+    );
     if (!response.ok) {
       throw new KubernetesApiError(response.status);
     }
@@ -124,11 +136,11 @@ export class ReaperController {
 
   async reconcileNeo4jPolicy(): Promise<void> {
     const serviceRequest: ApiRequest = {
-      method: "GET",
+      method: ApiMethod.Get,
       path: "/api/v1/namespaces/hive-data/services/hive-neo4j",
     };
     const endpointsRequest: ApiRequest = {
-      method: "GET",
+      method: ApiMethod.Get,
       path: "/api/v1/namespaces/hive-data/endpoints/hive-neo4j",
     };
     const service = await this.api.json<Service>(serviceRequest);
@@ -141,7 +153,7 @@ export class ReaperController {
     const destinations: NetworkTarget[] = [
       { ipBlock: { cidr: `${serviceIp}/32` } },
     ];
-    if (endpointIps[0] !== undefined) {
+    if (endpointIps.length > 0) {
       destinations.push({ ipBlock: { cidr: `${endpointIps[0]}/32` } });
     }
     for (const policyName of [
@@ -161,13 +173,17 @@ export class ReaperController {
       "/apis/networking.k8s.io/v1/namespaces/hive-system/networkpolicies/" +
       input.policyName;
     for (let attempt = 0; attempt < 3; attempt += 1) {
-      const readRequest: ApiRequest = { method: "GET", path: policyPath };
+      const readRequest: ApiRequest = {
+        method: ApiMethod.Get,
+        path: policyPath,
+      };
       const policy = await this.api.json<NetworkPolicy>(readRequest);
       const egress = structuredClone(policy.spec.egress);
-      const rule = egress.find(isNeo4jIpRule);
-      if (rule === undefined) {
+      const rules = egress.filter(isNeo4jIpRule);
+      if (rules.length !== 1) {
         throw new Error("Neo4j endpoint egress rule is missing");
       }
+      const rule = rules[0]!;
       const comparison = {
         left: rule.to ?? [],
         right: input.destinations,
@@ -181,7 +197,7 @@ export class ReaperController {
         spec: { egress },
       };
       const patchRequest: ApiRequest = {
-        method: "PATCH",
+        method: ApiMethod.Patch,
         path: policyPath,
         payload,
       };
@@ -201,33 +217,40 @@ export class ReaperController {
 
   async reap(podName: string): Promise<Response> {
     const podPath = `/api/v1/namespaces/${namespace}/pods/${podName}`;
-    const readRequest: ApiRequest = { method: "GET", path: podPath };
+    const readRequest: ApiRequest = { method: ApiMethod.Get, path: podPath };
     try {
       const pod = await this.api.json<Pod>(readRequest);
       if (pod.metadata?.labels?.["app.kubernetes.io/name"] !== "hive") {
-        return new Response(null, { status: 403 });
+        return responseWithStatus(403);
       }
-      const deleteRequest: ApiRequest = { method: "DELETE", path: podPath };
+      const deleteRequest: ApiRequest = {
+        method: ApiMethod.Delete,
+        path: podPath,
+      };
       await this.api.request(deleteRequest);
       for (let attempt = 0; attempt < 60; attempt += 1) {
         try {
           await this.api.request(readRequest);
         } catch (error) {
           if (error instanceof KubernetesApiError && error.status === 404) {
-            return new Response(null, { status: 204 });
+            return responseWithStatus(204);
           }
           throw error;
         }
         await Bun.sleep(2_000);
       }
-      return new Response(null, { status: 504 });
+      return responseWithStatus(504);
     } catch (error) {
       if (error instanceof KubernetesApiError && error.status === 404) {
-        return new Response(null, { status: 204 });
+        return responseWithStatus(204);
       }
-      return new Response(null, { status: 502 });
+      return responseWithStatus(502);
     }
   }
+}
+
+function responseWithStatus(status: number): Response {
+  return new Response(new Response().body, { status });
 }
 
 function secureEqual(input: { supplied: string; expected: string }): boolean {
@@ -257,7 +280,7 @@ export async function serve(): Promise<void> {
     port: 8080,
     async fetch(request) {
       if (request.method !== "POST") {
-        return new Response(null, { status: 404 });
+        return responseWithStatus(404);
       }
       const supplied =
         request.headers.get("Authorization")?.replace(/^Bearer /, "") ?? "";
@@ -266,10 +289,10 @@ export async function serve(): Promise<void> {
         /^\/reap\/(hive-[a-z0-9-]+)$/,
       );
       const credentials = { supplied, expected };
-      if (match === null || !secureEqual(credentials)) {
-        return new Response(null, { status: 403 });
+      if (!match || !secureEqual(credentials)) {
+        return responseWithStatus(403);
       }
-      return controller.reap(match[1]);
+      return controller.reap(match.at(1) ?? "");
     },
   });
 }

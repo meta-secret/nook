@@ -56,10 +56,10 @@ class MockApi implements KubernetesApi {
     }
     const policyName = input.path.split("/").at(-1) ?? "";
     this.policyReads += 1;
-    const stored = structuredClone(this.policies.get(policyName));
-    if (stored === undefined) {
+    if (!this.policies.has(policyName)) {
       throw new Error(`unexpected API path: ${input.path}`);
     }
+    const stored = structuredClone(this.policies.get(policyName)!);
     if (this.policyReads === 2) {
       stored.metadata.resourceVersion = "11";
       stored.spec.egress[0].to = [

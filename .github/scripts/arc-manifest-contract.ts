@@ -272,10 +272,7 @@ try {
   ) {
     throw new Error("Hive ARC Neo4j must be versioned and digest-pinned");
   }
-  if (
-    hivePod.volumes.filter((volume) => volume.hostPath !== undefined).length !==
-    2
-  ) {
+  if (hivePod.volumes.filter((volume) => "hostPath" in volume).length !== 2) {
     throw new Error("Hive ARC must inherit only the two approved hostPaths");
   }
 } finally {
