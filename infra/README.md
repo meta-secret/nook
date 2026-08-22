@@ -10,17 +10,19 @@ This directory owns Nook's stateful server infrastructure:
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
-- A pinned Actions Runner Controller scale set runs focused and opted-in trusted
+- Pinned Actions Runner Controller scale sets run focused and opted-in trusted
   Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM
   carries Docker client tooling and its own privileged BuildKit sidecar on Pod
-  loopback. Its
-  overlayfs builder state uses a guest-mounted ext4 image, is capped at 100 GiB,
-  and is discarded after the job. There is no Docker daemon, DinD, Sysbox,
-  shared builder, host socket, or hostPath.
-  No runners stay warm: ARC creates one fresh microVM per job. The ten-runner
-  maximum prevents queue congestion. Each Pod requests 1 CPU and 5 GiB so ten
-  fit the current node, while its unchanged burst limit remains 8 CPUs and
-  16 GiB.
+  loopback. Its overlayfs builder state uses a private 32 GiB ext4 image.
+  The image is a metadata-only reflink clone of a trusted seed in the
+  Task-managed Btrfs pool. There is no full-size copy at runner startup. There
+  is no Docker daemon, DinD, Sysbox, shared builder, or host runtime socket.
+  The runner container cannot mount the pool or another job's writable state.
+  No runners stay warm: ARC creates one fresh microVM per job. Both `nook-k0s`
+  and the dedicated `nook-k0s-hive` set permit ten concurrent jobs. Hive adds
+  pinned Neo4j and non-root Trixie test-runtime native sidecars. Kubernetes
+  stops both helpers when the runner exits. The runtime executes exported tests
+  through a private exchange volume. It does not introduce a Docker daemon.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
 expose anonymous S3 or registry access; every client authenticates with the
@@ -49,6 +51,7 @@ task infra:arc:diagnose
 task infra:arc:activate
 task infra:arc:fallback
 task infra:arc:smoke
+task infra:arc:hive:smoke
 ```
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
@@ -91,13 +94,17 @@ read trusted Main SeaweedFS objects through a separate read-only identity and
 stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
-Daemon-free `preflight` and `rust:ci` Remote selections use the ARC scale set
-through the repository variable `NOOK_RUNS_ON=nook-k0s`. Tasks that require
+Daemon-free `preflight` and `rust:ci` Remote selections use `nook-k0s` through
+the repository variable `NOOK_RUNS_ON`. Trusted Hive Rust verification uses
+`nook-k0s-hive` through `NOOK_HIVE_RUNS_ON`; its browser job stays hosted.
+Other tasks that require
 `type=docker` image loading or `docker run` stay on hosted runners.
 `task infra:arc:activate` sets the ARC route;
-`task infra:arc:fallback` immediately restores `ubuntu-latest`. ARC Buildx uses
-the remote driver against the private BuildKit sidecar. Builder state is
-discarded with the single-use microVM; durable cache state remains in Zot. Its
+`task infra:arc:fallback` immediately restores both routes to `ubuntu-latest`.
+ARC Buildx uses
+the remote driver against the private BuildKit sidecar. Each job starts from
+the reusable local seed but writes only to its own Pod UID clone. Zot remains
+the authoritative cache shared with hosted builders. Its
 authenticated Zot traffic resolves through the same node's TLS ingress,
 avoiding an external registry data path while preserving the public certificate
 and registry host.

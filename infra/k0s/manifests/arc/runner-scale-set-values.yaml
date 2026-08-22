@@ -66,8 +66,36 @@ template:
           limits:
             cpu: 100m
             memory: 128Mi
+      - name: prepare-buildkit-state
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
+        imagePullPolicy: Never
+        command: ["/usr/local/bin/nook-buildkit-prepare-state"]
+        env:
+          - name: POD_UID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - name: buildkit-requests
+            mountPath: /var/lib/nook-buildkit-requests
+          - name: temporary
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: 10m
+            memory: 32Mi
+          limits:
+            cpu: 100m
+            memory: 128Mi
       - name: buildkit
-        image: localhost/nook-arc-buildkit:0.32.2-ext4-v3
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
         restartPolicy: Always
         args:
@@ -77,7 +105,14 @@ template:
           - overlayfs
           - --oci-worker-gc
           - --oci-worker-gc-keepstorage
-          - "80000"
+          - "24000"
+        env:
+          - name: POD_UID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
+          - name: NOOK_BUILDKIT_STATE_IMAGE_BYTES
+            value: "34359738368"
         securityContext:
           privileged: true
         startupProbe:
@@ -91,19 +126,20 @@ template:
           periodSeconds: 2
           failureThreshold: 90
         volumeMounts:
-          - name: buildkit-state
+          - name: buildkit-jobs
             mountPath: /var/lib/nook-buildkit-backing
+            subPathExpr: $(POD_UID)
           - name: temporary
             mountPath: /tmp
         resources:
           requests:
             cpu: 750m
             memory: 4Gi
-            ephemeral-storage: 50Gi
+            ephemeral-storage: 4Gi
           limits:
             cpu: "6"
             memory: 10Gi
-            ephemeral-storage: 100Gi
+            ephemeral-storage: 32Gi
     containers:
       - name: runner
         image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
@@ -151,9 +187,14 @@ template:
       - name: work
         emptyDir:
           sizeLimit: 200Gi
-      - name: buildkit-state
-        emptyDir:
-          sizeLimit: 100Gi
+      - name: buildkit-requests
+        hostPath:
+          path: /var/lib/nook-arc-buildkit/pool/requests
+          type: Directory
+      - name: buildkit-jobs
+        hostPath:
+          path: /var/lib/nook-arc-buildkit/pool/jobs
+          type: Directory
       - name: docker-config
         emptyDir:
           sizeLimit: 64Mi

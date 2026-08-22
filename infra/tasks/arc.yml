@@ -5,6 +5,10 @@ vars:
   ARC_CONTROLLER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
   ARC_RUNNER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
   ARC_RUNNER_LABEL: nook-k0s
+  ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
+  ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
+  ARC_SMOKE_JOB_NAME: '{{default "Remote / preflight" .ARC_SMOKE_JOB_NAME}}'
+  ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 tasks:
   arc:auth:sync:
@@ -68,8 +72,16 @@ tasks:
         chart_version="{{.ARC_CHART_VERSION}}"
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
-        cleanup() { rm -f "$controller_render" "$runner_render"; }
+        hive_values="$(mktemp)"
+        hive_render="$(mktemp)"
+        cleanup() {
+          rm -f "$controller_render" "$runner_render" "$hive_values" "$hive_render"
+        }
         trap cleanup EXIT
+
+        ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
+          "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
+          "$hive_values"
 
         helm template nook-arc \
           "{{.ARC_CONTROLLER_CHART}}" \
@@ -83,25 +95,244 @@ tasks:
           --namespace arc-runners \
           --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           > "$runner_render"
+        helm template nook-k0s-hive \
+          "{{.ARC_RUNNER_CHART}}" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$hive_values" \
+          > "$hive_render"
 
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
         grep -q 'tcp://127.0.0.1:1234' "$runner_render"
-        grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-v3' "$runner_render"
+        grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1' "$runner_render"
         grep -q 'imagePullPolicy: Never' "$runner_render"
         grep -q -- '--oci-worker-snapshotter' "$runner_render"
         grep -q -- '- overlayfs' "$runner_render"
         grep -q 'restartPolicy: Always' "$runner_render"
         grep -q 'privileged: true' "$runner_render"
-        grep -q -- '- "80000"' "$runner_render"
-        grep -q 'sizeLimit: 100Gi' "$runner_render"
-        if grep -Eq 'docker:dind|dockerd|docker\.sock|hostPath:|sysbox|containerMode:' "$runner_render"; then
+        grep -q -- '- "24000"' "$runner_render"
+        grep -q 'value: "34359738368"' "$runner_render"
+        grep -q 'path: /var/lib/nook-arc-buildkit/pool/requests' "$runner_render"
+        grep -q 'path: /var/lib/nook-arc-buildkit/pool/jobs' "$runner_render"
+        grep -q 'subPathExpr: $(POD_UID)' "$runner_render"
+        ruby - "$runner_render" "$hive_render" <<'RUBY'
+        require "yaml"
+
+        def rendered_pod(render_path, expected_name)
+          documents = YAML.load_stream(File.read(render_path))
+          runner_set = documents.compact.find do |document|
+            document["kind"] == "AutoscalingRunnerSet"
+          end
+          raise "missing ARC scale set: #{expected_name}" unless runner_set
+          if runner_set.dig("metadata", "name") != expected_name
+            raise "unexpected ARC scale set: #{runner_set.dig('metadata', 'name')}"
+          end
+
+          pod = runner_set.dig("spec", "template", "spec")
+          host_paths = pod.fetch("volumes").filter_map do |volume|
+            [volume["name"], volume.dig("hostPath", "path")] if volume["hostPath"]
+          end.to_h
+          expected_paths = {
+            "buildkit-requests" => "/var/lib/nook-arc-buildkit/pool/requests",
+            "buildkit-jobs" => "/var/lib/nook-arc-buildkit/pool/jobs",
+          }
+          unless host_paths == expected_paths
+            raise "unexpected ARC hostPath volumes: #{host_paths.inspect}"
+          end
+
+          mounts = {}
+          pod.fetch("initContainers", []).concat(pod.fetch("containers", [])).each do |container|
+            mounts[container["name"]] = container.fetch("volumeMounts", []).map do |mount|
+              mount["name"]
+            end
+          end
+          expected_owners = {
+            "buildkit-requests" => ["prepare-buildkit-state"],
+            "buildkit-jobs" => ["buildkit"],
+          }
+          expected_owners.each do |volume_name, expected|
+            actual = mounts.filter_map do |container_name, volume_mounts|
+              container_name if volume_mounts.include?(volume_name)
+            end.sort
+            unless actual == expected
+              raise "unexpected mounts for #{volume_name}: #{actual.inspect}"
+            end
+          end
+          pod
+        end
+
+        rendered_pod(ARGV[0], "nook-k0s")
+        hive_pod = rendered_pod(ARGV[1], "nook-k0s-hive")
+        hive_containers = hive_pod.fetch("containers").to_h do |container|
+          [container["name"], container]
+        end
+        hive_init_containers = hive_pod.fetch("initContainers").to_h do |container|
+          [container["name"], container]
+        end
+        neo4j_image = hive_init_containers.fetch("neo4j", {}).fetch("image", "")
+        unless neo4j_image.split("@", 2).first == "neo4j:2026.06.0-community"
+          raise "Hive ARC scale set lacks its pinned Neo4j sidecar"
+        end
+        ["neo4j", "hive-test-runtime"].each do |sidecar_name|
+          unless hive_init_containers.fetch(sidecar_name, {})["restartPolicy"] == "Always"
+            raise "Hive ARC #{sidecar_name} is not a native sidecar"
+          end
+        end
+        runner_env = hive_containers.fetch("runner").fetch("env", []).to_h do |item|
+          [item["name"], item["value"]]
+        end
+        unless runner_env["NOOK_ARC_HIVE"] == "1"
+          raise "Hive ARC runner lacks its direct-test marker"
+        end
+        RUBY
+        if grep -Eq 'docker:dind|dockerd|docker\.sock|sysbox|containerMode:' "$runner_render"; then
           echo "Rendered ARC runner violates the no-nested-engine contract" >&2
           exit 1
         fi
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
-        echo "Pinned ARC render satisfies the private microVM-builder contract"
+        grep -q 'kind: AutoscalingRunnerSet' "$hive_render"
+        echo "Pinned ARC renders satisfy the private microVM-builder contract"
+        REMOTE
+
+  arc:cache:pool:sync:
+    internal: true
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        pool_root=/var/lib/nook-arc-buildkit
+        pool_image="$pool_root/pool.btrfs"
+        pool_image_next="$pool_root/pool.btrfs.next"
+        pool_mount="$pool_root/pool"
+        pool_size=768G
+        pool_size_bytes=824633720832
+        state_size=32G
+        state_bytes=34359738368
+        mount_unit="$(systemd-escape --path --suffix=mount "$pool_mount")"
+        mount_unit_path="/etc/systemd/system/$mount_unit"
+        cloner_unit_path=/etc/systemd/system/nook-arc-buildkit-cloner.service
+
+        sudo -n apt-get update -qq
+        sudo -n apt-get install -y -qq --no-install-recommends \
+          btrfs-progs e2fsprogs ruby util-linux
+        sudo -n install -d -m 0700 "$pool_root"
+        sudo -n install -d -m 0755 "$pool_mount"
+        if ! sudo -n test -f "$pool_image"; then
+          sudo -n rm -f -- "$pool_image_next"
+          sudo -n install -m 0600 /dev/null "$pool_image_next"
+          sudo -n truncate -s "$pool_size" "$pool_image_next"
+          sudo -n mkfs.btrfs -q -f -L nook-arc-buildkit "$pool_image_next"
+          sudo -n mv "$pool_image_next" "$pool_image"
+        fi
+        sudo -n chmod 0600 "$pool_image"
+        if test "$(sudo -n blkid -o value -s TYPE "$pool_image")" != btrfs; then
+          echo "ARC BuildKit pool image is not Btrfs: $pool_image" >&2
+          exit 1
+        fi
+        current_pool_size="$(sudo -n stat -c %s "$pool_image")"
+        if test "$current_pool_size" -lt "$pool_size_bytes"; then
+          sudo -n truncate -s "$pool_size" "$pool_image"
+        fi
+
+        mount_unit_temp="$(mktemp)"
+        cat > "$mount_unit_temp" <<UNIT
+        [Unit]
+        Description=Nook ARC BuildKit copy-on-write pool
+        After=local-fs.target
+        Before=k0scontroller.service
+
+        [Mount]
+        What=$pool_image
+        Where=$pool_mount
+        Type=btrfs
+        Options=loop,noatime,space_cache=v2
+
+        [Install]
+        WantedBy=multi-user.target
+        UNIT
+        sudo -n install -m 0644 "$mount_unit_temp" "$mount_unit_path"
+        rm -f "$mount_unit_temp"
+        sudo -n systemctl daemon-reload
+        sudo -n systemctl enable --now "$mount_unit" >/dev/null
+        sudo -n mountpoint -q "$pool_mount"
+        if test "$current_pool_size" -lt "$pool_size_bytes"; then
+          pool_loop="$(sudo -n findmnt -n -o SOURCE --target "$pool_mount")"
+          case "$pool_loop" in
+            /dev/loop[0-9]*) ;;
+            *) echo "ARC BuildKit pool is not mounted through a loop device" >&2; exit 1 ;;
+          esac
+          sudo -n losetup -c "$pool_loop"
+          sudo -n btrfs filesystem resize max "$pool_mount" >/dev/null
+        fi
+        if test "$(sudo -n btrfs filesystem usage -b "$pool_mount" | awk '/Device size:/ {print $3; exit}')" -lt "$pool_size_bytes"; then
+          echo "ARC BuildKit pool did not reach its required capacity" >&2
+          exit 1
+        fi
+        sudo -n btrfs quota enable "$pool_mount" >/dev/null 2>&1 || true
+        if ! sudo -n btrfs qgroup show "$pool_mount" >/dev/null; then
+          echo "ARC BuildKit pool quotas are unavailable" >&2
+          exit 1
+        fi
+
+        sudo -n install -d -m 0755 \
+          "$pool_mount/seed" "$pool_mount/jobs" "$pool_mount/requests"
+        seed_file="$pool_mount/seed/buildkit.ext4"
+        if ! sudo -n test -f "$seed_file"; then
+          seed_temp="$pool_mount/seed/buildkit.ext4.tmp"
+          sudo -n truncate -s "$state_size" "$seed_temp"
+          loop_device="$(sudo -n losetup --find --show "$seed_temp")"
+          cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
+          trap cleanup_loop EXIT
+          sudo -n mkfs.ext4 -q -F -m 0 "$loop_device"
+          cleanup_loop
+          trap - EXIT
+          sudo -n mv "$seed_temp" "$seed_file"
+        fi
+        if test "$(sudo -n stat -c %s "$seed_file")" != "$state_bytes"; then
+          echo "ARC BuildKit seed has the wrong logical capacity" >&2
+          exit 1
+        fi
+        reflink_probe="$pool_mount/seed/.reflink-probe"
+        sudo -n cp --reflink=always --sparse=auto "$seed_file" "$reflink_probe"
+        sudo -n rm -f "$reflink_probe"
+
+        sudo -n install -m 0755 \
+          "$remote_dir/infra/k0s/scripts/arc-buildkit-cloner" \
+          /usr/local/sbin/nook-arc-buildkit-cloner
+        cloner_unit_temp="$(mktemp)"
+        cat > "$cloner_unit_temp" <<UNIT
+        [Unit]
+        Description=Nook ARC BuildKit reflink cloner
+        Requires=$mount_unit
+        After=$mount_unit
+        Before=k0scontroller.service
+
+        [Service]
+        Type=simple
+        ExecStart=/usr/local/sbin/nook-arc-buildkit-cloner
+        Restart=always
+        RestartSec=1
+        NoNewPrivileges=true
+        PrivateTmp=true
+        ProtectHome=true
+        ProtectSystem=strict
+        ReadWritePaths=$pool_mount
+
+        [Install]
+        WantedBy=multi-user.target
+        UNIT
+        sudo -n install -m 0644 "$cloner_unit_temp" "$cloner_unit_path"
+        rm -f "$cloner_unit_temp"
+        sudo -n systemctl daemon-reload
+        sudo -n systemctl enable --now nook-arc-buildkit-cloner.service >/dev/null
+        sudo -n systemctl restart nook-arc-buildkit-cloner.service
+        sudo -n systemctl is-active --quiet nook-arc-buildkit-cloner.service
+        echo "ARC BuildKit copy-on-write pool is ready at 768 GiB with 32 GiB per job"
         REMOTE
 
   arc:buildkit:image:sync:
@@ -119,7 +350,7 @@ tasks:
         docker buildx build \
           --platform linux/amd64 \
           --provenance=false \
-          --tag localhost/nook-arc-buildkit:0.32.2-ext4-v3 \
+          --tag localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1 \
           --output "type=oci,dest=$artifact" \
           infra/k0s/images/arc-buildkit
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
@@ -132,6 +363,7 @@ tasks:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
+      - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
       - task: arc:render:check
       - task: arc:auth:sync
@@ -143,15 +375,24 @@ tasks:
         controller_chart="{{.ARC_CONTROLLER_CHART}}"
         runner_chart="{{.ARC_RUNNER_CHART}}"
         kubeconfig="$(mktemp)"
-        trap 'rm -f "$kubeconfig"' EXIT
+        hive_values="$(mktemp)"
+        trap 'rm -f "$kubeconfig" "$hive_values"' EXIT
         sudo -n k0s kubeconfig admin > "$kubeconfig"
         chmod 0600 "$kubeconfig"
         export KUBECONFIG="$kubeconfig"
         kubectl() { sudo -n k0s kubectl "$@"; }
 
+        ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
+          "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
+          "$hive_values"
+
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
+        kubectl create configmap nook-arc-hive-test-runtime \
+          --namespace arc-runners \
+          --from-file=run-hive-test-runtime="$remote_dir/infra/k0s/scripts/run-hive-test-runtime" \
+          --dry-run=client -o yaml | kubectl apply -f -
 
         helm upgrade --install nook-arc \
           "$controller_chart" \
@@ -185,6 +426,13 @@ tasks:
           --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           --wait \
           --timeout 10m
+        helm upgrade --install nook-k0s-hive \
+          "$runner_chart" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$hive_values" \
+          --wait \
+          --timeout 10m
 
         # Helm --wait covers the chart-owned AutoscalingRunnerSet, but not the
         # listener and EphemeralRunnerSet that ARC creates asynchronously. An
@@ -192,57 +440,59 @@ tasks:
         # not return while GitHub jobs could still target that transition.
         # Require six consecutive samples so a transient Running phase cannot
         # pass the gate while reconciliation is still converging.
-        arc_ready=false
-        ready_samples=0
-        for _ in $(seq 1 120); do
-          phase="$(
-            kubectl get autoscalingrunnerset nook-k0s \
-              --namespace arc-runners \
-              -o jsonpath='{.status.phase}' 2>/dev/null || true
-          )"
-          listener="$(
-            kubectl get autoscalinglistener \
-              --namespace arc-systems \
-              -l actions.github.com/scale-set-name=nook-k0s \
-              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
-          )"
-          ephemeral_runner_set="$(
-            kubectl get ephemeralrunnerset \
-              --namespace arc-runners \
-              -l actions.github.com/scale-set-name=nook-k0s \
-              -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
-          )"
-          if test "$phase" = Running &&
-             test -n "$listener" &&
-             test -n "$ephemeral_runner_set" &&
-             kubectl wait pod \
-               --namespace arc-systems \
-               -l actions.github.com/scale-set-name=nook-k0s,app.kubernetes.io/component=runner-scale-set-listener \
-               --for=condition=Ready \
-               --timeout=1s >/dev/null 2>&1; then
-            ready_samples=$((ready_samples + 1))
-            if test "$ready_samples" -ge 6; then
-              arc_ready=true
-              break
+        for scale_set in nook-k0s nook-k0s-hive; do
+          arc_ready=false
+          ready_samples=0
+          for _ in $(seq 1 120); do
+            phase="$(
+              kubectl get autoscalingrunnerset "$scale_set" \
+                --namespace arc-runners \
+                -o jsonpath='{.status.phase}' 2>/dev/null || true
+            )"
+            listener="$(
+              kubectl get autoscalinglistener \
+                --namespace arc-systems \
+                -l "actions.github.com/scale-set-name=$scale_set" \
+                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+            )"
+            ephemeral_runner_set="$(
+              kubectl get ephemeralrunnerset \
+                --namespace arc-runners \
+                -l "actions.github.com/scale-set-name=$scale_set" \
+                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
+            )"
+            if test "$phase" = Running &&
+               test -n "$listener" &&
+               test -n "$ephemeral_runner_set" &&
+               kubectl wait pod \
+                 --namespace arc-systems \
+                 -l "actions.github.com/scale-set-name=$scale_set,app.kubernetes.io/component=runner-scale-set-listener" \
+                 --for=condition=Ready \
+                 --timeout=1s >/dev/null 2>&1; then
+              ready_samples=$((ready_samples + 1))
+              if test "$ready_samples" -ge 6; then
+                arc_ready=true
+                break
+              fi
+            else
+              ready_samples=0
             fi
-          else
-            ready_samples=0
+            sleep 5
+          done
+          if test "$arc_ready" != true; then
+            echo "ARC scale set $scale_set did not become dispatch-ready within 10 minutes" >&2
+            kubectl get autoscalingrunnerset,ephemeralrunnerset \
+              --namespace arc-runners -o wide >&2 || true
+            kubectl get autoscalinglistener,pods \
+              --namespace arc-systems -o wide >&2 || true
+            exit 1
           fi
-          sleep 5
-        done
-        if test "$arc_ready" != true; then
-          echo "ARC scale set did not become dispatch-ready within 10 minutes" >&2
-          kubectl get autoscalingrunnerset,ephemeralrunnerset \
-            --namespace arc-runners -o wide >&2 || true
-          kubectl get autoscalinglistener,pods \
-            --namespace arc-systems -o wide >&2 || true
-          exit 1
-        fi
 
-        kubectl get autoscalingrunnerset nook-k0s \
-          --namespace arc-runners \
-          -o jsonpath='{.metadata.name}{" max="}{.spec.maxRunners}{"\n"}'
-        echo "ARC scale set is dispatch-ready"
+          kubectl get autoscalingrunnerset "$scale_set" \
+            --namespace arc-runners \
+            -o jsonpath='{.metadata.name}{" max="}{.spec.maxRunners}{"\n"}'
+        done
+        echo "ARC scale sets are dispatch-ready"
         REMOTE
 
   arc:activate:
@@ -252,7 +502,8 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
-      - echo "Opted-in workflows now target {{.ARC_RUNNER_LABEL}}"
+      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body nook-k0s-hive
+      - echo "Opted-in workflows now target {{.ARC_RUNNER_LABEL}} and nook-k0s-hive"
 
   arc:fallback:
     desc: Route opted-in workflows back to GitHub-hosted capacity.
@@ -261,6 +512,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
+      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - echo "Opted-in workflows now target ubuntu-latest"
 
   arc:status:
@@ -278,6 +530,11 @@ tasks:
         kubectl get autoscalinglistener --namespace arc-systems -o wide
         kubectl get pods --namespace arc-systems -o wide
         kubectl get pods --namespace arc-runners -o wide
+        sudo -n systemctl is-active nook-arc-buildkit-cloner.service
+        sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
+        sudo -n btrfs filesystem usage -b /var/lib/nook-arc-buildkit/pool
+        sudo -n btrfs filesystem du -s \
+          /var/lib/nook-arc-buildkit/pool/seed/buildkit.ext4
         REMOTE
 
   arc:diagnose:
@@ -294,6 +551,10 @@ tasks:
           --sort-by=.metadata.creationTimestamp | tail -n 60
         kubectl logs deployment/nook-arc-gha-rs-controller \
           --namespace arc-systems --tail=120 || true
+        sudo -n systemctl status nook-arc-buildkit-cloner.service \
+          --no-pager --lines=40 || true
+        sudo -n journalctl --unit nook-arc-buildkit-cloner.service \
+          --no-pager --lines=80 || true
         listener="$(kubectl get pods --namespace arc-systems \
           -l app.kubernetes.io/component=runner-scale-set-listener \
           -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
@@ -303,26 +564,46 @@ tasks:
         REMOTE
 
   arc:smoke:
-    desc: Run repository preflight on the exact branch through ARC.
+    desc: Run a trusted exact-branch task and promote its stopped ARC state.
+    vars:
+      ARC_SMOKE_STATE_FILE:
+        sh: 'mktemp "${TMPDIR:-/tmp}/nook-arc-smoke-{{.ARC_SMOKE_RUNNER_LABEL}}.XXXXXX"'
     cmds:
       - |
+        case "{{.ARC_SMOKE_RUNNER_LABEL}}" in
+          "{{.ARC_RUNNER_LABEL}}")
+            route_variable=NOOK_RUNS_ON
+            ;;
+          "{{.ARC_HIVE_RUNNER_LABEL}}")
+            route_variable=NOOK_HIVE_RUNS_ON
+            ;;
+          *)
+            echo "ARC smoke received an unsupported runner label: {{.ARC_SMOKE_RUNNER_LABEL}}" >&2
+            exit 2
+            ;;
+        esac
         selected_runner="$(
-          gh variable get NOOK_RUNS_ON \
+          gh variable get "$route_variable" \
             --repo meta-secret/nook
         )"
-        if test "$selected_runner" != "{{.ARC_RUNNER_LABEL}}"; then
-          echo "ARC smoke requires NOOK_RUNS_ON={{.ARC_RUNNER_LABEL}}; got $selected_runner" >&2
+        if test "$selected_runner" != "{{.ARC_SMOKE_RUNNER_LABEL}}"; then
+          echo "ARC smoke requires $route_variable={{.ARC_SMOKE_RUNNER_LABEL}}; got $selected_runner" >&2
           exit 2
         fi
       - |
         bash <<'BASH'
         set -euo pipefail
+        smoke_task='{{.ARC_SMOKE_TASK}}'
+        smoke_job_name='{{.ARC_SMOKE_JOB_NAME}}'
+        smoke_runner_label='{{.ARC_SMOKE_RUNNER_LABEL}}'
         smoke_ref="$(git branch --show-current)"
         if test -z "$smoke_ref"; then
           echo "ARC smoke requires a named, pushed branch." >&2
           exit 2
         fi
         head_sha="$(git rev-parse HEAD)"
+        state_file="{{.ARC_SMOKE_STATE_FILE}}"
+        rm -f "$state_file"
         remote_sha="$(
           git ls-remote --refs origin "refs/heads/$smoke_ref" |
             awk 'NR == 1 { print $1 }'
@@ -346,7 +627,7 @@ tasks:
         gh workflow run remote.yml \
           --repo meta-secret/nook \
           --ref "$smoke_ref" \
-          --raw-field "tasks=preflight"
+          --raw-field "tasks=$smoke_task"
         run_id=""
         for _ in $(seq 1 30); do
           while IFS= read -r candidate; do
@@ -390,6 +671,8 @@ tasks:
         }
         runner_name=""
         runner_uid=""
+        runner_sandbox_id=""
+        runner_state_retained=""
         missing_runner_samples=0
         for _ in $(seq 1 500); do
           run_state="$(
@@ -405,17 +688,31 @@ tasks:
               echo "ARC smoke run $run_id completed with $conclusion" >&2
               exit 1
             fi
+            if test -z "$runner_uid"; then
+              echo "Successful ARC smoke did not capture its runner Pod UID" >&2
+              exit 1
+            fi
+            if [[ ! "$runner_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
+              echo "Successful ARC smoke did not capture one Kata sandbox ID" >&2
+              exit 1
+            fi
+            if test -z "$runner_state_retained"; then
+              echo "Successful ARC smoke did not retain its BuildKit state" >&2
+              exit 1
+            fi
+            printf '%s\n%s\n%s\n' \
+              "$run_id" "$runner_uid" "$runner_sandbox_id" > "$state_file"
             break
           fi
 
           discovered_runner="$(
             gh api "repos/meta-secret/nook/actions/runs/$run_id/jobs" \
-              --jq '.jobs[] | select(.name == "Remote / preflight") | .runner_name // empty'
+              --jq ".jobs[] | select(.name == \"$smoke_job_name\") | .runner_name // empty"
           )"
           if test -n "$discovered_runner"; then
             runner_name="$discovered_runner"
             case "$runner_name" in
-              nook-k0s-*) ;;
+              "$smoke_runner_label"-*) ;;
               *)
                 echo "ARC smoke received an unexpected runner name: $runner_name" >&2
                 cancel_run
@@ -440,6 +737,22 @@ tasks:
                 ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
                   "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
                 exit 1
+              fi
+              if test -z "$runner_sandbox_id"; then
+                runner_sandbox_id="$(
+                  ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                    "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
+                  )"
+              fi
+              if [[ ! "$runner_uid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
+                echo "ARC smoke captured an invalid runner Pod UID" >&2
+                cancel_run
+                exit 1
+              fi
+              if test -z "$runner_state_retained" &&
+                 ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                   "sudo -n sh -ceu 'job_dir=\"/var/lib/nook-arc-buildkit/pool/jobs/\$1\"; runtime_dir=/var/lib/nook-arc-buildkit/pool/runtime; test -f \"\$job_dir/buildkit.ext4\"; umask 077; printf \"%s\\n\" \"\$((\$(date +%s) + 1800))\" > \"\$runtime_dir/\$1.retain.tmp\"; mv \"\$runtime_dir/\$1.retain.tmp\" \"\$runtime_dir/\$1.retain\"' sh '$runner_uid'"; then
+                runner_state_retained=1
               fi
             fi
             case "$pod_state" in
@@ -470,20 +783,168 @@ tasks:
           fi
           sleep 3
         done
+        if test ! -f "$state_file"; then
+          echo "ARC smoke run $run_id did not complete within 25 minutes" >&2
+          cancel_run
+          exit 1
+        fi
+        BASH
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        state_file="{{.ARC_SMOKE_STATE_FILE}}"
+        if test ! -f "$state_file"; then
+          echo "ARC smoke did not persist teardown state" >&2
+          exit 1
+        fi
+        state_lines="$(wc -l < "$state_file" | tr -d ' ')"
+        run_id="$(sed -n '1p' "$state_file")"
+        runner_uid="$(sed -n '2p' "$state_file")"
+        runner_sandbox_id="$(sed -n '3p' "$state_file")"
+        rm -f "$state_file"
+        if test "$state_lines" -ne 3; then
+          echo "ARC smoke did not persist complete teardown state" >&2
+          exit 1
+        fi
         final_status="$(
           gh run view "$run_id" --repo meta-secret/nook --json status --jq .status
         )"
         if test "$final_status" != completed; then
           echo "ARC smoke run $run_id did not complete within 25 minutes" >&2
-          cancel_run
           exit 1
         fi
         if ! gh api \
           "repos/meta-secret/nook/actions/runs/$run_id/jobs" \
-          --jq '.jobs[] | select(.name == "Remote / preflight") | .labels[]' |
-          grep -Fxq "{{.ARC_RUNNER_LABEL}}"; then
+          --jq ".jobs[] | select(.name == \"{{.ARC_SMOKE_JOB_NAME}}\") | .labels[]" |
+          grep -Fxq "{{.ARC_SMOKE_RUNNER_LABEL}}"; then
           echo "Successful smoke run did not report the ARC scale-set label" >&2
           exit 1
         fi
-        echo "ARC smoke run $run_id completed on {{.ARC_RUNNER_LABEL}}"
+        if test -z "$runner_uid"; then
+          echo "Successful ARC smoke did not capture its runner Pod UID" >&2
+          exit 1
+        fi
+        if [[ ! "$runner_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Successful ARC smoke did not capture one Kata sandbox ID" >&2
+          exit 1
+        fi
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          bash -s -- "$runner_uid" "$runner_sandbox_id" <<'REMOTE'
+        set -euo pipefail
+        pod_uid="$1"
+        sandbox_id="$2"
+        case "$pod_uid" in
+          ????????-????-????-????-????????????) ;;
+          *) echo "Invalid ARC smoke Pod UID" >&2; exit 2 ;;
+        esac
+        if [[ ! "$sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "Invalid ARC smoke sandbox ID" >&2
+          exit 2
+        fi
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        runtime_stopped=false
+        for _ in $(seq 1 180); do
+          api_present=false
+          kubelet_present=false
+          container_present=false
+          task_present=false
+          shim_present=false
+          if kubectl get pods --namespace arc-runners \
+            -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}' |
+            grep -Fxq "$pod_uid"; then
+            api_present=true
+          fi
+          test ! -e "/var/lib/k0s/kubelet/pods/$pod_uid" || kubelet_present=true
+          if sudo -n k0s ctr --namespace k8s.io containers info \
+            "$sandbox_id" >/dev/null 2>&1; then
+            container_present=true
+          fi
+          if sudo -n k0s ctr --namespace k8s.io tasks list -q 2>/dev/null |
+            grep -Fxq "$sandbox_id"; then
+            task_present=true
+          fi
+          for command_line_file in /proc/[0-9]*/cmdline; do
+            test -r "$command_line_file" || continue
+            command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
+            case "$command_line" in
+              *containerd-shim-kata-v2*)
+                case "$command_line" in
+                  *" -id $sandbox_id "*)
+                    shim_present=true
+                    break
+                    ;;
+                esac
+                ;;
+            esac
+          done
+          if test "$api_present" = false &&
+             test "$kubelet_present" = false &&
+             test "$container_present" = false &&
+             test "$task_present" = false &&
+             test "$shim_present" = false; then
+            runtime_stopped=true
+            break
+          fi
+          sleep 1
+        done
+        if test "$runtime_stopped" != true; then
+          echo "ARC smoke sandbox $sandbox_id did not stop before seed promotion" >&2
+          exit 1
+        fi
+
+        pool_dir=/var/lib/nook-arc-buildkit/pool
+        job_dir="$pool_dir/jobs/$pod_uid"
+        job_file="$job_dir/buildkit.ext4"
+        job_generation="$job_dir/.seed-generation"
+        seed_dir="$pool_dir/seed"
+        seed_file="$seed_dir/buildkit.ext4"
+        seed_next="$seed_dir/buildkit.ext4.next"
+        seed_lock="$pool_dir/.seed.lock"
+        sudo -n mountpoint -q "$pool_dir"
+        sudo -n test -f "$job_dir/.ready"
+        generation_size="$(sudo -n stat -c %s -- "$job_generation")"
+        if sudo -n test -L "$job_generation" ||
+           test "$(sudo -n stat -c '%F:%u:%g:%h' -- "$job_generation")" != \
+             "regular file:0:0:1" ||
+           test "$generation_size" -lt 8 ||
+           test "$generation_size" -gt 128 ||
+           ! sudo -n grep -Eq '^[0-9]+:[0-9]+:[0-9]+:[0-9]+$' \
+             "$job_generation"; then
+          echo "ARC smoke seed generation marker is not root-owned regular state" >&2
+          exit 1
+        fi
+        if sudo -n test -L "$job_file" ||
+           test "$(sudo -n stat -c '%F:%u:%g:%h:%s' -- "$job_file")" != \
+             "regular file:0:0:1:34359738368"; then
+          echo "ARC smoke BuildKit state is not the root-owned regular clone" >&2
+          exit 1
+        fi
+        sudo -n flock -x "$seed_lock" sh -ceu '
+          expected_generation="$(cat "$2")"
+          current_generation="$(stat -c "%i:%s:%Y:%Z" "$3")"
+          if test "$current_generation" != "$expected_generation"; then
+            echo "ARC seed advanced after this job cloned it; refusing stale promotion" >&2
+            exit 1
+          fi
+          rm -f "$4"
+          cp --reflink=always --sparse=auto "$1" "$4"
+          mv "$4" "$3"
+        ' sh "$job_file" "$job_generation" "$seed_file" "$seed_next"
+        sudo -n btrfs subvolume delete "$job_dir" >/dev/null
+        sudo -n rm -f -- "$pool_dir/runtime/$pod_uid.sandbox" \
+          "$pool_dir/runtime/$pod_uid.retain"
+        sudo -n btrfs filesystem sync "$pool_dir"
+        sudo -n btrfs filesystem du -s "$seed_file"
+        echo "Promoted successful ARC smoke state to the reusable seed"
+        REMOTE
+        echo "ARC smoke run $run_id completed on {{.ARC_SMOKE_RUNNER_LABEL}}"
         BASH
+
+  arc:hive:smoke:
+    desc: Warm and promote trusted Hive verification state through ARC.
+    cmds:
+      - task: arc:smoke
+        vars:
+          ARC_SMOKE_TASK: hive:verify
+          ARC_SMOKE_JOB_NAME: Remote / hive:verify
+          ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive

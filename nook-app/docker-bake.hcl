@@ -109,6 +109,12 @@ variable "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE" {
   default = ""
 }
 
+// Hosted setup sets this after it probes every exact ref. Local Task runs do
+// not probe, so an empty availability value there means unknown, not absent.
+variable "GHA_CACHE_EXACT_PROBES_COMPLETE" {
+  default = ""
+}
+
 variable "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE" {
   default = ""
 }

@@ -16,6 +16,7 @@ Pinned platform:
 - Neo4j Helm chart and image `2026.6.0`
 - Kata runtime-rs classes `kata-dragonball` for Hive and
   `kata-qemu-runtime-rs` for ARC builds
+- A loop-backed Btrfs ARC pool with private 32 GiB reflinked BuildKit images
 
 Install the pinned operator console and its credential-free kubeconfig through
 the root Taskfile, then use it directly after SSH login:
@@ -61,6 +62,15 @@ Service at `10.96.90.10:5000`. Traefik publishes it at
 `https://registry.dev.nokey.sh` with htpasswd authentication. There is no host
 `:5000` listener and no `kubectl port-forward`. k0s uninstall never removes the
 registry data.
+ARC storage uses a separate Task-managed Btrfs image under
+`/var/lib/nook-arc-buildkit`. The host filesystem remains ext4. Runner Pods
+receive two narrow mounts. The trusted preparation init container sees only the
+shared clone-request directory. The private BuildKit native sidecar sees only
+the pool entry selected for its Kubernetes Pod UID. No other container mounts
+either host path. The 768 GiB sparse pool covers twenty fully allocated 32 GiB
+job images, the reusable 32 GiB seed, and filesystem metadata. The 24 GB
+BuildKit garbage-collection target normally keeps physical use below that hard
+capacity envelope.
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT

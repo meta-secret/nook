@@ -257,6 +257,15 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
+- ARC keeps Zot as the authoritative cache and also starts each fresh Kata guest
+  from a private reflink clone of a trusted 32 GiB BuildKit seed.
+- Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
+  Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
+  so ARC remains daemon-free and the helpers stop with the runner.
+- Registry transfer time and local snapshot materialization time are separate
+  performance dimensions.
+- A manifest lookup proves index availability. It does not prove that a fresh
+  builder has hydrated content or extracted snapshots.
 - Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
 - Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
 - Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.

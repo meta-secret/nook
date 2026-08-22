@@ -248,10 +248,15 @@ Use this workflow for quality, CI, and deployment changes.
     - Shorter dependency indexes join only while that Main source ref is absent.
     - A missing exact and Main source scope falls back to source-free
       dependencies without cold `cargo install`.
-    - Hive PR verification imports exact SHA alone when present.
-    - A missing Hive exact SHA uses trusted Main.
-    - Its verified solve publishes only the isolated exact-SHA Hive leaf.
-    - Main remains the only writer of the shared Hive seed.
+    - Trusted Hive PR verification runs on the dedicated `nook-k0s-hive` ARC
+      scale set.
+    - Each fresh Hive runner receives a reflink clone of the node-local,
+      validated BuildKit seed.
+    - Hive PRs may import the trusted Main registry seed when the local clone
+      does not already contain the needed graph.
+    - Hive PRs do not export an isolated exact-SHA registry cache. The guarded
+      ARC smoke workflow promotes a validated local seed instead.
+    - Main remains the only workflow writer of the shared Hive registry seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Native publishers stage `docker:ci:cache:publish:rust-base` before
@@ -282,7 +287,7 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_exact_scope_excludes_main_then_cold_scope_falls_back`
     - `theorem_context_parents_never_write_publishers_mode_max`
     - `theorem_github_actions_zot_parameter_matrix`
-    - `theorem_hive_pr_publishes_only_exact_head_cache`
+    - `theorem_hive_arc_pr_reuses_local_state_without_exact_export`
     - `theorem_local_formatter_and_pr_share_input_cache`
     - `theorem_source_leaf_solves_do_not_duplicate_linked_dependency_targets`
     - `theorem_wasm_fingerprint_closed_allowlist`
@@ -299,8 +304,10 @@ Use this workflow for quality, CI, and deployment changes.
     and do not replace Main `nook/buildcache/**`.
     Scenario P proves a hosted-verified local candidate and a fresh PR runner
     share the same source-free dependency graph without sharing a commit SHA.
-    Scenario Q proves standalone Hive-style verification restores Main,
-    publishes only its exact PR leaf, and replays that leaf on a fresh runner.
+    Scenario Q proves a generic standalone exact-scope verification restores
+    Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
+    runner. Hive ARC verification instead reuses its private local BuildKit
+    state and does not publish per-PR registry cache refs.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
     builders.

@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+pool_dir="${NOOK_ARC_BUILDKIT_POOL:-/var/lib/nook-arc-buildkit/pool}"
+seed_file="$pool_dir/seed/buildkit.ext4"
+request_dir="$pool_dir/requests"
+jobs_dir="$pool_dir/jobs"
+runtime_dir="$pool_dir/runtime"
+seed_lock="$pool_dir/.seed.lock"
+pod_root="${NOOK_K0S_POD_ROOT:-/var/lib/k0s/kubelet/pods}"
+job_exclusive_limit="${NOOK_ARC_BUILDKIT_JOB_EXCLUSIVE_LIMIT:-32G}"
+last_prune=0
+
+mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir"
+chmod 0700 "$runtime_dir"
+test -f "$seed_file"
+
+valid_uid() {
+  [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+}
+
+delete_job_dir() {
+  local job_dir="$1"
+  local pod_uid
+  pod_uid="$(basename "$job_dir")"
+  if btrfs subvolume show "$job_dir" >/dev/null 2>&1; then
+    btrfs subvolume delete "$job_dir" >/dev/null
+  else
+    rm -rf -- "$job_dir"
+  fi
+  rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain"
+}
+
+record_sandbox_id() {
+  local pod_uid="$1"
+  local sandbox_id sandbox_marker temporary
+  sandbox_id="$(
+    k0s ctr --namespace k8s.io containers list -q \
+      "labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox"
+  )"
+  [[ "$sandbox_id" =~ ^[0-9a-f]{64}$ ]] || return 1
+  sandbox_marker="$runtime_dir/$pod_uid.sandbox"
+  temporary="$sandbox_marker.tmp"
+  printf '%s\n' "$sandbox_id" > "$temporary"
+  chmod 0600 "$temporary"
+  mv "$temporary" "$sandbox_marker"
+}
+
+record_active_sandboxes() {
+  local job_dir pod_uid sandbox_marker
+  while IFS= read -r -d '' job_dir; do
+    pod_uid="$(basename "$job_dir")"
+    valid_uid "$pod_uid" || continue
+    sandbox_marker="$runtime_dir/$pod_uid.sandbox"
+    test -f "$sandbox_marker" || record_sandbox_id "$pod_uid" || true
+  done < <(
+    find "$jobs_dir" -mindepth 1 -maxdepth 1 -type d -print0
+  )
+}
+
+retention_active() {
+  local now pod_uid="$1" retain_expiry retain_marker
+  retain_marker="$runtime_dir/$pod_uid.retain"
+  if test -L "$retain_marker" ||
+     test "$(stat -c '%F:%u:%g:%h' -- "$retain_marker" 2>/dev/null || true)" != \
+       "regular file:0:0:1"; then
+    rm -f -- "$retain_marker"
+    return 1
+  fi
+  retain_expiry="$(tr -d '\r\n' < "$retain_marker")"
+  [[ "$retain_expiry" =~ ^[0-9]+$ ]] || {
+    rm -f -- "$retain_marker"
+    return 1
+  }
+  now="$(date +%s)"
+  if (( retain_expiry > now && retain_expiry <= now + 1800 )); then
+    return 0
+  fi
+  rm -f -- "$retain_marker"
+  return 1
+}
+
+request_expired() {
+  local container_list pod_uid="$1" request="$2"
+  test -n "$(find "$request" -mmin +5 -print -quit)" || return 1
+  test ! -e "$pod_root/$pod_uid" || return 1
+  if ! container_list="$(
+    k0s ctr --namespace k8s.io containers list -q \
+      "labels.\"io.kubernetes.pod.uid\"==$pod_uid"
+  )"; then
+    return 1
+  fi
+  test -z "$container_list"
+}
+
+clone_requests() {
+  local request pod_uid request_value job_dir temporary
+  shopt -s nullglob
+  for request in "$request_dir"/*.request; do
+    test -f "$request" || continue
+    test ! -L "$request" || {
+      rm -f -- "$request"
+      continue
+    }
+    pod_uid="$(basename "$request" .request)"
+    if ! valid_uid "$pod_uid"; then
+      rm -f -- "$request"
+      continue
+    fi
+    request_value="$(tr -d '\r\n' < "$request")"
+    if test "$request_value" != "$pod_uid"; then
+      rm -f -- "$request"
+      continue
+    fi
+
+    job_dir="$jobs_dir/$pod_uid"
+    if test -L "$job_dir"; then
+      rm -f -- "$request"
+      continue
+    fi
+    if ! record_sandbox_id "$pod_uid"; then
+      if request_expired "$pod_uid" "$request"; then
+        rm -f -- "$request" "$request_dir/$pod_uid.ready" \
+          "$runtime_dir/$pod_uid.sandbox"
+      fi
+      continue
+    fi
+    if ! test -d "$job_dir"; then
+      btrfs subvolume create "$job_dir" >/dev/null
+    fi
+    chmod 0755 "$job_dir"
+    btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"
+    if test -f "$job_dir/.ready" &&
+       test -f "$job_dir/buildkit.ext4" &&
+       test -f "$job_dir/.seed-generation"; then
+      if record_sandbox_id "$pod_uid"; then
+        touch "$request_dir/$pod_uid.ready"
+        rm -f -- "$request"
+      fi
+      continue
+    fi
+
+    temporary="$job_dir/buildkit.ext4.tmp"
+    rm -f -- "$temporary"
+    (
+      flock -s 9
+      cp --reflink=always --sparse=auto "$seed_file" "$temporary"
+      stat -c '%i:%s:%Y:%Z' "$seed_file" > "$job_dir/.seed-generation"
+      chmod 0400 "$job_dir/.seed-generation"
+    ) 9> "$seed_lock"
+    mv "$temporary" "$job_dir/buildkit.ext4"
+    touch "$job_dir/.ready"
+    if ! record_sandbox_id "$pod_uid"; then
+      delete_job_dir "$job_dir"
+      continue
+    fi
+    touch "$request_dir/$pod_uid.ready"
+    rm -f -- "$request"
+  done
+}
+
+prune_stale_jobs() {
+  local command_line command_line_file container_list job_dir pod_uid
+  local sandbox_id sandbox_marker task_list
+  while IFS= read -r -d '' job_dir; do
+    pod_uid="$(basename "$job_dir")"
+    valid_uid "$pod_uid" || continue
+    test ! -e "$pod_root/$pod_uid" || continue
+    if ! container_list="$(
+      k0s ctr --namespace k8s.io containers list -q \
+        "labels.\"io.kubernetes.pod.uid\"==$pod_uid" 2>/dev/null
+    )"; then
+      continue
+    fi
+    if test -n "$container_list"; then
+      continue
+    fi
+    sandbox_marker="$runtime_dir/$pod_uid.sandbox"
+    if test -L "$sandbox_marker" ||
+       test "$(stat -c '%F:%u:%g:%h' -- "$sandbox_marker" 2>/dev/null || true)" != \
+         "regular file:0:0:1"; then
+      test ! -e "$request_dir/$pod_uid.request" || continue
+      for command_line_file in /proc/[0-9]*/cmdline; do
+        test -r "$command_line_file" || continue
+        command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
+        case "$command_line" in
+          *containerd-shim-kata-v2*) continue 2 ;;
+        esac
+      done
+      retention_active "$pod_uid" && continue
+      delete_job_dir "$job_dir"
+      continue
+    fi
+    sandbox_id="$(tr -d '\r\n' < "$sandbox_marker")"
+    [[ "$sandbox_id" =~ ^[0-9a-f]{64}$ ]] || continue
+    if k0s ctr --namespace k8s.io containers info "$sandbox_id" >/dev/null 2>&1; then
+      continue
+    fi
+    if ! task_list="$(k0s ctr --namespace k8s.io tasks list -q 2>/dev/null)"; then
+      continue
+    fi
+    if printf '%s\n' "$task_list" | grep -Fxq "$sandbox_id"; then
+      continue
+    fi
+    for command_line_file in /proc/[0-9]*/cmdline; do
+      test -r "$command_line_file" || continue
+      command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
+      case "$command_line" in
+        *containerd-shim-kata-v2*" -id $sandbox_id "*) continue 2 ;;
+      esac
+    done
+    retention_active "$pod_uid" && continue
+    delete_job_dir "$job_dir"
+  done < <(
+    find "$jobs_dir" -mindepth 1 -maxdepth 1 -type d -print0
+  )
+}
+
+while true; do
+  clone_requests
+  record_active_sandboxes
+  if (( SECONDS - last_prune >= 30 )); then
+    prune_stale_jobs
+    last_prune=$SECONDS
+  fi
+  sleep 0.2
+done

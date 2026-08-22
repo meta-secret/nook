@@ -137,7 +137,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks.contains("Scenario N:")
             && tasks.contains("Scenario O:")
             && tasks.contains("Scenario P: hosted-verified formatter deps feed fresh PR runner")
-            && tasks.contains("Scenario Q: inline PR verification publishes Hive-style exact leaf")
+            && tasks.contains("Scenario Q: inline PR verification publishes a generic exact leaf")
             && tasks
                 .contains("Scenario R: exact-only replay works across linked and internal parents")
             && tasks

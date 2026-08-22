@@ -227,20 +227,40 @@ runs:
         if [ -n "$scope_suffix" ]; then
           exact_repository="nook/remote-buildcache"
         fi
-        cache_ref_exists() {
-          docker buildx imagetools inspect "$1" >/dev/null 2>&1
+        cache_ref_status() {
+          local ref="$1"
+          local probe_output
+          probe_output="$(mktemp)"
+          if docker buildx imagetools inspect "$ref" >/dev/null 2>"$probe_output"; then
+            rm -f "$probe_output"
+            return 0
+          fi
+          if grep -Eqi 'not found|manifest unknown|name unknown' "$probe_output"; then
+            rm -f "$probe_output"
+            return 1
+          fi
+          echo "Registry cache probe was inconclusive: $ref" >&2
+          cat "$probe_output" >&2
+          rm -f "$probe_output"
+          return 2
         }
         publish_exact_availability() {
           local env_name="$1"
           local scope="$2"
           local ref="$registry_host/$exact_repository/$scope:buildcache"
           local available=""
-          if cache_ref_exists "$ref"; then
-            available=1
-            echo "Exact cache available: $scope"
-          else
-            echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
-          fi
+          local probe_status=0
+          cache_ref_status "$ref" || probe_status=$?
+          case "$probe_status" in
+            0)
+              available=1
+              echo "Exact cache available: $scope"
+              ;;
+            1)
+              echo "Exact cache absent; Main/fingerprint fallback enabled: $scope"
+              ;;
+            *) return "$probe_status" ;;
+          esac
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
         publish_main_availability() {
@@ -248,12 +268,18 @@ runs:
           local scope="$2"
           local ref="$registry_host/nook/buildcache/$scope:buildcache"
           local available=""
-          if cache_ref_exists "$ref"; then
-            available=1
-            echo "Main cache available: $scope"
-          else
-            echo "Main cache absent; source-free dependency fallback enabled: $scope"
-          fi
+          local probe_status=0
+          cache_ref_status "$ref" || probe_status=$?
+          case "$probe_status" in
+            0)
+              available=1
+              echo "Main cache available: $scope"
+              ;;
+            1)
+              echo "Main cache absent; source-free dependency fallback enabled: $scope"
+              ;;
+            *) return "$probe_status" ;;
+          esac
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
 
@@ -276,16 +302,23 @@ runs:
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v1$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+        echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
 
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
           hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v1:buildcache"
-          if cache_ref_exists "$hive_ref"; then
-            hive_seed=""
-            echo "Exact Hive cache available; Main seed suppressed"
-          else
-            echo "Exact Hive cache absent; trusted Main seed enabled"
-          fi
+          hive_probe_status=0
+          cache_ref_status "$hive_ref" || hive_probe_status=$?
+          case "$hive_probe_status" in
+            0)
+              hive_seed=""
+              echo "Exact Hive cache available; Main seed suppressed"
+              ;;
+            1)
+              echo "Exact Hive cache absent; trusted Main seed enabled"
+              ;;
+            *) exit "$hive_probe_status" ;;
+          esac
           echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
           echo "HIVE_CACHE_SEED_FROM=$hive_seed" >> "$GITHUB_ENV"
           echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"

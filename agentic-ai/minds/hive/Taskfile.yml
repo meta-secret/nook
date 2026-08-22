@@ -186,13 +186,17 @@ tasks:
             -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
             -e "HIVE_NEO4J_TEST_PASSWORD")
         fi
-        docker run --rm \
-          --platform linux/amd64 \
-          --network host \
-          --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
-          "${test_environment[@]}" \
-          "$HIVE_TEST_RUNTIME_IMAGE" \
-          bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
+        if [ "${NOOK_ARC_HIVE:-}" = "1" ]; then
+          "$HIVE_TASK_DIR/run-arc-tests.sh" "$verified/hive-tests"
+        else
+          docker run --rm \
+            --platform linux/amd64 \
+            --network host \
+            --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
+            "${test_environment[@]}" \
+            "$HIVE_TEST_RUNTIME_IMAGE" \
+            bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
+        fi
         BASH
 
   build:
@@ -278,13 +282,17 @@ tasks:
             -e "HIVE_NEO4J_TEST_USERNAME=${HIVE_NEO4J_TEST_USERNAME:-neo4j}"
             -e "HIVE_NEO4J_TEST_PASSWORD")
         fi
-        docker run --rm \
-          --platform linux/amd64 \
-          --network host \
-          --mount "type=bind,src=$compiled/hive-tests,dst=/tests,readonly" \
-          "${test_environment[@]}" \
-          "$HIVE_TEST_RUNTIME_IMAGE" \
-          bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
+        if [ "${NOOK_ARC_HIVE:-}" = "1" ]; then
+          "$HIVE_TASK_DIR/run-arc-tests.sh" "$compiled/hive-tests"
+        else
+          docker run --rm \
+            --platform linux/amd64 \
+            --network host \
+            --mount "type=bind,src=$compiled/hive-tests,dst=/tests,readonly" \
+            "${test_environment[@]}" \
+            "$HIVE_TEST_RUNTIME_IMAGE" \
+            bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
+        fi
         BASH
 
   cache:publish:

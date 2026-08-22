@@ -291,6 +291,21 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
                 fallback.contains(main_ref),
                 "{name} FALLBACK must restore Main {main_ref}"
             );
+            if name == "preflight_cache_from" {
+                let probed_absent = body
+                    .split_once(
+                        "GHA_CACHE_EXACT_PROBES_COMPLETE != \"\" && GHA_CACHE_FALLBACK_ENABLED != \"\" ? [",
+                    )
+                    .map(|(_, rest)| rest)
+                    .context("preflight must distinguish a completed hosted probe")?
+                    .split_once("] : GHA_CACHE_FALLBACK_ENABLED != \"\" ? [")
+                    .map(|(arm, _)| arm)
+                    .context("preflight must retain a separate unprobed local fallback")?;
+                assert!(
+                    probed_absent.contains(main_ref) && !probed_absent.contains(exact_marker),
+                    "preflight must not ask BuildKit to import an exact ref already probed as absent"
+                );
+            }
         }
     }
     Ok(())
@@ -492,11 +507,21 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
     );
     assert!(
         setup.contains("docker buildx imagetools inspect")
+            && setup.contains("Registry cache probe was inconclusive")
+            && setup.contains("manifest unknown|name unknown")
             && setup.contains("cache-from entries are merged, not ordered")
             && setup.contains("Exact cache absent; Main/fingerprint fallback enabled")
             && setup.contains("publish_main_availability")
             && setup.contains("Main cache available:"),
         "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
+    );
+    assert!(
+        app_bake.contains("variable \"GHA_CACHE_EXACT_PROBES_COMPLETE\"")
+            && setup.contains("GHA_CACHE_EXACT_PROBES_COMPLETE=1")
+            && preflight_bake.contains(
+                "GHA_CACHE_EXACT_PROBES_COMPLETE != \"\" && GHA_CACHE_FALLBACK_ENABLED != \"\"",
+            ),
+        "preflight must skip an exact ref only after hosted setup proves it absent"
     );
     for availability in [
         "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
@@ -570,7 +595,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_hive_pr_publishes_only_exact_head_cache() -> anyhow::Result<()> {
+fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Result<()> {
     let root = repository_root();
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let workflow = read(&root, ".github/workflows/hive.yml");
@@ -586,23 +611,31 @@ fn theorem_hive_pr_publishes_only_exact_head_cache() -> anyhow::Result<()> {
     );
     assert!(
         workflow.contains("uses: ./.github/actions/nook-docker-setup")
-            && workflow.contains("Docker setup for isolated PR cache")
-            && workflow.contains("cache-write: \"false\"")
-            && workflow.contains("main-cache-only: \"true\"")
-            && workflow.contains("isolated-cache-write: \"true\""),
-        "Hive PR verification must opt into the same isolated exact-head cache contract as every other Docker job"
+            && workflow.contains("runs-on: nook-k0s-hive")
+            && workflow.contains(
+                "main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+            )
+            && workflow.contains("isolated-cache-write: \"false\"")
+            && tasks.contains("${NOOK_ARC_HIVE:-}"),
+        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and avoid per-PR registry export"
     );
     let verify = taskfile_task_body(&tasks, "verify")?;
     assert!(
         verify.contains("--cache-from \"$HIVE_CACHE_FROM\"")
             && verify.contains("--cache-from \"$HIVE_CACHE_SEED_FROM\"")
             && verify.contains("--cache-to \"$HIVE_CACHE_TO\""),
-        "Hive verification must consume the setup-selected exact-or-Main cache and publish the verified exact graph"
+        "Hive verification must retain optional exact/Main importer and exporter capabilities for hosted fallback and Main publication"
     );
     assert!(
         workflow.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
-            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v1"),
-        "only trusted Main may publish the shared Hive seed"
+            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v1")
+            && workflow.matches("Publish verified Hive cache").count() == 2
+            && workflow.contains("verify-hosted:")
+            && workflow.contains("Connect hosted BuildKit cache")
+            && workflow.contains("verify-fork:")
+            && workflow.contains("Set up untrusted cache-free BuildKit")
+            && workflow.matches("HIVE_CACHE_FROM: \"\"").count() == 1,
+        "trusted Main must publish from ARC or hosted fallback, while untrusted PRs remain cache-free"
     );
     Ok(())
 }

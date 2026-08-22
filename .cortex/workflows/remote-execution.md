@@ -82,12 +82,29 @@ Security and cache rules:
   repository-safe fallback.
 - On ARC, run the job in a single-use `kata-qemu-runtime-rs` Pod and connect
   Buildx to its private BuildKit sidecar over Pod loopback.
+- Route trusted Hive Rust verification through `NOOK_HIVE_RUNS_ON`.
+  - `nook-k0s-hive` is the active ARC route.
+  - `ubuntu-latest` is the emergency fallback and restores the hosted Neo4j
+    service flow. Trusted same-repository jobs retain Zot and SeaweedFS
+    credentials there, and trusted Main continues publishing the shared Hive
+    cache.
+  - Keep the Control Center browser job on hosted capacity.
+  - Run Neo4j as a pinned Pod sidecar, not a Docker service container.
+  - Execute exported Hive tests in a pinned Trixie runtime sidecar inside the
+    guest.
+  - Keep fork and Dependabot PR verification on GitHub-hosted capacity.
 - Prohibit Docker-in-Docker, Docker daemons, nested Docker or Podman engines,
-  Sysbox, host runtime sockets, and hostPath volumes. BuildKit may be privileged
-  only inside the isolated Kata guest.
+  Sysbox, host runtime sockets, and broad hostPath volumes.
+- Permit only the Task-managed ARC BuildKit request and job hostPaths.
+  - A trusted init container sees only the request directory.
+  - It submits its Kubernetes Pod UID.
+  - The host helper creates a reflink clone from the trusted seed.
+  - The BuildKit sidecar mounts only its `jobs/<Pod UID>` subpath.
+  - The runner container never mounts the pool.
+- BuildKit may be privileged only inside the isolated Kata guest.
 - Import an exact BuildKit lineage alone when it exists.
-- When the exact scope is absent, seed it from source-free dependency scopes
-  and trusted Main.
+- Do not pass a probed, absent exact preflight ref to BuildKit.
+- Seed that scope from trusted Main when it exists.
 - Write git-commit Zot refs under `nook/remote-buildcache/**`.
 - Give the Remote identity read-only access to `nook/buildcache/**`.
   - Tag selection alone is not the Main security boundary.
@@ -126,7 +143,9 @@ The most frequently used checks have remote-only narrow orchestration:
 
 This avoids building full coverage, WASM test, browser, verification, and production-dist branches before a focused command. It does not change the local task semantics or move branch execution onto persistent infrastructure.
 
-Only `preflight` and `rust:ci` currently satisfy the daemon-free ARC contract.
+`preflight`, `rust:ci`, and trusted `hive:verify` currently satisfy the
+daemon-free ARC contract. Hive uses its dedicated `nook-k0s-hive` scale set,
+private Neo4j native sidecar, and pinned test-runtime native sidecar.
 Every task that uses a Bake `type=docker` output or invokes `docker run` remains
 hosted until it has a BuildKit-native execution path. Do not broaden the ARC
 selector merely because the Docker CLI is present; the runner intentionally has
