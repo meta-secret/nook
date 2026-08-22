@@ -3,6 +3,17 @@ use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+const PLAYWRIGHT_SOURCE_EXTENSIONS: [&str; 8] =
+    ["cjs", "cts", "js", "jsx", "mjs", "mts", "ts", "tsx"];
+
+fn is_playwright_behavior_spec(file_name: &str) -> bool {
+    ["spec", "test"].iter().any(|kind| {
+        PLAYWRIGHT_SOURCE_EXTENSIONS
+            .iter()
+            .any(|extension| file_name.ends_with(&format!(".{kind}.{extension}")))
+    })
+}
+
 fn collect_behavior_specs(
     directory: &Path,
     e2e_directory: &Path,
@@ -17,13 +28,10 @@ fn collect_behavior_specs(
             }
             continue;
         }
-        if path.extension().and_then(|extension| extension.to_str()) != Some("ts") {
-            continue;
-        }
         let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
             continue;
         };
-        if !file_name.ends_with(".spec.ts") {
+        if !is_playwright_behavior_spec(file_name) {
             continue;
         }
         specs.insert(
