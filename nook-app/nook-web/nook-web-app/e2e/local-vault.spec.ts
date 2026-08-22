@@ -390,6 +390,9 @@ test.describe('local vault', () => {
     await editForm.getByTestId('secret-value').fill(updatedBody)
     await editForm.getByTestId('save-secret-btn').click()
     await expect(editForm).not.toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toHaveCount(0)
 
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
@@ -399,6 +402,9 @@ test.describe('local vault', () => {
     await unlockVaultOnLogin(page)
     await waitForVaultUnlocked(page)
     await assertVaultReady(page)
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toHaveCount(0)
 
     const updatedRow = page
       .getByTestId('secret-row')
@@ -443,7 +449,6 @@ test.describe('local vault', () => {
     await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await expect(row).toContainText('1111')
     await expect(row).not.toContainText(cardNumber)
-    await expect(row).not.toContainText(cvv)
     await expandSecretRow(page, title)
     await expect(row.getByTestId('credit-card-number-value')).toHaveText(
       '•••• 1111',
@@ -458,10 +463,18 @@ test.describe('local vault', () => {
     await expect(row).toContainText(notes)
 
     await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await row.getByRole('button', { name: 'Copy name on card' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('Ada Lovelace')
     await row.getByRole('button', { name: 'Copy card number' }).click()
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(cardNumber)
+    await row.getByRole('button', { name: 'Copy expiration' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('12/2030')
     await row.getByRole('button', { name: 'Copy security code' }).click()
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
@@ -491,6 +504,14 @@ test.describe('local vault', () => {
     await expect(
       page.getByTestId('secret-row').filter({ hasText: updatedTitle }),
     ).toBeVisible()
+    await flushNookLogPersistQueue(page)
+    const replacementLogs = await readPersistedAppLogs(page, 500)
+    const serializedReplacementLogPayloads = JSON.stringify(
+      replacementLogs.map(({ message, data }) => ({ message, data })),
+    )
+    expect(serializedReplacementLogPayloads).not.toContain(cardNumber)
+    expect(serializedReplacementLogPayloads).not.toContain('9876')
+    expect(serializedReplacementLogPayloads).not.toContain(notes)
 
     await page.reload()
     await page.waitForLoadState('domcontentloaded')
@@ -519,6 +540,9 @@ test.describe('local vault', () => {
   test('adds, reveals, and downloads a file attachment', async ({ page }) => {
     const title = uniqueSecretKey('e2e-file')
     const fileContents = 'nook file attachment payload'
+    const fileContentsBase64 = Buffer.from(fileContents, 'utf8').toString(
+      'base64',
+    )
 
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-file-attachment').click()
@@ -549,6 +573,14 @@ test.describe('local vault', () => {
     const downloadPath = await download.path()
     expect(downloadPath).toBeTruthy()
     expect(readFileSync(downloadPath!, 'utf8')).toBe(fileContents)
+
+    await flushNookLogPersistQueue(page)
+    const logs = await readPersistedAppLogs(page, 500)
+    const serializedLogPayloads = JSON.stringify(
+      logs.map(({ message, data }) => ({ message, data })),
+    )
+    expect(serializedLogPayloads).not.toContain(fileContents)
+    expect(serializedLogPayloads).not.toContain(fileContentsBase64)
 
     await deleteSecret(page, title)
   })

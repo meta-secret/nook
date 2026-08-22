@@ -374,6 +374,14 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn secure_note_builder_rejects_blank_content_at_the_wasm_boundary() {
+        let fields =
+            NookSecretFormFields::secure_note("Empty note".to_owned(), " \n\t ".to_owned());
+
+        assert!(build_secret_yaml(&fields).is_err());
+    }
+
+    #[wasm_bindgen_test]
     fn totp_helpers_match_core_authenticator_for_fixture_seed() -> Result<(), wasm_bindgen::JsError>
     {
         let secret = "JBSWY3DPEHPK3PXP";

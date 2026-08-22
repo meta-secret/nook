@@ -280,7 +280,7 @@ YAML payload sections:
 | `nook-companion-core`         | `task rust:coverage:check`                         |
 | `nook-core`                   | `task rust:coverage:check`                         |
 | `nook-web/nook-web-app`       | Playwright e2e                                     |
-| `nook-wasm`                   | `task wasm:test:browser` + `nook-core` + e2e       |
+| `nook-wasm`                   | `task ci:wasm:node-test` + manual browser tests    |
 | `nook-web/nook-web-extension` | `task extension:check` + `task extension:test:e2e` |
 
 `preflight` detail:
