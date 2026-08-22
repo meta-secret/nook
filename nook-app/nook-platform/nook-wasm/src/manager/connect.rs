@@ -799,7 +799,7 @@ impl NookVaultManager {
         self.apply_genesis_vault_keys(identity, &keys)
     }
 
-    fn apply_genesis_vault_keys(
+    pub(in crate::manager) fn apply_genesis_vault_keys(
         &mut self,
         identity: &nook_core::DeviceIdentity,
         keys: &nook_core::VaultKeys,
