@@ -35,6 +35,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let fuzz_target = read("nook-app/nook-platform/fuzz/fuzz_targets/wire_parsers.rs")?;
     let fuzz_manifest = read("nook-app/nook-platform/fuzz/Cargo.toml")?;
     let readiness = read("agentic-ai/ci-agent/src/main/github.ts")?;
+    let dependency_policy = checks
+        .split_once("  dependency-policy:")
+        .and_then(|(_, jobs)| jobs.split_once("  deterministic-tests:"))
+        .map(|(job, _)| job)
+        .unwrap_or_default();
 
     assert!(
         pr.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml"),
@@ -48,6 +53,16 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         entry.contains("agentic-ai/minds/**"),
         "Thin rust-ecosystem.yml must keep labeled minds-only PR coverage"
     );
+    for marker in [
+        "github.rest.pulls.listFiles",
+        "file.filename.startsWith('agentic-ai/minds/')",
+        "needs.validation-request.outputs.should-run == 'true'",
+    ] {
+        assert!(
+            entry.contains(marker),
+            "Thin rust-ecosystem.yml must leave mixed PRs to pr.yml: missing {marker}"
+        );
+    }
     assert!(
         main.contains("uses: ./.github/workflows/rust-ecosystem-checks.yml")
             && main.contains("fuzz_seconds: \"20\"")
@@ -80,6 +95,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             "Main must route minds pushes while gating product jobs: missing {marker}"
         );
     }
+    assert!(
+        dependency_policy.contains("name: Dependency policy and RustSec")
+            && dependency_policy.contains("timeout-minutes: 30"),
+        "Dependency policy must retain enough time for a contended ARC cache miss"
+    );
     assert!(
         !entry.contains("Run dependency policy") && !entry.contains("Bake rust-dependency-policy"),
         "Thin rust-ecosystem.yml must not duplicate dependency-policy steps"
