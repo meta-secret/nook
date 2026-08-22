@@ -148,6 +148,11 @@ It is never shown as stored on one physical laptop.
 - **Dashboard persistence:** Store non-secret metadata only.
   - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
     backup-password values, or plaintext vault contents.
+- **Destructive local recovery:** Quiesce serialized storage work in every tab
+  before deleting the inaccessible wrapped app identity.
+  - Keep the local vault registry so recovery does not erase discoverable vault
+    locations.
+  - Never let a racing peer write restore the retired identity after cleanup.
 
 ## Interaction requirements
 
