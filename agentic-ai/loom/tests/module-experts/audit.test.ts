@@ -279,6 +279,7 @@ describe('module expert audit', () => {
     expect(
       MODULE_EXPERT_CODEX_OPTIONS.config.features.skill_mcp_dependency_install,
     ).toBe(false);
+    expect(MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS).toEqual(['CODEX_API_KEY']);
   });
 
   for (const drift of RUNTIME_POLICY_DRIFTS) {
@@ -304,7 +305,7 @@ describe('module expert audit', () => {
     const authDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
       authEnvironmentKeys: [
         ...MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
-        'OPENAI_API_KEY',
+        'CODEX_ACCESS_TOKEN',
       ],
       codexOptions: MODULE_EXPERT_CODEX_OPTIONS,
       processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,

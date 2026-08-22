@@ -1,21 +1,11 @@
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  mkdtempSync,
-  rmSync,
-} from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
 import type { RmOptions } from 'node:fs';
-import { homedir, tmpdir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 
-const AUTH_FILE_NAME = 'auth.json';
 const ISOLATED_CODEX_HOME_PREFIX = 'nook-module-expert-codex-';
-export const MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS = [
-  'CODEX_API_KEY',
-  'CODEX_ACCESS_TOKEN',
-] as const;
+export const MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
 export const MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS = [
   'COMSPEC',
   'PATH',
@@ -83,12 +73,11 @@ export function createModuleExpertRuntimeIsolation(
   try {
     const environment = allowlistedEnvironment(request.parentEnvironment);
     const shellEnvironment = allowlistedEnvironment(request.parentEnvironment);
-    const authenticationStage: ModuleExpertAuthenticationStage = {
-      codexHome,
+    const authenticationBroker: ModuleExpertAuthenticationBroker = {
       environment,
       parentEnvironment: request.parentEnvironment,
     };
-    stageAuthentication(authenticationStage);
+    brokerAuthentication(authenticationBroker);
     environment.CODEX_HOME = codexHome;
     const codexOptions: ModuleExpertCodexOptions = {
       config: {
@@ -145,8 +134,7 @@ export function moduleExpertThreadOptions(
   };
 }
 
-type ModuleExpertAuthenticationStage = {
-  readonly codexHome: string;
+type ModuleExpertAuthenticationBroker = {
   readonly environment: NonNullable<CodexOptions['env']>;
   readonly parentEnvironment: NodeJS.ProcessEnv;
 };
@@ -162,23 +150,14 @@ function allowlistedEnvironment(
   return environment;
 }
 
-function stageAuthentication(stage: ModuleExpertAuthenticationStage): void {
-  const sourceCodexHome =
-    stage.parentEnvironment.CODEX_HOME ?? join(homedir(), '.codex');
-  const sourceAuthPath = join(sourceCodexHome, AUTH_FILE_NAME);
-  if (existsSync(sourceAuthPath)) {
-    const isolatedAuthPath = join(stage.codexHome, AUTH_FILE_NAME);
-    copyFileSync(sourceAuthPath, isolatedAuthPath);
-    chmodSync(isolatedAuthPath, 0o600);
-    return;
-  }
-  const environmentAuth = supportedEnvironmentAuth(stage.parentEnvironment);
+function brokerAuthentication(broker: ModuleExpertAuthenticationBroker): void {
+  const environmentAuth = supportedEnvironmentAuth(broker.parentEnvironment);
   if (environmentAuth) {
-    stage.environment[environmentAuth.key] = environmentAuth.value;
+    broker.environment[environmentAuth.key] = environmentAuth.value;
     return;
   }
   throw new Error(
-    'Module expert runtime requires isolated CLI authentication material.',
+    'Module expert runtime requires CODEX_API_KEY authentication.',
   );
 }
 

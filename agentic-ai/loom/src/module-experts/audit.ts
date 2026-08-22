@@ -73,10 +73,7 @@ const AGENT_WORKFLOW_CLI = 'agentic-ai/loom/src/agent-workflow/cli.ts';
 const MODULE_EXPERT_CLI = 'agentic-ai/loom/src/module-experts/cli.ts';
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 const WEB_ROOT = 'nook-app/nook-web';
-const EXPECTED_AUTH_ENVIRONMENT_KEYS = [
-  'CODEX_API_KEY',
-  'CODEX_ACCESS_TOKEN',
-] as const;
+const EXPECTED_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
 const EXPECTED_PROCESS_ENVIRONMENT_KEYS = [
   'COMSPEC',
   'PATH',

@@ -162,6 +162,9 @@ Invoke one registered expert with an agent-owned JSON request:
 task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
 ```
 
+Invocation requires a non-empty `CODEX_API_KEY`. The isolated runtime never
+copies `auth.json` or accepts refreshable ChatGPT authentication state.
+
 The command validates the complete catalog and selected TOML definition before
 starting one isolated Codex thread. The request accepts no runtime permissions,
 tools, model, successors, or graph. It must declare the run, attempt, depth, and

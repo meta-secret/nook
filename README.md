@@ -431,6 +431,8 @@ routing, runtime isolation, generated WASM binding contracts, the
 and replay reject agent lineage deeper than three levels.
 Invoke one selected role with
 **`task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json`**.
+Invocation requires a non-empty **`CODEX_API_KEY`**. It does not reuse or copy
+interactive ChatGPT login state.
 The request binds an exact source commit, registered expert, stable run/task
 identity, attempt, parent lineage, and bounded instruction. Loom finalizes the
 attempt journal and returns its content-addressed evidence references, but does

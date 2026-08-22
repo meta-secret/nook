@@ -1,15 +1,46 @@
-import { mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import type { ThreadEvent } from '@openai/codex-sdk';
 import { describe, expect, test } from 'bun:test';
 import {
   AgentSourceStabilityPhase,
   assertAgentSourceStable,
+  collectCodexTurn,
 } from '../../src/agent-workflow/codex-runtime.ts';
-import type { AgentSourceStabilityCheck } from '../../src/agent-workflow/codex-runtime.ts';
+import type {
+  AgentSourceStabilityCheck,
+  CollectCodexTurnArgs,
+} from '../../src/agent-workflow/codex-runtime.ts';
+import { replayAgentAttemptJournal } from '../../src/agent-workflow/agent-replay.ts';
+import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
+import {
+  AgentAttemptParentKind,
+  DelegatedAgentWorkflowName,
+  TaskTerminalKind,
+  WorkflowResultKind,
+} from '../../src/agent-workflow/domain.ts';
+import type { WorkflowTaskOutput } from '../../src/agent-workflow/domain.ts';
+import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
+import type { RuntimeActivityObservation } from '../../src/agent-workflow/events.ts';
+import type {
+  AgentExecutionCompletion,
+  AgentExecutionInvocation,
+  AgentTaskRuntime,
+} from '../../src/agent-workflow/runtime.ts';
 import { runCommand } from '../../src/lib/run.ts';
 import type { RunCommandArgs } from '../../src/lib/run.ts';
+import { invokeModuleExpert } from '../../src/module-experts/invoke.ts';
+import type {
+  InvokeModuleExpertArgs,
+  ModuleExpertInvocationRequest,
+} from '../../src/module-experts/invoke.ts';
+
+const REPO_ROOT = resolve(import.meta.dir, '../../../..');
+const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
+const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 function runGit(command: RunCommandArgs): string {
   const result = runCommand(command);
@@ -102,3 +133,234 @@ describe('Codex agent source stability', () => {
     }
   });
 });
+
+describe('Codex streamed turn terminal state', () => {
+  test('requires an explicit successful turn terminal', async () => {
+    const completedEvents = [
+      threadStartedEvent(),
+      agentMessageEvent(),
+      turnCompletedEvent(),
+    ];
+    const completedStreamArgs: FakeThreadEventStreamArgs = {
+      events: completedEvents,
+    };
+    const completedArgs: CollectCodexTurnArgs = {
+      events: fakeThreadEventStream(completedStreamArgs),
+      expectedResultKind: WorkflowResultKind.CortexEvidence,
+      observe: async () => {},
+    };
+
+    const completion = await collectCodexTurn(completedArgs);
+    expect(completion.threadId).toBe('streamed-thread');
+    expect(completion.output.resultKind).toBe(
+      WorkflowResultKind.CortexEvidence,
+    );
+
+    const unterminatedEvents = [threadStartedEvent(), agentMessageEvent()];
+    const unterminatedStreamArgs: FakeThreadEventStreamArgs = {
+      events: unterminatedEvents,
+    };
+    const unterminatedArgs: CollectCodexTurnArgs = {
+      events: fakeThreadEventStream(unterminatedStreamArgs),
+      expectedResultKind: WorkflowResultKind.CortexEvidence,
+      observe: async () => {},
+    };
+    await expect(collectCodexTurn(unterminatedArgs)).rejects.toThrow(
+      'without a thread identity or structured result',
+    );
+  });
+
+  test('keeps turn failure authoritative across event ordering', async () => {
+    const sequences: readonly (readonly ThreadEvent[])[] = [
+      [threadStartedEvent(), agentMessageEvent(), turnFailedEvent()],
+      [
+        threadStartedEvent(),
+        fatalErrorEvent(),
+        agentMessageEvent(),
+        turnCompletedEvent(),
+      ],
+      [
+        threadStartedEvent(),
+        turnFailedEvent(),
+        agentMessageEvent(),
+        turnCompletedEvent(),
+      ],
+    ];
+
+    for (const events of sequences) {
+      const observations: RuntimeActivityObservation[] = [];
+      const streamArgs: FakeThreadEventStreamArgs = { events };
+      const collectArgs: CollectCodexTurnArgs = {
+        events: fakeThreadEventStream(streamArgs),
+        expectedResultKind: WorkflowResultKind.CortexEvidence,
+        observe: async (observation) => {
+          observations.push(observation);
+        },
+      };
+
+      await expect(collectCodexTurn(collectArgs)).rejects.toThrow(
+        'Codex turn failed',
+      );
+      expect(
+        observations.some(
+          (observation) =>
+            observation.activity === WorkflowRuntimeActivityKind.TurnFailed ||
+            observation.activity === WorkflowRuntimeActivityKind.RuntimeError,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test('module invocation records failed evidence after a structured message then failure', async () => {
+    const runtime = new FailingStreamAgentRuntime();
+    const request = directExpertRequest(
+      `module-expert-stream-failure-${randomUUID()}`,
+    );
+    const runDirectory = processingRunDirectory(request.runId);
+    const controller = new AbortController();
+    const invokeArgs: InvokeModuleExpertArgs = {
+      repoRoot: REPO_ROOT,
+      request,
+      runtime,
+      signal: controller.signal,
+    };
+    try {
+      const result = await invokeModuleExpert(invokeArgs);
+
+      expect(result.terminal.kind).toBe(TaskTerminalKind.Failed);
+      expect(result.terminal.kind).not.toBe(TaskTerminalKind.Completed);
+      const eventsPath = join(
+        result.runDirectory,
+        result.processing.events.path,
+      );
+      const eventsSerialized = await readFile(eventsPath, 'utf8');
+      const events = parseAgentAttemptEvents(eventsSerialized);
+      const replayRequest = { events };
+      expect(replayAgentAttemptJournal(replayRequest).terminalKind).toBe(
+        TaskTerminalKind.Failed,
+      );
+      expect(eventsSerialized).not.toContain('private streamed failure');
+    } finally {
+      await rm(runDirectory, REMOVE_RECURSIVELY);
+    }
+  });
+});
+
+type FakeThreadEventStreamArgs = {
+  readonly events: readonly ThreadEvent[];
+};
+
+async function* fakeThreadEventStream(
+  args: FakeThreadEventStreamArgs,
+): AsyncGenerator<ThreadEvent> {
+  for (const event of args.events) {
+    yield event;
+  }
+}
+
+class FailingStreamAgentRuntime implements AgentTaskRuntime<string, string> {
+  async executeAgent(
+    invocation: AgentExecutionInvocation<string, string>,
+  ): Promise<AgentExecutionCompletion> {
+    const events = [
+      threadStartedEvent(),
+      agentMessageEvent(),
+      turnFailedEvent(),
+    ];
+    const streamArgs: FakeThreadEventStreamArgs = { events };
+    const collectArgs: CollectCodexTurnArgs = {
+      events: fakeThreadEventStream(streamArgs),
+      expectedResultKind: invocation.execution.resultKind,
+      observe: invocation.observe,
+    };
+    return collectCodexTurn(collectArgs);
+  }
+}
+
+function threadStartedEvent(): ThreadEvent {
+  return { type: 'thread.started', thread_id: 'streamed-thread' };
+}
+
+function agentMessageEvent(): ThreadEvent {
+  return {
+    type: 'item.completed',
+    item: {
+      id: 'structured-message',
+      type: 'agent_message',
+      text: serializedEvidenceOutput(),
+    },
+  };
+}
+
+function turnFailedEvent(): ThreadEvent {
+  return {
+    type: 'turn.failed',
+    error: { message: 'private streamed failure' },
+  };
+}
+
+function fatalErrorEvent(): ThreadEvent {
+  return { type: 'error', message: 'private streamed failure' };
+}
+
+function turnCompletedEvent(): ThreadEvent {
+  return {
+    type: 'turn.completed',
+    usage: {
+      input_tokens: 1,
+      cached_input_tokens: 0,
+      cache_write_input_tokens: 0,
+      output_tokens: 1,
+      reasoning_output_tokens: 0,
+    },
+  };
+}
+
+function serializedEvidenceOutput(): string {
+  const output: WorkflowTaskOutput = {
+    resultKind: WorkflowResultKind.CortexEvidence,
+    summary: 'This output precedes a failed turn.',
+    materializedViewMarkdown: '# Failed turn\n\nMust not complete.',
+    findings: [],
+    notesForParent: [],
+    artifacts: [],
+  };
+  return JSON.stringify(output);
+}
+
+function directExpertRequest(runId: string): ModuleExpertInvocationRequest {
+  return {
+    runId,
+    expert: 'core_expert',
+    sourceCommit: SOURCE_COMMIT,
+    task: 'inspect-stream-failure',
+    attempt: 1,
+    depth: 2,
+    parent: {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: 'feature-synthesis',
+      agent: 'delivery-owner',
+      attempt: 1,
+    },
+    instruction: 'Inspect the module contract without writing files.',
+  };
+}
+
+function processingRunDirectory(runId: string): string {
+  return join(
+    REPO_ROOT,
+    'workflow',
+    'processing',
+    DelegatedAgentWorkflowName.AgentWork,
+    runId,
+  );
+}
+
+function parseAgentAttemptEvents(
+  serialized: string,
+): readonly AgentAttemptEvent[] {
+  return serialized
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as AgentAttemptEvent);
+}

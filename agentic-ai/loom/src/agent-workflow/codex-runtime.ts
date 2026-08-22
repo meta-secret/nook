@@ -6,10 +6,12 @@ import type {
   TurnOptions,
 } from '@openai/codex-sdk';
 import { AgentReasoningEffort, AgentWorkspacePolicy } from './domain.ts';
+import type { WorkflowResultKind } from './domain.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
   AgentTaskRuntime,
+  RuntimeActivityObserver,
 } from './runtime.ts';
 import {
   decodeWorkflowTaskOutput,
@@ -86,6 +88,12 @@ type GuardedAgentExecution<TTask extends string, TAgent extends string> = {
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
 };
 
+export type CollectCodexTurnArgs = {
+  readonly events: AsyncIterable<ThreadEvent>;
+  readonly expectedResultKind: WorkflowResultKind;
+  readonly observe: RuntimeActivityObserver;
+};
+
 async function executeGuardedAgent<TTask extends string, TAgent extends string>(
   execution: GuardedAgentExecution<TTask, TAgent>,
 ): Promise<AgentExecutionCompletion> {
@@ -138,13 +146,33 @@ async function executeStableAgent<TTask extends string, TAgent extends string>(
     signal: execution.invocation.signal,
   };
   const streamedTurn = await thread.runStreamed(prompt, turnOptions);
+  const collectionArgs: CollectCodexTurnArgs = {
+    events: streamedTurn.events,
+    expectedResultKind: execution.invocation.execution.resultKind,
+    observe: execution.invocation.observe,
+  };
+  return collectCodexTurn(collectionArgs);
+}
+
+export async function collectCodexTurn(
+  args: CollectCodexTurnArgs,
+): Promise<AgentExecutionCompletion> {
   let threadId = '';
   let serializedOutput = '';
-  for await (const event of streamedTurn.events) {
+  let turnCompleted = false;
+  let terminalFailureSeen = false;
+  for await (const event of args.events) {
     if (event.type === 'thread.started') {
       threadId = event.thread_id;
     }
+    if (event.type === 'turn.completed') {
+      turnCompleted = true;
+    }
+    if (event.type === 'turn.failed' || event.type === 'error') {
+      terminalFailureSeen = true;
+    }
     if (
+      !terminalFailureSeen &&
       event.type === 'item.completed' &&
       event.item.type === 'agent_message'
     ) {
@@ -152,18 +180,25 @@ async function executeStableAgent<TTask extends string, TAgent extends string>(
     }
     const observation = normalizeEvent(event);
     if (observation) {
-      await execution.invocation.observe(observation);
+      await args.observe(observation);
     }
   }
-  if (threadId.length === 0 || serializedOutput.length === 0) {
+  if (terminalFailureSeen) {
+    throw new Error('Codex turn failed before a valid structured result.');
+  }
+  if (
+    !turnCompleted ||
+    threadId.length === 0 ||
+    serializedOutput.length === 0
+  ) {
     throw new Error(
       'Codex completed without a thread identity or structured result.',
     );
   }
   const output = decodeWorkflowTaskOutput(serializedOutput);
-  if (output.resultKind !== execution.invocation.execution.resultKind) {
+  if (output.resultKind !== args.expectedResultKind) {
     throw new Error(
-      `Codex result kind ${output.resultKind} does not match ${execution.invocation.execution.resultKind}.`,
+      `Codex result kind ${output.resultKind} does not match ${args.expectedResultKind}.`,
     );
   }
   return { threadId, output };

@@ -27,7 +27,8 @@ const CODEX_EXECUTABLE = resolve(
   import.meta.dir,
   '../../node_modules/@openai/codex/bin/codex.js',
 );
-const FIXTURE_AUTH = '{"OPENAI_API_KEY":"fixture-api-key"}\n';
+const REFRESHABLE_PARENT_AUTH =
+  '{"auth_mode":"chatgpt","tokens":{"access_token":"parent-access-token","refresh_token":"parent-refresh-token"}}\n';
 
 type CodexMcpListEntry = {
   readonly name: string;
@@ -54,7 +55,7 @@ const DECOY_ENVIRONMENT: NodeJS.ProcessEnv = {
 };
 
 describe('module expert runtime isolation', () => {
-  test('excludes arbitrary inherited user and project MCP servers', async () => {
+  test('excludes inherited MCP servers and parent authentication state', async () => {
     const fixtureRoot = await mkdtemp(
       join(tmpdir(), 'loom-module-expert-isolation-'),
     );
@@ -76,7 +77,9 @@ describe('module expert runtime isolation', () => {
         cwd: projectRoot,
       };
       expect(runCommand(gitInitCommand).exitCode).toBe(0);
-      await writeFile(join(parentCodexHome, 'auth.json'), FIXTURE_AUTH, 'utf8');
+      const parentAuthPath = join(parentCodexHome, 'auth.json');
+      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
+      const parentAuthBefore = await stat(parentAuthPath);
       const quotedProjectRoot = JSON.stringify(projectRoot);
       await writeFile(
         join(parentCodexHome, 'config.toml'),
@@ -138,6 +141,7 @@ describe('module expert runtime isolation', () => {
         ).toBe(false);
         expect(isolation.codexHome).not.toBe(parentCodexHome);
         expect(Object.keys(isolation.codexOptions.env).sort()).toEqual([
+          'CODEX_API_KEY',
           'CODEX_HOME',
           'PATH',
         ]);
@@ -147,12 +151,13 @@ describe('module expert runtime isolation', () => {
         expect(
           isolation.codexOptions.config.shell_environment_policy.set,
         ).toEqual(expectedShellEnvironment);
-        expect(await readdir(isolation.codexHome)).toEqual(['auth.json']);
-        expect(
-          await readFile(join(isolation.codexHome, 'auth.json'), 'utf8'),
-        ).toBe(FIXTURE_AUTH);
-        const isolatedAuth = await stat(join(isolation.codexHome, 'auth.json'));
-        expect(isolatedAuth.mode & 0o777).toBe(0o600);
+        expect(await readdir(isolation.codexHome)).toEqual([]);
+        expect(await readFile(parentAuthPath, 'utf8')).toBe(
+          REFRESHABLE_PARENT_AUTH,
+        );
+        const parentAuthAfter = await stat(parentAuthPath);
+        expect(parentAuthAfter.mtimeMs).toBe(parentAuthBefore.mtimeMs);
+        expect(parentAuthAfter.size).toBe(parentAuthBefore.size);
         expect(isolation.codexOptions.env?.CODEX_HOME).toBe(
           isolation.codexHome,
         );
@@ -161,6 +166,10 @@ describe('module expert runtime isolation', () => {
           workingDirectory: projectRoot,
         };
         expect(await codexMcpNames(isolatedInventoryRequest)).toEqual([]);
+        expect(await readdir(isolation.codexHome)).not.toContain('auth.json');
+        expect(await readFile(parentAuthPath, 'utf8')).toBe(
+          REFRESHABLE_PARENT_AUTH,
+        );
       } finally {
         isolation.dispose();
       }
@@ -169,7 +178,7 @@ describe('module expert runtime isolation', () => {
     }
   });
 
-  test('brokers one supported environment credential without parent secrets', async () => {
+  test('brokers only the API key outside the expert tool-shell environment', async () => {
     const fixtureRoot = await mkdtemp(
       join(tmpdir(), 'loom-module-expert-environment-auth-'),
     );
@@ -182,6 +191,8 @@ describe('module expert runtime isolation', () => {
       };
       await mkdir(parentCodexHome, recursiveDirectoryOptions);
       await mkdir(isolationRoot, recursiveDirectoryOptions);
+      const parentAuthPath = join(parentCodexHome, 'auth.json');
+      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
       const parentEnvironment: NodeJS.ProcessEnv = {
         ...DECOY_ENVIRONMENT,
         CODEX_ACCESS_TOKEN: 'access-token',
@@ -209,6 +220,9 @@ describe('module expert runtime isolation', () => {
           isolation.codexOptions.config.shell_environment_policy.set,
         ).toEqual(expectedShellEnvironment);
         expect(await readdir(isolation.codexHome)).toEqual([]);
+        expect(await readFile(parentAuthPath, 'utf8')).toBe(
+          REFRESHABLE_PARENT_AUTH,
+        );
       } finally {
         isolation.dispose();
       }
@@ -230,8 +244,10 @@ describe('module expert runtime isolation', () => {
       };
       await mkdir(parentCodexHome, recursiveDirectoryOptions);
       await mkdir(isolationRoot, recursiveDirectoryOptions);
-      await writeFile(join(parentCodexHome, 'auth.json'), FIXTURE_AUTH, 'utf8');
+      const parentAuthPath = join(parentCodexHome, 'auth.json');
+      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
       const parentEnvironment: NodeJS.ProcessEnv = {
+        CODEX_API_KEY: 'api-key',
         CODEX_HOME: parentCodexHome,
         PATH: '/usr/bin:/bin',
         PROJECT_SECRET: 'must-not-leak',
@@ -245,6 +261,7 @@ describe('module expert runtime isolation', () => {
       try {
         expect(first.codexHome).not.toBe(second.codexHome);
         const expectedParentEnvironment: NodeJS.ProcessEnv = {
+          CODEX_API_KEY: 'api-key',
           CODEX_HOME: parentCodexHome,
           PATH: '/usr/bin:/bin',
           PROJECT_SECRET: 'must-not-leak',
@@ -254,7 +271,10 @@ describe('module expert runtime isolation', () => {
         expect(await readdir(isolationRoot)).toEqual([
           second.codexHome.slice(isolationRoot.length + 1),
         ]);
-        expect(await readdir(second.codexHome)).toEqual(['auth.json']);
+        expect(await readdir(second.codexHome)).toEqual([]);
+        expect(await readFile(parentAuthPath, 'utf8')).toBe(
+          REFRESHABLE_PARENT_AUTH,
+        );
       } finally {
         first.dispose();
         second.dispose();
@@ -264,7 +284,7 @@ describe('module expert runtime isolation', () => {
     }
   });
 
-  test('rejects unsupported authentication and removes the temporary home', async () => {
+  test('rejects parent OAuth and access-token authentication', async () => {
     const fixtureRoot = await mkdtemp(
       join(tmpdir(), 'loom-module-expert-auth-'),
     );
@@ -277,8 +297,10 @@ describe('module expert runtime isolation', () => {
       };
       await mkdir(parentCodexHome, recursiveDirectoryOptions);
       await mkdir(isolationRoot, recursiveDirectoryOptions);
+      const parentAuthPath = join(parentCodexHome, 'auth.json');
+      await writeFile(parentAuthPath, REFRESHABLE_PARENT_AUTH, 'utf8');
       const parentEnvironment: NodeJS.ProcessEnv = {
-        CODEX_ACCESS_TOKEN: '',
+        CODEX_ACCESS_TOKEN: 'unsupported-access-token',
         CODEX_API_KEY: '',
         CODEX_HOME: parentCodexHome,
         OPENAI_API_KEY: 'unsupported-openai-api-key',
@@ -291,8 +313,11 @@ describe('module expert runtime isolation', () => {
 
       expect(() =>
         createModuleExpertRuntimeIsolation(isolationRequest),
-      ).toThrow('requires isolated CLI authentication material');
+      ).toThrow('requires CODEX_API_KEY authentication');
       expect(await readdir(isolationRoot)).toEqual([]);
+      expect(await readFile(parentAuthPath, 'utf8')).toBe(
+        REFRESHABLE_PARENT_AUTH,
+      );
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
@@ -314,10 +339,11 @@ describe('module expert runtime isolation', () => {
         await mkdir(isolationRoot, recursiveDirectoryOptions);
         await writeFile(
           join(parentCodexHome, 'auth.json'),
-          FIXTURE_AUTH,
+          REFRESHABLE_PARENT_AUTH,
           'utf8',
         );
         const parentEnvironment: NodeJS.ProcessEnv = {
+          CODEX_API_KEY: 'api-key',
           CODEX_HOME: parentCodexHome,
           PATH: process.env.PATH ?? '',
         };

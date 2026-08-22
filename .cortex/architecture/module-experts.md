@@ -55,7 +55,7 @@ That runtime enforces:
 - disabled apps and plugins;
 - disabled multi-agent tools and zero child depth;
 - one disposable Codex home with no inherited configuration or MCP servers;
-- staged `auth.json` or one supported Codex authentication credential; and
+- one brokered `CODEX_API_KEY` excluded from expert tool-shell environments;
 - exact process and login-shell environment allowlists that exclude unrelated
   parent credentials and capability-bearing variables.
 
