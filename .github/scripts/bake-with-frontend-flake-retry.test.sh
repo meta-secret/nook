@@ -48,7 +48,7 @@ printf '%s\n' \
   'count=$((count + 1))' \
   'printf "%s" "$count" >"$count_file"' \
   'if [ "$count" -eq 1 ]; then' \
-  '  printf "%s\n" "#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.4" "#2 ERROR: failed to authorize: failed to fetch anonymous token: TLS handshake timeout"' \
+  '  (sleep 0.1; printf "%s\n" "#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.4" "#2 ERROR: failed to authorize: failed to fetch anonymous token: TLS handshake timeout") &' \
   '  exit 1' \
   'fi' >"$authorization_command"
 chmod +x "$authorization_command"
@@ -77,8 +77,8 @@ if bash "$retry_script" application-failure "$application_command" "$application
 fi
 assert_equals "$(<"$application_count")" 1 'application retry count'
 
-application_network_count="$test_dir/application-network-count"
-application_network_command="$test_dir/application-network-command"
+later_vertex_count="$test_dir/later-vertex-count"
+later_vertex_command="$test_dir/later-vertex-command"
 printf '%s\n' \
   '#!/usr/bin/env bash' \
   'set -euo pipefail' \
@@ -87,11 +87,11 @@ printf '%s\n' \
   'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
   'count=$((count + 1))' \
   'printf "%s" "$count" >"$count_file"' \
-  'printf "%s\n" "Dockerfile:24" ">>> RUN curl https://example.invalid" "curl: TLS handshake timeout"' \
-  'exit 1' >"$application_network_command"
-chmod +x "$application_network_command"
-if bash "$retry_script" application-network-failure "$application_network_command" "$application_network_count"; then
-  echo 'application network timeout must not retry or succeed' >&2
+  'printf "%s\n" "#2 resolve image config for docker-image://docker.io/docker/dockerfile:1.4" "#2 DONE 0.5s" "#7 [application 1/1] RUN curl https://example.invalid" "#7 ERROR: failed to authorize: failed to fetch anonymous token: TLS handshake timeout"' \
+  'exit 1' >"$later_vertex_command"
+chmod +x "$later_vertex_command"
+if bash "$retry_script" later-vertex-failure "$later_vertex_command" "$later_vertex_count"; then
+  echo 'later vertex authorization timeout must not retry or succeed' >&2
   exit 1
 fi
-assert_equals "$(<"$application_network_count")" 1 'application network retry count'
+assert_equals "$(<"$later_vertex_count")" 1 'later vertex retry count'

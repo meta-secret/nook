@@ -48,10 +48,17 @@ is_unattributed_syntax_frontend_exit() {
 is_frontend_authorization_timeout() {
   local log_file="$1"
   # Docker Hub token lookup can fail before the pinned Dockerfile frontend is
-  # loaded. Require both frontend resolution and the transient transport error
-  # so an identical timeout from an application RUN step still fails closed.
-  grep -Eiq 'resolve image config for docker-image://docker\.io/docker/dockerfile:' "$log_file" \
-    && grep -Eiq 'failed to authorize:.*TLS handshake timeout' "$log_file"
+  # loaded. Require the transient transport error on that same BuildKit vertex
+  # so a later application vertex cannot reuse a successful frontend marker.
+  awk '
+    /resolve image config for docker-image:\/\/docker\.io\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
+      frontend_vertex = $1
+    }
+    /failed to authorize:.*TLS handshake timeout/ && frontend_vertex != "" && $1 == frontend_vertex {
+      found = 1
+    }
+    END { exit(found ? 0 : 1) }
+  ' "$log_file"
 }
 
 # BSD/macOS mktemp requires the X template to end the path.
@@ -63,8 +70,8 @@ trap cleanup EXIT
 
 for attempt in 1 2; do
   set +e
-  "$@" > >(tee -a "$log_file") 2> >(tee -a "$log_file" >&2)
-  status=$?
+  "$@" 2>&1 | tee -a "$log_file"
+  status=${PIPESTATUS[0]}
   set -e
   if [ "$status" -eq 0 ]; then
     exit 0
