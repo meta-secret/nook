@@ -9,6 +9,7 @@ import {
   deleteSecret,
   expandSecretRow,
   fillSeedPhraseGrid,
+  flushNookLogPersistQueue,
   mockBip39Wordlist,
   readPersistedAppLogs,
   revealSecretInRow,
@@ -466,6 +467,7 @@ test.describe('local vault', () => {
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(cvv)
 
+    await flushNookLogPersistQueue(page)
     const logs = await readPersistedAppLogs(page, 500)
     const serializedLogPayloads = JSON.stringify(
       logs.map(({ message, data }) => ({ message, data })),
