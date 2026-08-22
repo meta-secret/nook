@@ -311,6 +311,19 @@ Extension detail:
 
 Domain logic changes **must** add or update Rust tests before merge. **Line coverage must stay at or above 90%** (`task rust:coverage:check`).
 
+Scenario coverage is bidirectional.
+
+- Cortex product and architecture requirements are candidate scenarios, not
+  mechanically generated tests.
+- Portable policy belongs in Rust tests.
+- Typed browser projections and storage behavior belong in WASM tests.
+- Observable browser journeys belong in Playwright.
+- Durable behavior discovered in strong tests must enrich the owning Cortex
+  specification when it affects future product decisions.
+- UI demos communicate behavior. They do not replace regression evidence.
+- Every top-level non-demo Playwright specification must belong to a default or
+  explicit manual-only project.
+
 ---
 
 ## 7. The Engineering Harness

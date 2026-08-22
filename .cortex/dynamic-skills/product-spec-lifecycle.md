@@ -54,6 +54,9 @@ Capture durable product knowledge in the owning specification in the same PR:
 
 - **Chat conversations:** When the user clarifies requirements, UX flows, constraints, or feature priorities.
 - **Task execution & debugging:** When implementation reveals essential product rules, defaults, or edge cases.
+- **Executable scenarios:** When behavior-focused Rust, WASM, or Playwright
+  tests prove an intentional product rule that the owning specification does
+  not yet explain.
 - **PR iterations & review feedback:** When review comments alter acceptance criteria, validation rules, or item attributes.
 
 If no specification exists for a new feature or item type:

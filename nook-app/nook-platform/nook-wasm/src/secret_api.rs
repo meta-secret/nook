@@ -510,6 +510,38 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn credit_card_list_and_detail_keep_distinct_secret_boundaries() -> anyhow::Result<()> {
+        let card = nook_core::CreditCardSecret::from_fields(
+            "Personal Visa",
+            "Ada Lovelace",
+            "4111111111111111",
+            "12",
+            "2030",
+            "123",
+            "private billing note",
+        )?;
+        let record = nook_core::SecretRecord {
+            id: nook_core::SecretId::from_vault_record("secret_credit_card"),
+            secret_type: nook_core::SecretType::CreditCard,
+            data: nook_core::SecretValue::CreditCard(card),
+        };
+        let item = NookSecretListItem::from_core(record.list_item(), String::new());
+
+        assert_eq!(item.secret_type(), nook_core::SecretType::CreditCard);
+        assert_eq!(item.title(), "Personal Visa");
+        assert_eq!(item.cardholder_name(), "Ada Lovelace");
+        assert_eq!(item.last4(), "1111");
+        assert_eq!(item.expiration_month(), "12");
+        assert_eq!(item.expiration_year(), "2030");
+
+        let detail = NookSecretRecord::from_record(record);
+        assert_eq!(detail.card_number(), "4111111111111111");
+        assert_eq!(detail.cvv(), "123");
+        assert_eq!(detail.notes(), "private billing note");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     fn issuer_host_map_loads_under_wasm() {
         assert_eq!(
             nook_core::mapped_host_for_issuer("OpenAI"),

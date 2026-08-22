@@ -2,13 +2,14 @@
 
 use crate::ValidationError;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use zeroize::Zeroize;
 
 const MIN_CARD_DIGITS: usize = 12;
 const MAX_CARD_DIGITS: usize = 19;
 
 /// Encrypted credit-card plaintext payload (`camelCase` YAML).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct CreditCardSecret {
     pub title: String,
@@ -18,6 +19,21 @@ pub struct CreditCardSecret {
     pub expiration_year: String,
     pub cvv: String,
     pub notes: String,
+}
+
+impl fmt::Debug for CreditCardSecret {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CreditCardSecret")
+            .field("title", &self.title)
+            .field("cardholder_name", &self.cardholder_name)
+            .field("number", &"[REDACTED]")
+            .field("expiration_month", &self.expiration_month)
+            .field("expiration_year", &self.expiration_year)
+            .field("cvv", &"[REDACTED]")
+            .field("notes", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl CreditCardSecret {
@@ -257,6 +273,66 @@ mod tests {
         assert!(card.cardholder_name.is_empty());
         assert!(card.cvv.is_empty());
         assert!(card.expiration_display().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_out_of_range_expiry_and_malformed_cvv() {
+        for (month, year) in [
+            ("0", "2030"),
+            ("13", "2030"),
+            ("12", "1999"),
+            ("12", "2101"),
+        ] {
+            assert_eq!(
+                CreditCardSecret::from_fields(
+                    "Invalid expiry",
+                    "",
+                    "4111111111111111",
+                    month,
+                    year,
+                    "",
+                    "",
+                ),
+                Err(ValidationError::CreditCardExpirationInvalid)
+            );
+        }
+
+        for cvv in ["12", "12345", "12a"] {
+            assert_eq!(
+                CreditCardSecret::from_fields(
+                    "Invalid CVV",
+                    "",
+                    "4111111111111111",
+                    "",
+                    "",
+                    cvv,
+                    "",
+                ),
+                Err(ValidationError::CreditCardCvvInvalid)
+            );
+        }
+    }
+
+    #[test]
+    fn debug_output_redacts_payment_secrets() -> anyhow::Result<()> {
+        let card = CreditCardSecret::from_fields(
+            "Personal Visa",
+            "Ada Lovelace",
+            "4111111111111111",
+            "12",
+            "2030",
+            "123",
+            "private billing note",
+        )?;
+        let debug = format!("{card:?}");
+
+        assert!(debug.contains("Personal Visa"));
+        assert!(debug.contains("Ada Lovelace"));
+        assert!(!debug.contains("4111111111111111"));
+        assert!(!debug.contains("123"));
+        assert!(!debug.contains("private billing note"));
+        assert_eq!(debug.matches("[REDACTED]").count(), 3);
         Ok(())
     }
 }
