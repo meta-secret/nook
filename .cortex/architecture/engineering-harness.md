@@ -150,8 +150,10 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 - Persists the toolchain.
 - Persists stable native/WASM dependency boundaries.
 - Persists separate source-sensitive native/WASM snapshots as private Zot BuildKit refs.
-- Every PR job restores Main's complete lineage plus its PR remote-buildcache scope.
-- PR jobs and local Task Bake export only isolated remote-buildcache refs.
+- Every PR job restores Main's complete lineage plus any existing PR remote-buildcache scope.
+- Hosted PR jobs and local Task Bake export only isolated remote-buildcache refs.
+- Trusted ARC PR jobs reuse their private node-local BuildKit state and skip
+  redundant isolated registry exports.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -281,7 +283,9 @@ GitHub-hosted runners. The self-hosted `nook` pool remains maintenance-only.
 ### Main Cache Visibility
 
 - Main alone refreshes shared refs under `nook/buildcache/**`.
-- PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
+- Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
+- Trusted ARC PR jobs are read-only registry consumers because their fresh Kata
+  guests start from the private node-local COW seed.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
 ### Docker Bake Orchestration

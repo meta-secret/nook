@@ -306,7 +306,7 @@ Use this workflow for quality, CI, and deployment changes.
     share the same source-free dependency graph without sharing a commit SHA.
     Scenario Q proves a generic standalone exact-scope verification restores
     Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
-    runner. Hive ARC verification instead reuses its private local BuildKit
+    runner. Trusted ARC verification instead reuses its private local BuildKit
     state and does not publish per-PR registry cache refs.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
@@ -332,7 +332,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Remote jobs restore Main's Zot lineage and write only git-commit refs under `nook/remote-buildcache/**`.
     - Same-repository PR Rust producers and Rust ecosystem Docker jobs mount the Main SeaweedFS build identity.
     - Forks stay secret-free and cold-compile.
-    - PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
+    - Hosted PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
+    - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
+      into private job-local BuildKit state without registry export.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow

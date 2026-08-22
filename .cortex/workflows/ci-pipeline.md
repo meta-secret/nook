@@ -394,9 +394,9 @@ Pods instead of queueing work on one persistent Docker host.
 
 - Delivery builds restore distinct private Zot BuildKit cache refs.
 - Main refreshes the default-branch scopes that new PRs may access.
-- PR jobs that publish registry cache write only immutable git-commit scopes
+- Hosted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
-- Trusted Hive PR verification is the exception: its fresh ARC guest reuses a
+- Trusted ARC PR verification is the exception: each fresh Kata guest reuses a
   private node-local COW seed and does not export an exact-SHA registry cache.
 - A cold PR scope restores trusted Main or a dependency-fingerprint scope.
 - Once an exact PR scope exists, setup imports that scope alone.

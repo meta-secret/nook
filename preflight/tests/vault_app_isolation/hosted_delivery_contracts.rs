@@ -49,6 +49,7 @@ fn assert_hosted_workflow_runtime_contract(root: &Path) {
 
 fn assert_docker_setup_contract(root: &Path) {
     let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
+    let pr = read(root, ".github/workflows/pr.yml");
     for required in [
         "docker/setup-buildx-action@v4",
         "docker/login-action@v4",
@@ -62,6 +63,8 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}",
         "cache_write_enabled=1",
+        "ARC persistent BuildKit state suppresses isolated registry cache export",
+        "${NOOK_ARC_RUNNER:-}",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
         "event_name=\"${{ github.event_name }}\"",
         "git_ref=\"${{ github.ref }}\"",
@@ -74,6 +77,11 @@ fn assert_docker_setup_contract(root: &Path) {
             "GitHub-hosted Docker setup is missing: {required}"
         );
     }
+    assert!(
+        pr.contains("ARC persistent BuildKit state retains the verified native graph; registry export skipped")
+            && pr.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then"),
+        "trusted ARC PR native verification must not export a redundant exact-SHA registry cache"
+    );
     assert!(
         !setup.contains("crazy-max/ghaction-github-runtime")
             && !setup.contains("systemctl restart docker")

@@ -325,7 +325,11 @@ runs:
         fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
-          cache_write_enabled=1
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            echo "ARC persistent BuildKit state suppresses isolated registry cache export"
+          else
+            cache_write_enabled=1
+          fi
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
         fi
