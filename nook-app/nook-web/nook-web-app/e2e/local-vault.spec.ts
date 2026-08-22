@@ -458,7 +458,7 @@ test.describe('local vault', () => {
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(cardNumber)
-    await row.getByRole('button', { name: 'Copy CVV' }).click()
+    await row.getByRole('button', { name: 'Copy security code' }).click()
     await expect
       .poll(() => page.evaluate(() => navigator.clipboard.readText()))
       .toBe(cvv)
