@@ -146,6 +146,10 @@ This avoids building full coverage, WASM test, browser, verification, and produc
 `preflight`, `rust:ci`, and trusted `hive:verify` currently satisfy the
 daemon-free ARC contract. Hive uses its dedicated `nook-k0s-hive` scale set,
 private Neo4j native sidecar, and pinned test-runtime native sidecar.
+An exact standalone `hive:verify` dispatch reuses its COW seed without a
+per-branch Hive registry export. A mixed batch remains hosted. Its non-Hive
+tasks retain their exact-SHA handoffs, while the Hive task explicitly clears
+its cache exporter.
 Every task that uses a Bake `type=docker` output or invokes `docker run` remains
 hosted until it has a BuildKit-native execution path. Do not broaden the ARC
 selector merely because the Docker CLI is present; the runner intentionally has

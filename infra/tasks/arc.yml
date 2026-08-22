@@ -164,6 +164,9 @@ tasks:
 
         rendered_pod(ARGV[0], "nook-k0s")
         hive_pod = rendered_pod(ARGV[1], "nook-k0s-hive")
+        unless hive_pod["runtimeClassName"] == "kata-dragonball"
+          raise "Hive ARC scale set must use Kata Dragonball"
+        end
         hive_containers = hive_pod.fetch("containers").to_h do |container|
           [container["name"], container]
         end
@@ -388,6 +391,7 @@ tasks:
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
+        kubectl get runtimeclass kata-dragonball >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
         kubectl create configmap nook-arc-hive-test-runtime \
           --namespace arc-runners \
@@ -732,11 +736,18 @@ tasks:
                   "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
                 exit 1
               fi
-              if test -z "$runner_sandbox_id"; then
-                runner_sandbox_id="$(
-                  ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                    "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
-                  )"
+              current_sandbox_id="$(
+                ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                  "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
+                )"
+              if test -z "$current_sandbox_id"; then
+                runner_sandbox_id=""
+              elif [[ "$current_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
+                runner_sandbox_id="$current_sandbox_id"
+              else
+                echo "ARC smoke captured an invalid current Kata sandbox ID" >&2
+                cancel_run
+                exit 1
               fi
               if [[ ! "$runner_uid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
                 echo "ARC smoke captured an invalid runner Pod UID" >&2

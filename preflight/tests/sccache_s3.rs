@@ -360,8 +360,10 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         compiler_jobs
     );
     assert!(remote.contains(
-        "isolated-cache-write: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'false' || 'true' }}"
+        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
     ));
+    let remote_batch = read(".github/scripts/remote-task-batch.sh");
+    assert!(remote_batch.contains("env HIVE_CACHE_TO= task hive:verify"));
 
     let hive = read(".github/workflows/hive.yml");
     assert!(hive.contains("NOOK_SCCACHE_ACCESS_KEY"));

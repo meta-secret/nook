@@ -19,6 +19,7 @@ hive_values["maxRunners"] = 10
 pod_template = hive_values.fetch("template")
 pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/role"] = "arc-hive-runner"
 pod = pod_template.fetch("spec")
+pod["runtimeClassName"] = "kata-dragonball"
 
 buildkit = named(pod.fetch("initContainers"), "buildkit")
 buildkit.fetch("resources").fetch("requests")["memory"] = "3Gi"

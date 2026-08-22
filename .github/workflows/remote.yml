@@ -87,7 +87,7 @@ jobs:
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
-          isolated-cache-write: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'false' || 'true' }}
+          isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
       - name: Start hosted Hive Neo4j service
         if: >-
           env.REQUEST_INCLUDES_HIVE == 'true' &&

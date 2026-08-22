@@ -433,8 +433,11 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
         "REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}"
     ));
     assert!(workflow.contains(
-        "isolated-cache-write: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'false' || 'true' }}"
-    ), "Remote Docker batches must write only their git-commit Zot namespace, while every Hive-containing batch reuses shared state without an exact export");
+        "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}"
+    ), "Remote Docker batches must preserve git-commit handoffs unless the selection is exactly Hive");
+    assert!(batch_script.contains(
+        "hive:verify) run_with_timeout \"$timeout_minutes\" env HIVE_CACHE_TO= task hive:verify ;;"
+    ), "Hive must not publish a per-branch cache even when another task makes a mixed hosted batch writable");
     assert!(workflow.contains("env.REQUEST_INCLUDES_HIVE == 'true'"));
     assert!(workflow.contains("(inputs.tasks || inputs.task) != 'hive:verify' ||"));
     assert_eq!(
