@@ -164,8 +164,8 @@ tasks:
 
         rendered_pod(ARGV[0], "nook-k0s")
         hive_pod = rendered_pod(ARGV[1], "nook-k0s-hive")
-        unless hive_pod["runtimeClassName"] == "kata-dragonball"
-          raise "Hive ARC scale set must use Kata Dragonball"
+        unless hive_pod["runtimeClassName"] == "kata-qemu-runtime-rs"
+          raise "Hive ARC scale set must use Kata QEMU runtime-rs"
         end
         hive_containers = hive_pod.fetch("containers").to_h do |container|
           [container["name"], container]
