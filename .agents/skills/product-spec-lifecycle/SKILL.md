@@ -22,3 +22,5 @@ Product specifications in `.cortex/product-specs/` are the living system of reco
 4. Keep `.cortex/product-specs/index.md` and `.cortex/knowledge-graph.md` synchronized.
 5. Fix obsolete or conflicting specification claims in the same PR.
 6. Keep new prose under [cortex-writer](../cortex-writer/SKILL.md).
+7. Promote durable behavior discovered in strong Rust, WASM, or Playwright
+   scenarios into the owning product specification.

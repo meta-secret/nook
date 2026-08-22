@@ -16,15 +16,23 @@ secure note, seed phrase, passkey, and authenticator.
 
 ## Product model
 
-| Field             | Required   | Notes                                                     |
-| ----------------- | ---------- | --------------------------------------------------------- |
-| `title`           | yes        | Display name (e.g. "Personal Visa")                       |
-| `cardholderName`  | no         | Name on card                                              |
-| `number`          | yes        | Digits only after normalize; Luhn-validated; 12–19 digits |
-| `expirationMonth` | with year  | `01`–`12` when set                                        |
-| `expirationYear`  | with month | Four-digit year when set                                  |
-| `cvv`             | no         | 3–4 digits when set                                       |
-| `notes`           | no         | Free-form notes                                           |
+- **`title`**
+  - Required display name such as `Personal Visa`.
+- **`cardholderName`**
+  - Optional name on the card.
+- **`number`**
+  - Required.
+  - Normalized to 12–19 digits.
+  - Luhn-validated.
+- **`expirationMonth` and `expirationYear`**
+  - Both are empty or both are present.
+  - Month is `01`–`12`.
+  - Year is four digits.
+- **`cvv`**
+  - Optional.
+  - Contains 3–4 digits when present.
+- **`notes`**
+  - Optional free-form text.
 
 Expiry month and year are either both empty or both present.
 
@@ -39,9 +47,21 @@ Expiry month and year are either both empty or both present.
 
 ## Import
 
-Bitwarden (`type: 3`), 1Password Credit Card (`categoryUuid: 002`), and Proton
-Pass (`type: creditCard`) map into this type when the export carries a usable
-card number. Previously these items were counted as skipped unsupported.
+Bitwarden (`type: 3`), 1Password Credit Card (`categoryUuid: 002`), Proton Pass
+(`type: creditCard`), and Dashlane `credit_card` payment rows map into this type
+when the export carries a usable card number. Unsupported payment rows remain
+counted and skipped.
+
+## Executable scenarios
+
+- Rust tests own Luhn validation, expiry and CVV bounds, safe list projection,
+  and redacted debug output.
+- WASM tests prove that list projections expose only safe metadata while the
+  explicitly decrypted detail record exposes the full fields.
+- Playwright covers invalid submission, masking before reveal, explicit
+  reveal, copy actions, edit and reload persistence, deletion, and absence of
+  full card values from application logs.
+- Import scenarios verify supported provider mappings and safe list rendering.
 
 ## Out of scope (for now)
 

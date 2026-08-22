@@ -1,0 +1,49 @@
+{
+  "stable": [
+    "auth-provider-credential-encryption.spec.ts",
+    "connect.spec.ts",
+    "device-key-protection.spec.ts",
+    "device-identity-recovery.spec.ts",
+    "devices-access.spec.ts",
+    "local-vault-apple-safari-imports.spec.ts",
+    "local-vault-dashlane-import.spec.ts",
+    "local-vault-imports.spec.ts",
+    "local-vault-keeper-import.spec.ts",
+    "local-vault-keepassxc-import.spec.ts",
+    "local-vault.spec.ts",
+    "login-unlock-flow.spec.ts",
+    "vault-architecture-modes.spec.ts",
+    "idle-session-lock.spec.ts",
+    "local-folder-backup.spec.ts",
+    "onboard-providers.spec.ts",
+    "password-envelope-local.spec.ts",
+    "shell-height.spec.ts",
+    "bip39-seed-phrase.spec.ts",
+    "sync-provider-connect.spec.ts",
+    "sync-conflict-resolution.spec.ts",
+    "event-log-sync.spec.ts",
+    "multi-vault.spec.ts",
+    "vault-password-device-key.spec.ts",
+    "legal-pages.spec.ts",
+    "logs-page.spec.ts",
+    "workspace-routing.spec.ts"
+  ],
+  "unstable": [
+    "file-sync-provider.spec.ts",
+    "onboarding-file-provider.spec.ts",
+    "sync-fanout.spec.ts",
+    "multi-device-local.spec.ts",
+    "sentinel-unlock-ceremony.spec.ts",
+    "sync-vault.spec.ts",
+    "multi-device-sync.spec.ts",
+    "password-envelope-sync.spec.ts",
+    "fresh-vault-passwords.spec.ts",
+    "provider-switch-passwords.spec.ts",
+    "remote-vault-recovery-sync.spec.ts"
+  ],
+  "manual": [
+    "live/google-drive-shared-grant.smoke.spec.ts",
+    "live/sync.smoke.spec.ts"
+  ],
+  "isolation": ["app-isolation.spec.ts"]
+}

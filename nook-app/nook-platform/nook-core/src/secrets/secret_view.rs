@@ -247,10 +247,15 @@ pub fn build_secret_yaml_from_form(
             "name": fields.name,
             "seed": fields.seed,
         }),
-        SecretFormFields::SecureNote(fields) => serde_json::json!({
-            "title": fields.title,
-            "note": fields.note,
-        }),
+        SecretFormFields::SecureNote(fields) => {
+            if fields.note.trim().is_empty() {
+                return Err(crate::ValidationError::SecretDataRequired.into());
+            }
+            serde_json::json!({
+                "title": fields.title,
+                "note": fields.note,
+            })
+        }
         SecretFormFields::Authenticator(fields) => {
             let value = AuthenticatorSecret::from_form_fields(
                 &fields.issuer,
@@ -336,6 +341,22 @@ mod tests {
             }));
         assert!(err.is_err());
         Ok(())
+    }
+
+    #[test]
+    fn build_secret_yaml_from_secure_note_form_requires_content() {
+        let result =
+            build_secret_yaml_from_form(&SecretFormFields::SecureNote(SecureNoteSecretForm {
+                title: "Empty note".to_owned(),
+                note: " \n\t ".to_owned(),
+            }));
+
+        assert!(matches!(
+            result,
+            Err(SecretPayloadError::Validation(
+                crate::ValidationError::SecretDataRequired
+            ))
+        ));
     }
 
     #[test]

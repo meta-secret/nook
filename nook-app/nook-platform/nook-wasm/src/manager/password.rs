@@ -757,6 +757,7 @@ mod wasm_tests {
         )?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];
         owner.bootstrap_event_log_genesis().await?;
@@ -777,11 +778,12 @@ mod wasm_tests {
                 "correct horse battery staple".to_owned(),
                 50,
             )
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!("password recovery failed: {error:?}"))?;
 
         assert!(recovered.device.identity_private_key.is_empty());
         assert_eq!(recovered.vault.store_id, store_id);
-        assert_eq!(page.total, 0);
+        assert_eq!(page.total(), 0);
         Ok(())
     }
 
@@ -799,6 +801,7 @@ mod wasm_tests {
         )?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];
         owner.bootstrap_event_log_genesis().await?;
@@ -814,8 +817,8 @@ mod wasm_tests {
             .map_err(|error| anyhow::anyhow!("password listing failed: {error:?}"))?;
 
         assert_eq!(listed.len(), 1);
-        assert_eq!(listed[0].id, password_entry.id);
-        assert_eq!(listed[0].label, "Recovery");
+        assert_eq!(listed[0].id(), password_entry.id);
+        assert_eq!(listed[0].label(), "Recovery");
         assert!(recovered.device.identity_private_key.is_empty());
         Ok(())
     }

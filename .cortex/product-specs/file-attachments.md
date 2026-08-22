@@ -33,6 +33,15 @@ key, seed phrase, secure note, authenticator, and passkey.
   browser `Blob` from the decrypted base64 content.
 - File bytes must never be logged.
 
+## Executable scenarios
+
+- Rust tests own base64 validation, decoded-size agreement, the 1 MiB maximum,
+  path-separator rejection, safe metadata projection, and plaintext zeroizing.
+- WASM form builders preserve the validated typed payload.
+- Playwright covers upload, safe metadata rendering, explicit reveal,
+  byte-for-byte download, deletion, and browser rejection above the 1 MiB
+  limit.
+
 ## Out of scope (for now)
 
 - Importing provider attachments (1Password / Proton Pass still skip attachments)

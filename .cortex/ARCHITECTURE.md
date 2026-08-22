@@ -280,7 +280,7 @@ YAML payload sections:
 | `nook-companion-core`         | `task rust:coverage:check`                         |
 | `nook-core`                   | `task rust:coverage:check`                         |
 | `nook-web/nook-web-app`       | Playwright e2e                                     |
-| `nook-wasm`                   | Covered via `nook-core` + e2e                      |
+| `nook-wasm`                   | `task ci:wasm:node-test` + manual browser tests    |
 | `nook-web/nook-web-extension` | `task extension:check` + `task extension:test:e2e` |
 
 `preflight` detail:
@@ -310,6 +310,21 @@ Extension detail:
 - `task extension:test:e2e` — Chromium smoke from packaged `dist`.
 
 Domain logic changes **must** add or update Rust tests before merge. **Line coverage must stay at or above 90%** (`task rust:coverage:check`).
+
+Scenario coverage is bidirectional.
+
+- Cortex product and architecture requirements are candidate scenarios, not
+  mechanically generated tests.
+- Portable policy belongs in Rust tests.
+- Typed browser projections and storage behavior belong in WASM tests.
+- Observable browser journeys belong in Playwright.
+- Durable behavior discovered in strong tests must enrich the owning Cortex
+  specification when it affects future product decisions.
+- UI demos communicate behavior. They do not replace regression evidence.
+- Every non-demo `nook-web-app` Playwright specification must appear exactly
+  once in the shared gate manifest consumed by its repository-owned project.
+- Playwright suites that use default discovery continue to execute every spec
+  under their configured `testDir`.
 
 ---
 

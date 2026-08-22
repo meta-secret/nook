@@ -9,7 +9,9 @@ import {
   deleteSecret,
   expandSecretRow,
   fillSeedPhraseGrid,
+  flushNookLogPersistQueue,
   mockBip39Wordlist,
+  readPersistedAppLogs,
   revealSecretInRow,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
@@ -345,11 +347,14 @@ test.describe('local vault', () => {
     )
   })
 
-  test('adds, reveals, and deletes a secure note with markdown', async ({
+  test('creates, edits, reloads, and deletes a secure note with markdown', async ({
     page,
   }) => {
     const title = uniqueSecretKey('e2e-note')
+    const updatedTitle = `${title}-updated`
     const noteBody = '# Recovery\n\n- step one\n\nUse **backup** code `1234`.'
+    const updatedBody =
+      '# Updated recovery\n\n- step two\n\nUse **replacement** code `5678`.'
 
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-secure-note').click()
@@ -377,12 +382,167 @@ test.describe('local vault', () => {
     await expect(row.getByText('backup')).toBeVisible()
     await expect(row.getByText('1234')).toBeVisible()
 
-    await deleteSecret(page, title)
+    await row.getByTestId('edit-secret-btn').click()
+    const editForm = page.getByTestId('edit-secret-form')
+    await expect(editForm.getByTestId('secret-label')).toHaveValue(title)
+    await expect(editForm.getByTestId('secret-value')).toHaveValue(noteBody)
+    await editForm.getByTestId('secret-label').fill(updatedTitle)
+    await editForm.getByTestId('secret-value').fill(updatedBody)
+    await editForm.getByTestId('save-secret-btn').click()
+    await expect(editForm).not.toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toHaveCount(0)
+
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await unlockVaultOnLogin(page)
+    await waitForVaultUnlocked(page)
+    await assertVaultReady(page)
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toHaveCount(0)
+
+    const updatedRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: updatedTitle })
+    await expect(updatedRow).toBeVisible()
+    await revealSecretInRow(updatedRow)
+    await expect(
+      updatedRow.getByRole('heading', { name: 'Updated recovery' }),
+    ).toBeVisible()
+    await expect(updatedRow.getByText('replacement')).toBeVisible()
+    await expect(updatedRow.getByText('5678')).toBeVisible()
+
+    await deleteSecret(page, updatedTitle)
+  })
+
+  test('validates, masks, persists, and keeps credit-card secrets out of logs', async ({
+    page,
+    context,
+  }) => {
+    const title = uniqueSecretKey('e2e-card')
+    const updatedTitle = `${title}-updated`
+    const cardNumber = '4111111111111111'
+    const cvv = '123'
+    const notes = 'private billing note'
+
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-credit-card').click()
+    await page.getByTestId('secret-label').fill(title)
+    await page.getByTestId('credit-card-cardholder').fill('Ada Lovelace')
+    await page.getByTestId('credit-card-number').fill('4111111111111112')
+    await page.getByTestId('credit-card-exp-month').fill('12')
+    await page.getByTestId('credit-card-exp-year').fill('2030')
+    await page.getByTestId('credit-card-cvv').fill(cvv)
+    await page.getByTestId('credit-card-notes').fill(notes)
+    await page.getByTestId('save-secret-btn').click()
+    await expect(page.getByTestId('secret-form-error')).toBeVisible()
+
+    await page.getByTestId('credit-card-number').fill(cardNumber)
+    await page.getByTestId('save-secret-btn').click()
+
+    const row = page.getByTestId('secret-row').filter({ hasText: title })
+    await expect(row).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(row).toContainText('1111')
+    await expect(row).not.toContainText(cardNumber)
+    await expandSecretRow(page, title)
+    await expect(row.getByTestId('credit-card-number-value')).toHaveText(
+      '•••• 1111',
+    )
+    await expect(row.getByTestId('credit-card-cvv-value')).toHaveText('•••')
+
+    await revealSecretInRow(row)
+    await expect(row.getByTestId('credit-card-number-value')).toHaveText(
+      cardNumber,
+    )
+    await expect(row.getByTestId('credit-card-cvv-value')).toHaveText(cvv)
+    await expect(row).toContainText(notes)
+
+    await context.grantPermissions(['clipboard-read', 'clipboard-write'])
+    await row.getByRole('button', { name: 'Copy name on card' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('Ada Lovelace')
+    await row.getByRole('button', { name: 'Copy card number' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(cardNumber)
+    await row.getByRole('button', { name: 'Copy expiration' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe('12/2030')
+    await row.getByRole('button', { name: 'Copy security code' }).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(cvv)
+
+    await flushNookLogPersistQueue(page)
+    const logs = await readPersistedAppLogs(page, 500)
+    const serializedLogPayloads = JSON.stringify(
+      logs.map(({ message, data }) => ({ message, data })),
+    )
+    expect(serializedLogPayloads).not.toContain(cardNumber)
+    expect(serializedLogPayloads).not.toContain(cvv)
+    expect(serializedLogPayloads).not.toContain(notes)
+
+    await row.getByTestId('edit-secret-btn').click()
+    const editForm = page.getByTestId('edit-secret-form')
+    await expect(editForm.getByTestId('credit-card-number')).toHaveValue(
+      cardNumber,
+    )
+    await editForm.getByTestId('secret-label').fill(updatedTitle)
+    await editForm.getByTestId('credit-card-cvv').fill('9876')
+    await editForm.getByTestId('save-secret-btn').click()
+    await expect(editForm).not.toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toHaveCount(0)
+    await expect(
+      page.getByTestId('secret-row').filter({ hasText: updatedTitle }),
+    ).toBeVisible()
+    await flushNookLogPersistQueue(page)
+    const replacementLogs = await readPersistedAppLogs(page, 500)
+    const serializedReplacementLogPayloads = JSON.stringify(
+      replacementLogs.map(({ message, data }) => ({ message, data })),
+    )
+    expect(serializedReplacementLogPayloads).not.toContain(cardNumber)
+    expect(serializedReplacementLogPayloads).not.toContain('9876')
+    expect(serializedReplacementLogPayloads).not.toContain(notes)
+
+    await page.reload()
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.getByTestId('login-gate')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await unlockVaultOnLogin(page)
+    await waitForVaultUnlocked(page)
+    await assertVaultReady(page)
+
+    const persistedRow = page
+      .getByTestId('secret-row')
+      .filter({ hasText: updatedTitle })
+    await expect(persistedRow).toBeVisible()
+    await revealSecretInRow(persistedRow)
+    await expect(
+      persistedRow.getByTestId('credit-card-number-value'),
+    ).toHaveText(cardNumber)
+    await expect(persistedRow.getByTestId('credit-card-cvv-value')).toHaveText(
+      '9876',
+    )
+
+    await deleteSecret(page, updatedTitle)
   })
 
   test('adds, reveals, and downloads a file attachment', async ({ page }) => {
     const title = uniqueSecretKey('e2e-file')
     const fileContents = 'nook file attachment payload'
+    const fileContentsBase64 = Buffer.from(fileContents, 'utf8').toString(
+      'base64',
+    )
 
     await page.getByTestId('add-secret-btn').click()
     await page.getByTestId('item-type-file-attachment').click()
@@ -400,11 +560,15 @@ test.describe('local vault', () => {
     const row = page.getByTestId('secret-row').filter({ hasText: title })
     await expect(page.getByTestId('vault-group-file-attachment')).toBeVisible()
     await expect(row).toBeVisible()
+    await expect(row).not.toContainText(fileContents)
+    await expect(row).not.toContainText(fileContentsBase64)
 
     await expandSecretRow(page, title)
     await expect(row.getByTestId('file-attachment-name')).toHaveText(
       'recovery.txt',
     )
+    await expect(row).not.toContainText(fileContents)
+    await expect(row).not.toContainText(fileContentsBase64)
     await revealSecretInRow(row)
     const downloadPromise = page.waitForEvent('download')
     await row.getByTestId('download-file-attachment-btn').click()
@@ -414,7 +578,32 @@ test.describe('local vault', () => {
     expect(downloadPath).toBeTruthy()
     expect(readFileSync(downloadPath!, 'utf8')).toBe(fileContents)
 
+    await flushNookLogPersistQueue(page)
+    const logs = await readPersistedAppLogs(page, 500)
+    const serializedLogPayloads = JSON.stringify(
+      logs.map(({ message, data }) => ({ message, data })),
+    )
+    expect(serializedLogPayloads).not.toContain(fileContents)
+    expect(serializedLogPayloads).not.toContain(fileContentsBase64)
+
     await deleteSecret(page, title)
+  })
+
+  test('rejects a file attachment above the documented one MiB limit', async ({
+    page,
+  }) => {
+    await page.getByTestId('add-secret-btn').click()
+    await page.getByTestId('item-type-file-attachment').click()
+    await page.getByTestId('file-attachment-input').setInputFiles({
+      name: 'oversized.bin',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.alloc(1_048_577, 7),
+    })
+
+    await expect(page.getByTestId('file-attachment-error')).toBeVisible()
+    await expect(page.getByTestId('file-attachment-selected')).toHaveCount(0)
+    await expect(page.getByTestId('save-secret-btn')).toBeDisabled()
+    await expect(page.getByTestId('vault-group-file-attachment')).toHaveCount(0)
   })
 
   test('adds an authenticator with a simple setup-key form and live TOTP code', async ({

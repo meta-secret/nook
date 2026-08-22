@@ -374,6 +374,14 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn secure_note_builder_rejects_blank_content_at_the_wasm_boundary() {
+        let fields =
+            NookSecretFormFields::secure_note("Empty note".to_owned(), " \n\t ".to_owned());
+
+        assert!(build_secret_yaml(&fields).is_err());
+    }
+
+    #[wasm_bindgen_test]
     fn totp_helpers_match_core_authenticator_for_fixture_seed() -> Result<(), wasm_bindgen::JsError>
     {
         let secret = "JBSWY3DPEHPK3PXP";
@@ -507,6 +515,38 @@ mod wasm_tests {
         assert_eq!(item.rp_id(), "login.example.com");
         assert_eq!(item.passkey_user_name(), "alice@example.com");
         assert_eq!(item.passkey_user_display_name(), "Alice");
+    }
+
+    #[wasm_bindgen_test]
+    fn credit_card_list_and_detail_keep_distinct_secret_boundaries() -> anyhow::Result<()> {
+        let card = nook_core::CreditCardSecret::from_fields(
+            "Personal Visa",
+            "Ada Lovelace",
+            "4111111111111111",
+            "12",
+            "2030",
+            "123",
+            "private billing note",
+        )?;
+        let record = nook_core::SecretRecord {
+            id: nook_core::SecretId::from_vault_record("secret_credit_card"),
+            secret_type: nook_core::SecretType::CreditCard,
+            data: nook_core::SecretValue::CreditCard(card),
+        };
+        let item = NookSecretListItem::from_core(record.list_item(), String::new());
+
+        assert_eq!(item.secret_type(), nook_core::SecretType::CreditCard);
+        assert_eq!(item.title(), "Personal Visa");
+        assert_eq!(item.cardholder_name(), "Ada Lovelace");
+        assert_eq!(item.last4(), "1111");
+        assert_eq!(item.expiration_month(), "12");
+        assert_eq!(item.expiration_year(), "2030");
+
+        let detail = NookSecretRecord::from_record(record);
+        assert_eq!(detail.card_number(), "4111111111111111");
+        assert_eq!(detail.cvv(), "123");
+        assert_eq!(detail.notes(), "private billing note");
+        Ok(())
     }
 
     #[wasm_bindgen_test]

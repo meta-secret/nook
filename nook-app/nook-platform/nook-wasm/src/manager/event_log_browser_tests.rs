@@ -20,15 +20,26 @@ async fn pin_protection_bootstraps_the_initial_identity() -> anyhow::Result<()> 
         .finish_pin_device_protection("correct horse battery staple".to_owned())
         .await
         .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
-    let request = manager.identity_directory_snapshot_request()?;
-    let snapshot = request.resolve().await?;
+    let request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build identity snapshot request: {error:?}"))?;
+    let snapshot = request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve identity snapshot: {error:?}"))?;
 
     assert_eq!(snapshot.length(), 1);
     assert_eq!(
         snapshot.selection_kind(),
         crate::identity_record::NookIdentityDirectorySelectionKind::Selected
     );
-    assert_eq!(snapshot.identity(0)?.label(), "Personal");
+    assert_eq!(
+        snapshot
+            .identity(0)
+            .map_err(|error| anyhow::anyhow!("read initial identity: {error:?}"))?
+            .label(),
+        "Personal"
+    );
     manager
         .delete_local_browser_data()
         .await
@@ -54,11 +65,22 @@ async fn passkey_protection_bootstraps_the_initial_identity() -> anyhow::Result<
         )
         .await
         .map_err(|error| anyhow::anyhow!("protect device with passkey: {error:?}"))?;
-    let request = manager.identity_directory_snapshot_request()?;
-    let snapshot = request.resolve().await?;
+    let request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build identity snapshot request: {error:?}"))?;
+    let snapshot = request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve identity snapshot: {error:?}"))?;
 
     assert_eq!(snapshot.length(), 1);
-    assert_eq!(snapshot.identity(0)?.label(), "Personal");
+    assert_eq!(
+        snapshot
+            .identity(0)
+            .map_err(|error| anyhow::anyhow!("read initial identity: {error:?}"))?
+            .label(),
+        "Personal"
+    );
     manager
         .delete_local_browser_data()
         .await

@@ -1,4 +1,5 @@
 import { defineConfig } from '@playwright/test'
+import playwrightGates from './playwright.gates.json' with { type: 'json' }
 
 const chromiumExecutablePath =
   process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?.trim() ?? ''
@@ -11,7 +12,7 @@ const commonEnvironment = {
 
 export default defineConfig({
   testDir: 'e2e',
-  testMatch: '**/app-isolation.spec.ts',
+  testMatch: playwrightGates.isolation.map((file) => `**/${file}`),
   timeout: 90_000,
   reporter: process.env.CI ? 'line' : 'list',
   use: {

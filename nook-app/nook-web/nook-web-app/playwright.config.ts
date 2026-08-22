@@ -3,6 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from '@playwright/test'
+import playwrightGates from './playwright.gates.json' with { type: 'json' }
 
 const rootDir = path.dirname(fileURLToPath(import.meta.url))
 dotenv.config({ path: path.join(rootDir, '.env.test.local') })
@@ -31,48 +32,13 @@ const webPort = isUiDemo ? 5183 : 5173
 /** One shared preview/dev server is safe: app state lives in per-context IndexedDB; provider routes are per-page. */
 
 /** IndexedDB-only specs — fast manual/debug subset of the full e2e suite. */
-const PR_SPECS = [
-  'auth-provider-credential-encryption.spec.ts',
-  'connect.spec.ts',
-  'device-key-protection.spec.ts',
-  'devices-access.spec.ts',
-  'local-vault-imports.spec.ts',
-  'local-vault.spec.ts',
-  'login-unlock-flow.spec.ts',
-  'vault-architecture-modes.spec.ts',
-  'idle-session-lock.spec.ts',
-  'local-folder-backup.spec.ts',
-  'onboard-providers.spec.ts',
-  'password-envelope-local.spec.ts',
-  'shell-height.spec.ts',
-  'bip39-seed-phrase.spec.ts',
-  'sync-provider-connect.spec.ts',
-  'sync-conflict-resolution.spec.ts',
-  'event-log-sync.spec.ts',
-  'multi-vault.spec.ts',
-  'vault-password-device-key.spec.ts',
-  'legal-pages.spec.ts',
-  'logs-page.spec.ts',
-  'workspace-routing.spec.ts',
-] as const
+const PR_SPECS = playwrightGates.stable
 
 /** Sync provider flows via isolated local e2e remotes (no live cloud quota). */
-const SYNC_PROVIDER_SPECS = [
-  'file-sync-provider.spec.ts',
-  'onboarding-file-provider.spec.ts',
-  'sync-fanout.spec.ts',
-  'multi-device-local.spec.ts',
-  'sentinel-unlock-ceremony.spec.ts',
-  'sync-vault.spec.ts',
-  'multi-device-sync.spec.ts',
-  'password-envelope-sync.spec.ts',
-  'fresh-vault-passwords.spec.ts',
-  'provider-switch-passwords.spec.ts',
-  'remote-vault-recovery-sync.spec.ts',
-] as const
+const SYNC_PROVIDER_SPECS = playwrightGates.unstable
 
 /** Real sync provider API — explicit manual runs only. */
-const SYNC_LIVE_SPECS = ['live/**/*.spec.ts'] as const
+const SYNC_LIVE_SPECS = playwrightGates.manual
 
 const specPaths = (files: readonly string[]) =>
   files.map((file) => path.join('**', file))
