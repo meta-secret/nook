@@ -438,8 +438,17 @@ hiveWorkflow.requireAll([
   "verify-hosted:",
   "Connect hosted BuildKit cache",
   "github.event.pull_request.head.repo.full_name != github.repository",
-  "github.actor == 'dependabot[bot]'",
+  "github.event.pull_request.user.login == 'dependabot[bot]'",
+  "github.event.pull_request.user.login != 'dependabot[bot]'",
 ]);
+hiveWorkflow.count({
+  fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",
+  expected: 2,
+});
+hiveWorkflow.count({
+  fragment: "github.event.pull_request.user.login == 'dependabot[bot]'",
+  expected: 1,
+});
 const publishCount = { fragment: "Publish verified Hive cache", expected: 2 };
 hiveWorkflow.count(publishCount);
 const bunSetupCount = { fragment: "uses: oven-sh/setup-bun@v2", expected: 3 };
@@ -447,5 +456,206 @@ hiveWorkflow.count(bunSetupCount);
 hiveNeo4jWait.require("http://127.0.0.1:7474/db/neo4j/tx/commit");
 hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");
+
+type RunnerPlacement =
+  | "arc-general-main"
+  | "arc-general-pr"
+  | "arc-general-remote"
+  | "arc-general-rust-reusable"
+  | "arc-hive"
+  | "hosted-ai"
+  | "hosted-control"
+  | "hosted-deployment"
+  | "hosted-runtime"
+  | "hosted-scheduled"
+  | "hosted-untrusted"
+  | "legacy-cleanup"
+  | "reusable";
+
+interface WorkflowJob {
+  "runs-on"?: string;
+  uses?: string;
+}
+
+interface WorkflowManifest {
+  jobs: Record<string, WorkflowJob>;
+}
+
+interface WorkflowPlacementContract {
+  workflow: string;
+  jobs: Record<string, RunnerPlacement>;
+}
+
+const hostedRunnerPlacements = new Set<RunnerPlacement>([
+  "hosted-ai",
+  "hosted-control",
+  "hosted-deployment",
+  "hosted-runtime",
+  "hosted-scheduled",
+  "hosted-untrusted",
+]);
+
+const runnerPlacementReasons: Record<RunnerPlacement, string> = {
+  "arc-general-main": "trusted Main job with a disposable general Kata guest",
+  "arc-general-pr": "trusted same-repository PR native job with hosted fork fallback",
+  "arc-general-remote": "explicitly allowlisted focused task with hosted fallback",
+  "arc-general-rust-reusable": "trusted push or same-repository PR Rust job with hosted fallback",
+  "arc-hive": "trusted Hive job with isolated native service sidecars",
+  "hosted-ai": "AI credentials and agent execution stay outside the private cluster",
+  "hosted-control": "small orchestration work avoids consuming scarce ARC build capacity",
+  "hosted-deployment": "release or deployment credentials stay outside the private cluster",
+  "hosted-runtime": "non-Main browser, WASM, coverage, or arbitrary-ref runtime",
+  "hosted-scheduled": "scheduled maintenance avoids consuming ARC build capacity",
+  "hosted-untrusted": "fork or Dependabot code must not enter the private cluster",
+  "legacy-cleanup": "maintenance only for the separately registered persistent Docker pool",
+  reusable: "caller-owned placement for a reusable workflow",
+};
+
+const workflowPlacementContracts: WorkflowPlacementContract[] = [
+  { workflow: "agent-implement.yml", jobs: { "agent-implement": "hosted-ai" } },
+  { workflow: "ci-agent-smoke.yml", jobs: { smoke: "hosted-ai" } },
+  { workflow: "e2e-pr.yml", jobs: { e2e: "hosted-runtime" } },
+  {
+    workflow: "hive.yml",
+    jobs: {
+      console: "hosted-control",
+      verify: "arc-hive",
+      "verify-hosted": "hosted-runtime",
+      "verify-fork": "hosted-untrusted",
+    },
+  },
+  {
+    workflow: "linear-ui-demo.yml",
+    jobs: { publish: "hosted-deployment", close: "hosted-deployment" },
+  },
+  { workflow: "main-build-stats.yml", jobs: { record: "hosted-control" } },
+  { workflow: "main-failure-handoff.yml", jobs: { record: "hosted-control" } },
+  {
+    workflow: "main.yml",
+    jobs: {
+      "product-paths": "arc-general-main",
+      "rust-ecosystem": "reusable",
+      rust: "arc-general-main",
+      wasm: "arc-general-main",
+      web: "arc-general-main",
+      "web-e2e": "arc-general-main",
+      "extension-e2e": "arc-general-main",
+      "ui-demos": "arc-general-main",
+      deploy: "arc-general-main",
+    },
+  },
+  { workflow: "pr-coverage.yml", jobs: { coverage: "hosted-runtime" } },
+  { workflow: "pr-validation-handoff.yml", jobs: { promote: "hosted-control" } },
+  {
+    workflow: "pr.yml",
+    jobs: {
+      "validation-request": "hosted-control",
+      "rust-ecosystem": "reusable",
+      rust: "arc-general-pr",
+      wasm: "hosted-runtime",
+      "wasm-node-test": "hosted-runtime",
+      verify: "hosted-runtime",
+      "ui-demo": "hosted-runtime",
+      preview: "hosted-deployment",
+      coverage: "reusable",
+      "full-e2e": "hosted-runtime",
+      "full-extension-e2e": "hosted-runtime",
+    },
+  },
+  { workflow: "release.yml", jobs: { deploy: "hosted-deployment" } },
+  {
+    workflow: "remote.yml",
+    jobs: { batch: "arc-general-remote", "rust-cache-promote": "hosted-control" },
+  },
+  { workflow: "repository-policy.yml", jobs: { verify: "hosted-untrusted" } },
+  { workflow: "runner-cleanup.yml", jobs: { "docker-prune": "legacy-cleanup" } },
+  {
+    workflow: "rust-dependency-updates.yml",
+    jobs: { audit: "hosted-scheduled", update: "hosted-ai" },
+  },
+  {
+    workflow: "rust-ecosystem-checks.yml",
+    jobs: {
+      "dependency-policy": "arc-general-rust-reusable",
+      "deterministic-tests": "arc-general-rust-reusable",
+      "fuzz-smoke": "arc-general-rust-reusable",
+      kani: "arc-general-rust-reusable",
+      dylint: "arc-general-rust-reusable",
+    },
+  },
+  {
+    workflow: "rust-ecosystem.yml",
+    jobs: { "validation-request": "hosted-control", ecosystem: "reusable" },
+  },
+  { workflow: "web-research.yml", jobs: { deploy: "hosted-deployment" } },
+];
+
+function expectedRunner(placement: RunnerPlacement): string {
+  if (hostedRunnerPlacements.has(placement)) return "ubuntu-latest";
+  if (placement === "legacy-cleanup") return "nook";
+  if (placement === "arc-hive") return "nook-k0s-hive";
+  if (placement === "arc-general-main") {
+    return "${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}";
+  }
+  if (placement === "arc-general-pr") {
+    return "${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}";
+  }
+  if (placement === "arc-general-remote") {
+    return "${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}";
+  }
+  if (placement === "arc-general-rust-reusable") {
+    return "${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}";
+  }
+  throw new Error(`Runner placement ${placement} does not own runs-on`);
+}
+
+async function validateWorkflowPlacement(
+  input: WorkflowPlacementContract,
+): Promise<void> {
+  const relativePath = `.github/workflows/${input.workflow}`;
+  const manifest = Bun.YAML.parse(await read(relativePath)) as WorkflowManifest;
+  const actualJobs = Object.keys(manifest.jobs).sort();
+  const classifiedJobs = Object.keys(input.jobs).sort();
+  if (actualJobs.join("\n") !== classifiedJobs.join("\n")) {
+    throw new Error(
+      `${input.workflow} job inventory changed; actual=${actualJobs.join(",")} classified=${classifiedJobs.join(",")}`,
+    );
+  }
+
+  for (const jobName of actualJobs) {
+    const job = manifest.jobs[jobName];
+    const placement = input.jobs[jobName];
+    if (!job || !placement) throw new Error(`${input.workflow}/${jobName} is unclassified`);
+    if (placement === "reusable") {
+      if (!job.uses?.startsWith("./.github/workflows/")) {
+        throw new Error(`${input.workflow}/${jobName} must call a local reusable workflow`);
+      }
+      continue;
+    }
+    const expected = expectedRunner(placement);
+    if (job["runs-on"] !== expected) {
+      throw new Error(
+        `${input.workflow}/${jobName} must use ${expected}: ${runnerPlacementReasons[placement]}`,
+      );
+    }
+  }
+}
+
+for (const placementContract of workflowPlacementContracts) {
+  await validateWorkflowPlacement(placementContract);
+}
+
+const workflowDirectory = resolve(root, ".github/workflows");
+const workflowFiles = [
+  ...new Bun.Glob("*.{yml,yaml}").scanSync(workflowDirectory),
+].sort();
+const classifiedWorkflowFiles = workflowPlacementContracts
+  .map((item) => item.workflow)
+  .sort();
+if (workflowFiles.join("\n") !== classifiedWorkflowFiles.join("\n")) {
+  throw new Error(
+    `Workflow inventory changed; actual=${workflowFiles.join(",")} classified=${classifiedWorkflowFiles.join(",")}`,
+  );
+}
 
 console.log("ARC manifest contract passed");
