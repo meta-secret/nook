@@ -59,9 +59,10 @@ consistent.
    - Keep fixtures, selectors, timings, and implementation mechanics in tests.
 5. Exclude draft or speculative behavior until the owning specification marks
    it as implemented.
-6. Require each non-demo Playwright behavior specification to appear exactly
-   once in the shared executable gate manifest consumed by the default,
-   isolation, or explicit manual project.
+6. When a Playwright suite partitions specifications across projects, require
+   every non-demo behavior specification to appear exactly once in the shared
+   executable gate manifest. Suites that rely on default `testDir` discovery
+   do not need a redundant manifest.
 
 Do not mechanically translate Markdown sentences into tests. Choose scenarios
 through architectural ownership and risk.

@@ -321,8 +321,10 @@ Scenario coverage is bidirectional.
 - Durable behavior discovered in strong tests must enrich the owning Cortex
   specification when it affects future product decisions.
 - UI demos communicate behavior. They do not replace regression evidence.
-- Every non-demo Playwright specification must appear exactly once in the
-  shared gate manifest consumed by its repository-owned project.
+- Every non-demo `nook-web-app` Playwright specification must appear exactly
+  once in the shared gate manifest consumed by its repository-owned project.
+- Playwright suites that use default discovery continue to execute every spec
+  under their configured `testDir`.
 
 ---
 

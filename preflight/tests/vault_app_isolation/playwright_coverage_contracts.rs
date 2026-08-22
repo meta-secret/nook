@@ -66,7 +66,7 @@ fn manifest_specs(manifest_path: PathBuf) -> anyhow::Result<BTreeSet<String>> {
 }
 
 #[test]
-fn every_playwright_behavior_spec_belongs_to_exactly_one_gate() -> anyhow::Result<()> {
+fn every_nook_web_app_behavior_spec_belongs_to_exactly_one_gate() -> anyhow::Result<()> {
     let root = repository_root();
     let e2e_directory = root.join("nook-app/nook-web/nook-web-app/e2e");
     let mut discovered = BTreeSet::new();
