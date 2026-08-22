@@ -483,7 +483,9 @@ test.describe('local vault', () => {
     await editForm.getByTestId('credit-card-cvv').fill('9876')
     await editForm.getByTestId('save-secret-btn').click()
     await expect(editForm).not.toBeVisible()
-    await expect(row).toHaveCount(0)
+    await expect(
+      page.getByRole('heading', { name: title, exact: true }),
+    ).toHaveCount(0)
     await expect(
       page.getByTestId('secret-row').filter({ hasText: updatedTitle }),
     ).toBeVisible()
