@@ -24,7 +24,6 @@ import {
   withModuleExpertRuntimeIsolation,
 } from '../module-experts/runtime-contract.ts';
 import type {
-  ModuleExpertRuntimeIsolation,
   ModuleExpertRuntimeIsolationRequest,
   ModuleExpertRuntimeIsolationUse,
 } from '../module-experts/runtime-contract.ts';
@@ -44,14 +43,26 @@ export class CodexSdkAgentRuntime<
   TTask extends string,
   TAgent extends string,
 > implements AgentTaskRuntime<TTask, TAgent> {
+  readonly codex = new Codex();
+
   async executeAgent(
     invocation: AgentExecutionInvocation<TTask, TAgent>,
   ): Promise<AgentExecutionCompletion> {
-    if (
-      invocation.agentProfile.workspacePolicy !== AgentWorkspacePolicy.ReadOnly
-    ) {
-      throw new Error('Write-capable Codex workflow workers are not enabled.');
-    }
+    const execution: GuardedAgentExecution<TTask, TAgent> = {
+      codex: this.codex,
+      invocation,
+    };
+    return executeGuardedAgent(execution);
+  }
+}
+
+export class ModuleExpertCodexSdkAgentRuntime<
+  TTask extends string,
+  TAgent extends string,
+> implements AgentTaskRuntime<TTask, TAgent> {
+  async executeAgent(
+    invocation: AgentExecutionInvocation<TTask, TAgent>,
+  ): Promise<AgentExecutionCompletion> {
     const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
       parentEnvironment: process.env,
     };
@@ -59,44 +70,52 @@ export class CodexSdkAgentRuntime<
       {
         isolationRequest,
         run: async (isolation) => {
-          const beforeAttempt: AgentSourceStabilityCheck = {
-            workingDirectory: invocation.workingDirectory,
-            sourceCommit: invocation.sourceCommit,
-            phase: AgentSourceStabilityPhase.BeforeAttempt,
+          const execution: GuardedAgentExecution<TTask, TAgent> = {
+            codex: new Codex(isolation.codexOptions),
+            invocation,
           };
-          assertAgentSourceStable(beforeAttempt);
-          try {
-            const isolatedExecution: IsolatedAgentExecution<TTask, TAgent> = {
-              invocation,
-              isolation,
-            };
-            return await executeIsolatedAgent(isolatedExecution);
-          } finally {
-            const afterAttempt: AgentSourceStabilityCheck = {
-              workingDirectory: invocation.workingDirectory,
-              sourceCommit: invocation.sourceCommit,
-              phase: AgentSourceStabilityPhase.AfterAttempt,
-            };
-            assertAgentSourceStable(afterAttempt);
-          }
+          return executeGuardedAgent(execution);
         },
       };
     return withModuleExpertRuntimeIsolation(isolationUse);
   }
 }
 
-type IsolatedAgentExecution<TTask extends string, TAgent extends string> = {
+type GuardedAgentExecution<TTask extends string, TAgent extends string> = {
+  readonly codex: Codex;
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
-  readonly isolation: ModuleExpertRuntimeIsolation;
 };
 
-async function executeIsolatedAgent<
-  TTask extends string,
-  TAgent extends string,
->(
-  execution: IsolatedAgentExecution<TTask, TAgent>,
+async function executeGuardedAgent<TTask extends string, TAgent extends string>(
+  execution: GuardedAgentExecution<TTask, TAgent>,
 ): Promise<AgentExecutionCompletion> {
-  const codex = new Codex(execution.isolation.codexOptions);
+  if (
+    execution.invocation.agentProfile.workspacePolicy !==
+    AgentWorkspacePolicy.ReadOnly
+  ) {
+    throw new Error('Write-capable Codex workflow workers are not enabled.');
+  }
+  const beforeAttempt: AgentSourceStabilityCheck = {
+    workingDirectory: execution.invocation.workingDirectory,
+    sourceCommit: execution.invocation.sourceCommit,
+    phase: AgentSourceStabilityPhase.BeforeAttempt,
+  };
+  assertAgentSourceStable(beforeAttempt);
+  try {
+    return await executeStableAgent(execution);
+  } finally {
+    const afterAttempt: AgentSourceStabilityCheck = {
+      workingDirectory: execution.invocation.workingDirectory,
+      sourceCommit: execution.invocation.sourceCommit,
+      phase: AgentSourceStabilityPhase.AfterAttempt,
+    };
+    assertAgentSourceStable(afterAttempt);
+  }
+}
+
+async function executeStableAgent<TTask extends string, TAgent extends string>(
+  execution: GuardedAgentExecution<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
   const moduleExpertThreadOptionsArgs = {
     workingDirectory: execution.invocation.workingDirectory,
   };
@@ -109,7 +128,7 @@ async function executeIsolatedAgent<
       execution.invocation.agentProfile.reasoningEffort,
     ),
   };
-  const thread = codex.startThread(threadOptions);
+  const thread = execution.codex.startThread(threadOptions);
   const prompt = buildPrompt(execution.invocation);
   const outputSchema = workflowTaskOutputSchema(
     execution.invocation.execution.resultKind,

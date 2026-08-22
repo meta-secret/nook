@@ -142,9 +142,18 @@ Invoke one registered expert with an agent-owned JSON request:
 
 ```json
 {
+  "runId": "feature-vault-api-20260822",
   "expert": "core_expert",
   "sourceCommit": "<40-character-commit-sha>",
   "task": "inspect-core-contract",
+  "attempt": 1,
+  "depth": 2,
+  "parent": {
+    "kind": "agent-attempt",
+    "task": "feature-synthesis",
+    "agent": "delivery-owner",
+    "attempt": 1
+  },
   "instruction": "Describe the smallest external API required by nook-wasm."
 }
 ```
@@ -155,11 +164,20 @@ task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
 
 The command validates the complete catalog and selected TOML definition before
 starting one isolated Codex thread. The request accepts no runtime permissions,
-tools, model, parent, successors, or graph. The expert is read-only and offline;
-native delegation, apps, and plugins remain disabled. The JSON result contains
-the selected role, definition digest, bounded runtime activities, thread ID, and
-typed `cortex-evidence` output. The delivery owner remains responsible for
-recording the attempt, aggregation, continuation, and lifecycle state.
+tools, model, successors, or graph. It must declare the run, attempt, depth, and
+parent agent-attempt lineage. Direct named experts run only at depth two or
+three; workflow-root, depth-one, self-parent, and invalid parent-attempt
+lineage are rejected before runtime. The expert is read-only and offline;
+native delegation, apps, and plugins remain disabled. Before the command
+returns, Loom finalizes the immutable attempt stream, result, and materialized
+view under
+`workflow/processing/delegated-agent-work/<runId>/agents/<task>/attempt-<n>/`.
+The JSON response contains the typed terminal and content-addressed processing
+references. Before returning them, Loom rereads all three projections, verifies
+their digests and exact identity, and replays the terminal stream. Runtime
+errors and invalid resolved completions produce a sanitized failed terminal and
+a Loom-authored failure view. The delivery owner remains responsible for
+aggregation, continuation, and lifecycle state.
 
 ## Prerequisites
 

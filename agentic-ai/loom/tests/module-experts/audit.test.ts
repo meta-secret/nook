@@ -11,13 +11,18 @@ import {
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import type { CodexOptions } from '@openai/codex-sdk';
 import { describe, expect, test } from 'bun:test';
 import {
   auditGeneratedScopeProducerContract,
+  auditModuleExpertRuntimePolicy,
+  auditModuleExpertRuntimeRouting,
   auditModuleExperts,
 } from '../../src/module-experts/audit.ts';
 import type {
   AuditGeneratedScopeProducerContractArgs,
+  AuditModuleExpertRuntimePolicyArgs,
+  AuditModuleExpertRuntimeRoutingArgs,
   AuditModuleExpertsArgs,
 } from '../../src/module-experts/audit.ts';
 import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
@@ -26,7 +31,9 @@ import type {
   ModuleExpertGeneratedScope,
 } from '../../src/module-experts/catalog.ts';
 import {
+  MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
   MODULE_EXPERT_CODEX_OPTIONS,
+  MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
   moduleExpertThreadOptions,
 } from '../../src/module-experts/runtime-contract.ts';
 import {
@@ -46,6 +53,11 @@ type GeneratedMarkerEvidenceMutation = {
   readonly evidence: string;
 };
 
+type ModuleExpertRuntimePolicyDrift = {
+  readonly description: string;
+  readonly codexOptions: CodexOptions;
+};
+
 const internalApiProfile = MODULE_EXPERT_CATALOG.find(
   (profile) => profile.name === 'internal_api_expert',
 );
@@ -62,6 +74,62 @@ const GENERATED_MARKER_MUTATIONS: readonly GeneratedMarkerEvidenceMutation[] =
       })),
     ),
   );
+const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
+  {
+    description: 'non-file authentication storage',
+    codexOptions: {
+      config: {
+        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        cli_auth_credentials_store: 'auto',
+      },
+    },
+  },
+  {
+    description: 'login-shell enablement',
+    codexOptions: {
+      config: {
+        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        allow_login_shell: true,
+      },
+    },
+  },
+  {
+    description: 'inherited shell environment',
+    codexOptions: {
+      config: {
+        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        shell_environment_policy: {
+          ...MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy,
+          inherit: 'all',
+        },
+      },
+    },
+  },
+  {
+    description: 'ignored default shell exclusions',
+    codexOptions: {
+      config: {
+        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        shell_environment_policy: {
+          ...MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy,
+          ignore_default_excludes: true,
+        },
+      },
+    },
+  },
+  {
+    description: 'skill MCP dependency installation',
+    codexOptions: {
+      config: {
+        ...MODULE_EXPERT_CODEX_OPTIONS.config,
+        features: {
+          ...MODULE_EXPERT_CODEX_OPTIONS.config.features,
+          skill_mcp_dependency_install: true,
+        },
+      },
+    },
+  },
+];
 
 describe('module expert audit', () => {
   test('accepts the complete read-only project catalog', () => {
@@ -200,6 +268,94 @@ describe('module expert audit', () => {
     expect(MODULE_EXPERT_CODEX_OPTIONS.config.features.multi_agent_v2).toBe(
       false,
     );
+    expect(MODULE_EXPERT_CODEX_OPTIONS.config.allow_login_shell).toBe(false);
+    expect(
+      MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy.inherit,
+    ).toBe('none');
+    expect(
+      MODULE_EXPERT_CODEX_OPTIONS.config.shell_environment_policy
+        .ignore_default_excludes,
+    ).toBe(false);
+    expect(
+      MODULE_EXPERT_CODEX_OPTIONS.config.features.skill_mcp_dependency_install,
+    ).toBe(false);
+  });
+
+  for (const drift of RUNTIME_POLICY_DRIFTS) {
+    test(`rejects module expert runtime policy drift: ${drift.description}`, () => {
+      const threadOptionsArgs = { workingDirectory: REPO_ROOT };
+      const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
+        authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+        codexOptions: drift.codexOptions,
+        processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+        threadOptions: moduleExpertThreadOptions(threadOptionsArgs),
+      };
+      const findings = auditModuleExpertRuntimePolicy(auditArgs);
+
+      expect(findings.map((finding) => finding.code)).toEqual([
+        'unsafe-module-expert-runtime',
+      ]);
+    });
+  }
+
+  test('rejects authentication and process environment allowlist drift', () => {
+    const threadOptionsArgs = { workingDirectory: REPO_ROOT };
+    const threadOptions = moduleExpertThreadOptions(threadOptionsArgs);
+    const authDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
+      authEnvironmentKeys: [
+        ...MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+        'OPENAI_API_KEY',
+      ],
+      codexOptions: MODULE_EXPERT_CODEX_OPTIONS,
+      processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+      threadOptions,
+    };
+    const processDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
+      authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+      codexOptions: MODULE_EXPERT_CODEX_OPTIONS,
+      processEnvironmentKeys: [
+        ...MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+        'GITHUB_TOKEN',
+      ],
+      threadOptions,
+    };
+
+    expect(
+      auditModuleExpertRuntimePolicy(authDriftArgs).map(
+        (finding) => finding.code,
+      ),
+    ).toEqual(['unsafe-module-expert-runtime']);
+    expect(
+      auditModuleExpertRuntimePolicy(processDriftArgs).map(
+        (finding) => finding.code,
+      ),
+    ).toEqual(['unsafe-module-expert-runtime']);
+  });
+
+  test('rejects generic and module-expert runtime routing drift', () => {
+    const moduleRoutingDrift: AuditModuleExpertRuntimeRoutingArgs = {
+      agentWorkflowCliSource:
+        'const runtime = new CodexSdkAgentRuntime<Task, Agent>();',
+      moduleExpertCliSource:
+        '// new ModuleExpertCodexSdkAgentRuntime<string, string>();\nconst runtime = new CodexSdkAgentRuntime<string, string>();',
+    };
+    const genericRoutingDrift: AuditModuleExpertRuntimeRoutingArgs = {
+      agentWorkflowCliSource:
+        '// new CodexSdkAgentRuntime<Task, Agent>();\nconst runtime = new ModuleExpertCodexSdkAgentRuntime<Task, Agent>();',
+      moduleExpertCliSource:
+        'const runtime = new ModuleExpertCodexSdkAgentRuntime<string, string>();',
+    };
+
+    expect(
+      auditModuleExpertRuntimeRouting(moduleRoutingDrift).map(
+        (finding) => finding.code,
+      ),
+    ).toEqual(['unsafe-module-expert-runtime-routing']);
+    expect(
+      auditModuleExpertRuntimeRouting(genericRoutingDrift).map(
+        (finding) => finding.code,
+      ),
+    ).toEqual(['unsafe-generic-runtime-routing']);
   });
 
   for (const mutation of GENERATED_MARKER_MUTATIONS) {
@@ -254,6 +410,7 @@ async function moduleExpertFixture(): Promise<string> {
   );
   await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
   await symlink(join(REPO_ROOT, '.agents'), join(fixtureRoot, '.agents'));
+  await symlink(join(REPO_ROOT, 'agentic-ai'), join(fixtureRoot, 'agentic-ai'));
   await symlink(join(REPO_ROOT, 'nook-app'), join(fixtureRoot, 'nook-app'));
   const sourceDirectory = join(REPO_ROOT, '.codex/agents/module-experts');
   const definitionNames = await readdir(sourceDirectory);

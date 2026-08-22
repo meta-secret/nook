@@ -79,7 +79,7 @@ tasks:
         validate --working-directory "{{.REPO_ROOT}}"
 
   loom:module-experts:invoke:
-    desc: Invoke one registered module expert through the isolated read-only Codex runtime.
+    desc: Invoke and journal one registered module expert through the isolated read-only Codex runtime.
     deps: [loom:install]
     requires:
       vars: [REQUEST]

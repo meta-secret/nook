@@ -7,6 +7,8 @@ import {
   normalize,
   relative,
 } from 'node:path';
+import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
+import * as ts from 'typescript';
 import {
   MODULE_EXPERT_AGENT_INSTRUCTIONS,
   MODULE_EXPERT_CATALOG,
@@ -17,7 +19,9 @@ import type {
   ModuleExpertProfile,
 } from './catalog.ts';
 import {
+  MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
   MODULE_EXPERT_CODEX_OPTIONS,
+  MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
   moduleExpertThreadOptions,
 } from './runtime-contract.ts';
 import {
@@ -43,6 +47,18 @@ export type AuditModuleExpertsArgs = {
   readonly repoRoot: string;
 };
 
+export type AuditModuleExpertRuntimePolicyArgs = {
+  readonly authEnvironmentKeys: readonly string[];
+  readonly codexOptions: CodexOptions;
+  readonly processEnvironmentKeys: readonly string[];
+  readonly threadOptions: ThreadOptions;
+};
+
+export type AuditModuleExpertRuntimeRoutingArgs = {
+  readonly agentWorkflowCliSource: string;
+  readonly moduleExpertCliSource: string;
+};
+
 type ParsedAgentDefinition = {
   readonly name: string;
   readonly description: string;
@@ -53,8 +69,23 @@ type ParsedAgentDefinition = {
 
 const CODEX_AGENT_DIRECTORY = '.codex/agents';
 const AGENT_DIRECTORY = `${CODEX_AGENT_DIRECTORY}/module-experts`;
+const AGENT_WORKFLOW_CLI = 'agentic-ai/loom/src/agent-workflow/cli.ts';
+const MODULE_EXPERT_CLI = 'agentic-ai/loom/src/module-experts/cli.ts';
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 const WEB_ROOT = 'nook-app/nook-web';
+const EXPECTED_AUTH_ENVIRONMENT_KEYS = [
+  'CODEX_API_KEY',
+  'CODEX_ACCESS_TOKEN',
+] as const;
+const EXPECTED_PROCESS_ENVIRONMENT_KEYS = [
+  'COMSPEC',
+  'PATH',
+  'Path',
+  'PATHEXT',
+  'SYSTEMROOT',
+  'SystemRoot',
+  'WINDIR',
+] as const;
 
 export function auditModuleExperts(
   args: AuditModuleExpertsArgs,
@@ -73,6 +104,7 @@ export function auditModuleExperts(
   validateProductionCoverage(coverageArgs);
   validateAgentDefinitions(context);
   validateRuntimePolicy(context);
+  validateRuntimeRouting(context);
   return {
     findings,
     profileCount: MODULE_EXPERT_CATALOG.length,
@@ -105,6 +137,121 @@ export function auditGeneratedScopeProducerContract(
   };
   validateGeneratedScopeProducer(validationArgs);
   return findings;
+}
+
+export function auditModuleExpertRuntimePolicy(
+  args: AuditModuleExpertRuntimePolicyArgs,
+): readonly ModuleExpertAuditFinding[] {
+  const config = args.codexOptions.config;
+  const agents = config?.agents;
+  const features = config?.features;
+  const shellEnvironmentPolicy = config?.shell_environment_policy;
+  const authEnvironmentComparison: OrderedValuesComparison = {
+    actual: args.authEnvironmentKeys,
+    expected: EXPECTED_AUTH_ENVIRONMENT_KEYS,
+  };
+  const processEnvironmentComparison: OrderedValuesComparison = {
+    actual: args.processEnvironmentKeys,
+    expected: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
+  };
+  const valid =
+    args.threadOptions.sandboxMode === 'read-only' &&
+    args.threadOptions.approvalPolicy === 'never' &&
+    args.threadOptions.networkAccessEnabled === false &&
+    args.threadOptions.webSearchMode === 'disabled' &&
+    config?.allow_login_shell === false &&
+    config.cli_auth_credentials_store === 'file' &&
+    typeof agents === 'object' &&
+    !Array.isArray(agents) &&
+    agents.enabled === false &&
+    agents.max_depth === 0 &&
+    typeof features === 'object' &&
+    !Array.isArray(features) &&
+    features.apps === false &&
+    features.multi_agent === false &&
+    features.multi_agent_v2 === false &&
+    features.plugins === false &&
+    features.skill_mcp_dependency_install === false &&
+    typeof shellEnvironmentPolicy === 'object' &&
+    !Array.isArray(shellEnvironmentPolicy) &&
+    shellEnvironmentPolicy.inherit === 'none' &&
+    shellEnvironmentPolicy.ignore_default_excludes === false &&
+    sameOrderedValues(authEnvironmentComparison) &&
+    sameOrderedValues(processEnvironmentComparison);
+  if (valid) return [];
+  return [
+    {
+      code: 'unsafe-module-expert-runtime',
+      path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
+      message:
+        'Module experts require an isolated read-only, offline, non-delegating Codex runtime.',
+    },
+  ];
+}
+
+export function auditModuleExpertRuntimeRouting(
+  args: AuditModuleExpertRuntimeRoutingArgs,
+): readonly ModuleExpertAuditFinding[] {
+  const findings: ModuleExpertAuditFinding[] = [];
+  const moduleExpertRuntimeNames = constructedRuntimeNames(
+    args.moduleExpertCliSource,
+  );
+  const agentWorkflowRuntimeNames = constructedRuntimeNames(
+    args.agentWorkflowCliSource,
+  );
+  if (
+    !moduleExpertRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime') ||
+    moduleExpertRuntimeNames.includes('CodexSdkAgentRuntime')
+  ) {
+    findings[findings.length] = {
+      code: 'unsafe-module-expert-runtime-routing',
+      path: MODULE_EXPERT_CLI,
+      message:
+        'Module expert invocation must use only the isolated module-expert Codex runtime.',
+    };
+  }
+  if (
+    !agentWorkflowRuntimeNames.includes('CodexSdkAgentRuntime') ||
+    agentWorkflowRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime')
+  ) {
+    findings[findings.length] = {
+      code: 'unsafe-generic-runtime-routing',
+      path: AGENT_WORKFLOW_CLI,
+      message:
+        'Generic agent workflows must retain the ordinary Codex runtime and authentication store.',
+    };
+  }
+  return findings;
+}
+
+function constructedRuntimeNames(source: string): readonly string[] {
+  const sourceFile = ts.createSourceFile(
+    'runtime-routing.ts',
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const names: string[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
+      names[names.length] = node.expression.text;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return names;
+}
+
+type OrderedValuesComparison = {
+  readonly actual: readonly string[];
+  readonly expected: readonly string[];
+};
+
+function sameOrderedValues(comparison: OrderedValuesComparison): boolean {
+  return (
+    JSON.stringify(comparison.actual) === JSON.stringify(comparison.expected)
+  );
 }
 
 function validateProfiles(context: ModuleExpertValidationContext): void {
@@ -534,25 +681,30 @@ function collectAgentDefinitionPaths(
 function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
   const threadOptionsArgs = { workingDirectory: context.repoRoot };
   const threadOptions = moduleExpertThreadOptions(threadOptionsArgs);
-  const config = MODULE_EXPERT_CODEX_OPTIONS.config;
-  const valid =
-    threadOptions.sandboxMode === 'read-only' &&
-    threadOptions.approvalPolicy === 'never' &&
-    threadOptions.networkAccessEnabled === false &&
-    threadOptions.webSearchMode === 'disabled' &&
-    config.agents.enabled === false &&
-    config.agents.max_depth === 0 &&
-    config.features.apps === false &&
-    config.features.multi_agent === false &&
-    config.features.multi_agent_v2 === false &&
-    config.features.plugins === false;
-  if (!valid) {
-    context.findings[context.findings.length] = {
-      code: 'unsafe-module-expert-runtime',
-      path: 'agentic-ai/loom/src/module-experts/runtime-contract.ts',
-      message:
-        'Module experts require an isolated read-only, offline, non-delegating Codex runtime.',
-    };
+  const auditArgs: AuditModuleExpertRuntimePolicyArgs = {
+    authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
+    codexOptions: MODULE_EXPERT_CODEX_OPTIONS,
+    processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+    threadOptions,
+  };
+  for (const finding of auditModuleExpertRuntimePolicy(auditArgs)) {
+    context.findings[context.findings.length] = finding;
+  }
+}
+
+function validateRuntimeRouting(context: ModuleExpertValidationContext): void {
+  const agentWorkflowCliPath = join(context.repoRoot, AGENT_WORKFLOW_CLI);
+  const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
+  const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
+    agentWorkflowCliSource: existsSync(agentWorkflowCliPath)
+      ? readFileSync(agentWorkflowCliPath, 'utf8')
+      : '',
+    moduleExpertCliSource: existsSync(moduleExpertCliPath)
+      ? readFileSync(moduleExpertCliPath, 'utf8')
+      : '',
+  };
+  for (const finding of auditModuleExpertRuntimeRouting(auditArgs)) {
+    context.findings[context.findings.length] = finding;
   }
 }
 

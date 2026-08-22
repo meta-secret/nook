@@ -53,10 +53,23 @@ That runtime enforces:
 - no approval escalation;
 - no network or web search;
 - disabled apps and plugins;
-- disabled multi-agent tools and zero child depth.
+- disabled multi-agent tools and zero child depth;
+- one disposable Codex home with no inherited configuration or MCP servers;
+- staged `auth.json` or one supported Codex authentication credential; and
+- exact process and login-shell environment allowlists that exclude unrelated
+  parent credentials and capability-bearing variables.
+
+This isolation belongs only to the module-expert adapter.
+Generic Loom workflows retain the ordinary Codex home and authentication store,
+including keyring-backed sessions.
 
 Direct custom-agent spawning from a write-capable delivery session is not an
 authorized module-expert invocation.
+
+The invocation boundary treats the SDK completion as untrusted transport data.
+It validates the result, finalizes the immutable attempt journal, and then
+rereads, hashes, and replay-verifies `events.jsonl`, `result.json`, and
+`view.md` before processing references can reach the parent.
 
 ## Portable Rust module experts
 
@@ -195,7 +208,8 @@ task loom:module-experts:validate
 
 The audit rejects:
 
-- malformed role definitions or runtime capability drift;
+- malformed role definitions, runtime capability drift, unsafe credential or
+  environment allowlists, and generic-versus-expert runtime routing drift;
 - missing or duplicate production-module routes;
 - missing authority, skill, authored scope, or entry-point paths;
 - generated scope producer, selector, or marker drift;

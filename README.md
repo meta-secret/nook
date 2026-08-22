@@ -431,9 +431,12 @@ routing, runtime isolation, generated WASM binding contracts, the
 and replay reject agent lineage deeper than three levels.
 Invoke one selected role with
 **`task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json`**.
-The request binds an exact source commit, registered expert, stable task ID, and
-bounded instruction. Loom returns typed evidence but does not schedule a
-successor or mutate lifecycle state.
+The request binds an exact source commit, registered expert, stable run/task
+identity, attempt, parent lineage, and bounded instruction. Loom finalizes the
+attempt journal and returns its content-addressed evidence references, but does
+not schedule a successor or mutate lifecycle state. Direct named experts are
+agent-attempt children at depth two or three; they never use workflow-root
+lineage.
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
