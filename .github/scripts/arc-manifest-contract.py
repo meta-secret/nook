@@ -523,6 +523,16 @@ require(
 )
 require(
     BUILDKIT_CLONER,
+    'test "$existing_sandbox_id" = "$sandbox_id" && return 0',
+    "active job markers must follow a replacement sandbox for the same Pod UID",
+)
+require(
+    BUILDKIT_CLONER,
+    "SECONDS - last_sandbox_refresh >= 1",
+    "replacement sandbox identities must be refreshed before stale-job pruning",
+)
+require(
+    BUILDKIT_CLONER,
     'if ! record_sandbox_id "$pod_uid"; then',
     "sandbox identity must be durable before any job subvolume is created",
 )

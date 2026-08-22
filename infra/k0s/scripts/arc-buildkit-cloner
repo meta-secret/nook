@@ -10,6 +10,7 @@ seed_lock="$pool_dir/.seed.lock"
 pod_root="${NOOK_K0S_POD_ROOT:-/var/lib/k0s/kubelet/pods}"
 job_exclusive_limit="${NOOK_ARC_BUILDKIT_JOB_EXCLUSIVE_LIMIT:-32G}"
 last_prune=0
+last_sandbox_refresh=-1
 
 mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir"
 chmod 0700 "$runtime_dir"
@@ -33,13 +34,17 @@ delete_job_dir() {
 
 record_sandbox_id() {
   local pod_uid="$1"
-  local sandbox_id sandbox_marker temporary
+  local existing_sandbox_id="" sandbox_id sandbox_marker temporary
   sandbox_id="$(
     k0s ctr --namespace k8s.io containers list -q \
       "labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox"
   )"
   [[ "$sandbox_id" =~ ^[0-9a-f]{64}$ ]] || return 1
   sandbox_marker="$runtime_dir/$pod_uid.sandbox"
+  if test -f "$sandbox_marker" && ! test -L "$sandbox_marker"; then
+    existing_sandbox_id="$(tr -d '\r\n' < "$sandbox_marker")"
+  fi
+  test "$existing_sandbox_id" = "$sandbox_id" && return 0
   temporary="$sandbox_marker.tmp"
   printf '%s\n' "$sandbox_id" > "$temporary"
   chmod 0600 "$temporary"
@@ -47,12 +52,11 @@ record_sandbox_id() {
 }
 
 record_active_sandboxes() {
-  local job_dir pod_uid sandbox_marker
+  local job_dir pod_uid
   while IFS= read -r -d '' job_dir; do
     pod_uid="$(basename "$job_dir")"
     valid_uid "$pod_uid" || continue
-    sandbox_marker="$runtime_dir/$pod_uid.sandbox"
-    test -f "$sandbox_marker" || record_sandbox_id "$pod_uid" || true
+    record_sandbox_id "$pod_uid" || true
   done < <(
     find "$jobs_dir" -mindepth 1 -maxdepth 1 -type d -print0
   )
@@ -218,7 +222,10 @@ prune_stale_jobs() {
 
 while true; do
   clone_requests
-  record_active_sandboxes
+  if (( SECONDS - last_sandbox_refresh >= 1 )); then
+    record_active_sandboxes
+    last_sandbox_refresh=$SECONDS
+  fi
   if (( SECONDS - last_prune >= 30 )); then
     prune_stale_jobs
     last_prune=$SECONDS

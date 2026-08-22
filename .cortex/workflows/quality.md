@@ -309,8 +309,9 @@ Use this workflow for quality, CI, and deployment changes.
     share the same source-free dependency graph without sharing a commit SHA.
     Scenario Q proves a generic standalone exact-scope verification restores
     Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
-    runner. Trusted ARC verification instead reuses its private local BuildKit
-    state and does not publish per-PR registry cache refs.
+    runner. General trusted ARC verification reuses its private local BuildKit
+    state and publishes only a minimal per-PR retry handoff. Hive ARC keeps its
+    separate smoke-promoted seed contract without per-PR registry refs.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
     builders.

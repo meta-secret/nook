@@ -337,6 +337,7 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     let web_toolchain = read(&root, "nook-app/nook-web/docker/toolchain.docker-bake.hcl");
     let app_bake = read(&root, "nook-app/docker-bake.hcl");
+    let preflight_bake = read(&root, "preflight/docker-bake.hcl");
 
     // Nested ecosystem leaves context rust-base. Importing the short rust-base
     // index there orphans nightly/policy RUNs after Main FALLBACK restored them.
@@ -478,7 +479,8 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     assert!(
         app_bake.contains("variable \"GHA_CACHE_EXPORT_MODE\"")
             && app_bake.contains("default = \"max\"")
-            && rust_bake.matches("mode=${GHA_CACHE_EXPORT_MODE}").count() == 11,
+            && rust_bake.matches("mode=${GHA_CACHE_EXPORT_MODE}").count() == 11
+            && preflight_bake.contains("mode=${GHA_CACHE_EXPORT_MODE}"),
         "trusted publishers must default to full exports while ARC may select minimal exact-SHA handoffs"
     );
     Ok(())
