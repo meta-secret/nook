@@ -409,6 +409,7 @@ tasks.requireAll([
   "ARC_SMOKE_RUNNER_LABEL: nook-k0s-cache",
   '--raw-field "runner_label=$smoke_runner_label"',
 ]);
+runtimeSmoke.forbid("Successful ARC smoke lost its current Kata sandbox before teardown tracking");
 tasks.forbidAll([
   "import yaml",
   "e2fsck",

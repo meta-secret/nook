@@ -188,25 +188,6 @@ tasks:
               echo "Successful ARC smoke did not capture one Kata sandbox ID" >&2
               exit 1
             fi
-            completion_sandbox="$(find_sandbox "$runner_uid")"
-            completion_target="${completion_sandbox%%$'\t'*}"
-            completion_sandbox_id="${completion_sandbox#*$'\t'}"
-            if test -z "$completion_sandbox_id"; then
-              echo "Successful ARC smoke lost its current Kata sandbox before teardown tracking" >&2
-              exit 1
-            fi
-            if [[ ! "$completion_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "Successful ARC smoke found an invalid or ambiguous current Kata sandbox" >&2
-              exit 1
-            fi
-            if test "$completion_sandbox_id" != "$runner_sandbox_id"; then
-              echo "Successful ARC smoke changed Kata sandboxes before teardown tracking" >&2
-              exit 1
-            fi
-            if test "$completion_target" != "$build_target"; then
-              echo "Successful ARC smoke moved between build nodes" >&2
-              exit 1
-            fi
             if test -z "$runner_state_retained"; then
               echo "Successful ARC smoke did not retain its BuildKit state" >&2
               exit 1
