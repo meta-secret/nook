@@ -271,6 +271,10 @@ try {
           name: string;
           image: string;
           restartPolicy?: string;
+          resources?: {
+            requests?: { memory?: string };
+            limits?: { memory?: string };
+          };
         }>;
         containers: Array<{
           name: string;
@@ -299,6 +303,13 @@ try {
   );
   if (sidecars.has("container-runtime")) {
     throw new Error("Hive ARC must not carry the general Podman runtime");
+  }
+  const hiveBuildkit = sidecars.get("buildkit");
+  if (
+    hiveBuildkit?.resources?.requests?.memory !== "2560Mi" ||
+    hiveBuildkit.resources.limits?.memory !== "2560Mi"
+  ) {
+    throw new Error("Hive ARC BuildKit must retain its Rust linker memory");
   }
   const hiveRunner = hivePod.containers.find((item) => item.name === "runner");
   if (

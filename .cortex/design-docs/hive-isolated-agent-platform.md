@@ -632,7 +632,7 @@ node selectors are all qualified.
 
 The ordinary Pod requests 1 CPU and 4 GiB. The Hive Pod requests about 2 CPUs
 and 4 GiB. Ordinary containers are capped at 4 GiB in aggregate. Hive
-containers are capped at about 4.5 GiB. The QEMU RuntimeClass adds 1792 MiB of
+containers are capped at about 5.25 GiB. The QEMU RuntimeClass adds 1792 MiB of
 Pod overhead. This leaves host-cgroup headroom for QEMU and virtiofs after a
 guest touches its memory. These
 caps are Kata VM sizing boundaries. They keep ten concurrent ordinary
@@ -642,6 +642,9 @@ former 12-vCPU and 16-GiB envelope across every job. The dedicated Hive set
 keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed
 service container with a Kubernetes-native sidecar. A second non-root sidecar
 executes exported Hive test binaries in their pinned Debian Trixie runtime.
+One 64 GiB compute node safely sustains ten ordinary VMs or eight Hive VMs at
+their full limits. ARC may advertise ten Hive runners, but another compute node
+is required before ten memory-saturated Hive jobs can run without overcommit.
 Both helpers are restartable init sidecars, so Kubernetes stops them when the
 runner exits and the single-use Pod can terminate. The exchange directory is
 private to the job Pod. The Hive scale set omits Podman. No Docker daemon is
