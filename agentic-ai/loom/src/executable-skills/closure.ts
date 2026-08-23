@@ -43,7 +43,12 @@ type ReadTreeFileRequest = {
 };
 
 type PackageTransport = {
-  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly dependencies:
+    | Readonly<Record<string, string>>
+    | readonly string[]
+    | string
+    | number
+    | boolean;
 };
 
 const PACKAGE_PATH = '.agents/skills/package.json';
@@ -92,7 +97,6 @@ async function materializeSkillClosureInternal(
   const sourceTree = request.sourceTree;
   const pending = [request.definition.runnerPath];
   const sources = new Map<string, string>();
-  const externalPackages = new Set<string>();
   let aggregateBytes = 0;
   let importEdges = 0;
   while (pending.length > 0) {
@@ -139,9 +143,6 @@ async function materializeSkillClosureInternal(
         );
       }
       if (!specifier.startsWith('.')) {
-        if (!specifier.startsWith('node:')) {
-          externalPackages.add(packageName(specifier));
-        }
         continue;
       }
       const importRequest: ResolveLocalImportRequest = {
@@ -209,11 +210,7 @@ async function materializeSkillClosureInternal(
       'Executable skill frozen manifest differs from its static registration.',
     );
   }
-  const declaredPackagesRequest: AssertDeclaredPackagesRequest = {
-    externalPackages,
-    packageText,
-  };
-  assertDeclaredPackages(declaredPackagesRequest);
+  assertNoDeclaredRuntimePackages(packageText);
   const closureFiles = new Map(sources);
   closureFiles.set(PACKAGE_PATH, packageText);
   closureFiles.set(LOCK_PATH, lockText);
@@ -223,7 +220,7 @@ async function materializeSkillClosureInternal(
     path.join(tmpdir(), 'nook-skill-closure-'),
   );
   try {
-    for (const [relativePath, content] of closureFiles) {
+    for (const [relativePath, content] of sources) {
       assertClosureActive(request);
       const contextPath = contextRelativePath(relativePath);
       const absolutePath = path.join(contextDirectory, contextPath);
@@ -550,27 +547,23 @@ function resolveLocalImport(request: ResolveLocalImportRequest): string {
   return resolved.endsWith('.ts') ? resolved : `${resolved}.ts`;
 }
 
-function packageName(specifier: string): string {
-  if (specifier.startsWith('@')) {
-    return specifier.split('/').slice(0, 2).join('/');
+function assertNoDeclaredRuntimePackages(packageText: string): void {
+  const transport = JSON.parse(packageText) as PackageTransport;
+  if (!Object.hasOwn(transport, 'dependencies')) return;
+  const declared = transport.dependencies;
+  if (
+    typeof declared !== 'object' ||
+    Array.isArray(declared) ||
+    Object.values(declared).some((version) => typeof version !== 'string')
+  ) {
+    throw new Error(
+      'Executable skill package dependencies must be an exact object.',
+    );
   }
-  return specifier.split('/')[0] ?? specifier;
-}
-
-type AssertDeclaredPackagesRequest = {
-  readonly externalPackages: ReadonlySet<string>;
-  readonly packageText: string;
-};
-
-function assertDeclaredPackages(request: AssertDeclaredPackagesRequest): void {
-  const transport = JSON.parse(request.packageText) as PackageTransport;
-  const declared = transport.dependencies ?? {};
-  for (const packageName of request.externalPackages) {
-    if (!Object.hasOwn(declared, packageName)) {
-      throw new Error(
-        `Executable skill imports an undeclared runtime package: ${packageName}`,
-      );
-    }
+  if (Object.keys(declared).length > 0) {
+    throw new Error(
+      'Executable skill forbids declared external runtime packages.',
+    );
   }
 }
 

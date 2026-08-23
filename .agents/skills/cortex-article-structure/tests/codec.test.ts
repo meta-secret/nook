@@ -9,14 +9,29 @@ import type {
   AuditCortexArticleStructureRequest,
   CortexArticleStructureResult,
 } from '../src/domain.ts';
-import { CortexArticleContractKind } from '../src/domain.ts';
+import {
+  CortexArticleBlockKind,
+  CortexArticleContractKind,
+} from '../src/domain.ts';
 
 const validRequest: AuditCortexArticleStructureRequest = {
   kind: CortexArticleContractKind.Request,
   documents: [
     {
       relativePath: '.cortex/example.md',
-      content: '# Example\n',
+      blocks: [
+        {
+          depth: 1,
+          line: 1,
+          text: 'Example',
+          type: CortexArticleBlockKind.Heading,
+        },
+        { line: 3, type: CortexArticleBlockKind.Paragraph },
+        { line: 5, ordered: true, type: CortexArticleBlockKind.List },
+        { comment: true, line: 7, type: CortexArticleBlockKind.Html },
+        { line: 9, type: CortexArticleBlockKind.Definition },
+        { line: 11, type: CortexArticleBlockKind.Structure },
+      ],
     },
   ],
   migrationBaselineEntries: false,
@@ -59,6 +74,29 @@ test('rejects malformed and extra request fields', () => {
   ];
   for (const serializedRequest of cases) {
     expect(() => decodeCortexArticleRequest(serializedRequest)).toThrow();
+  }
+});
+
+test('rejects missing, extra, malformed, and unbounded block fields', () => {
+  const blockCases = [
+    { type: 'heading', line: 1, text: 'Missing depth' },
+    { type: 'heading', depth: 0, line: 1, text: 'Invalid depth' },
+    { type: 'heading', depth: 2, line: 1, text: 'x'.repeat(4097) },
+    { type: 'paragraph', line: 0 },
+    { type: 'paragraph', line: 1, extra: true },
+    { type: 'list', line: 1, ordered: 'yes' },
+    { type: 'html', line: 1, comment: 'yes' },
+    { type: 'not-a-block', line: 1 },
+  ];
+  for (const block of blockCases) {
+    const invalidDocument = {
+      relativePath: '.cortex/example.md',
+      blocks: [block],
+    };
+    const invalidRequest = { ...validRequest, documents: [invalidDocument] };
+    expect(() =>
+      decodeCortexArticleRequest(JSON.stringify(invalidRequest)),
+    ).toThrow();
   }
 });
 

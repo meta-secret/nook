@@ -1,12 +1,10 @@
-import type { Heading, Root, RootContent } from 'mdast';
-import remarkGfm from 'remark-gfm';
-import remarkParse from 'remark-parse';
-import { unified } from 'unified';
 import {
   CortexArticleFindingCode,
   type AuditCortexArticleStructureRequest,
+  type CortexArticleBlock,
   type CortexArticleDocument,
   type CortexArticleFinding,
+  type CortexArticleHeadingBlock,
   type CortexArticleStructureResult,
 } from './domain.ts';
 
@@ -16,7 +14,7 @@ type VerifyCortexArticleStructureResultRequest = {
 };
 
 type VerifiedDocument = CortexArticleDocument & {
-  readonly root: Root;
+  readonly root: { readonly children: readonly CortexArticleBlock[] };
 };
 
 type VerifyDocumentRequest = {
@@ -25,8 +23,8 @@ type VerifyDocumentRequest = {
 };
 
 type VerifyArticleRequest = VerifyDocumentRequest & {
-  readonly heading: Heading;
-  readonly nodes: readonly RootContent[];
+  readonly heading: CortexArticleHeadingBlock;
+  readonly nodes: readonly CortexArticleBlock[];
 };
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
@@ -123,10 +121,7 @@ function verifyMigrationLedger(
 }
 
 function parseDocument(document: CortexArticleDocument): VerifiedDocument {
-  const root = unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .parse(document.content);
+  const root = { children: document.blocks };
   return { ...document, root };
 }
 
@@ -167,7 +162,7 @@ function verifyDocument(request: VerifyDocumentRequest): void {
 }
 
 type FindContentStartRequest = {
-  readonly children: readonly RootContent[];
+  readonly children: readonly CortexArticleBlock[];
   readonly mapIndex: number;
 };
 
@@ -184,13 +179,13 @@ function findContentStart(request: FindContentStartRequest): number {
 }
 
 type OwnedArticleNodesRequest = {
-  readonly children: readonly RootContent[];
+  readonly children: readonly CortexArticleBlock[];
   readonly headingIndex: number;
 };
 
 function ownedArticleNodes(
   request: OwnedArticleNodesRequest,
-): readonly RootContent[] {
+): readonly CortexArticleBlock[] {
   const heading = request.children[request.headingIndex];
   if (!heading || heading.type !== 'heading') return [];
   let end = request.children.length;
@@ -245,27 +240,24 @@ function verifyArticle(request: VerifyArticleRequest): void {
   }
 }
 
-function isVisibleNode(node: RootContent): boolean {
+function isVisibleNode(node: CortexArticleBlock): boolean {
   return node.type !== 'heading' && !isTransparentNode(node);
 }
 
-function isTransparentNode(node: RootContent): boolean {
-  return (
-    node.type === 'definition' ||
-    (node.type === 'html' && /^\s*<!--[\s\S]*-->\s*$/u.test(node.value))
-  );
+function isTransparentNode(node: CortexArticleBlock): boolean {
+  return node.type === 'definition' || (node.type === 'html' && node.comment);
 }
 
-function isHeading(node: RootContent): node is Heading {
+function isHeading(
+  node: CortexArticleBlock,
+): node is CortexArticleHeadingBlock {
   return node.type === 'heading';
 }
 
-function nodeText(node: RootContent): string {
-  if ('value' in node && typeof node.value === 'string') return node.value;
-  if (!('children' in node)) return '';
-  return node.children.map((child) => nodeText(child as RootContent)).join('');
+function nodeText(node: CortexArticleBlock): string {
+  return node.type === 'heading' ? node.text : '';
 }
 
-function nodeLine(node: RootContent): number {
-  return node.position?.start.line ?? 1;
+function nodeLine(node: CortexArticleBlock): number {
+  return node.line;
 }

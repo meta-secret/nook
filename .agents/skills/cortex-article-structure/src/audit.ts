@@ -1,16 +1,14 @@
-import type { Heading, Root, RootContent } from 'mdast';
-import remarkGfm from 'remark-gfm';
-import remarkParse from 'remark-parse';
-import { unified } from 'unified';
 import {
   CortexArticleFindingCode,
   type AuditCortexArticleStructureRequest,
+  type CortexArticleBlock,
   type CortexArticleDocument,
   type CortexArticleFinding,
+  type CortexArticleHeadingBlock,
 } from './domain.ts';
 
 type ParsedArticleDocument = CortexArticleDocument & {
-  readonly root: Root;
+  readonly root: { readonly children: readonly CortexArticleBlock[] };
 };
 
 type AddFindingArgs = {
@@ -35,8 +33,8 @@ type AuditDocumentArgs = {
 };
 
 type AuditArticleArgs = AuditDocumentArgs & {
-  readonly heading: Heading;
-  readonly sectionNodes: readonly RootContent[];
+  readonly heading: CortexArticleHeadingBlock;
+  readonly sectionNodes: readonly CortexArticleBlock[];
 };
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
@@ -70,10 +68,7 @@ export function auditCortexArticleStructure(
 }
 
 function parseDocument(document: CortexArticleDocument): ParsedArticleDocument {
-  const root = unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .parse(document.content);
+  const root = { children: document.blocks };
   return { ...document, root };
 }
 
@@ -190,7 +185,7 @@ function auditDocument(args: AuditDocumentArgs): void {
 }
 
 type FindContentStartArgs = {
-  readonly children: readonly RootContent[];
+  readonly children: readonly CortexArticleBlock[];
   readonly mapIndex: number;
 };
 
@@ -209,13 +204,13 @@ function findContentStart(args: FindContentStartArgs): number {
 }
 
 type OwnedSectionNodesArgs = {
-  readonly children: readonly RootContent[];
+  readonly children: readonly CortexArticleBlock[];
   readonly headingIndex: number;
 };
 
 function ownedSectionNodes(
   args: OwnedSectionNodesArgs,
-): readonly RootContent[] {
+): readonly CortexArticleBlock[] {
   const heading = args.children[args.headingIndex] ?? false;
   if (heading === false || heading.type !== 'heading') {
     return [];
@@ -252,7 +247,7 @@ function auditArticle(args: AuditArticleArgs): void {
   auditProcedure(args);
 }
 
-function isVisibleArticleNode(node: RootContent): boolean {
+function isVisibleArticleNode(node: CortexArticleBlock): boolean {
   return node.type !== 'heading' && !isTransparentArticleNode(node);
 }
 
@@ -283,12 +278,12 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
   }
 }
 
-function isTransparentArticleNode(node: RootContent): boolean {
+function isTransparentArticleNode(node: CortexArticleBlock): boolean {
   return node.type === 'definition' || isInvisibleHtmlComment(node);
 }
 
-function isInvisibleHtmlComment(node: RootContent): boolean {
-  return node.type === 'html' && /^\s*<!--[\s\S]*-->\s*$/.test(node.value);
+function isInvisibleHtmlComment(node: CortexArticleBlock): boolean {
+  return node.type === 'html' && node.comment;
 }
 
 function auditProcedure(args: AuditArticleArgs): void {
@@ -311,22 +306,18 @@ function auditProcedure(args: AuditArticleArgs): void {
   addFinding(findingArgs);
 }
 
-function isHeading(node: RootContent): node is Heading {
+function isHeading(
+  node: CortexArticleBlock,
+): node is CortexArticleHeadingBlock {
   return node.type === 'heading';
 }
 
-function nodeText(node: RootContent): string {
-  if ('value' in node && typeof node.value === 'string') {
-    return node.value;
-  }
-  if (!('children' in node)) {
-    return '';
-  }
-  return node.children.map((child) => nodeText(child as RootContent)).join('');
+function nodeText(node: CortexArticleBlock): string {
+  return node.type === 'heading' ? node.text : '';
 }
 
-function nodeLine(node: RootContent): number {
-  return node.position?.start.line ?? 1;
+function nodeLine(node: CortexArticleBlock): number {
+  return node.line;
 }
 
 function addFinding(args: AddFindingArgs): void {

@@ -129,9 +129,13 @@ Do not add an empty block merely because the label exists in this standard.
 
 ## Mechanical enforcement
 
-The skill-owned TypeScript capability parses the Markdown syntax tree. Loom
-materializes bounded inputs, invokes the statically registered capability, and
-aggregates its verified findings into the mandatory Cortex audit.
+Loom parses raw Markdown with the trusted host parser. It projects only
+root-level syntax into a closed, source-lined block contract. Raw Markdown does
+not enter the capability container.
+
+The skill-owned TypeScript capability evaluates article policy over those
+blocks. It independently verifies its result before Loom aggregates the
+findings into the mandatory Cortex audit.
 
 It rejects mechanically provable failures:
 

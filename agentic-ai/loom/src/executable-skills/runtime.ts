@@ -286,8 +286,6 @@ function skillDockerfile(closureSha256: string): string {
     `LABEL ${SEALED_IMAGE_LABEL}=${closureSha256}`,
     `LABEL ${SEALED_RECIPE_LABEL}=RECIPE_SHA_PLACEHOLDER`,
     `WORKDIR ${CONTAINER_SKILLS_ROOT}`,
-    'COPY package.json bun.lock ./',
-    'RUN bun install --frozen-lockfile --production --ignore-scripts',
     'COPY . .',
     'USER 65532:65532',
     '',

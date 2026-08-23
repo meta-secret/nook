@@ -116,10 +116,13 @@ Loom owns:
 Each capability invocation runs in a fresh container under the manifest's
 enforced `docker-read-only` policy:
 
-- the staged transitive source and locked dependency closure is materialized
-  from one immutable Git index tree;
-- a content-addressed image is built from that closure with dependency scripts
-  disabled;
+- the staged transitive local-source closure is materialized from one immutable
+  Git index tree;
+- package metadata and the lockfile remain bound provenance inputs;
+- external runtime package declarations and imports are forbidden;
+- type-only and test-tooling packages never enter the executable source graph;
+- a content-addressed image is built from audited local sources without a
+  package installation step;
 - only the serialized request enters the running container;
 - the container root filesystem is read-only, with no host bind mounts;
 - the repository root and Docker socket are absent;
@@ -131,10 +134,19 @@ enforced `docker-read-only` policy:
 The execution-kind field requests a policy. It is not evidence that the policy
 was applied. Loom emits a verified receipt only after the pinned container
 exits successfully and its bounded output passes the registered contract. The
-receipt binds the Git index tree, recursive source-and-lock closure digest, and
+receipt binds the Git index tree, recursive source-and-metadata closure digest, and
 inspected execution-image digest. Worktree changes to capability source or
 dependency metadata must be staged before execution so one invocation cannot
 mix versions.
+
+The first executable capability uses trusted host Markdown parsing. Loom
+projects the syntax tree into a closed block DTO before container execution.
+Raw Markdown does not enter the skill request. The skill owns only article
+policy and independent result verification over that DTO.
+
+Runtime package support remains out of scope until Loom can audit and seal the
+complete locked dependency source closure. Declaring or importing a package
+must fail before image construction.
 
 On deadline expiry, Loom force-removes the named container, terminates the
 client process, waits for teardown, and discards candidate output. Promise

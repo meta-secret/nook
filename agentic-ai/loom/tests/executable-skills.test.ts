@@ -251,7 +251,7 @@ test('host transport matches the isolated request and result contract', () => {
     documents: [
       {
         relativePath: '.cortex/example.md',
-        content: '# Example\n',
+        blocks: [{ depth: 1, line: 1, text: 'Example', type: 'heading' }],
       },
     ],
     migrationBaselineEntries: false,
@@ -382,6 +382,7 @@ test('container denies repository writes and network access', async () => {
     const containment = JSON.parse(result.serializedOutput);
     expect(containment.credentialAbsent).toBe(true);
     expect(containment.networkBlocked).toBe(true);
+    expect(containment.nodeModulesAbsent).toBe(true);
     expect(containment.writeBlocked).toBe(true);
     expect(Array.isArray(containment.environment)).toBe(true);
     expect(containment.environment.join('\n')).not.toContain(proxySentinel);

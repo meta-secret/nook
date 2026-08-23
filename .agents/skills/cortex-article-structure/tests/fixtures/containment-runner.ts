@@ -1,4 +1,4 @@
-export {};
+import { lstat } from 'node:fs/promises';
 
 await Bun.stdin.text();
 
@@ -21,8 +21,18 @@ try {
 
 const credentialAbsent =
   typeof Bun.env.NOOK_EXECUTABLE_SKILL_HOST_CREDENTIAL !== 'string';
+const nodeModulesAbsent = await lstat('/skills/node_modules').then(
+  () => false,
+  (error: NodeJS.ErrnoException) => error.code === 'ENOENT',
+);
 const environment = Object.keys(Bun.env)
   .sort()
   .map((name) => `${name}=${Bun.env[name] ?? ''}`);
-const result = { credentialAbsent, environment, networkBlocked, writeBlocked };
+const result = {
+  credentialAbsent,
+  environment,
+  networkBlocked,
+  nodeModulesAbsent,
+  writeBlocked,
+};
 await Bun.write(Bun.stdout, JSON.stringify(result));

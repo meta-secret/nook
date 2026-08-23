@@ -1,3 +1,8 @@
+import type { RootContent } from 'mdast';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+
 export enum CortexArticleFindingCode {
   InvalidMigrationLedger = 'invalid-article-migration-ledger',
   EmptyArticle = 'empty-article',
@@ -26,6 +31,45 @@ export type EncodeCortexArticleRequestArgs = {
   };
 };
 
+enum CortexArticleRequestBlockKind {
+  Definition = 'definition',
+  Heading = 'heading',
+  Html = 'html',
+  List = 'list',
+  Paragraph = 'paragraph',
+  Structure = 'structure',
+}
+
+type CortexArticleRequestBlock =
+  | {
+      readonly depth: number;
+      readonly line: number;
+      readonly text: string;
+      readonly type: CortexArticleRequestBlockKind.Heading;
+    }
+  | {
+      readonly line: number;
+      readonly type:
+        | CortexArticleRequestBlockKind.Paragraph
+        | CortexArticleRequestBlockKind.Definition
+        | CortexArticleRequestBlockKind.Structure;
+    }
+  | {
+      readonly line: number;
+      readonly ordered: boolean;
+      readonly type: CortexArticleRequestBlockKind.List;
+    }
+  | {
+      readonly comment: boolean;
+      readonly line: number;
+      readonly type: CortexArticleRequestBlockKind.Html;
+    };
+
+type NormalizedRequestDocument = {
+  readonly relativePath: string;
+  readonly blocks: readonly CortexArticleRequestBlock[];
+};
+
 type ResultTransport = {
   readonly kind: string | false;
   readonly findings: readonly FindingTransport[] | false;
@@ -48,8 +92,70 @@ const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
 export function encodeCortexArticleRequest(
   args: EncodeCortexArticleRequestArgs,
 ): string {
-  const request = { kind: REQUEST_KIND, ...args };
+  const documents = args.documents.map(normalizeDocument);
+  const request = {
+    kind: REQUEST_KIND,
+    documents,
+    migrationBaselineEntries: args.migrationBaselineEntries,
+    migrationLedger: args.migrationLedger,
+  };
   return JSON.stringify(request);
+}
+
+function normalizeDocument(
+  document: CortexArticleRequestDocument,
+): NormalizedRequestDocument {
+  const parser = unified().use(remarkParse).use(remarkGfm);
+  const root = parser.parse(document.content);
+  return {
+    relativePath: document.relativePath,
+    blocks: root.children.map(normalizeBlock),
+  };
+}
+
+function normalizeBlock(node: RootContent): CortexArticleRequestBlock {
+  const line = node.position?.start.line;
+  if (typeof line !== 'number' || !Number.isSafeInteger(line) || line < 1) {
+    throw new Error('Cortex article source block has no valid source line.');
+  }
+  if (node.type === 'heading') {
+    return {
+      depth: node.depth,
+      line,
+      text: nodeText(node),
+      type: CortexArticleRequestBlockKind.Heading,
+    };
+  }
+  if (node.type === 'paragraph' || node.type === 'definition') {
+    return {
+      line,
+      type:
+        node.type === 'paragraph'
+          ? CortexArticleRequestBlockKind.Paragraph
+          : CortexArticleRequestBlockKind.Definition,
+    };
+  }
+  if (node.type === 'list') {
+    return {
+      line,
+      ordered: node.ordered === true,
+      type: CortexArticleRequestBlockKind.List,
+    };
+  }
+  if (node.type === 'html') {
+    return {
+      comment: /^\s*<!--[\s\S]*-->\s*$/u.test(node.value),
+      line,
+      type: CortexArticleRequestBlockKind.Html,
+    };
+  }
+  return { line, type: CortexArticleRequestBlockKind.Structure };
+}
+
+function nodeText(node: RootContent): string {
+  if ('value' in node && typeof node.value === 'string') return node.value;
+  if (!('children' in node)) return '';
+  return node.children.map((child) => nodeText(child as RootContent)).join('');
 }
 
 export function decodeCortexArticleResult(

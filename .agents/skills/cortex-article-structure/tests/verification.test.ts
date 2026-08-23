@@ -8,6 +8,7 @@ import {
   type CortexArticleStructureResult,
 } from '../src/domain.ts';
 import { verifyCortexArticleStructureResult } from '../src/verification.ts';
+import { blocksFromMarkdown } from './markdown-fixture.ts';
 
 const CONTENT = `# Recovery
 
@@ -37,7 +38,7 @@ const AUDIT_REQUEST: AuditCortexArticleStructureRequest = {
   documents: [
     {
       relativePath: '.cortex/recovery.md',
-      content: CONTENT,
+      blocks: blocksFromMarkdown(CONTENT),
     },
   ],
   migrationBaselineEntries: false,
@@ -128,7 +129,7 @@ test('rejects missing, empty, incorrect, reordered, rebound, and duplicate findi
     documents: [
       {
         relativePath: '.cortex/recovery.md',
-        content: '# Recovery\n',
+        blocks: blocksFromMarkdown('# Recovery\n'),
       },
     ],
   };
@@ -196,7 +197,12 @@ function requestForContent(
 ): AuditCortexArticleStructureRequest {
   return {
     kind: CortexArticleContractKind.Request,
-    documents: [{ relativePath: '.cortex/example.md', content }],
+    documents: [
+      {
+        relativePath: '.cortex/example.md',
+        blocks: blocksFromMarkdown(content),
+      },
+    ],
     migrationBaselineEntries: false,
     migrationLedger: {
       relativePath: '.cortex/article-structure-migration.txt',
@@ -223,10 +229,13 @@ function invalidMigrationLedgerRequest(): AuditCortexArticleStructureRequest {
   return {
     kind: CortexArticleContractKind.Request,
     documents: [
-      { relativePath: '.cortex/exempted.md', content: '# Exempted\n' },
+      {
+        relativePath: '.cortex/exempted.md',
+        blocks: blocksFromMarkdown('# Exempted\n'),
+      },
       {
         relativePath: '.cortex/post-baseline.md',
-        content: '# Post baseline\n',
+        blocks: blocksFromMarkdown('# Post baseline\n'),
       },
     ],
     migrationBaselineEntries: ['.cortex/exempted.md'],

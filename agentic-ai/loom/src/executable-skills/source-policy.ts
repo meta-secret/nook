@@ -94,7 +94,7 @@ export function analyzeExecutableSkillSource(
     }
     if (
       ts.isExportDeclaration(node) &&
-      !node.isTypeOnly &&
+      !isTypeOnlyExport(node) &&
       node.moduleSpecifier &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
@@ -117,6 +117,11 @@ export function analyzeExecutableSkillSource(
     moduleSpecifiers.some(isForbiddenRuntimeModule)
   ) {
     throw new Error('Executable skill requests a forbidden ambient module.');
+  }
+  if (moduleSpecifiers.some(isExternalRuntimePackage)) {
+    throw new Error(
+      'Executable skill forbids external runtime package imports.',
+    );
   }
   return { moduleSpecifiers };
 }
@@ -339,6 +344,10 @@ function isForbiddenRuntimeModule(specifier: string): boolean {
   );
 }
 
+function isExternalRuntimePackage(specifier: string): boolean {
+  return !specifier.startsWith('.') && !specifier.startsWith('node:');
+}
+
 function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
   const clause = node.importClause;
   if (!clause) return false;
@@ -348,5 +357,16 @@ function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
     ts.isNamedImports(clause.namedBindings) &&
     clause.namedBindings.elements.length > 0 &&
     clause.namedBindings.elements.every((element) => element.isTypeOnly)
+  );
+}
+
+function isTypeOnlyExport(node: ts.ExportDeclaration): boolean {
+  if (node.isTypeOnly) return true;
+  const clause = node.exportClause;
+  return Boolean(
+    clause &&
+    ts.isNamedExports(clause) &&
+    clause.elements.length > 0 &&
+    clause.elements.every((element) => element.isTypeOnly),
   );
 }

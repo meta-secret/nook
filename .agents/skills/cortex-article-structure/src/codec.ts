@@ -1,7 +1,9 @@
 import {
   CortexArticleFindingCode,
+  CortexArticleBlockKind,
   CortexArticleContractKind,
   type AuditCortexArticleStructureRequest,
+  type CortexArticleBlock,
   type CortexArticleDocument,
   type CortexArticleFinding,
   type CortexArticleMigrationLedger,
@@ -10,7 +12,16 @@ import {
 
 type CortexArticleDocumentTransport = {
   readonly relativePath: string | false;
-  readonly content: string | false;
+  readonly blocks: readonly CortexArticleBlockTransport[] | false;
+};
+
+type CortexArticleBlockTransport = {
+  readonly comment?: boolean;
+  readonly depth?: number;
+  readonly line: number | false;
+  readonly ordered?: boolean;
+  readonly text?: string;
+  readonly type: string | false;
 };
 
 type CortexArticleMigrationLedgerTransport = {
@@ -41,6 +52,7 @@ type ExactKeysRequest = {
   readonly value:
     | CortexArticleRequestTransport
     | CortexArticleDocumentTransport
+    | CortexArticleBlockTransport
     | CortexArticleMigrationLedgerTransport
     | CortexArticleResultTransport
     | CortexArticleFindingTransport;
@@ -53,7 +65,11 @@ const REQUEST_KEYS = [
   'migrationBaselineEntries',
   'migrationLedger',
 ] as const;
-const DOCUMENT_KEYS = ['relativePath', 'content'] as const;
+const DOCUMENT_KEYS = ['relativePath', 'blocks'] as const;
+const SIMPLE_BLOCK_KEYS = ['line', 'type'] as const;
+const HEADING_BLOCK_KEYS = ['depth', 'line', 'text', 'type'] as const;
+const LIST_BLOCK_KEYS = ['line', 'ordered', 'type'] as const;
+const HTML_BLOCK_KEYS = ['comment', 'line', 'type'] as const;
 const LEDGER_KEYS = ['relativePath', 'content'] as const;
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
@@ -139,14 +155,106 @@ function decodeDocument(
     !transport ||
     !hasExactKeys(exactKeysRequest) ||
     !isSafeRelativePath(transport.relativePath) ||
-    typeof transport.content !== 'string'
+    !Array.isArray(transport.blocks) ||
+    transport.blocks.length > 100_000
   ) {
     throw new Error('Invalid Cortex article document.');
   }
   return {
     relativePath: transport.relativePath,
-    content: transport.content,
+    blocks: transport.blocks.map(decodeBlock),
   };
+}
+
+function decodeBlock(
+  transport: CortexArticleBlockTransport,
+): CortexArticleBlock {
+  if (!transport || !isPositiveLine(transport.line)) {
+    throw new Error('Invalid Cortex article block.');
+  }
+  const line = transport.line;
+  if (transport.type === 'heading') {
+    const exactKeysRequest: ExactKeysRequest = {
+      value: transport,
+      expected: HEADING_BLOCK_KEYS,
+    };
+    if (
+      !hasExactKeys(exactKeysRequest) ||
+      typeof transport.depth !== 'number' ||
+      !Number.isInteger(transport.depth) ||
+      transport.depth < 1 ||
+      transport.depth > 6 ||
+      typeof transport.text !== 'string' ||
+      transport.text.length > 4096
+    ) {
+      throw new Error('Invalid Cortex article heading block.');
+    }
+    return {
+      depth: transport.depth,
+      line,
+      text: transport.text,
+      type: CortexArticleBlockKind.Heading,
+    };
+  }
+  if (transport.type === 'list') {
+    const exactKeysRequest: ExactKeysRequest = {
+      value: transport,
+      expected: LIST_BLOCK_KEYS,
+    };
+    if (
+      !hasExactKeys(exactKeysRequest) ||
+      typeof transport.ordered !== 'boolean'
+    ) {
+      throw new Error('Invalid Cortex article list block.');
+    }
+    return {
+      line,
+      ordered: transport.ordered,
+      type: CortexArticleBlockKind.List,
+    };
+  }
+  if (transport.type === 'html') {
+    const exactKeysRequest: ExactKeysRequest = {
+      value: transport,
+      expected: HTML_BLOCK_KEYS,
+    };
+    if (
+      !hasExactKeys(exactKeysRequest) ||
+      typeof transport.comment !== 'boolean'
+    ) {
+      throw new Error('Invalid Cortex article HTML block.');
+    }
+    return {
+      comment: transport.comment,
+      line,
+      type: CortexArticleBlockKind.Html,
+    };
+  }
+  if (
+    transport.type === 'paragraph' ||
+    transport.type === 'definition' ||
+    transport.type === 'structure'
+  ) {
+    const exactKeysRequest: ExactKeysRequest = {
+      value: transport,
+      expected: SIMPLE_BLOCK_KEYS,
+    };
+    if (!hasExactKeys(exactKeysRequest)) {
+      throw new Error('Invalid Cortex article simple block.');
+    }
+    const type =
+      transport.type === 'paragraph'
+        ? CortexArticleBlockKind.Paragraph
+        : transport.type === 'definition'
+          ? CortexArticleBlockKind.Definition
+          : CortexArticleBlockKind.Structure;
+    return { line, type };
+  }
+  throw new Error('Invalid Cortex article block type.');
+}
+
+function isPositiveLine(value: number | false): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
 function decodeLedger(

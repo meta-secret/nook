@@ -105,7 +105,7 @@ test('materializes only the exact executable-skill files granted to code refacto
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'structural-code-scope-'));
   const removeOptions: RmOptions = { recursive: true, force: true };
   const revisionRequest: RunCommandArgs = {
-    args: ['rev-parse', 'HEAD'],
+    args: ['write-tree'],
     command: 'git',
     cwd: REPO_ROOT,
   };

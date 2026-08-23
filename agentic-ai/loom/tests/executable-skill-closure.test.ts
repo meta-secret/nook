@@ -61,6 +61,21 @@ test('materializes an immutable recursive staged skill closure', async () => {
           'utf8',
         ),
       ).toContain('sealed dependency');
+      for (const excludedPath of [
+        'package.json',
+        'bun.lock',
+        'stub-skill/executable-skill.json',
+        'node_modules',
+      ]) {
+        expect(
+          Boolean(
+            lstatSync(
+              path.join(closure.contextDirectory, excludedPath),
+              LSTAT_MISSING_OPTIONS,
+            ),
+          ),
+        ).toBe(false);
+      }
     } finally {
       const contextDirectory = closure.contextDirectory;
       closure.dispose();
@@ -240,6 +255,17 @@ test('rejects forbidden capabilities in recursively imported sources', async () 
     "import { spawnSync as launch } from 'bun';\nlaunch(['true']);\n",
     "import * as runtime from 'bun';\nruntime.spawn(['true']);\n",
     "import { dlopen } from 'bun:ffi';\nvoid dlopen;\n",
+    "import 'runtime-package';\n",
+    "import value from '@scope/runtime/subpath';\nvoid value;\n",
+    "export { value } from 'runtime-package';\n",
+    "export * from '@scope/runtime/subpath';\n",
+    "import runtime = require('runtime-package');\nvoid runtime;\n",
+    "import 'npm:runtime-package@1';\n",
+    "import 'jsr:@scope/runtime';\n",
+    "import 'file:./runtime.ts';\n",
+    "import 'https://example.com/runtime.ts';\n",
+    "import 'data:text/javascript,export default 1';\n",
+    "import '#runtime-alias';\n",
   ];
   for (const source of forbiddenSources) {
     const repositoryRoot = createClosureRepository();
@@ -259,11 +285,13 @@ test('rejects forbidden capabilities in recursively imported sources', async () 
   }
 });
 
-test('keeps type-only Bun imports outside the runtime capability graph', async () => {
+test('keeps type-only external imports outside the runtime capability graph', async () => {
   const runnerSource =
     "import type { Subprocess } from 'bun';\n" +
+    "import type { ExternalType } from 'runtime-package';\n" +
     "import { value } from './dependency.ts';\n" +
     'export type ProcessType = Subprocess;\n' +
+    "export type { ExternalType } from '@scope/runtime-types';\n" +
     'void value;\n';
   const repositoryRoot = createClosureRepository(runnerSource);
   try {
@@ -273,6 +301,52 @@ test('keeps type-only Bun imports outside the runtime capability graph', async (
     closure.dispose();
   } finally {
     rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+  }
+});
+
+test('rejects declared external runtime packages before materialization', async () => {
+  const repositoryRoot = createClosureRepository();
+  try {
+    const packagePath = path.join(
+      repositoryRoot,
+      '.agents/skills/package.json',
+    );
+    const packageValue = {
+      name: 'closure-fixture',
+      dependencies: { 'runtime-package': '1.0.0' },
+    };
+    writeFileSync(packagePath, JSON.stringify(packageValue));
+    const gitOptions = { cwd: repositoryRoot };
+    execFileSync('git', ['add', '.'], gitOptions);
+    await expect(
+      materializeSkillClosure(closureRequestFor(repositoryRoot)),
+    ).rejects.toThrow('forbids declared external runtime packages');
+  } finally {
+    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+  }
+});
+
+test('rejects malformed runtime dependency declarations', async () => {
+  for (const packageText of [
+    '{"name":"closure-fixture","dependencies":[]}',
+    '{"name":"closure-fixture","dependencies":"runtime-package"}',
+    '{"name":"closure-fixture","dependencies":null}',
+    '{"name":"closure-fixture","dependencies":{"runtime-package":1}}',
+  ]) {
+    const repositoryRoot = createClosureRepository();
+    try {
+      writeFileSync(
+        path.join(repositoryRoot, '.agents/skills/package.json'),
+        packageText,
+      );
+      const gitOptions = { cwd: repositoryRoot };
+      execFileSync('git', ['add', '.'], gitOptions);
+      await expect(
+        materializeSkillClosure(closureRequestFor(repositoryRoot)),
+      ).rejects.toThrow();
+    } finally {
+      rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+    }
   }
 });
 
