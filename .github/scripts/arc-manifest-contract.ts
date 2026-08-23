@@ -585,6 +585,8 @@ tasks.requireAll([
   "arc:cache-primary:ensure:",
   "arc-cache-primary-ssh-target",
   "arc-build-ssh-targets",
+  'mktemp "$target_file.next.XXXXXX"',
+  'mktemp "$inventory_file.next.XXXXXX"',
   "synchronized to every build node",
   "Imported the pinned ARC BuildKit wrapper into every build node",
   "nook.nokey.sh/ssh-target",

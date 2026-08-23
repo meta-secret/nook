@@ -76,10 +76,12 @@ tasks:
         target_dir="$HOME/.nook/infra"
         target_file="$target_dir/arc-cache-primary-ssh-target"
         inventory_file="$target_dir/arc-build-ssh-targets"
-        target_next="$target_file.next"
-        inventory_next="$inventory_file.next"
         install -d -m 0700 "$HOME/.nook" "$target_dir"
         umask 077
+        target_next="$(mktemp "$target_file.next.XXXXXX")"
+        inventory_next="$(mktemp "$inventory_file.next.XXXXXX")"
+        cleanup() { rm -f "$target_next" "$inventory_next"; }
+        trap cleanup EXIT
         : > "$inventory_next"
         primary_target=""
         while IFS=$'\t' read -r is_primary node target; do
@@ -107,6 +109,7 @@ tasks:
         printf '%s\n' "$primary_target" > "$target_next"
         mv "$target_next" "$target_file"
         mv "$inventory_next" "$inventory_file"
+        trap - EXIT
         chmod 0600 "$target_file" "$inventory_file"
         echo "ARC build SSH inventory persisted under $target_dir"
         BASH
