@@ -38,11 +38,15 @@ not keep warm runners.
 
 - `nook-k0s` serves parallel ordinary trusted jobs on every qualified node.
 - `nook-k0s-cache` serves serialized Main cache producers on one primary node.
-- `nook-k0s-hive` serves Hive Rust verification.
+- `nook-k0s-hive` serves Hive Rust verification on every qualified node.
 - The general and Hive scale sets each advertise `maxRunners: 10`.
 - The cache-primary set advertises two runners, although workflow dependencies
   permit only one producer at a time.
 - A preparation taint blocks an unqualified compute node.
+- Preferred node affinity orders general and Hive placement: Rise-S is
+  `primary`, the home 7950X3D worker is `secondary`, and KS-6 is `overflow`.
+- Wide, soft hostname spreading remains a safety valve. It does not block a job
+  when only one node has capacity.
 - Only the cache-primary scale set requires
   `nook.nokey.sh/arc-cache-primary=true`.
 
@@ -59,6 +63,12 @@ Pod overhead.
 One 64 GiB compute node can sustain ten ordinary microVMs or seven
 memory-saturated Hive microVMs. A second compute node is required before ten
 Hive jobs can run at their full memory limits without overcommit.
+
+The home worker owns no durable service or cache authority. It establishes
+WireGuard outbound from behind NAT, so neither a public address nor an inbound
+home-router port is required. Loss of the home network removes only disposable
+runner capacity; GitHub keeps queued jobs and Kubernetes schedules new Pods on
+the remaining qualified nodes.
 
 ## Job-scoped BuildKit state
 
@@ -141,9 +151,10 @@ cluster grows.
 
 Every node labeled `nook.nokey.sh/arc-build=true` receives its own local pool,
 cloner service, and pinned BuildKit image. General and Hive jobs may use any
-qualified build node. Exactly one node also owns the host verifier credential
-and `nook.nokey.sh/arc-cache-primary=true`; only the Main producer scale set
-uses that selector.
+qualified build node, including the KS-6 control-storage node. Exactly one node
+also owns the host verifier credential and
+`nook.nokey.sh/arc-cache-primary=true`. Only the Main producer scale set uses
+that selector.
 
 ## Credential ownership
 

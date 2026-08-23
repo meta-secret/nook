@@ -18,7 +18,11 @@ hive_values["minRunners"] = 0
 hive_values["maxRunners"] = 10
 pod_template = hive_values.fetch("template")
 pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/role"] = "arc-hive-runner"
+pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/arc-spread-group"] = "hive"
 pod = pod_template.fetch("spec")
+pod.fetch("topologySpreadConstraints").fetch(0).fetch("labelSelector").fetch("matchLabels")[
+  "nook.nokey.sh/arc-spread-group"
+] = "hive"
 pod["runtimeClassName"] = "kata-qemu-runtime-rs"
 pod.fetch("initContainers").reject! do |container|
   %w[prepare-container-runtime-state container-runtime].include?(container["name"])

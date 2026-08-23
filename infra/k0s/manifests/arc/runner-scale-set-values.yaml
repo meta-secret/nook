@@ -35,9 +35,41 @@ template:
   metadata:
     labels:
       nook.nokey.sh/role: arc-runner
+      nook.nokey.sh/arc-spread-group: general
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [primary]
+          - weight: 50
+            preference:
+              matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [secondary]
+          - weight: 1
+            preference:
+              matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [overflow]
+    topologySpreadConstraints:
+      - maxSkew: 8
+        minDomains: 2
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        nodeAffinityPolicy: Honor
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            nook.nokey.sh/arc-spread-group: general
     runtimeClassName: kata-qemu-runtime-rs
     securityContext:
       fsGroup: 1001

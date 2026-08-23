@@ -179,6 +179,20 @@ runners.requireAll([
   "runAsNonRoot: true",
   "runtimeClassName: kata-qemu-runtime-rs",
   'nodeSelector:\n      nook.nokey.sh/arc-build: "true"',
+  "preferredDuringSchedulingIgnoredDuringExecution:",
+  "weight: 100",
+  "values: [primary]",
+  "weight: 50",
+  "values: [secondary]",
+  "weight: 1",
+  "values: [overflow]",
+  "topologySpreadConstraints:",
+  "maxSkew: 8",
+  "topologyKey: kubernetes.io/hostname",
+  "whenUnsatisfiable: ScheduleAnyway",
+  "nodeAffinityPolicy: Honor",
+  "nodeTaintsPolicy: Honor",
+  "nook.nokey.sh/arc-spread-group: general",
   "--oci-worker-snapshotter",
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
@@ -242,6 +256,9 @@ kataTasks.requireAll([
 controller.requireAll([
   "updateStrategy: eventual",
   "nodeSelector:\n  nook.nokey.sh/node-role: control-storage",
+  "tolerations:\n  - key: nook.nokey.sh/arc-build",
+  "value: preparing",
+  "effect: NoSchedule",
 ]);
 network.require("policyTypes:\n    - Ingress");
 workerTasks.requireAll([
@@ -637,6 +654,8 @@ cacheRunners.requireAll([
   "runnerScaleSetName: nook-k0s-cache",
   "maxRunners: 2",
   'nook.nokey.sh/arc-cache-primary: "true"',
+  "nook.nokey.sh/arc-spread-group: cache",
+  "minDomains: 1",
 ]);
 tasks.requireAll([
   'credential_store="$credential_dir/arc-controller-token"',
@@ -649,6 +668,13 @@ tasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",
   "arc:build-host:resolve:",
   "arc:cache-primary:ensure:",
+  "arc:controller-build:prepare:",
+  "arc:controller-build:activate:",
+  "nook.nokey.sh/node-role=control-storage",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule",
+  "nook.nokey.sh/arc-tier=overflow",
+  "nook.nokey.sh/arc-tier=primary --overwrite",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
   "arc-cache-primary-ssh-target",
   "arc-build-ssh-targets",
   'mktemp "$target_file.next.XXXXXX"',
@@ -657,6 +683,9 @@ tasks.requireAll([
   "sudo -n rm -f /etc/nook/arc-cache-verifier-token",
   "Imported the pinned ARC BuildKit wrapper into every build node",
   "nook.nokey.sh/ssh-target",
+  "nook.nokey.sh/infra-remote-dir",
+  "build_remote_dir",
+  'printf "%s\\n" "$HOME/.local/share/nook-infra"',
 ]);
 buildkitCloner.forbid('test -s "$github_token_file"\n\nvalid_uid');
 tasks.require("ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new");
@@ -664,7 +693,17 @@ tasks.forbid("$credential_temp.normalized");
 tasks.forbid('primary_node="$(jq -r');
 workerTasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",
-  '"nook.nokey.sh/ssh-target=debian@$worker_mesh_address"',
+  '"nook.nokey.sh/ssh-target=$worker_ssh_user@$worker_mesh_address"',
+  '"nook.nokey.sh/infra-remote-dir=$remote_dir"',
+  "INFRA_WORKER_ENDPOINT_MODE",
+  "INFRA_WORKER_ARC_TIER",
+  'test "$worker_endpoint_mode" = roaming',
+  "PersistentKeepalive = 25",
+  "nook k0s mesh wireguard roaming",
+  "wg syncconf wg-nook",
+  'ip route replace "$worker_pod_cidr" dev wg-nook',
+  'if test "$worker_endpoint_mode" = direct; then\n          configure_worker_firewall',
+  "debian:13|ubuntu:26.04",
   '--kubelet-extra-args="--node-ip=$worker_mesh_address',
   '--arg address "$worker_mesh_address"',
   '--arg name "$worker_node_name" --arg address "$worker_mesh_address"',
@@ -676,9 +715,10 @@ workerTasks.requireAll([
   'comment "nook k0s worker wireguard"',
   '/comment "nook k0s worker /',
   'grep -Ev \'^[[:space:]]*flush ruleset[[:space:]]*$\' "$config" > "$bootstrap"',
-  '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"',
+  '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute,nook.nokey.sh/arc-tier=$worker_arc_tier"',
 ]);
 workerTasks.forbid('sudo -n nft --file /etc/nftables.conf');
+workerTasks.forbid("systemctl restart wg-quick@wg-nook.service");
 workerTasks.forbid(
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"',
 );

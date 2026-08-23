@@ -4,8 +4,8 @@ This directory is deployed only through `infra/Taskfile.yml`. From the
 repository root, `task infra:deploy` validates the target, installs k0s and
 Kata, deploys persistent Neo4j and Zot, publishes the Hive image to Zot through
 the target's loopback endpoint, and rolls out four Kata-backed workers. A
-dedicated compute node joins through WireGuard and receives only ephemeral ARC
-runner Pods.
+compute nodes join through WireGuard and receive only ephemeral ARC runner
+Pods.
 
 Pinned platform:
 
@@ -23,14 +23,24 @@ Pinned platform:
 Cluster roles:
 
 - The KS-6 node owns the control plane, Neo4j, Zot, Hive, ARC controllers, and
-  ARC listeners. It is labeled `nook.nokey.sh/node-role=control-storage`.
+  ARC listeners. It is labeled `nook.nokey.sh/node-role=control-storage` and
+  also qualifies as a slower `nook.nokey.sh/arc-build=true` runner node.
 - The Rise-S NVMe node owns ARC runner microVMs and their disposable caches. It
-  is labeled `nook.nokey.sh/arc-build=true`.
+  is labeled `nook.nokey.sh/arc-build=true`, uses ARC tier `primary`, and
+  remains the cache-primary node.
+- The home 7950X3D NVMe node is worker-only, uses ARC tier `secondary`, and
+  connects from behind NAT through an outbound WireGuard session. It owns no
+  durable cluster, registry, or cache-authority state.
+- KS-6 uses ARC tier `overflow`. Its large HDD volume retains Zot and other
+  durable services without placing registry data on runner NVMe.
 - WireGuard address `10.202.0.1` belongs to the controller. Every worker receives
   one explicit, unique address from `10.202.0.2/24`. The stable API address
   remains `10.201.0.1`. Before changing a controller peer, deployment verifies
   that any persisted peer key and Kubernetes `InternalIP` assignment identify
-  that same worker. Reusing another worker's address fails closed.
+  that same worker. Reusing another worker's address fails closed. A `direct`
+  worker has a fixed endpoint. A `roaming` worker has no public endpoint; its
+  persistent outbound handshake lets the controller learn the current NAT
+  mapping.
 - ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
   warm. The general and Hive scale sets can each create up to ten concurrent
   runners. A third cache-primary scale set owns serialized Main producers.
@@ -40,7 +50,15 @@ Join or reconcile the compute node only through the Taskfile:
 ```text
 task --taskfile infra/Taskfile.yml k0s:worker:deploy \
   INFRA_WORKER_SSH_TARGET=debian@167.114.209.184 \
-  INFRA_WORKER_MESH_ADDRESS=10.202.0.2
+  INFRA_WORKER_MESH_ADDRESS=10.202.0.2 \
+  INFRA_WORKER_ARC_TIER=primary
+
+task --taskfile infra/Taskfile.yml k0s:worker:deploy \
+  INFRA_WORKER_SSH_TARGET=ssh.bynull.link \
+  INFRA_WORKER_REMOTE_DIR=/home/bynull/.local/share/nook-infra \
+  INFRA_WORKER_MESH_ADDRESS=10.202.0.3 \
+  INFRA_WORKER_ENDPOINT_MODE=roaming \
+  INFRA_WORKER_ARC_TIER=secondary
 ```
 
 The worker stays tainted until Kata, the local cache pool, the BuildKit image,
@@ -85,7 +103,7 @@ records an existing CNI's masquerade state before
 restarting k0s; a migration replaces existing Hive workload Pod sandboxes
 automatically. Neo4j data uses the retained local PV at
 `/var/lib/hive/neo4j`; k0s uninstall never removes that directory.
-Zot uses a separate retained local PV at `/var/lib/hive/zot` and a ClusterIP
+Zot uses a separate KS-6 retained local PV at `/var/lib/hive/zot` and a ClusterIP
 Service at `10.96.90.10:5000`. Traefik publishes it at
 `https://registry.dev.nokey.sh` with htpasswd authentication. There is no host
 `:5000` listener and no `kubectl port-forward`. k0s uninstall never removes the
@@ -132,7 +150,10 @@ wait behind accepted promotion. ARC jobs therefore skip registry export, while
 hosted fallback jobs retain Zot publication for cold-node recovery.
 Only `nook-k0s-cache` requires the one `arc-cache-primary` node label, so a
 larger cluster cannot divide Main's serialized lineage among node-local seeds.
-General and Hive jobs remain horizontally schedulable. Hive keeps an
+General and Hive jobs prefer Rise-S, then the home 7950X3D worker, then KS-6.
+The preference is soft so an unavailable or resource-saturated node never
+blocks the queue. Hostname spreading has a wide skew allowance and therefore
+acts as a safety valve rather than overriding the tier order. Hive keeps an
 independent Zot publication path because its workflow may overlap Main.
 
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
@@ -141,9 +162,11 @@ Worker reconciliation rejects both mesh addresses and Kubernetes node names
 owned by another node before changing controller state. It replaces only its
 comment-owned live mesh rules in one checked nftables transaction, preserving
 Docker and every unrelated dynamic rule. Worker-side reconciliation follows
-the same comment-owned transaction rule. A fresh host creates the Nook table
-without flushing the ruleset; an existing host retains all unrelated live
-rules.
+the same comment-owned transaction rule for direct workers. A roaming worker
+is already protected by outbound NAT, retains its existing host firewall, and
+admits cluster traffic only through authenticated WireGuard. A fresh direct
+host creates the Nook table without flushing the ruleset; an existing host
+retains all unrelated live rules.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
 Pod endpoint into the workers' and Workbench dispatcher's narrow Bolt egress
 policies, including after automatic StatefulSet or kubelet replacement.

@@ -72,7 +72,7 @@ flowchart TB
     end
     end
 
-    subgraph compute["NVMe compute node"]
+    subgraph compute["Preferred NVMe compute nodes"]
       arc["Ephemeral ARC runner Pods (Kata QEMU)"]
       buildkit["Per-job BuildKit + reflink cache"]
     end
@@ -96,12 +96,13 @@ flowchart TB
 The cluster separates durable control and storage from disposable build
 compute. The control node is labeled
 `nook.nokey.sh/node-role=control-storage`. Neo4j, Zot, Hive, ARC controllers,
-and ARC listeners remain there. Compute nodes are labeled
-`nook.nokey.sh/arc-build=true`; both ARC runner scale sets select only those
-nodes. Node and Pod traffic crosses an authenticated WireGuard mesh on
-`10.202.0.0/24`. Each worker address has one owner. Before mutating a controller
-peer, deployment verifies that any persisted peer key and Kubernetes
-`InternalIP` assignment identify that same worker. Address collisions fail
+and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
+qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
+select those nodes and prefer hostname spreading. The cache-primary scale set
+remains pinned to one node. Node and Pod traffic crosses an authenticated
+WireGuard mesh on `10.202.0.0/24`. Each worker address has one owner. Before
+mutating a controller peer, deployment verifies that any persisted peer key
+and Kubernetes `InternalIP` assignment identify that same worker. Address collisions fail
 closed. The Kubernetes API retains its stable `10.201.0.1` address.
 
 Neo4j runs with the normal container runtime because it is a persistent

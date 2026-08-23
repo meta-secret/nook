@@ -23,7 +23,9 @@ This directory owns Nook's stateful server infrastructure:
   No runners stay warm: ARC creates one fresh microVM per job. Both `nook-k0s`
   and the dedicated `nook-k0s-hive` set permit ten concurrent jobs. Hive adds
   pinned Neo4j and non-root Trixie test-runtime native sidecars. Kubernetes
-  stops both helpers when the runner exits. The runtime executes exported tests
+  prefers Rise-S, then the home 7950X3D node, then KS-6 for both pools. Soft
+  hostname spreading preserves burst capacity and failover. It stops both
+  Hive helpers when the runner exits. The runtime executes exported tests
   through a private exchange volume. It does not introduce a Docker daemon.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
@@ -121,9 +123,11 @@ through cluster TLS ingress while preserving the public certificate and
 registry host.
 
 Every qualified ARC build node owns a local pool, cloner, and pinned BuildKit
-image. General and Hive runners may schedule across those nodes. Exactly one
-node carries the cache-primary label, receives the Actions-read host verifier
-credential, and runs Main cache producer jobs.
+image. The cache-primary Rise-S node has placement tier `primary`; the home
+7950X3D node is `secondary`; KS-6 is `overflow`. These tiers are preferences,
+so node failure or resource pressure immediately exposes the next eligible
+node. Exactly one node carries the cache-primary label, receives the
+Actions-read host verifier credential, and runs Main cache producer jobs.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

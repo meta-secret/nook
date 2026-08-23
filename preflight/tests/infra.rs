@@ -108,6 +108,72 @@ fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
 }
 
 #[test]
+fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
+    let values = read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
+    let controller_values = read("infra/k0s/manifests/arc/controller-values.yaml");
+    let tasks = read("infra/tasks/arc.yml");
+
+    for contract in [
+        "topologySpreadConstraints:",
+        "maxSkew: 8",
+        "topologyKey: kubernetes.io/hostname",
+        "whenUnsatisfiable: ScheduleAnyway",
+        "nodeAffinityPolicy: Honor",
+        "nodeTaintsPolicy: Honor",
+        "nook.nokey.sh/arc-spread-group: general",
+        "preferredDuringSchedulingIgnoredDuringExecution:",
+        "values: [primary]",
+        "values: [secondary]",
+        "values: [overflow]",
+    ] {
+        assert!(
+            values.contains(contract),
+            "ARC spreading is missing: {contract}"
+        );
+    }
+    assert!(
+        hive_values.contains("nook.nokey.sh/arc-spread-group\"] = \"hive\"")
+            && hive_values.contains("topologySpreadConstraints"),
+        "Hive ARC must own an independent hostname-spread group"
+    );
+    for contract in [
+        "arc:controller-build:prepare:",
+        "nook.nokey.sh/arc-build=preparing:NoSchedule",
+        "nook.nokey.sh/arc-tier=overflow",
+        "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}",
+        "arc:controller-build:activate:",
+        "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
+    ] {
+        assert!(
+            tasks.contains(contract),
+            "KS-6 ARC qualification is missing: {contract}"
+        );
+    }
+    let prepare = tasks
+        .find("- task: arc:controller-build:prepare")
+        .expect("ARC deployment must prepare the controller build node");
+    let pool = tasks
+        .find("- task: arc:cache:pool:sync")
+        .expect("ARC deployment must converge every build-node pool");
+    let activate = tasks
+        .rfind("- task: arc:controller-build:activate")
+        .expect("ARC deployment must activate the controller build node");
+    assert!(prepare < pool && pool < activate);
+    for contract in [
+        "tolerations:",
+        "key: nook.nokey.sh/arc-build",
+        "value: preparing",
+        "effect: NoSchedule",
+    ] {
+        assert!(
+            controller_values.contains(contract),
+            "ARC controller must tolerate build preparation: {contract}"
+        );
+    }
+}
+
+#[test]
 fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
     let root = repository_root();
     let output = Command::new("bash")

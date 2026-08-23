@@ -73,8 +73,9 @@ tasks:
           local found_target=""
           local found_sandbox=""
           local candidate_target candidate_sandbox
-          while IFS= read -r candidate_target; do
+          while IFS=$'\t' read -r candidate_target candidate_remote_dir; do
             test -n "$candidate_target"
+            test -n "$candidate_remote_dir"
             candidate_sandbox="$(
               ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 -J "$controller_target" "$candidate_target" \

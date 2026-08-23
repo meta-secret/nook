@@ -12,6 +12,62 @@ vars:
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 tasks:
+  arc:controller-build:prepare:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        node="$(kubectl get nodes \
+          -l nook.nokey.sh/node-role=control-storage \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+        if test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" != 1; then
+          echo "ARC requires exactly one control-storage node" >&2
+          exit 1
+        fi
+        node="$(printf '%s\n' "$node" | sed '/^$/d')"
+        test "$(kubectl get node "$node" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')" = True
+        test "$(kubectl get node "$node" -o jsonpath='{.metadata.labels.katacontainers\.io/kata-runtime}')" = true
+        test -c /dev/kvm
+        kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
+        internal_ip="$(kubectl get node "$node" \
+          -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
+        test -n "$internal_ip"
+        kubectl taint node "$node" \
+          nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite
+        kubectl label node "$node" \
+          nook.nokey.sh/arc-build=true \
+          nook.nokey.sh/arc-tier=overflow \
+          --overwrite
+        kubectl annotate node "$node" \
+          "nook.nokey.sh/ssh-target=debian@$internal_ip" \
+          "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}" \
+          --overwrite
+        echo "ARC controller build node $node is qualified and held for convergence"
+        REMOTE
+
+  arc:controller-build:activate:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        node="$(kubectl get nodes \
+          -l nook.nokey.sh/node-role=control-storage,nook.nokey.sh/arc-build=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+        test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+        node="$(printf '%s\n' "$node" | sed '/^$/d')"
+        kubectl taint node "$node" \
+          nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true
+        test -z "$(kubectl get node "$node" \
+          -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
+        echo "ARC controller build node $node is active"
+        REMOTE
+
   arc:cache-primary:ensure:
     internal: true
     silent: true
@@ -41,6 +97,8 @@ tasks:
           echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
           exit 1
         fi
+        kubectl label node "$cache_primary" \
+          nook.nokey.sh/arc-tier=primary --overwrite
         echo "ARC cache producer lineage is pinned to $cache_primary"
         REMOTE
 
@@ -67,8 +125,7 @@ tasks:
           exit 1
         fi
         jq -r '.items | sort_by(.metadata.name)[] |
-          (.status.addresses[] | select(.type == "InternalIP") | .address) as $address |
-          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), .metadata.name, ("debian@" + $address)] | @tsv' \
+          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), .metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
           <<<"$build_nodes"
         REMOTE
         )"
@@ -84,11 +141,11 @@ tasks:
         trap cleanup EXIT
         : > "$inventory_next"
         primary_target=""
-        while IFS=$'\t' read -r is_primary node target; do
+        while IFS=$'\t' read -r is_primary node target remote_dir; do
           user="${target%%@*}"
           host="${target#*@}"
           if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
-            echo "ARC build node $node lacks a usable InternalIP" >&2
+            echo "ARC build node $node lacks a usable SSH target" >&2
             exit 1
           fi
           case "$user:$host" in
@@ -97,12 +154,21 @@ tasks:
               exit 1
               ;;
           esac
-          printf '%s\n' "$target" >> "$inventory_next"
+          if test -z "$remote_dir"; then
+            remote_dir="$(ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              -J "$controller_target" "$target" \
+              'printf "%s\n" "$HOME/.local/share/nook-infra"')"
+          fi
+          if ! [[ "$remote_dir" =~ ^/[A-Za-z0-9_./-]+$ ]]; then
+            echo "ARC build node $node lacks a safe remote infrastructure directory" >&2
+            exit 1
+          fi
+          printf '%s\t%s\n' "$target" "$remote_dir" >> "$inventory_next"
           if test "$is_primary" = true; then
             primary_target="$target"
           fi
           ssh -n -o BatchMode=yes "$controller_target" \
-            "sudo -n k0s kubectl annotate node '$node' 'nook.nokey.sh/ssh-target=$target' --overwrite >/dev/null"
+            "sudo -n k0s kubectl annotate node '$node' 'nook.nokey.sh/ssh-target=$target' 'nook.nokey.sh/infra-remote-dir=$remote_dir' --overwrite >/dev/null"
         done <<< "$inventory"
         test -n "$primary_target"
         test "$(sort -u "$inventory_next" | wc -l | tr -d ' ')" = "$(wc -l < "$inventory_next" | tr -d ' ')"
@@ -124,16 +190,16 @@ tasks:
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
         repo_root="$(git rev-parse --show-toplevel)"
-        remote_dir="{{.INFRA_REMOTE_DIR}}"
-        while IFS= read -r build_target; do
+        while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
+          test -n "$build_remote_dir"
           ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             -J "$controller_target" "$build_target" \
-            "install -d -m 0750 '$remote_dir'"
+            "install -d -m 0750 '$build_remote_dir'"
           COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" -cf - infra/k0s |
             ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
               -J "$controller_target" "$build_target" \
-              "tar -xf - -C '$remote_dir'"
+              "tar -xf - -C '$build_remote_dir'"
         done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
@@ -250,8 +316,9 @@ tasks:
         sudo -n install -d -m 0700 /etc/nook
         sudo -n install -m 0600 "$credential_temp" /etc/nook/arc-cache-verifier-token'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
-        while IFS= read -r build_target; do
+        while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
+          test -n "$build_remote_dir"
           if test "$build_target" = "$primary_target"; then
             ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
               -J "$controller_target" "$build_target" \
@@ -450,12 +517,13 @@ tasks:
       - |
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
-        while IFS= read -r build_target; do
+        while IFS=$'\t' read -r build_target build_remote_dir; do
         test -n "$build_target"
+        test -n "$build_remote_dir"
         ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-          -J "$controller_target" "$build_target" 'bash -s' <<'REMOTE'
+          -J "$controller_target" "$build_target" bash -s -- "$build_remote_dir" <<'REMOTE'
         set -euo pipefail
-        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        remote_dir="$1"
         pool_root=/var/lib/nook-arc-buildkit
         pool_image="$pool_root/pool.btrfs"
         pool_image_next="$pool_root/pool.btrfs.next"
@@ -609,8 +677,9 @@ tasks:
           --tag localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1 \
           --output "type=oci,dest=$artifact" \
           infra/k0s/images/arc-buildkit
-        while IFS= read -r build_target; do
+        while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
+          test -n "$build_remote_dir"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             -J "$controller_target" "$build_target" \
             'sudo -n k0s ctr --namespace k8s.io images import -' \
@@ -624,6 +693,7 @@ tasks:
     silent: true
     cmds:
       - task: arc:cache-primary:ensure
+      - task: arc:controller-build:prepare
       - task: arc:build-host:resolve
       - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
@@ -771,3 +841,4 @@ tasks:
         done
         echo "ARC scale sets are dispatch-ready"
         REMOTE
+      - task: arc:controller-build:activate
