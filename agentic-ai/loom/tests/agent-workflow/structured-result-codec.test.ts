@@ -59,6 +59,37 @@ test('rejects missing, duplicate, or invalid module expert authorizations', () =
       ...output.moduleExpertAuthorizations,
     ],
   };
+  const firstAuthorization = output.moduleExpertAuthorizations[0];
+  if (!firstAuthorization) {
+    throw new Error('Expected an authorization in the test fixture.');
+  }
+  const collidingStorageKey: ModuleDevelopmentPlanTaskOutput = {
+    ...output,
+    moduleExpertAuthorizations: [
+      firstAuthorization,
+      {
+        ...firstAuthorization,
+        expert: 'web_expert',
+        parent: {
+          kind: AgentAttemptParentKind.AgentAttempt,
+          task: 'alternate-parent',
+          agent: 'alternate-owner',
+          attempt: 2,
+        },
+      },
+    ],
+  };
+  const childReusesParentStorageKey: ModuleDevelopmentPlanTaskOutput = {
+    ...output,
+    moduleExpertAuthorizations: [
+      {
+        ...firstAuthorization,
+        task: firstAuthorization.parent.task,
+        expert: 'different_expert',
+        attempt: firstAuthorization.parent.attempt,
+      },
+    ],
+  };
   const invalidDepth = jsonMap(output);
   const authorizationNode = invalidDepth.moduleExpertAuthorizations;
   if (!Array.isArray(authorizationNode) || !isRecord(authorizationNode[0])) {
@@ -72,7 +103,13 @@ test('rejects missing, duplicate, or invalid module expert authorizations', () =
   ).toThrow('missing or extra fields');
   expect(() =>
     decodeWorkflowTaskOutput(JSON.stringify(duplicateAuthorization)),
-  ).toThrow('must be unique');
+  ).toThrow('journal storage keys must be unique');
+  expect(() =>
+    decodeWorkflowTaskOutput(JSON.stringify(collidingStorageKey)),
+  ).toThrow('journal storage keys must be unique');
+  expect(() =>
+    decodeWorkflowTaskOutput(JSON.stringify(childReusesParentStorageKey)),
+  ).toThrow('identity is invalid');
   expect(() => decodeWorkflowTaskOutput(JSON.stringify(invalidDepth))).toThrow(
     'identity is invalid',
   );

@@ -323,10 +323,13 @@ function decodeModuleExpertAuthorizations(
     decodeModuleExpertAuthorization(entry),
   );
   if (
-    new Set(authorizations.map((entry) => JSON.stringify(entry))).size !==
-    authorizations.length
+    new Set(
+      authorizations.map((entry) => `${entry.task}\u0000${entry.attempt}`),
+    ).size !== authorizations.length
   ) {
-    invalidOutput('module expert authorizations must be unique');
+    invalidOutput(
+      'module expert authorization journal storage keys must be unique',
+    );
   }
   return authorizations;
 }
@@ -360,7 +363,7 @@ function decodeModuleExpertAuthorization(
     attempt < 1 ||
     parentAttempt < 1 ||
     (depth !== 2 && depth !== 3) ||
-    (task === parentTask && expert === parentAgent && attempt === parentAttempt)
+    (task === parentTask && attempt === parentAttempt)
   ) {
     invalidOutput('module expert authorization identity is invalid');
   }

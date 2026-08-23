@@ -105,6 +105,65 @@ test('rejects absent, failed, source-drifted, unauthorized, or corrupted parents
   }
 });
 
+test('rejects authorization storage collisions before lineage materializes', async () => {
+  const siblingRequest = directRequest(
+    `authorization-key-collision-${randomUUID()}`,
+  );
+  const siblingAuthorization = authorization(siblingRequest);
+  const collidingSibling: ModuleExpertAuthorization = {
+    ...siblingAuthorization,
+    expert: 'web_expert',
+    parent: {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: 'alternate-feature-synthesis',
+      agent: 'alternate-delivery-owner',
+      attempt: 2,
+    },
+  };
+  const direct = directRequest(`authorization-parent-key-${randomUUID()}`);
+  const parent = directParent(direct);
+  const parentKeyRequest: ModuleExpertInvocationRequest = {
+    ...direct,
+    task: parent.task,
+    attempt: parent.attempt,
+  };
+  const cases: readonly AuthorizationStorageCollisionCase[] = [
+    {
+      request: siblingRequest,
+      authorizations: [siblingAuthorization, collidingSibling],
+      expectedMessage: 'journal storage keys must be unique',
+    },
+    {
+      request: parentKeyRequest,
+      authorizations: [authorization(parentKeyRequest)],
+      expectedMessage: 'identity is invalid',
+    },
+  ];
+
+  for (const testCase of cases) {
+    const runDirectory = processingRunDirectory(testCase.request.runId);
+    const immediateParent = directParent(testCase.request);
+    const completedArgs = {
+      repoRoot: REPO_ROOT,
+      runId: testCase.request.runId,
+      sourceCommit: testCase.request.sourceCommit,
+      task: immediateParent.task,
+      agent: immediateParent.agent,
+      attempt: immediateParent.attempt,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      output: moduleDevelopmentPlanOutput(testCase.authorizations),
+    } as const;
+    try {
+      await expect(createCompletedAttempt(completedArgs)).rejects.toThrow(
+        testCase.expectedMessage,
+      );
+    } finally {
+      await rm(runDirectory, REMOVE_RECURSIVELY);
+    }
+  }
+});
+
 test('runs a depth-three expert only when the root plan predeclares the exact child', async () => {
   const request = depthThreeRequest(`depth-three-${randomUUID()}`);
   const runDirectory = processingRunDirectory(request.runId);
@@ -277,6 +336,12 @@ type InvalidDepthThreeParentCase = {
   readonly immediateOutput: ReturnType<
     typeof moduleDevelopmentPlanOutput | typeof moduleExpertEvidenceOutput
   >;
+};
+
+type AuthorizationStorageCollisionCase = {
+  readonly request: ModuleExpertInvocationRequest;
+  readonly authorizations: readonly ModuleExpertAuthorization[];
+  readonly expectedMessage: string;
 };
 
 async function createDepthThreeFixtureLineage(

@@ -1,5 +1,6 @@
 import { Codex } from '@openai/codex-sdk';
 import type {
+  McpToolCallItem,
   ModelReasoningEffort,
   ThreadEvent,
   ThreadOptions,
@@ -22,6 +23,7 @@ import type { RuntimeActivityObservation } from './events.ts';
 import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
 import {
+  MODULE_EXPERT_CONTEXT_MCP,
   moduleExpertThreadOptions,
   withModuleExpertRuntimeIsolation,
 } from '../module-experts/runtime-contract.ts';
@@ -29,6 +31,7 @@ import type {
   ModuleExpertRuntimeIsolationRequest,
   ModuleExpertRuntimeIsolationUse,
 } from '../module-experts/runtime-contract.ts';
+import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../module-experts/read-context-mcp.ts';
 
 export enum AgentSourceStabilityPhase {
   BeforeAttempt = 'before attempt',
@@ -330,6 +333,9 @@ function normalizeEvent(
       `File change ${event.item.status}.`,
     ]);
   }
+  if (event.item.type === 'mcp_tool_call') {
+    return sourceReadObservation(event.item);
+  }
   if (event.item.type === 'agent_message') {
     return observation([
       WorkflowRuntimeActivityKind.AgentMessageCompleted,
@@ -337,6 +343,45 @@ function normalizeEvent(
     ]);
   }
   return false;
+}
+
+function sourceReadObservation(
+  item: McpToolCallItem,
+): RuntimeActivityObservation | false {
+  if (item.server !== MODULE_EXPERT_CONTEXT_MCP) {
+    return false;
+  }
+  const action = sourceReadAction(item.tool);
+  if (!action) {
+    return false;
+  }
+  return observation([
+    WorkflowRuntimeActivityKind.SourceReadCompleted,
+    `Repository ${action} ${sourceReadStatus(item.status)}.`,
+  ]);
+}
+
+function sourceReadAction(tool: string): string | false {
+  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[0]) {
+    return 'file listing';
+  }
+  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[1]) {
+    return 'file read';
+  }
+  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[2]) {
+    return 'text search';
+  }
+  return false;
+}
+
+function sourceReadStatus(status: McpToolCallItem['status']): string {
+  if (status === 'completed') {
+    return 'completed';
+  }
+  if (status === 'failed') {
+    return 'failed';
+  }
+  return 'ended without a terminal status';
 }
 
 type ObservationValues = readonly [WorkflowRuntimeActivityKind, string];

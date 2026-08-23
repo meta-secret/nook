@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, unlink, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import type { ThreadEvent } from '@openai/codex-sdk';
+import type { McpToolCallItem, ThreadEvent } from '@openai/codex-sdk';
 import { describe, expect, test } from 'bun:test';
 import {
   AgentSourceStabilityPhase,
@@ -40,6 +40,8 @@ import type {
 import { createAuthorizedDirectParent } from '../module-experts/invoke-parent-fixture.ts';
 import { registerModuleExpertRuntimeMock } from '../module-experts/module-expert-runtime-mock.ts';
 import type { RegisterModuleExpertRuntimeMockArgs } from '../module-experts/module-expert-runtime-mock.ts';
+import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../../src/module-experts/read-context-mcp.ts';
+import { MODULE_EXPERT_CONTEXT_MCP } from '../../src/module-experts/runtime-contract.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -214,6 +216,50 @@ describe('Codex streamed turn terminal state', () => {
     }
   });
 
+  test('records bounded source-read activity without MCP payloads', async () => {
+    const events = [
+      threadStartedEvent(),
+      completedSourceReadEvent(),
+      failedSourceReadEvent(),
+      agentMessageEvent(),
+      turnCompletedEvent(),
+    ];
+    const observations: RuntimeActivityObservation[] = [];
+    const streamArgs: FakeThreadEventStreamArgs = { events };
+    const collectArgs: CollectCodexTurnArgs = {
+      events: fakeThreadEventStream(streamArgs),
+      expectedResultKind: WorkflowResultKind.CortexEvidence,
+      observe: async (observation) => {
+        observations.push(observation);
+      },
+    };
+
+    await collectCodexTurn(collectArgs);
+
+    const sourceReads = observations.filter(
+      (observation) =>
+        observation.activity ===
+        WorkflowRuntimeActivityKind.SourceReadCompleted,
+    );
+    expect(sourceReads).toEqual([
+      {
+        activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
+        detail: 'Repository file read completed.',
+      },
+      {
+        activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
+        detail: 'Repository text search failed.',
+      },
+    ]);
+    const serializedObservations = JSON.stringify(observations);
+    expect(serializedObservations).not.toContain('private-read-argument');
+    expect(serializedObservations).not.toContain('private-read-result');
+    expect(serializedObservations).not.toContain('private-search-error');
+    expect(
+      sourceReads.every((observation) => observation.detail.length < 64),
+    ).toBe(true);
+  });
+
   test('module invocation records failed evidence after a structured message then failure', async () => {
     const runtime = new FailingStreamAgentRuntime();
     const request = directExpertRequest(
@@ -299,6 +345,35 @@ function agentMessageEvent(): ThreadEvent {
       text: serializedEvidenceOutput(),
     },
   };
+}
+
+function completedSourceReadEvent(): ThreadEvent {
+  const item: McpToolCallItem = {
+    id: 'completed-source-read',
+    type: 'mcp_tool_call',
+    server: MODULE_EXPERT_CONTEXT_MCP,
+    tool: MODULE_EXPERT_READ_CONTEXT_TOOLS[1],
+    arguments: { path: 'private-read-argument' },
+    result: {
+      content: [{ type: 'text', text: 'private-read-result' }],
+      structured_content: { path: 'private-read-result' },
+    },
+    status: 'completed',
+  };
+  return { type: 'item.completed', item };
+}
+
+function failedSourceReadEvent(): ThreadEvent {
+  const item: McpToolCallItem = {
+    id: 'failed-source-read',
+    type: 'mcp_tool_call',
+    server: MODULE_EXPERT_CONTEXT_MCP,
+    tool: MODULE_EXPERT_READ_CONTEXT_TOOLS[2],
+    arguments: { query: 'private-read-argument' },
+    error: { message: 'private-search-error' },
+    status: 'failed',
+  };
+  return { type: 'item.completed', item };
 }
 
 function turnFailedEvent(): ThreadEvent {
