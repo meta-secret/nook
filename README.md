@@ -600,8 +600,9 @@ WASM, and deployment jobs run on fresh GitHub-hosted VMs. Each ARC runner
 starts from a private 32 GiB reflinked BuildKit seed and restores distinct
 cache refs from the authenticated OCI registry at
 `registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
-copy its full logical capacity. A trusted sidecar promotes local state only
-after GitHub reports the exact Main runner job successful. Hosted fallback
+copy its full logical capacity. A trusted sidecar receives no repository
+credential and promotes local state only after public GitHub metadata reports
+the exact Main runner job successful. Hosted fallback
 jobs refresh shared Zot refs, which bootstrap new or cold compute nodes. Main
 cache producers are serialized. An authenticated promotion intent blocks the
 next producer clone until the preceding successful state becomes the next seed

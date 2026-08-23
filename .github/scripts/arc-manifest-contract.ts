@@ -487,6 +487,8 @@ buildkitCloner.requireAll([
   'promotion_requests_pending || promotion_intents_pending',
   'intent="$request_dir/$pod_uid.intent"',
   'find "$intent" -mmin +2',
+  'find "$request" -mmin +2',
+  "Abandoning expired ARC promotion barrier",
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
   'cp --reflink=always --sparse=auto "$job_file" "$seed_next"',
@@ -527,6 +529,8 @@ ciTasks.requireAll([
 ]);
 runtimeSmoke.forbid("task ci:arc:promote-buildkit-cache");
 runners.requireAll([
+  "name: prepare-cache-promotion-signal",
+  "install -d -o 1001 -g 1001 -m 0700 /var/run/nook-cache-promotion",
   "name: request-buildkit-promotion",
   "name: cache-promotion-signal",
   "NOOK_ARC_CACHE_PROMOTION_DIR",
@@ -537,14 +541,14 @@ runners.requireAll([
   'mv "$intent_next" "$intent_file"',
   'rm -f "$intent_file"',
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
-  'name: nook-arc-github',
-  'key: github_token',
+  "https://api.github.com/repos/$GITHUB_REPOSITORY/$1",
   '.event == "push" and',
   '.head_branch == "main" and',
   '[.jobs[]? | select(.runner_name == $runner)][0].conclusion // empty',
   "trap finalize_promotion TERM INT",
   "while true; do sleep 1; done",
 ]);
+runners.forbid("- name: GITHUB_TOKEN");
 mainWorkflow.require("needs: [wasm, web]");
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",

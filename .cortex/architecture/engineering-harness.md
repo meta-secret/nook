@@ -267,8 +267,9 @@ maintenance-only.
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
 - ARC starts each fresh Kata guest from a private reflink clone of a trusted
   32 GiB BuildKit seed.
-- A GitHub-authenticated sidecar promotes local state only after the exact Main
-  runner job reaches a final `success` conclusion.
+- A sidecar authenticates public GitHub run metadata without a repository
+  credential and promotes local state only after the exact Main runner job
+  reaches a final `success` conclusion.
 - Main cache-producing jobs are serialized. Their authenticated promotion
   intents block the next producer clone until the preceding generation is
   promoted, so divergent cache lineages are not silently discarded.

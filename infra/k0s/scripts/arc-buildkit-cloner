@@ -79,6 +79,11 @@ promotion_requests_pending() {
       rm -f -- "$request"
       continue
     fi
+    if test -n "$(find "$request" -mmin +2 -print -quit 2>/dev/null)"; then
+      echo "Abandoning expired ARC promotion barrier for $pod_uid" >&2
+      rm -f -- "$request"
+      continue
+    fi
     return 0
   done
   return 1
@@ -95,6 +100,11 @@ promotion_intents_pending() {
     fi
     job_dir="$jobs_dir/$pod_uid"
     if ! test -d "$job_dir" || ! promotion_intended "$pod_uid"; then
+      rm -f -- "$intent"
+      continue
+    fi
+    if promotion_intent_expired "$pod_uid"; then
+      echo "Abandoning expired ARC promotion intent for $pod_uid" >&2
       rm -f -- "$intent"
       continue
     fi

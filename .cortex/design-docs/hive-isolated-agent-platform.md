@@ -676,9 +676,9 @@ reachable only on Pod loopback inside the Kata guest and uses disposable
 Two narrow hostPaths are permitted for the Task-managed BuildKit pool. The
 trusted preparation container sees only the request directory. The trusted
 promotion verifier sees the same directory and may write markers only for its
-own Pod UID after authenticating a Main push with its private GitHub token. The
-BuildKit sidecar sees only its Pod UID job subpath. The runner sees neither path
-and never receives the verifier's token.
+own Pod UID after authenticating public GitHub run metadata. The verifier has no
+repository credential. The BuildKit sidecar sees only its Pod UID job subpath.
+The runner sees neither path and receives no ARC credential.
 
 The runner image and its Docker CLI remain separate from BuildKit and Podman.
 The CLI does not create an engine. A chart-render check verifies the final Helm

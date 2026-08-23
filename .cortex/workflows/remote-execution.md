@@ -107,12 +107,15 @@ Security and cache rules:
 - Permit only the Task-managed ARC BuildKit request and job hostPaths.
   - A trusted init container sees only the request directory and submits its
     Kubernetes Pod UID for a private clone.
-  - A trusted promotion verifier sees the request directory and a private
-    GitHub token. The runner sees neither.
+  - A trusted promotion verifier sees the request directory. It authenticates
+    public GitHub run metadata and receives no repository credential. The
+    runner sees neither host path.
   - The verifier writes an authenticated intent for its own Pod UID. The intent
     blocks the next cache producer until GitHub reports a final conclusion.
   - Only a final successful Main job converts that intent into a promotion
     request.
+  - Abandon an intent or request that blocks clones for more than two minutes.
+    Retain unsafe job state until complete Kata teardown is proven.
   - The host helper creates a reflink clone from the trusted seed.
   - The BuildKit sidecar mounts only its `jobs/<Pod UID>` subpath.
   - The runner container never mounts the pool.

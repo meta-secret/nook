@@ -99,12 +99,15 @@ BuildKit garbage-collection target normally keeps physical use below that hard
 capacity envelope.
 
 Verified Main jobs signal through an in-guest `emptyDir`. A trusted sidecar
-authenticates the run and creates an intent for its own Pod UID. That intent
+authenticates the public run metadata without receiving a repository credential
+and creates an intent for its own Pod UID. That intent
 blocks the next cache-producing clone so parallel branches cannot discard a
 lineage. The verifier then waits for GitHub to report the exact Pod runner's
 final `success` conclusion. Only then does it convert the intent into a
-promotion request; the runner never sees the host request directory or ARC
-repository token.
+promotion request; the runner never sees the host request directory or any ARC
+repository credential. Promotion intents and requests stop blocking new clones
+after two minutes. The host abandons that promotion but retains unsafe job state
+until Kata teardown can be proven complete.
 The host waits for complete Kata teardown, rejects a stale seed generation, and
 promotes the private state through an atomic Btrfs reflink. New clone requests
 wait behind accepted promotion. ARC jobs therefore skip registry export, while
