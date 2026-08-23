@@ -87,19 +87,24 @@ Service at `10.96.90.10:5000`. Traefik publishes it at
 registry data.
 ARC storage uses a separate Task-managed Btrfs image under
 `/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
-filesystem remains ext4. Runner Pods
-receive two narrow mounts. The trusted preparation init container sees only the
-shared clone-request directory. The private BuildKit native sidecar sees only
-the pool entry selected for its Kubernetes Pod UID. No other container mounts
-either host path. The 768 GiB sparse pool covers twenty fully allocated 32 GiB
+filesystem remains ext4. Runner Pods receive two narrow host paths. The trusted
+preparation init container sees only the shared clone-request directory. The
+trusted promotion verifier sees that same directory so it can establish an
+authenticated intent and publish a final-success request for its own Pod UID.
+The private BuildKit native sidecar sees only the pool entry selected for its
+Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
+covers twenty fully allocated 32 GiB
 job images, the reusable 32 GiB seed, and filesystem metadata. The 24 GB
 BuildKit garbage-collection target normally keeps physical use below that hard
 capacity envelope.
 
 Verified Main jobs signal through an in-guest `emptyDir`. A trusted sidecar
-authenticates the run and waits for GitHub to report the exact Pod runner's
-final `success` conclusion. Only then does it create a request for its own Pod
-UID; the runner never sees the host request directory or ARC repository token.
+authenticates the run and creates an intent for its own Pod UID. That intent
+blocks the next cache-producing clone so parallel branches cannot discard a
+lineage. The verifier then waits for GitHub to report the exact Pod runner's
+final `success` conclusion. Only then does it convert the intent into a
+promotion request; the runner never sees the host request directory or ARC
+repository token.
 The host waits for complete Kata teardown, rejects a stale seed generation, and
 promotes the private state through an atomic Btrfs reflink. New clone requests
 wait behind accepted promotion. ARC jobs therefore skip registry export, while

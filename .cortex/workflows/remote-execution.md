@@ -105,11 +105,20 @@ Security and cache rules:
 - Back Podman with a sparse 24 GiB ext4 image inside the guest. Native overlay
   must not fall back to `fuse-overlayfs` on the Kata shared volume.
 - Permit only the Task-managed ARC BuildKit request and job hostPaths.
-  - A trusted init container sees only the request directory.
-  - It submits its Kubernetes Pod UID.
+  - A trusted init container sees only the request directory and submits its
+    Kubernetes Pod UID for a private clone.
+  - A trusted promotion verifier sees the request directory and a private
+    GitHub token. The runner sees neither.
+  - The verifier writes an authenticated intent for its own Pod UID. The intent
+    blocks the next cache producer until GitHub reports a final conclusion.
+  - Only a final successful Main job converts that intent into a promotion
+    request.
   - The host helper creates a reflink clone from the trusted seed.
   - The BuildKit sidecar mounts only its `jobs/<Pod UID>` subpath.
   - The runner container never mounts the pool.
+- Serialize Main cache-producing jobs so each producer starts from the seed
+  generation published by its predecessor. Non-producing validation remains
+  parallel.
 - BuildKit and the general Podman sidecar may be privileged only inside the
   isolated Kata guest.
 - Import an exact BuildKit lineage alone when it exists.

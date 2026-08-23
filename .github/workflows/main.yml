@@ -393,7 +393,10 @@ jobs:
 
   ui-demos:
     name: UI demos
-    needs: [wasm]
+    # Cache-producing jobs are deliberately serialized. The host-side promotion
+    # intent blocks this job's clone until the web producer reaches a final
+    # successful conclusion and its state becomes the next seed generation.
+    needs: [wasm, web]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read

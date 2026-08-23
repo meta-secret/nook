@@ -602,7 +602,10 @@ cache refs from the authenticated OCI registry at
 `registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
 copy its full logical capacity. A trusted sidecar promotes local state only
 after GitHub reports the exact Main runner job successful. Hosted fallback
-jobs refresh shared Zot refs, which bootstrap new or cold compute nodes.
+jobs refresh shared Zot refs, which bootstrap new or cold compute nodes. Main
+cache producers are serialized. An authenticated promotion intent blocks the
+next producer clone until the preceding successful state becomes the next seed
+generation, so concurrent validation never discards a cache lineage.
 Same-repository PR jobs may publish only exact-SHA generations under
 `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
 producer restores Main's dedicated, complete WASM dependency boundary so it

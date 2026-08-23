@@ -481,14 +481,17 @@ buildkitCloner.requireAll([
   '*containerd-shim-kata-v2*" -id $sandbox_id "*',
   'labels.\\"io.kubernetes.pod.uid\\"==$pod_uid',
   ".seed-generation",
-  'request="$request_dir/$pod_uid.promote"',
+  'request="$request_dir/$pod_uid.$suffix"',
   '"regular file:0:0:1"',
-  'promotion_requests_pending && return 0',
+  'promotion_barrier_pending && return 0',
+  'promotion_requests_pending || promotion_intents_pending',
+  'intent="$request_dir/$pod_uid.intent"',
+  'find "$intent" -mmin +2',
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
   'cp --reflink=always --sparse=auto "$job_file" "$seed_next"',
   'if promotion_requested "$pod_uid"; then',
-  "if promotion_requests_pending || (( SECONDS - last_prune >= 30 )); then",
+  "if promotion_barrier_pending || (( SECONDS - last_prune >= 30 )); then",
 ]);
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
 if (
@@ -528,8 +531,11 @@ runners.requireAll([
   "name: cache-promotion-signal",
   "NOOK_ARC_CACHE_PROMOTION_DIR",
   'request_file="$request_dir/$POD_UID.promote"',
+  'intent_file="$request_dir/$POD_UID.intent"',
   '"regular file:1001:1001:1"',
   'mv "$request_next" "$request_file"',
+  'mv "$intent_next" "$intent_file"',
+  'rm -f "$intent_file"',
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
   'name: nook-arc-github',
   'key: github_token',
@@ -539,6 +545,7 @@ runners.requireAll([
   "trap finalize_promotion TERM INT",
   "while true; do sleep 1; done",
 ]);
+mainWorkflow.require("needs: [wasm, web]");
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",
   expected: 2,

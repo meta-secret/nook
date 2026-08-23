@@ -269,6 +269,9 @@ maintenance-only.
   32 GiB BuildKit seed.
 - A GitHub-authenticated sidecar promotes local state only after the exact Main
   runner job reaches a final `success` conclusion.
+- Main cache-producing jobs are serialized. Their authenticated promotion
+  intents block the next producer clone until the preceding generation is
+  promoted, so divergent cache lineages are not silently discarded.
 - Hosted fallback publication keeps Zot as the cross-node bootstrap source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,

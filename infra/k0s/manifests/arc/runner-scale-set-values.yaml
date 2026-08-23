@@ -155,6 +155,8 @@ template:
             signal_file="$signal_dir/request"
             accepted_file="$signal_dir/accepted"
             request_dir=/var/lib/nook-buildkit-requests
+            intent_file="$request_dir/$POD_UID.intent"
+            intent_next="$intent_file.next"
             request_file="$request_dir/$POD_UID.promote"
             request_next="$request_file.next"
 
@@ -181,16 +183,19 @@ template:
                     umask 077
                     printf '%s\n' "$POD_UID" > "$request_next"
                     mv "$request_next" "$request_file"
+                    rm -f "$intent_file"
                     exit 0
                     ;;
                   cancelled|failure|neutral|skipped|stale|timed_out)
                     echo "ARC cache promotion rejected final conclusion: $conclusion" >&2
+                    rm -f "$intent_file"
                     exit 0
                     ;;
                 esac
                 sleep 1
               done
               echo "ARC cache promotion skipped: final conclusion unavailable" >&2
+              rm -f "$intent_file"
               exit 0
             }
 
@@ -225,6 +230,8 @@ template:
                .head_sha == $sha and
                .head_repository.full_name == $repository' >/dev/null
             umask 077
+            printf '%s\n' "$POD_UID" > "$intent_next"
+            mv "$intent_next" "$intent_file"
             printf '%s\n' "$POD_UID" > "$accepted_file.next"
             mv "$accepted_file.next" "$accepted_file"
             trap finalize_promotion TERM INT
