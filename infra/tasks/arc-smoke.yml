@@ -142,6 +142,34 @@ tasks:
           echo "ARC smoke could not find dispatch nonce $dispatch_nonce" >&2
           exit 1
         fi
+        runner_name=""
+        runner_uid=""
+        runner_sandbox_id=""
+        runner_state_retained=""
+        build_target=""
+        cancel_run() {
+          gh api --method POST \
+            "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
+            >/dev/null 2>&1 ||
+            gh run cancel "$run_id" --repo meta-secret/nook || true
+        }
+        cleanup_smoke() {
+          exit_status=$?
+          trap - EXIT INT TERM
+          if test ! -f "$state_file"; then
+            cancel_run
+            if test -n "$runner_uid" && test -n "$build_target"; then
+              ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                -J "$controller_target" "$build_target" \
+                "sudo -n rm -f -- '/var/lib/nook-arc-buildkit/pool/runtime/$runner_uid.retain'" \
+                >/dev/null 2>&1 || true
+            fi
+          fi
+          exit "$exit_status"
+        }
+        trap cleanup_smoke EXIT
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
         dispatched_sha="$(
           gh run view "$run_id" \
             --repo meta-secret/nook \
@@ -155,16 +183,6 @@ tasks:
             >/dev/null 2>&1 || true
           exit 1
         fi
-        cancel_run() {
-          gh api --method POST \
-            "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
-            >/dev/null 2>&1 ||
-            gh run cancel "$run_id" --repo meta-secret/nook || true
-        }
-        runner_name=""
-        runner_uid=""
-        runner_sandbox_id=""
-        runner_state_retained=""
         missing_runner_samples=0
         for _ in $(seq 1 500); do
           run_state="$(
@@ -190,6 +208,14 @@ tasks:
             fi
             if test -z "$runner_state_retained"; then
               echo "Successful ARC smoke did not retain its BuildKit state" >&2
+              exit 1
+            fi
+            completed_sandbox="$(find_sandbox "$runner_uid")"
+            completed_build_target="${completed_sandbox%%$'\t'*}"
+            completed_sandbox_id="${completed_sandbox#*$'\t'}"
+            if test "$completed_build_target" != "$build_target" ||
+               test "$completed_sandbox_id" != "$runner_sandbox_id"; then
+              echo "ARC smoke sandbox identity changed before completion" >&2
               exit 1
             fi
             printf '%s\n%s\n%s\n%s\n' \
@@ -289,6 +315,7 @@ tasks:
           cancel_run
           exit 1
         fi
+        trap - EXIT INT TERM
         BASH
       - |
         bash <<'BASH'

@@ -38,6 +38,16 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:wasm:node-test:host }
 
+  ci:main:wasm-node-test:
+    desc: Verify WASM Node output without exporting registry cache from ARC runners.
+    cmds:
+      - |
+        if test "${NOOK_ARC_RUNNER:-}" = "1"; then
+          GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test
+        else
+          GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test
+        fi
+
   _ci:wasm:node-test:host:
     cmds:
       - task: docker:ci:wasm:node-test

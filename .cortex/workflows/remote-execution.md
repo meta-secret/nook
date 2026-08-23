@@ -110,7 +110,9 @@ Security and cache rules:
   - A credential-free sidecar forwards its Pod-scoped candidate through the
     request directory. The runner sees neither host path.
   - A root-owned authenticated host verifier binds that candidate to the exact
-    in-progress runner job before writing an intent.
+    in-progress runner job before writing an intent in a mode-`0700`,
+    host-private runtime directory. Pods receive only an acceptance marker in
+    their untrusted request lane.
   - The intent blocks the next cache producer until the host observes the final
     conclusion. Only a successful Main job promotes the seed.
   - Abandon an intent or request that blocks clones for more than two minutes.

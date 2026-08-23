@@ -98,6 +98,12 @@ Before creating a promotion intent, the host verifies:
 - the exact run attempt contains an in-progress job; and
 - that job's `runner_name` equals the candidate Pod name.
 
+The intent lives under the cloner's mode-`0700` host runtime directory. That
+directory is never mounted into a Pod. The Pod-mounted request lane contains
+only an untrusted candidate and a host-created acceptance marker. A guest may
+spoof its own view of acceptance, but it cannot create the host authority that
+blocks cloning or promotes a seed.
+
 Only then does the sidecar acknowledge the workflow step. A feature-branch,
 fork, or unrelated runner cannot create a clone barrier by replaying a public
 Main run identity.
@@ -106,8 +112,8 @@ After Pod teardown, the host queries the same runner job once more. It promotes
 only a `success` conclusion. Failures, cancellations, missing conclusions, and
 expired intents do not refresh the seed.
 
-Both intent and promotion barriers expire after two minutes. Expiration removes
-only the barrier. Unsafe job state remains retained while the Pod directory,
+Both host-private intent and promotion barriers expire after two minutes.
+Expiration removes only the barrier. Unsafe job state remains retained while the Pod directory,
 containerd task, or Kata shim still exists.
 
 Promotion waits for kubelet volume teardown, containerd task removal, and Kata

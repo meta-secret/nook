@@ -9,6 +9,8 @@ tasks:
     preconditions:
       - sh: test -n "{{.INFRA_WORKER_SSH_TARGET}}"
         msg: INFRA_WORKER_SSH_TARGET must identify the Debian worker.
+      - sh: printf '%s\n' "{{.INFRA_WORKER_MESH_ADDRESS}}" | grep -Eq '^10\.202\.0\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$'
+        msg: INFRA_WORKER_MESH_ADDRESS must be a unique worker address from 10.202.0.2 through 10.202.0.254.
     cmds:
       - |
         bash <<'BASH'
@@ -29,12 +31,15 @@ tasks:
     preconditions:
       - sh: test -n "{{.INFRA_WORKER_SSH_TARGET}}"
         msg: INFRA_WORKER_SSH_TARGET must identify the Debian worker.
+      - sh: printf '%s\n' "{{.INFRA_WORKER_MESH_ADDRESS}}" | grep -Eq '^10\.202\.0\.([2-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-4])$'
+        msg: INFRA_WORKER_MESH_ADDRESS must be a unique worker address from 10.202.0.2 through 10.202.0.254.
     cmds:
       - |
         bash <<'BASH'
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
         worker_target="{{.INFRA_WORKER_SSH_TARGET}}"
+        worker_mesh_address="{{.INFRA_WORKER_MESH_ADDRESS}}"
 
         discover_public_ip() {
           ssh -n -o BatchMode=yes "$1" \
@@ -74,22 +79,65 @@ tasks:
           test "${#public_key}" -eq 44
         done
 
-        configure_peer() {
-          target="$1"
-          local_address="$2"
-          peer_address="$3"
-          peer_public_ip="$4"
-          peer_public_key="$5"
-          api_route="$6"
-          ssh -o BatchMode=yes "$target" bash -s -- \
-            "$local_address" "$peer_address" "$peer_public_ip" \
-            "$peer_public_key" "$api_route" <<'REMOTE'
+        configure_controller_peer() {
+          ssh -o BatchMode=yes "$controller_target" bash -s -- \
+            "$worker_mesh_address" "$worker_public_ip" "$worker_public_key" <<'REMOTE'
+        set -euo pipefail
+        peer_address="$1"
+        peer_public_ip="$2"
+        peer_public_key="$3"
+        private_key="$(sudo -n cat /etc/wireguard/nook-private.key)"
+        config="$(mktemp)"
+        peer="$(mktemp)"
+        cleanup() {
+          private_key=
+          rm -f "$config" "$peer"
+        }
+        trap cleanup EXIT
+        sudo -n install -d -m 0700 /etc/wireguard/nook-peers
+        cat > "$peer" <<EOF
+        [Peer]
+        PublicKey = $peer_public_key
+        Endpoint = $peer_public_ip:51820
+        AllowedIPs = $peer_address/32
+        PersistentKeepalive = 25
+        EOF
+        sudo -n install -m 0600 "$peer" "/etc/wireguard/nook-peers/$peer_address.conf"
+        cat > "$config" <<EOF
+        [Interface]
+        Address = 10.202.0.1/24
+        ListenPort = 51820
+        PrivateKey = $private_key
+        EOF
+        while IFS= read -r peer_file; do
+          printf '\n' >> "$config"
+          sudo -n cat "$peer_file" >> "$config"
+        done < <(sudo -n find /etc/wireguard/nook-peers -maxdepth 1 -type f -name '*.conf' -print | sort)
+        sudo -n install -m 0600 "$config" /etc/wireguard/wg-nook.conf
+        private_key=
+        sudo -n install -d -m 0755 /etc/systemd/system/wg-quick@wg-nook.service.d
+        cat > "$config" <<'EOF'
+        [Unit]
+        Before=k0scontroller.service k0sworker.service
+        EOF
+        sudo -n install -m 0644 "$config" \
+          /etc/systemd/system/wg-quick@wg-nook.service.d/10-nook-k0s.conf
+        sudo -n sysctl -w net.ipv4.ip_forward=1 >/dev/null
+        printf '%s\n' 'net.ipv4.ip_forward=1' | sudo -n tee /etc/sysctl.d/90-nook-k0s.conf >/dev/null
+        sudo -n systemctl daemon-reload
+        sudo -n systemctl enable wg-quick@wg-nook.service >/dev/null
+        sudo -n systemctl restart wg-quick@wg-nook.service
+        sudo -n systemctl is-active --quiet wg-quick@wg-nook.service
+        REMOTE
+        }
+
+        configure_worker_peer() {
+          ssh -o BatchMode=yes "$worker_target" bash -s -- \
+            "$worker_mesh_address" "$controller_public_ip" "$controller_public_key" <<'REMOTE'
         set -euo pipefail
         local_address="$1"
-        peer_address="$2"
-        peer_public_ip="$3"
-        peer_public_key="$4"
-        api_route="${5:-}"
+        peer_public_ip="$2"
+        peer_public_key="$3"
         private_key="$(sudo -n cat /etc/wireguard/nook-private.key)"
         config="$(mktemp)"
         cleanup() {
@@ -106,7 +154,7 @@ tasks:
         [Peer]
         PublicKey = $peer_public_key
         Endpoint = $peer_public_ip:51820
-        AllowedIPs = $peer_address/32,10.244.0.0/16${api_route:+,$api_route}
+        AllowedIPs = 10.202.0.1/32,10.201.0.1/32,10.244.0.0/16
         PersistentKeepalive = 25
         EOF
         sudo -n install -m 0600 "$config" /etc/wireguard/wg-nook.conf
@@ -127,22 +175,34 @@ tasks:
         REMOTE
         }
 
-        configure_peer \
-          "$controller_target" 10.202.0.1 10.202.0.2 \
-          "$worker_public_ip" "$worker_public_key" ""
-        configure_peer \
-          "$worker_target" 10.202.0.2 10.202.0.1 \
-          "$controller_public_ip" "$controller_public_key" 10.201.0.1/32
+        configure_controller_peer
+        configure_worker_peer
 
         configure_controller_firewall() {
-          ssh -o BatchMode=yes "$controller_target" bash -s -- "$worker_public_ip" <<'REMOTE'
+          ssh -o BatchMode=yes "$controller_target" bash -s -- \
+            "$worker_mesh_address" "$worker_public_ip" <<'REMOTE'
         set -euo pipefail
-        worker_public_ip="$1"
+        worker_mesh_address="$1"
+        worker_public_ip="$2"
+        endpoint="$(mktemp)"
         fragment="$(mktemp)"
         config="$(mktemp)"
-        trap 'rm -f "$fragment" "$config"' EXIT
-        cat > "$fragment" <<EOF
-        add rule inet bynull_filter input ip saddr $worker_public_ip udp dport 51820 accept comment "nook k0s mesh wireguard"
+        trap 'rm -f "$endpoint" "$fragment" "$config"' EXIT
+        sudo -n install -d -m 0700 /etc/nftables.d/nook-k0s-mesh-endpoints
+        printf '%s\n' "$worker_public_ip" > "$endpoint"
+        sudo -n install -m 0600 "$endpoint" \
+          "/etc/nftables.d/nook-k0s-mesh-endpoints/$worker_mesh_address.ip"
+        while IFS= read -r endpoint_file; do
+          endpoint_ip="$(sudo -n cat "$endpoint_file")"
+          if ! [[ "$endpoint_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "k0s mesh: refusing invalid persisted worker endpoint" >&2
+            exit 2
+          fi
+          printf '%s\n' \
+            "add rule inet bynull_filter input ip saddr $endpoint_ip udp dport 51820 accept comment \"nook k0s mesh wireguard $endpoint_ip\"" \
+            >> "$fragment"
+        done < <(sudo -n find /etc/nftables.d/nook-k0s-mesh-endpoints -maxdepth 1 -type f -name '*.ip' -print | sort)
+        cat >> "$fragment" <<'EOF'
         add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s mesh node input"
         add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport { 6443, 8132, 10250 } accept comment "nook k0s mesh pod control plane"
         add rule inet bynull_filter forward iifname "wg-nook" accept comment "nook k0s mesh ingress"
@@ -155,16 +215,9 @@ tasks:
           sudo -n nft --check --file "$config"
           sudo -n install -m 0644 "$config" /etc/nftables.conf
         fi
-        for marker in \
-          'nook k0s mesh wireguard' \
-          'nook k0s mesh node input' \
-          'nook k0s mesh pod control plane' \
-          'nook k0s mesh ingress' \
-          'nook k0s mesh egress'; do
-          if ! sudo -n nft list ruleset | grep -Fq "comment \"$marker\""; then
-            grep -F "comment \"$marker\"" "$fragment" | sudo -n nft --file -
-          fi
-        done
+        grep -Eq '^[[:space:]]*flush ruleset[[:space:]]*$' "$config"
+        sudo -n nft --check --file "$config"
+        sudo -n nft --file "$config"
         REMOTE
         }
 
@@ -212,7 +265,8 @@ tasks:
 
         configure_controller_firewall
         configure_worker_firewall
-        ssh -n -o BatchMode=yes "$controller_target" 'ping -c 3 -W 2 10.202.0.2 >/dev/null'
+        ssh -n -o BatchMode=yes "$controller_target" \
+          "ping -c 3 -W 2 '$worker_mesh_address' >/dev/null"
         ssh -n -o BatchMode=yes "$worker_target" 'ping -c 3 -W 2 10.202.0.1 >/dev/null'
         echo "Authenticated k0s node transport is healthy"
         BASH
@@ -293,6 +347,7 @@ tasks:
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
         worker_target="{{.INFRA_WORKER_SSH_TARGET}}"
+        worker_mesh_address="{{.INFRA_WORKER_MESH_ADDRESS}}"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         ssh -o BatchMode=yes "$worker_target" bash -s -- \
           "$remote_dir" "{{.K0S_VERSION}}" "{{.K0S_AMD64_SHA256}}" <<'REMOTE'
@@ -339,6 +394,7 @@ tasks:
           'sudo -n k0s token create --role worker --expiry 15m')"
         test "${#token}" -gt 100
         remote_program='set -euo pipefail
+        worker_mesh_address="$1"
         token_file=/etc/k0s/worker-token
         token_temp="$(mktemp)"
         cleanup() { rm -f "$token_temp"; }
@@ -348,32 +404,67 @@ tasks:
         sudo -n k0s install worker \
           --force \
           --token-file "$token_file" \
-          --kubelet-extra-args="--node-ip=10.202.0.2 --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
+          --kubelet-extra-args="--node-ip=$worker_mesh_address --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
           --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"
         sudo -n systemctl daemon-reload
         sudo -n systemctl enable --now k0sworker'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
         printf '%s' "$token" |
           ssh -o BatchMode=yes "$worker_target" \
-            "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\""
+            "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\" bash '$worker_mesh_address'"
         token=
 
-        ssh -o BatchMode=yes "$controller_target" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes "$controller_target" bash -s -- \
+          "$worker_mesh_address" <<'REMOTE'
         set -euo pipefail
+        worker_mesh_address="$1"
         for _ in $(seq 1 150); do
           node="$(sudo -n k0s kubectl get nodes -o json 2>/dev/null | jq -r \
-            '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == "10.202.0.2")) | .metadata.name' || true)"
-          if test -n "$node" && sudo -n k0s kubectl wait "node/$node" \
-            --for=condition=Ready --timeout=2s >/dev/null 2>&1; then
-            break
-          fi
+            --arg address "$worker_mesh_address" \
+            '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name' || true)"
+          test -z "$node" || break
           sleep 2
         done
         test -n "$node"
+        worker_pod_cidr="$(
+          sudo -n k0s kubectl get "node/$node" -o jsonpath='{.spec.podCIDR}'
+        )"
+        if ! [[ "$worker_pod_cidr" =~ ^10\.244\.[0-9]{1,3}\.0/24$ ]]; then
+          echo "k0s worker received an invalid Pod CIDR: $worker_pod_cidr" >&2
+          exit 1
+        fi
+        peer_file="/etc/wireguard/nook-peers/$worker_mesh_address.conf"
+        test "$(sudo -n stat -c '%F:%u:%g:%h' -- "$peer_file")" = \
+          "regular file:0:0:1"
+        peer_next="$(mktemp)"
+        config="$(mktemp)"
+        private_key="$(sudo -n cat /etc/wireguard/nook-private.key)"
+        cleanup() {
+          private_key=
+          rm -f "$peer_next" "$config"
+        }
+        trap cleanup EXIT
+        sudo -n sed \
+          "s|^AllowedIPs = .*|AllowedIPs = $worker_mesh_address/32,$worker_pod_cidr|" \
+          "$peer_file" > "$peer_next"
+        sudo -n install -m 0600 "$peer_next" "$peer_file"
+        cat > "$config" <<EOF
+        [Interface]
+        Address = 10.202.0.1/24
+        ListenPort = 51820
+        PrivateKey = $private_key
+        EOF
+        while IFS= read -r persisted_peer; do
+          printf '\n' >> "$config"
+          sudo -n cat "$persisted_peer" >> "$config"
+        done < <(sudo -n find /etc/wireguard/nook-peers -maxdepth 1 -type f -name '*.conf' -print | sort)
+        sudo -n install -m 0600 "$config" /etc/wireguard/wg-nook.conf
+        private_key=
+        sudo -n systemctl restart wg-quick@wg-nook.service
         sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m
-        test "$(sudo -n k0s kubectl get "node/$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')" = 10.202.0.2
+        test "$(sudo -n k0s kubectl get "node/$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')" = "$worker_mesh_address"
         sudo -n k0s kubectl annotate "node/$node" \
-          "nook.nokey.sh/ssh-target=debian@10.202.0.2" --overwrite
+          "nook.nokey.sh/ssh-target=debian@$worker_mesh_address" --overwrite
         primary_count="$(sudo -n k0s kubectl get nodes \
           -l nook.nokey.sh/arc-cache-primary=true \
           -o jsonpath='{.items[*].metadata.name}' | wc -w | tr -d ' ')"
@@ -394,12 +485,18 @@ tasks:
     silent: true
     cmds:
       - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" bash -s -- \
+          "{{.INFRA_WORKER_MESH_ADDRESS}}" <<'REMOTE'
         set -euo pipefail
+        worker_mesh_address="$1"
         kubectl() { sudo -n k0s kubectl "$@"; }
+        node="$(kubectl get nodes -o json | jq -r \
+          --arg address "$worker_mesh_address" \
+          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name')"
+        test -n "$node"
         kubectl delete pod arc-worker-kata-smoke \
           --namespace arc-runners --ignore-not-found --wait=true
-        cat <<'YAML' | kubectl apply -f -
+        cat <<YAML | kubectl apply -f -
         apiVersion: v1
         kind: Pod
         metadata:
@@ -407,6 +504,7 @@ tasks:
           namespace: arc-runners
         spec:
           runtimeClassName: kata-qemu-runtime-rs
+          nodeName: $node
           automountServiceAccountToken: false
           restartPolicy: Never
           securityContext:
@@ -435,8 +533,8 @@ tasks:
           --namespace arc-runners \
           --for=jsonpath='{.status.phase}'=Succeeded \
           --timeout=10m
-        node="$(kubectl get pod arc-worker-kata-smoke \
-          --namespace arc-runners -o jsonpath='{.spec.nodeName}')"
+        test "$(kubectl get pod arc-worker-kata-smoke \
+          --namespace arc-runners -o jsonpath='{.spec.nodeName}')" = "$node"
         test "$(kubectl get node "$node" -o jsonpath='{.metadata.labels.nook\.nokey\.sh/arc-build}')" = true
         guest_kernel="$(kubectl logs arc-worker-kata-smoke --namespace arc-runners)"
         test -n "$guest_kernel"
@@ -475,10 +573,13 @@ tasks:
       - task: k0s:worker:kata:verify
       - task: arc:deploy
       - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" bash -s -- \
+          "{{.INFRA_WORKER_MESH_ADDRESS}}" <<'REMOTE'
         set -euo pipefail
+        worker_mesh_address="$1"
         node="$(sudo -n k0s kubectl get nodes -o json | jq -r \
-          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == "10.202.0.2")) | .metadata.name')"
+          --arg address "$worker_mesh_address" \
+          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name')"
         test -n "$node"
         sudo -n k0s kubectl taint node "$node" \
           nook.nokey.sh/arc-build=preparing:NoSchedule-

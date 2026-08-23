@@ -271,8 +271,9 @@ maintenance-only.
   host verifier promotes local state only after the exact Main runner job
   reaches a final `success` conclusion.
 - Main cache-producing jobs are serialized. Their authenticated promotion
-  intents block the next producer clone until the preceding generation is
-  promoted. A cache-primary node selector keeps that lineage on one local seed.
+  intents live in a host-private runtime directory. They block the next producer
+  clone until the preceding generation is promoted. A cache-primary node
+  selector keeps that lineage on one local seed.
 - Hosted fallback publication keeps Zot as the cross-node bootstrap source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,

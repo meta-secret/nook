@@ -574,7 +574,7 @@ tasks:
         ProtectHome=true
         ProtectSystem=strict
         ReadWritePaths=$pool_mount
-        ReadOnlyPaths=/etc/nook/arc-cache-verifier-token
+        ReadOnlyPaths=-/etc/nook/arc-cache-verifier-token
 
         [Install]
         WantedBy=multi-user.target

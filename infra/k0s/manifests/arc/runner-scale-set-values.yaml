@@ -158,7 +158,7 @@ template:
             signal_file="$signal_dir/request"
             accepted_file="$signal_dir/accepted"
             request_dir=/var/lib/nook-buildkit-requests
-            intent_file="$request_dir/$POD_UID.intent"
+            host_accepted_file="$request_dir/$POD_UID.accepted"
             candidate_file="$request_dir/$POD_UID.candidate"
             candidate_next="$candidate_file.next"
 
@@ -185,12 +185,13 @@ template:
             esac
             test "${#head_sha}" -eq 40
             umask 077
+            rm -f "$host_accepted_file"
             printf '%s:%s:%s:%s:%s\n' \
               "$POD_UID" "$POD_NAME" "$run_id" "$run_attempt" "$head_sha" \
               > "$candidate_next"
             mv "$candidate_next" "$candidate_file"
             deadline=$(($(date +%s) + 60))
-            while ! test -f "$intent_file"; do
+            while ! test -f "$host_accepted_file"; do
               if test "$(date +%s)" -ge "$deadline"; then
                 echo "ARC cache promotion host verifier rejected the request" >&2
                 rm -f "$candidate_file"
@@ -198,6 +199,9 @@ template:
               fi
               sleep 0.2
             done
+            test ! -L "$host_accepted_file"
+            test "$(stat -c '%F:%u:%g:%a:%h' "$host_accepted_file")" = \
+              "regular file:0:0:600:1"
             printf '%s\n' "$POD_UID" > "$accepted_file.next"
             mv "$accepted_file.next" "$accepted_file"
             while true; do sleep 1; done

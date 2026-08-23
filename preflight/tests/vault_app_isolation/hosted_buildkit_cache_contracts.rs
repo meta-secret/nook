@@ -323,7 +323,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task ci:pr:wasm")
         .context("Main WASM job must verify")?;
     let wasm_node = wasm
-        .find("task ci:wasm:node-test")
+        .find("task ci:main:wasm-node-test")
         .context("Main WASM job must run Node tests")?;
     let wasm_publish = wasm
         .find("task ci:main:publish-wasm-cache")

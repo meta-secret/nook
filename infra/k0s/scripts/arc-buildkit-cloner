@@ -6,6 +6,7 @@ seed_file="$pool_dir/seed/buildkit.ext4"
 request_dir="$pool_dir/requests"
 jobs_dir="$pool_dir/jobs"
 runtime_dir="$pool_dir/runtime"
+intent_dir="$runtime_dir/intents"
 seed_lock="$pool_dir/.seed.lock"
 github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-token}"
 github_repository="${NOOK_ARC_GITHUB_REPOSITORY:-meta-secret/nook}"
@@ -14,8 +15,8 @@ job_exclusive_limit="${NOOK_ARC_BUILDKIT_JOB_EXCLUSIVE_LIMIT:-32G}"
 last_prune=0
 last_sandbox_refresh=-1
 
-mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir"
-chmod 0700 "$runtime_dir"
+mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir" "$intent_dir"
+chmod 0700 "$runtime_dir" "$intent_dir"
 test -f "$seed_file"
 
 valid_uid() {
@@ -32,14 +33,15 @@ delete_job_dir() {
     rm -rf -- "$job_dir"
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
-    "$request_dir/$pod_uid.intent" "$request_dir/$pod_uid.intent.next" \
+    "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
+    "$request_dir/$pod_uid.accepted" "$request_dir/$pod_uid.accepted.next" \
     "$request_dir/$pod_uid.candidate" "$request_dir/$pod_uid.candidate.next"
 }
 
 promotion_intended() {
   local pod_uid="$1" intent intent_value intent_uid pod_name run_id run_attempt
   local head_sha trailing
-  intent="$request_dir/$pod_uid.intent"
+  intent="$intent_dir/$pod_uid.intent"
   test -e "$intent" || return 1
   if test -L "$intent" ||
      test "$(stat -c '%F:%u:%g:%h' -- "$intent" 2>/dev/null || true)" != \
@@ -79,7 +81,7 @@ candidate_expired() {
 promotion_job_conclusion() {
   local pod_uid="$1" intent_value intent_uid pod_name run_id run_attempt
   local head_sha trailing jobs
-  intent_value="$(tr -d '\r\n' < "$request_dir/$pod_uid.intent")"
+  intent_value="$(tr -d '\r\n' < "$intent_dir/$pod_uid.intent")"
   IFS=: read -r intent_uid pod_name run_id run_attempt head_sha trailing <<EOF
 $intent_value
 EOF
@@ -90,7 +92,7 @@ EOF
 
 verify_promotion_candidates() {
   local candidate candidate_value pod_uid candidate_uid pod_name run_id
-  local run_attempt head_sha trailing job_dir run jobs intent_next
+  local run_attempt head_sha trailing job_dir run jobs intent_next accepted_next
   shopt -s nullglob
   if ! test -s "$github_token_file"; then
     for candidate in "$request_dir"/*.candidate; do
@@ -149,24 +151,29 @@ EOF
       rm -f -- "$candidate"
       continue
     fi
-    intent_next="$request_dir/$pod_uid.intent.next"
+    intent_next="$intent_dir/$pod_uid.intent.next"
     printf '%s\n' "$candidate_value" > "$intent_next"
     chmod 0600 "$intent_next"
-    mv "$intent_next" "$request_dir/$pod_uid.intent"
+    mv "$intent_next" "$intent_dir/$pod_uid.intent"
+    accepted_next="$request_dir/$pod_uid.accepted.next"
+    rm -f -- "$request_dir/$pod_uid.accepted" "$accepted_next"
+    printf '%s\n' "$pod_uid" > "$accepted_next"
+    chmod 0600 "$accepted_next"
+    mv "$accepted_next" "$request_dir/$pod_uid.accepted"
     rm -f -- "$candidate"
   done
 }
 
 promotion_intent_expired() {
   local pod_uid="$1" intent
-  intent="$request_dir/$pod_uid.intent"
+  intent="$intent_dir/$pod_uid.intent"
   test -n "$(find "$intent" -mmin +2 -print -quit 2>/dev/null)"
 }
 
 promotion_intents_pending() {
   local intent pod_uid job_dir
   shopt -s nullglob
-  for intent in "$request_dir"/*.intent; do
+  for intent in "$intent_dir"/*.intent; do
     pod_uid="$(basename "$intent" .intent)"
     if ! valid_uid "$pod_uid"; then
       rm -f -- "$intent"
@@ -408,7 +415,8 @@ prune_stale_jobs() {
             *) continue ;;
           esac
         fi
-        rm -f -- "$request_dir/$pod_uid.intent"
+        rm -f -- "$intent_dir/$pod_uid.intent" \
+          "$request_dir/$pod_uid.accepted"
       elif retention_active "$pod_uid"; then
         continue
       fi
@@ -442,7 +450,8 @@ prune_stale_jobs() {
           *) continue ;;
         esac
       fi
-      rm -f -- "$request_dir/$pod_uid.intent"
+      rm -f -- "$intent_dir/$pod_uid.intent" \
+        "$request_dir/$pod_uid.accepted"
     elif retention_active "$pod_uid"; then
       continue
     fi

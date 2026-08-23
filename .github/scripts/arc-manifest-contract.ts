@@ -246,7 +246,9 @@ controller.requireAll([
 network.require("policyTypes:\n    - Ingress");
 workerTasks.requireAll([
   "10.202.0.1",
-  "10.202.0.2",
+  "INFRA_WORKER_MESH_ADDRESS",
+  "nook-peers",
+  "nook-k0s-mesh-endpoints",
   "wg-quick@wg-nook.service",
   "hive.nook.sh/storage=local",
   "nook.nokey.sh/arc-build=preparing:NoSchedule",
@@ -401,6 +403,14 @@ tasks.requireAll([
   "*containerd-shim-kata-v2*",
   "/var/lib/k0s/kubelet/pods/$pod_uid",
   "runner_state_retained=1",
+  'completed_sandbox="$(find_sandbox "$runner_uid")"',
+  'test "$completed_sandbox_id" != "$runner_sandbox_id"',
+  "cleanup_smoke()",
+  "trap cleanup_smoke EXIT",
+  "trap 'exit 130' INT",
+  "trap 'exit 143' TERM",
+  'test ! -f "$state_file"',
+  'rm -f -- \'/var/lib/nook-arc-buildkit/pool/runtime/$runner_uid.retain\'',
   "nook-arc-hive-test-runtime",
   "gh variable set NOOK_HIVE_RUNS_ON",
   "gh variable set NOOK_CACHE_RUNS_ON",
@@ -502,7 +512,9 @@ buildkitCloner.requireAll([
   '"regular file:0:0:1"',
   'promotion_barrier_pending && return 0',
   "promotion_intents_pending",
-  'intent="$request_dir/$pod_uid.intent"',
+  'intent_dir="$runtime_dir/intents"',
+  'intent="$intent_dir/$pod_uid.intent"',
+  'accepted_next="$request_dir/$pod_uid.accepted.next"',
   'find "$intent" -mmin +2',
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
@@ -541,6 +553,9 @@ hiveWorkflow.requireAll([
   "task hive:cache:publish",
 ]);
 ciTasks.requireAll([
+  "ci:main:wasm-node-test:",
+  'GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test',
+  'GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test',
   "ci:arc:promote-buildkit-cache:",
   'if test "${NOOK_ARC_RUNNER:-}" = "1" &&',
   'test "${GITHUB_REF:-}" = "refs/heads/main" &&',
@@ -562,10 +577,11 @@ runners.requireAll([
   "name: cache-promotion-signal",
   "NOOK_ARC_CACHE_PROMOTION_DIR",
   'candidate_file="$request_dir/$POD_UID.candidate"',
-  'intent_file="$request_dir/$POD_UID.intent"',
+  'host_accepted_file="$request_dir/$POD_UID.accepted"',
   '"regular file:1001:1001:640:1"',
   'mv "$candidate_next" "$candidate_file"',
-  'while ! test -f "$intent_file"; do',
+  'while ! test -f "$host_accepted_file"; do',
+  '"regular file:0:0:600:1"',
   "deadline=$(($(date +%s) + 60))",
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
   "while true; do sleep 1; done",
@@ -584,7 +600,7 @@ tasks.requireAll([
   "ARC_CACHE_VERIFIER_TOKEN_FILE",
   "/etc/nook/arc-cache-verifier-token",
   "actions/runs?per_page=1",
-  "ReadOnlyPaths=/etc/nook/arc-cache-verifier-token",
+  "ReadOnlyPaths=-/etc/nook/arc-cache-verifier-token",
   "nook.nokey.sh/arc-cache-primary=true",
   "arc:build-host:resolve:",
   "arc:cache-primary:ensure:",
@@ -603,13 +619,21 @@ tasks.forbid("$credential_temp.normalized");
 tasks.forbid('primary_node="$(jq -r');
 workerTasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",
-  '"nook.nokey.sh/ssh-target=debian@10.202.0.2"',
+  '"nook.nokey.sh/ssh-target=debian@$worker_mesh_address"',
+  '--kubelet-extra-args="--node-ip=$worker_mesh_address',
+  '--arg address "$worker_mesh_address"',
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"',
 ]);
 workerTasks.forbid(
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"',
 );
-mainWorkflow.require("needs: [web]");
+mainWorkflow.requireAll([
+  "needs: [web]",
+  "task ci:main:wasm-node-test",
+]);
+mainWorkflow.forbid(
+  "# The exporter commits only after the Node-test Docker stage succeeds.\n          GHA_CACHE_WRITE_ENABLED: \"1\"",
+);
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",
   expected: 2,

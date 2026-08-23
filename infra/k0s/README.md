@@ -26,8 +26,9 @@ Cluster roles:
   ARC listeners. It is labeled `nook.nokey.sh/node-role=control-storage`.
 - The Rise-S NVMe node owns ARC runner microVMs and their disposable caches. It
   is labeled `nook.nokey.sh/arc-build=true`.
-- WireGuard addresses `10.202.0.1` and `10.202.0.2` carry authenticated node and
-  Pod traffic. The stable API address remains `10.201.0.1`.
+- WireGuard address `10.202.0.1` belongs to the controller. Every worker receives
+  one explicit, unique address from `10.202.0.2/24`. The stable API address
+  remains `10.201.0.1`.
 - ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
   warm. The general and Hive scale sets can each create up to ten concurrent
   runners. A third cache-primary scale set owns serialized Main producers.
@@ -36,7 +37,8 @@ Join or reconcile the compute node only through the Taskfile:
 
 ```text
 task --taskfile infra/Taskfile.yml k0s:worker:deploy \
-  INFRA_WORKER_SSH_TARGET=debian@167.114.209.184
+  INFRA_WORKER_SSH_TARGET=debian@167.114.209.184 \
+  INFRA_WORKER_MESH_ADDRESS=10.202.0.2
 ```
 
 The worker stays tainted until Kata, the local cache pool, the BuildKit image,
@@ -91,8 +93,9 @@ ARC storage uses a separate Task-managed Btrfs image under
 filesystem remains ext4. Runner Pods receive two narrow host paths. The trusted
 preparation init container sees only the shared clone-request directory. A
 credential-free sidecar forwards its Pod-scoped candidate through that path.
-The authenticated root-owned host verifier establishes the intent and checks
-the final job conclusion.
+The authenticated root-owned host verifier establishes the intent under the
+host-private runtime directory and checks the final job conclusion. Pods see
+only an untrusted candidate lane and a host-created acceptance marker.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
 covers twenty fully allocated 32 GiB
@@ -103,9 +106,9 @@ capacity envelope.
 Verified Main jobs signal through an in-guest `emptyDir`. The sidecar forwards
 the request without receiving a repository credential. The authenticated host
 verifier confirms that the exact Pod is currently running the selected Main
-job before creating an intent. It checks the same job's final `success`
+job before creating a host-private intent. It checks the same job's final `success`
 conclusion after teardown and only then promotes the seed. The runner never sees
-the host request directory or any ARC credential. Intents stop blocking new
+the host-private intent directory or any ARC credential. Intents stop blocking new
 clones after two minutes. The host abandons that promotion but retains unsafe
 job state until Kata teardown can be proven complete.
 The host waits for complete Kata teardown, rejects a stale seed generation, and

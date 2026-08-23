@@ -36,6 +36,9 @@ fn arc_smoke_retains_the_observed_sandbox_before_persisting_teardown_state() -> 
     let persist = completion
         .find("\"$run_id\" \"$runner_uid\" \"$runner_sandbox_id\" \"$build_target\" > \"$state_file\"")
         .context("ARC smoke completion must persist teardown state")?;
+    let completion_recheck = completion
+        .find("completed_sandbox=\"$(find_sandbox \"$runner_uid\")\"")
+        .context("ARC smoke completion must recheck the current Kata sandbox")?;
 
     assert!(
         tasks.contains("$pool_dir/runtime/$pod_uid.retain")
@@ -43,8 +46,8 @@ fn arc_smoke_retains_the_observed_sandbox_before_persisting_teardown_state() -> 
         "ARC smoke must retain the observed BuildKit state while the runner is active"
     );
     assert!(
-        retention_check < persist,
-        "ARC smoke must require retained BuildKit state before persisting teardown state"
+        retention_check < completion_recheck && completion_recheck < persist,
+        "ARC smoke must require retained state and recheck its current sandbox before persisting teardown authority"
     );
     Ok(())
 }

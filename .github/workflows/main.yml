@@ -217,11 +217,9 @@ jobs:
           overwrite: true
 
       - name: WASM Node tests
-        run: task ci:wasm:node-test
+        run: task ci:main:wasm-node-test
         env:
           CI: true
-          # The exporter commits only after the Node-test Docker stage succeeds.
-          GHA_CACHE_WRITE_ENABLED: "1"
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
