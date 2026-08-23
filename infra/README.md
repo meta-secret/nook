@@ -11,7 +11,7 @@ This directory owns Nook's stateful server infrastructure:
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - Pinned Actions Runner Controller scale sets run focused and opted-in trusted
-  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 16 GiB microVM
+  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 5 GiB microVM
   carries Docker client tooling and its own privileged BuildKit sidecar on Pod
   loopback. Its overlayfs builder state uses a private 32 GiB ext4 image.
   General runners also give Podman a sparse, private 24 GiB ext4 image so its

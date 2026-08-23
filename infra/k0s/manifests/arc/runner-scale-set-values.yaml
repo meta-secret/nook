@@ -141,8 +141,8 @@ template:
             memory: 3Gi
             ephemeral-storage: 4Gi
           limits:
-            cpu: "6"
-            memory: 8Gi
+            cpu: "1.25"
+            memory: 3584Mi
             ephemeral-storage: 32Gi
       - name: prepare-container-runtime-state
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
@@ -218,8 +218,8 @@ template:
             memory: 1Gi
             ephemeral-storage: 1Gi
           limits:
-            cpu: "4"
-            memory: 6Gi
+            cpu: 250m
+            memory: 512Mi
             ephemeral-storage: 24Gi
     containers:
       - name: runner
@@ -265,8 +265,8 @@ template:
             memory: 1Gi
             ephemeral-storage: 25Gi
           limits:
-            cpu: "2"
-            memory: 2Gi
+            cpu: 500m
+            memory: 1Gi
             ephemeral-storage: 100Gi
     volumes:
       - name: work
