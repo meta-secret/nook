@@ -631,8 +631,10 @@ receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
 node selectors are all qualified.
 
 The ordinary Pod requests 1 CPU and 4.5 GiB. The Hive Pod requests about 2 CPUs
-and 4.5 GiB. Both cap their concurrently running containers at 2 CPUs and 5
-GiB in aggregate. This cap is a Kata VM sizing boundary. It keeps ten concurrent
+and 4 GiB. Both cap their concurrently running containers at 2 CPUs and 4.5
+GiB in aggregate. The QEMU RuntimeClass adds 768 MiB of Pod overhead so a fully
+touched guest still leaves host-cgroup headroom for QEMU and virtiofs. These
+caps are Kata VM sizing boundaries. They keep ten concurrent
 microVMs within the 16-thread, 64 GiB Rise-S worker instead of multiplying the
 former 12-vCPU and 16-GiB envelope across every job. The dedicated Hive set
 keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed

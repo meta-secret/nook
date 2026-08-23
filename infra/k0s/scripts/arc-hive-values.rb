@@ -29,9 +29,9 @@ end
 
 buildkit = named(pod.fetch("initContainers"), "buildkit")
 buildkit.fetch("resources").fetch("requests")["cpu"] = "1"
-buildkit.fetch("resources").fetch("requests")["memory"] = "2Gi"
+buildkit.fetch("resources").fetch("requests")["memory"] = "1750Mi"
 buildkit.fetch("resources").fetch("limits")["cpu"] = "1"
-buildkit.fetch("resources").fetch("limits")["memory"] = "2Gi"
+buildkit.fetch("resources").fetch("limits")["memory"] = "1750Mi"
 
 pod.fetch("initContainers").concat(
   [
@@ -82,9 +82,9 @@ runner.fetch("env").reject! do |item|
 end
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
 runner.fetch("resources").fetch("requests")["cpu"] = "500m"
-runner.fetch("resources").fetch("requests")["memory"] = "1280Mi"
+runner.fetch("resources").fetch("requests")["memory"] = "1Gi"
 runner.fetch("resources").fetch("limits")["cpu"] = "500m"
-runner.fetch("resources").fetch("limits")["memory"] = "1280Mi"
+runner.fetch("resources").fetch("limits")["memory"] = "1Gi"
 runner.fetch("volumeMounts") << {
   "name" => "hive-test-exchange",
   "mountPath" => "/var/run/nook-hive-tests"

@@ -83,6 +83,10 @@ const kataValues = contract({
   label: "Kata values",
   source: await read("infra/k0s/manifests/kata/values.yaml"),
 });
+const kataTasks = contract({
+  label: "Kata tasks",
+  source: await read("infra/tasks/kata.yml"),
+});
 const tasks = contract({
   label: "ARC tasks",
   source: await read("infra/tasks/arc.yml"),
@@ -164,7 +168,7 @@ runners.requireAll([
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
-  'limits:\n            cpu: "1.25"\n            memory: 3584Mi',
+  'limits:\n            cpu: "1.25"\n            memory: 3Gi',
   'limits:\n            cpu: 250m\n            memory: 512Mi',
   '- "24000"',
   'value: "34359738368"',
@@ -214,6 +218,11 @@ kataValues.require("qemu-runtime-rs:\n    enabled: true");
 kataValues.requireAll([
   "key: nook.nokey.sh/arc-build",
   "value: preparing",
+]);
+kataTasks.requireAll([
+  "kubectl patch runtimeclass kata-qemu-runtime-rs --type=merge",
+  '\"cpu\":\"250m\",\"memory\":\"768Mi\"',
+  "-o jsonpath='{.overhead.podFixed.memory}')\" = 768Mi",
 ]);
 controller.requireAll([
   "updateStrategy: eventual",
