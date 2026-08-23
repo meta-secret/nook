@@ -1,18 +1,22 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
+import { AgentAttemptEventKind } from '../../src/agent-workflow/agent-events.ts';
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
+  MaterializedViewPresence,
   TaskTerminalKind,
 } from '../../src/agent-workflow/domain.ts';
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
 import type {
+  CompletedTaskTerminal,
   ModuleExpertAuthorization,
+  ModuleDevelopmentPlanTaskOutput,
   ParentAgentAttempt,
 } from '../../src/agent-workflow/domain.ts';
 import type {
@@ -25,6 +29,7 @@ import type {
   InvokeModuleExpertArgs,
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
+import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from '../../src/agent-workflow/structured-result-codec.ts';
 import {
   createCompletedAttempt,
   createFailedAttempt,
@@ -102,6 +107,57 @@ test('rejects absent, failed, source-drifted, unauthorized, or corrupted parents
       runtime.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
+  }
+});
+
+test('authorizes a multibyte parent view within the character limit', async () => {
+  const request = directRequest(`multibyte-parent-view-${randomUUID()}`);
+  const runDirectory = processingRunDirectory(request.runId);
+  const runtime = new CountingRuntime(request.runId);
+  const multibyteView = '界'.repeat(40_000);
+  try {
+    const planArgs: CreateDirectPlanWithViewArgs = {
+      request,
+      view: multibyteView,
+    };
+    await createDirectPlanWithView(planArgs);
+    const invocationInput: InvocationArgs = { request };
+    const result = await invokeModuleExpert(invocationArgs(invocationInput));
+
+    expect(multibyteView.length).toBe(40_000);
+    expect(Buffer.byteLength(multibyteView, 'utf8')).toBeGreaterThan(65_536);
+    expect(result.terminal.kind).toBe(TaskTerminalKind.Completed);
+    expect(runtime.executionCount).toBe(1);
+  } finally {
+    runtime.dispose();
+    await rm(runDirectory, REMOVE_RECURSIVELY);
+  }
+});
+
+test('rejects a parent view above the character limit with valid projection hashes', async () => {
+  const request = directRequest(`oversized-parent-view-${randomUUID()}`);
+  const runDirectory = processingRunDirectory(request.runId);
+  const runtime = new CountingRuntime(request.runId);
+  try {
+    const planArgs: CreateDirectPlanWithViewArgs = {
+      request,
+      view: 'v'.repeat(MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH),
+    };
+    await createDirectPlanWithView(planArgs);
+    const rewriteArgs: RewriteParentViewArgs = {
+      request,
+      view: 'v'.repeat(MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH + 1),
+    };
+    await rewriteParentView(rewriteArgs);
+
+    const invocationInput: InvocationArgs = { request };
+    await expect(
+      invokeModuleExpert(invocationArgs(invocationInput)),
+    ).rejects.toThrow('parent authorization failed');
+    expect(runtime.executionCount).toBe(0);
+  } finally {
+    runtime.dispose();
+    await rm(runDirectory, REMOVE_RECURSIVELY);
   }
 });
 
@@ -455,6 +511,13 @@ type CreateDirectPlanArgs = {
   readonly authorization: ModuleExpertAuthorization;
 };
 
+type CreateDirectPlanWithViewArgs = {
+  readonly request: ModuleExpertInvocationRequest;
+  readonly view: string;
+};
+
+type RewriteParentViewArgs = CreateDirectPlanWithViewArgs;
+
 async function createDirectPlan(args: CreateDirectPlanArgs): Promise<void> {
   const parent = directParent(args.request);
   const completedArgs = {
@@ -469,6 +532,100 @@ async function createDirectPlan(args: CreateDirectPlanArgs): Promise<void> {
     output: moduleDevelopmentPlanOutput([args.authorization]),
   } as const;
   await createCompletedAttempt(completedArgs);
+}
+
+async function createDirectPlanWithView(
+  args: CreateDirectPlanWithViewArgs,
+): Promise<void> {
+  const parent = directParent(args.request);
+  const output: ModuleDevelopmentPlanTaskOutput = {
+    ...moduleDevelopmentPlanOutput([authorization(args.request)]),
+    materializedViewMarkdown: args.view,
+  };
+  const completedArgs = {
+    repoRoot: REPO_ROOT,
+    runId: args.request.runId,
+    sourceCommit: args.request.sourceCommit,
+    task: parent.task,
+    agent: parent.agent,
+    attempt: parent.attempt,
+    depth: 1,
+    parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+    output,
+  } as const;
+  await createCompletedAttempt(completedArgs);
+}
+
+async function rewriteParentView(args: RewriteParentViewArgs): Promise<void> {
+  const parent = directParent(args.request);
+  const attemptDirectory = join(
+    processingRunDirectory(args.request.runId),
+    'agents',
+    parent.task,
+    `attempt-${parent.attempt}`,
+  );
+  const eventsPath = join(attemptDirectory, 'events.jsonl');
+  const resultPath = join(attemptDirectory, 'result.json');
+  const viewPath = join(attemptDirectory, 'view.md');
+  const originalTerminal = JSON.parse(
+    await readFile(resultPath, 'utf8'),
+  ) as CompletedTaskTerminal<string>;
+  const output: ModuleDevelopmentPlanTaskOutput = {
+    ...moduleDevelopmentPlanOutput([authorization(args.request)]),
+    materializedViewMarkdown: args.view,
+  };
+  const terminal: CompletedTaskTerminal<string> = {
+    ...originalTerminal,
+    output,
+  };
+  const resultSerialized = `${JSON.stringify(terminal)}\n`;
+  const viewSerialized = `${args.view.trim()}\n`;
+  const resultHash = sha256(resultSerialized);
+  const viewHash = sha256(viewSerialized);
+  const events = (await readFile(eventsPath, 'utf8'))
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as AgentAttemptEvent);
+  const rewrittenEvents = events.map((event): AgentAttemptEvent => {
+    if (event.kind === AgentAttemptEventKind.ResultProjected) {
+      return { ...event, result: { ...event.result, sha256: resultHash } };
+    }
+    if (event.kind === AgentAttemptEventKind.ViewProjected) {
+      if (event.view.presence !== MaterializedViewPresence.Recorded) {
+        throw new Error('Expected a recorded parent view projection.');
+      }
+      return {
+        ...event,
+        view: {
+          ...event.view,
+          projection: { ...event.view.projection, sha256: viewHash },
+        },
+      };
+    }
+    if (event.kind === AgentAttemptEventKind.AttemptTerminalRecorded) {
+      if (event.view.presence !== MaterializedViewPresence.Recorded) {
+        throw new Error('Expected a recorded parent terminal view.');
+      }
+      return {
+        ...event,
+        result: { ...event.result, sha256: resultHash },
+        view: {
+          ...event.view,
+          projection: { ...event.view.projection, sha256: viewHash },
+        },
+      };
+    }
+    return event;
+  });
+  await Promise.all([
+    writeFile(
+      eventsPath,
+      `${rewrittenEvents.map((event) => JSON.stringify(event)).join('\n')}\n`,
+      'utf8',
+    ),
+    writeFile(resultPath, resultSerialized, 'utf8'),
+    writeFile(viewPath, viewSerialized, 'utf8'),
+  ]);
 }
 
 type CreateDepthThreeLineageArgs = {
@@ -601,4 +758,8 @@ function processingRunDirectory(runId: string): string {
     DelegatedAgentWorkflowName.AgentWork,
     runId,
   );
+}
+
+function sha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
 }

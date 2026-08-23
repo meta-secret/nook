@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { join } from 'node:path';
 import { AgentAttemptEventKind } from '../agent-workflow/agent-events.ts';
 import {
@@ -20,11 +20,20 @@ import type {
   ParentAgentAttempt,
 } from '../agent-workflow/domain.ts';
 import { replayAgentAttemptJournal } from '../agent-workflow/agent-replay.ts';
-import { decodeWorkflowTaskOutput } from '../agent-workflow/structured-result-codec.ts';
+import {
+  MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH,
+  decodeWorkflowTaskOutput,
+} from '../agent-workflow/structured-result-codec.ts';
 
 const MAX_PARENT_EVENTS_BYTES = 1_048_576;
 const MAX_PARENT_RESULT_BYTES = 262_144;
-const MAX_PARENT_VIEW_BYTES = 65_537;
+const PERSISTED_VIEW_LINE_ENDING_LENGTH = 1;
+const MAX_UTF8_BYTES_PER_UTF16_CODE_UNIT = 3;
+const MAX_PARENT_VIEW_CHARACTERS =
+  MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH + PERSISTED_VIEW_LINE_ENDING_LENGTH;
+const MAX_PARENT_VIEW_BYTES =
+  MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH * MAX_UTF8_BYTES_PER_UTF16_CODE_UNIT +
+  PERSISTED_VIEW_LINE_ENDING_LENGTH;
 
 export type ModuleExpertChildRequest = {
   readonly runId: string;
@@ -79,6 +88,11 @@ type ReadParentAttemptArgs = {
 type VerifiedParentAttempt = {
   readonly firstEvent: AgentAttemptEvent;
   readonly terminal: CompletedTaskTerminal<string>;
+};
+
+type ReadBoundedParentProjectionArgs = {
+  readonly path: string;
+  readonly maxBytes: number;
 };
 
 export async function verifyModuleExpertParentAuthorization(
@@ -197,19 +211,27 @@ async function readParentAttempt(
   let resultSerialized: string;
   let viewSerialized: string;
   try {
+    const eventsRead: ReadBoundedParentProjectionArgs = {
+      path: join(attemptDirectory, 'events.jsonl'),
+      maxBytes: MAX_PARENT_EVENTS_BYTES,
+    };
+    const resultRead: ReadBoundedParentProjectionArgs = {
+      path: join(attemptDirectory, 'result.json'),
+      maxBytes: MAX_PARENT_RESULT_BYTES,
+    };
+    const viewRead: ReadBoundedParentProjectionArgs = {
+      path: join(attemptDirectory, 'view.md'),
+      maxBytes: MAX_PARENT_VIEW_BYTES,
+    };
     [eventsSerialized, resultSerialized, viewSerialized] = await Promise.all([
-      readFile(join(attemptDirectory, 'events.jsonl'), 'utf8'),
-      readFile(join(attemptDirectory, 'result.json'), 'utf8'),
-      readFile(join(attemptDirectory, 'view.md'), 'utf8'),
+      readBoundedParentProjection(eventsRead),
+      readBoundedParentProjection(resultRead),
+      readBoundedParentProjection(viewRead),
     ]);
   } catch {
     authorizationFailed();
   }
-  if (
-    Buffer.byteLength(eventsSerialized, 'utf8') > MAX_PARENT_EVENTS_BYTES ||
-    Buffer.byteLength(resultSerialized, 'utf8') > MAX_PARENT_RESULT_BYTES ||
-    Buffer.byteLength(viewSerialized, 'utf8') > MAX_PARENT_VIEW_BYTES
-  ) {
+  if (viewSerialized.length > MAX_PARENT_VIEW_CHARACTERS) {
     authorizationFailed();
   }
   let events: readonly AgentAttemptEvent[];
@@ -291,6 +313,30 @@ async function readParentAttempt(
     authorizationFailed();
   }
   return { firstEvent, terminal: { ...terminal, output: decodedOutput } };
+}
+
+async function readBoundedParentProjection(
+  args: ReadBoundedParentProjectionArgs,
+): Promise<string> {
+  const handle = await open(args.path, 'r');
+  try {
+    const buffer = Buffer.alloc(args.maxBytes + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const read = await handle.read(
+        buffer,
+        bytesRead,
+        buffer.length - bytesRead,
+        bytesRead,
+      );
+      if (read.bytesRead === 0) break;
+      bytesRead += read.bytesRead;
+    }
+    if (bytesRead > args.maxBytes) authorizationFailed();
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } finally {
+    await handle.close();
+  }
 }
 
 function completedTerminalHasExactKeys(

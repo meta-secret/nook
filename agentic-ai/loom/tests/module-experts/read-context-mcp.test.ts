@@ -53,6 +53,20 @@ type McpCall = {
   readonly server: ModuleExpertReadContextServer;
 };
 
+type SearchTextPayload = {
+  readonly matches: readonly string[];
+  readonly searchedBytes: number;
+  readonly searchedFiles: number;
+  readonly truncated: boolean;
+};
+
+type WriteNumberedFilesRequest = {
+  readonly content: string;
+  readonly count: number;
+  readonly directory: string;
+  readonly prefix: string;
+};
+
 type McpRequestStreamController = {
   readonly close: () => void;
   readonly enqueue: (chunk: Uint8Array) => void;
@@ -181,6 +195,101 @@ describe('module expert read-context MCP', () => {
         expect(search.result?.content?.[0]?.text).toContain(
           'provider-types.ts:1',
         );
+      } finally {
+        await server.dispose();
+      }
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('reports every bounded search exit as truncated', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-read-context-search-bounds-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const repository = await createTestRepository(fixtureRoot);
+      const fileCapDirectory = join(repository.root, 'search-file-cap');
+      const fileCapRequest: WriteNumberedFilesRequest = {
+        content: '',
+        count: 5_001,
+        directory: fileCapDirectory,
+        prefix: 'file',
+      };
+      await writeNumberedFiles(fileCapRequest);
+      const byteCapDirectory = join(repository.root, 'search-byte-cap');
+      const byteCapRequest: WriteNumberedFilesRequest = {
+        content: 'b'.repeat(256 * 1024),
+        count: 17,
+        directory: byteCapDirectory,
+        prefix: 'bytes',
+      };
+      await writeNumberedFiles(byteCapRequest);
+      const responseCapDirectory = join(repository.root, 'search-response-cap');
+      const recursiveDirectoryOptions: MakeDirectoryOptions = {
+        recursive: true,
+      };
+      await mkdir(responseCapDirectory, recursiveDirectoryOptions);
+      await writeFile(
+        join(responseCapDirectory, 'matches.txt'),
+        `${`response-cap ${'x'.repeat(2_100)}\n`.repeat(100)}`,
+        'utf8',
+      );
+      const serverRequest: ModuleExpertReadContextServerRequest = {
+        repositoryRoot: repository.root,
+      };
+      const server = createModuleExpertReadContextServer(serverRequest);
+      try {
+        const resultLimitCall: ToolCall = {
+          arguments: {
+            maxResults: 3,
+            path: 'src',
+            query: 'bounded-match',
+          },
+          id: 13,
+          name: 'search_text',
+          server,
+        };
+        const resultLimit = searchPayload(await toolCall(resultLimitCall));
+        expect(resultLimit.matches).toHaveLength(3);
+        expect(resultLimit.truncated).toBe(true);
+
+        const fileLimitCall: ToolCall = {
+          arguments: { path: 'search-file-cap', query: 'never-present' },
+          id: 14,
+          name: 'search_text',
+          server,
+        };
+        const fileLimit = searchPayload(await toolCall(fileLimitCall));
+        expect(fileLimit.searchedFiles).toBe(5_000);
+        expect(fileLimit.truncated).toBe(true);
+
+        const byteLimitCall: ToolCall = {
+          arguments: { path: 'search-byte-cap', query: 'never-present' },
+          id: 15,
+          name: 'search_text',
+          server,
+        };
+        const byteLimit = searchPayload(await toolCall(byteLimitCall));
+        expect(byteLimit.searchedBytes).toBe(4 * 1024 * 1024);
+        expect(byteLimit.searchedFiles).toBe(16);
+        expect(byteLimit.truncated).toBe(true);
+
+        const responseLimitCall: ToolCall = {
+          arguments: {
+            maxResults: 100,
+            path: 'search-response-cap',
+            query: 'response-cap',
+          },
+          id: 16,
+          name: 'search_text',
+          server,
+        };
+        const responseLimit = searchPayload(await toolCall(responseLimitCall));
+        expect(responseLimit.matches.length).toBeGreaterThan(0);
+        expect(responseLimit.matches.length).toBeLessThan(100);
+        expect(responseLimit.truncated).toBe(true);
       } finally {
         await server.dispose();
       }
@@ -343,6 +452,12 @@ async function callMcp(call: McpCall): Promise<McpResponse> {
   return (await response.json()) as McpResponse;
 }
 
+function searchPayload(response: McpResponse): SearchTextPayload {
+  const text = response.result?.content?.[0]?.text;
+  if (!text) throw new Error('Expected a search result payload.');
+  return JSON.parse(text) as SearchTextPayload;
+}
+
 async function callChunkedOversizedMcp(
   server: ModuleExpertReadContextServer,
 ): Promise<McpResponse> {
@@ -417,4 +532,26 @@ async function createTestRepository(
   await symlink(outsideFile, join(sourceDirectory, 'outside-link'));
   await symlink('domain.ts', join(sourceDirectory, 'inside-link'));
   return { outsideFile, root };
+}
+
+async function writeNumberedFiles(
+  request: WriteNumberedFilesRequest,
+): Promise<void> {
+  const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
+  await mkdir(request.directory, recursiveDirectoryOptions);
+  const batchSize = 250;
+  for (let start = 0; start < request.count; start += batchSize) {
+    const writes: Promise<void>[] = [];
+    const end = Math.min(start + batchSize, request.count);
+    for (let index = start; index < end; index += 1) {
+      writes.push(
+        writeFile(
+          join(request.directory, `${request.prefix}-${index}.txt`),
+          request.content,
+          'utf8',
+        ),
+      );
+    }
+    await Promise.all(writes);
+  }
 }

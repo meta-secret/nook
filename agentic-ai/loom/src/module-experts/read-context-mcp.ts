@@ -12,6 +12,7 @@ const MAX_READ_BYTES = 256 * 1024;
 const MAX_QUERY_LENGTH = 200;
 const MAX_RESULTS = 100;
 const MAX_RESPONSE_BYTES = 256 * 1024;
+const MAX_SEARCH_OUTPUT_BYTES = MAX_RESPONSE_BYTES - 64 * 1024;
 const MAX_RESULT_LINE_BYTES = 2_000;
 const MAX_REQUEST_BYTES = 65_536;
 export const MODULE_EXPERT_READ_CONTEXT_TOOLS = [
@@ -633,11 +634,11 @@ type SearchFileRequest = {
 function searchFile(request: SearchFileRequest): boolean {
   if (
     request.state.matches.length >= request.maxResults ||
-    request.state.outputBytes >= MAX_RESPONSE_BYTES ||
+    request.state.outputBytes >= MAX_SEARCH_OUTPUT_BYTES ||
     request.state.searchedFiles >= MAX_SEARCHED_FILES ||
     request.state.searchedBytes >= MAX_SEARCHED_BYTES
   ) {
-    return false;
+    return truncateSearch(request.state);
   }
   const stats = lstatSync(request.path.absolutePath);
   if (!stats.isFile()) return true;
@@ -645,8 +646,9 @@ function searchFile(request: SearchFileRequest): boolean {
     request.state.truncated = true;
     return true;
   }
-  if (request.state.searchedBytes + stats.size > MAX_SEARCHED_BYTES)
-    return false;
+  if (request.state.searchedBytes + stats.size > MAX_SEARCHED_BYTES) {
+    return truncateSearch(request.state);
+  }
   request.state.searchedFiles += 1;
   request.state.searchedBytes += stats.size;
   const content = readFileSync(request.path.absolutePath, 'utf8');
@@ -659,14 +661,22 @@ function searchFile(request: SearchFileRequest): boolean {
       .subarray(0, MAX_RESULT_LINE_BYTES)
       .toString('utf8');
     const match = `${request.path.relativePath}:${index + 1}:${boundedLine}`;
-    const matchBytes = Buffer.byteLength(match, 'utf8');
-    if (request.state.outputBytes + matchBytes > MAX_RESPONSE_BYTES)
-      return false;
+    const matchBytes = Buffer.byteLength(JSON.stringify(match), 'utf8');
+    if (request.state.outputBytes + matchBytes > MAX_SEARCH_OUTPUT_BYTES) {
+      return truncateSearch(request.state);
+    }
     request.state.matches[request.state.matches.length] = match;
     request.state.outputBytes += matchBytes;
-    if (request.state.matches.length >= request.maxResults) return false;
+    if (request.state.matches.length >= request.maxResults) {
+      return truncateSearch(request.state);
+    }
   }
   return true;
+}
+
+function truncateSearch(state: SearchState): false {
+  state.truncated = true;
+  return false;
 }
 
 function walkFiles(request: WalkRequest): boolean {
