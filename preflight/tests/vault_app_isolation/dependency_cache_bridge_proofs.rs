@@ -354,6 +354,8 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
 
     assert!(
         verifier.contains("docker-container")
+            && verifier.contains("NOOK_BUILDKIT_REMOTE")
+            && verifier.contains("buildx prune")
             && verifier.contains("--use")
             && !verifier.contains("--builder")
             && verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
@@ -361,7 +363,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
             && verifier.contains("nook-sccache-report chef-wasm-release")
             && verifier.contains("nook-sccache-report chef-wasm-clippy")
             && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "runtime WASM proof must use a fresh docker-container builder and require chef CACHED markers"
+        "runtime WASM proof must empty its hosted or ARC builder and require chef CACHED markers"
     );
     Ok(())
 }

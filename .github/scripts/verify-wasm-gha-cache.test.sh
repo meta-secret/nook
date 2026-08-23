@@ -41,7 +41,7 @@ run_proof \
   NOOK_BUILDKIT_REMOTE=1 \
   NOOK_PR_BUILDX_BUILDER=nook-arc-test
 grep -Fxq 'buildx use nook-arc-test' "$arc_calls"
-grep -Fxq 'buildx prune --builder nook-arc-test --all --force' "$arc_calls"
+grep -Fxq 'buildx prune --all --force' "$arc_calls"
 if grep -Fq 'buildx create' "$arc_calls" || grep -Fq 'buildx rm' "$arc_calls"; then
   echo 'ARC cache proof must reuse, prune, and retain its private sidecar' >&2
   exit 1

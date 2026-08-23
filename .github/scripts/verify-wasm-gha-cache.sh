@@ -60,7 +60,6 @@ for attempt in 1 2 3; do
     # registry layers, including after an earlier incomplete attempt.
     "$docker_bin" buildx use "$proof_builder"
     "$docker_bin" buildx prune \
-      --builder "$proof_builder" \
       --all \
       --force >/dev/null
   else
