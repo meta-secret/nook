@@ -34,29 +34,7 @@ delete_job_dir() {
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
     "$request_dir/$pod_uid.intent" "$request_dir/$pod_uid.intent.next" \
-    "$request_dir/$pod_uid.candidate" "$request_dir/$pod_uid.candidate.next" \
-    "$request_dir/$pod_uid.promote" "$request_dir/$pod_uid.promote.next"
-}
-
-valid_job_marker() {
-  local pod_uid="$1" suffix="$2" request request_value
-  request="$request_dir/$pod_uid.$suffix"
-  test -e "$request" || return 1
-  if test -L "$request" ||
-     test "$(stat -c '%F:%u:%g:%h' -- "$request" 2>/dev/null || true)" != \
-       "regular file:0:0:1"; then
-    rm -f -- "$request"
-    return 1
-  fi
-  request_value="$(tr -d '\r\n' < "$request")"
-  if test "$request_value" != "$pod_uid"; then
-    rm -f -- "$request"
-    return 1
-  fi
-}
-
-promotion_requested() {
-  valid_job_marker "$1" promote
+    "$request_dir/$pod_uid.candidate" "$request_dir/$pod_uid.candidate.next"
 }
 
 promotion_intended() {
@@ -179,30 +157,6 @@ promotion_intent_expired() {
   test -n "$(find "$intent" -mmin +2 -print -quit 2>/dev/null)"
 }
 
-promotion_requests_pending() {
-  local request pod_uid job_dir
-  shopt -s nullglob
-  for request in "$request_dir"/*.promote; do
-    pod_uid="$(basename "$request" .promote)"
-    if ! valid_uid "$pod_uid"; then
-      rm -f -- "$request"
-      continue
-    fi
-    job_dir="$jobs_dir/$pod_uid"
-    if ! test -d "$job_dir" || ! promotion_requested "$pod_uid"; then
-      rm -f -- "$request"
-      continue
-    fi
-    if test -n "$(find "$request" -mmin +2 -print -quit 2>/dev/null)"; then
-      echo "Abandoning expired ARC promotion barrier for $pod_uid" >&2
-      rm -f -- "$request"
-      continue
-    fi
-    return 0
-  done
-  return 1
-}
-
 promotion_intents_pending() {
   local intent pod_uid job_dir
   shopt -s nullglob
@@ -228,7 +182,7 @@ promotion_intents_pending() {
 }
 
 promotion_barrier_pending() {
-  promotion_requests_pending || promotion_intents_pending
+  promotion_intents_pending
 }
 
 promote_job_dir() {
@@ -449,8 +403,6 @@ prune_stale_jobs() {
           esac
         fi
         rm -f -- "$request_dir/$pod_uid.intent"
-      elif promotion_requested "$pod_uid"; then
-        promote_job_dir "$job_dir" || true
       elif retention_active "$pod_uid"; then
         continue
       fi
@@ -485,8 +437,6 @@ prune_stale_jobs() {
         esac
       fi
       rm -f -- "$request_dir/$pod_uid.intent"
-    elif promotion_requested "$pod_uid"; then
-      promote_job_dir "$job_dir" || true
     elif retention_active "$pod_uid"; then
       continue
     fi

@@ -432,6 +432,8 @@ remoteWorkflow.requireAll([
   "vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest'",
   "REQUESTED_RUNNER_LABEL:",
   "nook-k0s-cache|nook-k0s-hive",
+  "nook-k0s-cache:arc:runtime",
+  "nook-k0s-hive:hive:verify",
   "HIVE_NEO4J_TEST_URI:",
   "--publish 127.0.0.1:7474:7474",
   "nook-hive-linux-amd64-v1:buildcache",
@@ -497,14 +499,11 @@ buildkitCloner.requireAll([
   '*containerd-shim-kata-v2*" -id $sandbox_id "*',
   'labels.\\"io.kubernetes.pod.uid\\"==$pod_uid',
   ".seed-generation",
-  'request="$request_dir/$pod_uid.$suffix"',
   '"regular file:0:0:1"',
   'promotion_barrier_pending && return 0',
-  'promotion_requests_pending || promotion_intents_pending',
+  "promotion_intents_pending",
   'intent="$request_dir/$pod_uid.intent"',
   'find "$intent" -mmin +2',
-  'find "$request" -mmin +2',
-  "Abandoning expired ARC promotion barrier",
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
   'if ! cp --reflink=always --sparse=auto "$job_file" "$seed_next"; then',
@@ -516,11 +515,12 @@ buildkitCloner.requireAll([
   "candidate_expired",
   'any(.jobs[]?; .runner_name == $runner and .status == "in_progress" and .conclusion == null)',
   'conclusion="$(promotion_job_conclusion "$pod_uid" || true)"',
-  'if promotion_requested "$pod_uid"; then',
   "promotion_barrier_pending && prune_interval=5",
   "if (( SECONDS - last_prune >= prune_interval )); then",
 ]);
+buildkitCloner.forbid(".promote");
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
+buildkitPrepare.require("deadline=$(($(date +%s) + 240))");
 if (
   buildkitCloner.index('if ! record_sandbox_id "$pod_uid"; then') >
   buildkitCloner.index('btrfs subvolume create "$job_dir"')

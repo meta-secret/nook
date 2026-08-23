@@ -84,6 +84,16 @@ jobs:
             ""|nook-k0s|nook-k0s-cache|nook-k0s-hive) ;;
             *) echo "Unsupported remote runner label: $REQUESTED_RUNNER_LABEL" >&2; exit 2 ;;
           esac
+          case "$REQUESTED_RUNNER_LABEL:$REQUESTED_REMOTE_TASKS" in
+            :*) ;;
+            nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:arc:runtime) ;;
+            nook-k0s-cache:arc:runtime) ;;
+            nook-k0s-hive:hive:verify) ;;
+            *)
+              echo "Remote runner label is incompatible with the requested task" >&2
+              exit 2
+              ;;
+          esac
           .github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS"
       - uses: ./.github/actions/nook-docker-setup
         with:

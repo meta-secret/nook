@@ -21,13 +21,14 @@ rm -f "$ready_file"
 printf '%s\n' "$pod_uid" > "$request_temp"
 mv "$request_temp" "$request_file"
 
-for _ in $(seq 1 600); do
+deadline=$(($(date +%s) + 240))
+while test "$(date +%s)" -lt "$deadline"; do
   if test -f "$ready_file"; then
     rm -f "$ready_file"
     echo "Prepared private reflinked BuildKit state for Pod $pod_uid"
     exit 0
   fi
-  sleep 0.1
+  sleep 1
 done
 
 echo "Timed out waiting for private BuildKit state for Pod $pod_uid" >&2

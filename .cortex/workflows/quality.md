@@ -354,10 +354,13 @@ Use this workflow for quality, CI, and deployment changes.
 
     #### Main workflow
     - Main serializes native → WASM → web publisher lanes.
-    - Each lane verifies read-only first, then exports its already-solved graph from the same job-scoped builder.
-    - WASM dependencies export alone with no hosted reimport and forced zstd compression.
+    - Cache-primary ARC lanes verify read-only first, then promote the same
+      job-scoped graph into the node-local seed.
+    - Hosted fallback lanes export their verified graph to Zot for cold-node recovery.
+    - Hosted WASM dependency export uses no reimport and forces zstd compression.
     - Browser/UI validation remains read-only and receives no compiler-cache identity.
-    - After UI-demo assertions pass, its lane exports the warm browser graph through a dedicated cache-only publisher.
+    - After UI-demo assertions pass, cache-primary ARC promotes the warm browser
+      graph; hosted fallback uses the dedicated cache-only Zot publisher.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
