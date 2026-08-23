@@ -93,14 +93,18 @@ fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
         "find \"$request_lane\" -mmin +5",
         "test ! -e \"$pod_root/$pod_uid\"",
         "io.kubernetes.pod.uid",
-        "containerd-shim-kata-v2",
+        "sandbox_marker=\"$runtime_dir/$pod_uid.sandbox\"",
+        "k0s ctr --namespace k8s.io tasks list -q",
+        "containerd-shim-kata-v2*\" -id $sandbox_id \"",
     ] {
         assert!(
             reaper.contains(guard),
             "orphan-lane reaper is missing: {guard}"
         );
     }
+    assert!(cloner.contains("record_sandbox_id \"$pod_uid\""));
     assert!(reaper.contains("delete_request_lane \"$request_lane\""));
+    assert!(!reaper.contains("*containerd-shim-kata-v2*) continue 2"));
 }
 
 #[test]

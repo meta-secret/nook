@@ -81,7 +81,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     fingerprint when cache recipes are clean.
   - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - **Main owns the shared trusted BuildKit lineage.**
-  - Main exports the Rust, WASM, web, and e2e caches.
+  - Cache-primary ARC Main lanes promote their already-solved private BuildKit
+    state into the node-local copy-on-write seed after verification succeeds.
+  - ARC promotion does not export the full Rust, WASM, web, or e2e builder
+    graphs to Zot.
+  - GitHub-hosted fallback Main lanes export those builder graphs to Zot.
   - Every PR job restores its exact SHA alone when that scope exists.
   - A new native or WASM source scope restores Main source alone when that ref exists.
   - Other new exact scopes restore source-free dependencies and trusted Main.
@@ -160,9 +164,12 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Other explicit Main jobs select the general scale set through
     `NOOK_RUNS_ON`.
   - Both routes use `ubuntu-latest` only as their configuration fallback.
-  - Each lane verifies, then exports only its already-solved local builder graph.
-  - Export happens only after every lane-specific check succeeds.
-  - The WASM dependency scope keeps its no-import, forced-zstd export.
+  - Each cache-primary ARC lane verifies, then promotes its already-solved
+    local BuildKit state into the node-local seed.
+  - Hosted fallback lanes export only their already-solved builder graphs.
+  - Promotion or hosted export happens only after every lane-specific check succeeds.
+  - The hosted fallback WASM dependency export keeps its no-import,
+    forced-zstd behavior.
   - Later browser/UI consumers remain read-only.
   - Development deploy waits on web verify + web e2e.
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.

@@ -360,13 +360,21 @@ record_sandbox_id() {
 }
 
 record_active_sandboxes() {
-  local job_dir pod_uid
+  local job_dir pod_uid request_lane
   while IFS= read -r -d '' job_dir; do
     pod_uid="$(basename "$job_dir")"
     valid_uid "$pod_uid" || continue
     record_sandbox_id "$pod_uid" || true
   done < <(
     find "$jobs_dir" -mindepth 1 -maxdepth 1 -type d -print0
+  )
+  while IFS= read -r -d '' request_lane; do
+    pod_uid="$(basename "$request_lane")"
+    valid_uid "$pod_uid" || continue
+    request_lane_valid "$request_lane" || continue
+    record_sandbox_id "$pod_uid" || true
+  done < <(
+    find "$request_dir" -mindepth 1 -maxdepth 1 -type d -print0
   )
 }
 
@@ -407,6 +415,7 @@ request_expired() {
 
 prune_orphan_request_lanes() {
   local command_line command_line_file container_list pod_uid request_lane
+  local sandbox_id sandbox_marker task_list
   while IFS= read -r -d '' request_lane; do
     pod_uid="$(basename "$request_lane")"
     valid_uid "$pod_uid" || continue
@@ -422,14 +431,34 @@ prune_orphan_request_lanes() {
       continue
     fi
     test -z "$container_list" || continue
-    for command_line_file in /proc/[0-9]*/cmdline; do
-      test -r "$command_line_file" || continue
-      command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
-      case "$command_line" in
-        *containerd-shim-kata-v2*) continue 2 ;;
-      esac
-    done
+    sandbox_marker="$runtime_dir/$pod_uid.sandbox"
+    if test -e "$sandbox_marker"; then
+      if test -L "$sandbox_marker" ||
+         test "$(stat -c '%F:%u:%g:%h' -- "$sandbox_marker" 2>/dev/null || true)" != \
+           "regular file:0:0:1"; then
+        continue
+      fi
+      sandbox_id="$(tr -d '\r\n' < "$sandbox_marker")"
+      [[ "$sandbox_id" =~ ^[0-9a-f]{64}$ ]] || continue
+      if k0s ctr --namespace k8s.io containers info "$sandbox_id" >/dev/null 2>&1; then
+        continue
+      fi
+      if ! task_list="$(k0s ctr --namespace k8s.io tasks list -q 2>/dev/null)"; then
+        continue
+      fi
+      if printf '%s\n' "$task_list" | grep -Fxq "$sandbox_id"; then
+        continue
+      fi
+      for command_line_file in /proc/[0-9]*/cmdline; do
+        test -r "$command_line_file" || continue
+        command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
+        case "$command_line" in
+          *containerd-shim-kata-v2*" -id $sandbox_id "*) continue 2 ;;
+        esac
+      done
+    fi
     delete_request_lane "$request_lane"
+    rm -f -- "$sandbox_marker"
   done < <(
     find "$request_dir" -mindepth 1 -maxdepth 1 -type d -print0
   )
