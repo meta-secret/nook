@@ -100,11 +100,35 @@ const BUN_SKILL_IMAGE =
 const CONTAINER_SKILLS_ROOT = '/skills';
 const SEALED_IMAGE_LABEL = 'nook.executable-skill-closure';
 const SEALED_RECIPE_LABEL = 'nook.executable-skill-recipe';
-const dockerEnvironment: Readonly<Record<string, string>> = {
+const DOCKER_CONNECTION_ENVIRONMENT_KEYS = [
+  'DOCKER_CERT_PATH',
+  'DOCKER_CONFIG',
+  'DOCKER_CONTEXT',
+  'DOCKER_HOST',
+  'DOCKER_TLS',
+  'DOCKER_TLS_VERIFY',
+  'HOME',
+  'SSH_AUTH_SOCK',
+] as const;
+const BASE_DOCKER_CONTROL_ENVIRONMENT: Readonly<Record<string, string>> = {
   NO_COLOR: '1',
   PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin',
 };
-const DOCKER_ENVIRONMENT = Object.freeze(dockerEnvironment);
+
+export function resolveDockerControlEnvironment(): Readonly<
+  Record<string, string>
+> {
+  const environment: Record<string, string> = {
+    ...BASE_DOCKER_CONTROL_ENVIRONMENT,
+  };
+  for (const key of DOCKER_CONNECTION_ENVIRONMENT_KEYS) {
+    const value = Bun.env[key];
+    if (typeof value === 'string' && value.length > 0) {
+      environment[key] = value;
+    }
+  }
+  return Object.freeze(environment);
+}
 
 export enum ExecutableSkillAcceptanceProbe {
   Containment = 'containment',
@@ -483,7 +507,7 @@ async function runAttachedContainer(
 ): Promise<Omit<DockerSkillOutput, 'runtimeImageDigest'>> {
   const executionTimeoutMs = remainingMilliseconds(request.deadline);
   const spawnOptions = {
-    env: DOCKER_ENVIRONMENT,
+    env: resolveDockerControlEnvironment(),
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'pipe',
@@ -651,7 +675,7 @@ async function runDockerControl(
 ): Promise<DockerControlOutput> {
   const controlTimeoutMs = remainingMilliseconds(request.deadline);
   const options = {
-    env: DOCKER_ENVIRONMENT,
+    env: resolveDockerControlEnvironment(),
     stdin: request.stdin === false ? ('ignore' as const) : ('pipe' as const),
     stdout: 'pipe',
     stderr: 'pipe',

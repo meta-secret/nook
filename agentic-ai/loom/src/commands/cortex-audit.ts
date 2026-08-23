@@ -70,6 +70,16 @@ export async function runCortexAuditFromDirectory(
     };
     loomFailureDetail(loomFailureDetailArgs);
   }
+  const executableSkillAuditRequest = { repositoryRoot: repoRoot };
+  const executableSkillRegistryFindings = auditExecutableSkillRegistry(
+    executableSkillAuditRequest,
+  );
+  if (executableSkillRegistryFindings.length > 0) {
+    const failureReportRequest: ExecutableSkillRegistryFailureReportRequest = {
+      findings: executableSkillRegistryFindings,
+    };
+    return executableSkillRegistryFailureReport(failureReportRequest);
+  }
 
   const mdFiles = listPersistentCortexMarkdownFiles(cortexRoot);
   const brokenLinks: BrokenLink[] = [];
@@ -189,11 +199,6 @@ export async function runCortexAuditFromDirectory(
       missingExecutableSkills.push(slug);
     }
   }
-  const executableSkillAuditRequest = { repositoryRoot: repoRoot };
-  const executableSkillRegistryFindings = auditExecutableSkillRegistry(
-    executableSkillAuditRequest,
-  );
-
   return {
     brokenLinks,
     missingFromIndex,
@@ -212,6 +217,26 @@ export async function runCortexAuditFromDirectory(
       structureFindings.length === 0 &&
       articleStructureFindings.length === 0 &&
       executableSkillRegistryFindings.length === 0,
+  };
+}
+
+type ExecutableSkillRegistryFailureReportRequest = {
+  readonly findings: readonly ExecutableSkillRegistryFinding[];
+};
+
+function executableSkillRegistryFailureReport(
+  request: ExecutableSkillRegistryFailureReportRequest,
+): CortexAuditReport {
+  return {
+    brokenLinks: [],
+    missingFromIndex: [],
+    orphanIndexRows: [],
+    missingExecutableSkills: [],
+    densityFindings: [],
+    structureFindings: [],
+    articleStructureFindings: [],
+    executableSkillRegistryFindings: request.findings,
+    auditOk: false,
   };
 }
 

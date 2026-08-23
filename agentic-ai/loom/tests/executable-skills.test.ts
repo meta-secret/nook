@@ -45,6 +45,7 @@ import {
   ExecutableSkillTimeoutError,
   executeExecutableSkillAcceptanceProbe,
   executeRegisteredSkill,
+  resolveDockerControlEnvironment,
 } from '../src/executable-skills/runtime.ts';
 
 const REPOSITORY_ROOT = path.resolve(import.meta.dir, '../../..');
@@ -54,6 +55,7 @@ const LSTAT_MISSING_OPTIONS: { readonly throwIfNoEntry: false } = {
 };
 const REMOVE_TREE_OPTIONS = { recursive: true, force: true } as const;
 const CREATE_TREE_OPTIONS = { recursive: true } as const;
+const HOST_CREDENTIAL_NAME = 'NOOK_EXECUTABLE_SKILL_HOST_CREDENTIAL';
 setDefaultTimeout(180_000);
 
 const baseManifest: ExecutableSkillManifest = {
@@ -92,6 +94,45 @@ test('decodes only exact bounded Docker manifests', () => {
   expect(() => decodeExecutableSkillManifest(JSON.stringify(dotAlias))).toThrow(
     'Invalid executable skill manifest',
   );
+});
+
+test('preserves Docker connection selection while scrubbing other host state', () => {
+  const environmentValues = {
+    DOCKER_CERT_PATH: '/tmp/nook-docker-certs',
+    DOCKER_CONFIG: '/tmp/nook-docker-config',
+    DOCKER_CONTEXT: 'nook-test-context',
+    DOCKER_HOST: 'unix:///tmp/nook-docker.sock',
+    DOCKER_TLS: '1',
+    DOCKER_TLS_VERIFY: '1',
+    HOME: '/tmp/nook-docker-home',
+    SSH_AUTH_SOCK: '/tmp/nook-ssh-agent.sock',
+    [HOST_CREDENTIAL_NAME]: 'synthetic-secret',
+  };
+  const mutationRequest: ApplyHostEnvironmentRequest = {
+    values: environmentValues,
+  };
+  const originalEnvironment = applyHostEnvironment(mutationRequest);
+  try {
+    const environment = resolveDockerControlEnvironment();
+    expect(environment.DOCKER_CERT_PATH).toBe(
+      environmentValues.DOCKER_CERT_PATH,
+    );
+    expect(environment.DOCKER_CONFIG).toBe(environmentValues.DOCKER_CONFIG);
+    expect(environment.DOCKER_CONTEXT).toBe(environmentValues.DOCKER_CONTEXT);
+    expect(environment.DOCKER_HOST).toBe(environmentValues.DOCKER_HOST);
+    expect(environment.DOCKER_TLS).toBe(environmentValues.DOCKER_TLS);
+    expect(environment.DOCKER_TLS_VERIFY).toBe(
+      environmentValues.DOCKER_TLS_VERIFY,
+    );
+    expect(environment.HOME).toBe(environmentValues.HOME);
+    expect(environment.SSH_AUTH_SOCK).toBe(environmentValues.SSH_AUTH_SOCK);
+    expect(Object.hasOwn(environment, HOST_CREDENTIAL_NAME)).toBe(false);
+  } finally {
+    const restoreRequest: RestoreHostEnvironmentRequest = {
+      values: originalEnvironment,
+    };
+    restoreHostEnvironment(restoreRequest);
+  }
 });
 
 test('executes and verifies the registered skill in the pinned container', async () => {
@@ -336,22 +377,34 @@ test('rejects dynamic and missing local modules from the closure', () => {
 });
 
 test('container denies repository writes and network access', async () => {
-  const result = await executeExecutableSkillAcceptanceProbe(
-    ExecutableSkillAcceptanceProbe.Containment,
-  );
-  const expectedContainment = {
-    networkBlocked: true,
-    writeBlocked: true,
+  const mutationRequest: ApplyHostEnvironmentRequest = {
+    values: { [HOST_CREDENTIAL_NAME]: 'synthetic-host-credential' },
   };
-  expect(JSON.parse(result.serializedOutput)).toEqual(expectedContainment);
-  const forbiddenFile = lstatSync(
-    path.join(
-      REPOSITORY_ROOT,
-      '.agents/skills/cortex-article-structure/forbidden.txt',
-    ),
-    LSTAT_MISSING_OPTIONS,
-  );
-  expect(Boolean(forbiddenFile)).toBe(false);
+  const originalEnvironment = applyHostEnvironment(mutationRequest);
+  try {
+    const result = await executeExecutableSkillAcceptanceProbe(
+      ExecutableSkillAcceptanceProbe.Containment,
+    );
+    const expectedContainment = {
+      credentialAbsent: true,
+      networkBlocked: true,
+      writeBlocked: true,
+    };
+    expect(JSON.parse(result.serializedOutput)).toEqual(expectedContainment);
+    const forbiddenFile = lstatSync(
+      path.join(
+        REPOSITORY_ROOT,
+        '.agents/skills/cortex-article-structure/forbidden.txt',
+      ),
+      LSTAT_MISSING_OPTIONS,
+    );
+    expect(Boolean(forbiddenFile)).toBe(false);
+  } finally {
+    const restoreRequest: RestoreHostEnvironmentRequest = {
+      values: originalEnvironment,
+    };
+    restoreHostEnvironment(restoreRequest);
+  }
 });
 
 test('deadline covers verification and removes the killed container', async () => {
@@ -530,4 +583,37 @@ function createClosureRepository(
   execFileSync('git', ['init', '--quiet'], gitOptions);
   execFileSync('git', ['add', '.'], gitOptions);
   return repositoryRoot;
+}
+
+type HostEnvironmentValues = Readonly<Record<string, string>>;
+type HostEnvironmentSnapshot = Readonly<Record<string, string | false>>;
+
+type ApplyHostEnvironmentRequest = {
+  readonly values: HostEnvironmentValues;
+};
+
+function applyHostEnvironment(
+  request: ApplyHostEnvironmentRequest,
+): HostEnvironmentSnapshot {
+  const snapshot: Record<string, string | false> = {};
+  for (const [key, value] of Object.entries(request.values)) {
+    const original = Bun.env[key];
+    snapshot[key] = typeof original === 'string' ? original : false;
+    Bun.env[key] = value;
+  }
+  return snapshot;
+}
+
+type RestoreHostEnvironmentRequest = {
+  readonly values: HostEnvironmentSnapshot;
+};
+
+function restoreHostEnvironment(request: RestoreHostEnvironmentRequest): void {
+  for (const [key, value] of Object.entries(request.values)) {
+    if (value === false) {
+      delete Bun.env[key];
+    } else {
+      Bun.env[key] = value;
+    }
+  }
 }

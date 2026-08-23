@@ -19,5 +19,7 @@ try {
   networkBlocked = true;
 }
 
-const result = { networkBlocked, writeBlocked };
+const credentialAbsent =
+  typeof Bun.env.NOOK_EXECUTABLE_SKILL_HOST_CREDENTIAL !== 'string';
+const result = { credentialAbsent, networkBlocked, writeBlocked };
 await Bun.write(Bun.stdout, JSON.stringify(result));

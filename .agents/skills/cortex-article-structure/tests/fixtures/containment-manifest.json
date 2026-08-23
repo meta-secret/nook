@@ -7,7 +7,7 @@
   "policyPaths": [".cortex/dynamic-skills/cortex-article-structure.md"],
   "limits": {
     "requestBytes": 64,
-    "resultBytes": 64,
+    "resultBytes": 128,
     "timeoutMs": 5000
   }
 }
