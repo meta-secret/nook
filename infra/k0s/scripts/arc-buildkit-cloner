@@ -12,6 +12,7 @@ github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-to
 github_repository="${NOOK_ARC_GITHUB_REPOSITORY:-meta-secret/nook}"
 pod_root="${NOOK_K0S_POD_ROOT:-/var/lib/k0s/kubelet/pods}"
 job_exclusive_limit="${NOOK_ARC_BUILDKIT_JOB_EXCLUSIVE_LIMIT:-32G}"
+request_exclusive_limit="${NOOK_ARC_BUILDKIT_REQUEST_EXCLUSIVE_LIMIT:-1M}"
 last_prune=0
 last_sandbox_refresh=-1
 
@@ -21,6 +22,15 @@ test -f "$seed_file"
 
 valid_uid() {
   [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
+}
+
+delete_request_lane() {
+  local request_lane="$1"
+  if btrfs subvolume show "$request_lane" >/dev/null 2>&1; then
+    btrfs subvolume delete "$request_lane" >/dev/null
+  else
+    rm -rf -- "$request_lane"
+  fi
 }
 
 delete_job_dir() {
@@ -37,13 +47,47 @@ delete_job_dir() {
     "$intent_dir/$pod_uid.accepted.next"
   request_lane="$request_dir/$pod_uid"
   if valid_uid "$pod_uid" && test ! -L "$request_lane"; then
-    rm -rf -- "$request_lane"
+    delete_request_lane "$request_lane"
   fi
+}
+
+prepare_request_lanes() {
+  local create create_value pod_uid request_lane
+  shopt -s nullglob
+  for create in "$request_dir"/.create-*; do
+    if test -L "$create" ||
+       test "$(stat -c '%F:%u:%g:%a:%h' -- "$create" 2>/dev/null || true)" != \
+         "regular file:0:0:600:1"; then
+      rm -f -- "$create"
+      continue
+    fi
+    pod_uid="${create##*/.create-}"
+    create_value="$(tr -d '\r\n' < "$create")"
+    if ! valid_uid "$pod_uid" || test "$create_value" != "$pod_uid"; then
+      rm -f -- "$create"
+      continue
+    fi
+    request_lane="$request_dir/$pod_uid"
+    if test -L "$request_lane"; then
+      rm -f -- "$create"
+      continue
+    fi
+    if ! btrfs subvolume show "$request_lane" >/dev/null 2>&1; then
+      if test -e "$request_lane"; then
+        rm -rf -- "$request_lane"
+      fi
+      btrfs subvolume create "$request_lane" >/dev/null
+    fi
+    chmod 0700 "$request_lane"
+    btrfs qgroup limit -e "$request_exclusive_limit" "$request_lane"
+    rm -f -- "$create"
+  done
 }
 
 request_lane_valid() {
   local request_lane="$1"
   test ! -L "$request_lane" &&
+    btrfs subvolume show "$request_lane" >/dev/null 2>&1 &&
     test "$(stat -c '%F:%u:%g:%a' -- "$request_lane" 2>/dev/null || true)" = \
       "directory:0:0:700"
 }
@@ -192,10 +236,6 @@ EOF
       rm -f -- "$candidate"
       continue
     fi
-    intent_next="$intent_dir/$pod_uid.intent.next"
-    printf '%s\n' "$candidate_value" > "$intent_next"
-    chmod 0600 "$intent_next"
-    mv "$intent_next" "$intent_dir/$pod_uid.intent"
     accepted_next="$intent_dir/$pod_uid.accepted.next"
     rm -f -- "$accepted_next"
     printf '%s\n' "$pod_uid" > "$accepted_next"
@@ -205,6 +245,15 @@ EOF
       rm -f -- "$accepted_next"
       continue
     fi
+    intent_next="$intent_dir/$pod_uid.intent.next"
+    rm -f -- "$intent_next"
+    printf '%s\n' "$candidate_value" > "$intent_next"
+    chmod 0600 "$intent_next"
+    if ! ln "$intent_next" "$intent_dir/$pod_uid.intent"; then
+      rm -f -- "$intent_next" "$candidate"
+      continue
+    fi
+    rm -f -- "$intent_next"
     rm -f -- "$candidate"
   done
 }
@@ -389,6 +438,7 @@ clone_requests() {
       if request_expired "$pod_uid" "$request"; then
         rm -f -- "$request" "$ready_file" \
           "$runtime_dir/$pod_uid.sandbox"
+        delete_request_lane "$request_lane"
       fi
       continue
     fi
@@ -510,6 +560,7 @@ prune_stale_jobs() {
 }
 
 while true; do
+  prepare_request_lanes
   verify_promotion_candidates
   clone_requests
   if (( SECONDS - last_sandbox_refresh >= 1 )); then

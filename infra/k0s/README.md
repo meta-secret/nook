@@ -94,7 +94,9 @@ ARC storage uses a separate Task-managed Btrfs image under
 `/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
 filesystem remains ext4. The trusted preparation init container briefly sees
 only the shared clone-request root before untrusted job containers start. It
-creates a root-owned, mode-`0700` filesystem lane for that Pod UID. A
+asks the host service to create a root-owned, mode-`0700` Btrfs subvolume for
+that Pod UID. The host applies a 1 MiB exclusive quota before the init container
+can publish its clone request. A
 credential-free sidecar mounts only its own lane through `subPathExpr` and
 forwards its Pod-scoped candidate there.
 The authenticated root-owned host verifier establishes the intent under the
@@ -105,7 +107,9 @@ marker in its private runtime directory and atomically renames it into the lane,
 so an untrusted lane cannot redirect host writes through a symlink. Before
 accepting a candidate, the verifier also resolves the lane's Pod UID through
 host CRI metadata and requires its observed Pod name to match the claimed
-GitHub runner.
+GitHub runner. Acceptance is published before the host installs a promotion
+intent with an exclusive link. A repeated candidate can neither refresh an
+existing intent nor extend its two-minute barrier.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
 covers twenty fully allocated 32 GiB

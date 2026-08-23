@@ -488,11 +488,20 @@ runtimeSmoke.requireAll([
   '--volume "$shared_dir:/nook-output"',
   "ARC BuildKit-to-Podman runtime smoke passed",
 ]);
-buildkitPrepare.require("printf '%s\\n' \"$pod_uid\"");
+buildkitPrepare.requireAll([
+  "printf '%s\\n' \"$pod_uid\"",
+  'create_file="$request_dir/.create-$pod_uid"',
+  'while ! test -d "$request_lane"; do',
+]);
+buildkitPrepare.forbid('mkdir -p "$request_lane"');
 buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-34359738368");
 buildkitDockerfile.require("jq=1.8.1-r0");
 buildkitCloner.requireAll([
   'btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"',
+  'request_exclusive_limit="${NOOK_ARC_BUILDKIT_REQUEST_EXCLUSIVE_LIMIT:-1M}"',
+  'btrfs subvolume create "$request_lane"',
+  'btrfs qgroup limit -e "$request_exclusive_limit" "$request_lane"',
+  "prepare_request_lanes",
   'if ! container_list="$(',
   "cp --reflink=always --sparse=auto",
   'test ! -e "$pod_root/$pod_uid" || continue',
@@ -527,6 +536,7 @@ buildkitCloner.requireAll([
   'test "$trusted_pod_name" != "$pod_name"',
   'accepted_next="$intent_dir/$pod_uid.accepted.next"',
   'mv -T "$accepted_next" "$request_lane/accepted"',
+  'ln "$intent_next" "$intent_dir/$pod_uid.intent"',
   'find "$intent" -mmin +2',
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
@@ -544,6 +554,7 @@ buildkitCloner.requireAll([
   "if (( SECONDS - last_prune >= prune_interval )); then",
 ]);
 buildkitCloner.forbid('accepted_next="$request_lane/accepted.next"');
+buildkitCloner.forbid('mv "$intent_next" "$intent_dir/$pod_uid.intent"');
 buildkitCloner.forbid(".promote");
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
 buildkitCloner.forbid('promote_job_dir "$job_dir" || true');
@@ -555,6 +566,12 @@ if (
   throw new Error(
     "sandbox identity must be recorded before job subvolume creation",
   );
+}
+if (
+  buildkitCloner.index('mv -T "$accepted_next" "$request_lane/accepted"') >
+  buildkitCloner.index('ln "$intent_next" "$intent_dir/$pod_uid.intent"')
+) {
+  throw new Error("ARC acceptance must publish before promotion intent");
 }
 platformTasks.require("--no-cache");
 hiveWorkflow.requireAll([

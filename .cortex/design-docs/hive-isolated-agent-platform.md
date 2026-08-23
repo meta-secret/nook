@@ -888,6 +888,9 @@ the comment-owned mesh rules in one checked nftables transaction. Docker and
 unrelated dynamic firewall state remain live on both the controller and worker.
 The ARC cache verifier binds every claimed runner name to host-observed CRI
 metadata for that request lane's Pod UID before creating a promotion intent.
+Every writable request lane is a host-created Btrfs subvolume with a 1 MiB
+exclusive quota. Acceptance must reach the lane before an intent is installed,
+and exclusive intent creation prevents retries from refreshing its deadline.
 
 ## 11. Source map
 
