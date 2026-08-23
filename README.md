@@ -474,6 +474,13 @@ or synthesis barrier; every role remains nondelegating and read-only. See the
 [structural refactoring registry](.cortex/architecture/refactoring-experts.md)
 and [workflow](.cortex/workflows/structural-refactoring.md).
 
+Executable skills currently stop at a dormant provider and source-audit
+boundary. Loom decodes exact manifests, applies one shared source policy,
+materializes immutable frozen-index closures, and can mint opaque authority only
+for an audited empty production registry. Provider code under
+`.agents/skills/` cannot register, execute, or schedule itself. Container
+execution and product workflow activation belong to later consumer slices.
+
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
