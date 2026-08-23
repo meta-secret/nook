@@ -69,8 +69,9 @@ Batch behavior:
 - On GitHub-hosted runners, timeout recovery also removes task-created Docker
   containers and restarts the job-scoped BuildKit container.
 - On ARC, the private BuildKit sidecar is probed but never treated as a Docker
-  container. Its local state is discarded with the microVM; Zot holds durable
-  caches.
+  container. Focused Remote state is discarded with the microVM and cannot
+  promote the trusted seed. Only authenticated successful Main jobs may request
+  local promotion. Zot retains the hosted cross-node bootstrap cache.
 - After every task, reselect the job-scoped Buildx builder.
   - This prevents temporary builders from affecting later selections.
 - Report every task result in the GitHub job summary.

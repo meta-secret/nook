@@ -131,6 +131,10 @@ const buildkitEntrypoint = contract({
   label: "ARC BuildKit entrypoint",
   source: await read("infra/k0s/images/arc-buildkit/entrypoint"),
 });
+const buildkitDockerfile = contract({
+  label: "ARC BuildKit image",
+  source: await read("infra/k0s/images/arc-buildkit/Dockerfile"),
+});
 const buildkitPrepare = contract({
   label: "ARC BuildKit preparation",
   source: await read("infra/k0s/images/arc-buildkit/prepare-state"),
@@ -426,6 +430,7 @@ const mainCount = {
   expected: 8,
 };
 mainWorkflow.count(mainCount);
+mainWorkflow.count({ fragment: "if: success()", expected: 4 });
 remoteBatch.require(
   'rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust',
 );
@@ -453,6 +458,7 @@ runtimeSmoke.requireAll([
 ]);
 buildkitPrepare.require("printf '%s\\n' \"$pod_uid\"");
 buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-34359738368");
+buildkitDockerfile.require("jq=1.8.1-r0");
 buildkitCloner.requireAll([
   'btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"',
   'if ! container_list="$(',
@@ -502,17 +508,21 @@ hiveWorkflow.requireAll([
   "github.event.pull_request.head.repo.full_name != github.repository",
   "github.event.pull_request.user.login == 'dependabot[bot]'",
   "github.event.pull_request.user.login != 'dependabot[bot]'",
-  "run: task ci:arc:promote-buildkit-cache",
+  'test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"',
+  "task ci:arc:promote-buildkit-cache",
+  "task hive:cache:publish",
 ]);
 ciTasks.requireAll([
   "ci:arc:promote-buildkit-cache:",
-  'if test "${NOOK_ARC_RUNNER:-}" = "1"; then',
+  'if test "${NOOK_ARC_RUNNER:-}" = "1" &&',
+  'test "${GITHUB_REF:-}" = "refs/heads/main" &&',
   "task _buildx:healthy BUILD_TASK=_ci:main:publish-native-cache:host",
+  'test "${GITHUB_EVENT_NAME:-}" = "push"',
   'signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"',
   'mv "$signal_dir/request.next" "$signal_dir/request"',
   'test -f "$signal_dir/accepted" && exit 0',
 ]);
-runtimeSmoke.require("task ci:arc:promote-buildkit-cache");
+runtimeSmoke.forbid("task ci:arc:promote-buildkit-cache");
 runners.requireAll([
   "name: request-buildkit-promotion",
   "name: cache-promotion-signal",
@@ -521,7 +531,13 @@ runners.requireAll([
   '"regular file:1001:1001:1"',
   'mv "$request_next" "$request_file"',
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
-  "while true; do sleep 3600; done",
+  'name: nook-arc-github',
+  'key: github_token',
+  '.event == "push" and',
+  '.head_branch == "main" and',
+  '[.jobs[]? | select(.runner_name == $runner)][0].conclusion // empty',
+  "trap finalize_promotion TERM INT",
+  "while true; do sleep 1; done",
 ]);
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",

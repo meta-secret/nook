@@ -265,8 +265,11 @@ maintenance-only.
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
-- ARC keeps Zot as the authoritative cache and also starts each fresh Kata guest
-  from a private reflink clone of a trusted 32 GiB BuildKit seed.
+- ARC starts each fresh Kata guest from a private reflink clone of a trusted
+  32 GiB BuildKit seed.
+- A GitHub-authenticated sidecar promotes local state only after the exact Main
+  runner job reaches a final `success` conclusion.
+- Hosted fallback publication keeps Zot as the cross-node bootstrap source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
   so ARC remains daemon-free and the helpers stop with the runner.

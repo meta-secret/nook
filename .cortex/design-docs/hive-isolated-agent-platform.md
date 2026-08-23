@@ -603,10 +603,15 @@ exclusive quota, so a compromised guest cannot consume the rest of the shared
 pool through files beside its state image. The garbage-collection target is
 24 GB.
 
-A successful trusted ARC job asks for seed promotion through an in-guest
-`emptyDir` signal. The runner never mounts the host request directory. A
-trusted sidecar validates the runner-owned regular signal and writes only its
-own Pod-UID-scoped host request. New clone requests wait behind an accepted
+A verified Main ARC job asks for seed promotion through an in-guest `emptyDir`
+signal. The runner never mounts the host request directory. A trusted sidecar
+uses the isolated ARC repository credential to verify the exact run is a Main
+push. It acknowledges the in-guest request without writing host state.
+
+When the runner exits, the sidecar queries GitHub for that exact Pod runner's
+final conclusion. It writes its Pod-UID-scoped host request only after GitHub
+reports `success`. Feature-branch dispatches, failures, and cancellations
+cannot request promotion. New clone requests wait behind an accepted host
 promotion so dependent jobs cannot start from the older seed.
 
 Promotion waits for API removal, kubelet volume teardown, containerd task
@@ -615,9 +620,8 @@ inode, and recorded seed generation. It replaces the seed atomically under the
 same lock used by clone creation. Stale concurrent jobs cannot overwrite a
 newer seed. The host never parses guest-controlled ext4 metadata; journal
 recovery occurs when a later Kata guest mounts its private clone. Failed,
-cancelled, or active jobs that never reach the verified publication step cannot
-refresh the seed. The ordinary and Hive smoke tasks apply the same gate to both
-scale sets.
+cancelled, non-Main, or active jobs cannot refresh the seed. The ordinary and
+Hive scale sets apply the same authenticated final-conclusion gate.
 Every smoke dispatch carries a unique nonce in the workflow run name. The
 operator matches both that nonce and the exact head SHA before monitoring or
 cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.

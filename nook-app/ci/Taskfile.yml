@@ -160,7 +160,9 @@ tasks:
     desc: Promote verified native ARC state locally or publish fallback cache scopes.
     cmds:
       - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1"; then
+        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
+           test "${GITHUB_REF:-}" = "refs/heads/main" &&
+           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
           task ci:arc:promote-buildkit-cache
         else
           task _buildx:healthy BUILD_TASK=_ci:main:publish-native-cache:host
@@ -170,7 +172,9 @@ tasks:
     desc: Promote verified WASM ARC state locally or publish fallback cache scopes.
     cmds:
       - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1"; then
+        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
+           test "${GITHUB_REF:-}" = "refs/heads/main" &&
+           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
           task ci:arc:promote-buildkit-cache
         else
           task _buildx:healthy BUILD_TASK=_ci:main:publish-wasm-cache:host
@@ -180,7 +184,9 @@ tasks:
     desc: Promote verified web ARC state locally or publish fallback cache scopes.
     cmds:
       - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1"; then
+        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
+           test "${GITHUB_REF:-}" = "refs/heads/main" &&
+           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
           task ci:arc:promote-buildkit-cache
         else
           task _buildx:healthy BUILD_TASK=_ci:main:publish-web-cache:host
@@ -190,7 +196,9 @@ tasks:
     desc: Promote verified browser ARC state locally or publish fallback cache scopes.
     cmds:
       - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1"; then
+        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
+           test "${GITHUB_REF:-}" = "refs/heads/main" &&
+           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
           task ci:arc:promote-buildkit-cache
         else
           task _buildx:healthy BUILD_TASK=_ci:main:publish-web-e2e-cache:host
@@ -202,11 +210,17 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
+        test "${GITHUB_ACTIONS:-}" = "true"
+        test "${GITHUB_EVENT_NAME:-}" = "push"
+        test "${GITHUB_REF:-}" = "refs/heads/main"
         signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"
         test -d "$signal_dir"
         test ! -L "$signal_dir"
         umask 077
-        printf '%s\n' "${GITHUB_RUN_ID:-manual}:${GITHUB_JOB:-job}" > "$signal_dir/request.next"
+        printf '%s:%s:%s\n' \
+          "${GITHUB_RUN_ID:?missing GitHub run ID}" \
+          "${GITHUB_RUN_ATTEMPT:?missing GitHub run attempt}" \
+          "${GITHUB_SHA:?missing GitHub head SHA}" > "$signal_dir/request.next"
         mv "$signal_dir/request.next" "$signal_dir/request"
         for _ in $(seq 1 100); do
           test -f "$signal_dir/accepted" && exit 0

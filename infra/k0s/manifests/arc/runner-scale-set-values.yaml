@@ -158,21 +158,93 @@ template:
             request_file="$request_dir/$POD_UID.promote"
             request_next="$request_file.next"
 
+            github_get() {
+              wget -qO- \
+                --header="Authorization: Bearer $GITHUB_TOKEN" \
+                --header="Accept: application/vnd.github+json" \
+                --header="X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/$1"
+            }
+
+            finalize_promotion() {
+              trap - TERM INT
+              deadline=$(($(date +%s) + 45))
+              while test "$(date +%s)" -lt "$deadline"; do
+                jobs="$(github_get \
+                  "actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100" || true)"
+                conclusion="$(printf '%s' "$jobs" | jq -r \
+                  --arg runner "$POD_NAME" \
+                  '[.jobs[]? | select(.runner_name == $runner)][0].conclusion // empty' \
+                  2>/dev/null || true)"
+                case "$conclusion" in
+                  success)
+                    umask 077
+                    printf '%s\n' "$POD_UID" > "$request_next"
+                    mv "$request_next" "$request_file"
+                    exit 0
+                    ;;
+                  cancelled|failure|neutral|skipped|stale|timed_out)
+                    echo "ARC cache promotion rejected final conclusion: $conclusion" >&2
+                    exit 0
+                    ;;
+                esac
+                sleep 1
+              done
+              echo "ARC cache promotion skipped: final conclusion unavailable" >&2
+              exit 0
+            }
+
             while ! test -f "$signal_file"; do sleep 0.2; done
             test ! -L "$signal_file"
             test "$(stat -c '%F:%u:%g:%h' "$signal_file")" = \
               "regular file:1001:1001:1"
+            signal_value="$(tr -d '\r\n' < "$signal_file")"
+            IFS=: read -r run_id run_attempt head_sha trailing <<EOF
+            $signal_value
+            EOF
+            test -z "$trailing"
+            case "$run_id:$run_attempt" in
+              *[!0-9:]*|:*|*::*|*:)
+                echo "ARC cache promotion rejected malformed run identity" >&2
+                exit 1
+                ;;
+            esac
+            case "$head_sha" in
+              *[!0-9a-fA-F]*|'')
+                echo "ARC cache promotion rejected malformed head SHA" >&2
+                exit 1
+                ;;
+            esac
+            test "${#head_sha}" -eq 40
+            run="$(github_get "actions/runs/$run_id")"
+            printf '%s' "$run" | jq -e \
+              --arg repository "$GITHUB_REPOSITORY" \
+              --arg sha "$head_sha" \
+              '.event == "push" and
+               .head_branch == "main" and
+               .head_sha == $sha and
+               .head_repository.full_name == $repository' >/dev/null
             umask 077
-            printf '%s\n' "$POD_UID" > "$request_next"
-            mv "$request_next" "$request_file"
             printf '%s\n' "$POD_UID" > "$accepted_file.next"
             mv "$accepted_file.next" "$accepted_file"
-            while true; do sleep 3600; done
+            trap finalize_promotion TERM INT
+            while true; do sleep 1; done
         env:
           - name: POD_UID
             valueFrom:
               fieldRef:
                 fieldPath: metadata.uid
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: GITHUB_REPOSITORY
+            value: meta-secret/nook
+          - name: GITHUB_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: nook-arc-github
+                key: github_token
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

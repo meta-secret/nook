@@ -29,5 +29,4 @@ docker run --rm \
   "$image" \
   sh -ceu 'cat /nook-arc-runtime > /nook-output/result'
 test "$(cat "$shared_dir/result")" = arc-runtime-ok
-task ci:arc:promote-buildkit-cache
 echo "ARC BuildKit-to-Podman runtime smoke passed"

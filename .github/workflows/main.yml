@@ -156,16 +156,17 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
       - name: Publish verified native BuildKit cache
+        if: success()
         run: task ci:main:publish-native-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
 
   wasm:
     name: WASM verification and artifact
@@ -228,16 +229,17 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
       - name: Publish verified WASM BuildKit cache
+        if: success()
         run: task ci:main:publish-wasm-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
 
   web:
     name: Verify web build
@@ -282,16 +284,17 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
       - name: Publish verified web BuildKit cache
+        if: success()
         run: task ci:main:publish-web-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
 
   web-e2e:
     name: Web e2e
@@ -436,25 +439,6 @@ jobs:
           VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
           WASM_BUILD_MODE=dev
 
-      - name: Publish verified browser web BuildKit cache
-        run: >-
-          task ci:main:publish-web-e2e-cache
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-
       - name: Upload complete Main UI demo artifact
         if: always()
         uses: actions/upload-artifact@v7
@@ -526,6 +510,26 @@ jobs:
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
+
+      - name: Publish verified browser web BuildKit cache
+        if: success()
+        run: >-
+          task ci:main:publish-web-e2e-cache
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          GIT_COMMIT_ID: ${{ github.sha }}
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
   deploy:
     name: Deploy development
