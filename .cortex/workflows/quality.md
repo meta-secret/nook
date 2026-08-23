@@ -170,8 +170,11 @@ Use this workflow for quality, CI, and deployment changes.
     - Delivery does not depend on the daemon's default image store and never restarts Docker.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
-    #### BuildKit cache (Zot)
-    - Private Zot is the authoritative BuildKit cache.
+    #### BuildKit cache
+    - The cache-primary node-local seed is authoritative for ARC Main producers.
+    - Every ARC build node receives the same pool, cloner, verifier, and pinned
+      BuildKit image contract before it becomes schedulable.
+    - Private Zot is the authenticated fallback for hosted jobs and recovery.
     - The k0s Zot Pod reserves one CPU and 2 GiB of memory.
     - It may burst to four CPUs and 8 GiB during parallel cache transfers.
     - Raise that ceiling only after production telemetry proves Zot is the
@@ -421,8 +424,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
-    - Main publishes shared verified Zot BuildKit layers.
-    - Pull requests restore them read-only.
+    - Main ARC producers promote the shared cache-primary node-local seed.
+    - Hosted jobs restore the verified Zot fallback read-only.
 
 11. **GitHub Actions agent execution:**
     - When an iteration is coherent, agents run `task loom:pre-push`, commit,

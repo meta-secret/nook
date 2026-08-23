@@ -88,8 +88,8 @@ succeed. Host-network Traefik requires an nftables INPUT accept for TCP `443`
 after k0s firewall updates. Public Redis `:6380` is retired.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
-`registry.dev.nokey.sh`. Main publishes shared cache manifests; pull requests
-restore them read-only after `docker login`. Explicit Remote tasks use
+`registry.dev.nokey.sh`. Hosted fallback jobs publish shared cache manifests;
+hosted pull requests restore them read-only after `docker login`. Explicit Remote tasks use
 branch-and-task Zot refs with Main fallback and write only those Remote refs in
 the separately authorized `nook/remote-buildcache/**` repository path. Zot
 deduplicates identical layer blobs shared with Main. Remote Rust compiler vertices
@@ -110,11 +110,16 @@ forks, and Dependabot retain hosted routing.
 `task infra:arc:fallback` immediately restores both routes to `ubuntu-latest`.
 ARC Buildx uses
 the remote driver against the private BuildKit sidecar. Each job starts from
-the reusable local seed but writes only to its own Pod UID clone. Zot remains
-the authoritative cache shared with hosted builders. Its
-authenticated Zot traffic resolves through the same node's TLS ingress,
-avoiding an external registry data path while preserving the public certificate
-and registry host.
+the reusable local seed but writes only to its own Pod UID clone. The
+cache-primary node-local seed is authoritative for ARC Main producers. Zot is
+the authenticated fallback shared with hosted builders. Its traffic resolves
+through cluster TLS ingress while preserving the public certificate and
+registry host.
+
+Every qualified ARC build node owns a local pool, cloner, verifier credential,
+and pinned BuildKit image. General and Hive runners may schedule across those
+nodes. Exactly one node carries the cache-primary label and receives Main cache
+producer jobs.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

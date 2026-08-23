@@ -13,38 +13,76 @@ vars:
 
 tasks:
   arc:build-host:resolve:
-    desc: Resolve and persist the Kubernetes cache-primary SSH target.
+    desc: Resolve and persist every Kubernetes ARC build SSH target.
     silent: true
     cmds:
       - |
         bash <<'BASH'
         set -euo pipefail
-        target="${INFRA_WORKER_SSH_TARGET:-}"
-        if test -z "$target"; then
-          target="$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-            "sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-cache-primary=true -o jsonpath='{.items[0].metadata.annotations.nook\\.nokey\\.sh/ssh-target}'")"
-        fi
-        user="${target%%@*}"
-        host="${target#*@}"
-        if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
-          echo "ARC cache-primary node lacks a valid nook.nokey.sh/ssh-target annotation" >&2
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        inventory="$(ssh -o BatchMode=yes "$controller_target" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
+        build_count="$(jq '.items | length' <<<"$build_nodes")"
+        if test "$build_count" -lt 1; then
+          echo "ARC has no qualified build node" >&2
           exit 1
         fi
-        case "$user:$host" in
-          *[!A-Za-z0-9_.:-]*|*:*@*)
-            echo "ARC cache-primary node has an unsafe nook.nokey.sh/ssh-target annotation" >&2
-            exit 1
-            ;;
-        esac
+        primary_count="$(jq '[.items[] | select(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true")] | length' <<<"$build_nodes")"
+        if test "$primary_count" -gt 1; then
+          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
+          exit 1
+        fi
+        if test "$primary_count" = 0; then
+          primary_node="$(jq -r '.items | sort_by(.metadata.name) | first.metadata.name' <<<"$build_nodes")"
+          kubectl label node "$primary_node" \
+            nook.nokey.sh/arc-cache-primary=true --overwrite >/dev/null
+          build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
+        fi
+        jq -r '.items | sort_by(.metadata.name)[] |
+          (.status.addresses[] | select(.type == "InternalIP") | .address) as $address |
+          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), .metadata.name, ("debian@" + $address)] | @tsv' \
+          <<<"$build_nodes"
+        REMOTE
+        )"
+        test -n "$inventory"
         target_dir="$HOME/.nook/infra"
         target_file="$target_dir/arc-cache-primary-ssh-target"
+        inventory_file="$target_dir/arc-build-ssh-targets"
         target_next="$target_file.next"
+        inventory_next="$inventory_file.next"
         install -d -m 0700 "$HOME/.nook" "$target_dir"
         umask 077
-        printf '%s\n' "$target" > "$target_next"
+        : > "$inventory_next"
+        primary_target=""
+        while IFS=$'\t' read -r is_primary node target; do
+          user="${target%%@*}"
+          host="${target#*@}"
+          if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
+            echo "ARC build node $node lacks a usable InternalIP" >&2
+            exit 1
+          fi
+          case "$user:$host" in
+            *[!A-Za-z0-9_.:-]*|*:*@*)
+              echo "ARC build node $node resolved an unsafe SSH target" >&2
+              exit 1
+              ;;
+          esac
+          printf '%s\n' "$target" >> "$inventory_next"
+          if test "$is_primary" = true; then
+            primary_target="$target"
+          fi
+          ssh -n -o BatchMode=yes "$controller_target" \
+            "sudo -n k0s kubectl annotate node '$node' 'nook.nokey.sh/ssh-target=$target' --overwrite >/dev/null"
+        done <<< "$inventory"
+        test -n "$primary_target"
+        test "$(sort -u "$inventory_next" | wc -l | tr -d ' ')" = "$(wc -l < "$inventory_next" | tr -d ' ')"
+        printf '%s\n' "$primary_target" > "$target_next"
         mv "$target_next" "$target_file"
-        chmod 0600 "$target_file"
-        echo "ARC cache-primary SSH target persisted at $target_file"
+        mv "$inventory_next" "$inventory_file"
+        chmod 0600 "$target_file" "$inventory_file"
+        echo "ARC build SSH inventory persisted under $target_dir"
         BASH
 
   arc:build-host:sync:
@@ -55,18 +93,19 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
         controller_target="{{.INFRA_SSH_TARGET}}"
-        if test "$build_target" = "$controller_target"; then
-          exit 0
-        fi
         repo_root="$(git rev-parse --show-toplevel)"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
-        ssh -n -o BatchMode=yes "$build_target" \
-          "install -d -m 0750 '$remote_dir'"
-        COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" -cf - infra/k0s |
-          ssh -o BatchMode=yes "$build_target" \
-            "tar -xf - -C '$remote_dir'"
+        while IFS= read -r build_target; do
+          test -n "$build_target"
+          ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$build_target" \
+            "install -d -m 0750 '$remote_dir'"
+          COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" -cf - infra/k0s |
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              -J "$controller_target" "$build_target" \
+              "tar -xf - -C '$remote_dir'"
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
   arc:auth:sync:
@@ -141,7 +180,7 @@ tasks:
         bash <<'BASH'
         set -euo pipefail
         credential_file="$HOME/.nook/github/arc-controller-token"
-        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
+        controller_target="{{.INFRA_SSH_TARGET}}"
         test -s "$credential_file"
         token="$(tr -d '\r\n' < "$credential_file")"
         [[ "$token" =~ ^[A-Za-z0-9_]+$ ]]
@@ -165,10 +204,14 @@ tasks:
         sudo -n install -d -m 0700 /etc/nook
         sudo -n install -m 0600 "$credential_temp" /etc/nook/arc-cache-verifier-token'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
-        ssh -o BatchMode=yes "$build_target" \
-          "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
-          < "$credential_file"
-        echo "ARC host verifier credential synchronized outside runner Pods"
+        while IFS= read -r build_target; do
+          test -n "$build_target"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$build_target" \
+            "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
+            < "$credential_file"
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
+        echo "ARC host verifier credential synchronized to every build node"
         BASH
 
   arc:render:check:
@@ -353,8 +396,12 @@ tasks:
     silent: true
     cmds:
       - |
-        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
-        ssh -o BatchMode=yes "$build_target" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        while IFS= read -r build_target; do
+        test -n "$build_target"
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+          -J "$controller_target" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         pool_root=/var/lib/nook-arc-buildkit
@@ -488,6 +535,7 @@ tasks:
         sudo -n systemctl is-active --quiet nook-arc-buildkit-cloner.service
         echo "ARC BuildKit copy-on-write pool is ready at 768 GiB with 32 GiB per job"
         REMOTE
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
 
   arc:buildkit:image:sync:
     internal: true
@@ -497,7 +545,7 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
+        controller_target="{{.INFRA_SSH_TARGET}}"
         temp_dir="$(mktemp -d)"
         artifact="$temp_dir/nook-arc-buildkit.tar"
         cleanup() { rm -rf "$temp_dir"; }
@@ -509,10 +557,14 @@ tasks:
           --tag localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1 \
           --output "type=oci,dest=$artifact" \
           infra/k0s/images/arc-buildkit
-        ssh -o BatchMode=yes "$build_target" \
-          'sudo -n k0s ctr --namespace k8s.io images import -' \
-          < "$artifact"
-        echo "Imported the pinned ARC BuildKit wrapper into k0s containerd"
+        while IFS= read -r build_target; do
+          test -n "$build_target"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$build_target" \
+            'sudo -n k0s ctr --namespace k8s.io images import -' \
+            < "$artifact"
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
+        echo "Imported the pinned ARC BuildKit wrapper into every build node"
         BASH
 
   arc:deploy:

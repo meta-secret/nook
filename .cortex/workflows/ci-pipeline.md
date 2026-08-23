@@ -394,8 +394,9 @@ host.
 
 **Zot cache policy:**
 
-- Delivery builds restore distinct private Zot BuildKit cache refs.
-- Main refreshes the default-branch scopes that new PRs may access.
+- Hosted delivery builds restore distinct private Zot BuildKit cache refs.
+- Main ARC producers refresh the cache-primary node-local seed. Hosted fallback
+  publication refreshes the default-branch Zot scopes.
 - Hosted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
 - Trusted ARC PR verification reuses a private node-local COW seed for the full
@@ -546,8 +547,11 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 ### Runner allocation
 
 - **`pr.yml`, `main.yml`, `release.yml`**
-  - Runner: `ubuntu-latest`
-  - Purpose: Elastic delivery capacity with Main-seeded private Zot caches
+  - Runner: trusted same-repository PR and Main native jobs use ARC. Hosted
+    capacity remains for releases, forks, Dependabot, browser, WASM, and
+    runtime-dependent gates.
+  - Purpose: Elastic delivery with a node-local ARC seed and private Zot as the
+    hosted fallback.
 - **`repository-policy.yml`, `hive.yml`**
   - Runner: `ubuntu-latest`
   - Purpose: Independent architecture and package verification
@@ -831,8 +835,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - General ARC jobs execute loaded images through a job-scoped Podman API on Pod
   loopback inside the same Kata guest. Hive ARC omits this runtime.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
-- Both placements restore separate Zot scopes for stable and source-sensitive
-  Rust/WASM layers, web dependencies, browser-free web, and e2e web.
+- Hosted placements restore separate Zot scopes for stable and source-sensitive
+  Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
+  start from their node-local copy-on-write BuildKit seed.
 - Neither placement uses GitHub Actions cache storage for BuildKit layers.
 - PR CI assigns native Rust to one runner and WASM to another.
 - The small generated WASM package feeds parallel browser-free preview validation as soon as clippy/build finishes.
@@ -873,11 +878,14 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Trusted same-repository PR jobs and every explicit Main job use ARC. Fork PRs,
   other PR jobs, and release jobs use GitHub-hosted runners.
-- Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
-- WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
-- Main then verifies the fingerprint from a fresh builder.
+- Main verifies each native/WASM/web lane, then serially promotes its already
+  solved graph into the cache-primary node's copy-on-write seed.
+- Hosted fallback jobs continue publishing scoped Zot `mode=max` refs.
+- Node-local promotion is authenticated by the host after the exact job and
+  full Kata teardown succeed.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
-- Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
+- Hosted fallback publication maintains protected default-branch Zot refs for
+  GitHub-hosted jobs. ARC jobs reuse the local seed without registry transfer.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
 - PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
 - Docker setup probes each full-graph exact ref separately.
@@ -944,7 +952,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   unchanged and PR jobs fall back to Main.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
-- Main publishes shared cache manifests after lane verification.
+- Main ARC producers promote the cache-primary seed after lane verification.
+- Hosted fallback jobs publish the shared Zot cache manifests.
 - Explicit Remote tasks import a present git-commit ref alone.
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.

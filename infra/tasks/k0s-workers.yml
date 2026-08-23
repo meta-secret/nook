@@ -349,7 +349,7 @@ tasks:
           --force \
           --token-file "$token_file" \
           --kubelet-extra-args="--node-ip=10.202.0.2 --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
-          --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"
+          --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"
         sudo -n systemctl daemon-reload
         sudo -n systemctl enable --now k0sworker'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
@@ -358,13 +358,11 @@ tasks:
             "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\""
         token=
 
-        ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$worker_target" <<'REMOTE'
+        ssh -o BatchMode=yes "$controller_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        worker_target="$1"
         for _ in $(seq 1 150); do
-          node="$(sudo -n k0s kubectl get nodes \
-            -l nook.nokey.sh/arc-build=true \
-            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+          node="$(sudo -n k0s kubectl get nodes -o json 2>/dev/null | jq -r \
+            '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == "10.202.0.2")) | .metadata.name' || true)"
           if test -n "$node" && sudo -n k0s kubectl wait "node/$node" \
             --for=condition=Ready --timeout=2s >/dev/null 2>&1; then
             break
@@ -375,7 +373,17 @@ tasks:
         sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m
         test "$(sudo -n k0s kubectl get "node/$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')" = 10.202.0.2
         sudo -n k0s kubectl annotate "node/$node" \
-          "nook.nokey.sh/ssh-target=$worker_target" --overwrite
+          "nook.nokey.sh/ssh-target=debian@10.202.0.2" --overwrite
+        primary_count="$(sudo -n k0s kubectl get nodes \
+          -l nook.nokey.sh/arc-cache-primary=true \
+          -o jsonpath='{.items[*].metadata.name}' | wc -w | tr -d ' ')"
+        if test "$primary_count" = 0; then
+          sudo -n k0s kubectl label "node/$node" \
+            nook.nokey.sh/arc-cache-primary=true --overwrite
+        elif test "$primary_count" -gt 1; then
+          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
+          exit 1
+        fi
         REMOTE
         ssh -n -o BatchMode=yes "$worker_target" \
           'sudo -n rm -f /etc/k0s/worker-token'
@@ -469,9 +477,8 @@ tasks:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        node="$(sudo -n k0s kubectl get nodes \
-          -l nook.nokey.sh/arc-build=true \
-          -o jsonpath='{.items[0].metadata.name}')"
+        node="$(sudo -n k0s kubectl get nodes -o json | jq -r \
+          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == "10.202.0.2")) | .metadata.name')"
         test -n "$node"
         sudo -n k0s kubectl taint node "$node" \
           nook.nokey.sh/arc-build=preparing:NoSchedule-

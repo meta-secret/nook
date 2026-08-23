@@ -90,8 +90,13 @@ github_get() {
     printf 'header = "Accept: application/vnd.github+json"\n'
     printf 'header = "X-GitHub-Api-Version: 2022-11-28"\n'
   } | curl --config - --fail --silent --show-error \
-    --connect-timeout 5 --max-time 15 \
+    --connect-timeout 5 --max-time 10 \
+    --retry 1 --retry-all-errors --retry-delay 1 \
     "https://api.github.com/repos/$github_repository/$endpoint"
+}
+
+candidate_expired() {
+  test -n "$(find "$1" -mmin +1 -print -quit 2>/dev/null)"
 }
 
 promotion_job_conclusion() {
@@ -136,7 +141,9 @@ EOF
       continue
     fi
     if ! run="$(github_get "actions/runs/$run_id")"; then
-      rm -f -- "$candidate"
+      if candidate_expired "$candidate"; then
+        rm -f -- "$candidate"
+      fi
       continue
     fi
     if ! printf '%s' "$run" | jq -e \
@@ -147,7 +154,9 @@ EOF
       continue
     fi
     if ! jobs="$(github_get "actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100")"; then
-      rm -f -- "$candidate"
+      if candidate_expired "$candidate"; then
+        rm -f -- "$candidate"
+      fi
       continue
     fi
     if ! printf '%s' "$jobs" | jq -e --arg runner "$pod_name" \

@@ -33,7 +33,7 @@ tasks:
       - echo "Opted-in workflows now target ubuntu-latest"
 
   arc:smoke:
-    desc: Run a trusted exact-branch task and promote its stopped ARC state.
+    desc: Run a trusted exact-branch task and validate its stopped ARC state.
     deps: [arc:build-host:resolve]
     vars:
       ARC_SMOKE_STATE_FILE:
@@ -43,6 +43,9 @@ tasks:
         case "{{.ARC_SMOKE_RUNNER_LABEL}}" in
           "{{.ARC_RUNNER_LABEL}}")
             route_variable=NOOK_RUNS_ON
+            ;;
+          "{{.ARC_CACHE_RUNNER_LABEL}}")
+            route_variable=NOOK_CACHE_RUNS_ON
             ;;
           "{{.ARC_HIVE_RUNNER_LABEL}}")
             route_variable=NOOK_HIVE_RUNS_ON
@@ -63,7 +66,30 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        build_target=""
+        find_sandbox() {
+          local pod_uid="$1"
+          local found_target=""
+          local found_sandbox=""
+          local candidate_target candidate_sandbox
+          while IFS= read -r candidate_target; do
+            test -n "$candidate_target"
+            candidate_sandbox="$(
+              ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                -J "$controller_target" "$candidate_target" \
+                "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
+            )"
+            test -z "$candidate_sandbox" && continue
+            if test -n "$found_target"; then
+              echo "ARC smoke found its Kata sandbox on multiple build nodes" >&2
+              return 1
+            fi
+            found_target="$candidate_target"
+            found_sandbox="$candidate_sandbox"
+          done < "$HOME/.nook/infra/arc-build-ssh-targets"
+          test -z "$found_target" || printf '%s\t%s\n' "$found_target" "$found_sandbox"
+        }
         smoke_task='{{.ARC_SMOKE_TASK}}'
         smoke_job_name='{{.ARC_SMOKE_JOB_NAME}}'
         smoke_runner_label='{{.ARC_SMOKE_RUNNER_LABEL}}'
@@ -91,7 +117,8 @@ tasks:
           --repo meta-secret/nook \
           --ref "$smoke_ref" \
           --raw-field "tasks=$smoke_task" \
-          --raw-field "dispatch_nonce=$dispatch_nonce"
+          --raw-field "dispatch_nonce=$dispatch_nonce" \
+          --raw-field "runner_label=$smoke_runner_label"
         run_id=""
         for _ in $(seq 1 30); do
           run_id="$(
@@ -161,10 +188,9 @@ tasks:
               echo "Successful ARC smoke did not capture one Kata sandbox ID" >&2
               exit 1
             fi
-            completion_sandbox_id="$(
-              ssh -o BatchMode=yes "$build_target" \
-                "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
-            )"
+            completion_sandbox="$(find_sandbox "$runner_uid")"
+            completion_target="${completion_sandbox%%$'\t'*}"
+            completion_sandbox_id="${completion_sandbox#*$'\t'}"
             if test -z "$completion_sandbox_id"; then
               echo "Successful ARC smoke lost its current Kata sandbox before teardown tracking" >&2
               exit 1
@@ -177,12 +203,16 @@ tasks:
               echo "Successful ARC smoke changed Kata sandboxes before teardown tracking" >&2
               exit 1
             fi
+            if test "$completion_target" != "$build_target"; then
+              echo "Successful ARC smoke moved between build nodes" >&2
+              exit 1
+            fi
             if test -z "$runner_state_retained"; then
               echo "Successful ARC smoke did not retain its BuildKit state" >&2
               exit 1
             fi
-            printf '%s\n%s\n%s\n' \
-              "$run_id" "$runner_uid" "$runner_sandbox_id" > "$state_file"
+            printf '%s\n%s\n%s\n%s\n' \
+              "$run_id" "$runner_uid" "$runner_sandbox_id" "$build_target" > "$state_file"
             break
           fi
 
@@ -219,13 +249,13 @@ tasks:
                   "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
                 exit 1
               fi
-              current_sandbox_id="$(
-                ssh -o BatchMode=yes "$build_target" \
-                  "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
-                )"
+              current_sandbox="$(find_sandbox "$runner_uid")"
+              current_build_target="${current_sandbox%%$'\t'*}"
+              current_sandbox_id="${current_sandbox#*$'\t'}"
               if test -z "$current_sandbox_id"; then
                 runner_sandbox_id=""
               elif [[ "$current_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
+                build_target="$current_build_target"
                 runner_sandbox_id="$current_sandbox_id"
               else
                 echo "ARC smoke captured an invalid current Kata sandbox ID" >&2
@@ -238,7 +268,9 @@ tasks:
                 exit 1
               fi
               if test -z "$runner_state_retained" &&
-                 ssh -o BatchMode=yes "$build_target" \
+                 test -n "$build_target" &&
+                 ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+                   -J "$controller_target" "$build_target" \
                    "sudo -n sh -ceu 'job_dir=\"/var/lib/nook-arc-buildkit/pool/jobs/\$1\"; runtime_dir=/var/lib/nook-arc-buildkit/pool/runtime; test -f \"\$job_dir/buildkit.ext4\"; umask 077; printf \"%s\\n\" \"\$((\$(date +%s) + 1800))\" > \"\$runtime_dir/\$1.retain.tmp\"; mv \"\$runtime_dir/\$1.retain.tmp\" \"\$runtime_dir/\$1.retain\"' sh '$runner_uid'"; then
                 runner_state_retained=1
               fi
@@ -289,8 +321,9 @@ tasks:
         run_id="$(sed -n '1p' "$state_file")"
         runner_uid="$(sed -n '2p' "$state_file")"
         runner_sandbox_id="$(sed -n '3p' "$state_file")"
+        build_target="$(sed -n '4p' "$state_file")"
         rm -f "$state_file"
-        if test "$state_lines" -ne 3; then
+        if test "$state_lines" -ne 4; then
           echo "ARC smoke did not persist complete teardown state" >&2
           exit 1
         fi
@@ -331,7 +364,8 @@ tasks:
         echo "ARC smoke Pod $pod_uid remained in the API after completion" >&2
         exit 1
         REMOTE
-        ssh -o BatchMode=yes "$build_target" \
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+          -J "{{.INFRA_SSH_TARGET}}" "$build_target" \
           bash -s -- "$runner_uid" "$runner_sandbox_id" <<'REMOTE'
         set -euo pipefail
         pod_uid="$1"
@@ -383,63 +417,44 @@ tasks:
           sleep 1
         done
         if test "$runtime_stopped" != true; then
-          echo "ARC smoke sandbox $sandbox_id did not stop before seed promotion" >&2
+          echo "ARC smoke sandbox $sandbox_id did not stop before state disposal" >&2
           exit 1
         fi
 
         pool_dir=/var/lib/nook-arc-buildkit/pool
         job_dir="$pool_dir/jobs/$pod_uid"
         job_file="$job_dir/buildkit.ext4"
-        job_generation="$job_dir/.seed-generation"
-        seed_dir="$pool_dir/seed"
-        seed_file="$seed_dir/buildkit.ext4"
-        seed_next="$seed_dir/buildkit.ext4.next"
-        seed_lock="$pool_dir/.seed.lock"
         sudo -n mountpoint -q "$pool_dir"
         sudo -n test -f "$job_dir/.ready"
-        generation_size="$(sudo -n stat -c %s -- "$job_generation")"
-        if sudo -n test -L "$job_generation" ||
-           test "$(sudo -n stat -c '%F:%u:%g:%h' -- "$job_generation")" != \
-             "regular file:0:0:1" ||
-           test "$generation_size" -lt 8 ||
-           test "$generation_size" -gt 128 ||
-           ! sudo -n grep -Eq '^[0-9]+:[0-9]+:[0-9]+:[0-9]+$' \
-             "$job_generation"; then
-          echo "ARC smoke seed generation marker is not root-owned regular state" >&2
-          exit 1
-        fi
         if sudo -n test -L "$job_file" ||
            test "$(sudo -n stat -c '%F:%u:%g:%h:%s' -- "$job_file")" != \
              "regular file:0:0:1:34359738368"; then
           echo "ARC smoke BuildKit state is not the root-owned regular clone" >&2
           exit 1
         fi
-        sudo -n flock -x "$seed_lock" sh -ceu '
-          expected_generation="$(cat "$2")"
-          current_generation="$(stat -c "%i:%s:%Y:%Z" "$3")"
-          if test "$current_generation" != "$expected_generation"; then
-            echo "ARC seed advanced after this job cloned it; refusing stale promotion" >&2
-            exit 1
-          fi
-          rm -f "$4"
-          cp --reflink=always --sparse=auto "$1" "$4"
-          mv "$4" "$3"
-        ' sh "$job_file" "$job_generation" "$seed_file" "$seed_next"
         sudo -n btrfs subvolume delete "$job_dir" >/dev/null
         sudo -n rm -f -- "$pool_dir/runtime/$pod_uid.sandbox" \
           "$pool_dir/runtime/$pod_uid.retain"
         sudo -n btrfs filesystem sync "$pool_dir"
-        sudo -n btrfs filesystem du -s "$seed_file"
-        echo "Promoted successful ARC smoke state to the reusable seed"
+        echo "Validated and discarded successful ARC smoke state"
         REMOTE
         echo "ARC smoke run $run_id completed on {{.ARC_SMOKE_RUNNER_LABEL}}"
         BASH
 
   arc:hive:smoke:
-    desc: Warm and promote trusted Hive verification state through ARC.
+    desc: Validate trusted Hive verification through ARC.
     cmds:
       - task: arc:smoke
         vars:
           ARC_SMOKE_TASK: hive:verify
           ARC_SMOKE_JOB_NAME: Remote / hive:verify
           ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive
+
+  arc:cache:smoke:
+    desc: Validate the cache-primary ARC route and Kata runtime.
+    cmds:
+      - task: arc:smoke
+        vars:
+          ARC_SMOKE_TASK: arc:runtime
+          ARC_SMOKE_JOB_NAME: Remote / arc:runtime
+          ARC_SMOKE_RUNNER_LABEL: nook-k0s-cache

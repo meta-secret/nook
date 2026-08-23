@@ -21,7 +21,8 @@ tasks:
         REMOTE
       - |
         build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
-        ssh -o BatchMode=yes "$build_target" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+          -J "{{.INFRA_SSH_TARGET}}" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl is-active nook-arc-buildkit-cloner.service
         sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
@@ -54,7 +55,8 @@ tasks:
         REMOTE
       - |
         build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
-        ssh -o BatchMode=yes "$build_target" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+          -J "{{.INFRA_SSH_TARGET}}" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl status nook-arc-buildkit-cloner.service \
           --no-pager --lines=40 || true

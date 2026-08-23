@@ -128,6 +128,12 @@ does not enter or overwrite that lineage. The cache-primary node selector
 ensures Main dependencies cannot diverge across node-local seeds when the
 cluster grows.
 
+Every node labeled `nook.nokey.sh/arc-build=true` receives its own local pool,
+cloner service, verifier credential, and pinned BuildKit image. General and Hive
+jobs may use any qualified build node. Exactly one node also owns
+`nook.nokey.sh/arc-cache-primary=true`; only the Main producer scale set uses
+that selector.
+
 ## Credential ownership
 
 The ARC GitHub token is stored in `arc-runners/nook-arc-github` for the

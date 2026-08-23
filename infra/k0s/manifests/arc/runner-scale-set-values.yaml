@@ -189,7 +189,7 @@ template:
               "$POD_UID" "$POD_NAME" "$run_id" "$run_attempt" "$head_sha" \
               > "$candidate_next"
             mv "$candidate_next" "$candidate_file"
-            deadline=$(($(date +%s) + 10))
+            deadline=$(($(date +%s) + 60))
             while ! test -f "$intent_file"; do
               if test "$(date +%s)" -ge "$deadline"; then
                 echo "ARC cache promotion host verifier rejected the request" >&2

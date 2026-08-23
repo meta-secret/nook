@@ -373,8 +373,6 @@ tasks.requireAll([
   'sudo -n mountpoint -q "$pool_mount"',
   '*" -id $sandbox_id "*',
   "stat -c '%F:%u:%g:%h:%s' -- \"$job_file\"",
-  'test "$generation_size" -gt 128',
-  "'^[0-9]+:[0-9]+:[0-9]+:[0-9]+$'",
   "actions/runs/$run_id/force-cancel",
   "runner_uid",
   "A session for this runner already exists.",
@@ -397,9 +395,9 @@ tasks.requireAll([
   "btrfs-progs curl e2fsprogs jq ruby util-linux",
   "mkfs.btrfs -q -f -L nook-arc-buildkit",
   'sudo -n mv "$pool_image_next" "$pool_image"',
-  "Promoted successful ARC smoke state to the reusable seed",
+  "Validated and discarded successful ARC smoke state",
   'mktemp "${TMPDIR:-/tmp}/nook-arc-smoke-{{.ARC_SMOKE_RUNNER_LABEL}}.XXXXXX"',
-  'test "$state_lines" -ne 3',
+  'test "$state_lines" -ne 4',
   "*containerd-shim-kata-v2*",
   "/var/lib/k0s/kubelet/pods/$pod_uid",
   "runner_state_retained=1",
@@ -407,7 +405,9 @@ tasks.requireAll([
   "gh variable set NOOK_HIVE_RUNS_ON",
   "gh variable set NOOK_CACHE_RUNS_ON",
   "route_variable=NOOK_HIVE_RUNS_ON",
-  "refusing stale promotion",
+  "route_variable=NOOK_CACHE_RUNS_ON",
+  "ARC_SMOKE_RUNNER_LABEL: nook-k0s-cache",
+  '--raw-field "runner_label=$smoke_runner_label"',
 ]);
 tasks.forbidAll([
   "import yaml",
@@ -428,6 +428,9 @@ remoteWorkflow.requireAll([
   "runs-on: ubuntu-latest",
   "run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}",
   "vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest'",
+  "vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest'",
+  "REQUESTED_RUNNER_LABEL:",
+  "nook-k0s-cache|nook-k0s-hive",
   "HIVE_NEO4J_TEST_URI:",
   "--publish 127.0.0.1:7474:7474",
   "nook-hive-linux-amd64-v1:buildcache",
@@ -507,7 +510,9 @@ buildkitCloner.requireAll([
   "verify_promotion_candidates",
   'github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-token}"',
   "curl --config - --fail --silent --show-error",
-  "--connect-timeout 5 --max-time 15",
+  "--connect-timeout 5 --max-time 10",
+  "--retry 1 --retry-all-errors --retry-delay 1",
+  "candidate_expired",
   'any(.jobs[]?; .runner_name == $runner and .status == "in_progress" and .conclusion == null)',
   'conclusion="$(promotion_job_conclusion "$pod_uid" || true)"',
   'if promotion_requested "$pod_uid"; then',
@@ -557,6 +562,7 @@ runners.requireAll([
   '"regular file:1001:1001:640:1"',
   'mv "$candidate_next" "$candidate_file"',
   'while ! test -f "$intent_file"; do',
+  "deadline=$(($(date +%s) + 60))",
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
   "while true; do sleep 1; done",
 ]);
@@ -576,12 +582,19 @@ tasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",
   "arc:build-host:resolve:",
   "arc-cache-primary-ssh-target",
+  "arc-build-ssh-targets",
+  "synchronized to every build node",
+  "Imported the pinned ARC BuildKit wrapper into every build node",
   "nook.nokey.sh/ssh-target",
 ]);
 workerTasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",
-  '"nook.nokey.sh/ssh-target=$worker_target"',
+  '"nook.nokey.sh/ssh-target=debian@10.202.0.2"',
+  '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"',
 ]);
+workerTasks.forbid(
+  '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"',
+);
 mainWorkflow.require("needs: [web]");
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",
@@ -770,7 +783,7 @@ function expectedRunner(placement: RunnerPlacement): string {
     return "${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}";
   }
   if (placement === RunnerPlacement.ArcGeneralRemote) {
-    return "${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}";
+    return "${{ inputs.runner_label == 'nook-k0s-cache' && (vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || ((inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest')) }}";
   }
   if (placement === RunnerPlacement.ArcGeneralRustReusable) {
     return "${{ (github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}";
