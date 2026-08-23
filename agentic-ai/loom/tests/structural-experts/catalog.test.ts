@@ -38,6 +38,38 @@ test('passes deterministic catalog and definition audit', () => {
   expect(report).toEqual(expected);
 });
 
+test('grants executable-skill code through exact files without a broad skill root', () => {
+  const profile = STRUCTURAL_EXPERT_CATALOG[0];
+  if (!profile) throw new Error('Code refactoring profile is missing.');
+  expect(
+    profile.allowedEvidenceFiles.filter((path) =>
+      path.startsWith('.agents/skills/'),
+    ),
+  ).toEqual([
+    '.agents/skills/package.json',
+    '.agents/skills/bun.lock',
+    '.agents/skills/cortex-article-structure/executable-skill.json',
+    '.agents/skills/cortex-article-structure/src/audit.ts',
+    '.agents/skills/cortex-article-structure/src/codec.ts',
+    '.agents/skills/cortex-article-structure/src/domain.ts',
+    '.agents/skills/cortex-article-structure/src/runner.ts',
+    '.agents/skills/cortex-article-structure/tests/audit.test.ts',
+    '.agents/skills/cortex-article-structure/tests/codec.test.ts',
+    '.agents/skills/cortex-article-structure/tests/definition.test.ts',
+    '.agents/skills/cortex-article-structure/tests/fixtures/containment-manifest.json',
+    '.agents/skills/cortex-article-structure/tests/fixtures/containment-runner.ts',
+    '.agents/skills/cortex-article-structure/tests/fixtures/overflow-runner.ts',
+    '.agents/skills/cortex-article-structure/tests/fixtures/timeout-manifest.json',
+    '.agents/skills/cortex-article-structure/tests/fixtures/timeout-runner.ts',
+  ]);
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
+    '.agents/skills',
+  );
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
+    '.agents/skills/cortex-article-structure',
+  );
+});
+
 test('rejects broadening or reordering an exact structural scope', () => {
   const first = STRUCTURAL_EXPERT_CATALOG[0];
   if (!first) throw new Error('Code refactoring profile is missing.');

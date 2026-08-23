@@ -586,11 +586,39 @@ test('audits exact manifest, runner, policy, tracking, and capabilities', async 
     const mutatedLimits = { ...mutatedManifest.limits, timeoutMs: 4999 };
     const driftedManifest = { ...mutatedManifest, limits: mutatedLimits };
     writeFileSync(manifestPath, JSON.stringify(driftedManifest));
+    const driftedManifestCodes = (
+      await auditExecutableSkillRegistry(auditRequest)
+    ).map((entry) => entry.code);
+    expect(driftedManifestCodes).toContain(
+      ExecutableSkillRegistryFindingCode.InvalidManifest,
+    );
+    expect(driftedManifestCodes).toContain(
+      ExecutableSkillRegistryFindingCode.WorktreeDrift,
+    );
+    writeFileSync(manifestPath, originalManifest);
+
+    rmSync(manifestPath);
+    symlinkSync('/tmp/outside-executable-skill-manifest.json', manifestPath);
     expect(
       (await auditExecutableSkillRegistry(auditRequest)).map(
         (entry) => entry.code,
       ),
-    ).toContain(ExecutableSkillRegistryFindingCode.InvalidManifest);
+    ).toContain(ExecutableSkillRegistryFindingCode.WorktreeDrift);
+    rmSync(manifestPath);
+    writeFileSync(manifestPath, ' '.repeat(16 * 1024 + 1));
+    expect(
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
+    ).toContain(ExecutableSkillRegistryFindingCode.WorktreeDrift);
+    rmSync(manifestPath);
+    execFileSync('mkfifo', [manifestPath]);
+    expect(
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
+    ).toContain(ExecutableSkillRegistryFindingCode.WorktreeDrift);
+    rmSync(manifestPath);
     writeFileSync(manifestPath, originalManifest);
 
     const policyPath = path.join(repositoryRoot, POLICY_PATH);
@@ -647,6 +675,8 @@ test('shared AST policy rejects forbidden forms in nested sources', async () => 
     "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nload('node:child_process');\n",
     "import module from 'module';\nmodule.createRequire(import.meta.url)('child_process');\n",
     "const load = require;\nload('node:child_process');\n",
+    "import processRuntime from 'node:process';\nconst load = processRuntime.getBuiltinModule;\nload('node:child_process');\n",
+    "import { getBuiltinModule as load } from 'process';\nload('child_process');\n",
     'void Bun.env.SECRET;\n',
     'const runtime = Bun;\nvoid runtime;\n',
     "Bun.spawn(['true']);\n",
@@ -678,6 +708,49 @@ test('shared AST policy rejects forbidden forms in nested sources', async () => 
     } finally {
       rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
     }
+  }
+});
+
+test('discovers manifests from one frozen index tree and reports worktree drift', async () => {
+  const repositoryRoot = createAuditRepository();
+  const gitOptions = { cwd: repositoryRoot } as const;
+  const registeredManifest =
+    '.agents/skills/cortex-article-structure/executable-skill.json';
+  try {
+    execFileSync(
+      'git',
+      ['rm', '--cached', '--quiet', '--', registeredManifest],
+      gitOptions,
+    );
+    const stagedDeletedCodes = (
+      await auditExecutableSkillRegistry(registryAuditRequest(repositoryRoot))
+    ).map((finding) => finding.code);
+    expect(stagedDeletedCodes).toContain(
+      ExecutableSkillRegistryFindingCode.UnexpectedRegistration,
+    );
+    expect(stagedDeletedCodes).toContain(
+      ExecutableSkillRegistryFindingCode.WorktreeDrift,
+    );
+
+    execFileSync('git', ['add', '--', registeredManifest], gitOptions);
+    const unregisteredManifest =
+      '.agents/skills/unregistered/executable-skill.json';
+    const unregisteredPath = path.join(repositoryRoot, unregisteredManifest);
+    mkdirSync(path.dirname(unregisteredPath), CREATE_TREE_OPTIONS);
+    writeFileSync(unregisteredPath, '{}');
+    execFileSync('git', ['add', '--', unregisteredManifest], gitOptions);
+    rmSync(unregisteredPath);
+    const unregisteredCodes = (
+      await auditExecutableSkillRegistry(registryAuditRequest(repositoryRoot))
+    ).map((finding) => finding.code);
+    expect(unregisteredCodes).toContain(
+      ExecutableSkillRegistryFindingCode.MissingRegistration,
+    );
+    expect(unregisteredCodes).toContain(
+      ExecutableSkillRegistryFindingCode.WorktreeDrift,
+    );
+  } finally {
+    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
   }
 });
 

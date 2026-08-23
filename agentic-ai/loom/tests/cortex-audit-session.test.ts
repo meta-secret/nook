@@ -67,9 +67,15 @@ test('returns precise registry findings without launching an invalid capability'
 
     expect(report.auditOk).toBe(false);
     expect(report.articleStructureFindings).toEqual([]);
-    expect(
-      report.executableSkillRegistryFindings.map((finding) => finding.code),
-    ).toContain(ExecutableSkillRegistryFindingCode.InvalidManifest);
+    const findingCodes = report.executableSkillRegistryFindings.map(
+      (finding) => finding.code,
+    );
+    expect(findingCodes).toContain(
+      ExecutableSkillRegistryFindingCode.UnexpectedRegistration,
+    );
+    expect(findingCodes).toContain(
+      ExecutableSkillRegistryFindingCode.WorktreeDrift,
+    );
   } finally {
     rmSync(repositoryRoot, removeOptions);
   }

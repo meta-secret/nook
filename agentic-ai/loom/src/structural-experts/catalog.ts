@@ -42,6 +42,21 @@ const COMMON_CONTEXT = [
 const CODE_REFACTORING_FILES = [
   'Taskfile.yml',
   'agentic-ai/loom/package.json',
+  '.agents/skills/package.json',
+  '.agents/skills/bun.lock',
+  '.agents/skills/cortex-article-structure/executable-skill.json',
+  '.agents/skills/cortex-article-structure/src/audit.ts',
+  '.agents/skills/cortex-article-structure/src/codec.ts',
+  '.agents/skills/cortex-article-structure/src/domain.ts',
+  '.agents/skills/cortex-article-structure/src/runner.ts',
+  '.agents/skills/cortex-article-structure/tests/audit.test.ts',
+  '.agents/skills/cortex-article-structure/tests/codec.test.ts',
+  '.agents/skills/cortex-article-structure/tests/definition.test.ts',
+  '.agents/skills/cortex-article-structure/tests/fixtures/containment-manifest.json',
+  '.agents/skills/cortex-article-structure/tests/fixtures/containment-runner.ts',
+  '.agents/skills/cortex-article-structure/tests/fixtures/overflow-runner.ts',
+  '.agents/skills/cortex-article-structure/tests/fixtures/timeout-manifest.json',
+  '.agents/skills/cortex-article-structure/tests/fixtures/timeout-runner.ts',
 ] as const;
 
 const CODE_REFACTORING_DESCENDANT_ROOTS = [

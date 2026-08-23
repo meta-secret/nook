@@ -181,6 +181,8 @@ test('rejects forbidden capabilities in recursively imported sources', async () 
     "import { writeFile } from 'node:fs';\nvoid writeFile;\n",
     "import { createRequire } from 'node:module';\nvoid createRequire;\n",
     "const load = require;\nload('node:child_process');\n",
+    "import processRuntime from 'node:process';\nconst load = processRuntime.getBuiltinModule;\nload('node:child_process');\n",
+    "import { getBuiltinModule as load } from 'process';\nload('child_process');\n",
   ];
   for (const source of forbiddenSources) {
     const repositoryRoot = createClosureRepository();

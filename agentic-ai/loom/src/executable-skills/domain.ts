@@ -9,6 +9,7 @@ export enum ExecutableSkillRegistryFindingCode {
   UnexpectedRegistration = 'unexpected-executable-skill-registration',
   UnsafeCapability = 'unsafe-executable-skill-capability',
   UnsafeFile = 'unsafe-executable-skill-file',
+  WorktreeDrift = 'executable-skill-worktree-drift',
 }
 
 export enum ExecutableSkillPayloadKind {

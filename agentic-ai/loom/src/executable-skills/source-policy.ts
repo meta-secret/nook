@@ -20,6 +20,7 @@ const FORBIDDEN_NODE_MODULES = new Set([
   'https',
   'module',
   'net',
+  'process',
   'tls',
   'worker_threads',
 ]);

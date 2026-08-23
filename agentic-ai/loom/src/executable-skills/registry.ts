@@ -1,5 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { lstat, realpath } from 'node:fs/promises';
+import { constants } from 'node:fs';
+import { lstat, open, realpath } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import {
   ExecutableSkillExecutionKind,
@@ -21,6 +23,10 @@ import { decodeExecutableSkillManifest } from './manifest-codec.ts';
 
 const CORTEX_ARTICLE_POLICY =
   '.cortex/dynamic-skills/cortex-article-structure.md';
+const GIT_TREE_HASH = /^[0-9a-f]{40}$/u;
+const EXECUTABLE_MANIFEST_PATH =
+  /^\.agents\/skills\/[a-z0-9][a-z0-9-]*\/executable-skill\.json$/u;
+const MAXIMUM_EXECUTABLE_SKILL_MANIFESTS = 32;
 const cortexArticleLimits = {
   requestBytes: 4 * 1024 * 1024,
   resultBytes: 1024 * 1024,
@@ -207,8 +213,14 @@ async function auditExecutableSkillRegistryCanonical(
   request: AuditExecutableSkillRegistryRequest,
 ): Promise<readonly ExecutableSkillRegistryFinding[]> {
   assertRegistryActive(request);
-  const manifestPaths = await discoverManifestPaths(request);
-  const findings: ExecutableSkillRegistryFinding[] = [];
+  const discovery = await discoverManifestPaths(request);
+  const manifestPaths = discovery.manifestPaths;
+  const driftRequest: WorktreeManifestDriftRequest = {
+    ...request,
+    frozenManifestPaths: manifestPaths,
+    sourceTree: discovery.sourceTree,
+  };
+  const findings = await worktreeManifestDriftFindings(driftRequest);
   const discoveredIds = new Set<string>();
   for (const manifestPath of manifestPaths) {
     assertRegistryActive(request);
@@ -237,6 +249,7 @@ async function auditExecutableSkillRegistryCanonical(
     }
     const registrationRequest: AuditRegistrationRequest = {
       registration,
+      sourceTree: discovery.sourceTree,
       ...request,
     };
     findings.push(...(await auditRegistration(registrationRequest)));
@@ -255,13 +268,17 @@ async function auditExecutableSkillRegistryCanonical(
 
 type AuditRegistrationRequest = AuditExecutableSkillRegistryRequest & {
   readonly registration: RegisteredExecutableSkill;
+  readonly sourceTree: string;
 };
 
 async function auditRegistration(
   request: AuditRegistrationRequest,
 ): Promise<readonly ExecutableSkillRegistryFinding[]> {
   const manifestGitRequest: RunRegistryGitRequest = {
-    arguments: ['show', `:${request.registration.manifestPath}`],
+    arguments: [
+      'show',
+      `${request.sourceTree}:${request.registration.manifestPath}`,
+    ],
     deadlineExpiresAt: request.deadlineExpiresAt,
     repositoryRoot: request.repositoryRoot,
     signal: request.signal,
@@ -324,22 +341,186 @@ async function auditRegistration(
 
 async function discoverManifestPaths(
   request: AuditExecutableSkillRegistryRequest,
-): Promise<readonly string[]> {
-  const glob = new Bun.Glob('.agents/skills/*/executable-skill.json');
-  const scanOptions = {
-    cwd: request.repositoryRoot,
-    dot: true,
-    onlyFiles: true,
-  } as const;
-  const paths: string[] = [];
-  for await (const manifestPath of glob.scan(scanOptions)) {
+): Promise<FrozenManifestDiscovery> {
+  const writeTreeRequest: RunRegistryGitRequest = {
+    arguments: ['write-tree'],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
+  };
+  const sourceTree = (await runRegistryGit(writeTreeRequest)).trim();
+  if (!GIT_TREE_HASH.test(sourceTree)) {
+    throw new Error(
+      'Executable skill manifest index tree could not be frozen.',
+    );
+  }
+  const listTreeRequest: RunRegistryGitRequest = {
+    arguments: [
+      'ls-tree',
+      '-r',
+      '--name-only',
+      '-z',
+      sourceTree,
+      '--',
+      '.agents/skills',
+    ],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
+  };
+  const treePaths = (await runRegistryGit(listTreeRequest)).split('\0');
+  const manifestPaths = treePaths.filter((candidate) =>
+    EXECUTABLE_MANIFEST_PATH.test(candidate),
+  );
+  if (manifestPaths.length > MAXIMUM_EXECUTABLE_SKILL_MANIFESTS) {
+    throw new Error('Executable skill manifest count exceeds its bound.');
+  }
+  return {
+    sourceTree,
+    manifestPaths: manifestPaths.sort(),
+  };
+}
+
+type FrozenManifestDiscovery = {
+  readonly sourceTree: string;
+  readonly manifestPaths: readonly string[];
+};
+
+type WorktreeManifestDriftRequest = AuditExecutableSkillRegistryRequest & {
+  readonly frozenManifestPaths: readonly string[];
+  readonly sourceTree: string;
+};
+
+async function worktreeManifestDriftFindings(
+  request: WorktreeManifestDriftRequest,
+): Promise<ExecutableSkillRegistryFinding[]> {
+  const frozenPaths = new Set(request.frozenManifestPaths);
+  const candidatePaths = new Set([
+    ...request.frozenManifestPaths,
+    ...[...EXECUTABLE_SKILL_REGISTRY.values()].map(
+      (registration) => registration.manifestPath,
+    ),
+  ]);
+  const driftedPaths = new Set<string>();
+  for (const manifestPath of candidatePaths) {
     assertRegistryActive(request);
-    paths.push(manifestPath);
-    if (paths.length > 32) {
-      throw new Error('Executable skill manifest count exceeds its bound.');
+    if (!frozenPaths.has(manifestPath)) {
+      const worktreeRequest: ManifestWorktreePathRequest = {
+        ...request,
+        manifestPath,
+      };
+      if (await manifestExistsInWorktree(worktreeRequest)) {
+        driftedPaths.add(manifestPath);
+      }
+      continue;
+    }
+    const contentRequest: ManifestContentDriftRequest = {
+      ...request,
+      manifestPath,
+    };
+    if (await manifestContentDrifted(contentRequest)) {
+      driftedPaths.add(manifestPath);
     }
   }
-  return paths.sort();
+  return [...driftedPaths].sort().map((manifestPath) => ({
+    code: ExecutableSkillRegistryFindingCode.WorktreeDrift,
+    skillId: manifestPath.split('/').at(-2) ?? 'registry',
+    message: `Executable skill manifest differs between the frozen index and worktree: ${manifestPath}`,
+  }));
+}
+
+type ManifestWorktreePathRequest = AuditExecutableSkillRegistryRequest & {
+  readonly manifestPath: string;
+};
+
+type ManifestContentDriftRequest = ManifestWorktreePathRequest & {
+  readonly sourceTree: string;
+};
+
+async function manifestExistsInWorktree(
+  request: ManifestWorktreePathRequest,
+): Promise<boolean> {
+  try {
+    const absolutePath = path.join(
+      request.repositoryRoot,
+      request.manifestPath,
+    );
+    await lstat(absolutePath);
+    assertRegistryActive(request);
+    return true;
+  } catch {
+    assertRegistryActive(request);
+    return false;
+  }
+}
+
+async function manifestContentDrifted(
+  request: ManifestContentDriftRequest,
+): Promise<boolean> {
+  let handle: Awaited<ReturnType<typeof open>> | false = false;
+  try {
+    assertRegistryActive(request);
+    const absolutePath = path.join(
+      request.repositoryRoot,
+      request.manifestPath,
+    );
+    const flags =
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+    handle = await open(absolutePath, flags);
+    const stat = await handle.stat();
+    assertRegistryActive(request);
+    if (!stat.isFile() || stat.size > 16 * 1024) {
+      return true;
+    }
+    const gitRequest: RunRegistryGitRequest = {
+      arguments: ['show', `${request.sourceTree}:${request.manifestPath}`],
+      deadlineExpiresAt: request.deadlineExpiresAt,
+      repositoryRoot: request.repositoryRoot,
+      signal: request.signal,
+    };
+    const frozenContent = await runRegistryGit(gitRequest);
+    const descriptorRequest: ReadManifestDescriptorRequest = {
+      handle,
+      lifecycle: request,
+    };
+    const worktreeContent = await readManifestDescriptor(descriptorRequest);
+    assertRegistryActive(request);
+    return frozenContent !== worktreeContent;
+  } catch {
+    assertRegistryActive(request);
+    return true;
+  } finally {
+    if (handle !== false) await handle.close();
+  }
+}
+
+type ReadManifestDescriptorRequest = {
+  readonly handle: FileHandle;
+  readonly lifecycle: AuditExecutableSkillRegistryRequest;
+};
+
+async function readManifestDescriptor(
+  request: ReadManifestDescriptorRequest,
+): Promise<string> {
+  const maximumBytes = 16 * 1024;
+  const content = Buffer.alloc(maximumBytes + 1);
+  let offset = 0;
+  while (offset < content.byteLength) {
+    assertRegistryActive(request.lifecycle);
+    const readResult = await request.handle.read(
+      content,
+      offset,
+      content.byteLength - offset,
+      offset,
+    );
+    assertRegistryActive(request.lifecycle);
+    if (readResult.bytesRead === 0) break;
+    offset += readResult.bytesRead;
+  }
+  if (offset > maximumBytes) {
+    throw new Error('Executable skill worktree manifest exceeds its bound.');
+  }
+  return content.subarray(0, offset).toString('utf8');
 }
 
 type AuditBoundFileRequest = AuditExecutableSkillRegistryRequest & {

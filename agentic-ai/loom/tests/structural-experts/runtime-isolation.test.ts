@@ -5,6 +5,9 @@ import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
 import { createReadOnlyExpertRuntimeIsolation } from '../../src/module-experts/runtime-contract.ts';
 import type { ReadOnlyExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
+import { structuralExpertProfile } from '../../src/structural-experts/catalog.ts';
+import { runCommand } from '../../src/lib/run.ts';
+import type { RunCommandArgs } from '../../src/lib/run.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
@@ -87,6 +90,68 @@ test('rejects traversal and oversized synthetic context before agent execution',
       createReadOnlyExpertRuntimeIsolation(unsafeRequest),
     ).rejects.toThrow('context file is unsafe');
     expect(await readdir(temporaryRoot)).toEqual([]);
+  } finally {
+    await rm(temporaryRoot, removeOptions);
+  }
+});
+
+test('materializes only the exact executable-skill files granted to code refactoring', async () => {
+  const profile = structuralExpertProfile('code_refactoring_expert');
+  if (profile === false)
+    throw new Error('Code refactoring profile is missing.');
+  const executableSkillFiles = profile.allowedEvidenceFiles.filter((path) =>
+    path.startsWith('.agents/skills/'),
+  );
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'structural-code-scope-'));
+  const removeOptions: RmOptions = { recursive: true, force: true };
+  const revisionRequest: RunCommandArgs = {
+    args: ['rev-parse', 'HEAD'],
+    command: 'git',
+    cwd: REPO_ROOT,
+  };
+  const sourceCommit = runCommand(revisionRequest).stdout.trim();
+  try {
+    const isolationRequest: ReadOnlyExpertRuntimeIsolationRequest = {
+      expertName: profile.name,
+      parentEnvironment: {
+        CODEX_API_KEY: 'structural-snapshot-test-key',
+        PATH: process.env.PATH ?? '',
+      },
+      snapshot: {
+        excludedPaths: profile.excludedPaths,
+        optionalScopePaths: [],
+        scopePaths: executableSkillFiles,
+        contextFiles: [],
+      },
+      sourceCommit,
+      temporaryRoot,
+      workingDirectory: REPO_ROOT,
+    };
+    const isolation =
+      await createReadOnlyExpertRuntimeIsolation(isolationRequest);
+    try {
+      for (const relativePath of executableSkillFiles) {
+        await access(join(isolation.repositorySnapshot, relativePath));
+      }
+      await expect(
+        access(
+          join(
+            isolation.repositorySnapshot,
+            '.agents/skills/cortex-article-structure/SKILL.md',
+          ),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        access(
+          join(
+            isolation.repositorySnapshot,
+            '.agents/skills/coding-bro/SKILL.md',
+          ),
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await isolation.dispose();
+    }
   } finally {
     await rm(temporaryRoot, removeOptions);
   }
