@@ -13,7 +13,7 @@ vars:
 
 tasks:
   arc:build-host:resolve:
-    internal: true
+    desc: Resolve and persist the Kubernetes cache-primary SSH target.
     silent: true
     cmds:
       - |
@@ -21,7 +21,7 @@ tasks:
         set -euo pipefail
         target="${INFRA_WORKER_SSH_TARGET:-}"
         if test -z "$target"; then
-          target="$(ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          target="$(ssh -n -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
             "sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-cache-primary=true -o jsonpath='{.items[0].metadata.annotations.nook\\.nokey\\.sh/ssh-target}'")"
         fi
         user="${target%%@*}"
@@ -44,6 +44,7 @@ tasks:
         printf '%s\n' "$target" > "$target_next"
         mv "$target_next" "$target_file"
         chmod 0600 "$target_file"
+        echo "ARC cache-primary SSH target persisted at $target_file"
         BASH
 
   arc:build-host:sync:
@@ -518,6 +519,7 @@ tasks:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
+      - task: arc:build-host:resolve
       - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
       - task: arc:render:check
