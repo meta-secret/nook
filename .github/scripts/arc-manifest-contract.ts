@@ -403,6 +403,7 @@ tasks.requireAll([
   'sudo -n mv "$pool_image_next" "$pool_image"',
   "Validated and discarded successful ARC smoke state",
   'btrfs subvolume delete "$request_lane"',
+  'btrfs subvolume delete "$job_dir"',
   '"$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next"',
   'mktemp "${TMPDIR:-/tmp}/nook-arc-smoke-{{.ARC_SMOKE_RUNNER_LABEL}}.XXXXXX"',
   'test "$state_lines" -ne 4',

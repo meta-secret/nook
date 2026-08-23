@@ -447,8 +447,8 @@ tasks:
           echo "ARC smoke request lane is not the bounded Btrfs subvolume" >&2
           exit 1
         fi
-        sudo -n btrfs subvolume delete "$job_dir" >/dev/null
         sudo -n btrfs subvolume delete "$request_lane" >/dev/null
+        sudo -n btrfs subvolume delete "$job_dir" >/dev/null
         sudo -n rm -f -- "$pool_dir/runtime/$pod_uid.sandbox" \
           "$pool_dir/runtime/$pod_uid.retain" \
           "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \

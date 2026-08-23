@@ -69,10 +69,10 @@ fn arc_smoke_discards_the_job_and_bounded_request_lane() -> anyhow::Result<()> {
         .context("ARC smoke teardown must delete promotion intent state")?;
 
     assert!(
-        validate_request < delete_job
-            && delete_job < delete_request
-            && delete_request < delete_intent,
-        "ARC smoke must validate both retained subvolumes before deleting the job, request lane, and promotion intent"
+        validate_request < delete_request
+            && delete_request < delete_job
+            && delete_job < delete_intent,
+        "ARC smoke must preserve the job recovery index until the request lane is deleted"
     );
     Ok(())
 }
