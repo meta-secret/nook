@@ -1,41 +1,35 @@
-import path from 'node:path';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { expect, test } from 'bun:test';
+import { auditCortexArticleStructure } from '../src/audit.ts';
 import {
-  auditCortexArticleStructure,
   CortexArticleFindingCode,
-} from '../src/lib/cortex-article-structure.ts';
-import type { AuditCortexArticleStructureArgs } from '../src/lib/cortex-article-structure.ts';
-import type { CortexDocumentSource } from '../src/lib/cortex-document-structure.ts';
-
-const REPO_ROOT = '/repo';
+  CortexArticleContractKind,
+  type AuditCortexArticleStructureRequest,
+  type CortexArticleDocument,
+} from '../src/domain.ts';
 
 type MakeDocumentArgs = {
   readonly path: string;
   readonly content: string;
 };
 
-function makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
+function makeDocument(args: MakeDocumentArgs): CortexArticleDocument {
   return {
-    absolutePath: path.join(REPO_ROOT, args.path),
     relativePath: args.path,
     content: args.content,
   };
 }
 
-function audit(documents: readonly CortexDocumentSource[]) {
-  const args: AuditCortexArticleStructureArgs = {
+function audit(documents: readonly CortexArticleDocument[]) {
+  const request: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
     documents,
     migrationBaselineEntries: false,
-    migrationLedgerPath: path.join(
-      REPO_ROOT,
-      '.cortex',
-      'article-structure-migration.txt',
-    ),
-    repoRoot: REPO_ROOT,
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: false,
+    },
   };
-  return auditCortexArticleStructure(args);
+  return auditCortexArticleStructure(request);
 }
 
 const STRUCTURED_DOCUMENT_ARGS: MakeDocumentArgs = {
@@ -456,25 +450,18 @@ Literal examples do not create structural articles.
 });
 
 test('rejects article migration exemptions added after the baseline', () => {
-  const repositoryRoot = mkdtempSync(path.join(tmpdir(), 'article-ledger-'));
-  try {
-    const cortexRoot = path.join(repositoryRoot, '.cortex');
-    mkdirSync(cortexRoot);
-    const ledgerPath = path.join(cortexRoot, 'article-structure-migration.txt');
-    writeFileSync(ledgerPath, '.cortex/structured.md\n');
-    const document = makeDocument(STRUCTURED_DOCUMENT_ARGS);
-    const args: AuditCortexArticleStructureArgs = {
-      documents: [document],
-      migrationBaselineEntries: [],
-      migrationLedgerPath: ledgerPath,
-      repoRoot: repositoryRoot,
-    };
-    const findings = auditCortexArticleStructure(args);
-    expect(findings.map((finding) => finding.code)).toContain(
-      CortexArticleFindingCode.InvalidMigrationLedger,
-    );
-  } finally {
-    const removeOptions = { recursive: true, force: true } as const;
-    rmSync(repositoryRoot, removeOptions);
-  }
+  const document = makeDocument(STRUCTURED_DOCUMENT_ARGS);
+  const request: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents: [document],
+    migrationBaselineEntries: [],
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: '.cortex/structured.md\n',
+    },
+  };
+  const findings = auditCortexArticleStructure(request);
+  expect(findings.map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.InvalidMigrationLedger,
+  );
 });

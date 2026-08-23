@@ -1,33 +1,15 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import type { Heading, Root, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
-import type { CortexDocumentSource } from './cortex-document-structure.ts';
+import {
+  CortexArticleFindingCode,
+  type AuditCortexArticleStructureRequest,
+  type CortexArticleDocument,
+  type CortexArticleFinding,
+} from './domain.ts';
 
-export enum CortexArticleFindingCode {
-  InvalidMigrationLedger = 'invalid-article-migration-ledger',
-  EmptyArticle = 'empty-article',
-  DenseArticle = 'dense-article',
-  UnorderedProcedure = 'unordered-procedure',
-}
-
-export type CortexArticleFinding = {
-  readonly code: CortexArticleFindingCode;
-  readonly file: string;
-  readonly line: number;
-  readonly message: string;
-};
-
-export type AuditCortexArticleStructureArgs = {
-  readonly documents: readonly CortexDocumentSource[];
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerPath: string;
-  readonly repoRoot: string;
-};
-
-type ParsedArticleDocument = CortexDocumentSource & {
+type ParsedArticleDocument = CortexArticleDocument & {
   readonly root: Root;
 };
 
@@ -43,8 +25,8 @@ type ReadMigrationExemptionsArgs = {
   readonly catalog: ReadonlySet<string>;
   readonly findings: CortexArticleFinding[];
   readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerPath: string;
-  readonly repoRoot: string;
+  readonly migrationLedgerContent: string | false;
+  readonly migrationLedgerRelativePath: string;
 };
 
 type AuditDocumentArgs = {
@@ -62,17 +44,17 @@ const PROCEDURE_HEADING =
   /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
 
 export function auditCortexArticleStructure(
-  args: AuditCortexArticleStructureArgs,
+  request: AuditCortexArticleStructureRequest,
 ): CortexArticleFinding[] {
   const findings: CortexArticleFinding[] = [];
-  const documents = args.documents.map(parseDocument);
+  const documents = request.documents.map(parseDocument);
   const catalog = new Set(documents.map((document) => document.relativePath));
   const exemptionArgs: ReadMigrationExemptionsArgs = {
     catalog,
     findings,
-    migrationBaselineEntries: args.migrationBaselineEntries,
-    migrationLedgerPath: args.migrationLedgerPath,
-    repoRoot: args.repoRoot,
+    migrationBaselineEntries: request.migrationBaselineEntries,
+    migrationLedgerContent: request.migrationLedger.content,
+    migrationLedgerRelativePath: request.migrationLedger.relativePath,
   };
   const exemptions = readMigrationExemptions(exemptionArgs);
 
@@ -87,7 +69,7 @@ export function auditCortexArticleStructure(
   return findings;
 }
 
-function parseDocument(document: CortexDocumentSource): ParsedArticleDocument {
+function parseDocument(document: CortexArticleDocument): ParsedArticleDocument {
   const root = unified()
     .use(remarkParse)
     .use(remarkGfm)
@@ -98,10 +80,7 @@ function parseDocument(document: CortexDocumentSource): ParsedArticleDocument {
 function readMigrationExemptions(
   args: ReadMigrationExemptionsArgs,
 ): ReadonlySet<string> {
-  let content: string;
-  try {
-    content = readFileSync(args.migrationLedgerPath, 'utf8');
-  } catch {
+  if (args.migrationLedgerContent === false) {
     return new Set<string>();
   }
 
@@ -110,8 +89,8 @@ function readMigrationExemptions(
     args.migrationBaselineEntries === false
       ? false
       : new Set(args.migrationBaselineEntries);
-  const ledgerFile = path.relative(args.repoRoot, args.migrationLedgerPath);
-  const lines = content.split(/\r?\n/);
+  const ledgerFile = args.migrationLedgerRelativePath;
+  const lines = args.migrationLedgerContent.split(/\r?\n/);
 
   for (let index = 0; index < lines.length; index += 1) {
     const entry = (lines[index] ?? '').trim();

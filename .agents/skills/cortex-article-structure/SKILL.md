@@ -23,3 +23,18 @@ Every Cortex edit must make the body's real hierarchy visible.
 4. Keep detailed rationale as prose inside a clearly owned article.
 5. Update `.cortex/knowledge-graph.md` whenever the heading hierarchy changes.
 6. Run the structured-article and consistency checks before completion.
+
+## Mechanical capability
+
+This skill owns the deterministic article-structure checker in `src/` and its
+focused real-document tests in `tests/`.
+
+Run it through the shared executable-skill quality project:
+
+```bash
+task skills:verify
+```
+
+Loom retains mandatory Cortex-audit invocation, static registration, enforced
+read-only container execution, hard deadline termination, and workflow
+provenance. This skill cannot schedule or authorize writes.

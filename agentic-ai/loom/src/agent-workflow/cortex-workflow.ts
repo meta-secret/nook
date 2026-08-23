@@ -204,7 +204,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.SkillAuditor,
         instruction:
-          'Inspect .cortex/dynamic-skills, .agents/skills, .cursor executable mirrors, .claude executable mirrors, .cortex/AGENTS.md, and AGENTS.md. Find stale skills, missing or divergent executable wrappers and mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
+          'Inspect .cortex/dynamic-skills, .agents/skills, .cursor agent-skill mirrors, .claude agent-skill mirrors, .cortex/AGENTS.md, and AGENTS.md. Find stale skills, missing or divergent agent skill adapters and mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {

@@ -63,7 +63,7 @@ export function insertSkillCatalogEntry(
   }
 
   const executableSkill = args.createExecutableWrappers
-    ? `\n  - Executable skill: [\`.agents/skills/${args.slug}/SKILL.md\`](../../.agents/skills/${args.slug}/SKILL.md)`
+    ? `\n  - Agent skill adapter: [\`.agents/skills/${args.slug}/SKILL.md\`](../../.agents/skills/${args.slug}/SKILL.md)`
     : '';
   const entry = `- **[${args.slug}.md](${args.slug}.md)**\n  - Purpose: TODO: purpose${executableSkill}`;
   const markerIndex = markerMatch.index;

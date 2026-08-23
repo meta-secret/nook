@@ -2,7 +2,17 @@ import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
+import {
+  decodeCortexArticleResult,
+  encodeCortexArticleRequest,
+  type CortexArticleFinding,
+  type CortexArticleRequestDocument,
+  type EncodeCortexArticleRequestArgs,
+} from '../executable-skills/cortex-article-transport.ts';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
+import type { ExecutableSkillRegistryFinding } from '../executable-skills/domain.ts';
+import { auditExecutableSkillRegistry } from '../executable-skills/registry.ts';
+import { executeRegisteredSkill } from '../executable-skills/runtime.ts';
 import { lintProseDensity, type DensityFinding } from '../lib/density.ts';
 import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -21,11 +31,6 @@ import {
   type CortexDocumentSource,
   type CortexStructureFinding,
 } from '../lib/cortex-document-structure.ts';
-import {
-  auditCortexArticleStructure,
-  type AuditCortexArticleStructureArgs,
-  type CortexArticleFinding,
-} from '../lib/cortex-article-structure.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly missingFromIndex: string[];
@@ -33,7 +38,8 @@ export type CortexAuditReport = {
   readonly missingExecutableSkills: string[];
   readonly densityFindings: DensityFinding[];
   readonly structureFindings: CortexStructureFinding[];
-  readonly articleStructureFindings: CortexArticleFinding[];
+  readonly articleStructureFindings: readonly CortexArticleFinding[];
+  readonly executableSkillRegistryFindings: readonly ExecutableSkillRegistryFinding[];
   readonly auditOk: boolean;
 };
 
@@ -110,17 +116,36 @@ export async function runCortexAuditFromDirectory(
     markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
     repoRoot,
   };
-  const articleStructureAuditArgs: AuditCortexArticleStructureArgs = {
-    documents,
+  const articleLedgerPath = path.join(
+    cortexRoot,
+    'article-structure-migration.txt',
+  );
+  const articleDocuments: CortexArticleRequestDocument[] = documents.map(
+    (document) => ({
+      relativePath: document.relativePath,
+      content: document.content,
+    }),
+  );
+  const articleStructureRequest: EncodeCortexArticleRequestArgs = {
+    documents: articleDocuments,
     migrationBaselineEntries: migrationBaselineEntries(articleBaselineArgs),
-    migrationLedgerPath: path.join(
-      cortexRoot,
-      'article-structure-migration.txt',
-    ),
-    repoRoot,
+    migrationLedger: {
+      relativePath: ARTICLE_MIGRATION_LEDGER_PATH,
+      content: readOptionalText(articleLedgerPath),
+    },
   };
-  const articleStructureFindings = auditCortexArticleStructure(
-    articleStructureAuditArgs,
+  const serializedArticleRequest = encodeCortexArticleRequest(
+    articleStructureRequest,
+  );
+  const articleExecutionRequest = {
+    skillId: 'cortex-article-structure',
+    serializedRequest: serializedArticleRequest,
+  } as const;
+  const articleExecution = await executeRegisteredSkill(
+    articleExecutionRequest,
+  );
+  const articleStructureFindings = decodeCortexArticleResult(
+    articleExecution.serializedResult,
   );
 
   const skillsDir = path.join(cortexRoot, 'dynamic-skills');
@@ -164,6 +189,10 @@ export async function runCortexAuditFromDirectory(
       missingExecutableSkills.push(slug);
     }
   }
+  const executableSkillAuditRequest = { repositoryRoot: repoRoot };
+  const executableSkillRegistryFindings = auditExecutableSkillRegistry(
+    executableSkillAuditRequest,
+  );
 
   return {
     brokenLinks,
@@ -173,6 +202,7 @@ export async function runCortexAuditFromDirectory(
     densityFindings,
     structureFindings,
     articleStructureFindings,
+    executableSkillRegistryFindings,
     auditOk:
       brokenLinks.length === 0 &&
       missingFromIndex.length === 0 &&
@@ -180,8 +210,17 @@ export async function runCortexAuditFromDirectory(
       missingExecutableSkills.length === 0 &&
       densityFindings.length === 0 &&
       structureFindings.length === 0 &&
-      articleStructureFindings.length === 0,
+      articleStructureFindings.length === 0 &&
+      executableSkillRegistryFindings.length === 0,
   };
+}
+
+function readOptionalText(filePath: string): string | false {
+  try {
+    return readFileSync(filePath, 'utf8');
+  } catch {
+    return false;
+  }
 }
 
 const DOCUMENT_MAP_MIGRATION_LEDGER_PATH = '.cortex/document-map-migration.txt';

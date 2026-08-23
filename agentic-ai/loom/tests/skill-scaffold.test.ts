@@ -28,7 +28,7 @@ describe('skill scaffold', () => {
     expect(insertSkillCatalogEntry(insertArgs)).toContain(
       '- **[self-improvement.md](self-improvement.md)**\n' +
         '  - Purpose: TODO: purpose\n' +
-        '  - Executable skill: [`.agents/skills/self-improvement/SKILL.md`](../../.agents/skills/self-improvement/SKILL.md)\n\n' +
+        '  - Agent skill adapter: [`.agents/skills/self-improvement/SKILL.md`](../../.agents/skills/self-improvement/SKILL.md)\n\n' +
         '## How to add one',
     );
   });

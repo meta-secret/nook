@@ -310,12 +310,15 @@ Examples include:
 - evaluating architectural tradeoffs;
 - deciding whether a repeated procedure is stable enough to compile.
 
-The expert may propose a typed Loom leaf or reviewed static graph.
+The expert may propose a skill-owned TypeScript capability, a generic Loom
+leaf, or a reviewed static graph. Follow
+[Agent, Skill, and Capability Architecture](agent-skill-capabilities.md).
 The proposal names inputs, outputs, failure behavior, and residual semantic
 policy.
 
-No Markdown instruction moves until the typed implementation, tests, and
-entrypoint are accepted.
+No duplicated mechanical prose is removed until the typed implementation,
+tests, and mandatory entrypoint are accepted. The semantic rule, rationale,
+scope, exceptions, and acceptance meaning remain in Cortex.
 The delivery owner then replaces duplicated mechanics with a link to the
 canonical executable path.
 
@@ -347,7 +350,7 @@ task preflight:loom-contracts
 Validate direct skill routing by checking:
 
 - every canonical skill card is indexed;
-- every executable wrapper points to its canonical card;
+- every agent skill adapter points to its canonical card;
 - Cursor and Claude entries are symlinks to `.agents/skills/`;
 - every role file is a regular tracked file;
 - the registry contains exactly the two repository-reading roles and one

@@ -15,11 +15,19 @@ links are updated in the same change.
 Dynamic skills turn concrete feedback into reusable guidance:
 
 1. A **skill card** in [`.cortex/dynamic-skills/`](../dynamic-skills/) is the
-   source of truth for the pattern. Every durable repo-specific agent skill
-   belongs here.
-2. Executable skills live in [`.agents/skills/`](../../.agents/skills/) (the canonical open agent skill directory for Antigravity, Cursor, Claude, and Codex), with symlinks in [`.cursor/skills/`](../../.cursor/skills/) and [`.claude/skills/`](../../.claude/skills/). Skill wrappers are mirrors, not the canonical copy.
-3. The registry at [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md)
-   lists every available skill card and whether it has an executable skill.
+   source of truth for one reusable pattern, technique, or invariant.
+2. Agent skill adapters live in [`.agents/skills/`](../../.agents/skills/),
+   with symlinks in [`.cursor/skills/`](../../.cursor/skills/) and
+   [`.claude/skills/`](../../.claude/skills/).
+3. An agent skill may also contain a mechanically executable TypeScript
+   capability when the behavior meets the
+   [capability-package criteria](../architecture/agent-skill-capabilities.md#mechanical-capability-package).
+4. The registry at [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md)
+   lists every available semantic skill and its direct invocation adapter.
+
+Do not create a dynamic skill card for an agent profile or workflow merely to
+mirror its architecture authority. Follow the
+[concept taxonomy](../architecture/agent-skill-capabilities.md#concept-taxonomy).
 
 ## Prompt Protocol
 
@@ -55,6 +63,8 @@ scope, and apply the pattern with normal coding workflow and validation.
 5. Update [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md) in the
    same change.
 6. Create or update `.agents/skills/<skill-name>/SKILL.md` (and ensure `.cursor/skills/` and `.claude/skills/` symlinks exist) when the pattern is intended to be invoked directly by future agents.
+7. Add a mechanical capability only when the skill has stable closed inputs,
+   outputs, bounds, tests, and repeated execution value.
 
 For a new card scaffold, prefer Loom:
 
@@ -67,6 +77,10 @@ skillScaffold:
 ```bash
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
+
+The legacy typed field name `createExecutableWrappers` is retained for request
+compatibility. It creates agent skill adapters and symlink mirrors. It does not
+create a mechanical TypeScript capability.
 
 Then fill the card content and verify with `task loom:cortex-audit`.
 

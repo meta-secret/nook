@@ -1,6 +1,23 @@
 # Loom
 
-Loom runs mechanical Cortex tools and reviewed static agent workflows.
+Loom runs generic controlled execution for reviewed repository tooling and
+reviewed static agent workflows.
+
+Repository-specific deterministic mechanics may live beside their owning
+project skill under `.agents/skills/<slug>/`. Loom invokes those capabilities
+through one reviewed static registry. It retains bounds, scheduling, isolation,
+provenance, journals, replay, barriers, and terminal authority.
+
+Executable skills are reviewed repository code, not hostile plugins. Loom
+seals each staged recursive source-and-lock closure into a content-addressed
+image, runs it in a no-network read-only container, and hard-terminates the
+container at its deadline.
+
+Validate skill capability packages directly with:
+
+```bash
+task skills:verify
+```
 
 Policy stays in `.cortex`.
 

@@ -467,6 +467,17 @@ or synthesis barrier; every role remains nondelegating and read-only. See the
 [structural refactoring registry](.cortex/architecture/refactoring-experts.md)
 and [workflow](.cortex/workflows/structural-refactoring.md).
 
+Nook keeps a large catalog of focused project skills over a small stable set of
+agent profiles. Instruction-only skills remain lightweight. A skill with stable
+deterministic mechanics may add a statically registered reviewed TypeScript
+capability under `.agents/skills/<slug>/src`, with focused tests beside it. Loom
+seals the staged recursive source-and-lock closure into a content-addressed
+image, then runs it through a pinned, no-network, read-only container. Run
+**`task skills:verify`** for those packages. Loom retains the reviewed static
+registry, bounds, scheduling, isolation, provenance, replay, barriers, and
+terminal authority. See the
+[agent and skill capability architecture](.cortex/architecture/agent-skill-capabilities.md).
+
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed

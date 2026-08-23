@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "stub-skill",
+  "executionKind": "docker-read-only",
+  "requestKind": "stub-request-v1",
+  "resultKind": "stub-result-v1",
+  "policyPaths": [".cortex/dynamic-skills/cortex-article-structure.md"],
+  "limits": {
+    "requestBytes": 64,
+    "resultBytes": 64,
+    "timeoutMs": 2000
+  }
+}

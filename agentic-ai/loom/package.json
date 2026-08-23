@@ -17,10 +17,11 @@
     "agent-delegation": "bun run src/agent-workflow/delegation-cli.ts",
     "module-experts": "bun run src/module-experts/cli.ts",
     "structural-experts": "bun run src/structural-experts/cli.ts",
-    "check": "tsc --noEmit",
+    "check": "tsc --noEmit && bun run lint:tooling",
     "lint": "eslint src tests",
-    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
-    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
+    "lint:tooling": "cd ../.. && agentic-ai/loom/node_modules/.bin/eslint --no-config-lookup --rule 'no-undef:error' --rule 'no-unused-vars:error' --rule 'prefer-const:error' tooling/eslint-rules",
+    "format": "prettier --write \"src/**/*.ts\" \"tests/**/*.ts\" \"../../tooling/eslint-rules/**/*.js\" \"*.{ts,json,md}\" .prettierrc",
+    "format:check": "prettier --check \"src/**/*.ts\" \"tests/**/*.ts\" \"../../tooling/eslint-rules/**/*.js\" \"*.{ts,json,md}\" .prettierrc",
     "test": "bun test",
     "verify": "bun run format:check && bun run lint && bun run check && bun test"
   },
@@ -28,7 +29,6 @@
     "@eslint/js": "10.0.1",
     "@types/bun": "1.3.14",
     "@types/diff": "8.0.0",
-    "@types/mdast": "4.0.4",
     "eslint": "10.8.1",
     "prettier": "3.9.6",
     "typescript": "6.0.3",
@@ -38,9 +38,6 @@
     "@openai/codex-sdk": "0.147.0",
     "diff": "9.0.0",
     "github-slugger": "2.0.0",
-    "mdast-util-from-markdown": "2.0.3",
-    "remark-gfm": "4.0.1",
-    "remark-parse": "11.0.0",
-    "unified": "11.0.5"
+    "mdast-util-from-markdown": "2.0.3"
   }
 }

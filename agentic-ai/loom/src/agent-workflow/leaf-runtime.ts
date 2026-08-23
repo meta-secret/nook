@@ -222,9 +222,23 @@ export function mechanicalCortexAuditOutput(
     const finding: WorkflowFinding = {
       severity: WorkflowFindingSeverity.Error,
       title: 'Missing executable dynamic-skill wrapper',
-      summary: `${skill} has no executable skill wrapper.`,
-      evidence: [`Expected executable wrapper at ${executablePath}.`],
+      summary: `${skill} has no agent skill adapter.`,
+      evidence: [`Expected agent skill adapter at ${executablePath}.`],
       affectedPaths: ['.cortex/dynamic-skills/index.md', executablePath],
+    };
+    findings.push(finding);
+  }
+  for (const registryFinding of report.executableSkillRegistryFindings) {
+    const evidence = [registryFinding.message];
+    const affectedPaths = [
+      `.agents/skills/${registryFinding.skillId}/executable-skill.json`,
+    ];
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Invalid executable skill capability registration',
+      summary: registryFinding.message,
+      evidence,
+      affectedPaths,
     };
     findings.push(finding);
   }

@@ -1,5 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { readFileSync } from 'node:fs';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
@@ -22,6 +24,20 @@ import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from '../../src/agent-workflow/
 
 const REMOVE_TREE_OPTIONS: RmOptions = { recursive: true, force: true };
 const CREATE_TREE_OPTIONS: MakeDirectoryOptions = { recursive: true };
+const EXECUTABLE_SKILL_MANIFEST = readFileSync(
+  new URL(
+    '../../../../.agents/skills/cortex-article-structure/executable-skill.json',
+    import.meta.url,
+  ),
+  'utf8',
+);
+const EXECUTABLE_SKILL_RUNNER = readFileSync(
+  new URL(
+    '../../../../.agents/skills/cortex-article-structure/src/runner.ts',
+    import.meta.url,
+  ),
+  'utf8',
+);
 
 class UnusedAgentRuntime implements AgentTaskRuntime<string, never> {
   executeAgent(): never {
@@ -44,6 +60,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
     densityFindings: [],
     structureFindings: [],
     articleStructureFindings: [],
+    executableSkillRegistryFindings: [],
     auditOk: false,
   };
   const output = mechanicalCortexAuditOutput(report);
@@ -65,6 +82,7 @@ test('allows a clean mechanical report with zero findings', () => {
     densityFindings: [],
     structureFindings: [],
     articleStructureFindings: [],
+    executableSkillRegistryFindings: [],
     auditOk: true,
   };
   const output = mechanicalCortexAuditOutput(report);
@@ -86,6 +104,7 @@ test('bounds Loom-authored mechanical materialized views', () => {
     densityFindings: [],
     structureFindings: [],
     articleStructureFindings: [],
+    executableSkillRegistryFindings: [],
     auditOk: false,
   };
   const output = mechanicalCortexAuditOutput(report);
@@ -103,6 +122,25 @@ test('runs the mechanical audit from the invocation working directory', async ()
   try {
     const skillsDirectory = join(repositoryRoot, '.cortex', 'dynamic-skills');
     await mkdir(skillsDirectory, CREATE_TREE_OPTIONS);
+    const executableSkillDirectory = join(
+      repositoryRoot,
+      '.agents',
+      'skills',
+      'cortex-article-structure',
+    );
+    await mkdir(join(executableSkillDirectory, 'src'), CREATE_TREE_OPTIONS);
+    await writeFile(
+      join(executableSkillDirectory, 'executable-skill.json'),
+      EXECUTABLE_SKILL_MANIFEST,
+    );
+    await writeFile(
+      join(executableSkillDirectory, 'src', 'runner.ts'),
+      EXECUTABLE_SKILL_RUNNER,
+    );
+    await writeFile(
+      join(skillsDirectory, 'cortex-article-structure.md'),
+      '# Cortex article structure\n',
+    );
     await writeFile(
       join(repositoryRoot, '.cortex', 'AGENTS.md'),
       '# Agents\n\n[Missing](missing.md)\n',
@@ -112,6 +150,9 @@ test('runs the mechanical audit from the invocation working directory', async ()
       '# Cortex Knowledge Graph\n\n- [Agents](AGENTS.md)\n- [Skills](dynamic-skills/index.md)\n',
     );
     await writeFile(join(skillsDirectory, 'index.md'), '# Skills\n');
+    const gitOptions = { cwd: repositoryRoot };
+    execFileSync('git', ['init', '--quiet'], gitOptions);
+    execFileSync('git', ['add', '.'], gitOptions);
 
     const runtime = new LocalWorkflowTaskRuntime<string, never>(
       new UnusedAgentRuntime(),
@@ -139,7 +180,11 @@ test('runs the mechanical audit from the invocation working directory', async ()
     if (terminal.kind !== TaskTerminalKind.Completed) {
       throw new Error('Expected the mechanical Cortex audit to complete.');
     }
-    expect(terminal.output.findings).toHaveLength(1);
+    expect(
+      terminal.output.findings.some(
+        (finding) => finding.title === 'Broken Cortex link',
+      ),
+    ).toBe(true);
     expect(terminal.output.findings[0]?.title).toBe('Broken Cortex link');
   } finally {
     await rm(repositoryRoot, REMOVE_TREE_OPTIONS);

@@ -116,7 +116,7 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
   {
     family: RequestFamily.SkillScaffold,
     description:
-      'Create a dynamic-skill card and optional executable wrappers.',
+      'Create a dynamic-skill card and optional agent skill adapters.',
     exampleRequest: 'task loom:skill-scaffold CONFIG=<request.yaml>',
     inputSchema: SKILL_SCAFFOLD_INPUT_SCHEMA,
   },

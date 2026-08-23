@@ -266,9 +266,13 @@ Classify each candidate instruction before changing its owner.
 - **Semantic policy or judgment:** Keep it in the owning Cortex authority.
   - Examples include tradeoffs, classification, architectural synthesis, and
     exception handling.
-- **Deterministic leaf:** Move it to Loom, Task, or another typed tool.
+- **Deterministic mechanism:** Encode it in the owning skill capability, Loom,
+  Task, CI, lint, or another typed tool according to its responsibility.
   - Its output must follow entirely from declared inputs.
   - Do not create an agent task for a mechanical assertion.
+  - Keep semantic authority, rationale, scope, exceptions, and acceptance
+    meaning in Cortex.
+  - Keep scheduling, isolation, provenance, and replay mechanics in Loom.
 - **Bounded semantic task:** Delegate it when the generic delegation criteria
   are satisfied.
   - Give each worker the same exact baseline.
@@ -299,7 +303,11 @@ worker contract and safe parallelism rules.
    - Parallelize only lanes with the same immutable baseline.
    - Require non-overlapping resources and independent acceptance evidence.
    - Define the join before dispatch.
-6. Move deterministic assertions into a typed leaf.
+6. Move deterministic assertions into the owning typed capability.
+   - Use a skill package for repository-specific mechanics.
+   - Use Loom for generic trust and orchestration mechanics.
+   - Keep mandatory Task or CI registration independent of model skill
+     selection.
 7. Use bounded subagents for semantic evidence collection.
 8. Promote a repeated stable graph only as a reviewed TypeScript catalog
    change.

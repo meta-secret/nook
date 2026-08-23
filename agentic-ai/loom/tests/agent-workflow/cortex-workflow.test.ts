@@ -12,7 +12,7 @@ test('uses the current adapter-bearing attempt journal schema', () => {
   );
 });
 
-test('declares executable skill mirrors in the skill audit scope', () => {
+test('declares agent skill mirrors in the skill audit scope', () => {
   const task =
     CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
       CortexAuditTask.AuditDynamicSkillsAndEntryPoints
@@ -24,8 +24,8 @@ test('declares executable skill mirrors in the skill audit scope', () => {
     throw new Error('Skill audit must use an agent executor.');
   }
   expect(task.execution.instruction).toContain('.agents/skills');
-  expect(task.execution.instruction).toContain('.cursor executable mirrors');
-  expect(task.execution.instruction).toContain('.claude executable mirrors');
+  expect(task.execution.instruction).toContain('.cursor agent-skill mirrors');
+  expect(task.execution.instruction).toContain('.claude agent-skill mirrors');
 });
 
 test('compares design and product claims with owning implementation', () => {

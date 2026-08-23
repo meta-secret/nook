@@ -21,6 +21,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let manifest = read(&root, "agentic-ai/loom/package.json");
     for required in [
         "\"lint\": \"eslint src tests\"",
+        "\"lint:tooling\":",
+        "\"check\": \"tsc --noEmit && bun run lint:tooling\"",
         "\"verify\": \"bun run format:check && bun run lint && bun run check && bun test\"",
         "\"eslint\":",
     ] {
@@ -30,7 +32,11 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let eslint = read(&root, "agentic-ai/loom/eslint.config.js");
+    let eslint = format!(
+        "{}\n{}",
+        read(&root, "agentic-ai/loom/eslint.config.js"),
+        read(&root, "tooling/eslint-rules/no-raw-object-arguments.js")
+    );
     for required in [
         "'max-params': ['error', { max: 1 }]",
         "'@typescript-eslint/no-restricted-types'",
@@ -42,6 +48,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "'@typescript-eslint/no-empty-object-type': 'error'",
         "'no-raw-object-arguments': noRawObjectArguments",
         "'loom/no-raw-object-arguments': 'error'",
+        "../../tooling/eslint-rules/no-raw-object-arguments.js",
         "transparentTypeScriptWrappers",
         "ConditionalExpression",
         "LogicalExpression",
