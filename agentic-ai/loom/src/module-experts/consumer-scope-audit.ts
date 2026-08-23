@@ -10,6 +10,11 @@ const GENERATED_BINDING_REFERENCES = [
   'nook-wasm/nook_wasm',
   'nook-companion-wasm/nook_companion_wasm',
 ] as const;
+const JSON_GENERATED_BINDING_REFERENCES = [
+  '$app-wasm',
+  'nook-wasm',
+  'nook-companion-wasm',
+] as const;
 const EXCLUDED_CONSUMER_SCOPE_PREFIXES = [
   'nook-app/nook-web/nook-web-research/',
   'nook-app/nook-web/nook-web-shared/src/extension/nook-companion-wasm/',
@@ -34,6 +39,11 @@ export type AuditInternalApiExpertConsumerScopeArgs = {
   readonly profile: ModuleExpertProfile;
 };
 
+type GeneratedBindingSourceInspection = {
+  readonly bindingReferences: readonly string[];
+  readonly sourceFile: ts.SourceFile;
+};
+
 export function auditInternalApiExpertConsumerScope(
   args: AuditInternalApiExpertConsumerScopeArgs,
 ): readonly InternalApiConsumerScopeFinding[] {
@@ -49,7 +59,7 @@ export function auditInternalApiExpertConsumerScope(
       code: 'invalid-internal-api-consumer-scope',
       path: args.profile.agentDefinitionPath,
       message:
-        'internal_api_expert must declare every authored production TypeScript or Svelte file that directly imports, configures, or resolves a generated WASM binding, and no broader scope.',
+        'internal_api_expert must declare every authored production TypeScript, Svelte, or JSON configuration file that directly imports, configures, or resolves a generated WASM binding, and no broader scope.',
     },
   ];
 }
@@ -65,9 +75,13 @@ export function discoverInternalApiConsumerPaths(
     '**/scripts/verify-app-isolation.ts',
     '**/vite.config.ts',
     '**/vite-config.ts',
+    '**/knip.json',
+    '**/tsconfig.json',
+    '**/tsconfig.app.json',
+    'tsconfig.eslint.json',
   ];
   return ts.sys
-    .readDirectory(webRoot, ['.ts', '.svelte'], [], includes)
+    .readDirectory(webRoot, ['.json', '.svelte', '.ts'], [], includes)
     .filter((path) => {
       const repoPath = relative(repoRoot, path).replaceAll('\\', '/');
       return (
@@ -95,6 +109,13 @@ function productionConsumerScopePath(repoPath: string): boolean {
 
 function referencesGeneratedBinding(sourcePath: string): boolean {
   const source = readFileSync(sourcePath, 'utf8');
+  if (sourcePath.endsWith('.json')) {
+    const inspection: GeneratedBindingSourceInspection = {
+      bindingReferences: JSON_GENERATED_BINDING_REFERENCES,
+      sourceFile: ts.parseJsonText('module-expert-consumer.json', source),
+    };
+    return sourceFileReferencesGeneratedBinding(inspection);
+  }
   const typeScriptSources = sourcePath.endsWith('.svelte')
     ? extractSvelteTypeScriptSources(source)
     : [source];
@@ -108,11 +129,21 @@ function typeScriptSourceReferencesGeneratedBinding(source: string): boolean {
     ts.ScriptTarget.Latest,
     true,
   );
+  const inspection: GeneratedBindingSourceInspection = {
+    bindingReferences: GENERATED_BINDING_REFERENCES,
+    sourceFile,
+  };
+  return sourceFileReferencesGeneratedBinding(inspection);
+}
+
+function sourceFileReferencesGeneratedBinding(
+  inspection: GeneratedBindingSourceInspection,
+): boolean {
   let found = false;
   const visit = (node: ts.Node): void => {
     if (
       ts.isStringLiteralLike(node) &&
-      GENERATED_BINDING_REFERENCES.some((binding) =>
+      inspection.bindingReferences.some((binding) =>
         node.text.includes(binding),
       )
     ) {
@@ -121,7 +152,7 @@ function typeScriptSourceReferencesGeneratedBinding(source: string): boolean {
     }
     ts.forEachChild(node, visit);
   };
-  visit(sourceFile);
+  visit(inspection.sourceFile);
   return found;
 }
 

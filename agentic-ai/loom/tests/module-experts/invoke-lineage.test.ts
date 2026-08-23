@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
@@ -74,13 +74,15 @@ class CountingRuntime implements AgentTaskRuntime<string, string> {
   }
 }
 
-test('rejects absent, failed, source-drifted, unauthorized, or corrupted parents before runtime', async () => {
+test('rejects invalid, corrupted, or symlinked parents before runtime', async () => {
   const setupCases: readonly ParentSetupCase[] = [
     { name: 'absent', setup: setupAbsentParent },
     { name: 'failed', setup: setupFailedParent },
     { name: 'source-drifted', setup: setupDriftedParent },
     { name: 'unauthorized', setup: setupUnauthorizedParent },
     { name: 'corrupted', setup: setupCorruptedParent },
+    { name: 'symlinked-projection', setup: setupSymlinkedProjection },
+    { name: 'symlinked-directory', setup: setupSymlinkedAttemptDirectory },
   ];
 
   for (const setupCase of setupCases) {
@@ -503,6 +505,48 @@ async function setupCorruptedParent(args: ParentSetupArgs): Promise<void> {
   );
   const serialized = await readFile(resultPath, 'utf8');
   await writeFile(resultPath, `${serialized}corrupted`, 'utf8');
+}
+
+async function setupSymlinkedProjection(args: ParentSetupArgs): Promise<void> {
+  const planArgs: CreateDirectPlanArgs = {
+    request: args.request,
+    sourceCommit: args.request.sourceCommit,
+    authorization: authorization(args.request),
+  };
+  await createDirectPlan(planArgs);
+  const parent = directParent(args.request);
+  const attemptDirectory = join(
+    processingRunDirectory(args.request.runId),
+    'agents',
+    parent.task,
+    `attempt-${parent.attempt}`,
+  );
+  const projectionPath = join(attemptDirectory, 'result.json');
+  const projectionTarget = join(attemptDirectory, 'result-target.json');
+  await rename(projectionPath, projectionTarget);
+  await symlink('result-target.json', projectionPath, 'file');
+}
+
+async function setupSymlinkedAttemptDirectory(
+  args: ParentSetupArgs,
+): Promise<void> {
+  const planArgs: CreateDirectPlanArgs = {
+    request: args.request,
+    sourceCommit: args.request.sourceCommit,
+    authorization: authorization(args.request),
+  };
+  await createDirectPlan(planArgs);
+  const parent = directParent(args.request);
+  const parentDirectory = join(
+    processingRunDirectory(args.request.runId),
+    'agents',
+    parent.task,
+  );
+  const attemptName = `attempt-${parent.attempt}`;
+  const attemptDirectory = join(parentDirectory, attemptName);
+  const attemptTargetName = `${attemptName}-target`;
+  await rename(attemptDirectory, join(parentDirectory, attemptTargetName));
+  await symlink(attemptTargetName, attemptDirectory, 'dir');
 }
 
 type CreateDirectPlanArgs = {

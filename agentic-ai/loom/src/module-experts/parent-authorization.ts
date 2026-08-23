@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { open } from 'node:fs/promises';
-import { join } from 'node:path';
+import { constants } from 'node:fs';
+import { lstat, open, realpath } from 'node:fs/promises';
+import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { AgentAttemptEventKind } from '../agent-workflow/agent-events.ts';
 import {
   AgentAttemptAdapterKind,
@@ -91,6 +92,7 @@ type VerifiedParentAttempt = {
 };
 
 type ReadBoundedParentProjectionArgs = {
+  readonly runDirectory: string;
   readonly path: string;
   readonly maxBytes: number;
 };
@@ -212,14 +214,17 @@ async function readParentAttempt(
   let viewSerialized: string;
   try {
     const eventsRead: ReadBoundedParentProjectionArgs = {
+      runDirectory: args.runDirectory,
       path: join(attemptDirectory, 'events.jsonl'),
       maxBytes: MAX_PARENT_EVENTS_BYTES,
     };
     const resultRead: ReadBoundedParentProjectionArgs = {
+      runDirectory: args.runDirectory,
       path: join(attemptDirectory, 'result.json'),
       maxBytes: MAX_PARENT_RESULT_BYTES,
     };
     const viewRead: ReadBoundedParentProjectionArgs = {
+      runDirectory: args.runDirectory,
       path: join(attemptDirectory, 'view.md'),
       maxBytes: MAX_PARENT_VIEW_BYTES,
     };
@@ -318,8 +323,14 @@ async function readParentAttempt(
 async function readBoundedParentProjection(
   args: ReadBoundedParentProjectionArgs,
 ): Promise<string> {
-  const handle = await open(args.path, 'r');
+  const projectionPath = await verifiedParentProjectionPath(args);
+  const handle = await open(
+    projectionPath,
+    constants.O_RDONLY | constants.O_NOFOLLOW,
+  );
   try {
+    const status = await handle.stat();
+    if (!status.isFile()) authorizationFailed();
     const buffer = Buffer.alloc(args.maxBytes + 1);
     let bytesRead = 0;
     while (bytesRead < buffer.length) {
@@ -337,6 +348,61 @@ async function readBoundedParentProjection(
   } finally {
     await handle.close();
   }
+}
+
+async function verifiedParentProjectionPath(
+  args: ReadBoundedParentProjectionArgs,
+): Promise<string> {
+  const runDirectory = resolve(args.runDirectory);
+  const projectionPath = resolve(args.path);
+  const projectionRelativePath = relative(runDirectory, projectionPath);
+  if (
+    projectionRelativePath === '' ||
+    pathEscapesRunDirectory(projectionRelativePath)
+  ) {
+    authorizationFailed();
+  }
+  const runDirectoryStatus = await lstat(runDirectory);
+  if (
+    runDirectoryStatus.isSymbolicLink() ||
+    !runDirectoryStatus.isDirectory()
+  ) {
+    authorizationFailed();
+  }
+  const pathSegments = projectionRelativePath.split(sep);
+  let currentPath = runDirectory;
+  for (const [index, segment] of pathSegments.entries()) {
+    currentPath = join(currentPath, segment);
+    const status = await lstat(currentPath);
+    const isProjectionFile = index === pathSegments.length - 1;
+    if (
+      status.isSymbolicLink() ||
+      (isProjectionFile ? !status.isFile() : !status.isDirectory())
+    ) {
+      authorizationFailed();
+    }
+  }
+  const resolvedRunDirectory = await realpath(runDirectory);
+  const resolvedProjectionPath = await realpath(projectionPath);
+  const resolvedRelativePath = relative(
+    resolvedRunDirectory,
+    resolvedProjectionPath,
+  );
+  if (
+    resolvedRelativePath === '' ||
+    pathEscapesRunDirectory(resolvedRelativePath)
+  ) {
+    authorizationFailed();
+  }
+  return projectionPath;
+}
+
+function pathEscapesRunDirectory(relativePath: string): boolean {
+  return (
+    isAbsolute(relativePath) ||
+    relativePath === '..' ||
+    relativePath.startsWith(`..${sep}`)
+  );
 }
 
 function completedTerminalHasExactKeys(

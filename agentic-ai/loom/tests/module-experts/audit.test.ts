@@ -33,6 +33,7 @@ import type { AuditInternalApiExpertConsumerScopeArgs } from '../../src/module-e
 import {
   INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
   INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
+  INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
   INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
@@ -577,6 +578,7 @@ describe('module expert audit', () => {
       'nook-app/nook-web/nook-web-shared/src/vault-app/App.svelte',
     );
     const bindingConfigurationPaths = [
+      ...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
       'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
       'nook-app/nook-web/nook-vault-simple/vite.config.ts',
       'nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts',

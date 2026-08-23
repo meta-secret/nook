@@ -126,7 +126,7 @@ export const INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS = [
   REPLICATION_ROOT,
 ] as const;
 
-export const INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS = [
+const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-vault-sentinel/src/extension-connect-disabled.ts',
   'nook-app/nook-web/nook-vault-sentinel/src/main.ts',
   'nook-app/nook-web/nook-vault-sentinel/vite.config.ts',
@@ -288,6 +288,21 @@ export const INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/vault-app/main.ts',
   'nook-app/nook-web/nook-web-shared/vite-config.ts',
 ] as const;
+
+export const INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS = [
+  'nook-app/nook-web/nook-vault-sentinel/tsconfig.json',
+  'nook-app/nook-web/nook-vault-simple/tsconfig.json',
+  'nook-app/nook-web/nook-web-app/knip.json',
+  'nook-app/nook-web/nook-web-app/tsconfig.app.json',
+  'nook-app/nook-web/nook-web-app/tsconfig.json',
+  'nook-app/nook-web/nook-web-extension/tsconfig.json',
+  'nook-app/nook-web/tsconfig.eslint.json',
+] as const;
+
+export const INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS: readonly string[] = [
+  ...INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS,
+  ...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
+].sort();
 
 export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
   {

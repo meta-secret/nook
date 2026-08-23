@@ -13,7 +13,10 @@ import { dirname, join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import { Codex } from '@openai/codex-sdk';
 import type { CodexOptions, TurnOptions } from '@openai/codex-sdk';
-import { MODULE_EXPERT_CATALOG } from '../../src/module-experts/catalog.ts';
+import {
+  INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS,
+  MODULE_EXPERT_CATALOG,
+} from '../../src/module-experts/catalog.ts';
 import type { ModuleExpertProfile } from '../../src/module-experts/catalog.ts';
 import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../../src/module-experts/read-context-mcp.ts';
 import {
@@ -454,6 +457,9 @@ describe('module expert runtime isolation', () => {
             ),
           ).toBe(`committed:${consumerPath}\n`);
         }
+        expect(
+          selected.scopePaths.filter((path) => path.endsWith('.json')),
+        ).toEqual([...INTERNAL_API_EXPERT_JSON_CONSUMER_SCOPE_PATHS]);
         await expect(
           access(
             join(isolation.repositorySnapshot, UNRELATED_WEB_CONSUMER_PATH),
