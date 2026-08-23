@@ -12,7 +12,6 @@ template:
       nook.nokey.sh/arc-cache-primary: "true"
     topologySpreadConstraints:
       - maxSkew: 1
-        minDomains: 1
         topologyKey: kubernetes.io/hostname
         whenUnsatisfiable: ScheduleAnyway
         nodeAffinityPolicy: Honor

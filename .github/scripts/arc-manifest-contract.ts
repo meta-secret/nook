@@ -652,13 +652,14 @@ runners.requireAll([
 ]);
 runners.forbid("- name: GITHUB_TOKEN");
 runners.forbid("https://api.github.com");
+runners.forbid("minDomains:");
 cacheRunners.requireAll([
   "runnerScaleSetName: nook-k0s-cache",
   "maxRunners: 2",
   'nook.nokey.sh/arc-cache-primary: "true"',
   "nook.nokey.sh/arc-spread-group: cache",
-  "minDomains: 1",
 ]);
+cacheRunners.forbid("minDomains:");
 tasks.requireAll([
   'credential_store="$credential_dir/arc-controller-token"',
   "ARC credential persisted under ~/.nook",
