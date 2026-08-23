@@ -739,10 +739,11 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
 
 ARC runners reach `registry.dev.nokey.sh` on the k0s node's local TLS ingress
 path. Buildx may import authenticated Zot registry-cache refs to bootstrap a
-new or cold compute node. Successful ARC jobs promote the private local seed
-and skip registry cache export. Hosted fallback runners continue to publish Zot
-cache, so a replacement compute node retains a cross-host recovery source. Each
-job's writable clone is private and is removed after promotion or inactivity.
+new or cold compute node. Successful cache-primary Main producers promote the
+private local seed and skip registry cache export. Hive and hosted fallback
+runners continue to publish Zot cache, so a replacement compute node retains a
+cross-host recovery source. Each job's writable clone is private and is removed
+after promotion or inactivity.
 Main cache producers run in dependency order. An authenticated promotion intent
 blocks the next producer clone until the prior final-success generation is
 promoted; non-producing Main validation remains parallel.

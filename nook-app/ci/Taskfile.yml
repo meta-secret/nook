@@ -224,9 +224,10 @@ tasks:
           "${GITHUB_RUN_ATTEMPT:?missing GitHub run attempt}" \
           "${GITHUB_SHA:?missing GitHub head SHA}" > "$signal_dir/request.next"
         mv "$signal_dir/request.next" "$signal_dir/request"
-        for _ in $(seq 1 100); do
+        deadline=$(($(date +%s) + 70))
+        while test "$(date +%s)" -lt "$deadline"; do
           test -f "$signal_dir/accepted" && exit 0
-          sleep 0.1
+          sleep 1
         done
         echo "ARC cache promotion sidecar did not accept the request" >&2
         exit 1

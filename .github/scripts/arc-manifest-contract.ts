@@ -548,6 +548,7 @@ ciTasks.requireAll([
   'signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"',
   "umask 027",
   'mv "$signal_dir/request.next" "$signal_dir/request"',
+  "deadline=$(($(date +%s) + 70))",
   'test -f "$signal_dir/accepted" && exit 0',
 ]);
 runtimeSmoke.forbid("task ci:arc:promote-buildkit-cache");
