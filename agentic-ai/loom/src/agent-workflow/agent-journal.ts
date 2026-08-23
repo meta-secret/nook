@@ -42,6 +42,16 @@ import {
   consumeModuleExpertCompletionAuthority,
   consumeModuleExpertJournalAuthority,
 } from '../module-experts/trusted-runtime.ts';
+import {
+  consumeStructuralCompletionAuthority,
+  consumeStructuralJournalAuthority,
+} from '../structural-experts/trusted-runtime.ts';
+import type {
+  StructuralJournalAuthority,
+  StructuralJournalBinding,
+  StructuralRuntimeIdentity,
+  TrustedStructuralExecution,
+} from '../structural-experts/trusted-runtime.ts';
 import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
 import type {
   ModuleExpertJournalAuthority,
@@ -94,9 +104,29 @@ export type FinalizeModuleExpertAttemptArgs<TTask extends string> = {
   readonly execution: TrustedModuleExpertExecution;
 };
 
+export type StructuralExpertAttemptJournalConfiguration = Omit<
+  AgentAttemptJournalConfiguration,
+  'adapter'
+>;
+
+export type CreateStructuralExpertAttemptJournalArgs = {
+  readonly configuration: StructuralExpertAttemptJournalConfiguration;
+  readonly authority: StructuralJournalAuthority;
+  readonly identity: StructuralRuntimeIdentity;
+};
+
+export type FinalizeStructuralExpertAttemptArgs<TTask extends string> = {
+  readonly terminal: TaskTerminal<TTask>;
+  readonly execution: TrustedStructuralExecution;
+};
+
 const PENDING_MODULE_EXPERT_CONFIGURATIONS = new WeakMap<
   AgentAttemptJournalConfiguration,
   ModuleExpertJournalBinding
+>();
+const PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS = new WeakMap<
+  AgentAttemptJournalConfiguration,
+  StructuralJournalBinding
 >();
 
 export class AgentAttemptJournal<TTask extends string> {
@@ -109,10 +139,15 @@ export class AgentAttemptJournal<TTask extends string> {
   private readonly moduleExpertJournalBinding:
     ModuleExpertJournalBinding | false;
   private trustedModuleExpertFinalization: boolean;
+  private readonly structuralExpertJournalBinding:
+    StructuralJournalBinding | false;
+  private trustedStructuralExpertFinalization: boolean;
 
   constructor(configuration: AgentAttemptJournalConfiguration) {
     const pendingBinding =
       PENDING_MODULE_EXPERT_CONFIGURATIONS.get(configuration);
+    const pendingStructuralBinding =
+      PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.get(configuration);
     const adapter = configuration.adapter as AgentAttemptAdapterKind;
     if (adapter === AgentAttemptAdapterKind.ModuleExpertInvocation) {
       if (!pendingBinding) {
@@ -121,6 +156,13 @@ export class AgentAttemptJournal<TTask extends string> {
         );
       }
       PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(configuration);
+    } else if (adapter === AgentAttemptAdapterKind.StructuralExpertInvocation) {
+      if (!pendingStructuralBinding) {
+        throw new Error(
+          'Structural expert journals require runtime completion authority.',
+        );
+      }
+      PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.delete(configuration);
     } else if (!Object.values(AgentAttemptAdapterKind).includes(adapter)) {
       throw new Error('Agent attempt adapter provenance is invalid.');
     }
@@ -159,6 +201,8 @@ export class AgentAttemptJournal<TTask extends string> {
     this.finalized = false;
     this.moduleExpertJournalBinding = pendingBinding ?? false;
     this.trustedModuleExpertFinalization = false;
+    this.structuralExpertJournalBinding = pendingStructuralBinding ?? false;
+    this.trustedStructuralExpertFinalization = false;
   }
 
   get eventHighWaterMark(): WorkflowEventSequence {
@@ -282,6 +326,34 @@ export class AgentAttemptJournal<TTask extends string> {
     }
   }
 
+  async finalizeStructuralExpert(
+    args: FinalizeStructuralExpertAttemptArgs<TTask>,
+  ): Promise<AgentAttemptProcessingReference> {
+    if (!this.structuralExpertJournalBinding) {
+      throw new Error('Structural expert journal binding is missing.');
+    }
+    const terminal = args.terminal;
+    if (terminal.kind !== TaskTerminalKind.Completed) {
+      throw new Error('Structural expert completion terminal is invalid.');
+    }
+    const terminalCompletion = {
+      threadId: terminal.threadId,
+      output: terminal.output,
+    };
+    const consumeRequest = {
+      binding: this.structuralExpertJournalBinding,
+      execution: args.execution,
+      terminalCompletion,
+    };
+    consumeStructuralCompletionAuthority(consumeRequest);
+    this.trustedStructuralExpertFinalization = true;
+    try {
+      return await this.finalize(terminal);
+    } finally {
+      this.trustedStructuralExpertFinalization = false;
+    }
+  }
+
   private assertTerminal(terminal: TaskTerminal<TTask>): void {
     if (
       terminal.task !== this.configuration.task ||
@@ -299,6 +371,19 @@ export class AgentAttemptJournal<TTask extends string> {
       ) {
         throw new Error(
           'Module expert evidence requires the isolated invocation adapter.',
+        );
+      }
+      const structuralEvidence =
+        output.resultKind === WorkflowResultKind.CodeRefactoringEvidence ||
+        output.resultKind === WorkflowResultKind.CortexRefactoringEvidence ||
+        output.resultKind === WorkflowResultKind.SystemCoherenceSynthesis;
+      if (
+        structuralEvidence &&
+        (adapter !== AgentAttemptAdapterKind.StructuralExpertInvocation ||
+          !this.trustedStructuralExpertFinalization)
+      ) {
+        throw new Error(
+          'Structural expert evidence requires the isolated invocation adapter.',
         );
       }
       const view = terminal.output?.materializedViewMarkdown;
@@ -428,6 +513,51 @@ export function createModuleExpertAttemptJournal<TTask extends string>(
   if (!adapterSet) {
     PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(configuration);
     throw new Error('Module expert journal provenance could not be sealed.');
+  }
+  return new AgentAttemptJournal<TTask>(configuration);
+}
+
+export function createStructuralExpertAttemptJournal<TTask extends string>(
+  args: CreateStructuralExpertAttemptJournalArgs,
+): AgentAttemptJournal<TTask> {
+  const identityMatches =
+    args.configuration.runDirectory === args.identity.runDirectory &&
+    args.configuration.runId === args.identity.runId &&
+    args.configuration.workflow === args.identity.workflow &&
+    args.configuration.workflowVersion === args.identity.workflowVersion &&
+    args.configuration.sourceCommit === args.identity.sourceCommit &&
+    args.configuration.task === args.identity.task &&
+    args.configuration.agent === args.identity.agent &&
+    args.configuration.attempt === args.identity.attempt &&
+    args.configuration.depth === args.identity.depth &&
+    JSON.stringify(args.configuration.parent) ===
+      JSON.stringify(args.identity.parent);
+  if (!identityMatches) {
+    throw new Error('Structural expert journal identity is invalid.');
+  }
+  const consumeRequest = {
+    authority: args.authority,
+    identity: args.identity,
+  };
+  const binding = consumeStructuralJournalAuthority(consumeRequest);
+  const parentValue: AgentAttemptParent = { ...args.configuration.parent };
+  const parent = Object.freeze(parentValue);
+  const configuration: AgentAttemptJournalConfiguration = {
+    ...args.configuration,
+    parent,
+    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+  };
+  PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.set(configuration, binding);
+  const adapterSet = Reflect.set(
+    configuration,
+    'adapter',
+    AgentAttemptAdapterKind.StructuralExpertInvocation,
+  );
+  if (!adapterSet) {
+    PENDING_STRUCTURAL_EXPERT_CONFIGURATIONS.delete(configuration);
+    throw new Error(
+      'Structural expert journal provenance could not be sealed.',
+    );
   }
   return new AgentAttemptJournal<TTask>(configuration);
 }

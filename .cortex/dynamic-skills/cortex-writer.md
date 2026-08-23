@@ -8,7 +8,8 @@ This is a P1 documentation rule for every `.cortex` Markdown file.
   invariant.
 - Static directory trees in documentation are a failed documentation invariant.
 - ASCII art, ASCII box drawings, and text flowcharts are prohibited.
-- Tables in Markdown files are discouraged; use enclosed lists instead.
+- Tables are reserved for compact repeated fields or exact mappings.
+  Enclosed lists remain the default.
 
 ## Purpose
 
@@ -18,7 +19,8 @@ Cortex is optimized for AI legibility and structure:
 
 - One sentence should carry one idea.
 - Complex facts belong in short sentences, bullets, or lists.
-- Tables in Markdown files are not advisable; replace them with enclosed structured lists.
+- Use tables only when compact repeated fields or exact mappings make lookup
+  clearer than an enclosed list.
 - Project structure is dynamic; documents must not contain static directory trees.
 - ASCII graphics are hard for AI agents to parse; diagrams must use Mermaid (` ```mermaid `) or structured lists.
 
@@ -50,9 +52,10 @@ Split the idea before writing the final prose.
 2. Write one short sentence per unit when the fact stands alone.
 3. Use a bullet list when several units share one topic.
 4. Use a nested list only when a parent item owns clear children.
-5. **Do not use tables in Markdown files.**
-   - Using tables is not advisable.
-   - Replace tables with enclosed structured lists.
+5. **Prefer enclosed structured lists.**
+   - Use a table only for compact repeated fields or exact mappings.
+   - Keep every table cell short and free of procedural prose.
+   - Replace explanatory or multi-clause tables with enclosed structured lists.
    - Enclose related properties under a bold primary item with nested child bullets.
    - Enclosed lists are clean, wrap naturally, and are easily parsed and maintained by AI agents.
 6. **Never include project or directory trees in Cortex files.**

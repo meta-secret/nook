@@ -21,7 +21,7 @@ source of truth.
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition
   - Executable skill: [`.agents/skills/source-file-size/SKILL.md`](../../.agents/skills/source-file-size/SKILL.md)
 - **[cortex-writer.md](cortex-writer.md)**
-  - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists to reduce cognitive complexity, and replace tables with enclosed structured lists
+  - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; reserve tables for compact repeated fields or exact mappings
   - Executable skill: [`.agents/skills/cortex-writer/SKILL.md`](../../.agents/skills/cortex-writer/SKILL.md)
 - **[cortex-article-structure.md](cortex-article-structure.md)**
   - Purpose: **P1 / critical `.cortex` article rule:** expose explanation, rules, procedures, branches, and reference data through semantic hierarchy
@@ -64,6 +64,15 @@ source of truth.
 - **[internal-api-expert.md](internal-api-expert.md)**
   - Purpose: Design the smallest provider-consumer contract across Rust crates, both WASM bridges, generated bindings, and TypeScript adapters
   - Executable skill: [`.agents/skills/internal-api-expert/SKILL.md`](../../.agents/skills/internal-api-expert/SKILL.md)
+- **[code-refactoring-expert.md](code-refactoring-expert.md)**
+  - Purpose: Audit one code surface for architecture, design, quality, tests, and stronger types without granting write authority
+  - Executable skill: [`.agents/skills/code-refactoring-expert/SKILL.md`](../../.agents/skills/code-refactoring-expert/SKILL.md)
+- **[cortex-refactoring-expert.md](cortex-refactoring-expert.md)**
+  - Purpose: Audit Cortex complexity, conflicts, duplication, legacy guidance, ownership drift, and deterministic extraction candidates
+  - Executable skill: [`.agents/skills/cortex-refactoring-expert/SKILL.md`](../../.agents/skills/cortex-refactoring-expert/SKILL.md)
+- **[system-coherence-synthesizer.md](system-coherence-synthesizer.md)**
+  - Purpose: Reconcile verified code and Cortex evidence without repository access or write authority
+  - Executable skill: [`.agents/skills/system-coherence-synthesizer/SKILL.md`](../../.agents/skills/system-coherence-synthesizer/SKILL.md)
 - **[rust-coding.md](rust-coding.md)**
   - Purpose: Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs
   - Executable skill: [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md)
@@ -99,7 +108,7 @@ source of truth.
 - **[web-unused-code.md](web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
 - **[cortex-document-map.md](cortex-document-map.md)**
-  - Purpose: Require standard relationship links and a hierarchical internal map in every Cortex document
+  - Purpose: Centralize Cortex navigation and section anchors in `.cortex/knowledge-graph.md`
   - Executable skill: [`.agents/skills/cortex-document-map/SKILL.md`](../../.agents/skills/cortex-document-map/SKILL.md)
 - **[testing-pyramid-and-regression.md](testing-pyramid-and-regression.md)**
   - Purpose: Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor

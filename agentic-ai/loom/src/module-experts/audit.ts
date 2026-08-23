@@ -48,6 +48,7 @@ import {
 import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
 import { validModuleExpertRuntimeEnvironment } from './runtime-environment-audit.ts';
 import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
+import { STRUCTURAL_EXPERT_CATALOG } from '../structural-experts/catalog.ts';
 export { auditModuleExpertRuntimeRouting };
 export type { AuditModuleExpertRuntimeRoutingArgs };
 
@@ -699,7 +700,9 @@ function validateAgentDefinitions(
     return;
   }
   const expectedPaths = new Set(
-    MODULE_EXPERT_CATALOG.map((profile) => profile.agentDefinitionPath),
+    [...MODULE_EXPERT_CATALOG, ...STRUCTURAL_EXPERT_CATALOG].map(
+      (profile) => profile.agentDefinitionPath,
+    ),
   );
   const collectArgs: CollectAgentDefinitionPathsArgs = {
     directory: agentDirectory,

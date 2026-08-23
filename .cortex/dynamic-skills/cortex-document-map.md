@@ -17,7 +17,7 @@ It contains:
 - Golden principles and system entry points.
 - Categorized directories of product specs, design docs, dynamic skills, workflows, references, and exec plans.
 - Hierarchical section maps with clickable fragment links for every document.
-- Directional summaries for every document and section.
+- Directional summaries when a link label does not make routing intent clear.
 
 ## Individual document structure
 
@@ -74,7 +74,7 @@ Applies to:
 - [ ] Ensure the document starts with exactly one H1 title.
 - [ ] Omit inline `## Relationships` and `## Document map` from individual documents.
 - [ ] Add the document and its section anchors to `.cortex/knowledge-graph.md`.
-- [ ] Give every section entry in `knowledge-graph.md` a concise directional summary.
+- [ ] Add a concise directional summary when the link label alone is ambiguous.
 - [ ] Apply the Cortex writer and consistency checks.
 
 ## Validation

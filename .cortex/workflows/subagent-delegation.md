@@ -318,6 +318,16 @@ One parent resolves conflicting findings and authors the final edit.
 
 A topic-local one-hop consistency check does not require fan-out.
 
+### Structural coherence
+
+Use the [structural refactoring workflow](structural-refactoring.md) when code
+or Cortex structure is the requested maintenance surface.
+
+- The registry contains two repository-reading structural experts.
+- `system_coherence_synthesizer` receives only verified evidence.
+- The delivery owner predeclares all tasks and applies accepted corrections.
+- Structural roles do not delegate or create another tier.
+
 ### Broad repository inventory
 
 Repository-wide migrations MUST use read-only workers when two or more disjoint
