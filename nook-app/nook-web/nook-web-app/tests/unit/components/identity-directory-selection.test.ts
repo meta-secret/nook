@@ -72,6 +72,10 @@ function identitySnapshot(identity: (typeof identities)[number]) {
       identity.members.map((member) => ({
         appId: member.appId,
         currentBrowser: member.currentBrowser,
+        localProtection:
+          identity.identityId === 'personal'
+            ? DeviceAccessProtectionKind.PasskeyStandard
+            : DeviceAccessProtectionKind.Missing,
         labelKind: NookIdentityMemberLabelKind.Known,
         label: () => member.label,
         free,
@@ -110,12 +114,15 @@ const directorySnapshot = {
     index === 0
       ? identitySnapshot(identities[0])
       : identitySnapshot(identities[1]),
+  deviceAccess: () => accessSnapshot,
   free,
 }
 
 const managerMethods = {
   device_access_snapshot_request: () => ({
-    resolve: async () => accessSnapshot,
+    resolve: async () => {
+      throw new Error('dashboard must use identity-bound access evidence')
+    },
     free,
   }),
   identity_directory_snapshot_request: () => ({

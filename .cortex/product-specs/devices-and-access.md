@@ -37,35 +37,81 @@ See
 
 ## Evidence and provenance
 
-Dashboard facts must be distinguishable as:
+Stored access facts remain typed by provenance:
 
 - **verified by Nook** — cryptographic app-key unlock or vault open succeeded;
 - **reported by browser** — WebAuthn attachment, transports, backup flags,
   AAGUID, or ceremony metadata;
-- **named by the user** — a reminder about where a passkey was saved;
+- **named by the user** — the passkey name shown in its inventory row;
 - **last-known** — cached evidence from an earlier session; or
 - **unknown** — unavailable, unsupported, or predating collection.
 
 WebAuthn cannot inventory external passkey managers.
-The dashboard must never imply that capability.
+The primary dashboard must not present browser ceremony metadata as product
+information.
 
 Registration evidence may include an authenticator GUID.
 Nook maps known GUIDs to a typed keeper name such as Apple Passwords,
 Proton Pass, or Google Password Manager.
-That name is browser-reported display help.
+That name is internal diagnostic metadata.
 It is not an inventory of the keeper.
-It must stay distinct from the optional user reminder.
 
 A synced passkey is shown as provider-available.
 It is never shown as stored on one physical laptop.
 
 ## Persistence boundary
 
-- **Unlock-critical records:** Use `app_id` and `app_key_wrapped`.
-  - Dual-read legacy `device_id` and `device_identity_wrapped` only during
+- **Local identity keyring:** Use `local_identity_keyring_v1`.
+  - Bind each local identity ID to one independently generated app ID.
+  - Store only the wrapped app key and an app-key-sealed event-signing seed.
+  - Commit the new keyring entry and identity-directory entry in one IndexedDB
+    transaction.
+  - Select a new identity only after both records are durable.
+  - Migrate legacy `app_id` and `app_key_wrapped` into the selected identity's
+    keyring entry.
+  - Dual-read legacy `device_id` and `device_identity_wrapped` only during that
     migration.
   - Store descriptive dashboard data in a separately versioned access profile.
+  - Key each access profile by its local app ID.
   - Missing descriptive data must not prevent app-key unlock.
+  - Key identity-sealed sync-provider snapshots by local app ID.
+  - Migrate the legacy singleton provider snapshot only when it belongs to the
+    sole local keyring entry.
+  - A locked pre-sealed provider import must claim eligible legacy grants before
+    it writes the first app-scoped snapshot.
+  - An unlocked manager may write live provider grants only when its in-memory
+    app ID matches the grant. Otherwise use the grant's explicit app scope.
+  - Extension event import must resolve the protected local key by the grant's
+    explicit app ID. It must not substitute the persisted directory selection.
+  - Bind the grant's protected local identity selection before importing event
+    bytes or provider state. If activation is blocked, abort without either
+    mutation.
+  - When an extension grant targets another local app ID, select its owning
+    protected identity and lock the prior live session before reporting import
+    success. The next extension unlock must target the imported grant.
+  - Clear decrypted provider grants and provider drafts from web memory
+    immediately after an Add identity protection action persists and adopts
+    another local app key.
+  - Preserve local vault discovery while clearing identity-scoped provider
+    secrets, so a cancelled identity unlock cannot hide the local unlock path.
+  - Do not auto-open a known vault while **Devices & access** owns an identity
+    transition. Re-enter the catalog-driven local unlock path only after the
+    user leaves the dashboard.
+  - Clear any pending extension handoff and its secrets before a local identity
+    transition can adopt a different app key.
+  - After a legacy wrapped app key authenticates, atomically promote it into the
+    directory and keyring and seal its existing singleton signing seed.
+  - Normal PIN or passkey unlock must finish that promotion when an earlier
+    read already created a seedless keyring entry.
+  - If that pre-vault legacy identity has no signing seed and no established
+    signing public key, mint its first signer during promotion.
+  - If established signing evidence exists but its seed is missing, fail closed
+    instead of replacing the signer.
+  - If a stored legacy signing seed does not derive the established membership
+    public key, fail closed instead of rotating the event actor.
+  - After keyring promotion, ordinary vault genesis must retain the signing seed
+    only inside its app-key-sealed keyring envelope. It must not recreate the
+    legacy plaintext singleton seed.
 - **Local identity directory:** Use `identity_directory_v1`.
   - Represent selection as explicit `Empty` or `Selected(identity_id)`.
   - Apply updates in one IndexedDB read-write transaction.
@@ -112,6 +158,9 @@ It is never shown as stored on one physical laptop.
   - Fail closed on concurrent identity changes without overwriting them.
   - Retain unrelated concurrent changes through a typed three-way rebase.
   - Reject a staged-identity conflict or cross-identity app-key overlap.
+  - Bind extension-first staged genesis to the live authorizer app key.
+  - If no live authorizer exists, bind it to the handed-off app key.
+  - Never derive staged ownership from another tab's persisted selection.
 - **Genesis event state:** Use `awaiting-event`, `legacy-event-pinned`, or
   `event-pinned`.
   - Let the current pinned variant own the complete signed `eventYaml`, an
@@ -148,11 +197,53 @@ It is never shown as stored on one physical laptop.
 - **Dashboard persistence:** Store non-secret metadata only.
   - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
     backup-password values, or plaintext vault contents.
+  - Scope passkey metadata by app ID.
+  - Validate each passkey metadata write against the wrapped credential owned
+    by that app ID, not the directory selection shared by other tabs.
 - **Destructive local recovery:** Quiesce serialized storage work in every tab
   before deleting the inaccessible wrapped app identity.
+  - Bind scoped recovery to the initiating tab's app ID instead of the shared
+    directory selection.
+  - Carry that explicit app ID from the rendered protected-identity snapshot so
+    recovery remains targeted after reload and across cleanup retries.
+  - Fail closed when that app ID no longer matches a readable directory and
+    keyring.
+  - When the directory is unreadable but the versioned keyring is valid, use a
+    full local-identity reset because identity-to-key ownership cannot be
+    established safely.
+  - Abort before any write when the versioned keyring cannot be decoded or
+    validated.
+  - Remove only the explicitly targeted identity's keyring entry.
+  - Preserve unrelated local identities and their wrapped app keys.
+  - Preserve the selected surviving local identity. Choose another survivor
+    only when recovery retired the prior selection.
+  - Preserve a Simple genesis marker owned by a remaining local identity.
+  - Reject scoped recovery when a pending Sentinel finalization marker cannot
+    be attributed safely.
+  - Remove only the retired app key's provider snapshot when another local
+    identity remains.
+  - If cleanup fails after the identity transaction commits, resume the cleanup
+    target recorded by the durable marker even when another identity is now
+    selected.
+  - While that durable cleanup marker remains, block local identity creation and
+    activation so a stale cleanup cannot erase replacement credentials.
+  - Locked recovery uses the initiating manager's retained app ID before it
+    consults persisted selection. A new manager without a retained app ID may
+    resolve the persisted selected app ID.
   - Keep the local vault registry so recovery does not erase discoverable vault
     locations.
+  - Keep destructive recovery visible when identity-directory metadata is
+    corrupt or future-incompatible. An unreadable directory must not trap the
+    browser in an error state with no recovery action.
+  - When recovery leaves only peer-owned identity members and no local keyring
+    entry, allow the ordinary protection flow to create a new independent local
+    identity after recovery cleanup completes.
   - Never let a racing peer write restore the retired identity after cleanup.
+  - After scoped recovery quiesces peer tabs, reload those tabs on both success
+    and failure so none remain permanently suspended from storage work.
+  - If recovery preserves another local identity, direct the user to unlock a
+    remaining identity. Ask for a new passkey only when no local identity
+    survives.
 
 ## Interaction requirements
 
@@ -178,36 +269,66 @@ Current dashboard requirements:
   persisted authorization selection.
 - The directory and access evidence derive current-installation ownership from
   the same live Rust session app key.
+  - Rust returns the directory, current-browser ownership, and access evidence
+    in one identity-bound snapshot. Presentation code must not resolve them as
+    independent requests.
   - A locked browser may fall back to its persisted protected app ID.
+  - A locked tab that retains an app ID must resolve that exact local keyring
+    entry even when another tab changes the shared directory selection.
+  - An unlocked tab must resolve vault creation and other identity-owned
+    mutations from its live app key. Another tab's persisted selection cannot
+    redirect or block those operations.
   - A companion session must not inherit the persisted browser app ID.
   - Rust/WASM projects each identity's locally known vault-access rows together
     with the identity directory. Presentation code must not infer grants by
-    intersecting independently loaded identity and vault snapshots.
-- **Add identity** remains visible but unavailable until Nook can create and
-  protect an independent app key for the new identity.
-- An unprepared browser may start passkey or PIN protection from the dashboard.
+    intersecting identity and vault snapshots.
+  - A combined snapshot carries the manager's real unlock state. Retaining a
+    public app ID after lock must not present the identity as unlocked.
+  - Each local identity's vault rows use only access profiles belonging to that
+    identity's local app keys.
+- **Add identity** is the primary rail action.
+  - It reveals the existing browser-protection widget in the detail column.
+  - Opening or cancelling the widget is non-persistent and must not advance the
+    cross-tab storage generation.
+  - The widget creates a distinct passkey- or PIN-protected app key.
+  - Pending Simple or Sentinel vault creation, or unfinished recovery cleanup,
+    blocks identity creation and activation until that transition finishes.
+  - Cancelling or failing protection leaves the prior unlocked web and Rust
+    session, directory, and keyring unchanged.
+  - Clear the prior vault UI session only after new protection commits and Rust
+    adopts the new app key.
+  - Successful protection adds and selects the identity atomically.
+- The browser-protection widget does not appear at the bottom of the default
+  dashboard.
+- Selecting an identity protected on this browser offers **Use identity**.
+  - Activation changes the persisted selection.
+  - Activation uses ordinary serialized storage and does not advance the
+    destructive-recovery storage generation.
+  - Other tabs retain their live app-key sessions after activation.
+  - The prior in-memory app key, vault session, pending extension handoff, and
+    decrypted provider state are cleared.
+  - The selected identity must authenticate before opening vaults.
 - The selected identity defaults to a flat key inventory.
   - The current protector and current app key appear as separate rows.
   - Every other public app-key member also appears.
-  - Protector provenance and last-used evidence remain explicit.
+  - The passkey row owns its rename action.
   - App keys from another installation are read-only.
-  - They never open the current browser's detail evidence.
+  - They never borrow the active identity's protection state.
 - A List/Graph control switches between the flat key inventory and relationship
   graph for the same selected identity.
   - The representations are mutually exclusive and never appear one after the
     other in the same content area.
-  - Selecting inspectable key evidence from the list opens the graph at that
-    evidence.
   - The graph is supporting access detail rather than the primary identity
     selector.
   - Vault browsing remains available inside that relationship detail.
   - It renders only when the browsed identity owns the current browser app key.
-  - Another installation receives an explicit unavailable-evidence state.
+  - Another installation receives an explicit local-key-unavailable state.
 - **Add a key** must not imply success before explicit identity enrollment
   exists.
   - The control explains that another installation must request enrollment.
-- Technical identifiers use progressive disclosure.
-  Raw passkey credential bytes never appear.
+- The primary surface omits access-evidence inspection and browser-reported
+  ceremony fields.
+- Raw passkey credential bytes never appear.
 - The Access frame uses a wider measure than the secrets workspace so Graph
   and the key inventory can occupy the content column.
 

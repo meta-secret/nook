@@ -32,8 +32,8 @@ pub use device_identity::DeviceProtectionDeviceModeState;
 #[cfg(test)]
 pub(crate) use device_identity::save_wrapped_device_identity;
 pub(crate) use device_identity::{
-    delete_device_identity_for_recovery, device_identity_device_mode,
-    device_identity_protection_status, load_wrapped_device_identity, put_wrapped_device_identity,
+    delete_device_identity_for_recovery, load_legacy_wrapped_device_identity_from_store,
+    load_wrapped_device_identity, load_wrapped_device_identity_for_app_id,
 };
 
 use crate::{NookError, storage::open_nook_database};
@@ -141,6 +141,26 @@ async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(),
     Ok(())
 }
 
+async fn read_optional_string_from_store(
+    store: &rexie::Store,
+    key: &str,
+    context: &str,
+) -> Result<Option<String>, NookError> {
+    let id = serde_wasm_bindgen::to_value(key)
+        .map_err(|error| NookError::IndexedDb(format!("{context} key error: {error:?}")))?;
+    let value = store
+        .get(id)
+        .await
+        .map_err(|error| NookError::IndexedDb(format!("{context} read error: {error:?}")))?;
+    match value {
+        None => Ok(None),
+        Some(value) if value.is_undefined() || value.is_null() => Ok(None),
+        Some(value) => serde_wasm_bindgen::from_value(value)
+            .map(Some)
+            .map_err(|error| NookError::IndexedDb(format!("{context} decode error: {error:?}"))),
+    }
+}
+
 pub(crate) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
@@ -197,6 +217,7 @@ pub(crate) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookErr
 pub(super) enum StringUpdateGuard<'a> {
     Unconditional,
     WrappedCredentialFingerprint(&'a str),
+    AppWrappedCredentialFingerprint { app_id: &'a str, expected: &'a str },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -207,6 +228,18 @@ pub(super) enum StringUpdateResult {
 
 pub(super) async fn idb_update_string<F>(
     key: &str,
+    guard: StringUpdateGuard<'_>,
+    update: F,
+) -> Result<StringUpdateResult, NookError>
+where
+    F: FnOnce(Option<String>) -> Result<String, NookError>,
+{
+    idb_update_string_with_fallback(key, None, guard, update).await
+}
+
+pub(super) async fn idb_update_string_with_fallback<F>(
+    key: &str,
+    fallback_key: Option<&str>,
     guard: StringUpdateGuard<'_>,
     update: F,
 ) -> Result<StringUpdateResult, NookError>
@@ -225,21 +258,52 @@ where
     let store = transaction.store("vault").map_err(|error| {
         NookError::IndexedDb(format!("Atomic string update store error: {error:?}"))
     })?;
-    if let StringUpdateGuard::WrappedCredentialFingerprint(expected) = guard {
-        let fingerprint = read_string_preferring(
-            &store,
-            APP_KEY_WRAPPED_KEY,
-            WRAPPED_DEVICE_IDENTITY_KEY,
-            "Atomic string guard",
-        )
-        .await?
-        .and_then(|raw| {
-            let wrapped = nook_core::parse_wrapped_device_identity(&raw).ok()?;
-            wrapped
+    let (guarded_entry, allow_legacy_guard) = match guard {
+        StringUpdateGuard::WrappedCredentialFingerprint(_) => (
+            crate::storage::identity_record::selected_local_keyring_entry_for_store(&store).await?,
+            true,
+        ),
+        StringUpdateGuard::AppWrappedCredentialFingerprint { app_id, .. } => {
+            let app_id = nook_core::AppId::parse(app_id)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            (
+                crate::storage::identity_record::local_keyring_entry_for_app_id_from_store(
+                    &store, &app_id,
+                )
+                .await?,
+                false,
+            )
+        }
+        StringUpdateGuard::Unconditional => (None, false),
+    };
+    let expected_fingerprint = match guard {
+        StringUpdateGuard::WrappedCredentialFingerprint(expected)
+        | StringUpdateGuard::AppWrappedCredentialFingerprint { expected, .. } => Some(expected),
+        StringUpdateGuard::Unconditional => None,
+    };
+    if let Some(expected) = expected_fingerprint {
+        let fingerprint = match guarded_entry {
+            Some(entry) => entry
+                .wrapped_app_key()
                 .credential_id_bytes()
                 .ok()
-                .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
-        });
+                .map(|bytes| nook_core::passkey_credential_identifier(&bytes)),
+            None if allow_legacy_guard => read_string_preferring(
+                &store,
+                APP_KEY_WRAPPED_KEY,
+                WRAPPED_DEVICE_IDENTITY_KEY,
+                "Atomic string guard",
+            )
+            .await?
+            .and_then(|raw| {
+                let wrapped = nook_core::parse_wrapped_device_identity(&raw).ok()?;
+                wrapped
+                    .credential_id_bytes()
+                    .ok()
+                    .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
+            }),
+            None => None,
+        };
         if fingerprint.as_deref() != Some(expected) {
             transaction.done().await.map_err(|error| {
                 NookError::IndexedDb(format!("Atomic string guard completion error: {error:?}"))
@@ -250,16 +314,13 @@ where
     let id_key = serde_wasm_bindgen::to_value(key).map_err(|error| {
         NookError::IndexedDb(format!("Atomic string update key error: {error:?}"))
     })?;
-    let current = store.get(id_key.clone()).await.map_err(|error| {
-        NookError::IndexedDb(format!("Atomic string update read error: {error:?}"))
-    })?;
-    let current = match current {
-        None => None,
-        Some(value) if value.is_undefined() || value.is_null() => None,
-        Some(value) => Some(serde_wasm_bindgen::from_value(value).map_err(|error| {
-            NookError::IndexedDb(format!("Atomic string update decode error: {error:?}"))
-        })?),
-    };
+    let mut current = read_optional_string_from_store(&store, key, "Atomic string update").await?;
+    if current.is_none()
+        && let Some(fallback_key) = fallback_key
+    {
+        current =
+            read_optional_string_from_store(&store, fallback_key, "Atomic string fallback").await?;
+    }
     let updated = update(current)?;
     let updated_value = serde_wasm_bindgen::to_value(&updated).map_err(|error| {
         NookError::IndexedDb(format!("Atomic string update encode error: {error:?}"))
@@ -274,6 +335,86 @@ where
         NookError::IndexedDb(format!("Atomic string update completion error: {error:?}"))
     })?;
     Ok(StringUpdateResult::Applied)
+}
+
+pub(super) async fn idb_migrate_string_if<F>(
+    source_key: &str,
+    target_key: &str,
+    can_migrate: F,
+) -> Result<(), NookError>
+where
+    F: FnOnce(&str) -> bool,
+{
+    let rexie = open_nook_database().await?;
+    // The ownership check, conditional copy, and source deletion share one
+    // read-write transaction. IndexedDB therefore serializes this migration
+    // with profile updates from every tab that touches the vault store.
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| {
+            NookError::IndexedDb(format!(
+                "Atomic string migration transaction error: {error:?}"
+            ))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string migration store error: {error:?}"))
+    })?;
+    let source_id = serde_wasm_bindgen::to_value(source_key).map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Atomic string migration source key error: {error:?}"
+        ))
+    })?;
+    let source = store.get(source_id.clone()).await.map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Atomic string migration source read error: {error:?}"
+        ))
+    })?;
+    let Some(source) = source.filter(|value| !value.is_undefined() && !value.is_null()) else {
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!(
+                "Atomic string migration completion error: {error:?}"
+            ))
+        })?;
+        return Ok(());
+    };
+    let source_text: String = serde_wasm_bindgen::from_value(source.clone()).map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string migration decode error: {error:?}"))
+    })?;
+    if !can_migrate(&source_text) {
+        transaction.done().await.map_err(|error| {
+            NookError::IndexedDb(format!(
+                "Atomic string migration completion error: {error:?}"
+            ))
+        })?;
+        return Ok(());
+    }
+    let target_id = serde_wasm_bindgen::to_value(target_key).map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Atomic string migration target key error: {error:?}"
+        ))
+    })?;
+    let target = store.get(target_id.clone()).await.map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Atomic string migration target read error: {error:?}"
+        ))
+    })?;
+    if target.is_none_or(|value| value.is_undefined() || value.is_null()) {
+        store
+            .put(&source, Some(&target_id))
+            .await
+            .map_err(|error| {
+                NookError::IndexedDb(format!("Atomic string migration write error: {error:?}"))
+            })?;
+    }
+    store.delete(source_id).await.map_err(|error| {
+        NookError::IndexedDb(format!("Atomic string migration delete error: {error:?}"))
+    })?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!(
+            "Atomic string migration completion error: {error:?}"
+        ))
+    })?;
+    Ok(())
 }
 
 pub(crate) async fn idb_delete_key(key: &str) -> Result<(), NookError> {

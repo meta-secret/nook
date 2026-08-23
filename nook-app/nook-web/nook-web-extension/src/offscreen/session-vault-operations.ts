@@ -86,6 +86,10 @@ export async function importExtensionVaultWithDependencies({
   }
   const grantedProviders = dependencies.decodeProviders(providerSnapshot)
   try {
+    // Resolve and persist the grant's protected identity before importing any
+    // event or provider state. This is selection-only when the manager already
+    // retains the same app ID; a different live identity is locked first.
+    await activeManager.activate_local_identity_for_app_id(grant.deviceId)
     const recordValues = dependencies.createRecords(records)
     const statusValue =
       await activeManager.import_extension_event_log_records_js(
@@ -98,7 +102,10 @@ export async function importExtensionVaultWithDependencies({
     const status = statusValue.to_object()
     statusValue.free()
     const protection = await activeManager.device_protection_status()
-    if (protection === DeviceProtectionStatus.Unlocked) {
+    const grantMatchesUnlockedIdentity =
+      protection === DeviceProtectionStatus.Unlocked &&
+      activeManager.device_id === grant.deviceId
+    if (grantMatchesUnlockedIdentity) {
       const replaceArgs: Parameters<
         typeof activeManager.replace_auth_providers_for_vault
       >[0] = {
@@ -110,24 +117,23 @@ export async function importExtensionVaultWithDependencies({
       }
       await activeManager.replace_auth_providers_for_vault(replaceArgs)
     } else {
-      // Pairing may race a closed/locked offscreen session. Website grants are
-      // already sealed for this device public key, so replace this vault's
-      // complete provider set without unlock, including an empty set.
-      const lockedManager = activeManager as NookVaultManager & {
-        save_presealed_auth_providers_snapshot: (
-          snapshot: AuthProvidersSnapshot,
-        ) => Promise<void>
-      }
+      // Pairing may race a closed/locked offscreen session or an unlocked
+      // manager for another identity. Website grants are already sealed for
+      // the granted device public key, so replace this vault's complete
+      // provider set through the explicit app scope, including an empty set.
       const saveArgs: Parameters<
-        typeof lockedManager.save_presealed_auth_providers_snapshot
-      >[0] = {
+        typeof activeManager.save_presealed_auth_providers_snapshot
+      >[1] = {
         providers: grantedProviders,
         activeVaultStoreId: {
           state: 'storeId',
           value: grant.vaultStoreId,
         },
       }
-      await lockedManager.save_presealed_auth_providers_snapshot(saveArgs)
+      await activeManager.save_presealed_auth_providers_snapshot(
+        grant.deviceId,
+        saveArgs,
+      )
     }
     return { ok: true, status }
   } finally {

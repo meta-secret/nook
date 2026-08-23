@@ -25,6 +25,7 @@ mod diagnostics;
 mod event_log;
 mod identity;
 mod identity_handoff;
+mod local_identity;
 mod login_fill;
 mod login_save;
 mod multi_device;

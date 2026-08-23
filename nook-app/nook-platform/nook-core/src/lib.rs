@@ -25,8 +25,9 @@ pub use device_access::{
     PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
     classify_device_access_identity_state, classify_device_access_protection,
-    decode_device_access_profile, normalize_device_access_provider_label,
-    passkey_credential_identifier, passkey_keeper_kind, passkey_user_handle_identifier,
+    decode_device_access_profile, normalize_device_access_passkey_name,
+    normalize_device_access_provider_label, passkey_credential_identifier, passkey_keeper_kind,
+    passkey_user_handle_identifier,
 };
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
@@ -122,16 +123,17 @@ pub use nook_app_common::{
     resolve_error_message, resolve_translation_catalog, translate, translate_from_catalog,
     translate_with_replacements,
 };
+pub use nook_auth2::{
+    LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
+    SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
+    SentinelUnlockStatus, add_sentinel_unlock_response, finalize_sentinel_unlock,
+    sentinel_unlock_request, sentinel_unlock_status,
+};
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
     MemoryPasskeyAuthenticator, MockPasskeyAssertion, MockPasskeyAssertionRequest,
     MockPasskeyError, MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyResult,
     MockPasskeyUserAuthorization, StoredMockPasskey,
-};
-pub use nook_auth2::{
-    SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
-    SentinelUnlockStatus, add_sentinel_unlock_response, finalize_sentinel_unlock,
-    sentinel_unlock_request, sentinel_unlock_status,
 };
 pub use nook_companion_core::{
     AuthenticationOutcomeDecision, AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict,

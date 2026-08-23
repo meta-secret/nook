@@ -427,6 +427,8 @@ pub const DEVICE_PROTECTION_RECOVERY_PASSKEY_UNAVAILABLE_PIN_FALLBACK_READY: &st
     "device_protection.recovery_passkey_unavailable_pin_fallback_ready";
 pub const DEVICE_PROTECTION_RECOVERY_PIN_FALLBACK_READY: &str =
     "device_protection.recovery_pin_fallback_ready";
+pub const DEVICE_PROTECTION_RECOVERY_SURVIVOR_COMPLETE: &str =
+    "device_protection.recovery_survivor_complete";
 pub const DEVICE_PROTECTION_RECOVERY_WARNING: &str = "device_protection.recovery_warning";
 pub const DEVICE_PROTECTION_SETUP_ACTION: &str = "device_protection.setup_action";
 pub const DEVICE_PROTECTION_SETUP_DESCRIPTION: &str = "device_protection.setup_description";
@@ -434,13 +436,16 @@ pub const DEVICE_PROTECTION_STEP_LABEL: &str = "device_protection.step_label";
 pub const DEVICE_PROTECTION_TITLE: &str = "device_protection.title";
 pub const DEVICE_PROTECTION_UNAVAILABLE_DESCRIPTION: &str =
     "device_protection.unavailable_description";
+pub const DEVICE_PROTECTION_UNAVAILABLE_RECOVERY_ACTION: &str =
+    "device_protection.unavailable_recovery_action";
+pub const DEVICE_PROTECTION_UNAVAILABLE_RECOVERY_WARNING: &str =
+    "device_protection.unavailable_recovery_warning";
 pub const DEVICE_PROTECTION_UNLOCK_ACTION: &str = "device_protection.unlock_action";
 pub const DEVICE_PROTECTION_UNLOCK_DESCRIPTION: &str = "device_protection.unlock_description";
 pub const DEVICES_ACCESS_AAGUID: &str = "devices_access.aaguid";
 pub const DEVICES_ACCESS_ACCESS_UNKNOWN: &str = "devices_access.access_unknown";
 pub const DEVICES_ACCESS_ACCESS_VERIFIED: &str = "devices_access.access_verified";
 pub const DEVICES_ACCESS_ADD_IDENTITY: &str = "devices_access.add_identity";
-pub const DEVICES_ACCESS_ADD_IDENTITY_UNAVAILABLE: &str = "devices_access.add_identity_unavailable";
 pub const DEVICES_ACCESS_ADD_KEY: &str = "devices_access.add_key";
 pub const DEVICES_ACCESS_ADD_KEY_UNAVAILABLE: &str = "devices_access.add_key_unavailable";
 pub const DEVICES_ACCESS_ATTACHMENT: &str = "devices_access.attachment";
@@ -552,6 +557,7 @@ pub const DEVICES_ACCESS_DONT_SHOW_AGAIN: &str = "devices_access.dont_show_again
 pub const DEVICES_ACCESS_ENROLLED_DEVICES: &str = "devices_access.enrolled_devices";
 pub const DEVICES_ACCESS_EVIDENCE_LEGEND: &str = "devices_access.evidence_legend";
 pub const DEVICES_ACCESS_IDENTITIES_SECTION: &str = "devices_access.identities_section";
+pub const DEVICES_ACCESS_IDENTITY_DEFAULT_LABEL: &str = "devices_access.identity_default_label";
 pub const DEVICES_ACCESS_IDENTITY_DETAILS: &str = "devices_access.identity_details";
 pub const DEVICES_ACCESS_IDENTITY_DIRECTORY_FAILED: &str =
     "devices_access.identity_directory_failed";
@@ -565,6 +571,7 @@ pub const DEVICES_ACCESS_IDENTITY_KEYS_HEADING: &str = "devices_access.identity_
 pub const DEVICES_ACCESS_IDENTITY_KEYS_LEDE: &str = "devices_access.identity_keys_lede";
 pub const DEVICES_ACCESS_IDENTITY_LOCKED: &str = "devices_access.identity_locked";
 pub const DEVICES_ACCESS_IDENTITY_MISSING: &str = "devices_access.identity_missing";
+pub const DEVICES_ACCESS_IDENTITY_ON_THIS_BROWSER: &str = "devices_access.identity_on_this_browser";
 pub const DEVICES_ACCESS_IDENTITY_SUMMARY: &str = "devices_access.identity_summary";
 pub const DEVICES_ACCESS_IDENTITY_UNLOCKED: &str = "devices_access.identity_unlocked";
 pub const DEVICES_ACCESS_IDENTITY_VAULT_COUNT_PLURAL: &str =
@@ -704,7 +711,9 @@ pub const DEVICES_ACCESS_TRANSPORTS: &str = "devices_access.transports";
 pub const DEVICES_ACCESS_TRY_AGAIN: &str = "devices_access.try_again";
 pub const DEVICES_ACCESS_UNKNOWN: &str = "devices_access.unknown";
 pub const DEVICES_ACCESS_UNKNOWN_LEGACY: &str = "devices_access.unknown_legacy";
+pub const DEVICES_ACCESS_UNLOCK_IDENTITY: &str = "devices_access.unlock_identity";
 pub const DEVICES_ACCESS_UNNAMED_DEVICE: &str = "devices_access.unnamed_device";
+pub const DEVICES_ACCESS_USE_IDENTITY: &str = "devices_access.use_identity";
 pub const DEVICES_ACCESS_USER_HANDLE_ID: &str = "devices_access.user_handle_id";
 pub const DEVICES_ACCESS_VAULT_ACCESS_SECTION: &str = "devices_access.vault_access_section";
 pub const DEVICES_ACCESS_VAULT_RELATIONSHIPS: &str = "devices_access.vault_relationships";

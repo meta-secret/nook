@@ -18,6 +18,7 @@ creation as the primary interactions.
     identities: readonly IdentityDirectoryEntry[]
     selectedIdentityId: string
     onSelectIdentity: (identityId: string) => void
+    onAddIdentity: () => void
   }
 
   let {
@@ -26,6 +27,7 @@ creation as the primary interactions.
     identities,
     selectedIdentityId,
     onSelectIdentity,
+    onAddIdentity,
   }: IdentityDirectoryRailProps = $props()
 
   type CountLabelRequest = {
@@ -71,7 +73,6 @@ creation as the primary interactions.
     }
     return vault.t(summaryArgs)
   }
-
 </script>
 
 <aside
@@ -123,13 +124,10 @@ creation as the primary interactions.
     type="button"
     variant="outline"
     class="mt-4 w-full"
-    disabled
     data-testid="devices-access-add-identity"
+    onclick={onAddIdentity}
   >
     <Plus class="size-4" />
     {vault.t(I18N_KEYS.DevicesAccessAddIdentity)}
   </Button>
-  <p class="mt-2 text-xs leading-relaxed text-muted-foreground">
-    {vault.t(I18N_KEYS.DevicesAccessAddIdentityUnavailable)}
-  </p>
 </aside>

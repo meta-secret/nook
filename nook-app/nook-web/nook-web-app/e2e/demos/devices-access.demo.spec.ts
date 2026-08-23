@@ -39,10 +39,14 @@ test('walk the access chain from passkey to app key to vaults', async ({
     page.getByTestId('devices-access-relationship-details'),
   ).toHaveCount(0)
 
-  await expect(page.getByTestId('devices-access-add-identity')).toBeDisabled()
-  await expect(identityRail).toContainText(
-    'Another identity needs its own protected app key',
-  )
+  await expect(page.getByTestId('devices-access-add-identity')).toBeEnabled()
+  await page.getByTestId('devices-access-add-identity').click()
+  await expect(
+    page.getByTestId('devices-access-add-identity-flow'),
+  ).toBeVisible()
+  await page.waitForTimeout(BEAT_MS)
+  await page.getByTestId('devices-access-cancel-add-identity').click()
+  await expect(keyInventory).toBeVisible()
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('devices-access-layout-graph').click()
@@ -86,39 +90,27 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await page.setViewportSize({ width: 1280, height: 720 })
   await page.waitForTimeout(BEAT_MS)
 
-  const panel = page.getByTestId('devices-access-panel')
+  await page.getByTestId('devices-access-layout-list').click()
+  await page.getByTestId('devices-access-rename-passkey').click()
   await page
-    .getByTestId('devices-access-provider-label')
-    .fill('Apple Passwords on personal devices')
-  await page.getByTestId('devices-access-provider-save').click()
-  await expect(page.getByTestId('devices-access-provider-label')).toHaveValue(
-    'Apple Passwords on personal devices',
-  )
+    .getByTestId('devices-access-passkey-name-input')
+    .fill('Personal devices passkey')
+  await page.getByRole('button', { name: 'Save', exact: true }).click()
+  await expect(keyInventory).toContainText('Personal devices passkey')
   await page.waitForTimeout(BEAT_MS)
 
-  await page.getByTestId('devices-access-browser-reported').click()
-  await expect(panel).toContainText('Backed up or synced')
+  await page.getByTestId('devices-access-layout-graph').click()
+  await expect(
+    chain.getByRole('article', {
+      name: /Passkey: Passkey · recoverable identity/,
+    }),
+  ).toBeVisible()
+  await expect(chain.getByRole('article', { name: /App key/ })).toBeVisible()
   await page.waitForTimeout(BEAT_MS)
 
-  const unlockTab = page.getByTestId('devices-access-node-unlock')
-  const deviceKeyTab = page.getByTestId('devices-access-node-device-key')
-  await unlockTab.focus()
-  await unlockTab.press('ArrowRight')
-  await expect(deviceKeyTab).toHaveAttribute('aria-selected', 'true')
-  await expect(panel).toContainText('App key')
-  await expect(panel).toContainText('A backup password is different')
-  await page.waitForTimeout(BEAT_MS)
-
-  await page.getByTestId('devices-access-node-vaults').click()
   await expect(
     page.getByTestId('devices-access-strength-vaults'),
   ).toContainText('Verified way in')
-  await expect(page.getByTestId('devices-access-vaults')).toContainText(
-    'Access verified',
-  )
-  await expect(page.getByTestId('devices-access-current-vault')).toContainText(
-    'Travel recovery',
-  )
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('devices-access-perspective-vaults').click()
@@ -142,10 +134,8 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(page.getByTestId('devices-access-identity-state')).toContainText(
     'Identity locked',
   )
-  await page.getByTestId('devices-access-node-vaults').click()
-  await expect(page.getByTestId('devices-access-vaults')).toContainText(
-    'Access verified',
-  )
-  await expect(page.getByTestId('devices-access-current-vault')).toHaveCount(0)
+  await expect(
+    page.getByTestId('devices-access-strength-vaults'),
+  ).toContainText('Verified way in')
   await page.waitForTimeout(BEAT_MS)
 })

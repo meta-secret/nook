@@ -10,7 +10,8 @@ use crate::{AppKey, IdentityId, IdentityMember, IdentityRecord, StoreId};
 mod legacy_migration;
 mod staged_rebase;
 
-/// Explicit identity-selection state. Empty directories cannot have a selection.
+/// Explicit local identity-selection state. A directory may retain peer-only
+/// identities without selecting one as this installation's active identity.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "kind", content = "identityId", rename_all = "kebab-case")]
 pub enum IdentitySelection {
@@ -94,7 +95,7 @@ impl IdentityDirectory {
             }
         }
         match (&self.selection, self.identities.is_empty()) {
-            (IdentitySelection::Empty, true) => Ok(()),
+            (IdentitySelection::Empty, _) => Ok(()),
             (IdentitySelection::Selected(identity_id), false) if ids.contains(identity_id) => {
                 Ok(())
             }
@@ -455,6 +456,51 @@ impl IdentityDirectory {
         if let Some(app_id) = recovered_app_id {
             self.retire_app_id(app_id);
         }
+    }
+
+    /// Leave known identities visible without treating a peer-only identity as
+    /// the local browser's active protection target.
+    pub fn clear_selection(&mut self) {
+        self.selection = IdentitySelection::Empty;
+    }
+
+    /// Retire one inaccessible installation key without discarding unrelated
+    /// identities. A one-member identity is removed; a multi-member identity
+    /// remains available to its other installations.
+    pub fn retire_local_identity_key(
+        &mut self,
+        identity_id: &IdentityId,
+        app_id: &crate::AppId,
+    ) -> MultiDeviceResult<()> {
+        let index = self
+            .identities
+            .iter()
+            .position(|identity| &identity.identity_id == identity_id)
+            .ok_or_else(|| MultiDeviceError::IdentityNotFound {
+                identity_id: identity_id.to_string(),
+            })?;
+        if !self.identities[index]
+            .members
+            .iter()
+            .any(|member| &member.app_id == app_id)
+        {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "retired app key does not belong to the selected identity".to_owned(),
+            ));
+        }
+        if self.identities[index].members.len() == 1 {
+            self.identities.remove(index);
+            self.selection = self
+                .identities
+                .first()
+                .map_or(IdentitySelection::Empty, |identity| {
+                    IdentitySelection::Selected(identity.identity_id.clone())
+                });
+        } else {
+            self.identities[index].remove_member(app_id)?;
+        }
+        self.retire_app_id(app_id.clone());
+        self.validate()
     }
 
     /// Permanently reject one installation key discovered outside a readable directory.
@@ -866,6 +912,53 @@ mod tests {
         directory.create_identity("Peer", &peer_key, None)?;
         let replacement_key = AppKey::generate()?;
         directory.validate_vault_enrollment(&replacement_key, &store_id)?;
+        Ok(())
+    }
+
+    #[test]
+    fn scoped_recovery_preserves_other_local_identities() -> anyhow::Result<()> {
+        let first_key = AppKey::generate()?;
+        let second_key = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        let first_id = directory.create_identity("First", &first_key, None)?;
+        let second_id = directory.create_identity("Second", &second_key, None)?;
+
+        directory.retire_local_identity_key(&second_id, second_key.app_id())?;
+
+        assert_eq!(directory.identities().len(), 1);
+        assert_eq!(directory.identities()[0].identity_id, first_id);
+        assert_eq!(
+            directory.selection(),
+            &IdentitySelection::Selected(first_id.clone())
+        );
+        assert!(directory.retired_app_ids().contains(second_key.app_id()));
+        assert!(matches!(
+            directory.create_identity("Retired", &second_key, None),
+            Err(MultiDeviceError::RetiredAppKey)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn selection_can_be_cleared_without_discarding_peer_only_identity() -> anyhow::Result<()> {
+        let local_key = AppKey::generate()?;
+        let peer_key = AppKey::generate()?;
+        let mut directory = IdentityDirectory::empty();
+        let identity_id = directory.create_identity("Personal", &local_key, None)?;
+        directory.selected_mut()?.add_member(IdentityMember {
+            app_id: peer_key.app_id().clone(),
+            auth_id: peer_key.auth_id(),
+            public_key: peer_key.public_key(),
+            signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
+            label: None,
+        })?;
+        directory.retire_local_identity_key(&identity_id, local_key.app_id())?;
+
+        directory.clear_selection();
+
+        assert_eq!(directory.identities().len(), 1);
+        assert_eq!(directory.selection(), &IdentitySelection::Empty);
+        directory.validate()?;
         Ok(())
     }
 }
