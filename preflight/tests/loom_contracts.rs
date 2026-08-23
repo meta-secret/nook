@@ -128,3 +128,43 @@ fn loom_workflow_audits_every_cortex_change() {
         "Loom must run the mechanical Cortex audit"
     );
 }
+
+#[test]
+fn mechanical_cortex_audit_timeout_covers_executable_skill_lifecycle() {
+    let root = repository_root();
+    let budgets = read(
+        &root,
+        "agentic-ai/loom/src/agent-workflow/executable-skill-budget.ts",
+    );
+    let lifecycle_budgets = read(&root, "agentic-ai/loom/src/executable-skills/budgets.ts");
+    let workflow = read(
+        &root,
+        "agentic-ai/loom/src/agent-workflow/cortex-workflow.ts",
+    );
+    let validation = read(
+        &root,
+        "agentic-ai/loom/src/agent-workflow/executable-skill-timeout-validation.ts",
+    );
+    for required in [
+        "executableSkillWorkflowMinimumTimeoutMs",
+        "MAXIMUM_REGISTERED_EXECUTABLE_SKILL_TIMEOUT_MS",
+    ] {
+        assert!(
+            budgets.contains(required),
+            "mechanical Cortex audit budget must retain `{required}`"
+        );
+    }
+    assert!(
+        lifecycle_budgets.contains("EXECUTABLE_SKILL_WORKFLOW_ORCHESTRATION_MARGIN_MS"),
+        "executable-skill workflow budget must retain an orchestration margin"
+    );
+    assert!(
+        workflow.contains("timeoutMs: MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS"),
+        "mechanical Cortex audit must use the executable-skill lifecycle budget"
+    );
+    assert!(
+        validation.contains("WorkflowValidationIssueKind.InsufficientTimeout")
+            && validation.contains("MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS"),
+        "workflow validation must reject a mechanical audit timeout below the lifecycle budget"
+    );
+}

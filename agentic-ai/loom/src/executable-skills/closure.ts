@@ -272,6 +272,7 @@ async function readTreeFile(request: ReadClosureFileRequest): Promise<string> {
   try {
     return await runClosureGit(gitRequest);
   } catch {
+    assertClosureActive(request);
     throw new Error(
       `Executable skill closure file is absent from the frozen index: ${request.relativePath}`,
     );

@@ -3,7 +3,6 @@ import {
   isValidTaskResourceClaim,
   taskResourcePatternsOverlap,
   TaskTargetKind,
-  WorkflowExecutorKind,
   JoinCompletionPolicy,
 } from './domain.ts';
 
@@ -20,6 +19,10 @@ import {
   WorkflowValidationIssueKind,
   WorkflowValidationStatus,
 } from './validation-result.ts';
+import {
+  taskDefinitionValidationIssues,
+  type TaskDefinitionValidationRequest,
+} from './task-definition-validation.ts';
 import type {
   WorkflowValidation,
   WorkflowValidationIssue,
@@ -269,24 +272,17 @@ export function validateStaticAgentWorkflow<
       adjacency: topology.adjacency,
     };
     ensureNode(taskRegistration);
-    if (task.name !== taskName) {
-      const issue: WorkflowValidationIssue = {
-        kind: WorkflowValidationIssueKind.RegistryMismatch,
-        message: `task registry key ${taskName} contains definition ${task.name}`,
-      };
-      issues.push(issue);
-    }
-    if (
-      task.execution.kind === WorkflowExecutorKind.Agent &&
-      (!workflow.agentNames.includes(task.execution.agent) ||
-        !registryAgentNameSet.has(task.execution.agent))
-    ) {
-      const issue: WorkflowValidationIssue = {
-        kind: WorkflowValidationIssueKind.InvalidReference,
-        message: `task ${taskName} references missing agent ${task.execution.agent}`,
-      };
-      issues.push(issue);
-    }
+    const taskDefinitionRequest: TaskDefinitionValidationRequest<
+      TTask,
+      TAgent,
+      TJoin
+    > = {
+      agentNames: workflow.agentNames,
+      registeredAgentNames: registryAgentNameSet,
+      task,
+      taskName,
+    };
+    issues.push(...taskDefinitionValidationIssues(taskDefinitionRequest));
     const claimValidation: ResourceClaimValidation = {
       task: taskName,
       resources: task.resources,

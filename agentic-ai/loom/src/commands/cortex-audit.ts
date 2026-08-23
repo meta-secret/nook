@@ -10,6 +10,7 @@ import {
   type EncodeCortexArticleRequestArgs,
 } from '../executable-skills/cortex-article-transport.ts';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
+import { EXECUTABLE_SKILL_REGISTRY_INSPECTION_TIMEOUT_MS } from '../executable-skills/budgets.ts';
 import type { ExecutableSkillRegistryFinding } from '../executable-skills/domain.ts';
 import {
   ExecutableSkillRegistryInspectionKind,
@@ -76,7 +77,8 @@ export async function runCortexAuditFromDirectory(
     loomFailureDetail(loomFailureDetailArgs);
   }
   const executableSkillAuditRequest = {
-    deadlineExpiresAt: Date.now() + 180_000,
+    deadlineExpiresAt:
+      Date.now() + EXECUTABLE_SKILL_REGISTRY_INSPECTION_TIMEOUT_MS,
     repositoryRoot: repoRoot,
     signal: args.signal,
   };

@@ -21,6 +21,7 @@ import {
   WorkflowValidationStatus,
   validateStaticAgentWorkflow,
 } from '../../src/agent-workflow/validation.ts';
+import { MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS } from '../../src/agent-workflow/executable-skill-budget.ts';
 
 import type {
   StaticAgentWorkflowDefinition,
@@ -36,6 +37,29 @@ type CortexWorkflow = StaticAgentWorkflowDefinition<
   CortexAuditAgent,
   CortexAuditJoin
 >;
+
+test('rejects a mechanical audit timeout below its executable-skill lifecycle', () => {
+  const mechanicalTask =
+    CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+      CortexAuditTask.MechanicalCortexAudit
+    ];
+  const workflow: CortexWorkflow = {
+    ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW,
+    tasks: {
+      ...CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks,
+      [CortexAuditTask.MechanicalCortexAudit]: {
+        ...mechanicalTask,
+        timeoutMs: MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS - 1,
+      },
+    },
+  };
+  const validation = validateStaticAgentWorkflow(workflow);
+  const assertion: WorkflowIssueAssertion = {
+    validation,
+    kind: WorkflowValidationIssueKind.InsufficientTimeout,
+  };
+  expectIssue(assertion);
+});
 
 enum ExclusiveBranchTask {
   Root = 'root',

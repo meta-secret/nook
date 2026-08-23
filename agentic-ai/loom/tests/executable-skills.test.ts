@@ -413,6 +413,22 @@ test('active cancellation removes the blocking container before settling', async
     timeoutMs: 30_000,
   };
   const observedContainer = await waitForAcceptanceContainer(waitRequest);
+  const identityInspection = Bun.spawnSync([
+    'docker',
+    'container',
+    'inspect',
+    '--format',
+    '{{.Image}}|{{.Config.Image}}',
+    observedContainer,
+  ]);
+  expect(identityInspection.exitCode).toBe(0);
+  const [resolvedImage, configuredImage, extraImage] = identityInspection.stdout
+    .toString()
+    .trim()
+    .split('|');
+  expect(resolvedImage).toMatch(/^sha256:[0-9a-f]{64}$/u);
+  expect(configuredImage).toBe(resolvedImage);
+  expect(typeof extraImage).not.toBe('string');
   const startedAt = Date.now();
   controller.abort();
   let cancellation: ExecutableSkillCancellationError | false = false;
@@ -628,6 +644,9 @@ test('shared AST policy rejects forbidden forms in nested sources', async () => 
     'const network = fetch;\nvoid network;\n',
     'process.cwd();\n',
     "process.getBuiltinModule('fs');\n",
+    "import { createRequire } from 'node:module';\nconst load = createRequire(import.meta.url);\nload('node:child_process');\n",
+    "import module from 'module';\nmodule.createRequire(import.meta.url)('child_process');\n",
+    "const load = require;\nload('node:child_process');\n",
     'void Bun.env.SECRET;\n',
     'const runtime = Bun;\nvoid runtime;\n',
     "Bun.spawn(['true']);\n",

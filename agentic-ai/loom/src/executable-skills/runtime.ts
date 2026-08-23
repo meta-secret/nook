@@ -5,6 +5,10 @@ import {
   type BoundedExecutableSkillStreamRead,
   type ReadBoundedExecutableSkillStreamRequest,
 } from './bounded-stream.ts';
+import {
+  EXECUTABLE_SKILL_PROVISIONING_TIMEOUT_MS,
+  EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_TIMEOUT_MS,
+} from './budgets.ts';
 import { ExecutableSkillPayloadKind } from './domain.ts';
 import type {
   RegisteredExecutableSkill,
@@ -117,8 +121,8 @@ const CONTAINER_SKILLS_ROOT = '/skills';
 const SEALED_IMAGE_LABEL = 'nook.executable-skill-closure';
 const SEALED_RECIPE_LABEL = 'nook.executable-skill-recipe';
 const CONTAINER_SOURCE_TREE_LABEL = 'nook.executable-skill-source-tree';
-export const PROVISIONING_TIMEOUT_MS = 180_000;
-const TEARDOWN_TIMEOUT_MS = 3_000;
+export const PROVISIONING_TIMEOUT_MS = EXECUTABLE_SKILL_PROVISIONING_TIMEOUT_MS;
+const TEARDOWN_TIMEOUT_MS = EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_TIMEOUT_MS;
 
 export type ExecuteRegisteredSkillRequest = {
   readonly registryAuthority: AuditedExecutableSkillRegistry;
@@ -420,7 +424,7 @@ export async function runDockerSkill(
     '/tmp:rw,noexec,nosuid,size=16m',
     '--workdir',
     path.posix.dirname(containerRunner),
-    image.reference,
+    image.digest,
     'bun',
     'run',
     containerRunner,

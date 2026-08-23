@@ -16,6 +16,7 @@ import type {
   TaskResourceClaims,
 } from './domain.ts';
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.ts';
+import { MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS } from './executable-skill-budget.ts';
 
 export enum CortexAuditAgent {
   WorkflowAuditor = 'workflow-auditor',
@@ -268,7 +269,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         join: CortexAuditJoin.EvidenceCollected,
       },
       resources: READ_ONLY_CORTEX,
-      timeoutMs: 60_000,
+      timeoutMs: MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS,
     },
   },
   joins: {

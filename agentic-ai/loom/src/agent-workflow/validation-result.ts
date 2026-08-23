@@ -15,6 +15,7 @@ export enum WorkflowValidationIssueKind {
   DuplicateScheduling = 'duplicate-scheduling',
   ResourceConflict = 'resource-conflict',
   UnsupportedCapability = 'unsupported-capability',
+  InsufficientTimeout = 'insufficient-timeout',
   Cycle = 'cycle',
   UnreachableNode = 'unreachable-node',
 }

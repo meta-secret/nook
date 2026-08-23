@@ -18,6 +18,7 @@ const FORBIDDEN_NODE_MODULES = new Set([
   'fs',
   'http',
   'https',
+  'module',
   'net',
   'tls',
   'worker_threads',
@@ -147,6 +148,7 @@ function isForbiddenAmbientIdentifier(node: ts.Identifier): boolean {
   if (
     node.text === 'fetch' ||
     node.text === 'WebSocket' ||
+    node.text === 'require' ||
     node.text === 'process' ||
     node.text === 'globalThis'
   ) {

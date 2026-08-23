@@ -5,10 +5,36 @@ import {
 } from '../../src/agent-workflow/cortex-workflow.ts';
 import { WorkflowExecutorKind } from '../../src/agent-workflow/domain.ts';
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
+import { MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS } from '../../src/agent-workflow/executable-skill-budget.ts';
+import {
+  EXECUTABLE_SKILL_PROVISIONING_TIMEOUT_MS,
+  EXECUTABLE_SKILL_REGISTRY_INSPECTION_TIMEOUT_MS,
+  EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_COUNT,
+  EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_TIMEOUT_MS,
+  EXECUTABLE_SKILL_WORKFLOW_ORCHESTRATION_MARGIN_MS,
+} from '../../src/executable-skills/budgets.ts';
+import { MAXIMUM_REGISTERED_EXECUTABLE_SKILL_TIMEOUT_MS } from '../../src/executable-skills/registry.ts';
 
 test('uses the current adapter-bearing attempt journal schema', () => {
   expect(CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.version).toBe(
     CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  );
+});
+
+test('mechanical audit timeout covers the complete executable-skill lifecycle', () => {
+  const task =
+    CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
+      CortexAuditTask.MechanicalCortexAudit
+    ];
+  expect(task.timeoutMs).toBe(MECHANICAL_CORTEX_AUDIT_MINIMUM_TIMEOUT_MS);
+  const boundedPhaseTotal =
+    EXECUTABLE_SKILL_REGISTRY_INSPECTION_TIMEOUT_MS +
+    EXECUTABLE_SKILL_PROVISIONING_TIMEOUT_MS +
+    MAXIMUM_REGISTERED_EXECUTABLE_SKILL_TIMEOUT_MS +
+    EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_TIMEOUT_MS *
+      EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_COUNT;
+  expect(task.timeoutMs - boundedPhaseTotal).toBe(
+    EXECUTABLE_SKILL_WORKFLOW_ORCHESTRATION_MARGIN_MS,
   );
 });
 

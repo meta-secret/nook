@@ -47,6 +47,10 @@ const executableSkillEntries: readonly RegisteredExecutableSkill[] = [
   },
 ] as const;
 
+export const MAXIMUM_REGISTERED_EXECUTABLE_SKILL_TIMEOUT_MS = Math.max(
+  ...executableSkillEntries.map((entry) => entry.manifest.limits.timeoutMs),
+);
+
 export const EXECUTABLE_SKILL_REGISTRY: ReadonlyMap<
   string,
   RegisteredExecutableSkill

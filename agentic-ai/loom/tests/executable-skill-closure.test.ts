@@ -177,24 +177,26 @@ test('post-mkdtemp cancellation removes the materialized context', async () => {
 });
 
 test('rejects forbidden capabilities in recursively imported sources', async () => {
-  const repositoryRoot = createClosureRepository();
-  try {
-    const dependencyPath = path.join(
-      repositoryRoot,
-      '.agents/skills/stub-skill/src/dependency.ts',
-    );
-    writeFileSync(
-      dependencyPath,
-      "import { writeFile } from 'node:fs';\nvoid writeFile;\n",
-    );
-    const gitOptions = { cwd: repositoryRoot };
-    execFileSync('git', ['add', '.'], gitOptions);
-    const closureRequest = closureRequestFor(repositoryRoot);
-    await expect(materializeSkillClosure(closureRequest)).rejects.toThrow(
-      'forbidden ambient module',
-    );
-  } finally {
-    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+  const forbiddenSources = [
+    "import { writeFile } from 'node:fs';\nvoid writeFile;\n",
+    "import { createRequire } from 'node:module';\nvoid createRequire;\n",
+    "const load = require;\nload('node:child_process');\n",
+  ];
+  for (const source of forbiddenSources) {
+    const repositoryRoot = createClosureRepository();
+    try {
+      const dependencyPath = path.join(
+        repositoryRoot,
+        '.agents/skills/stub-skill/src/dependency.ts',
+      );
+      writeFileSync(dependencyPath, source);
+      const gitOptions = { cwd: repositoryRoot };
+      execFileSync('git', ['add', '.'], gitOptions);
+      const closureRequest = closureRequestFor(repositoryRoot);
+      await expect(materializeSkillClosure(closureRequest)).rejects.toThrow();
+    } finally {
+      rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+    }
   }
 });
 
