@@ -130,6 +130,11 @@ function assertNoForbiddenCapability(
   request: AssertNoForbiddenCapabilityRequest,
 ): void {
   const node = request.node;
+  if (ts.isMetaProperty(node) && !isAllowedImportMetaUse(node)) {
+    throw new Error(
+      'Executable skill forbids import.meta loader capabilities.',
+    );
+  }
   if (ts.isIdentifier(node) && isForbiddenAmbientIdentifier(node)) {
     throw new Error('Executable skill forbids ambient global capabilities.');
   }
@@ -221,6 +226,7 @@ function isForbiddenAmbientIdentifier(node: ts.Identifier): boolean {
     node.text === 'WebSocket' ||
     node.text === 'WebAssembly' ||
     node.text === 'global' ||
+    node.text === 'module' ||
     node.text === 'require' ||
     node.text === 'process' ||
     node.text === 'globalThis' ||
@@ -235,6 +241,15 @@ function isForbiddenAmbientIdentifier(node: ts.Identifier): boolean {
   return !(
     ts.isPropertyAccessExpression(node.parent) &&
     node.parent.expression === node
+  );
+}
+
+function isAllowedImportMetaUse(node: ts.MetaProperty): boolean {
+  return (
+    node.keywordToken === ts.SyntaxKind.ImportKeyword &&
+    ts.isPropertyAccessExpression(node.parent) &&
+    node.parent.expression === node &&
+    node.parent.name.text === 'main'
   );
 }
 
