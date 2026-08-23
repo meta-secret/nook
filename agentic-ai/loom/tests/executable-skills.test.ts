@@ -15,6 +15,7 @@ import { expect, setDefaultTimeout, test } from 'bun:test';
 import { CortexArticleContractKind } from '../../../.agents/skills/cortex-article-structure/src/domain.ts';
 import {
   ExecutableSkillExecutionKind,
+  ExecutableSkillHostResultContract,
   ExecutableSkillRegistryFindingCode,
 } from '../src/executable-skills/domain.ts';
 import type {
@@ -33,7 +34,12 @@ import {
   type EncodeCortexArticleRequestArgs,
 } from '../src/executable-skills/cortex-article-transport.ts';
 import { decodeExecutableSkillManifest } from '../src/executable-skills/manifest-codec.ts';
-import { auditExecutableSkillRegistry } from '../src/executable-skills/registry.ts';
+import {
+  auditExecutableSkillRegistry,
+  EXECUTABLE_SKILL_REGISTRY,
+  validateRegisteredExecutableSkillResult,
+  type ValidateRegisteredExecutableSkillResultRequest,
+} from '../src/executable-skills/registry.ts';
 import {
   ExecutableSkillAcceptanceProbe,
   ExecutableSkillTimeoutError,
@@ -106,6 +112,9 @@ test('executes and verifies the registered skill in the pinned container', async
   expect(result.executionKind).toBe(
     ExecutableSkillExecutionKind.DockerReadOnly,
   );
+  expect(result.resultContract).toBe(
+    ExecutableSkillHostResultContract.CortexArticleStructureV1,
+  );
   expect(result.requestSha256).toHaveLength(64);
   expect(result.resultSha256).toHaveLength(64);
   expect(result.closureSha256).toHaveLength(64);
@@ -165,6 +174,65 @@ test('host transport matches the isolated request and result contract', () => {
   expect(() => decodeCortexArticleResult(serializedExtraResult)).toThrow(
     'Invalid executable Cortex article result',
   );
+});
+
+test('rejects malformed or wrong-kind results before trust promotion', () => {
+  const registration = EXECUTABLE_SKILL_REGISTRY.get(
+    'cortex-article-structure',
+  );
+  if (!registration) throw new Error('Missing executable skill registration.');
+  const wrongKindResult = { kind: 'wrong-result-kind', findings: [] };
+  const malformedFindingsResult = {
+    kind: 'cortex-article-structure-findings-v1',
+    findings: 'not-an-array',
+  };
+  const extraAuthorityResult = {
+    kind: 'cortex-article-structure-findings-v1',
+    findings: [],
+    forgedAuthority: true,
+  };
+  const adversarialResults = [
+    'not-json',
+    JSON.stringify(wrongKindResult),
+    JSON.stringify(malformedFindingsResult),
+    JSON.stringify(extraAuthorityResult),
+  ];
+  for (const serializedResult of adversarialResults) {
+    const validationRequest: ValidateRegisteredExecutableSkillResultRequest = {
+      registration,
+      serializedResult,
+    };
+    expect(() =>
+      validateRegisteredExecutableSkillResult(validationRequest),
+    ).toThrow();
+  }
+  const validResultValue = {
+    kind: 'cortex-article-structure-findings-v1',
+    findings: [],
+  };
+  const validResult = JSON.stringify(validResultValue);
+  const validRequest: ValidateRegisteredExecutableSkillResultRequest = {
+    registration,
+    serializedResult: validResult,
+  };
+  expect(() =>
+    validateRegisteredExecutableSkillResult(validRequest),
+  ).not.toThrow();
+  const mismatchedManifest = {
+    ...registration.manifest,
+    resultKind: 'forged-result-kind',
+  };
+  const mismatchedRegistration: RegisteredExecutableSkill = {
+    ...registration,
+    manifest: mismatchedManifest,
+  };
+  const mismatchedRequest: ValidateRegisteredExecutableSkillResultRequest = {
+    registration: mismatchedRegistration,
+    serializedResult: validResult,
+  };
+  expect(() =>
+    validateRegisteredExecutableSkillResult(mismatchedRequest),
+  ).toThrow('contract kind mismatch');
 });
 
 test('materializes an immutable recursive staged skill closure', () => {
@@ -429,6 +497,7 @@ function closureDefinition(): RegisteredExecutableSkill {
     skillId: 'stub-skill',
     manifest: baseManifest,
     manifestPath: '.agents/skills/stub-skill/executable-skill.json',
+    resultContract: ExecutableSkillHostResultContract.CortexArticleStructureV1,
     runnerPath: '.agents/skills/stub-skill/src/runner.ts',
   };
 }

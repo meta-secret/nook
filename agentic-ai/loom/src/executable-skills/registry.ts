@@ -6,6 +6,7 @@ import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import {
   ExecutableSkillExecutionKind,
+  ExecutableSkillHostResultContract,
   ExecutableSkillRegistryFindingCode,
 } from './domain.ts';
 import type {
@@ -14,6 +15,10 @@ import type {
   ExecutableSkillRegistryFinding,
   RegisteredExecutableSkill,
 } from './domain.ts';
+import {
+  CORTEX_ARTICLE_RESULT_KIND,
+  decodeCortexArticleResult,
+} from './cortex-article-transport.ts';
 import { decodeExecutableSkillManifest } from './manifest-codec.ts';
 
 const CORTEX_ARTICLE_POLICY =
@@ -39,6 +44,7 @@ const executableSkillEntries: readonly RegisteredExecutableSkill[] = [
     manifest: CORTEX_ARTICLE_MANIFEST,
     manifestPath:
       '.agents/skills/cortex-article-structure/executable-skill.json',
+    resultContract: ExecutableSkillHostResultContract.CortexArticleStructureV1,
     runnerPath: '.agents/skills/cortex-article-structure/src/runner.ts',
   },
 ] as const;
@@ -47,6 +53,29 @@ export const EXECUTABLE_SKILL_REGISTRY: ReadonlyMap<
   string,
   RegisteredExecutableSkill
 > = createExecutableSkillRegistry(executableSkillEntries);
+
+export type ValidateRegisteredExecutableSkillResultRequest = {
+  readonly registration: RegisteredExecutableSkill;
+  readonly serializedResult: string;
+};
+
+export function validateRegisteredExecutableSkillResult(
+  request: ValidateRegisteredExecutableSkillResultRequest,
+): void {
+  switch (request.registration.resultContract) {
+    case ExecutableSkillHostResultContract.CortexArticleStructureV1: {
+      if (
+        request.registration.manifest.resultKind !== CORTEX_ARTICLE_RESULT_KIND
+      ) {
+        throw new Error('Executable skill host result contract kind mismatch.');
+      }
+      decodeCortexArticleResult(request.serializedResult);
+      return;
+    }
+    default:
+      throw new Error('Executable skill host result contract is unsupported.');
+  }
+}
 
 const FORBIDDEN_SOURCE_PATTERNS = [
   /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]node:(?:child_process|cluster|dgram|dns|fs|http|https|net|tls|worker_threads)['"]/u,

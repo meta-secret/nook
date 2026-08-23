@@ -2,7 +2,10 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { findRepoRoot } from '../lib/repo.ts';
-import { ExecutableSkillPayloadKind } from './domain.ts';
+import {
+  ExecutableSkillHostResultContract,
+  ExecutableSkillPayloadKind,
+} from './domain.ts';
 import type {
   ExecuteRegisteredSkillRequest,
   RegisteredExecutableSkill,
@@ -12,7 +15,9 @@ import { decodeExecutableSkillManifest } from './manifest-codec.ts';
 import {
   auditExecutableSkillRegistry,
   EXECUTABLE_SKILL_REGISTRY,
+  validateRegisteredExecutableSkillResult,
 } from './registry.ts';
+import type { ValidateRegisteredExecutableSkillResultRequest } from './registry.ts';
 import {
   materializeSkillAcceptanceProbeClosure,
   materializeSkillClosure,
@@ -311,12 +316,19 @@ async function executeSkillWithDefinition(
     label: ExecutableSkillPayloadKind.Result,
   };
   assertByteLimit(resultLimit);
+  const resultContractRequest: ValidateRegisteredExecutableSkillResultRequest =
+    {
+      registration: request.definition,
+      serializedResult,
+    };
+  validateRegisteredExecutableSkillResult(resultContractRequest);
   const execution: VerifiedExecutableSkillExecution = {
     closureSha256: closure.closureSha256,
     skillId: manifest.id,
     schemaVersion: manifest.schemaVersion,
     executionKind: manifest.executionKind,
     requestKind: manifest.requestKind,
+    resultContract: request.definition.resultContract,
     resultKind: manifest.resultKind,
     requestSha256: sha256(request.serializedRequest),
     resultSha256: sha256(serializedResult),
@@ -344,6 +356,7 @@ export async function executeExecutableSkillAcceptanceProbe(
     skillId: 'cortex-article-structure',
     manifest,
     manifestPath: `${fixtureRoot}/${manifestName}`,
+    resultContract: ExecutableSkillHostResultContract.CortexArticleStructureV1,
     runnerPath: `${fixtureRoot}/${probe}-runner.ts`,
   };
   const closureRequest = { definition, repositoryRoot };

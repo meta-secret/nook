@@ -106,7 +106,7 @@ The delivery owner reviews every finding before editing.
 4. Apply the lowest provider or canonical authority correction first.
 5. Add or strengthen behavior-focused tests for code invariants.
 6. Update dependent consumers after their provider contract is accepted.
-7. Update Cortex and executable mirrors when durable guidance changes.
+7. Update Cortex and agent skill adapter mirrors when durable guidance changes.
 8. Update `.cortex/knowledge-graph.md` when document headings or paths change.
 9. Run the validation owned by each edit group.
 
@@ -115,15 +115,18 @@ serialized.
 
 ## Promote deterministic candidates
 
-A proposal moves into Loom or Task only through a reviewed implementation.
+A deterministic proposal moves into its owning skill capability, Loom, Task,
+CI, or lint only through a reviewed implementation. Repository-specific
+mechanics belong to the focused skill. Generic orchestration, isolation,
+provenance, and replay remain in Loom.
 
 1. Prove that output follows entirely from declared inputs.
-2. Search existing typed leaves and compiled workflows.
+2. Search existing skill capabilities, typed leaves, and compiled workflows.
 3. Define typed input, output, and failure behavior.
 4. Add behavior-focused tests for the deterministic contract.
 5. Add or update the canonical Task entrypoint.
 6. Validate the implementation on the updated exact head.
-7. Replace duplicated prose with a short semantic rule and executable link.
+7. Replace duplicated prose with a short semantic rule and typed entrypoint.
 
 Do not generate topology from Markdown, prompts, or model output.
 Do not delete semantic policy merely because some validation became mechanical.

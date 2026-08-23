@@ -87,7 +87,7 @@ Agents must follow this navigation and search protocol:
   Markdown view. Parents aggregate child views into higher-level views until
   the root delivery owner authors the final report. Treat bypasses as P1
   violations. See [workflows/subagent-delegation.md](workflows/subagent-delegation.md)
-  and [the executable skill](../.agents/skills/subagent-delegation/SKILL.md).
+  and [the agent skill adapter](../.agents/skills/subagent-delegation/SKILL.md).
 - **Flat agent hierarchy:** Keep every local agent lineage at depth three or
   less. Normal work uses synthesis at depth 1 and named experts at depth 2.
   Depth 3 is exceptional and predeclared. Children cannot add tasks or tiers.

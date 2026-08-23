@@ -16,6 +16,10 @@ export enum ExecutableSkillPayloadKind {
   Result = 'result',
 }
 
+export enum ExecutableSkillHostResultContract {
+  CortexArticleStructureV1 = 'cortex-article-structure-result-v1',
+}
+
 export type ExecutableSkillLimits = {
   readonly requestBytes: number;
   readonly resultBytes: number;
@@ -36,6 +40,7 @@ export type RegisteredExecutableSkill = {
   readonly skillId: string;
   readonly manifest: ExecutableSkillManifest;
   readonly manifestPath: string;
+  readonly resultContract: ExecutableSkillHostResultContract;
   readonly runnerPath: string;
 };
 
@@ -50,6 +55,7 @@ export type VerifiedExecutableSkillExecution = {
   readonly schemaVersion: 1;
   readonly executionKind: ExecutableSkillExecutionKind;
   readonly requestKind: string;
+  readonly resultContract: ExecutableSkillHostResultContract;
   readonly resultKind: string;
   readonly requestSha256: string;
   readonly resultSha256: string;

@@ -24,5 +24,5 @@ The canonical card owns:
 - reviewed Loom leaf and static-graph extraction; and
 - cleanup plus updated exact-head validation.
 
-This executable skill is an invocation mirror. Do not duplicate or redefine
+This agent skill adapter is an invocation mirror. Do not duplicate or redefine
 the procedure here.

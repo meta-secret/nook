@@ -39,7 +39,8 @@ type FindingTransport = {
 };
 
 const REQUEST_KIND = 'cortex-article-structure-audit-v1';
-const RESULT_KIND = 'cortex-article-structure-findings-v1';
+export const CORTEX_ARTICLE_RESULT_KIND =
+  'cortex-article-structure-findings-v1';
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
@@ -62,7 +63,7 @@ export function decodeCortexArticleResult(
   if (
     !result ||
     !hasExactKeys(resultKeysRequest) ||
-    result.kind !== RESULT_KIND ||
+    result.kind !== CORTEX_ARTICLE_RESULT_KIND ||
     !Array.isArray(result.findings) ||
     result.findings.length > 50_000
   ) {

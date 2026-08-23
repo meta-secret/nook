@@ -294,7 +294,7 @@ Examples include:
 
 - path and link existence;
 - heading and knowledge-graph coverage;
-- executable-skill mirror integrity;
+- agent skill adapter mirror integrity;
 - exact duplicate blocks;
 - migration-ledger monotonicity;
 - source-size and closed-vocabulary checks;

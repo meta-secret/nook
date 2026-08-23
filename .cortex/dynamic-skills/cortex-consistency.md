@@ -144,7 +144,7 @@ task loom:cortex-audit
 - For density findings, set `includeDensityLint: true` in the cortexAudit
   request.
 - See [Loom tools](../references/loom-tools.md).
-- Loom checks broken relative links, skill-index sync, and executable skill
+- Loom checks broken relative links, skill-index sync, and agent skill adapter
   paths.
 - Semantic conflicts still require agent judgment.
 - For implementation tasks:
