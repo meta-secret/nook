@@ -28,7 +28,9 @@ Cluster roles:
   is labeled `nook.nokey.sh/arc-build=true`.
 - WireGuard address `10.202.0.1` belongs to the controller. Every worker receives
   one explicit, unique address from `10.202.0.2/24`. The stable API address
-  remains `10.201.0.1`.
+  remains `10.201.0.1`. Before changing a controller peer, deployment verifies
+  that any persisted peer key and Kubernetes `InternalIP` assignment identify
+  that same worker. Reusing another worker's address fails closed.
 - ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
   warm. The general and Hive scale sets can each create up to ten concurrent
   runners. A third cache-primary scale set owns serialized Main producers.

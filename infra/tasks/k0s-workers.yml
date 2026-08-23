@@ -73,11 +73,50 @@ tasks:
         fi
         sudo -n test -s /etc/wireguard/nook-public.key
         sudo -n cat /etc/wireguard/nook-public.key'
-        controller_public_key="$(ssh -n -o BatchMode=yes "$controller_target" "$ensure_key")"
         worker_public_key="$(ssh -n -o BatchMode=yes "$worker_target" "$ensure_key")"
-        for public_key in "$controller_public_key" "$worker_public_key"; do
-          test "${#public_key}" -eq 44
-        done
+        test "${#worker_public_key}" -eq 44
+        worker_node_name="$(ssh -n -o BatchMode=yes "$worker_target" 'hostname -s')"
+        if ! [[ "$worker_node_name" =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]]; then
+          echo "k0s mesh: refusing invalid worker node name" >&2
+          exit 2
+        fi
+
+        assert_mesh_address_available() {
+          ssh -o BatchMode=yes "$controller_target" bash -s -- \
+            "$worker_mesh_address" "$worker_public_key" "$worker_node_name" <<'REMOTE'
+        set -euo pipefail
+        worker_mesh_address="$1"
+        worker_public_key="$2"
+        worker_node_name="$3"
+        peer_file="/etc/wireguard/nook-peers/$worker_mesh_address.conf"
+        if sudo -n test -e "$peer_file"; then
+          if sudo -n test -L "$peer_file" ||
+             test "$(sudo -n stat -c '%F:%u:%g:%h' -- "$peer_file")" != \
+            "regular file:0:0:1"; then
+            echo "k0s mesh: refusing unsafe persisted peer for $worker_mesh_address" >&2
+            exit 2
+          fi
+          persisted_public_key="$(sudo -n sed -n 's/^PublicKey = //p' "$peer_file")"
+          if test "$persisted_public_key" != "$worker_public_key"; then
+            echo "k0s mesh: $worker_mesh_address belongs to another WireGuard peer" >&2
+            exit 2
+          fi
+        fi
+        assigned_nodes="$(
+          sudo -n k0s kubectl get nodes -o json | jq -r \
+            --arg address "$worker_mesh_address" \
+            '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name'
+        )"
+        if test -n "$assigned_nodes" && test "$assigned_nodes" != "$worker_node_name"; then
+          echo "k0s mesh: $worker_mesh_address belongs to Kubernetes node $assigned_nodes" >&2
+          exit 2
+        fi
+        REMOTE
+        }
+
+        assert_mesh_address_available
+        controller_public_key="$(ssh -n -o BatchMode=yes "$controller_target" "$ensure_key")"
+        test "${#controller_public_key}" -eq 44
 
         configure_controller_peer() {
           ssh -o BatchMode=yes "$controller_target" bash -s -- \

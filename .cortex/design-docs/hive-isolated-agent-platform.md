@@ -99,7 +99,10 @@ compute. The control node is labeled
 and ARC listeners remain there. Compute nodes are labeled
 `nook.nokey.sh/arc-build=true`; both ARC runner scale sets select only those
 nodes. Node and Pod traffic crosses an authenticated WireGuard mesh on
-`10.202.0.0/24`. The Kubernetes API retains its stable `10.201.0.1` address.
+`10.202.0.0/24`. Each worker address has one owner. Before mutating a controller
+peer, deployment verifies that any persisted peer key and Kubernetes
+`InternalIP` assignment identify that same worker. Address collisions fail
+closed. The Kubernetes API retains its stable `10.201.0.1` address.
 
 Neo4j runs with the normal container runtime because it is a persistent
 infrastructure service. The dispatcher and every task worker use
