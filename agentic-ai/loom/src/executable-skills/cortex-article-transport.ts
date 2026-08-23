@@ -83,6 +83,9 @@ type FindingTransport = {
 };
 
 const REQUEST_KIND = 'cortex-article-structure-audit-v1';
+export const CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT = 4096;
+export const CORTEX_ARTICLE_HEADING_TEXT_LIMIT =
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT;
 export const CORTEX_ARTICLE_RESULT_KIND =
   'cortex-article-structure-findings-v1';
 const RESULT_KEYS = ['kind', 'findings'] as const;
@@ -119,10 +122,14 @@ function normalizeBlock(node: RootContent): CortexArticleRequestBlock {
     throw new Error('Cortex article source block has no valid source line.');
   }
   if (node.type === 'heading') {
+    const text = nodeText(node);
+    if (text.length > CORTEX_ARTICLE_HEADING_TEXT_LIMIT) {
+      throw new Error('Cortex article heading text exceeds its bound.');
+    }
     return {
       depth: node.depth,
       line,
-      text: nodeText(node),
+      text,
       type: CortexArticleRequestBlockKind.Heading,
     };
   }
@@ -194,7 +201,7 @@ function decodeFinding(finding: FindingTransport): CortexArticleFinding {
     finding.line < 1 ||
     typeof finding.message !== 'string' ||
     finding.message.trim() === '' ||
-    finding.message.length > 4096
+    finding.message.length > CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT
   ) {
     throw new Error('Invalid executable Cortex article finding.');
   }

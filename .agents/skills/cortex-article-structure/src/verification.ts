@@ -99,11 +99,11 @@ function verifyMigrationLedger(
     if (entry.length === 0 || entry.startsWith('#')) continue;
     let message: string | false = false;
     if (exemptions.has(entry)) {
-      message = `Duplicate article-structure migration exemption: ${entry}`;
+      message = 'Duplicate article-structure migration exemption.';
     } else if (!request.catalog.has(entry)) {
-      message = `Article-structure exemption is not a Cortex Markdown file: ${entry}`;
+      message = 'Article-structure exemption is not a Cortex Markdown file.';
     } else if (baseline !== false && !baseline.has(entry)) {
-      message = `Article-structure exemption was added after the baseline: ${entry}`;
+      message = 'Article-structure exemption was added after the baseline.';
     }
     if (message !== false) {
       const finding: CortexArticleFinding = {
@@ -205,7 +205,7 @@ function verifyArticle(request: VerifyArticleRequest): void {
       code: CortexArticleFindingCode.EmptyArticle,
       file: request.document.relativePath,
       line: nodeLine(request.heading),
-      message: `Article #${nodeText(request.heading)} has no body content.`,
+      message: 'Article has no body content.',
     };
     request.expected.push(finding);
     return;
@@ -221,7 +221,7 @@ function verifyArticle(request: VerifyArticleRequest): void {
         code: CortexArticleFindingCode.DenseArticle,
         file: request.document.relativePath,
         line: nodeLine(node),
-        message: `Article #${nodeText(request.heading)} has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
+        message: `Article has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
       };
       request.expected.push(finding);
     }
@@ -234,7 +234,8 @@ function verifyArticle(request: VerifyArticleRequest): void {
       code: CortexArticleFindingCode.UnorderedProcedure,
       file: request.document.relativePath,
       line: nodeLine(request.heading),
-      message: `Procedure-like article #${nodeText(request.heading)} must expose its action sequence as an ordered list.`,
+      message:
+        'Procedure-like article must expose its action sequence as an ordered list.',
     };
     request.expected.push(finding);
   }

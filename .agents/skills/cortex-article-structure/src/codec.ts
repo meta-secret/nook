@@ -2,6 +2,8 @@ import {
   CortexArticleFindingCode,
   CortexArticleBlockKind,
   CortexArticleContractKind,
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  CORTEX_ARTICLE_HEADING_TEXT_LIMIT,
   type AuditCortexArticleStructureRequest,
   type CortexArticleBlock,
   type CortexArticleDocument,
@@ -185,7 +187,7 @@ function decodeBlock(
       transport.depth < 1 ||
       transport.depth > 6 ||
       typeof transport.text !== 'string' ||
-      transport.text.length > 4096
+      transport.text.length > CORTEX_ARTICLE_HEADING_TEXT_LIMIT
     ) {
       throw new Error('Invalid Cortex article heading block.');
     }
@@ -295,7 +297,8 @@ function decodeFinding(
     typeof line !== 'number' ||
     !Number.isSafeInteger(line) ||
     line < 1 ||
-    !isNonblankString(transport.message)
+    !isNonblankString(transport.message) ||
+    transport.message.length > CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT
   ) {
     throw new Error('Invalid Cortex article finding.');
   }

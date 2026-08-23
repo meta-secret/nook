@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test';
-import { encodeCortexArticleRequest } from '../src/executable-skills/cortex-article-transport.ts';
+import {
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  CORTEX_ARTICLE_HEADING_TEXT_LIMIT,
+  decodeCortexArticleResult,
+  encodeCortexArticleRequest,
+} from '../src/executable-skills/cortex-article-transport.ts';
 
 type TransportBlock = {
   readonly comment?: boolean;
@@ -77,4 +82,71 @@ A | B
   expect(serialized).not.toContain('https://example.com');
   expect(serialized).not.toContain('visible HTML');
   expect(serialized).not.toContain('Quoted heading');
+});
+
+test('aligns exact heading and finding-message boundaries', () => {
+  const heading = `Recovery procedure ${'x'.repeat(CORTEX_ARTICLE_HEADING_TEXT_LIMIT - 19)}`;
+  const request = {
+    documents: [
+      {
+        relativePath: '.cortex/boundary.md',
+        content: `## ${heading}\n`,
+      },
+    ],
+    migrationBaselineEntries: false,
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: false,
+    },
+  } as const;
+  expect(() => encodeCortexArticleRequest(request)).not.toThrow();
+  const overflowRequest = {
+    ...request,
+    documents: [
+      {
+        relativePath: '.cortex/boundary.md',
+        content: `## ${heading}x\n`,
+      },
+    ],
+  } as const;
+  expect(() => encodeCortexArticleRequest(overflowRequest)).toThrow(
+    'heading text exceeds its bound',
+  );
+  const generatedMessage =
+    'Procedure-like article must expose its action sequence as an ordered list.';
+  const resultTransport = {
+    kind: 'cortex-article-structure-findings-v1',
+    findings: [
+      {
+        code: 'unordered-procedure',
+        file: '.cortex/boundary.md',
+        line: 1,
+        message: generatedMessage,
+      },
+    ],
+  } as const;
+  const result = JSON.stringify(resultTransport);
+  expect(() => decodeCortexArticleResult(result)).not.toThrow();
+  const boundaryFinding = {
+    ...resultTransport.findings[0],
+    message: 'x'.repeat(CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT),
+  };
+  const boundaryResult = {
+    ...resultTransport,
+    findings: [boundaryFinding],
+  };
+  expect(() =>
+    decodeCortexArticleResult(JSON.stringify(boundaryResult)),
+  ).not.toThrow();
+  const overflowFinding = {
+    ...boundaryFinding,
+    message: 'x'.repeat(CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT + 1),
+  };
+  const overflowResult = {
+    ...resultTransport,
+    findings: [overflowFinding],
+  };
+  expect(() =>
+    decodeCortexArticleResult(JSON.stringify(overflowResult)),
+  ).toThrow('Invalid executable Cortex article finding');
 });

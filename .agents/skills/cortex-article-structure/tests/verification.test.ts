@@ -2,7 +2,10 @@ import { expect, test } from 'bun:test';
 import { auditCortexArticleStructure } from '../src/audit.ts';
 import {
   CortexArticleContractKind,
+  CortexArticleBlockKind,
   CortexArticleFindingCode,
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  CORTEX_ARTICLE_HEADING_TEXT_LIMIT,
   type AuditCortexArticleStructureRequest,
   type CortexArticleFinding,
   type CortexArticleStructureResult,
@@ -54,14 +57,14 @@ const CANONICAL_FINDINGS: readonly CortexArticleFinding[] = [
     file: '.cortex/recovery.md',
     line: 21,
     message:
-      'Article #Recovery procedure has more than 3 consecutive prose blocks without visible structure.',
+      'Article has more than 3 consecutive prose blocks without visible structure.',
   },
   {
     code: CortexArticleFindingCode.UnorderedProcedure,
     file: '.cortex/recovery.md',
     line: 13,
     message:
-      'Procedure-like article #Recovery procedure must expose its action sequence as an ordered list.',
+      'Procedure-like article must expose its action sequence as an ordered list.',
   },
 ];
 
@@ -80,6 +83,85 @@ test('accepts only the exact independently derived semantic result', () => {
     result: resultWith(CANONICAL_FINDINGS),
   };
   expect(() => verifyCortexArticleStructureResult(request)).not.toThrow();
+});
+
+test('keeps maximal accepted heading findings inside the result bound', () => {
+  const heading = `Recovery procedure ${'x'.repeat(CORTEX_ARTICLE_HEADING_TEXT_LIMIT - 19)}`;
+  const auditRequest: AuditCortexArticleStructureRequest = {
+    ...AUDIT_REQUEST,
+    documents: [
+      {
+        relativePath: '.cortex/boundary.md',
+        blocks: [
+          {
+            depth: 2,
+            line: 1,
+            text: 'Document map',
+            type: CortexArticleBlockKind.Heading,
+          },
+          {
+            depth: 2,
+            line: 3,
+            text: heading,
+            type: CortexArticleBlockKind.Heading,
+          },
+          { line: 5, type: CortexArticleBlockKind.Paragraph },
+          { line: 7, type: CortexArticleBlockKind.Paragraph },
+          { line: 9, type: CortexArticleBlockKind.Paragraph },
+          { line: 11, type: CortexArticleBlockKind.Paragraph },
+        ],
+      },
+    ],
+  };
+  const findings = auditCortexArticleStructure(auditRequest);
+  expect(findings.length).toBe(2);
+  expect(
+    findings.every(
+      (finding) =>
+        finding.message.length <= CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+    ),
+  ).toBe(true);
+  const verificationRequest = {
+    auditRequest,
+    result: resultWith(findings),
+  };
+  expect(() =>
+    verifyCortexArticleStructureResult(verificationRequest),
+  ).not.toThrow();
+});
+
+test('does not echo an oversized migration entry into finding messages', () => {
+  const oversizedEntry = `.cortex/${'x'.repeat(
+    CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT + 1,
+  )}.md`;
+  const auditRequest: AuditCortexArticleStructureRequest = {
+    ...AUDIT_REQUEST,
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: oversizedEntry,
+    },
+  };
+  const findings = auditCortexArticleStructure(auditRequest);
+  const expectedFinding: CortexArticleFinding = {
+    code: CortexArticleFindingCode.InvalidMigrationLedger,
+    file: '.cortex/article-structure-migration.txt',
+    line: 1,
+    message: 'Article-structure exemption is not a Cortex Markdown file.',
+  };
+  expect(findings[0]).toEqual(expectedFinding);
+  expect(
+    findings.every(
+      (finding) =>
+        finding.message.length <= CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+    ),
+  ).toBe(true);
+  const verificationRequest = {
+    auditRequest,
+    result: resultWith(findings),
+  };
+  expect(() =>
+    verifyCortexArticleStructureResult(verificationRequest),
+  ).not.toThrow();
 });
 
 test('rejects missing, empty, incorrect, reordered, rebound, and duplicate findings', () => {

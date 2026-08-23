@@ -19,6 +19,10 @@ export enum CortexArticleBlockKind {
   Structure = 'structure',
 }
 
+export const CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT = 4096;
+export const CORTEX_ARTICLE_HEADING_TEXT_LIMIT =
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT;
+
 export type CortexArticleFinding = {
   readonly code: CortexArticleFindingCode;
   readonly file: string;

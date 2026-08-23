@@ -440,10 +440,17 @@ steps
 - Publish the artifact.
 `,
   };
-  const findings = audit([makeDocument(documentArgs)]);
+  const document = makeDocument(documentArgs);
+  const expectedHeading = {
+    text: 'Release\nsteps',
+    type: 'heading',
+  } as const;
+  expect(document.blocks.find((block) => block.line === 13)).toMatchObject(
+    expectedHeading,
+  );
+  const findings = audit([document]);
   expect(findings).toHaveLength(1);
   expect(findings[0]?.line).toBe(13);
-  expect(findings[0]?.message).toContain('#Release\nsteps');
 });
 
 test('normalizes linked and escaped heading text without losing source line', () => {
@@ -466,12 +473,17 @@ test('normalizes linked and escaped heading text without losing source line', ()
 - Prepare the input.
 `,
   };
-  const findings = audit([makeDocument(documentArgs)]);
+  const document = makeDocument(documentArgs);
+  const expectedHeading = {
+    text: 'Recovery procedure #1 with code_value',
+    type: 'heading',
+  } as const;
+  expect(document.blocks.find((block) => block.line === 13)).toMatchObject(
+    expectedHeading,
+  );
+  const findings = audit([document]);
   expect(findings).toHaveLength(1);
   expect(findings[0]?.line).toBe(13);
-  expect(findings[0]?.message).toContain(
-    'Recovery procedure #1 with code_value',
-  );
 });
 
 test('resets prose density at thematic breaks and non-comment HTML blocks', () => {

@@ -57,6 +57,7 @@ const CODE_REFACTORING_FILES = [
   '.agents/skills/cortex-article-structure/tests/verification.test.ts',
   '.agents/skills/cortex-article-structure/tests/fixtures/containment-manifest.json',
   '.agents/skills/cortex-article-structure/tests/fixtures/containment-runner.ts',
+  '.agents/skills/cortex-article-structure/tests/fixtures/overflow-manifest.json',
   '.agents/skills/cortex-article-structure/tests/fixtures/overflow-runner.ts',
   '.agents/skills/cortex-article-structure/tests/fixtures/timeout-manifest.json',
   '.agents/skills/cortex-article-structure/tests/fixtures/timeout-runner.ts',

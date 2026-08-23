@@ -12,6 +12,8 @@ import type {
 import {
   CortexArticleBlockKind,
   CortexArticleContractKind,
+  CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  CORTEX_ARTICLE_HEADING_TEXT_LIMIT,
 } from '../src/domain.ts';
 
 const validRequest: AuditCortexArticleStructureRequest = {
@@ -81,7 +83,12 @@ test('rejects missing, extra, malformed, and unbounded block fields', () => {
   const blockCases = [
     { type: 'heading', line: 1, text: 'Missing depth' },
     { type: 'heading', depth: 0, line: 1, text: 'Invalid depth' },
-    { type: 'heading', depth: 2, line: 1, text: 'x'.repeat(4097) },
+    {
+      type: 'heading',
+      depth: 2,
+      line: 1,
+      text: 'x'.repeat(CORTEX_ARTICLE_HEADING_TEXT_LIMIT + 1),
+    },
     { type: 'paragraph', line: 0 },
     { type: 'paragraph', line: 1, extra: true },
     { type: 'list', line: 1, ordered: 'yes' },
@@ -98,6 +105,48 @@ test('rejects missing, extra, malformed, and unbounded block fields', () => {
       decodeCortexArticleRequest(JSON.stringify(invalidRequest)),
     ).toThrow();
   }
+});
+
+test('aligns the exact heading and finding message boundaries', () => {
+  const boundaryHeading = {
+    depth: 2,
+    line: 1,
+    text: 'x'.repeat(CORTEX_ARTICLE_HEADING_TEXT_LIMIT),
+    type: CortexArticleBlockKind.Heading,
+  } as const;
+  const boundaryRequest = {
+    ...validRequest,
+    documents: [{ ...validRequest.documents[0], blocks: [boundaryHeading] }],
+  };
+  expect(() =>
+    decodeCortexArticleRequest(JSON.stringify(boundaryRequest)),
+  ).not.toThrow();
+
+  const boundaryFinding = {
+    code: 'empty-article',
+    file: '.cortex/example.md',
+    line: 1,
+    message: 'x'.repeat(CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT),
+  };
+  const boundaryResult = {
+    kind: CortexArticleContractKind.Result,
+    findings: [boundaryFinding],
+  };
+  expect(() =>
+    decodeCortexArticleResult(JSON.stringify(boundaryResult)),
+  ).not.toThrow();
+  const overflowResult = {
+    ...boundaryResult,
+    findings: [
+      {
+        ...boundaryFinding,
+        message: 'x'.repeat(CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT + 1),
+      },
+    ],
+  };
+  expect(() =>
+    decodeCortexArticleResult(JSON.stringify(overflowResult)),
+  ).toThrow();
 });
 
 test('rejects malformed and extra result fields', () => {

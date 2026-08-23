@@ -27,6 +27,7 @@ const GIT_TREE_HASH = /^[0-9a-f]{40}$/u;
 const EXECUTABLE_MANIFEST_PATH =
   /^\.agents\/skills\/[a-z0-9][a-z0-9-]*\/executable-skill\.json$/u;
 const MAXIMUM_EXECUTABLE_SKILL_MANIFESTS = 32;
+const MAXIMUM_EXECUTABLE_SKILL_MANIFEST_PATH_BYTES = 4096;
 const cortexArticleLimits = {
   requestBytes: 4 * 1024 * 1024,
   resultBytes: 1024 * 1024,
@@ -383,11 +384,21 @@ async function discoverManifestPaths(
     deadlineExpiresAt: request.deadlineExpiresAt,
     repositoryRoot: request.repositoryRoot,
     signal: request.signal,
+    manifestDiscovery: true,
   };
   const treePaths = (await runRegistryGit(listTreeRequest)).split('\0');
   const manifestPaths = treePaths.filter((candidate) =>
     EXECUTABLE_MANIFEST_PATH.test(candidate),
   );
+  if (
+    manifestPaths.some(
+      (manifestPath) =>
+        Buffer.byteLength(manifestPath, 'utf8') + 1 >
+        MAXIMUM_EXECUTABLE_SKILL_MANIFEST_PATH_BYTES,
+    )
+  ) {
+    throw new Error('Executable skill manifest path exceeds its bound.');
+  }
   if (manifestPaths.length > MAXIMUM_EXECUTABLE_SKILL_MANIFESTS) {
     throw new Error('Executable skill manifest count exceeds its bound.');
   }
@@ -625,6 +636,7 @@ function assertRegistryActive(
 
 type RunRegistryGitRequest = AuditExecutableSkillRegistryRequest & {
   readonly arguments: readonly string[];
+  readonly manifestDiscovery?: true;
 };
 
 async function runRegistryGit(request: RunRegistryGitRequest): Promise<string> {
@@ -637,12 +649,37 @@ async function runRegistryGit(request: RunRegistryGitRequest): Promise<string> {
     stderr: 'pipe',
   } as const;
   const subprocess = Bun.spawn(['git', ...request.arguments], options);
-  const output = readRegistryStream(subprocess.stdout);
-  const errors = readRegistryStream(subprocess.stderr);
+  const stdoutRequest: ReadRegistryStreamRequest = {
+    maximumBytes: 16 * 1024,
+    stream: subprocess.stdout,
+  };
+  const stderrRequest: ReadRegistryStreamRequest = {
+    maximumBytes: 16 * 1024,
+    stream: subprocess.stderr,
+  };
+  const output =
+    request.manifestDiscovery === true
+      ? readManifestDiscoveryStream(subprocess.stdout)
+      : readRegistryStream(stdoutRequest);
+  const errors = readRegistryStream(stderrRequest);
+  const streamFailure = Promise.race([
+    waitForRegistryStreamFailure(output),
+    waitForRegistryStreamFailure(errors),
+  ]);
   const interruption = waitForRegistryInterruption(request);
   try {
     const completion = subprocess.exited.then((exitCode) => ({ exitCode }));
-    const first = await Promise.race([completion, interruption.promise]);
+    const first = await Promise.race([
+      completion,
+      interruption.promise,
+      streamFailure,
+    ]);
+    if (first instanceof Error) {
+      subprocess.kill(9);
+      await subprocess.exited;
+      await Promise.allSettled([output, errors]);
+      throw first;
+    }
     if (first === 'interrupted') {
       subprocess.kill(9);
       await subprocess.exited;
@@ -659,6 +696,59 @@ async function runRegistryGit(request: RunRegistryGitRequest): Promise<string> {
     interruption.dispose();
     if (typeof subprocess.exitCode !== 'number') subprocess.kill(9);
     await subprocess.exited;
+  }
+}
+
+async function readManifestDiscoveryStream(
+  stream: ReadableStream<Uint8Array>,
+): Promise<string> {
+  const reader = stream.getReader();
+  let pathBytes: number[] = [];
+  const manifestPaths: string[] = [];
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      for (const byte of chunk.value) {
+        if (byte !== 0) {
+          pathBytes.push(byte);
+          if (pathBytes.length > MAXIMUM_EXECUTABLE_SKILL_MANIFEST_PATH_BYTES) {
+            await reader.cancel();
+            throw new Error(
+              'Executable skill registry tree path exceeds its bound.',
+            );
+          }
+          continue;
+        }
+        const candidate = Buffer.from(pathBytes).toString('utf8');
+        pathBytes = [];
+        if (!EXECUTABLE_MANIFEST_PATH.test(candidate)) continue;
+        manifestPaths.push(candidate);
+        if (manifestPaths.length > MAXIMUM_EXECUTABLE_SKILL_MANIFESTS) {
+          await reader.cancel();
+          throw new Error('Executable skill manifest count exceeds its bound.');
+        }
+      }
+    }
+    if (pathBytes.length > 0) {
+      throw new Error('Executable skill registry tree framing is invalid.');
+    }
+    return manifestPaths.join('\0');
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function waitForRegistryStreamFailure(
+  stream: Promise<string>,
+): Promise<Error> {
+  try {
+    await stream;
+    return await new Promise<Error>(() => false);
+  } catch (error) {
+    return error instanceof Error
+      ? error
+      : new Error('Executable skill registry Git stream failed.');
   }
 }
 
@@ -695,10 +785,15 @@ function waitForRegistryInterruption(
   };
 }
 
+type ReadRegistryStreamRequest = {
+  readonly maximumBytes: number;
+  readonly stream: ReadableStream<Uint8Array>;
+};
+
 async function readRegistryStream(
-  stream: ReadableStream<Uint8Array>,
+  request: ReadRegistryStreamRequest,
 ): Promise<string> {
-  const reader = stream.getReader();
+  const reader = request.stream.getReader();
   const decoder = new TextDecoder();
   let bytes = 0;
   let output = '';
@@ -707,7 +802,7 @@ async function readRegistryStream(
       const chunk = await reader.read();
       if (chunk.done) break;
       bytes += chunk.value.byteLength;
-      if (bytes > 16 * 1024) {
+      if (bytes > request.maximumBytes) {
         await reader.cancel();
         throw new Error(
           'Executable skill registry Git output exceeded its bound.',

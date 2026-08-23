@@ -125,13 +125,13 @@ type InvalidLedgerMessageArgs = {
 
 function invalidLedgerMessage(args: InvalidLedgerMessageArgs): string | false {
   if (args.exemptions.has(args.entry)) {
-    return `Duplicate article-structure migration exemption: ${args.entry}`;
+    return 'Duplicate article-structure migration exemption.';
   }
   if (!args.catalog.has(args.entry)) {
-    return `Article-structure exemption is not a Cortex Markdown file: ${args.entry}`;
+    return 'Article-structure exemption is not a Cortex Markdown file.';
   }
   if (args.baseline !== false && !args.baseline.has(args.entry)) {
-    return `Article-structure exemption was added after the baseline: ${args.entry}`;
+    return 'Article-structure exemption was added after the baseline.';
   }
   return false;
 }
@@ -237,7 +237,7 @@ function auditArticle(args: AuditArticleArgs): void {
       code: CortexArticleFindingCode.EmptyArticle,
       file: args.document.relativePath,
       line: nodeLine(args.heading),
-      message: `Article #${nodeText(args.heading)} has no body content.`,
+      message: 'Article has no body content.',
     };
     addFinding(findingArgs);
     return;
@@ -271,7 +271,7 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
         code: CortexArticleFindingCode.DenseArticle,
         file: args.document.relativePath,
         line: nodeLine(node),
-        message: `Article #${nodeText(args.heading)} has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
+        message: `Article has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
       };
       addFinding(findingArgs);
     }
@@ -301,7 +301,8 @@ function auditProcedure(args: AuditArticleArgs): void {
     code: CortexArticleFindingCode.UnorderedProcedure,
     file: args.document.relativePath,
     line: nodeLine(args.heading),
-    message: `Procedure-like article #${nodeText(args.heading)} must expose its action sequence as an ordered list.`,
+    message:
+      'Procedure-like article must expose its action sequence as an ordered list.',
   };
   addFinding(findingArgs);
 }
