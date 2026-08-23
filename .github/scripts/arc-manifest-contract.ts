@@ -157,7 +157,7 @@ runners.requireAll([
   "runnerScaleSetName: nook-k0s",
   "minRunners: 0",
   "maxRunners: 10",
-  "requests:\n            cpu: 500m\n            memory: 3Gi",
+  "requests:\n            cpu: 500m\n            memory: 2560Mi",
   "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 250m\n            memory: 1Gi",
   'limits:\n            cpu: 500m\n            memory: 1Gi',
@@ -168,7 +168,7 @@ runners.requireAll([
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
-  'limits:\n            cpu: "1.25"\n            memory: 3Gi',
+  'limits:\n            cpu: "1.25"\n            memory: 2560Mi',
   'limits:\n            cpu: 250m\n            memory: 512Mi',
   '- "24000"',
   'value: "34359738368"',
@@ -221,8 +221,8 @@ kataValues.requireAll([
 ]);
 kataTasks.requireAll([
   "kubectl patch runtimeclass kata-qemu-runtime-rs --type=merge",
-  '\"cpu\":\"250m\",\"memory\":\"768Mi\"',
-  "-o jsonpath='{.overhead.podFixed.memory}')\" = 768Mi",
+  '\"cpu\":\"250m\",\"memory\":\"1280Mi\"',
+  "-o jsonpath='{.overhead.podFixed.memory}')\" = 1280Mi",
 ]);
 controller.requireAll([
   "updateStrategy: eventual",

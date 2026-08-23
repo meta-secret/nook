@@ -138,11 +138,11 @@ template:
         resources:
           requests:
             cpu: 500m
-            memory: 3Gi
+            memory: 2560Mi
             ephemeral-storage: 4Gi
           limits:
             cpu: "1.25"
-            memory: 3Gi
+            memory: 2560Mi
             ephemeral-storage: 32Gi
       - name: prepare-container-runtime-state
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1

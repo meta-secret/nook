@@ -440,7 +440,7 @@ tasks:
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
         test "$(kubectl get runtimeclass kata-qemu-runtime-rs \
-          -o jsonpath='{.overhead.podFixed.memory}')" = 768Mi
+          -o jsonpath='{.overhead.podFixed.memory}')" = 1280Mi
         kubectl get runtimeclass kata-dragonball >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
         kubectl create configmap nook-arc-hive-test-runtime \
