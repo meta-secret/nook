@@ -123,6 +123,10 @@ const platformTasks = contract({
   label: "platform tasks",
   source: await read("nook-app/nook-platform/Taskfile.yml"),
 });
+const ciTasks = contract({
+  label: "CI cache publication tasks",
+  source: await read("nook-app/ci/Taskfile.yml"),
+});
 const buildkitEntrypoint = contract({
   label: "ARC BuildKit entrypoint",
   source: await read("infra/k0s/images/arc-buildkit/entrypoint"),
@@ -344,7 +348,7 @@ tasks.requireAll([
   "helm upgrade --install nook-k0s-hive",
   "unexpected ARC hostPath volumes",
   'ruby - "$runner_render" "$hive_render"',
-  '"buildkit-requests" => ["prepare-buildkit-state"]',
+  '"buildkit-requests" => ["prepare-buildkit-state", "request-buildkit-promotion"]',
   '"buildkit-jobs" => ["buildkit"]',
   'install -d -m 0700 "$pool_root"',
   "pool_size=768G",
@@ -469,6 +473,14 @@ buildkitCloner.requireAll([
   '*containerd-shim-kata-v2*" -id $sandbox_id "*',
   'labels.\\"io.kubernetes.pod.uid\\"==$pod_uid',
   ".seed-generation",
+  'request="$request_dir/$pod_uid.promote"',
+  '"regular file:0:0:1"',
+  'promotion_requests_pending && return 0',
+  'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
+  'if test "$current_generation" != "$expected_generation"; then',
+  'cp --reflink=always --sparse=auto "$job_file" "$seed_next"',
+  'if promotion_requested "$pod_uid"; then',
+  "if promotion_requests_pending || (( SECONDS - last_prune >= 30 )); then",
 ]);
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
 if (
@@ -488,6 +500,26 @@ hiveWorkflow.requireAll([
   "github.event.pull_request.head.repo.full_name != github.repository",
   "github.event.pull_request.user.login == 'dependabot[bot]'",
   "github.event.pull_request.user.login != 'dependabot[bot]'",
+  "run: task ci:arc:promote-buildkit-cache",
+]);
+ciTasks.requireAll([
+  "ci:arc:promote-buildkit-cache:",
+  'if test "${NOOK_ARC_RUNNER:-}" = "1"; then',
+  "task _buildx:healthy BUILD_TASK=_ci:main:publish-native-cache:host",
+  'signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"',
+  'mv "$signal_dir/request.next" "$signal_dir/request"',
+  'test -f "$signal_dir/accepted" && exit 0',
+]);
+runtimeSmoke.require("task ci:arc:promote-buildkit-cache");
+runners.requireAll([
+  "name: request-buildkit-promotion",
+  "name: cache-promotion-signal",
+  "NOOK_ARC_CACHE_PROMOTION_DIR",
+  'request_file="$request_dir/$POD_UID.promote"',
+  '"regular file:1001:1001:1"',
+  'mv "$request_next" "$request_file"',
+  'chown 1001:1001 "$accepted_file.next"',
+  "while true; do sleep 3600; done",
 ]);
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",

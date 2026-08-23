@@ -174,7 +174,7 @@ tasks:
             end
           end
           expected_owners = {
-            "buildkit-requests" => ["prepare-buildkit-state"],
+            "buildkit-requests" => ["prepare-buildkit-state", "request-buildkit-promotion"],
             "buildkit-jobs" => ["buildkit"],
           }
           expected_owners.each do |volume_name, expected|

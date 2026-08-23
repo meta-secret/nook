@@ -603,14 +603,20 @@ exclusive quota, so a compromised guest cannot consume the rest of the shared
 pool through files beside its state image. The garbage-collection target is
 24 GB.
 
-A successful trusted ARC smoke run may refresh the seed after its Pod stops.
-The promotion waits for API removal, kubelet volume teardown, containerd task
-removal, and Kata shim exit. It validates only the root-owned regular backing
-inode on the host, then replaces the seed atomically under the same lock used
-by clone creation. The host never parses guest-controlled ext4 metadata;
-journal recovery occurs when a later Kata guest mounts its private clone.
-Failed or active jobs cannot refresh the seed. `task infra:arc:hive:smoke`
-applies the same promotion gate to the dedicated Hive scale set.
+A successful trusted ARC job asks for seed promotion through an in-guest
+`emptyDir` signal. The runner never mounts the host request directory. A
+trusted sidecar validates the runner-owned regular signal and writes only its
+own Pod-UID-scoped host request. New clone requests wait behind an accepted
+promotion so dependent jobs cannot start from the older seed.
+
+Promotion waits for API removal, kubelet volume teardown, containerd task
+removal, and Kata shim exit. The host validates the root-owned request, backing
+inode, and recorded seed generation. It replaces the seed atomically under the
+same lock used by clone creation. Stale concurrent jobs cannot overwrite a
+newer seed. The host never parses guest-controlled ext4 metadata; journal
+recovery occurs when a later Kata guest mounts its private clone. Failed,
+cancelled, or active jobs cannot refresh the seed. The ordinary and Hive smoke
+tasks apply the same gate to both scale sets.
 Every smoke dispatch carries a unique nonce in the workflow run name. The
 operator matches both that nonce and the exact head SHA before monitoring or
 cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.
@@ -630,13 +636,14 @@ not a retained pool. A preparation taint prevents a new compute node from
 receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
 node selectors are all qualified.
 
-The ordinary Pod requests 1 CPU and 4 GiB. The Hive Pod requests about 2 CPUs
-and 4 GiB. Ordinary containers are capped at 4 GiB in aggregate. Hive
-containers are capped at about 6.75 GiB. The QEMU RuntimeClass adds 1792 MiB of
-Pod overhead. This leaves host-cgroup headroom for QEMU and virtiofs after a
-guest touches its memory. These
-caps are Kata VM sizing boundaries. They keep ten concurrent ordinary
-microVMs at 57.5 GiB of limit memory within the worker's 62.3 GiB
+The ordinary Pod requests about 1 CPU and 4 GiB. The Hive Pod requests about 2
+CPUs and 4 GiB. Ordinary containers are capped at about 4.1 GiB in aggregate.
+Hive containers are capped at about 6.8 GiB.
+The QEMU RuntimeClass adds 1792 MiB of Pod overhead.
+This leaves host-cgroup headroom for QEMU and virtiofs after a guest touches
+its memory. These caps are Kata VM sizing boundaries.
+They keep ten concurrent ordinary microVMs at about 58.1 GiB of limit memory
+within the worker's 62.3 GiB
 allocatable envelope instead of multiplying the
 former 12-vCPU and 16-GiB envelope across every job. The dedicated Hive set
 keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed
@@ -861,10 +868,11 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
   SeaweedFS cache is attached by the workflow.
 
 ARC runners reach `registry.dev.nokey.sh` on the k0s node's local TLS ingress
-path. Buildx imports and exports the same authenticated Zot registry-cache refs
-as hosted runners. Zot remains the authoritative cross-host cache. The local
-reflink seed avoids reconstructing unchanged snapshots for every new guest.
-Each job's writable clone is private and is removed after it becomes inactive.
+path. Buildx may import authenticated Zot registry-cache refs to bootstrap a
+new or cold compute node. Successful ARC jobs promote the private local seed
+and skip registry cache export. Hosted fallback runners continue to publish Zot
+cache, so a replacement compute node retains a cross-host recovery source. Each
+job's writable clone is private and is removed after promotion or inactivity.
 
 ## 10. Taskfile operations
 

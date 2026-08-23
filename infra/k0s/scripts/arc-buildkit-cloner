@@ -29,7 +29,84 @@ delete_job_dir() {
   else
     rm -rf -- "$job_dir"
   fi
-  rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain"
+  rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
+    "$request_dir/$pod_uid.promote" "$request_dir/$pod_uid.promote.next"
+}
+
+promotion_requested() {
+  local pod_uid="$1" request request_value
+  request="$request_dir/$pod_uid.promote"
+  test -e "$request" || return 1
+  if test -L "$request" ||
+     test "$(stat -c '%F:%u:%g:%h' -- "$request" 2>/dev/null || true)" != \
+       "regular file:0:0:1"; then
+    rm -f -- "$request"
+    return 1
+  fi
+  request_value="$(tr -d '\r\n' < "$request")"
+  if test "$request_value" != "$pod_uid"; then
+    rm -f -- "$request"
+    return 1
+  fi
+}
+
+promotion_requests_pending() {
+  local request pod_uid job_dir
+  shopt -s nullglob
+  for request in "$request_dir"/*.promote; do
+    pod_uid="$(basename "$request" .promote)"
+    if ! valid_uid "$pod_uid"; then
+      rm -f -- "$request"
+      continue
+    fi
+    job_dir="$jobs_dir/$pod_uid"
+    if ! test -d "$job_dir" || ! promotion_requested "$pod_uid"; then
+      rm -f -- "$request"
+      continue
+    fi
+    return 0
+  done
+  return 1
+}
+
+promote_job_dir() {
+  local job_dir="$1" pod_uid job_file job_generation generation_size
+  local expected_generation current_generation seed_next
+  pod_uid="$(basename "$job_dir")"
+  job_file="$job_dir/buildkit.ext4"
+  job_generation="$job_dir/.seed-generation"
+  seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"
+
+  generation_size="$(stat -c %s -- "$job_generation" 2>/dev/null || true)"
+  if test -L "$job_generation" ||
+     test "$(stat -c '%F:%u:%g:%h' -- "$job_generation" 2>/dev/null || true)" != \
+       "regular file:0:0:1" ||
+     test "$generation_size" -lt 8 ||
+     test "$generation_size" -gt 128 ||
+     ! grep -Eq '^[0-9]+:[0-9]+:[0-9]+:[0-9]+$' "$job_generation"; then
+    echo "Refusing ARC promotion for $pod_uid: invalid seed generation" >&2
+    return 1
+  fi
+  if test -L "$job_file" ||
+     test "$(stat -c '%F:%u:%g:%h:%s' -- "$job_file" 2>/dev/null || true)" != \
+       "regular file:0:0:1:34359738368"; then
+    echo "Refusing ARC promotion for $pod_uid: invalid BuildKit state" >&2
+    return 1
+  fi
+
+  (
+    flock -x 9
+    expected_generation="$(cat "$job_generation")"
+    current_generation="$(stat -c '%i:%s:%Y:%Z' "$seed_file")"
+    if test "$current_generation" != "$expected_generation"; then
+      echo "Skipping stale ARC promotion for $pod_uid"
+      exit 0
+    fi
+    rm -f -- "$seed_next"
+    cp --reflink=always --sparse=auto "$job_file" "$seed_next"
+    mv "$seed_next" "$seed_file"
+    echo "Promoted ARC BuildKit state for $pod_uid"
+  ) 9> "$seed_lock"
 }
 
 record_sandbox_id() {
@@ -99,6 +176,7 @@ request_expired() {
 
 clone_requests() {
   local request pod_uid request_value job_dir temporary
+  promotion_requests_pending && return 0
   shopt -s nullglob
   for request in "$request_dir"/*.request; do
     test -f "$request" || continue
@@ -191,7 +269,11 @@ prune_stale_jobs() {
           *containerd-shim-kata-v2*) continue 2 ;;
         esac
       done
-      retention_active "$pod_uid" && continue
+      if promotion_requested "$pod_uid"; then
+        promote_job_dir "$job_dir" || true
+      elif retention_active "$pod_uid"; then
+        continue
+      fi
       delete_job_dir "$job_dir"
       continue
     fi
@@ -213,7 +295,11 @@ prune_stale_jobs() {
         *containerd-shim-kata-v2*" -id $sandbox_id "*) continue 2 ;;
       esac
     done
-    retention_active "$pod_uid" && continue
+    if promotion_requested "$pod_uid"; then
+      promote_job_dir "$job_dir" || true
+    elif retention_active "$pod_uid"; then
+      continue
+    fi
     delete_job_dir "$job_dir"
   done < <(
     find "$jobs_dir" -mindepth 1 -maxdepth 1 -type d -print0
@@ -226,7 +312,7 @@ while true; do
     record_active_sandboxes
     last_sandbox_refresh=$SECONDS
   fi
-  if (( SECONDS - last_prune >= 30 )); then
+  if promotion_requests_pending || (( SECONDS - last_prune >= 30 )); then
     prune_stale_jobs
     last_prune=$SECONDS
   fi

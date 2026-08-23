@@ -95,6 +95,15 @@ either host path. The 768 GiB sparse pool covers twenty fully allocated 32 GiB
 job images, the reusable 32 GiB seed, and filesystem metadata. The 24 GB
 BuildKit garbage-collection target normally keeps physical use below that hard
 capacity envelope.
+
+Successful jobs signal through an in-guest `emptyDir`. A trusted sidecar turns
+that signal into a request for only its own Pod UID; the runner never sees the
+host request directory. The host waits for complete Kata teardown, rejects a
+stale seed generation, and promotes the private state through an atomic Btrfs
+reflink. New clone requests wait behind accepted promotion. ARC jobs therefore
+skip registry export, while hosted fallback jobs retain Zot publication for
+cold-node recovery.
+
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
