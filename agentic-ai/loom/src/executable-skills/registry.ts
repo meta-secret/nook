@@ -1,8 +1,5 @@
-import {
-  execFileSync,
-  type ExecFileSyncOptionsWithStringEncoding,
-} from 'node:child_process';
-import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import {
   ExecutableSkillExecutionKind,
@@ -19,6 +16,7 @@ import {
   CORTEX_ARTICLE_RESULT_KIND,
   decodeCortexArticleResult,
 } from './cortex-article-transport.ts';
+import { materializeSkillClosure } from './closure.ts';
 import { decodeExecutableSkillManifest } from './manifest-codec.ts';
 
 const CORTEX_ARTICLE_POLICY =
@@ -54,6 +52,114 @@ export const EXECUTABLE_SKILL_REGISTRY: ReadonlyMap<
   RegisteredExecutableSkill
 > = createExecutableSkillRegistry(executableSkillEntries);
 
+export enum ExecutableSkillRegistryInspectionKind {
+  Invalid = 'invalid',
+  Verified = 'verified',
+}
+
+export type AuditedExecutableSkillRegistry = {
+  readonly auditId: string;
+};
+
+export type ExecutableSkillRegistryInspection =
+  | {
+      readonly kind: ExecutableSkillRegistryInspectionKind.Invalid;
+      readonly findings: readonly ExecutableSkillRegistryFinding[];
+    }
+  | {
+      readonly kind: ExecutableSkillRegistryInspectionKind.Verified;
+      readonly authority: AuditedExecutableSkillRegistry;
+      readonly findings: readonly [];
+    };
+
+const auditedRepositoryRoots = new WeakMap<
+  AuditedExecutableSkillRegistry,
+  string
+>();
+
+export async function inspectExecutableSkillRegistry(
+  request: AuditExecutableSkillRegistryRequest,
+): Promise<ExecutableSkillRegistryInspection> {
+  let repositoryRoot: string;
+  try {
+    repositoryRoot = await canonicalRepositoryRoot(request);
+  } catch {
+    assertRegistryActive(request);
+    const finding: ExecutableSkillRegistryFinding = {
+      code: ExecutableSkillRegistryFindingCode.UnsafeFile,
+      skillId: 'registry',
+      message: 'Executable skill repository root is not canonical.',
+    };
+    return {
+      kind: ExecutableSkillRegistryInspectionKind.Invalid,
+      findings: [finding],
+    };
+  }
+  const auditRequest: AuditExecutableSkillRegistryRequest = {
+    ...request,
+    repositoryRoot,
+  };
+  const findings = await auditExecutableSkillRegistryCanonical(auditRequest);
+  if (findings.length > 0) {
+    return {
+      kind: ExecutableSkillRegistryInspectionKind.Invalid,
+      findings,
+    };
+  }
+  const authorityValue: AuditedExecutableSkillRegistry = {
+    auditId: randomUUID(),
+  };
+  const authority = Object.freeze(authorityValue);
+  auditedRepositoryRoots.set(authority, repositoryRoot);
+  return {
+    kind: ExecutableSkillRegistryInspectionKind.Verified,
+    authority,
+    findings: [],
+  };
+}
+
+async function canonicalRepositoryRoot(
+  request: AuditExecutableSkillRegistryRequest,
+): Promise<string> {
+  assertRegistryActive(request);
+  const canonical = await realpath(request.repositoryRoot);
+  const gitRequest: RunRegistryGitRequest = {
+    arguments: ['rev-parse', '--show-toplevel'],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    repositoryRoot: canonical,
+    signal: request.signal,
+  };
+  const discovered = await realpath((await runRegistryGit(gitRequest)).trim());
+  if (canonical !== discovered) {
+    throw new Error('Executable skill repository root must be canonical.');
+  }
+  return canonical;
+}
+
+export type ResolveAuditedExecutableSkillRepositoryRequest = {
+  readonly authority: AuditedExecutableSkillRegistry;
+  readonly deadlineExpiresAt: number;
+  readonly signal: AbortSignal | false;
+};
+
+export async function resolveAuditedExecutableSkillRepository(
+  request: ResolveAuditedExecutableSkillRepositoryRequest,
+): Promise<string> {
+  const repositoryRoot = auditedRepositoryRoots.get(request.authority);
+  if (typeof repositoryRoot !== 'string') {
+    throw new Error('Executable skill registry authority is invalid.');
+  }
+  const auditRequest: AuditExecutableSkillRegistryRequest = {
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    repositoryRoot,
+    signal: request.signal,
+  };
+  if ((await auditExecutableSkillRegistryCanonical(auditRequest)).length > 0) {
+    throw new Error('Executable skill registry changed after authorization.');
+  }
+  return repositoryRoot;
+}
+
 export type ValidateRegisteredExecutableSkillResultRequest = {
   readonly registration: RegisteredExecutableSkill;
   readonly serializedResult: string;
@@ -77,239 +183,323 @@ export function validateRegisteredExecutableSkillResult(
   }
 }
 
-const FORBIDDEN_SOURCE_PATTERNS = [
-  /(?:from\s+|import\s*\(\s*|require\s*\(\s*)['"]node:(?:child_process|cluster|dgram|dns|fs|http|https|net|tls|worker_threads)['"]/u,
-  /\b(?:fetch|WebSocket)\s*\(/u,
-  /\bBun\.(?:file|serve|spawn|spawnSync)\b/u,
-  /\bBun\.write\s*\((?!\s*Bun\.stdout\b)/u,
-  /\bprocess\.(?:chdir|cwd|env|execArgv|kill)\b/u,
-] as const;
-
-export function auditExecutableSkillRegistry(
+export async function auditExecutableSkillRegistry(
   request: AuditExecutableSkillRegistryRequest,
-): readonly ExecutableSkillRegistryFinding[] {
-  const findings: ExecutableSkillRegistryFinding[] = [];
-  const registeredIds = new Set(EXECUTABLE_SKILL_REGISTRY.keys());
-  const manifestIds = new Set<string>();
-  const skillsRoot = path.join(request.repositoryRoot, '.agents', 'skills');
-  const directoryReadOptions = { withFileTypes: true } as const;
-  for (const entry of readdirSync(skillsRoot, directoryReadOptions)) {
-    if (!entry.isDirectory()) continue;
-    const manifestPath = path.join(
-      skillsRoot,
-      entry.name,
-      'executable-skill.json',
-    );
-    let manifest: ExecutableSkillManifest;
-    try {
-      manifest = decodeExecutableSkillManifest(
-        readFileSync(manifestPath, 'utf8'),
-      );
-      manifestIds.add(manifest.id);
-    } catch {
-      if (isFilesystemEntry(manifestPath)) {
-        const invalidManifestFinding: ExecutableSkillRegistryFinding = {
-          code: ExecutableSkillRegistryFindingCode.InvalidManifest,
-          skillId: entry.name,
-          message: 'Executable skill manifest is invalid.',
-        };
-        findings.push(registryFinding(invalidManifestFinding));
-      }
-      continue;
-    }
-    const registration = EXECUTABLE_SKILL_REGISTRY.get(manifest.id);
-    const relativeManifestPath = path.relative(
-      request.repositoryRoot,
-      manifestPath,
-    );
-    if (
-      manifest.id !== entry.name ||
-      !registration ||
-      registration.manifestPath !== relativeManifestPath ||
-      JSON.stringify(registration.manifest) !== JSON.stringify(manifest)
-    ) {
-      const driftFinding: ExecutableSkillRegistryFinding = {
-        code: ExecutableSkillRegistryFindingCode.InvalidManifest,
-        skillId: entry.name,
-        message:
-          'Executable skill manifest differs from its exact static registration.',
-      };
-      findings.push(registryFinding(driftFinding));
-      continue;
-    }
-    const boundPaths = [
-      registration.manifestPath,
-      registration.runnerPath,
-      ...registration.manifest.policyPaths,
-    ];
-    for (const relativePath of boundPaths) {
-      const fileRequest: AuditBoundFileRequest = {
-        relativePath,
-        repositoryRoot: request.repositoryRoot,
-        skillId: entry.name,
-      };
-      findings.push(...auditBoundFile(fileRequest));
-    }
-    const sourceRequest: AuditSkillSourceRequest = {
-      repositoryRoot: request.repositoryRoot,
-      skillId: entry.name,
+): Promise<readonly ExecutableSkillRegistryFinding[]> {
+  try {
+    const repositoryRoot = await canonicalRepositoryRoot(request);
+    const canonicalRequest: AuditExecutableSkillRegistryRequest = {
+      ...request,
+      repositoryRoot,
     };
-    findings.push(...auditSkillSource(sourceRequest));
+    return auditExecutableSkillRegistryCanonical(canonicalRequest);
+  } catch {
+    assertRegistryActive(request);
+    return [unsafeRegistryRootFinding()];
   }
-  for (const registeredId of registeredIds) {
-    if (!manifestIds.has(registeredId)) {
-      const unexpectedFinding: ExecutableSkillRegistryFinding = {
-        code: ExecutableSkillRegistryFindingCode.UnexpectedRegistration,
-        skillId: registeredId,
-        message: 'Registered executable skill has no valid manifest.',
-      };
-      findings.push(registryFinding(unexpectedFinding));
-    }
-  }
-  for (const manifestId of manifestIds) {
-    if (!registeredIds.has(manifestId)) {
-      const missingFinding: ExecutableSkillRegistryFinding = {
+}
+
+async function auditExecutableSkillRegistryCanonical(
+  request: AuditExecutableSkillRegistryRequest,
+): Promise<readonly ExecutableSkillRegistryFinding[]> {
+  assertRegistryActive(request);
+  const manifestPaths = await discoverManifestPaths(request);
+  const findings: ExecutableSkillRegistryFinding[] = [];
+  const discoveredIds = new Set<string>();
+  for (const manifestPath of manifestPaths) {
+    assertRegistryActive(request);
+    const segments = manifestPath.split('/');
+    const skillId = segments.at(-2);
+    if (typeof skillId !== 'string') continue;
+    discoveredIds.add(skillId);
+    const registration = EXECUTABLE_SKILL_REGISTRY.get(skillId);
+    if (!registration) {
+      const finding: ExecutableSkillRegistryFinding = {
         code: ExecutableSkillRegistryFindingCode.MissingRegistration,
-        skillId: manifestId,
+        skillId,
         message: 'Executable skill manifest has no static registration.',
       };
-      findings.push(registryFinding(missingFinding));
+      findings.push(finding);
+      continue;
     }
+    if (registration.manifestPath !== manifestPath) {
+      const finding: ExecutableSkillRegistryFinding = {
+        code: ExecutableSkillRegistryFindingCode.InvalidManifest,
+        skillId,
+        message: 'Executable skill manifest path differs from registration.',
+      };
+      findings.push(finding);
+      continue;
+    }
+    const registrationRequest: AuditRegistrationRequest = {
+      registration,
+      ...request,
+    };
+    findings.push(...(await auditRegistration(registrationRequest)));
+  }
+  for (const skillId of EXECUTABLE_SKILL_REGISTRY.keys()) {
+    if (discoveredIds.has(skillId)) continue;
+    const finding: ExecutableSkillRegistryFinding = {
+      code: ExecutableSkillRegistryFindingCode.UnexpectedRegistration,
+      skillId,
+      message: 'Registered executable skill has no manifest.',
+    };
+    findings.push(finding);
   }
   return findings;
 }
 
-type RegistryFindingRequest = ExecutableSkillRegistryFinding;
+type AuditRegistrationRequest = AuditExecutableSkillRegistryRequest & {
+  readonly registration: RegisteredExecutableSkill;
+};
 
-function registryFinding(
-  request: RegistryFindingRequest,
-): ExecutableSkillRegistryFinding {
-  return request;
+async function auditRegistration(
+  request: AuditRegistrationRequest,
+): Promise<readonly ExecutableSkillRegistryFinding[]> {
+  const manifestGitRequest: RunRegistryGitRequest = {
+    arguments: ['show', `:${request.registration.manifestPath}`],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
+  };
+  try {
+    const manifest = decodeExecutableSkillManifest(
+      await runRegistryGit(manifestGitRequest),
+    );
+    if (
+      JSON.stringify(manifest) !== JSON.stringify(request.registration.manifest)
+    ) {
+      throw new Error('Executable skill manifest registration drift.');
+    }
+  } catch {
+    assertRegistryActive(request);
+    const finding: ExecutableSkillRegistryFinding = {
+      code: ExecutableSkillRegistryFindingCode.InvalidManifest,
+      skillId: request.registration.skillId,
+      message: 'Executable skill staged manifest is invalid or drifted.',
+    };
+    return [finding];
+  }
+  for (const policyPath of request.registration.manifest.policyPaths) {
+    const boundRequest: AuditBoundFileRequest = {
+      ...request,
+      relativePath: policyPath,
+      skillId: request.registration.skillId,
+    };
+    if (!(await isBoundFileSafe(boundRequest))) {
+      return [unsafeBoundFileFinding(boundRequest)];
+    }
+  }
+  const closureRequest = {
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    definition: request.registration,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
+  };
+  try {
+    const closure = await materializeSkillClosure(closureRequest);
+    closure.dispose();
+    return [];
+  } catch (error) {
+    assertRegistryActive(request);
+    const message = error instanceof Error ? error.message : '';
+    const code = message.includes('forbid')
+      ? ExecutableSkillRegistryFindingCode.UnsafeCapability
+      : message.includes('manifest') ||
+          message.includes(request.registration.manifestPath)
+        ? ExecutableSkillRegistryFindingCode.InvalidManifest
+        : ExecutableSkillRegistryFindingCode.UnsafeFile;
+    const finding: ExecutableSkillRegistryFinding = {
+      code,
+      skillId: request.registration.skillId,
+      message: `Executable skill closure audit failed: ${message}`,
+    };
+    return [finding];
+  }
 }
 
-type AuditBoundFileRequest = {
+async function discoverManifestPaths(
+  request: AuditExecutableSkillRegistryRequest,
+): Promise<readonly string[]> {
+  const glob = new Bun.Glob('.agents/skills/*/executable-skill.json');
+  const scanOptions = {
+    cwd: request.repositoryRoot,
+    dot: true,
+    onlyFiles: true,
+  } as const;
+  const paths: string[] = [];
+  for await (const manifestPath of glob.scan(scanOptions)) {
+    assertRegistryActive(request);
+    paths.push(manifestPath);
+    if (paths.length > 32) {
+      throw new Error('Executable skill manifest count exceeds its bound.');
+    }
+  }
+  return paths.sort();
+}
+
+type AuditBoundFileRequest = AuditExecutableSkillRegistryRequest & {
   readonly relativePath: string;
-  readonly repositoryRoot: string;
   readonly skillId: string;
 };
 
-function auditBoundFile(
+async function isBoundFileSafe(
   request: AuditBoundFileRequest,
-): readonly ExecutableSkillRegistryFinding[] {
-  const absolutePath = path.join(request.repositoryRoot, request.relativePath);
+): Promise<boolean> {
   try {
-    const resolvedRoot = `${realpathSync(request.repositoryRoot)}${path.sep}`;
-    const resolvedPath = realpathSync(absolutePath);
-    const stat = lstatSync(absolutePath);
+    assertRegistryActive(request);
+    const absolutePath = path.join(
+      request.repositoryRoot,
+      request.relativePath,
+    );
+    const resolvedRoot = `${await realpath(request.repositoryRoot)}${path.sep}`;
+    const resolvedPath = await realpath(absolutePath);
+    const stat = await lstat(absolutePath);
     if (
       !resolvedPath.startsWith(resolvedRoot) ||
       stat.isSymbolicLink() ||
-      !stat.isFile() ||
-      !isRepositoryOwnedFile(request)
+      !stat.isFile()
     ) {
-      throw new Error('unsafe executable-skill file');
+      return false;
     }
-    return [];
-  } catch {
-    const unsafeFileFinding: ExecutableSkillRegistryFinding = {
-      code: ExecutableSkillRegistryFindingCode.UnsafeFile,
-      skillId: request.skillId,
-      message:
-        'Registered executable skill path is not a regular repository-owned file: ' +
-        request.relativePath,
+    const gitRequest: RunRegistryGitRequest = {
+      arguments: ['ls-files', '--error-unmatch', '--', request.relativePath],
+      deadlineExpiresAt: request.deadlineExpiresAt,
+      repositoryRoot: request.repositoryRoot,
+      signal: request.signal,
     };
-    return [registryFinding(unsafeFileFinding)];
+    return (await runRegistryGit(gitRequest)).trim() === request.relativePath;
+  } catch {
+    assertRegistryActive(request);
+    return false;
   }
 }
 
-function isRepositoryOwnedFile(request: AuditBoundFileRequest): boolean {
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: request.repositoryRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'ignore'],
+function unsafeBoundFileFinding(
+  request: AuditBoundFileRequest,
+): ExecutableSkillRegistryFinding {
+  return {
+    code: ExecutableSkillRegistryFindingCode.UnsafeFile,
+    skillId: request.skillId,
+    message: `Executable skill policy is not a tracked regular file: ${request.relativePath}`,
   };
-  const args = ['ls-files', '--error-unmatch', '--', request.relativePath];
-  const output = execFileSync('git', args, options);
-  return output.trim() === request.relativePath;
 }
 
-type AuditSkillSourceRequest = {
-  readonly repositoryRoot: string;
-  readonly skillId: string;
+function unsafeRegistryRootFinding(): ExecutableSkillRegistryFinding {
+  return {
+    code: ExecutableSkillRegistryFindingCode.UnsafeFile,
+    skillId: 'registry',
+    message: 'Executable skill repository root is unsafe or audit expired.',
+  };
+}
+
+function assertRegistryActive(
+  request: AuditExecutableSkillRegistryRequest,
+): void {
+  if (request.signal !== false && request.signal.aborted) {
+    throw new Error('Executable skill registry audit was cancelled.');
+  }
+  if (Date.now() >= request.deadlineExpiresAt) {
+    throw new Error('Executable skill registry audit deadline expired.');
+  }
+}
+
+type RunRegistryGitRequest = AuditExecutableSkillRegistryRequest & {
+  readonly arguments: readonly string[];
 };
 
-function auditSkillSource(
-  request: AuditSkillSourceRequest,
-): readonly ExecutableSkillRegistryFinding[] {
-  const sourceRoot = path.join(
-    request.repositoryRoot,
-    '.agents',
-    'skills',
-    request.skillId,
-    'src',
-  );
-  const findings: ExecutableSkillRegistryFinding[] = [];
-  let sourceNames: string[];
+async function runRegistryGit(request: RunRegistryGitRequest): Promise<string> {
+  assertRegistryActive(request);
+  const options = {
+    cwd: request.repositoryRoot,
+    env: { PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin' },
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  } as const;
+  const subprocess = Bun.spawn(['git', ...request.arguments], options);
+  const output = readRegistryStream(subprocess.stdout);
+  const errors = readRegistryStream(subprocess.stderr);
+  const interruption = waitForRegistryInterruption(request);
   try {
-    sourceNames = readdirSync(sourceRoot).sort();
-  } catch {
-    const missingSourceFinding: ExecutableSkillRegistryFinding = {
-      code: ExecutableSkillRegistryFindingCode.UnsafeFile,
-      skillId: request.skillId,
-      message: 'Executable skill source directory is missing or unreadable.',
-    };
-    return [registryFinding(missingSourceFinding)];
-  }
-  for (const name of sourceNames) {
-    if (!name.endsWith('.ts')) continue;
-    const relativePath = path.posix.join(
-      '.agents',
-      'skills',
-      request.skillId,
-      'src',
-      name,
-    );
-    const fileRequest: AuditBoundFileRequest = {
-      relativePath,
-      repositoryRoot: request.repositoryRoot,
-      skillId: request.skillId,
-    };
-    const fileFindings = auditBoundFile(fileRequest);
-    findings.push(...fileFindings);
-    if (fileFindings.length > 0) continue;
-    let source: string;
-    try {
-      source = readFileSync(path.join(sourceRoot, name), 'utf8');
-    } catch {
-      const unreadableFinding: ExecutableSkillRegistryFinding = {
-        code: ExecutableSkillRegistryFindingCode.UnsafeFile,
-        skillId: request.skillId,
-        message: `Executable skill source is not a readable regular file: src/${name}`,
-      };
-      findings.push(registryFinding(unreadableFinding));
-      continue;
+    const completion = subprocess.exited.then((exitCode) => ({ exitCode }));
+    const first = await Promise.race([completion, interruption.promise]);
+    if (first === 'interrupted') {
+      subprocess.kill(9);
+      await subprocess.exited;
+      await Promise.allSettled([output, errors]);
+      throw new Error('Executable skill registry audit was interrupted.');
     }
-    if (!FORBIDDEN_SOURCE_PATTERNS.some((pattern) => pattern.test(source))) {
-      continue;
+    const stdout = await output;
+    const stderr = await errors;
+    if (first.exitCode !== 0) {
+      throw new Error(stderr || 'Executable skill registry Git audit failed.');
     }
-    const capabilityFinding: ExecutableSkillRegistryFinding = {
-      code: ExecutableSkillRegistryFindingCode.UnsafeCapability,
-      skillId: request.skillId,
-      message:
-        'Executable skill source requests a forbidden ambient capability: ' +
-        `src/${name}`,
-    };
-    findings.push(registryFinding(capabilityFinding));
+    return stdout;
+  } finally {
+    interruption.dispose();
+    if (typeof subprocess.exitCode !== 'number') subprocess.kill(9);
+    await subprocess.exited;
   }
-  return findings;
 }
 
-function isFilesystemEntry(filePath: string): boolean {
+type RegistryInterruption = {
+  readonly dispose: () => void;
+  readonly promise: Promise<'interrupted'>;
+};
+
+function waitForRegistryInterruption(
+  request: AuditExecutableSkillRegistryRequest,
+): RegistryInterruption {
+  let listener: (() => void) | false = false;
+  let timer: ReturnType<typeof setTimeout> | false = false;
+  const promise = new Promise<'interrupted'>((resolve) => {
+    const remaining = Math.max(0, request.deadlineExpiresAt - Date.now());
+    timer = setTimeout(resolve, remaining, 'interrupted');
+    if (request.signal !== false) {
+      if (request.signal.aborted) {
+        resolve('interrupted');
+        return;
+      }
+      listener = () => resolve('interrupted');
+      request.signal.addEventListener('abort', listener);
+    }
+  });
+  return {
+    promise,
+    dispose: () => {
+      if (timer !== false) clearTimeout(timer);
+      if (request.signal !== false && listener !== false) {
+        request.signal.removeEventListener('abort', listener);
+      }
+    },
+  };
+}
+
+async function readRegistryStream(
+  stream: ReadableStream<Uint8Array>,
+): Promise<string> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let output = '';
   try {
-    lstatSync(filePath);
-    return true;
-  } catch {
-    return false;
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > 16 * 1024) {
+        await reader.cancel();
+        throw new Error(
+          'Executable skill registry Git output exceeded its bound.',
+        );
+      }
+      const decodeOptions = { stream: true } as const;
+      output += decoder.decode(chunk.value, decodeOptions);
+    }
+    return output + decoder.decode();
+  } finally {
+    reader.releaseLock();
   }
 }
 

@@ -28,6 +28,12 @@ import type {
 } from './runtime.ts';
 import type { TaskStopRequest } from './runtime.ts';
 import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from './structured-result-codec.ts';
+import { ExecutableSkillTeardownError } from '../executable-skills/runtime.ts';
+
+enum LeafStopCompletionKind {
+  Settled = 'settled',
+  Unconfirmed = 'unconfirmed',
+}
 
 export class LocalWorkflowTaskRuntime<
   TTask extends string,
@@ -53,15 +59,23 @@ export class LocalWorkflowTaskRuntime<
             request.hardDeadlineMs,
           );
         });
-        const settled = await Promise.race([
+        const outcome = await Promise.race([
           completion.then(
-            () => true,
-            () => true,
+            () => LeafStopCompletionKind.Settled,
+            (error) =>
+              error instanceof ExecutableSkillTeardownError
+                ? LeafStopCompletionKind.Unconfirmed
+                : LeafStopCompletionKind.Settled,
           ),
           deadline,
         ]);
         if (timeoutHandle) clearTimeout(timeoutHandle);
-        if (!settled) throw new UnconfirmedTaskTeardownError(invocation.task);
+        if (
+          outcome === false ||
+          outcome === LeafStopCompletionKind.Unconfirmed
+        ) {
+          throw new UnconfirmedTaskTeardownError(invocation.task);
+        }
         return { kind: TaskTeardownKind.Confirmed };
       },
     };
@@ -134,6 +148,7 @@ async function executeLeaf<TTask extends string, TAgent extends string>(
   };
   const cortexAuditArgs: RunCortexAuditFromDirectoryArgs = {
     request: cortexAuditInput,
+    signal: invocation.signal,
     startDirectory: invocation.workingDirectory,
   };
   const report = await runCortexAuditFromDirectory(cortexAuditArgs);

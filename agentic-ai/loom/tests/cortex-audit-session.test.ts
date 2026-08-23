@@ -58,7 +58,11 @@ test('returns precise registry findings without launching an invalid capability'
     execFileSync('git', ['init', '--quiet'], gitOptions);
 
     const request: CortexAuditRequest = { includeDensityLint: false };
-    const auditArgs = { request, startDirectory: repositoryRoot };
+    const auditArgs = {
+      request,
+      signal: false,
+      startDirectory: repositoryRoot,
+    } as const;
     const report = await runCortexAuditFromDirectory(auditArgs);
 
     expect(report.auditOk).toBe(false);

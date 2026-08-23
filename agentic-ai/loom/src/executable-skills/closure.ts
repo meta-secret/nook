@@ -1,19 +1,14 @@
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
-import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
-import {
-  lstatSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-  mkdirSync,
-} from 'node:fs';
+import { lstatSync, readFileSync, rmSync } from 'node:fs';
+import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import ts from 'typescript';
 import type { RegisteredExecutableSkill } from './domain.ts';
 import { decodeExecutableSkillManifest } from './manifest-codec.ts';
+import {
+  analyzeExecutableSkillSource,
+  type AnalyzeExecutableSkillSourceRequest,
+} from './source-policy.ts';
 
 export type MaterializedSkillClosure = {
   readonly closureSha256: string;
@@ -25,7 +20,9 @@ export type MaterializedSkillClosure = {
 
 export type MaterializeSkillClosureRequest = {
   readonly definition: RegisteredExecutableSkill;
+  readonly deadlineExpiresAt: number;
   readonly repositoryRoot: string;
+  readonly signal: AbortSignal | false;
 };
 
 type MaterializeSkillClosureInternalRequest = MaterializeSkillClosureRequest & {
@@ -47,37 +44,18 @@ const LOCK_PATH = '.agents/skills/bun.lock';
 const TREE_HASH = /^[0-9a-f]{40}$/u;
 const DIRECTORY_OPTIONS = { recursive: true } as const;
 const REMOVE_OPTIONS = { recursive: true, force: true } as const;
-const FORBIDDEN_NODE_MODULES = new Set([
-  'child_process',
-  'cluster',
-  'dgram',
-  'dns',
-  'fs',
-  'http',
-  'https',
-  'net',
-  'tls',
-  'worker_threads',
-]);
-const FORBIDDEN_BUN_MEMBERS = new Set([
-  'env',
-  'file',
-  'serve',
-  'spawn',
-  'spawnSync',
-]);
-const FORBIDDEN_PROCESS_MEMBERS = new Set([
-  'chdir',
-  'cwd',
-  'env',
-  'execArgv',
-  'getBuiltinModule',
-  'kill',
-]);
+const executableSkillClosureLimits = {
+  bytes: 8 * 1024 * 1024,
+  edges: 256,
+  files: 128,
+};
+export const EXECUTABLE_SKILL_CLOSURE_LIMITS = Object.freeze(
+  executableSkillClosureLimits,
+);
 
-export function materializeSkillClosure(
+export async function materializeSkillClosure(
   request: MaterializeSkillClosureRequest,
-): MaterializedSkillClosure {
+): Promise<MaterializedSkillClosure> {
   const internalRequest: MaterializeSkillClosureInternalRequest = {
     ...request,
     auditCapabilities: true,
@@ -85,9 +63,9 @@ export function materializeSkillClosure(
   return materializeSkillClosureInternal(internalRequest);
 }
 
-export function materializeSkillAcceptanceProbeClosure(
+export async function materializeSkillAcceptanceProbeClosure(
   request: MaterializeSkillClosureRequest,
-): MaterializedSkillClosure {
+): Promise<MaterializedSkillClosure> {
   const internalRequest: MaterializeSkillClosureInternalRequest = {
     ...request,
     auditCapabilities: false,
@@ -95,14 +73,18 @@ export function materializeSkillAcceptanceProbeClosure(
   return materializeSkillClosureInternal(internalRequest);
 }
 
-function materializeSkillClosureInternal(
+async function materializeSkillClosureInternal(
   request: MaterializeSkillClosureInternalRequest,
-): MaterializedSkillClosure {
-  const sourceTree = writeIndexTree(request.repositoryRoot);
+): Promise<MaterializedSkillClosure> {
+  assertClosureActive(request);
+  const sourceTree = await writeIndexTree(request);
   const pending = [request.definition.runnerPath];
   const sources = new Map<string, string>();
   const externalPackages = new Set<string>();
+  let aggregateBytes = 0;
+  let importEdges = 0;
   while (pending.length > 0) {
+    assertClosureActive(request);
     const relativePath = pending.pop();
     if (typeof relativePath !== 'string' || sources.has(relativePath)) continue;
     const sourcePathRequest: AssertSkillSourcePathRequest = {
@@ -116,16 +98,34 @@ function materializeSkillClosureInternal(
       repositoryRoot: request.repositoryRoot,
       sourceTree,
     };
-    const source = readTreeFile(treeFileRequest);
-    assertWorktreeMatches(treeFileRequest);
+    const closureFileRequest: ReadClosureFileRequest = {
+      ...treeFileRequest,
+      deadlineExpiresAt: request.deadlineExpiresAt,
+      signal: request.signal,
+    };
+    const source = await readTreeFile(closureFileRequest);
+    await assertWorktreeMatches(closureFileRequest);
+    assertClosureFileCount(sources.size + 1);
+    const sourceBytesRequest: BoundedClosureBytesRequest = {
+      current: aggregateBytes,
+      content: source,
+    };
+    aggregateBytes = boundedClosureBytes(sourceBytesRequest);
     sources.set(relativePath, source);
-    const moduleSpecifiersRequest: ModuleSpecifiersRequest = {
+    const sourceAnalysisRequest: AnalyzeExecutableSkillSourceRequest = {
       auditCapabilities: request.auditCapabilities,
       relativePath,
       source,
     };
-    const imports = moduleSpecifiers(moduleSpecifiersRequest);
+    const analysis = analyzeExecutableSkillSource(sourceAnalysisRequest);
+    const imports = analysis.moduleSpecifiers;
     for (const specifier of imports) {
+      importEdges += 1;
+      if (importEdges > EXECUTABLE_SKILL_CLOSURE_LIMITS.edges) {
+        throw new Error(
+          'Executable skill closure exceeds its import edge limit.',
+        );
+      }
       if (!specifier.startsWith('.')) {
         if (!specifier.startsWith('node:')) {
           externalPackages.add(packageName(specifier));
@@ -144,19 +144,50 @@ function materializeSkillClosureInternal(
     repositoryRoot: request.repositoryRoot,
     sourceTree,
   };
-  const packageText = readClosureMetadata(packageRequest);
+  const packageFileRequest: ReadClosureFileRequest = {
+    ...packageRequest,
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    signal: request.signal,
+  };
+  const packageText = await readClosureMetadata(packageFileRequest);
   const lockRequest: ReadTreeFileRequest = {
     relativePath: LOCK_PATH,
     repositoryRoot: request.repositoryRoot,
     sourceTree,
   };
-  const lockText = readClosureMetadata(lockRequest);
+  const lockFileRequest: ReadClosureFileRequest = {
+    ...lockRequest,
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    signal: request.signal,
+  };
+  const lockText = await readClosureMetadata(lockFileRequest);
   const manifestRequest: ReadTreeFileRequest = {
     relativePath: request.definition.manifestPath,
     repositoryRoot: request.repositoryRoot,
     sourceTree,
   };
-  const manifestText = readClosureMetadata(manifestRequest);
+  const manifestFileRequest: ReadClosureFileRequest = {
+    ...manifestRequest,
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    signal: request.signal,
+  };
+  const manifestText = await readClosureMetadata(manifestFileRequest);
+  assertClosureFileCount(sources.size + 3);
+  const packageBytesRequest: BoundedClosureBytesRequest = {
+    current: aggregateBytes,
+    content: packageText,
+  };
+  aggregateBytes = boundedClosureBytes(packageBytesRequest);
+  const lockBytesRequest: BoundedClosureBytesRequest = {
+    current: aggregateBytes,
+    content: lockText,
+  };
+  aggregateBytes = boundedClosureBytes(lockBytesRequest);
+  const manifestBytesRequest: BoundedClosureBytesRequest = {
+    current: aggregateBytes,
+    content: manifestText,
+  };
+  boundedClosureBytes(manifestBytesRequest);
   const frozenManifest = decodeExecutableSkillManifest(manifestText);
   if (
     JSON.stringify(frozenManifest) !==
@@ -176,197 +207,70 @@ function materializeSkillClosureInternal(
   closureFiles.set(LOCK_PATH, lockText);
   closureFiles.set(request.definition.manifestPath, manifestText);
   const closureSha256 = closureDigest(closureFiles);
-  const contextDirectory = mkdtempSync(
+  const contextDirectory = await mkdtemp(
     path.join(tmpdir(), 'nook-skill-closure-'),
   );
-  for (const [relativePath, content] of closureFiles) {
-    const contextPath = contextRelativePath(relativePath);
-    const absolutePath = path.join(contextDirectory, contextPath);
-    mkdirSync(path.dirname(absolutePath), DIRECTORY_OPTIONS);
-    writeFileSync(absolutePath, content, 'utf8');
+  try {
+    for (const [relativePath, content] of closureFiles) {
+      assertClosureActive(request);
+      const contextPath = contextRelativePath(relativePath);
+      const absolutePath = path.join(contextDirectory, contextPath);
+      await mkdir(path.dirname(absolutePath), DIRECTORY_OPTIONS);
+      await writeFile(absolutePath, content, 'utf8');
+    }
+    const runnerImagePath = `/skills/${contextRelativePath(
+      request.definition.runnerPath,
+    )}`;
+    return {
+      closureSha256,
+      contextDirectory,
+      runnerImagePath,
+      sourceTree,
+      dispose: () => rmSync(contextDirectory, REMOVE_OPTIONS),
+    };
+  } catch (error) {
+    rmSync(contextDirectory, REMOVE_OPTIONS);
+    throw error;
   }
-  const runnerImagePath = `/skills/${contextRelativePath(
-    request.definition.runnerPath,
-  )}`;
-  return {
-    closureSha256,
-    contextDirectory,
-    runnerImagePath,
-    sourceTree,
-    dispose: () => rmSync(contextDirectory, REMOVE_OPTIONS),
+}
+
+async function writeIndexTree(
+  request: MaterializeSkillClosureInternalRequest,
+): Promise<string> {
+  const gitRequest: RunClosureGitRequest = {
+    arguments: ['write-tree'],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    maximumBytes: 1024,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
   };
-}
-
-type ModuleSpecifiersRequest = {
-  readonly auditCapabilities: boolean;
-  readonly relativePath: string;
-  readonly source: string;
-};
-
-function moduleSpecifiers(request: ModuleSpecifiersRequest): readonly string[] {
-  const sourceFile = ts.createSourceFile(
-    request.relativePath,
-    request.source,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const specifiers: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (request.auditCapabilities) assertNoForbiddenCapability(node);
-    if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === 'require'))
-    ) {
-      throw new Error(
-        'Executable skill closure forbids dynamic module loading.',
-      );
-    }
-    if (
-      ts.isImportDeclaration(node) &&
-      !isTypeOnlyImport(node) &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      specifiers.push(node.moduleSpecifier.text);
-    }
-    if (
-      ts.isExportDeclaration(node) &&
-      !node.isTypeOnly &&
-      node.moduleSpecifier &&
-      ts.isStringLiteral(node.moduleSpecifier)
-    ) {
-      specifiers.push(node.moduleSpecifier.text);
-    }
-    if (
-      ts.isImportEqualsDeclaration(node) &&
-      !node.isTypeOnly &&
-      ts.isExternalModuleReference(node.moduleReference) &&
-      node.moduleReference.expression &&
-      ts.isStringLiteral(node.moduleReference.expression)
-    ) {
-      specifiers.push(node.moduleReference.expression.text);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  for (const specifier of specifiers) {
-    if (request.auditCapabilities && isForbiddenNodeModule(specifier)) {
-      throw new Error(
-        `Executable skill closure forbids ambient module: ${specifier}`,
-      );
-    }
-  }
-  return specifiers;
-}
-
-function assertNoForbiddenCapability(node: ts.Node): void {
-  if (
-    (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
-    ts.isIdentifier(node.expression) &&
-    (node.expression.text === 'fetch' || node.expression.text === 'WebSocket')
-  ) {
-    throw new Error('Executable skill closure forbids ambient network APIs.');
-  }
-  if (!ts.isPropertyAccessExpression(node)) return;
-  if (
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'Bun' &&
-    FORBIDDEN_BUN_MEMBERS.has(node.name.text)
-  ) {
-    throw new Error('Executable skill closure forbids ambient Bun APIs.');
-  }
-  if (
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'process' &&
-    FORBIDDEN_PROCESS_MEMBERS.has(node.name.text)
-  ) {
-    throw new Error('Executable skill closure forbids ambient process APIs.');
-  }
-  if (
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'globalThis' &&
-    (node.name.text === 'fetch' ||
-      node.name.text === 'WebSocket' ||
-      node.name.text === 'process')
-  ) {
-    throw new Error('Executable skill closure forbids ambient global APIs.');
-  }
-  if (
-    node.name.text === 'write' &&
-    ts.isIdentifier(node.expression) &&
-    node.expression.text === 'Bun' &&
-    !isBunOutputWrite(node.parent)
-  ) {
-    throw new Error('Executable skill closure forbids filesystem writes.');
-  }
-}
-
-function isBunOutputWrite(node: ts.Node): boolean {
-  if (!ts.isCallExpression(node)) return false;
-  const destination = node.arguments[0];
-  return Boolean(
-    destination &&
-    ts.isPropertyAccessExpression(destination) &&
-    ts.isIdentifier(destination.expression) &&
-    destination.expression.text === 'Bun' &&
-    (destination.name.text === 'stdout' || destination.name.text === 'stderr'),
-  );
-}
-
-function isForbiddenNodeModule(specifier: string): boolean {
-  if (!specifier.startsWith('node:')) return false;
-  const moduleName = specifier.slice('node:'.length).split('/')[0];
-  return (
-    typeof moduleName === 'string' && FORBIDDEN_NODE_MODULES.has(moduleName)
-  );
-}
-
-function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
-  const clause = node.importClause;
-  if (!clause) return false;
-  if (clause.isTypeOnly) return true;
-  if (clause.name || !clause.namedBindings) return false;
-  return (
-    ts.isNamedImports(clause.namedBindings) &&
-    clause.namedBindings.elements.length > 0 &&
-    clause.namedBindings.elements.every((element) => element.isTypeOnly)
-  );
-}
-
-function writeIndexTree(repositoryRoot: string): string {
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: repositoryRoot,
-    encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
-  };
-  const tree = execFileSync('git', ['write-tree'], options).trim();
+  const tree = (await runClosureGit(gitRequest)).trim();
   if (!TREE_HASH.test(tree)) {
     throw new Error('Executable skill source tree could not be frozen.');
   }
   return tree;
 }
 
-function readClosureMetadata(request: ReadTreeFileRequest): string {
-  const content = readTreeFile(request);
-  assertWorktreeMatches(request);
+type ReadClosureFileRequest = ReadTreeFileRequest & ClosureActivity;
+
+async function readClosureMetadata(
+  request: ReadClosureFileRequest,
+): Promise<string> {
+  const content = await readTreeFile(request);
+  await assertWorktreeMatches(request);
   return content;
 }
 
-function readTreeFile(request: ReadTreeFileRequest): string {
-  const options: ExecFileSyncOptionsWithStringEncoding = {
-    cwd: request.repositoryRoot,
-    encoding: 'utf8',
-    maxBuffer: 32 * 1024 * 1024,
-    stdio: ['ignore', 'pipe', 'pipe'],
+async function readTreeFile(request: ReadClosureFileRequest): Promise<string> {
+  const gitRequest: RunClosureGitRequest = {
+    arguments: ['show', `${request.sourceTree}:${request.relativePath}`],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    maximumBytes: EXECUTABLE_SKILL_CLOSURE_LIMITS.bytes + 1,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
   };
   try {
-    return execFileSync(
-      'git',
-      ['show', `${request.sourceTree}:${request.relativePath}`],
-      options,
-    );
+    return await runClosureGit(gitRequest);
   } catch {
     throw new Error(
       `Executable skill closure file is absent from the frozen index: ${request.relativePath}`,
@@ -374,8 +278,11 @@ function readTreeFile(request: ReadTreeFileRequest): string {
   }
 }
 
-function assertWorktreeMatches(request: ReadTreeFileRequest): void {
-  const indexed = readTreeFile(request);
+async function assertWorktreeMatches(
+  request: ReadClosureFileRequest,
+): Promise<void> {
+  const indexed = await readTreeFile(request);
+  assertClosureActive(request);
   const absolutePath = path.join(request.repositoryRoot, request.relativePath);
   const stat = lstatSync(absolutePath);
   if (
@@ -386,6 +293,169 @@ function assertWorktreeMatches(request: ReadTreeFileRequest): void {
     throw new Error(
       `Executable skill closure has worktree/index drift: ${request.relativePath}`,
     );
+  }
+}
+
+function assertClosureFileCount(count: number): void {
+  if (count > EXECUTABLE_SKILL_CLOSURE_LIMITS.files) {
+    throw new Error('Executable skill closure exceeds its file count limit.');
+  }
+}
+
+type BoundedClosureBytesRequest = {
+  readonly content: string;
+  readonly current: number;
+};
+
+function boundedClosureBytes(request: BoundedClosureBytesRequest): number {
+  const total = request.current + Buffer.byteLength(request.content, 'utf8');
+  if (total > EXECUTABLE_SKILL_CLOSURE_LIMITS.bytes) {
+    throw new Error(
+      'Executable skill closure exceeds its aggregate byte limit.',
+    );
+  }
+  return total;
+}
+
+type ClosureActivity = {
+  readonly deadlineExpiresAt: number;
+  readonly signal: AbortSignal | false;
+};
+
+function assertClosureActive(request: ClosureActivity): void {
+  if (request.signal !== false && request.signal.aborted) {
+    throw new Error('Executable skill lifecycle was cancelled.');
+  }
+  if (Date.now() >= request.deadlineExpiresAt) {
+    throw new Error('Executable skill closure lifecycle deadline expired.');
+  }
+}
+
+type RunClosureGitRequest = ClosureActivity & {
+  readonly arguments: readonly string[];
+  readonly maximumBytes: number;
+  readonly repositoryRoot: string;
+};
+
+type ClosureInterruption = {
+  readonly interrupted: string;
+};
+
+type ClosureInterruptionWait = {
+  readonly dispose: () => void;
+  readonly promise: Promise<ClosureInterruption>;
+};
+
+async function runClosureGit(request: RunClosureGitRequest): Promise<string> {
+  assertClosureActive(request);
+  const options = {
+    cwd: request.repositoryRoot,
+    env: { PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin' },
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe',
+  } as const;
+  const subprocess = Bun.spawn(['git', ...request.arguments], options);
+  const outputRequest: ReadGitStreamRequest = {
+    maximumBytes: request.maximumBytes,
+    stream: subprocess.stdout,
+  };
+  const errorRequest: ReadGitStreamRequest = {
+    maximumBytes: 32 * 1024,
+    stream: subprocess.stderr,
+  };
+  const output = readGitStream(outputRequest);
+  const error = readGitStream(errorRequest);
+  const completion = subprocess.exited.then((exitCode) => ({ exitCode }));
+  const interruption = waitForClosureInterruption(request);
+  try {
+    const first = await Promise.race([completion, interruption.promise]);
+    if ('interrupted' in first) {
+      subprocess.kill(9);
+      await subprocess.exited;
+      throw new Error(first.interrupted);
+    }
+    const stdout = await output;
+    const stderr = await error;
+    if (first.exitCode !== 0) {
+      throw new Error(stderr || 'Executable skill Git traversal failed.');
+    }
+    return stdout;
+  } finally {
+    interruption.dispose();
+    if (typeof subprocess.exitCode !== 'number') subprocess.kill(9);
+    await subprocess.exited;
+  }
+}
+
+function waitForClosureInterruption(
+  request: ClosureActivity,
+): ClosureInterruptionWait {
+  let abortListener: (() => void) | false = false;
+  let timer: ReturnType<typeof setTimeout> | false = false;
+  const promise = new Promise<ClosureInterruption>((resolve) => {
+    const remaining = Math.max(0, request.deadlineExpiresAt - Date.now());
+    timer = setTimeout(() => {
+      const interruption: ClosureInterruption = {
+        interrupted: 'Executable skill closure lifecycle deadline expired.',
+      };
+      resolve(interruption);
+    }, remaining);
+    if (request.signal !== false) {
+      if (request.signal.aborted) {
+        const interruption: ClosureInterruption = {
+          interrupted: 'Executable skill lifecycle was cancelled.',
+        };
+        resolve(interruption);
+        return;
+      }
+      abortListener = () => {
+        const interruption: ClosureInterruption = {
+          interrupted: 'Executable skill lifecycle was cancelled.',
+        };
+        resolve(interruption);
+      };
+      request.signal.addEventListener('abort', abortListener);
+    }
+  });
+  return {
+    promise,
+    dispose: () => {
+      if (timer !== false) clearTimeout(timer);
+      if (request.signal !== false && abortListener !== false) {
+        request.signal.removeEventListener('abort', abortListener);
+      }
+    },
+  };
+}
+
+type ReadGitStreamRequest = {
+  readonly maximumBytes: number;
+  readonly stream: ReadableStream<Uint8Array>;
+};
+
+async function readGitStream(request: ReadGitStreamRequest): Promise<string> {
+  const reader = request.stream.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let output = '';
+  try {
+    while (true) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      bytes += chunk.value.byteLength;
+      if (bytes > request.maximumBytes) {
+        await reader.cancel();
+        throw new Error(
+          'Executable skill Git traversal output exceeded its bound.',
+        );
+      }
+      const decodeOptions = { stream: true } as const;
+      output += decoder.decode(chunk.value, decodeOptions);
+    }
+    return output + decoder.decode();
+  } finally {
+    reader.releaseLock();
   }
 }
 

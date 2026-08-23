@@ -1,45 +1,65 @@
-import { createHash, randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
-import { findRepoRoot } from '../lib/repo.ts';
 import {
-  ExecutableSkillHostResultContract,
-  ExecutableSkillPayloadKind,
-} from './domain.ts';
+  readBoundedExecutableSkillStream,
+  type BoundedExecutableSkillStreamRead,
+  type ReadBoundedExecutableSkillStreamRequest,
+} from './bounded-stream.ts';
+import { ExecutableSkillPayloadKind } from './domain.ts';
 import type {
-  ExecuteRegisteredSkillRequest,
   RegisteredExecutableSkill,
   VerifiedExecutableSkillExecution,
 } from './domain.ts';
-import { decodeExecutableSkillManifest } from './manifest-codec.ts';
 import {
-  auditExecutableSkillRegistry,
   EXECUTABLE_SKILL_REGISTRY,
+  resolveAuditedExecutableSkillRepository,
   validateRegisteredExecutableSkillResult,
 } from './registry.ts';
-import type { ValidateRegisteredExecutableSkillResultRequest } from './registry.ts';
+import type {
+  AuditedExecutableSkillRegistry,
+  ValidateRegisteredExecutableSkillResultRequest,
+} from './registry.ts';
 import {
-  materializeSkillAcceptanceProbeClosure,
   materializeSkillClosure,
   type MaterializedSkillClosure,
 } from './closure.ts';
+import { resolveDockerControlEnvironment } from './docker-environment.ts';
+import {
+  assertExecutableSkillNotCancelled,
+  waitForExecutableSkillCancellation,
+} from './lifecycle-cancellation.ts';
+import {
+  assertExecutableSkillByteLimit,
+  boundedExecutableSkillStderr,
+  executableSkillSha256,
+  type AssertExecutableSkillByteLimitRequest,
+} from './payload-guards.ts';
+import {
+  ExecutableSkillCancellationError,
+  ExecutableSkillTeardownError,
+  ExecutableSkillTimeoutError,
+  type ExecutableSkillTimeoutErrorRequest,
+} from './runtime-errors.ts';
+export { resolveDockerControlEnvironment } from './docker-environment.ts';
+export {
+  ExecutableSkillCancellationError,
+  ExecutableSkillTeardownError,
+  ExecutableSkillTimeoutError,
+} from './runtime-errors.ts';
 
 type ExecuteSkillWithDefinitionRequest = ExecuteRegisteredSkillRequest & {
   readonly definition: RegisteredExecutableSkill;
+  readonly provisioningDeadline: DockerDeadline;
   readonly repositoryRoot: string;
 };
 
-type AssertByteLimitRequest = {
-  readonly value: string;
-  readonly maximumBytes: number;
-  readonly label: ExecutableSkillPayloadKind;
-};
-
-type RunDockerSkillRequest = {
+export type RunDockerSkillRequest = {
   readonly closure: MaterializedSkillClosure;
+  readonly deadline: DockerDeadline;
+  readonly image: SealedSkillImage;
   readonly resultBytes: number;
   readonly serializedRequest: string;
-  readonly timeoutMs: number;
+  readonly signal: AbortSignal | false;
 };
 
 type RunAttachedContainerRequest = {
@@ -47,10 +67,12 @@ type RunAttachedContainerRequest = {
   readonly deadline: DockerDeadline;
   readonly resultBytes: number;
   readonly serializedRequest: string;
+  readonly signal: AbortSignal | false;
   readonly containerName: string;
+  readonly provisionedImage: boolean;
 };
 
-type DockerSkillOutput = {
+export type DockerSkillOutput = {
   readonly exitCode: number;
   readonly stderr: string;
   readonly stdout: string;
@@ -65,6 +87,7 @@ type DockerControlOutput = {
 
 type SealedSkillImage = {
   readonly digest: string;
+  readonly provisioned: boolean;
   readonly reference: string;
 };
 
@@ -72,9 +95,11 @@ type DockerDeadline = {
   readonly expiresAt: number;
 };
 
-type EnsureSkillImageRequest = {
+export type EnsureSkillImageRequest = {
   readonly closure: MaterializedSkillClosure;
   readonly deadline: DockerDeadline;
+  readonly rebuild: boolean;
+  readonly signal: AbortSignal | false;
 };
 
 type RunDockerControlRequest = {
@@ -83,16 +108,7 @@ type RunDockerControlRequest = {
   readonly maximumStderrBytes: number;
   readonly maximumStdoutBytes: number;
   readonly stdin: string | false;
-};
-
-type ReadBoundedStreamRequest = {
-  readonly maximumBytes: number;
-  readonly stream: ReadableStream<Uint8Array>;
-};
-
-type BoundedStreamRead = {
-  readonly overflow: boolean;
-  readonly text: string;
+  readonly signal: AbortSignal | false;
 };
 
 const BUN_SKILL_IMAGE =
@@ -100,55 +116,25 @@ const BUN_SKILL_IMAGE =
 const CONTAINER_SKILLS_ROOT = '/skills';
 const SEALED_IMAGE_LABEL = 'nook.executable-skill-closure';
 const SEALED_RECIPE_LABEL = 'nook.executable-skill-recipe';
-const DOCKER_CONNECTION_ENVIRONMENT_KEYS = [
-  'DOCKER_CERT_PATH',
-  'DOCKER_CONFIG',
-  'DOCKER_CONTEXT',
-  'DOCKER_HOST',
-  'DOCKER_TLS',
-  'DOCKER_TLS_VERIFY',
-  'HOME',
-  'SSH_AUTH_SOCK',
-] as const;
-const BASE_DOCKER_CONTROL_ENVIRONMENT: Readonly<Record<string, string>> = {
-  NO_COLOR: '1',
-  PATH: '/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin',
+const CONTAINER_SOURCE_TREE_LABEL = 'nook.executable-skill-source-tree';
+export const PROVISIONING_TIMEOUT_MS = 180_000;
+const TEARDOWN_TIMEOUT_MS = 3_000;
+
+export type ExecuteRegisteredSkillRequest = {
+  readonly registryAuthority: AuditedExecutableSkillRegistry;
+  readonly serializedRequest: string;
+  readonly signal: AbortSignal | false;
+  readonly skillId: string;
 };
 
-export function resolveDockerControlEnvironment(): Readonly<
-  Record<string, string>
-> {
-  const environment: Record<string, string> = {
-    ...BASE_DOCKER_CONTROL_ENVIRONMENT,
-  };
-  for (const key of DOCKER_CONNECTION_ENVIRONMENT_KEYS) {
-    const value = Bun.env[key];
-    if (typeof value === 'string' && value.length > 0) {
-      environment[key] = value;
-    }
-  }
-  return Object.freeze(environment);
-}
-
-export enum ExecutableSkillAcceptanceProbe {
-  Containment = 'containment',
-  Overflow = 'overflow',
-  Timeout = 'timeout',
-}
-
-export type ExecutableSkillAcceptanceEvidence = {
-  readonly probe: ExecutableSkillAcceptanceProbe;
-  readonly serializedOutput: string;
-};
-
-async function ensureSkillImage(
+export async function ensureSkillImage(
   request: EnsureSkillImageRequest,
 ): Promise<SealedSkillImage> {
   const closure = request.closure;
   const recipe = skillDockerfile(closure.closureSha256);
-  const recipeSha256 = sha256(recipe);
+  const recipeSha256 = executableSkillSha256(recipe);
   const dockerfile = recipe.replace('RECIPE_SHA_PLACEHOLDER', recipeSha256);
-  const sealedIdentity = sha256(
+  const sealedIdentity = executableSkillSha256(
     `${closure.closureSha256}\n${recipeSha256}\n${BUN_SKILL_IMAGE}`,
   );
   const reference = `nook-executable-skill:${sealedIdentity}`;
@@ -157,9 +143,26 @@ async function ensureSkillImage(
     deadline: request.deadline,
     reference,
     recipeSha256,
+    signal: request.signal,
   };
-  const existing = await inspectSkillImage(inspectRequest);
-  if (existing !== false) return existing;
+  if (!request.rebuild) {
+    const existing = await inspectSkillImage(inspectRequest);
+    if (existing !== false) return existing;
+  }
+  if (request.rebuild) {
+    const removalRequest: RemoveSkillImageRequest = {
+      deadline: request.deadline,
+      reference,
+      signal: request.signal,
+    };
+    await removeSkillImage(removalRequest);
+    const remainingImage = await inspectSkillImage(inspectRequest);
+    if (remainingImage !== false) {
+      throw new Error(
+        'Executable skill sealed image removal was not confirmed.',
+      );
+    }
+  }
   const command = [
     'docker',
     'build',
@@ -173,19 +176,43 @@ async function ensureSkillImage(
   const buildRequest: RunDockerControlWithInputRequest = {
     command,
     deadline: request.deadline,
+    signal: request.signal,
     stdin: dockerfile,
   };
   const build = await runDockerControlWithInput(buildRequest);
   if (build.exitCode !== 0) {
     throw new Error(
-      `Executable skill sealed image build failed: ${boundedStderr(build.stderr)}`,
+      `Executable skill sealed image build failed: ${boundedExecutableSkillStderr(build.stderr)}`,
     );
   }
   const built = await inspectSkillImage(inspectRequest);
   if (built === false) {
     throw new Error('Executable skill sealed image identity is invalid.');
   }
-  return built;
+  return { ...built, provisioned: true };
+}
+
+type RemoveSkillImageRequest = {
+  readonly deadline: DockerDeadline;
+  readonly reference: string;
+  readonly signal: AbortSignal | false;
+};
+
+async function removeSkillImage(
+  request: RemoveSkillImageRequest,
+): Promise<void> {
+  const controlRequest: RunDockerControlRequest = {
+    command: ['docker', 'image', 'rm', '--force', request.reference],
+    deadline: request.deadline,
+    maximumStderrBytes: 32 * 1024,
+    maximumStdoutBytes: 32 * 1024,
+    signal: request.signal,
+    stdin: false,
+  };
+  const removal = await runDockerControl(controlRequest);
+  if (removal.exitCode !== 0 && !removal.stderr.includes('No such image')) {
+    throw new Error('Executable skill cold image removal failed.');
+  }
 }
 
 type InspectSkillImageRequest = {
@@ -193,6 +220,7 @@ type InspectSkillImageRequest = {
   readonly deadline: DockerDeadline;
   readonly recipeSha256: string;
   readonly reference: string;
+  readonly signal: AbortSignal | false;
 };
 
 async function inspectSkillImage(
@@ -214,6 +242,7 @@ async function inspectSkillImage(
     deadline: request.deadline,
     maximumStderrBytes: 32 * 1024,
     maximumStdoutBytes: 4096,
+    signal: request.signal,
     stdin: false,
   };
   const inspection = await runDockerControl(controlRequest);
@@ -230,7 +259,7 @@ async function inspectSkillImage(
   ) {
     return false;
   }
-  return { digest, reference: request.reference };
+  return { digest, provisioned: false, reference: request.reference };
 }
 
 function skillDockerfile(closureSha256: string): string {
@@ -247,26 +276,6 @@ function skillDockerfile(closureSha256: string): string {
   ].join('\n');
 }
 
-export class ExecutableSkillTimeoutError extends Error {
-  readonly containerName: string;
-
-  constructor(containerName: string) {
-    super('Executable skill timed out and its container was removed.');
-    this.name = 'ExecutableSkillTimeoutError';
-    this.containerName = containerName;
-  }
-}
-
-export class ExecutableSkillTeardownError extends Error {
-  readonly containerName: string;
-
-  constructor(containerName: string) {
-    super('Executable skill container teardown could not be confirmed.');
-    this.name = 'ExecutableSkillTeardownError';
-    this.containerName = containerName;
-  }
-}
-
 export async function executeRegisteredSkill(
   request: ExecuteRegisteredSkillRequest,
 ): Promise<VerifiedExecutableSkillExecution> {
@@ -274,15 +283,19 @@ export async function executeRegisteredSkill(
   if (!definition) {
     throw new Error(`Unregistered executable skill: ${request.skillId}`);
   }
-  const repositoryRoot = findRepoRoot();
-  const auditRequest = { repositoryRoot };
-  const auditFindings = auditExecutableSkillRegistry(auditRequest);
-  if (auditFindings.length > 0) {
-    throw new Error('Executable skill registry audit failed before execution.');
-  }
+  assertExecutableSkillNotCancelled(request.signal);
+  const provisioningDeadline = dockerDeadline(PROVISIONING_TIMEOUT_MS);
+  const repositoryRequest = {
+    authority: request.registryAuthority,
+    deadlineExpiresAt: provisioningDeadline.expiresAt,
+    signal: request.signal,
+  };
+  const repositoryRoot =
+    await resolveAuditedExecutableSkillRepository(repositoryRequest);
   const executionRequest: ExecuteSkillWithDefinitionRequest = {
     ...request,
     definition,
+    provisioningDeadline,
     repositoryRoot,
   };
   return executeSkillWithDefinition(executionRequest);
@@ -291,13 +304,7 @@ export async function executeRegisteredSkill(
 async function executeSkillWithDefinition(
   request: ExecuteSkillWithDefinitionRequest,
 ): Promise<VerifiedExecutableSkillExecution> {
-  const manifestPath = path.join(
-    request.repositoryRoot,
-    request.definition.manifestPath,
-  );
-  const manifest = decodeExecutableSkillManifest(
-    readFileSync(manifestPath, 'utf8'),
-  );
+  const manifest = request.definition.manifest;
   if (
     manifest.id !== request.skillId ||
     request.definition.skillId !== request.skillId ||
@@ -305,41 +312,54 @@ async function executeSkillWithDefinition(
   ) {
     throw new Error('Executable skill registration identity mismatch.');
   }
-  const requestLimit: AssertByteLimitRequest = {
+  const requestLimit: AssertExecutableSkillByteLimitRequest = {
     value: request.serializedRequest,
     maximumBytes: manifest.limits.requestBytes,
     label: ExecutableSkillPayloadKind.Request,
   };
-  assertByteLimit(requestLimit);
+  assertExecutableSkillByteLimit(requestLimit);
+  const provisioningDeadline = request.provisioningDeadline;
   const closureRequest = {
+    deadlineExpiresAt: provisioningDeadline.expiresAt,
     definition: request.definition,
     repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
   };
-  const closure = materializeSkillClosure(closureRequest);
-  const dockerRequest: RunDockerSkillRequest = {
-    closure,
-    resultBytes: manifest.limits.resultBytes,
-    serializedRequest: request.serializedRequest,
-    timeoutMs: manifest.limits.timeoutMs,
-  };
+  const closure = await materializeSkillClosure(closureRequest);
   let dockerOutput: DockerSkillOutput;
   try {
+    const imageRequest: EnsureSkillImageRequest = {
+      closure,
+      deadline: provisioningDeadline,
+      rebuild: false,
+      signal: request.signal,
+    };
+    const image = await ensureSkillImage(imageRequest);
+    assertExecutableSkillNotCancelled(request.signal);
+    const dockerRequest: RunDockerSkillRequest = {
+      closure,
+      deadline: dockerDeadline(manifest.limits.timeoutMs),
+      image,
+      resultBytes: manifest.limits.resultBytes,
+      serializedRequest: request.serializedRequest,
+      signal: request.signal,
+    };
     dockerOutput = await runDockerSkill(dockerRequest);
   } finally {
     closure.dispose();
   }
   if (dockerOutput.exitCode !== 0) {
     throw new Error(
-      `Executable skill container failed: ${boundedStderr(dockerOutput.stderr)}`,
+      `Executable skill container failed: ${boundedExecutableSkillStderr(dockerOutput.stderr)}`,
     );
   }
   const serializedResult = dockerOutput.stdout;
-  const resultLimit: AssertByteLimitRequest = {
+  const resultLimit: AssertExecutableSkillByteLimitRequest = {
     value: serializedResult,
     maximumBytes: manifest.limits.resultBytes,
     label: ExecutableSkillPayloadKind.Result,
   };
-  assertByteLimit(resultLimit);
+  assertExecutableSkillByteLimit(resultLimit);
   const resultContractRequest: ValidateRegisteredExecutableSkillResultRequest =
     {
       registration: request.definition,
@@ -354,8 +374,8 @@ async function executeSkillWithDefinition(
     requestKind: manifest.requestKind,
     resultContract: request.definition.resultContract,
     resultKind: manifest.resultKind,
-    requestSha256: sha256(request.serializedRequest),
-    resultSha256: sha256(serializedResult),
+    requestSha256: executableSkillSha256(request.serializedRequest),
+    resultSha256: executableSkillSha256(serializedResult),
     runtimeImageDigest: dockerOutput.runtimeImageDigest,
     serializedResult,
     sourceTree: closure.sourceTree,
@@ -363,62 +383,13 @@ async function executeSkillWithDefinition(
   return Object.freeze(execution);
 }
 
-export async function executeExecutableSkillAcceptanceProbe(
-  probe: ExecutableSkillAcceptanceProbe,
-): Promise<ExecutableSkillAcceptanceEvidence> {
-  const repositoryRoot = findRepoRoot();
-  const fixtureRoot = '.agents/skills/cortex-article-structure/tests/fixtures';
-  const manifestName =
-    probe === ExecutableSkillAcceptanceProbe.Timeout
-      ? 'timeout-manifest.json'
-      : 'containment-manifest.json';
-  const manifestPath = path.join(repositoryRoot, fixtureRoot, manifestName);
-  const manifest = decodeExecutableSkillManifest(
-    readFileSync(manifestPath, 'utf8'),
-  );
-  const definition: RegisteredExecutableSkill = {
-    skillId: 'cortex-article-structure',
-    manifest,
-    manifestPath: `${fixtureRoot}/${manifestName}`,
-    resultContract: ExecutableSkillHostResultContract.CortexArticleStructureV1,
-    runnerPath: `${fixtureRoot}/${probe}-runner.ts`,
-  };
-  const closureRequest = { definition, repositoryRoot };
-  const closure = materializeSkillAcceptanceProbeClosure(closureRequest);
-  const dockerRequest: RunDockerSkillRequest = {
-    closure,
-    resultBytes: manifest.limits.resultBytes,
-    serializedRequest: '{}',
-    timeoutMs: manifest.limits.timeoutMs,
-  };
-  let output: DockerSkillOutput;
-  try {
-    output = await runDockerSkill(dockerRequest);
-  } finally {
-    closure.dispose();
-  }
-  if (output.exitCode !== 0) {
-    throw new Error(
-      `Executable skill acceptance container failed: ${boundedStderr(output.stderr)}`,
-    );
-  }
-  const evidence: ExecutableSkillAcceptanceEvidence = {
-    probe,
-    serializedOutput: output.stdout,
-  };
-  return Object.freeze(evidence);
-}
-
-async function runDockerSkill(
+export async function runDockerSkill(
   request: RunDockerSkillRequest,
 ): Promise<DockerSkillOutput> {
   const containerName = `nook-skill-${randomUUID()}`;
-  const deadline = dockerDeadline(request.timeoutMs);
-  const imageRequest: EnsureSkillImageRequest = {
-    closure: request.closure,
-    deadline,
-  };
-  const image = await ensureSkillImage(imageRequest);
+  assertExecutableSkillNotCancelled(request.signal);
+  const deadline = request.deadline;
+  const image = request.image;
   const containerRunner = request.closure.runnerImagePath;
   const createCommand = [
     'docker',
@@ -426,6 +397,8 @@ async function runDockerSkill(
     '--interactive',
     '--name',
     containerName,
+    '--label',
+    `${CONTAINER_SOURCE_TREE_LABEL}=${request.closure.sourceTree}`,
     '--network',
     'none',
     '--read-only',
@@ -457,6 +430,7 @@ async function runDockerSkill(
     deadline,
     maximumStderrBytes: 32 * 1024,
     maximumStdoutBytes: 4096,
+    signal: request.signal,
     stdin: false,
   };
   let createResult: DockerControlOutput;
@@ -469,7 +443,7 @@ async function runDockerSkill(
   if (createResult.exitCode !== 0) {
     await confirmAbsentAfterAmbiguousCreate(containerName);
     throw new Error(
-      `Executable skill container creation failed: ${boundedStderr(createResult.stderr)}`,
+      `Executable skill container creation failed: ${boundedExecutableSkillStderr(createResult.stderr)}`,
     );
   }
   const command = [
@@ -483,22 +457,30 @@ async function runDockerSkill(
     command,
     containerName,
     deadline,
+    provisionedImage: image.provisioned,
     resultBytes: request.resultBytes,
     serializedRequest: request.serializedRequest,
+    signal: request.signal,
   };
-  let teardownConfirmed = false;
+  let attached: Omit<DockerSkillOutput, 'runtimeImageDigest'>;
   try {
-    const attached = await runAttachedContainer(attachedRequest);
+    attached = await runAttachedContainer(attachedRequest);
+  } catch (error) {
+    await forceRemoveWithRetry(containerName);
+    throw error;
+  }
+  await forceRemoveWithRetry(containerName);
+  return {
+    ...attached,
+    runtimeImageDigest: image.digest,
+  };
+}
+
+async function forceRemoveWithRetry(containerName: string): Promise<void> {
+  try {
     await forceRemoveAndConfirm(containerName);
-    teardownConfirmed = true;
-    return {
-      ...attached,
-      runtimeImageDigest: image.digest,
-    };
-  } finally {
-    if (!teardownConfirmed) {
-      await forceRemoveAndConfirm(containerName);
-    }
+  } catch {
+    await forceRemoveAndConfirm(containerName);
   }
 }
 
@@ -515,16 +497,16 @@ async function runAttachedContainer(
   const subprocess = Bun.spawn([...request.command], spawnOptions);
   subprocess.stdin.write(request.serializedRequest);
   subprocess.stdin.end();
-  const stdoutRequest: ReadBoundedStreamRequest = {
+  const stdoutRequest: ReadBoundedExecutableSkillStreamRequest = {
     maximumBytes: request.resultBytes,
     stream: subprocess.stdout,
   };
-  const stderrRequest: ReadBoundedStreamRequest = {
+  const stderrRequest: ReadBoundedExecutableSkillStreamRequest = {
     maximumBytes: 8 * 1024,
     stream: subprocess.stderr,
   };
-  const stdoutPromise = readBoundedStream(stdoutRequest);
-  const stderrPromise = readBoundedStream(stderrRequest);
+  const stdoutPromise = readBoundedExecutableSkillStream(stdoutRequest);
+  const stderrPromise = readBoundedExecutableSkillStream(stderrRequest);
   let timeoutHandle: ReturnType<typeof setTimeout> | false = false;
   const executionDeadline = new Promise<'timeout'>((resolve) => {
     timeoutHandle = setTimeout(resolve, executionTimeoutMs, 'timeout');
@@ -533,17 +515,26 @@ async function runAttachedContainer(
   const stdoutOverflow = overflowSignal(stdoutPromise);
   const stderrOverflow = overflowSignal(stderrPromise);
   const overflow = Promise.race([stdoutOverflow, stderrOverflow]);
+  const cancellation = waitForExecutableSkillCancellation(request.signal);
   try {
     const first = await Promise.race([
       processExit,
       executionDeadline,
       overflow,
+      cancellation.promise,
     ]);
-    if (first === 'timeout' || first === 'overflow') {
+    if (first === 'timeout' || first === 'overflow' || first === 'cancelled') {
       subprocess.kill(9);
       await subprocess.exited;
+      if (first === 'cancelled') {
+        throw new ExecutableSkillCancellationError(request.containerName);
+      }
       if (first === 'timeout') {
-        throw new ExecutableSkillTimeoutError(request.containerName);
+        const timeoutRequest: ExecutableSkillTimeoutErrorRequest = {
+          coldImageProvisioned: request.provisionedImage,
+          containerName: request.containerName,
+        };
+        throw new ExecutableSkillTimeoutError(timeoutRequest);
       }
       throw new Error(
         'Executable skill container output exceeds its byte limit.',
@@ -562,6 +553,7 @@ async function runAttachedContainer(
       stdout: stdout.text,
     };
   } finally {
+    cancellation.dispose();
     if (timeoutHandle !== false) clearTimeout(timeoutHandle);
     if (typeof subprocess.exitCode !== 'number') {
       subprocess.kill(9);
@@ -573,7 +565,7 @@ async function runAttachedContainer(
 async function confirmAbsentAfterAmbiguousCreate(
   containerName: string,
 ): Promise<void> {
-  const deadline = dockerDeadline(15_000);
+  const deadline = dockerDeadline(TEARDOWN_TIMEOUT_MS);
   try {
     const inspectRequest: InspectContainerRequest = {
       containerName,
@@ -596,7 +588,7 @@ async function confirmAbsentAfterAmbiguousCreate(
 }
 
 async function overflowSignal(
-  read: Promise<BoundedStreamRead>,
+  read: Promise<BoundedExecutableSkillStreamRead>,
 ): Promise<'overflow'> {
   const result = await read;
   if (result.overflow) return 'overflow';
@@ -604,28 +596,50 @@ async function overflowSignal(
 }
 
 async function forceRemoveAndConfirm(containerName: string): Promise<void> {
-  const deadline = dockerDeadline(15_000);
-  const command = ['docker', 'rm', '--force', containerName];
-  const removeRequest: RunDockerControlRequest = {
-    command,
-    deadline,
-    maximumStderrBytes: 8192,
-    maximumStdoutBytes: 4096,
-    stdin: false,
-  };
-  const removal = await runDockerControl(removeRequest);
-  const inspectRequest: InspectContainerRequest = { containerName, deadline };
-  const inspection = await inspectContainer(inspectRequest);
-  const confirmationRequest: ConfirmedAbsentInspectionRequest = {
-    containerName,
-    inspection,
-  };
-  if (
-    removal.exitCode !== 0 ||
-    removal.stdout.trim() !== containerName ||
-    removal.stderr !== '' ||
-    !isConfirmedAbsentInspection(confirmationRequest)
-  ) {
+  try {
+    const deadline = dockerDeadline(TEARDOWN_TIMEOUT_MS);
+    const initialInspectRequest: InspectContainerRequest = {
+      containerName,
+      deadline,
+    };
+    const initialInspection = await inspectContainer(initialInspectRequest);
+    const initialConfirmationRequest: ConfirmedAbsentInspectionRequest = {
+      containerName,
+      inspection: initialInspection,
+    };
+    if (isConfirmedAbsentInspection(initialConfirmationRequest)) return;
+    if (initialInspection.exitCode !== 0) {
+      throw new ExecutableSkillTeardownError(containerName);
+    }
+    const command = ['docker', 'rm', '--force', containerName];
+    const removeRequest: RunDockerControlRequest = {
+      command,
+      deadline,
+      maximumStderrBytes: 8192,
+      maximumStdoutBytes: 4096,
+      signal: false,
+      stdin: false,
+    };
+    const removal = await runDockerControl(removeRequest);
+    const inspectRequest: InspectContainerRequest = {
+      containerName,
+      deadline,
+    };
+    const inspection = await inspectContainer(inspectRequest);
+    const confirmationRequest: ConfirmedAbsentInspectionRequest = {
+      containerName,
+      inspection,
+    };
+    if (
+      removal.exitCode !== 0 ||
+      removal.stdout.trim() !== containerName ||
+      removal.stderr !== '' ||
+      !isConfirmedAbsentInspection(confirmationRequest)
+    ) {
+      throw new ExecutableSkillTeardownError(containerName);
+    }
+  } catch (error) {
+    if (error instanceof ExecutableSkillTeardownError) throw error;
     throw new ExecutableSkillTeardownError(containerName);
   }
 }
@@ -638,12 +652,20 @@ type InspectContainerRequest = {
 async function inspectContainer(
   request: InspectContainerRequest,
 ): Promise<DockerControlOutput> {
-  const command = ['docker', 'container', 'inspect', request.containerName];
+  const command = [
+    'docker',
+    'container',
+    'inspect',
+    '--format',
+    '{{.Name}}',
+    request.containerName,
+  ];
   const controlRequest: RunDockerControlRequest = {
     command,
     deadline: request.deadline,
     maximumStderrBytes: 8192,
-    maximumStdoutBytes: 8192,
+    maximumStdoutBytes: 4096,
+    signal: false,
     stdin: false,
   };
   return runDockerControl(controlRequest);
@@ -659,7 +681,7 @@ function isConfirmedAbsentInspection(
 ): boolean {
   if (
     request.inspection.exitCode !== 1 ||
-    request.inspection.stdout.trim() !== '[]'
+    request.inspection.stdout.trim() !== ''
   ) {
     return false;
   }
@@ -685,16 +707,16 @@ async function runDockerControl(
     subprocess.stdin.write(request.stdin);
     subprocess.stdin.end();
   }
-  const stdoutRequest: ReadBoundedStreamRequest = {
+  const stdoutRequest: ReadBoundedExecutableSkillStreamRequest = {
     maximumBytes: request.maximumStdoutBytes,
     stream: subprocess.stdout,
   };
-  const stderrRequest: ReadBoundedStreamRequest = {
+  const stderrRequest: ReadBoundedExecutableSkillStreamRequest = {
     maximumBytes: request.maximumStderrBytes,
     stream: subprocess.stderr,
   };
-  const stdoutPromise = readBoundedStream(stdoutRequest);
-  const stderrPromise = readBoundedStream(stderrRequest);
+  const stdoutPromise = readBoundedExecutableSkillStream(stdoutRequest);
+  const stderrPromise = readBoundedExecutableSkillStream(stderrRequest);
   const processExit = subprocess.exited.then((exitCode) => ({ exitCode }));
   let timeoutHandle: ReturnType<typeof setTimeout> | false = false;
   const timeout = new Promise<'timeout'>((resolve) => {
@@ -704,11 +726,20 @@ async function runDockerControl(
     overflowSignal(stdoutPromise),
     overflowSignal(stderrPromise),
   ]);
+  const cancellation = waitForExecutableSkillCancellation(request.signal);
   try {
-    const first = await Promise.race([processExit, timeout, overflow]);
-    if (first === 'timeout' || first === 'overflow') {
+    const first = await Promise.race([
+      processExit,
+      timeout,
+      overflow,
+      cancellation.promise,
+    ]);
+    if (first === 'timeout' || first === 'overflow' || first === 'cancelled') {
       subprocess.kill(9);
       await subprocess.exited;
+      if (first === 'cancelled') {
+        throw new ExecutableSkillCancellationError(false);
+      }
       throw new Error(
         first === 'timeout'
           ? 'Executable skill Docker control timed out.'
@@ -728,6 +759,7 @@ async function runDockerControl(
       stdout: stdout.text,
     };
   } finally {
+    cancellation.dispose();
     if (timeoutHandle !== false) clearTimeout(timeoutHandle);
     if (typeof subprocess.exitCode !== 'number') subprocess.kill(9);
     await subprocess.exited;
@@ -738,6 +770,7 @@ type RunDockerControlWithInputRequest = {
   readonly command: readonly string[];
   readonly deadline: DockerDeadline;
   readonly stdin: string;
+  readonly signal: AbortSignal | false;
 };
 
 async function runDockerControlWithInput(
@@ -748,12 +781,13 @@ async function runDockerControlWithInput(
     deadline: request.deadline,
     maximumStderrBytes: 1024 * 1024,
     maximumStdoutBytes: 1024 * 1024,
+    signal: request.signal,
     stdin: request.stdin,
   };
   return runDockerControl(controlRequest);
 }
 
-function dockerDeadline(timeoutMs: number): DockerDeadline {
+export function dockerDeadline(timeoutMs: number): DockerDeadline {
   return { expiresAt: Date.now() + timeoutMs };
 }
 
@@ -763,47 +797,4 @@ function remainingMilliseconds(deadline: DockerDeadline): number {
     throw new Error('Executable skill lifecycle deadline expired.');
   }
   return remaining;
-}
-
-async function readBoundedStream(
-  request: ReadBoundedStreamRequest,
-): Promise<BoundedStreamRead> {
-  const reader = request.stream.getReader();
-  const decoder = new TextDecoder();
-  let bytes = 0;
-  let text = '';
-  try {
-    while (true) {
-      const chunk = await reader.read();
-      if (chunk.done) break;
-      bytes += chunk.value.byteLength;
-      if (bytes > request.maximumBytes) {
-        await reader.cancel();
-        return { overflow: true, text: '' };
-      }
-      const decodeOptions = { stream: true } as const;
-      text += decoder.decode(chunk.value, decodeOptions);
-    }
-    text += decoder.decode();
-    return { overflow: false, text };
-  } finally {
-    reader.releaseLock();
-  }
-}
-
-function assertByteLimit(request: AssertByteLimitRequest): void {
-  if (Buffer.byteLength(request.value, 'utf8') > request.maximumBytes) {
-    throw new Error(
-      `Executable skill ${request.label} exceeds its byte limit.`,
-    );
-  }
-}
-
-function boundedStderr(stderr: string): string {
-  const normalized = stderr.trim().replaceAll(/[\r\n]+/gu, ' ');
-  return normalized.slice(0, 512) || 'runner exited without an error message';
-}
-
-function sha256(value: string): string {
-  return createHash('sha256').update(value).digest('hex');
 }

@@ -44,11 +44,6 @@ export type RegisteredExecutableSkill = {
   readonly runnerPath: string;
 };
 
-export type ExecuteRegisteredSkillRequest = {
-  readonly skillId: string;
-  readonly serializedRequest: string;
-};
-
 export type VerifiedExecutableSkillExecution = {
   readonly closureSha256: string;
   readonly skillId: string;
@@ -71,5 +66,7 @@ export type ExecutableSkillRegistryFinding = {
 };
 
 export type AuditExecutableSkillRegistryRequest = {
+  readonly deadlineExpiresAt: number;
   readonly repositoryRoot: string;
+  readonly signal: AbortSignal | false;
 };

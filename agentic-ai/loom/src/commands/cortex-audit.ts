@@ -11,7 +11,10 @@ import {
 } from '../executable-skills/cortex-article-transport.ts';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
 import type { ExecutableSkillRegistryFinding } from '../executable-skills/domain.ts';
-import { auditExecutableSkillRegistry } from '../executable-skills/registry.ts';
+import {
+  ExecutableSkillRegistryInspectionKind,
+  inspectExecutableSkillRegistry,
+} from '../executable-skills/registry.ts';
 import { executeRegisteredSkill } from '../executable-skills/runtime.ts';
 import { lintProseDensity, type DensityFinding } from '../lib/density.ts';
 import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts';
@@ -45,6 +48,7 @@ export type CortexAuditReport = {
 
 export type RunCortexAuditFromDirectoryArgs = {
   readonly request: CortexAuditRequest;
+  readonly signal: AbortSignal | false;
   readonly startDirectory: string;
 };
 
@@ -53,6 +57,7 @@ export async function runCortexAudit(
 ): Promise<CortexAuditReport> {
   const args: RunCortexAuditFromDirectoryArgs = {
     request,
+    signal: false,
     startDirectory: process.cwd(),
   };
   return runCortexAuditFromDirectory(args);
@@ -70,16 +75,25 @@ export async function runCortexAuditFromDirectory(
     };
     loomFailureDetail(loomFailureDetailArgs);
   }
-  const executableSkillAuditRequest = { repositoryRoot: repoRoot };
-  const executableSkillRegistryFindings = auditExecutableSkillRegistry(
+  const executableSkillAuditRequest = {
+    deadlineExpiresAt: Date.now() + 180_000,
+    repositoryRoot: repoRoot,
+    signal: args.signal,
+  };
+  const executableSkillInspection = await inspectExecutableSkillRegistry(
     executableSkillAuditRequest,
   );
-  if (executableSkillRegistryFindings.length > 0) {
+  if (
+    executableSkillInspection.kind ===
+    ExecutableSkillRegistryInspectionKind.Invalid
+  ) {
     const failureReportRequest: ExecutableSkillRegistryFailureReportRequest = {
-      findings: executableSkillRegistryFindings,
+      findings: executableSkillInspection.findings,
     };
     return executableSkillRegistryFailureReport(failureReportRequest);
   }
+  const executableSkillRegistryFindings: readonly ExecutableSkillRegistryFinding[] =
+    [];
 
   const mdFiles = listPersistentCortexMarkdownFiles(cortexRoot);
   const brokenLinks: BrokenLink[] = [];
@@ -148,8 +162,10 @@ export async function runCortexAuditFromDirectory(
     articleStructureRequest,
   );
   const articleExecutionRequest = {
+    registryAuthority: executableSkillInspection.authority,
     skillId: 'cortex-article-structure',
     serializedRequest: serializedArticleRequest,
+    signal: args.signal,
   } as const;
   const articleExecution = await executeRegisteredSkill(
     articleExecutionRequest,

@@ -19,14 +19,9 @@ import {
   ExecutableSkillRegistryFindingCode,
 } from '../src/executable-skills/domain.ts';
 import type {
-  ExecuteRegisteredSkillRequest,
   ExecutableSkillManifest,
   RegisteredExecutableSkill,
 } from '../src/executable-skills/domain.ts';
-import {
-  materializeSkillClosure,
-  type MaterializeSkillClosureRequest,
-} from '../src/executable-skills/closure.ts';
 import {
   CortexArticleFindingCode,
   decodeCortexArticleResult,
@@ -37,14 +32,21 @@ import { decodeExecutableSkillManifest } from '../src/executable-skills/manifest
 import {
   auditExecutableSkillRegistry,
   EXECUTABLE_SKILL_REGISTRY,
+  ExecutableSkillRegistryInspectionKind,
+  inspectExecutableSkillRegistry,
   validateRegisteredExecutableSkillResult,
+  type AuditedExecutableSkillRegistry,
   type ValidateRegisteredExecutableSkillResultRequest,
 } from '../src/executable-skills/registry.ts';
 import {
   ExecutableSkillAcceptanceProbe,
-  ExecutableSkillTimeoutError,
   executeExecutableSkillAcceptanceProbe,
+} from '../src/executable-skills/acceptance-runtime.ts';
+import {
+  ExecutableSkillCancellationError,
+  ExecutableSkillTimeoutError,
   executeRegisteredSkill,
+  type ExecuteRegisteredSkillRequest,
   resolveDockerControlEnvironment,
 } from '../src/executable-skills/runtime.ts';
 
@@ -57,6 +59,65 @@ const REMOVE_TREE_OPTIONS = { recursive: true, force: true } as const;
 const CREATE_TREE_OPTIONS = { recursive: true } as const;
 const HOST_CREDENTIAL_NAME = 'NOOK_EXECUTABLE_SKILL_HOST_CREDENTIAL';
 setDefaultTimeout(180_000);
+
+async function executableSkillAuthority() {
+  const inspectionRequest = registryAuditRequest(REPOSITORY_ROOT);
+  const inspection = await inspectExecutableSkillRegistry(inspectionRequest);
+  if (inspection.kind !== ExecutableSkillRegistryInspectionKind.Verified) {
+    throw new Error('Executable skill test registry is invalid.');
+  }
+  return inspection.authority;
+}
+
+function registryAuditRequest(repositoryRoot: string) {
+  return {
+    deadlineExpiresAt: Date.now() + 30_000,
+    repositoryRoot,
+    signal: false,
+  } as const;
+}
+
+function currentIndexTree(): string {
+  const treeOptions = { cwd: REPOSITORY_ROOT, encoding: 'utf8' } as const;
+  return execFileSync('git', ['write-tree'], treeOptions).trim();
+}
+
+function executableSkillContainersForTree(
+  sourceTree: string,
+): ReadonlySet<string> {
+  const output = Bun.spawnSync([
+    'docker',
+    'container',
+    'ls',
+    '--all',
+    '--filter',
+    'name=^nook-skill-',
+    '--filter',
+    `label=nook.executable-skill-source-tree=${sourceTree}`,
+    '--format',
+    '{{.Names}}',
+  ]);
+  return new Set(output.stdout.toString().trim().split('\n').filter(Boolean));
+}
+
+type WaitForAcceptanceContainerRequest = {
+  readonly existingContainers: ReadonlySet<string>;
+  readonly sourceTree: string;
+  readonly timeoutMs: number;
+};
+
+async function waitForAcceptanceContainer(
+  request: WaitForAcceptanceContainerRequest,
+): Promise<string> {
+  const deadline = Date.now() + request.timeoutMs;
+  while (Date.now() < deadline) {
+    for (const name of executableSkillContainersForTree(request.sourceTree)) {
+      if (!request.existingContainers.has(name)) return name;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error('Acceptance container did not become observable.');
+}
 
 const baseManifest: ExecutableSkillManifest = {
   schemaVersion: 1,
@@ -146,8 +207,10 @@ test('executes and verifies the registered skill in the pinned container', async
     },
   };
   const request: ExecuteRegisteredSkillRequest = {
+    registryAuthority: await executableSkillAuthority(),
     skillId: 'cortex-article-structure',
     serializedRequest: JSON.stringify(serializedRequestValue),
+    signal: false,
   };
   const result = await executeRegisteredSkill(request);
   expect(result.executionKind).toBe(
@@ -276,115 +339,18 @@ test('rejects malformed or wrong-kind results before trust promotion', () => {
   ).toThrow('contract kind mismatch');
 });
 
-test('materializes an immutable recursive staged skill closure', () => {
-  const repositoryRoot = createClosureRepository();
-  try {
-    const definition = closureDefinition();
-    const closureRequest: MaterializeSkillClosureRequest = {
-      definition,
-      repositoryRoot,
-    };
-    const closure = materializeSkillClosure(closureRequest);
-    try {
-      expect(closure.closureSha256).toHaveLength(64);
-      expect(closure.sourceTree).toMatch(/^[0-9a-f]{40,64}$/u);
-      expect(
-        readFileSync(
-          path.join(closure.contextDirectory, 'stub-skill/src/dependency.ts'),
-          'utf8',
-        ),
-      ).toContain('sealed dependency');
-    } finally {
-      closure.dispose();
-    }
-
-    const dependencyPath = path.join(
-      repositoryRoot,
-      '.agents/skills/stub-skill/src/dependency.ts',
-    );
-    writeFileSync(dependencyPath, "export const value = 'worktree drift';\n");
-    expect(() => materializeSkillClosure(closureRequest)).toThrow(
-      'worktree/index drift',
-    );
-    writeFileSync(
-      dependencyPath,
-      "export const value = 'sealed dependency';\n",
-    );
-    const manifestPath = path.join(
-      repositoryRoot,
-      '.agents/skills/stub-skill/executable-skill.json',
-    );
-    const driftedManifest = {
-      ...baseManifest,
-      requestKind: 'dirty-request-v1',
-    };
-    writeFileSync(manifestPath, JSON.stringify(driftedManifest));
-    expect(() => materializeSkillClosure(closureRequest)).toThrow(
-      'worktree/index drift',
-    );
-    writeFileSync(manifestPath, JSON.stringify(baseManifest));
-    const lockPath = path.join(repositoryRoot, '.agents/skills/bun.lock');
-    writeFileSync(lockPath, 'lockfileVersion = 2\n');
-    expect(() => materializeSkillClosure(closureRequest)).toThrow(
-      'worktree/index drift',
-    );
-  } finally {
-    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
-  }
-});
-
-test('rejects forbidden capabilities in recursively imported sources', () => {
-  const repositoryRoot = createClosureRepository();
-  try {
-    const dependencyPath = path.join(
-      repositoryRoot,
-      '.agents/skills/stub-skill/src/dependency.ts',
-    );
-    writeFileSync(
-      dependencyPath,
-      "import { writeFile } from 'node:fs';\nvoid writeFile;\n",
-    );
-    const gitOptions = { cwd: repositoryRoot };
-    execFileSync('git', ['add', '.'], gitOptions);
-    const closureRequest: MaterializeSkillClosureRequest = {
-      definition: closureDefinition(),
-      repositoryRoot,
-    };
-    expect(() => materializeSkillClosure(closureRequest)).toThrow(
-      'forbids ambient module',
-    );
-  } finally {
-    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
-  }
-});
-
-test('rejects dynamic and missing local modules from the closure', () => {
-  for (const source of [
-    "await import('./dependency.ts');\n",
-    "import './missing.ts';\n",
-  ]) {
-    const repositoryRoot = createClosureRepository(source);
-    try {
-      const closureRequest: MaterializeSkillClosureRequest = {
-        definition: closureDefinition(),
-        repositoryRoot,
-      };
-      expect(() => materializeSkillClosure(closureRequest)).toThrow();
-    } finally {
-      rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
-    }
-  }
-});
-
 test('container denies repository writes and network access', async () => {
   const mutationRequest: ApplyHostEnvironmentRequest = {
     values: { [HOST_CREDENTIAL_NAME]: 'synthetic-host-credential' },
   };
   const originalEnvironment = applyHostEnvironment(mutationRequest);
   try {
-    const result = await executeExecutableSkillAcceptanceProbe(
-      ExecutableSkillAcceptanceProbe.Containment,
-    );
+    const probeRequest = {
+      probe: ExecutableSkillAcceptanceProbe.Containment,
+      rebuildImage: false,
+      signal: false,
+    } as const;
+    const result = await executeExecutableSkillAcceptanceProbe(probeRequest);
     const expectedContainment = {
       credentialAbsent: true,
       networkBlocked: true,
@@ -407,17 +373,21 @@ test('container denies repository writes and network access', async () => {
   }
 });
 
-test('deadline covers verification and removes the killed container', async () => {
+test('cold provisioning precedes the execution timeout and teardown', async () => {
   let timeout: ExecutableSkillTimeoutError | false = false;
   try {
-    await executeExecutableSkillAcceptanceProbe(
-      ExecutableSkillAcceptanceProbe.Timeout,
-    );
+    const probeRequest = {
+      probe: ExecutableSkillAcceptanceProbe.Timeout,
+      rebuildImage: true,
+      signal: false,
+    } as const;
+    await executeExecutableSkillAcceptanceProbe(probeRequest);
   } catch (error) {
     if (error instanceof ExecutableSkillTimeoutError) timeout = error;
   }
   expect(timeout).not.toBe(false);
   if (timeout === false) return;
+  expect(timeout.coldImageProvisioned).toBe(true);
   const inspect = Bun.spawnSync([
     'docker',
     'container',
@@ -427,36 +397,167 @@ test('deadline covers verification and removes the killed container', async () =
   expect(inspect.exitCode).not.toBe(0);
 });
 
-test('kills a container whose stdout exceeds the result bound', async () => {
+test('active cancellation removes the blocking container before settling', async () => {
+  const controller = new AbortController();
+  const probeRequest = {
+    probe: ExecutableSkillAcceptanceProbe.Timeout,
+    rebuildImage: false,
+    signal: controller.signal,
+  } as const;
+  const sourceTree = currentIndexTree();
+  const existingContainers = executableSkillContainersForTree(sourceTree);
+  const execution = executeExecutableSkillAcceptanceProbe(probeRequest);
+  const waitRequest: WaitForAcceptanceContainerRequest = {
+    existingContainers,
+    sourceTree,
+    timeoutMs: 30_000,
+  };
+  const observedContainer = await waitForAcceptanceContainer(waitRequest);
+  const startedAt = Date.now();
+  controller.abort();
+  let cancellation: ExecutableSkillCancellationError | false = false;
+  try {
+    await execution;
+  } catch (error) {
+    if (error instanceof ExecutableSkillCancellationError) {
+      cancellation = error;
+    }
+  }
+  expect(cancellation).not.toBe(false);
+  expect(Date.now() - startedAt).toBeLessThan(10_000);
+  if (cancellation === false || cancellation.containerName === false) return;
+  expect(cancellation.containerName).toBe(observedContainer);
+  const inspect = Bun.spawnSync([
+    'docker',
+    'container',
+    'inspect',
+    cancellation.containerName,
+  ]);
+  expect(inspect.exitCode).not.toBe(0);
+});
+
+test('pre-aborted execution is rejected before lifecycle start', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const probeRequest = {
+    probe: ExecutableSkillAcceptanceProbe.Containment,
+    rebuildImage: false,
+    signal: controller.signal,
+  } as const;
   await expect(
-    executeExecutableSkillAcceptanceProbe(
-      ExecutableSkillAcceptanceProbe.Overflow,
-    ),
+    executeExecutableSkillAcceptanceProbe(probeRequest),
+  ).rejects.toBeInstanceOf(ExecutableSkillCancellationError);
+});
+
+test('kills a container whose stdout exceeds the result bound', async () => {
+  const probeRequest = {
+    probe: ExecutableSkillAcceptanceProbe.Overflow,
+    rebuildImage: false,
+    signal: false,
+  } as const;
+  await expect(
+    executeExecutableSkillAcceptanceProbe(probeRequest),
   ).rejects.toThrow('output exceeds');
 });
 
 test('fails closed for unknown skills and oversized requests', async () => {
   const unknownRequest: ExecuteRegisteredSkillRequest = {
+    registryAuthority: await executableSkillAuthority(),
     skillId: 'missing-skill',
     serializedRequest: '{}',
+    signal: false,
   };
   await expect(executeRegisteredSkill(unknownRequest)).rejects.toThrow(
     'Unregistered executable skill',
   );
   const oversizedRequest: ExecuteRegisteredSkillRequest = {
+    registryAuthority: await executableSkillAuthority(),
     skillId: 'cortex-article-structure',
     serializedRequest: 'x'.repeat(4 * 1024 * 1024 + 1),
+    signal: false,
   };
   await expect(executeRegisteredSkill(oversizedRequest)).rejects.toThrow(
     'request exceeds',
   );
 });
 
-test('audits exact manifest, runner, policy, tracking, and capabilities', () => {
+test('execution is bound to the explicitly audited repository root', async () => {
   const repositoryRoot = createAuditRepository();
   try {
-    const auditRequest = { repositoryRoot };
-    expect(auditExecutableSkillRegistry(auditRequest)).toEqual([]);
+    const inspectionRequest = registryAuditRequest(repositoryRoot);
+    const inspection = await inspectExecutableSkillRegistry(inspectionRequest);
+    expect(inspection.kind).toBe(
+      ExecutableSkillRegistryInspectionKind.Verified,
+    );
+    if (inspection.kind !== ExecutableSkillRegistryInspectionKind.Verified) {
+      return;
+    }
+    const requestValue = {
+      kind: CortexArticleContractKind.Request,
+      documents: [],
+      migrationBaselineEntries: false,
+      migrationLedger: {
+        relativePath: '.cortex/article-structure-migration.txt',
+        content: false,
+      },
+    };
+    const request: ExecuteRegisteredSkillRequest = {
+      registryAuthority: inspection.authority,
+      serializedRequest: JSON.stringify(requestValue),
+      signal: false,
+      skillId: 'cortex-article-structure',
+    };
+    const execution = await executeRegisteredSkill(request);
+    const gitOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
+    expect(execution.sourceTree).toBe(
+      execFileSync('git', ['write-tree'], gitOptions).trim(),
+    );
+  } finally {
+    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+  }
+});
+
+test('rejects forged audited repository authority', async () => {
+  const forgedAuthority: AuditedExecutableSkillRegistry = {
+    auditId: 'forged-authority',
+  };
+  const request: ExecuteRegisteredSkillRequest = {
+    registryAuthority: forgedAuthority,
+    serializedRequest: '{}',
+    signal: false,
+    skillId: 'cortex-article-structure',
+  };
+  await expect(executeRegisteredSkill(request)).rejects.toThrow(
+    'authority is invalid',
+  );
+});
+
+test('registry inspection propagates abort and deadline bounds', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  const abortedRequest = {
+    deadlineExpiresAt: Date.now() + 30_000,
+    repositoryRoot: REPOSITORY_ROOT,
+    signal: controller.signal,
+  };
+  await expect(inspectExecutableSkillRegistry(abortedRequest)).rejects.toThrow(
+    'cancelled',
+  );
+  const expiredRequest = {
+    deadlineExpiresAt: Date.now() - 1,
+    repositoryRoot: REPOSITORY_ROOT,
+    signal: false,
+  } as const;
+  await expect(inspectExecutableSkillRegistry(expiredRequest)).rejects.toThrow(
+    'deadline expired',
+  );
+});
+
+test('audits exact manifest, runner, policy, tracking, and capabilities', async () => {
+  const repositoryRoot = createAuditRepository();
+  try {
+    const auditRequest = registryAuditRequest(repositoryRoot);
+    expect(await auditExecutableSkillRegistry(auditRequest)).toEqual([]);
 
     const manifestPath = path.join(
       repositoryRoot,
@@ -470,7 +571,9 @@ test('audits exact manifest, runner, policy, tracking, and capabilities', () => 
     const driftedManifest = { ...mutatedManifest, limits: mutatedLimits };
     writeFileSync(manifestPath, JSON.stringify(driftedManifest));
     expect(
-      auditExecutableSkillRegistry(auditRequest).map((entry) => entry.code),
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
     ).toContain(ExecutableSkillRegistryFindingCode.InvalidManifest);
     writeFileSync(manifestPath, originalManifest);
 
@@ -478,11 +581,15 @@ test('audits exact manifest, runner, policy, tracking, and capabilities', () => 
     const originalPolicy = readFileSync(policyPath, 'utf8');
     rmSync(policyPath);
     expect(
-      auditExecutableSkillRegistry(auditRequest).map((entry) => entry.code),
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
     ).toContain(ExecutableSkillRegistryFindingCode.UnsafeFile);
     symlinkSync('/tmp/outside-policy.md', policyPath);
     expect(
-      auditExecutableSkillRegistry(auditRequest).map((entry) => entry.code),
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
     ).toContain(ExecutableSkillRegistryFindingCode.UnsafeFile);
     rmSync(policyPath);
     writeFileSync(policyPath, originalPolicy);
@@ -492,18 +599,66 @@ test('audits exact manifest, runner, policy, tracking, and capabilities', () => 
       '.agents/skills/cortex-article-structure/src/runner.ts',
     );
     writeFileSync(runnerPath, "await fetch('https://example.com');\n");
+    const gitOptions = { cwd: repositoryRoot };
+    execFileSync('git', ['add', '.'], gitOptions);
     expect(
-      auditExecutableSkillRegistry(auditRequest).map((entry) => entry.code),
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
     ).toContain(ExecutableSkillRegistryFindingCode.UnsafeCapability);
 
     rmSync(runnerPath);
     symlinkSync('/tmp/outside-runner.ts', runnerPath);
     expect(
-      auditExecutableSkillRegistry(auditRequest).map((entry) => entry.code),
+      (await auditExecutableSkillRegistry(auditRequest)).map(
+        (entry) => entry.code,
+      ),
     ).toContain(ExecutableSkillRegistryFindingCode.UnsafeFile);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repositoryRoot, removeOptions);
+  }
+});
+
+test('shared AST policy rejects forbidden forms in nested sources', async () => {
+  const forbiddenSources = [
+    "import fs from 'fs';\nvoid fs;\n",
+    "await import('./dependency.ts');\n",
+    "globalThis.fetch('https://example.com');\n",
+    'const network = fetch;\nvoid network;\n',
+    'process.cwd();\n',
+    "process.getBuiltinModule('fs');\n",
+    'void Bun.env.SECRET;\n',
+    'const runtime = Bun;\nvoid runtime;\n',
+    "Bun.spawn(['true']);\n",
+  ];
+  for (const source of forbiddenSources) {
+    const repositoryRoot = createAuditRepository();
+    try {
+      const nestedRoot = path.join(
+        repositoryRoot,
+        '.agents/skills/cortex-article-structure/src/nested',
+      );
+      mkdirSync(nestedRoot, CREATE_TREE_OPTIONS);
+      writeFileSync(path.join(nestedRoot, 'forbidden.ts'), source);
+      writeFileSync(
+        path.join(
+          repositoryRoot,
+          '.agents/skills/cortex-article-structure/src/runner.ts',
+        ),
+        "import './nested/forbidden.ts';\n",
+      );
+      const gitOptions = { cwd: repositoryRoot };
+      execFileSync('git', ['add', '.'], gitOptions);
+      const auditRequest = registryAuditRequest(repositoryRoot);
+      expect(
+        (await auditExecutableSkillRegistry(auditRequest)).map(
+          (finding) => finding.code,
+        ),
+      ).toContain(ExecutableSkillRegistryFindingCode.UnsafeCapability);
+    } finally {
+      rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+    }
   }
 });
 
@@ -516,7 +671,7 @@ function createAuditRepository(): string {
     '.agents/skills/cortex-article-structure',
   );
   const createTreeOptions = { recursive: true } as const;
-  mkdirSync(path.join(skillRoot, 'src'), createTreeOptions);
+  mkdirSync(skillRoot, createTreeOptions);
   mkdirSync(
     path.join(repositoryRoot, '.cortex/dynamic-skills'),
     createTreeOptions,
@@ -528,57 +683,24 @@ function createAuditRepository(): string {
     ),
     path.join(skillRoot, 'executable-skill.json'),
   );
+  const copyTreeOptions = { recursive: true } as const;
   cpSync(
-    path.join(
-      REPOSITORY_ROOT,
-      '.agents/skills/cortex-article-structure/src/runner.ts',
-    ),
-    path.join(skillRoot, 'src/runner.ts'),
+    path.join(REPOSITORY_ROOT, '.agents/skills/cortex-article-structure/src'),
+    path.join(skillRoot, 'src'),
+    copyTreeOptions,
+  );
+  cpSync(
+    path.join(REPOSITORY_ROOT, '.agents/skills/package.json'),
+    path.join(repositoryRoot, '.agents/skills/package.json'),
+  );
+  cpSync(
+    path.join(REPOSITORY_ROOT, '.agents/skills/bun.lock'),
+    path.join(repositoryRoot, '.agents/skills/bun.lock'),
   );
   writeFileSync(
     path.join(repositoryRoot, POLICY_PATH),
     '# Cortex article structure\n',
   );
-  const gitOptions = { cwd: repositoryRoot };
-  execFileSync('git', ['init', '--quiet'], gitOptions);
-  execFileSync('git', ['add', '.'], gitOptions);
-  return repositoryRoot;
-}
-
-function closureDefinition(): RegisteredExecutableSkill {
-  return {
-    skillId: 'stub-skill',
-    manifest: baseManifest,
-    manifestPath: '.agents/skills/stub-skill/executable-skill.json',
-    resultContract: ExecutableSkillHostResultContract.CortexArticleStructureV1,
-    runnerPath: '.agents/skills/stub-skill/src/runner.ts',
-  };
-}
-
-function createClosureRepository(
-  runnerSource = "import { value } from './dependency.ts';\nvoid value;\n",
-): string {
-  const repositoryRoot = mkdtempSync(
-    path.join(tmpdir(), 'executable-skill-closure-'),
-  );
-  const skillsRoot = path.join(repositoryRoot, '.agents/skills');
-  const skillRoot = path.join(skillsRoot, 'stub-skill');
-  mkdirSync(path.join(skillRoot, 'src'), CREATE_TREE_OPTIONS);
-  writeFileSync(
-    path.join(skillRoot, 'executable-skill.json'),
-    JSON.stringify(baseManifest),
-  );
-  writeFileSync(path.join(skillRoot, 'src/runner.ts'), runnerSource);
-  writeFileSync(
-    path.join(skillRoot, 'src/dependency.ts'),
-    "export const value = 'sealed dependency';\n",
-  );
-  const packageValue = { name: 'closure-fixture', dependencies: {} };
-  writeFileSync(
-    path.join(skillsRoot, 'package.json'),
-    JSON.stringify(packageValue),
-  );
-  writeFileSync(path.join(skillsRoot, 'bun.lock'), 'lockfileVersion = 1\n');
   const gitOptions = { cwd: repositoryRoot };
   execFileSync('git', ['init', '--quiet'], gitOptions);
   execFileSync('git', ['add', '.'], gitOptions);

@@ -1,10 +1,12 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
 import { execFileSync } from 'node:child_process';
+import { once } from 'node:events';
+import { createServer, type Server, type Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, test } from 'bun:test';
+import { expect, setDefaultTimeout, test } from 'bun:test';
 import type { CortexAuditReport } from '../../src/commands/cortex-audit.ts';
 import {
   LoomLeafKind,
@@ -17,6 +19,11 @@ import type {
   LoomLeafWorkflowTaskInvocation,
 } from '../../src/agent-workflow/runtime.ts';
 import {
+  TaskStopReason,
+  TaskTeardownKind,
+  UnconfirmedTaskTeardownError,
+} from '../../src/agent-workflow/runtime.ts';
+import {
   LocalWorkflowTaskRuntime,
   mechanicalCortexAuditOutput,
 } from '../../src/agent-workflow/leaf-runtime.ts';
@@ -24,6 +31,7 @@ import { MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH } from '../../src/agent-workflow/
 
 const REMOVE_TREE_OPTIONS: RmOptions = { recursive: true, force: true };
 const CREATE_TREE_OPTIONS: MakeDirectoryOptions = { recursive: true };
+setDefaultTimeout(180_000);
 const EXECUTABLE_SKILL_MANIFEST = readFileSync(
   new URL(
     '../../../../.agents/skills/cortex-article-structure/executable-skill.json',
@@ -31,12 +39,9 @@ const EXECUTABLE_SKILL_MANIFEST = readFileSync(
   ),
   'utf8',
 );
-const EXECUTABLE_SKILL_RUNNER = readFileSync(
-  new URL(
-    '../../../../.agents/skills/cortex-article-structure/src/runner.ts',
-    import.meta.url,
-  ),
-  'utf8',
+const EXECUTABLE_SKILLS_ROOT = new URL(
+  '../../../../.agents/skills/',
+  import.meta.url,
 );
 
 class UnusedAgentRuntime implements AgentTaskRuntime<string, never> {
@@ -128,14 +133,25 @@ test('runs the mechanical audit from the invocation working directory', async ()
       'skills',
       'cortex-article-structure',
     );
-    await mkdir(join(executableSkillDirectory, 'src'), CREATE_TREE_OPTIONS);
+    const executableSkillsRoot = join(repositoryRoot, '.agents', 'skills');
+    await mkdir(executableSkillDirectory, CREATE_TREE_OPTIONS);
     await writeFile(
       join(executableSkillDirectory, 'executable-skill.json'),
       EXECUTABLE_SKILL_MANIFEST,
     );
-    await writeFile(
-      join(executableSkillDirectory, 'src', 'runner.ts'),
-      EXECUTABLE_SKILL_RUNNER,
+    const copyOptions = { recursive: true } as const;
+    await cp(
+      new URL('cortex-article-structure/src/', EXECUTABLE_SKILLS_ROOT),
+      join(executableSkillDirectory, 'src'),
+      copyOptions,
+    );
+    await cp(
+      new URL('package.json', EXECUTABLE_SKILLS_ROOT),
+      join(executableSkillsRoot, 'package.json'),
+    );
+    await cp(
+      new URL('bun.lock', EXECUTABLE_SKILLS_ROOT),
+      join(executableSkillsRoot, 'bun.lock'),
     );
     await writeFile(
       join(skillsDirectory, 'cortex-article-structure.md'),
@@ -190,3 +206,259 @@ test('runs the mechanical audit from the invocation working directory', async ()
     await rm(repositoryRoot, REMOVE_TREE_OPTIONS);
   }
 });
+
+test('workflow stop waits for active executable-skill teardown', async () => {
+  const runnerSource = [
+    'export {};',
+    'await Bun.stdin.text();',
+    'await new Promise<never>(() => {});',
+    '',
+  ].join('\n');
+  const fixtureRequest: CreateWorkflowAuditRepositoryRequest = {
+    runnerSource,
+  };
+  const repositoryRoot = await createWorkflowAuditRepository(fixtureRequest);
+  try {
+    const runtime = new LocalWorkflowTaskRuntime<string, never>(
+      new UnusedAgentRuntime(),
+    );
+    const abortController = new AbortController();
+    const invocation: LoomLeafWorkflowTaskInvocation<string> = {
+      task: 'mechanical-cortex-audit-cancellation',
+      attempt: 1,
+      sourceCommit: '1111111111111111111111111111111111111111',
+      runId: 'test-cancellation-run',
+      workingDirectory: repositoryRoot,
+      upstreamOutputs: [],
+      signal: abortController.signal,
+      observe: () => Promise.resolve(),
+      execution: {
+        kind: WorkflowExecutorKind.LoomLeaf,
+        leaf: LoomLeafKind.CortexAudit,
+        includeDensityLint: false,
+      },
+    };
+    const attempt = runtime.start(invocation);
+    const completionSettled = attempt.completion.then(
+      () => true,
+      () => true,
+    );
+    const treeOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
+    const waitRequest: WaitForNewContainerRequest = {
+      sourceTree: execFileSync('git', ['write-tree'], treeOptions).trim(),
+      timeoutMs: 30_000,
+    };
+    const containerName = await waitForNewContainer(waitRequest);
+    abortController.abort();
+    const stopRequest = {
+      hardDeadlineMs: 9_000,
+      reason: TaskStopReason.WorkflowCancellation,
+    } as const;
+    const teardown = await attempt.stop(stopRequest);
+    expect(teardown.kind).toBe(TaskTeardownKind.Confirmed);
+    expect(await completionSettled).toBe(true);
+    const inspection = Bun.spawnSync([
+      'docker',
+      'container',
+      'inspect',
+      containerName,
+    ]);
+    expect(inspection.exitCode).not.toBe(0);
+  } finally {
+    await rm(repositoryRoot, REMOVE_TREE_OPTIONS);
+  }
+});
+
+test('workflow stop rejects when Docker cleanup control times out', async () => {
+  const fixtureRequest: CreateWorkflowAuditRepositoryRequest = {
+    runnerSource: [
+      'export {};',
+      'await Bun.stdin.text();',
+      'await new Promise<never>(() => {});',
+      '',
+    ].join('\n'),
+  };
+  const repositoryRoot = await createWorkflowAuditRepository(fixtureRequest);
+  const originalDockerHost = Bun.env.DOCKER_HOST ?? false;
+  const originalDockerContext = Bun.env.DOCKER_CONTEXT ?? false;
+  let containerName: string | false = false;
+  let dockerBlackhole: Server | false = false;
+  const dockerBlackholeSockets = new Set<Socket>();
+  try {
+    const runtime = new LocalWorkflowTaskRuntime<string, never>(
+      new UnusedAgentRuntime(),
+    );
+    const abortController = new AbortController();
+    const invocation: LoomLeafWorkflowTaskInvocation<string> = {
+      task: 'mechanical-cortex-audit-unconfirmed',
+      attempt: 1,
+      sourceCommit: '1111111111111111111111111111111111111111',
+      runId: 'test-unconfirmed-run',
+      workingDirectory: repositoryRoot,
+      upstreamOutputs: [],
+      signal: abortController.signal,
+      observe: () => Promise.resolve(),
+      execution: {
+        kind: WorkflowExecutorKind.LoomLeaf,
+        leaf: LoomLeafKind.CortexAudit,
+        includeDensityLint: false,
+      },
+    };
+    const attempt = runtime.start(invocation);
+    const completionSettled = attempt.completion.then(
+      () => true,
+      () => true,
+    );
+    const treeOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
+    const waitRequest: WaitForNewContainerRequest = {
+      sourceTree: execFileSync('git', ['write-tree'], treeOptions).trim(),
+      timeoutMs: 30_000,
+    };
+    containerName = await waitForNewContainer(waitRequest);
+    dockerBlackhole = createServer((socket) => {
+      dockerBlackholeSockets.add(socket);
+      socket.on('close', () => dockerBlackholeSockets.delete(socket));
+    });
+    const listening = once(dockerBlackhole, 'listening');
+    dockerBlackhole.listen(0, '127.0.0.1');
+    await listening;
+    const blackholeAddress = dockerBlackhole.address();
+    if (!blackholeAddress || typeof blackholeAddress === 'string') {
+      throw new Error('Docker cleanup blackhole did not bind a TCP port.');
+    }
+    Bun.env.DOCKER_HOST = `tcp://127.0.0.1:${blackholeAddress.port}`;
+    delete Bun.env.DOCKER_CONTEXT;
+    const stopStartedAt = Date.now();
+    abortController.abort();
+    const stopRequest = {
+      hardDeadlineMs: 9_000,
+      reason: TaskStopReason.WorkflowCancellation,
+    } as const;
+    await expect(attempt.stop(stopRequest)).rejects.toBeInstanceOf(
+      UnconfirmedTaskTeardownError,
+    );
+    expect(Date.now() - stopStartedAt).toBeLessThan(8_000);
+    expect(await completionSettled).toBe(true);
+  } finally {
+    const hostRestoreRequest: RestoreEnvironmentValueRequest = {
+      name: 'DOCKER_HOST',
+      value: originalDockerHost,
+    };
+    restoreEnvironmentValue(hostRestoreRequest);
+    const contextRestoreRequest: RestoreEnvironmentValueRequest = {
+      name: 'DOCKER_CONTEXT',
+      value: originalDockerContext,
+    };
+    restoreEnvironmentValue(contextRestoreRequest);
+    if (dockerBlackhole !== false) {
+      for (const socket of dockerBlackholeSockets) socket.destroy();
+      dockerBlackhole.close();
+    }
+    if (containerName !== false) {
+      Bun.spawnSync(['docker', 'rm', '--force', containerName]);
+    }
+    await rm(repositoryRoot, REMOVE_TREE_OPTIONS);
+  }
+});
+
+type RestoreEnvironmentValueRequest = {
+  readonly name: string;
+  readonly value: string | false;
+};
+
+function restoreEnvironmentValue(
+  request: RestoreEnvironmentValueRequest,
+): void {
+  if (request.value === false) {
+    delete Bun.env[request.name];
+    return;
+  }
+  Bun.env[request.name] = request.value;
+}
+
+type CreateWorkflowAuditRepositoryRequest = {
+  readonly runnerSource: string;
+};
+
+async function createWorkflowAuditRepository(
+  request: CreateWorkflowAuditRepositoryRequest,
+): Promise<string> {
+  const repositoryRoot = await mkdtemp(join(tmpdir(), 'loom-cortex-stop-'));
+  const cortexSkills = join(repositoryRoot, '.cortex', 'dynamic-skills');
+  const executableSkillsRoot = join(repositoryRoot, '.agents', 'skills');
+  const executableSkill = join(
+    executableSkillsRoot,
+    'cortex-article-structure',
+  );
+  await mkdir(cortexSkills, CREATE_TREE_OPTIONS);
+  await mkdir(executableSkill, CREATE_TREE_OPTIONS);
+  await writeFile(
+    join(executableSkill, 'executable-skill.json'),
+    EXECUTABLE_SKILL_MANIFEST,
+  );
+  const copyOptions = { recursive: true } as const;
+  await cp(
+    new URL('cortex-article-structure/src/', EXECUTABLE_SKILLS_ROOT),
+    join(executableSkill, 'src'),
+    copyOptions,
+  );
+  await writeFile(
+    join(executableSkill, 'src', 'runner.ts'),
+    request.runnerSource,
+  );
+  await cp(
+    new URL('package.json', EXECUTABLE_SKILLS_ROOT),
+    join(executableSkillsRoot, 'package.json'),
+  );
+  await cp(
+    new URL('bun.lock', EXECUTABLE_SKILLS_ROOT),
+    join(executableSkillsRoot, 'bun.lock'),
+  );
+  await writeFile(
+    join(cortexSkills, 'cortex-article-structure.md'),
+    '# Cortex article structure\n',
+  );
+  await writeFile(join(repositoryRoot, '.cortex', 'AGENTS.md'), '# Agents\n');
+  await writeFile(
+    join(repositoryRoot, '.cortex', 'knowledge-graph.md'),
+    '# Cortex Knowledge Graph\n',
+  );
+  await writeFile(join(cortexSkills, 'index.md'), '# Skills\n');
+  const gitOptions = { cwd: repositoryRoot };
+  execFileSync('git', ['init', '--quiet'], gitOptions);
+  execFileSync('git', ['add', '.'], gitOptions);
+  return repositoryRoot;
+}
+
+function executableSkillContainerNames(sourceTree: string): readonly string[] {
+  const output = Bun.spawnSync([
+    'docker',
+    'container',
+    'ls',
+    '--all',
+    '--filter',
+    'name=^nook-skill-',
+    '--filter',
+    `label=nook.executable-skill-source-tree=${sourceTree}`,
+    '--format',
+    '{{.Names}}',
+  ]);
+  return output.stdout.toString().trim().split('\n').filter(Boolean);
+}
+
+type WaitForNewContainerRequest = {
+  readonly sourceTree: string;
+  readonly timeoutMs: number;
+};
+
+async function waitForNewContainer(
+  request: WaitForNewContainerRequest,
+): Promise<string> {
+  const deadline = Date.now() + request.timeoutMs;
+  while (Date.now() < deadline) {
+    const [containerName] = executableSkillContainerNames(request.sourceTree);
+    if (typeof containerName === 'string') return containerName;
+    await Bun.sleep(50);
+  }
+  throw new Error('Executable skill container did not become observable.');
+}
