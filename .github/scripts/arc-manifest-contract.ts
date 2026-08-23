@@ -521,7 +521,8 @@ buildkitCloner.requireAll([
   'for candidate in "$request_dir"/*/candidate; do',
   'for request in "$request_dir"/*/request; do',
   'request_lane_valid "$request_lane"',
-  'accepted_next="$request_lane/accepted.next"',
+  'accepted_next="$intent_dir/$pod_uid.accepted.next"',
+  'mv -T "$accepted_next" "$request_lane/accepted"',
   'find "$intent" -mmin +2',
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
@@ -538,6 +539,7 @@ buildkitCloner.requireAll([
   "promotion_barrier_pending && prune_interval=5",
   "if (( SECONDS - last_prune >= prune_interval )); then",
 ]);
+buildkitCloner.forbid('accepted_next="$request_lane/accepted.next"');
 buildkitCloner.forbid(".promote");
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
 buildkitCloner.forbid('promote_job_dir "$job_dir" || true');
@@ -632,6 +634,11 @@ workerTasks.requireAll([
   '"nook.nokey.sh/ssh-target=debian@$worker_mesh_address"',
   '--kubelet-extra-args="--node-ip=$worker_mesh_address',
   '--arg address "$worker_mesh_address"',
+  '--arg name "$worker_node_name" --arg address "$worker_mesh_address"',
+  'Kubernetes node $worker_node_name belongs to another InternalIP',
+  'live_fragment="$(mktemp)"',
+  'delete rule inet bynull_filter " chain " handle " $NF',
+  'sudo -n nft --file "$live_fragment"',
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"',
 ]);
 workerTasks.forbid(

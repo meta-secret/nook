@@ -882,6 +882,10 @@ Destructive k0s uninstall requires `K0S_UNINSTALL_FORCE=1` and preserves
 encrypted Neo4j recovery material by default. It removes the owned live k0s
 firewall rules, persisted fragment, and nftables include without reloading the
 global ruleset.
+Worker admission rejects a mesh address or Kubernetes node name already owned
+by a different node before controller mutation. Reconciliation replaces only
+the comment-owned mesh rules in one checked nftables transaction. Docker and
+unrelated dynamic firewall state remain live.
 
 ## 11. Source map
 

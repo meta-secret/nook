@@ -33,7 +33,8 @@ delete_job_dir() {
     rm -rf -- "$job_dir"
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
-    "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next"
+    "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
+    "$intent_dir/$pod_uid.accepted.next"
   request_lane="$request_dir/$pod_uid"
   if valid_uid "$pod_uid" && test ! -L "$request_lane"; then
     rm -rf -- "$request_lane"
@@ -174,11 +175,15 @@ EOF
     printf '%s\n' "$candidate_value" > "$intent_next"
     chmod 0600 "$intent_next"
     mv "$intent_next" "$intent_dir/$pod_uid.intent"
-    accepted_next="$request_lane/accepted.next"
-    rm -f -- "$request_lane/accepted" "$accepted_next"
+    accepted_next="$intent_dir/$pod_uid.accepted.next"
+    rm -f -- "$accepted_next"
     printf '%s\n' "$pod_uid" > "$accepted_next"
     chmod 0600 "$accepted_next"
-    mv "$accepted_next" "$request_lane/accepted"
+    rm -rf -- "$request_lane/accepted"
+    if ! mv -T "$accepted_next" "$request_lane/accepted"; then
+      rm -f -- "$accepted_next"
+      continue
+    fi
     rm -f -- "$candidate"
   done
 }

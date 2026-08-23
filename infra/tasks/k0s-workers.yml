@@ -102,13 +102,22 @@ tasks:
             exit 2
           fi
         fi
+        nodes_json="$(sudo -n k0s kubectl get nodes -o json)"
         assigned_nodes="$(
-          sudo -n k0s kubectl get nodes -o json | jq -r \
+          printf '%s' "$nodes_json" | jq -r \
             --arg address "$worker_mesh_address" \
             '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name'
         )"
         if test -n "$assigned_nodes" && test "$assigned_nodes" != "$worker_node_name"; then
           echo "k0s mesh: $worker_mesh_address belongs to Kubernetes node $assigned_nodes" >&2
+          exit 2
+        fi
+        if printf '%s' "$nodes_json" | jq -e \
+          --arg name "$worker_node_name" --arg address "$worker_mesh_address" \
+          'any(.items[]; .metadata.name == $name and
+            (all(.status.addresses[]?; .type != "InternalIP" or .address != $address)))' \
+          >/dev/null; then
+          echo "k0s mesh: Kubernetes node $worker_node_name belongs to another InternalIP" >&2
           exit 2
         fi
         REMOTE
@@ -226,7 +235,8 @@ tasks:
         endpoint="$(mktemp)"
         fragment="$(mktemp)"
         config="$(mktemp)"
-        trap 'rm -f "$endpoint" "$fragment" "$config"' EXIT
+        live_fragment="$(mktemp)"
+        trap 'rm -f "$endpoint" "$fragment" "$config" "$live_fragment"' EXIT
         sudo -n install -d -m 0700 /etc/nftables.d/nook-k0s-mesh-endpoints
         printf '%s\n' "$worker_public_ip" > "$endpoint"
         sudo -n install -m 0600 "$endpoint" \
@@ -256,7 +266,15 @@ tasks:
         fi
         grep -Eq '^[[:space:]]*flush ruleset[[:space:]]*$' "$config"
         sudo -n nft --check --file "$config"
-        sudo -n nft --file "$config"
+        for chain in input forward; do
+          sudo -n nft --handle list chain inet bynull_filter "$chain" |
+            awk -v chain="$chain" \
+              '/comment "nook k0s mesh / { print "delete rule inet bynull_filter " chain " handle " $NF }' \
+              >> "$live_fragment"
+        done
+        cat "$fragment" >> "$live_fragment"
+        sudo -n nft --check --file "$live_fragment"
+        sudo -n nft --file "$live_fragment"
         REMOTE
         }
 
