@@ -41,7 +41,14 @@ const COMMON_CONTEXT = [
 
 const CODE_REFACTORING_FILES = [
   'Taskfile.yml',
+  'tooling/eslint-rules/no-raw-object-arguments.js',
   'agentic-ai/loom/package.json',
+  '.agents/skills/eslint.config.js',
+  '.agents/skills/package.json',
+  '.agents/skills/tsconfig.json',
+  '.agents/skills/bun.lock',
+  '.agents/skills/.prettierrc',
+  '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
 ] as const;
 
 const CODE_REFACTORING_DESCENDANT_ROOTS = [

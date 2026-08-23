@@ -1,14 +1,17 @@
 ---
 name: typescript-named-args
 description: >-
-  Loom and Nook web TypeScript: require named semantic object parameter types and ban
-  raw object literals in calls. Enforced by ESLint loom/no-raw-object-arguments in Loom and
+  Loom, executable-skill, and Nook web TypeScript: require named semantic
+  object parameter types and ban raw object literals in calls. Enforced by
+  ESLint loom/no-raw-object-arguments in Loom,
+  nook/no-raw-object-arguments in executable skills, and
   nook-typed-api/no-raw-object-arguments in Nook web.
 ---
 
 # TypeScript Named Call Arguments
 
-Use this skill when editing Loom or any Nook web production TypeScript/Svelte.
+Use this skill when editing Loom, executable-skill, or Nook web production
+TypeScript/Svelte.
 
 Read `.cortex/dynamic-skills/typescript-named-args.md` and apply it:
 
@@ -19,4 +22,4 @@ Read `.cortex/dynamic-skills/typescript-named-args.md` and apply it:
    site or inside the function body.
 5. Do not call `fn({ ... })` with an inline object literal.
 6. Create a named typed variable/constant, then pass that name.
-7. Keep the applicable Loom or web lint task green.
+7. Keep the applicable Loom, executable-skill, or web lint task green.

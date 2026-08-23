@@ -13,6 +13,7 @@
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
+- executable-skill TypeScript under `.agents/skills`;
 - all authored production TypeScript and Svelte under `nook-app/nook-web`.
 
 Generated bindings are excluded.
@@ -99,6 +100,7 @@ export function decodeDependencyPopularityRequest(
 ESLint `@typescript-eslint/no-restricted-types` bans `unknown` and `object` in:
 
 - `agentic-ai/loom/eslint.config.js`;
+- `.agents/skills/eslint.config.js`;
 - `nook-app/nook-web/eslint.config.js`.
 
 Allowlisted adapters may use `unknown`.
@@ -111,6 +113,7 @@ value.
 
 ```bash
 task loom:verify
+task skills:verify
 # or
 bun run --cwd agentic-ai/loom lint
 ```
@@ -124,4 +127,4 @@ bun run --cwd agentic-ai/loom lint
 - [ ] Remove generic recursive values from state, results, and service APIs.
 - [ ] Keep any unavoidable external-value use inside a dedicated adapter.
 - [ ] Prove that each adapter returns a concrete domain type or typed failure.
-- [ ] Keep the applicable Loom or web lint task green.
+- [ ] Keep the applicable Loom, executable-skill, or web lint task green.

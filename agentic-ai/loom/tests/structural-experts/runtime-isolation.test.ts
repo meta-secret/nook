@@ -5,6 +5,9 @@ import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
 import { createReadOnlyExpertRuntimeIsolation } from '../../src/module-experts/runtime-contract.ts';
 import type { ReadOnlyExpertRuntimeIsolationRequest } from '../../src/module-experts/runtime-contract.ts';
+import { runCommand } from '../../src/lib/run.ts';
+import type { RunCommandArgs } from '../../src/lib/run.ts';
+import { structuralExpertProfile } from '../../src/structural-experts/catalog.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
@@ -87,6 +90,96 @@ test('rejects traversal and oversized synthetic context before agent execution',
       createReadOnlyExpertRuntimeIsolation(unsafeRequest),
     ).rejects.toThrow('context file is unsafe');
     expect(await readdir(temporaryRoot)).toEqual([]);
+  } finally {
+    await rm(temporaryRoot, removeOptions);
+  }
+});
+
+test('materializes only exact shared lint tooling granted to code refactoring', async () => {
+  const profile = structuralExpertProfile('code_refactoring_expert');
+  if (profile === false)
+    throw new Error('Code refactoring profile is missing.');
+  const exactRefactoringFiles = [
+    'tooling/eslint-rules/no-raw-object-arguments.js',
+    '.agents/skills/eslint.config.js',
+    '.agents/skills/package.json',
+    '.agents/skills/tsconfig.json',
+    '.agents/skills/bun.lock',
+    '.agents/skills/.prettierrc',
+    '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
+  ];
+  for (const relativePath of exactRefactoringFiles) {
+    expect(profile.allowedEvidenceFiles).toContain(relativePath);
+  }
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'structural-code-scope-'));
+  const removeOptions: RmOptions = { recursive: true, force: true };
+  const revisionRequest: RunCommandArgs = {
+    args: ['write-tree'],
+    command: 'git',
+    cwd: REPO_ROOT,
+  };
+  const sourceCommit = runCommand(revisionRequest).stdout.trim();
+  try {
+    const isolationRequest: ReadOnlyExpertRuntimeIsolationRequest = {
+      expertName: profile.name,
+      parentEnvironment: {
+        CODEX_API_KEY: 'structural-snapshot-test-key',
+        PATH: process.env.PATH ?? '',
+      },
+      snapshot: {
+        excludedPaths: profile.excludedPaths,
+        optionalScopePaths: [],
+        scopePaths: exactRefactoringFiles,
+        contextFiles: [],
+      },
+      sourceCommit,
+      temporaryRoot,
+      workingDirectory: REPO_ROOT,
+    };
+    const isolation =
+      await createReadOnlyExpertRuntimeIsolation(isolationRequest);
+    try {
+      for (const relativePath of exactRefactoringFiles) {
+        await access(join(isolation.repositorySnapshot, relativePath));
+      }
+      expect(
+        await readdir(
+          join(isolation.repositorySnapshot, 'tooling/eslint-rules'),
+        ),
+      ).toEqual(['no-raw-object-arguments.js']);
+      expect(
+        (
+          await readdir(join(isolation.repositorySnapshot, '.agents/skills'))
+        ).sort(),
+      ).toEqual(
+        [
+          '.prettierrc',
+          'bun.lock',
+          'eslint.config.js',
+          'package.json',
+          'tsconfig.json',
+          'typescript-named-args',
+        ].sort(),
+      );
+      await expect(
+        access(
+          join(
+            isolation.repositorySnapshot,
+            '.agents/skills/cortex-article-structure/SKILL.md',
+          ),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        access(
+          join(
+            isolation.repositorySnapshot,
+            '.agents/skills/coding-bro/SKILL.md',
+          ),
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await isolation.dispose();
+    }
   } finally {
     await rm(temporaryRoot, removeOptions);
   }

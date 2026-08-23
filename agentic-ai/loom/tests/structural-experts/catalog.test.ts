@@ -38,6 +38,33 @@ test('passes deterministic catalog and definition audit', () => {
   expect(report).toEqual(expected);
 });
 
+test('grants shared skill lint tooling through exact files without broad roots', () => {
+  const profile = STRUCTURAL_EXPERT_CATALOG[0];
+  if (!profile) throw new Error('Code refactoring profile is missing.');
+  expect(
+    profile.allowedEvidenceFiles.filter((path) =>
+      path.startsWith('.agents/skills/'),
+    ),
+  ).toEqual([
+    '.agents/skills/eslint.config.js',
+    '.agents/skills/package.json',
+    '.agents/skills/tsconfig.json',
+    '.agents/skills/bun.lock',
+    '.agents/skills/.prettierrc',
+    '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
+  ]);
+  expect(profile.allowedEvidenceFiles).toContain(
+    'tooling/eslint-rules/no-raw-object-arguments.js',
+  );
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
+    '.agents/skills',
+  );
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain('tooling');
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
+    'tooling/eslint-rules',
+  );
+});
+
 test('rejects broadening or reordering an exact structural scope', () => {
   const first = STRUCTURAL_EXPERT_CATALOG[0];
   if (!first) throw new Error('Code refactoring profile is missing.');

@@ -19,9 +19,30 @@ vars:
   DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
+  skills:install:
+    desc: Install executable skill TypeScript dependencies with a frozen lockfile.
+    dir: .agents/skills
+    cmds:
+      - bun install --frozen-lockfile
+
+  skills:format:
+    desc: Format executable skill TypeScript capability packages.
+    dir: .agents/skills
+    deps: [skills:install]
+    cmds:
+      - bun run format
+
+  skills:verify:
+    desc: Format-check, lint, typecheck, and test executable skill capability packages.
+    dir: .agents/skills
+    deps: [skills:install]
+    cmds:
+      - bun run verify
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
+    deps: [skills:install]
     cmds:
       - bun install --frozen-lockfile
 
@@ -64,6 +85,7 @@ tasks:
     desc: Format-check, lint, typecheck, and unit-test Loom.
     deps: [loom:install]
     cmds:
+      - task: skills:verify
       - task: loom:format:check
       - task: loom:lint
       - task: loom:check
@@ -136,10 +158,12 @@ tasks:
 
   loom:pre-push:
     desc: Format Loom, then run the default pre-push request.
-    deps: [loom:format]
+    deps: [loom:install]
     vars:
       CONFIG: '{{default "" .CONFIG}}'
     cmds:
+      - task: skills:format
+      - task: loom:format
       - |
         set -euo pipefail
         if [ -n "{{.CONFIG}}" ]; then

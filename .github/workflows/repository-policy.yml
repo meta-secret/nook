@@ -6,12 +6,14 @@ on:
   push:
     branches: [main]
     paths:
+      - .agents/skills/**
       - .cortex/**
       - .github/scripts/arc-manifest-contract.ts
       - .github/workflows/**
       - .task/agentic-ai.yml
       - agentic-ai/loom/**
       - preflight/**
+      - tooling/eslint-rules/**
 
 permissions:
   contents: read
@@ -46,7 +48,7 @@ jobs:
           runner_placement_changed=false
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .cortex/* | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | agentic-ai/loom/* | preflight/*)
+              .agents/skills/* | .cortex/* | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | agentic-ai/loom/* | preflight/* | tooling/eslint-rules/*)
                 loom_changed=true
                 ;;
             esac

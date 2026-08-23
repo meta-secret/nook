@@ -16,17 +16,30 @@ export type ManifestDependencies = {
   readonly rustCrates: readonly string[];
 };
 
+const REPOSITORY_NPM_MANIFESTS = [
+  'agentic-ai/loom/package.json',
+  '.agents/skills/package.json',
+] as const;
+
 export function scanRepositoryManifests(
   repoRoot: string,
 ): ManifestDependencies {
   return {
-    npmPackages: readNpmPackages(
-      path.join(repoRoot, 'agentic-ai/loom/package.json'),
-    ),
+    npmPackages: scanRepositoryNpmPackages(repoRoot),
     rustCrates: readExternalWorkspaceCrates(
       path.join(repoRoot, 'nook-app/nook-platform'),
     ),
   };
+}
+
+export function scanRepositoryNpmPackages(repoRoot: string): readonly string[] {
+  const names = new Set<string>();
+  for (const manifestPath of REPOSITORY_NPM_MANIFESTS) {
+    for (const name of readNpmPackages(path.join(repoRoot, manifestPath))) {
+      names.add(name);
+    }
+  }
+  return [...names].sort();
 }
 
 function readNpmPackages(packageJsonPath: string): readonly string[] {
