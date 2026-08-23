@@ -1,4 +1,5 @@
-import { appendFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { appendFile, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -51,6 +52,7 @@ import {
 } from '../../src/agent-workflow/runtime.ts';
 import { runStaticWorkflow } from '../../src/agent-workflow/scheduler.ts';
 import type { StaticWorkflowRunConfiguration } from '../../src/agent-workflow/scheduler.ts';
+import { LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 import {
   createSchedulerFixture as createFixture,
   type ScriptedRuntimeConfiguration,
@@ -634,6 +636,48 @@ describe('static workflow scheduler', () => {
       expect(() => replayWorkflowJournal(noncanonicalReplayRequest)).toThrow(
         'projection escapes its run directory',
       );
+      const childEventsText = await readFile(childEventsPath, 'utf8');
+      const legacyChildEventsText = `${childEventsText
+        .trim()
+        .split('\n')
+        .map((line) => {
+          const event = JSON.parse(line) as AgentAttemptEvent;
+          const legacyEvent = {
+            ...event,
+            workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+          };
+          Reflect.deleteProperty(legacyEvent, 'adapter');
+          return JSON.stringify(legacyEvent);
+        })
+        .join('\n')}\n`;
+      await writeFile(childEventsPath, legacyChildEventsText, 'utf8');
+      const legacyChildDigest = createHash('sha256')
+        .update(legacyChildEventsText)
+        .digest('hex');
+      const legacyWorkflowEvents = workflowEvents.map((event) => {
+        if (
+          event.kind !== WorkflowEventKind.TaskTerminalRecorded ||
+          event.task !== CortexAuditTask.AuditWorkflowsAndReferences ||
+          event.processing.kind !== 'agent-attempt'
+        ) {
+          return event;
+        }
+        return {
+          ...event,
+          processing: {
+            ...event.processing,
+            events: { ...event.processing.events, sha256: legacyChildDigest },
+          },
+        };
+      });
+      const legacyReplayRequest = {
+        events: legacyWorkflowEvents,
+        runDirectory: fixture.configuration.journal.runDirectory,
+      };
+      expect(() => replayWorkflowJournal(legacyReplayRequest)).toThrow(
+        'Remove or explicitly migrate the persisted attempt',
+      );
+      await writeFile(childEventsPath, childEventsText, 'utf8');
       await appendFile(childEventsPath, '{}\n', 'utf8');
       expect(() => replayWorkflowJournal(replayRequest)).toThrow(
         'projection digest does not match',

@@ -259,6 +259,12 @@ Journal events are bounded and secret-sanitized. They must not contain:
   - It never serializes a raw SDK error, stack trace, or command failure object.
 - **Event identity:** Every event carries the workflow version and exact source
   commit. Sequence numbers increase without gaps within one run.
+- **Attempt schema compatibility:** Adapter-bearing attempt streams use workflow
+  version `2.0.0`.
+  - Version `1.0.0` is rejected as legacy.
+  - Loom does not infer missing adapter provenance during replay or migration.
+  - The exact cleanup and migration policy is owned by
+    [Subagent Delegation](../workflows/subagent-delegation.md#agent-action-streams).
 - **Resume:** Resume is not exposed in the first CLI slice.
   - Before adding it, a full reducer must rebuild eligibility and join state
     before scheduling new work.

@@ -32,8 +32,10 @@ import { consumeModuleExpertParentAuthorization } from './parent-authorization.t
 import type { VerifiedModuleExpertParentAuthorization } from './parent-authorization.ts';
 import { validatedModuleExpertInvocationRequest } from './request-codec.ts';
 import type { ModuleExpertInvocationRequest } from './request-codec.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../agent-workflow/agent-attempt-version.ts';
 
-export const MODULE_EXPERT_WORKFLOW_VERSION = '1.0.0';
+export const MODULE_EXPERT_WORKFLOW_VERSION =
+  CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION;
 
 export enum ModuleExpertRuntimeCapabilityKind {
   Session = 'module-expert-runtime-session',

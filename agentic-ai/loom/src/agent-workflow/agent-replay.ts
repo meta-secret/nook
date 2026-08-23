@@ -18,6 +18,7 @@ import type {
   MaterializedViewReference,
   ProjectionReference,
 } from './domain.ts';
+import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
   readonly events: readonly AgentAttemptEvent[];
@@ -54,6 +55,7 @@ export function replayAgentAttemptJournal(
   if (!first || first.kind !== AgentAttemptEventKind.AttemptStarted) {
     throw new Error('Agent attempt journal must start with attempt-started.');
   }
+  assertCurrentAgentAttemptWorkflowVersion(first.workflowVersion);
   let projectedResult: ProjectionReference | false = false;
   let sawView = false;
   let terminal: ReplayedAgentAttempt | false = false;
@@ -71,6 +73,7 @@ export function replayAgentAttemptJournal(
         `Agent attempt journal sequence ${event.sequence} must equal ${index + 1}.`,
       );
     }
+    assertCurrentAgentAttemptWorkflowVersion(event.workflowVersion);
     const identityPair: AgentAttemptIdentityPair = {
       expected: first,
       actual: event,

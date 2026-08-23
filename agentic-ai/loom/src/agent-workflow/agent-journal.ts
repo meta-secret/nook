@@ -42,6 +42,7 @@ import {
   consumeModuleExpertCompletionAuthority,
   consumeModuleExpertJournalAuthority,
 } from '../module-experts/trusted-runtime.ts';
+import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
 import type {
   ModuleExpertJournalAuthority,
   ModuleExpertJournalBinding,
@@ -123,6 +124,7 @@ export class AgentAttemptJournal<TTask extends string> {
     } else if (!Object.values(AgentAttemptAdapterKind).includes(adapter)) {
       throw new Error('Agent attempt adapter provenance is invalid.');
     }
+    assertCurrentAgentAttemptWorkflowVersion(configuration.workflowVersion);
     assertFilesystemIdentifier(configuration.task);
     assertFilesystemIdentifier(configuration.agent);
     assertFilesystemIdentifier(configuration.runId);

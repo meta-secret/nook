@@ -179,6 +179,18 @@ The stream records bounded observable actions and outcomes. It never records:
 Every event carries the exact adapter, workflow, version, source commit, task,
 agent, attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
 
+The current adapter-bearing attempt schema uses workflow version `2.0.0`.
+
+- Generic delegation, named module experts, and compiled static agent tasks emit
+  that version.
+- Version `1.0.0` is the legacy pre-provenance schema.
+- Loom rejects legacy attempt creation and replay with migration guidance.
+- A disposable legacy local run must be removed before retrying.
+- A retained legacy run requires an explicit trusted migration.
+- A migration must not infer a missing adapter from paths, result kinds, or
+  terminal content.
+- Missing adapter provenance under version `2.0.0` is invalid evidence.
+
 - Sequence is monotonic inside one stream.
 - Cross-stream global ordering is not claimed.
 - A retry creates a new attempt stream.

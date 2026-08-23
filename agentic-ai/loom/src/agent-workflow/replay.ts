@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 import { replayAgentAttemptJournal } from './agent-replay.ts';
+import { AgentAttemptSchemaCompatibilityError } from './agent-attempt-version.ts';
 import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
 import type { AgentAttemptEvent } from './agent-events.ts';
 import { WorkflowEventKind, WorkflowRuntimeActivityKind } from './events.ts';
@@ -514,7 +515,8 @@ function verifyAgentProcessing<TTask extends string>(
   try {
     const replayRequest = { events };
     replayed = replayAgentAttemptJournal(replayRequest);
-  } catch {
+  } catch (error) {
+    if (error instanceof AgentAttemptSchemaCompatibilityError) throw error;
     invalidJournal(
       `workflow journal task ${request.event.task} has an invalid agent attempt stream`,
     );

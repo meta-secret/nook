@@ -1,7 +1,10 @@
 import {
   INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_AUTHORITY_PATHS,
   WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_SCOPE_PATHS,
+  WEB_EXPERT_SKILL_AUTHORITY_PATHS,
   WEB_EXPERT_SKILL_PATHS,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
@@ -45,7 +48,8 @@ export function auditModuleExpertSnapshotScopes(
       actual: profile.canonicalContextPaths,
       expected: expectedContext,
     };
-    if (!sameOrderedPaths(contextComparison)) {
+    const contextMatches = sameOrderedPaths(contextComparison);
+    if (!contextMatches) {
       const finding: ModuleExpertSnapshotScopeFinding = {
         code: 'invalid-canonical-expert-context',
         path: profile.agentDefinitionPath,
@@ -55,6 +59,32 @@ export function auditModuleExpertSnapshotScopes(
       findings.push(finding);
     }
     if (profile.name === WEB_EXPERT_NAME) {
+      const authorityComparison: OrderedSnapshotPaths = {
+        actual: profile.authorityPaths,
+        expected: WEB_EXPERT_AUTHORITY_PATHS,
+      };
+      if (!sameOrderedPaths(authorityComparison)) {
+        const finding: ModuleExpertSnapshotScopeFinding = {
+          code: 'invalid-web-expert-authorities',
+          path: profile.agentDefinitionPath,
+          message:
+            'web_expert requires the exact cataloged package and module-expert authorities.',
+        };
+        findings.push(finding);
+      }
+      const scopeComparison: OrderedSnapshotPaths = {
+        actual: profile.scopePaths,
+        expected: WEB_EXPERT_SCOPE_PATHS,
+      };
+      if (!sameOrderedPaths(scopeComparison)) {
+        const finding: ModuleExpertSnapshotScopeFinding = {
+          code: 'invalid-web-expert-scope',
+          path: profile.agentDefinitionPath,
+          message:
+            'web_expert requires the exact cataloged product specifications and extension release authorities.',
+        };
+        findings.push(finding);
+      }
       const skillComparison: OrderedSnapshotPaths = {
         actual: profile.skillPaths,
         expected: WEB_EXPERT_SKILL_PATHS,
@@ -65,6 +95,24 @@ export function auditModuleExpertSnapshotScopes(
           path: profile.agentDefinitionPath,
           message:
             'web_expert requires the exact cataloged module, frontend, and browser-extension skill bundle.',
+        };
+        findings.push(finding);
+      }
+      const availableAuthorities = new Set([
+        ...profile.canonicalContextPaths,
+        ...profile.authorityPaths,
+      ]);
+      if (
+        contextMatches &&
+        WEB_EXPERT_SKILL_AUTHORITY_PATHS.some(
+          (path) => !availableAuthorities.has(path),
+        )
+      ) {
+        const finding: ModuleExpertSnapshotScopeFinding = {
+          code: 'missing-web-expert-skill-authority',
+          path: profile.agentDefinitionPath,
+          message:
+            'web_expert snapshots must resolve every authority linked by the fixed skill bundle.',
         };
         findings.push(finding);
       }

@@ -15,6 +15,7 @@ import type {
   StaticAgentWorkflowDefinition,
   TaskResourceClaims,
 } from './domain.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.ts';
 
 export enum CortexAuditAgent {
   WorkflowAuditor = 'workflow-auditor',
@@ -90,7 +91,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
   CortexAuditJoin
 > = {
   name: StaticAgentWorkflowName.CortexFullGarbageCollection,
-  version: '1.0.0',
+  version: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
   entry: CortexAuditTask.ResolveBaseline,
   materializedViewTask: CortexAuditTask.SynthesizeFindings,
   taskNames: [

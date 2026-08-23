@@ -18,8 +18,9 @@ import type {
   WorkflowTaskOutput,
 } from '../../src/agent-workflow/domain.ts';
 import type { ModuleExpertInvocationRequest } from '../../src/module-experts/invoke.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 
-const MODULE_EXPERT_WORKFLOW_VERSION = '1.0.0';
+const MODULE_EXPERT_WORKFLOW_VERSION = CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION;
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 
 export type CreateCompletedAttemptArgs = {

@@ -75,6 +75,47 @@ export const WEB_EXPERT_SKILL_PATHS = [
   EXTENSION_RELEASE_SECURITY_SKILL_PATH,
 ] as const;
 
+export const WEB_EXPERT_SKILL_AUTHORITY_PATHS = [
+  '.cortex/AGENTS.md',
+  EXPERT_AUTHORITY_PATH,
+  '.cortex/dynamic-skills/browser-extension-release-security.md',
+  ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+] as const;
+
+export const WEB_EXPERT_AUTHORITY_PATHS = [
+  PACKAGE_AUTHORITY_PATH,
+  EXPERT_AUTHORITY_PATH,
+] as const;
+
+export const WEB_EXPERT_PRODUCT_SPEC_PATHS = [
+  '.cortex/product-specs/authenticator-items.md',
+  '.cortex/product-specs/browser-extension.md',
+  '.cortex/product-specs/credit-card-items.md',
+  '.cortex/product-specs/decentralized-auth.md',
+  '.cortex/product-specs/devices-and-access.md',
+  '.cortex/product-specs/file-attachments.md',
+  '.cortex/product-specs/password-envelope.md',
+  '.cortex/product-specs/password-manager.md',
+  '.cortex/product-specs/secure-notes.md',
+  '.cortex/product-specs/slip39-recovery.md',
+  '.cortex/product-specs/vault-app-isolation.md',
+] as const;
+
+export const WEB_EXPERT_RELEASE_AUTHORITY_PATHS = [
+  '.github/scripts/ci-release-verify-extension.sh',
+  '.github/workflows/main.yml',
+  '.github/workflows/pr.yml',
+  '.github/workflows/release.yml',
+  '.task/ci-workflows.yml',
+  'Taskfile.yml',
+  'nook-app/ci/Taskfile.yml',
+] as const;
+
+export const WEB_EXPERT_SCOPE_PATHS = [
+  ...WEB_EXPERT_PRODUCT_SPEC_PATHS,
+  ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
+] as const;
+
 export const INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS = [
   APP_COMMON_ROOT,
   AUTH2_ROOT,
@@ -474,7 +515,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'nook-app/nook-web/nook-web-extension',
       'nook-app/nook-web/nook-web-shared',
     ],
-    scopePaths: [],
+    scopePaths: WEB_EXPERT_SCOPE_PATHS,
     generatedScopePaths: [],
     excludedPaths: [
       RESEARCH_ROOT,
@@ -488,7 +529,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'nook-app/nook-web/nook-web-extension/package.json',
       'nook-app/nook-web/nook-web-shared/package.json',
     ],
-    authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
+    authorityPaths: WEB_EXPERT_AUTHORITY_PATHS,
     skillPaths: WEB_EXPERT_SKILL_PATHS,
     validationSelectors: ['web:check', 'web:test', 'extension:check'],
   },

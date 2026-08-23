@@ -11,6 +11,7 @@ import {
   WorkflowResultKind,
 } from '../../src/agent-workflow/domain.ts';
 import { WorkflowRuntimeActivityKind } from '../../src/agent-workflow/events.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 
@@ -86,15 +87,21 @@ describe('delegated agent journal CLI', () => {
           .trim()
           .split('\n'),
       ).toHaveLength(5);
+      const eventLines = (
+        await readFile(join(attemptDirectory, 'events.jsonl'), 'utf8')
+      )
+        .trim()
+        .split('\n');
       expect(
-        (await readFile(join(attemptDirectory, 'events.jsonl'), 'utf8'))
-          .trim()
-          .split('\n')
-          .every((line) =>
+        eventLines.every(
+          (line) =>
             line.includes(
               `"adapter":"${AgentAttemptAdapterKind.GenericDelegationRecorder}"`,
+            ) &&
+            line.includes(
+              `"workflowVersion":"${CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION}"`,
             ),
-          ),
+        ),
       ).toBe(true);
 
       const unsafeRequest = {

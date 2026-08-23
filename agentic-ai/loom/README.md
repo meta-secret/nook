@@ -116,6 +116,10 @@ They do not contain raw SDK errors, stacks, or command failure objects.
 
 Every event carries the workflow version and exact source commit.
 
+Adapter-bearing attempt streams currently use workflow version `2.0.0`.
+Version `1.0.0` is a legacy pre-provenance schema. Loom rejects it with local
+cleanup or explicit migration guidance. Replay never infers a missing adapter.
+
 Terminal projections are content-hashed and referenced by journal events.
 
 Local software-development workflows remain local.

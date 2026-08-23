@@ -41,10 +41,17 @@ import { createAuthorizedDirectParent } from './invoke-parent-fixture.ts';
 import { moduleExpertEvidenceOutput } from './invoke-parent-fixture.ts';
 import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
 import type { RegisterModuleExpertRuntimeMockArgs } from './module-expert-runtime-mock.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
+
+test('uses the current adapter-bearing attempt journal schema', () => {
+  expect(MODULE_EXPERT_WORKFLOW_VERSION).toBe(
+    CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  );
+});
 
 type ExtendedModuleExpertInvocationRequest = ModuleExpertInvocationRequest & {
   readonly allowWrites: boolean;

@@ -269,8 +269,31 @@ It identifies:
   - `.cortex/dynamic-skills/browser-extension-release-security.md`
   - `.cortex/dynamic-skills/module-expert.md`
   - `.cortex/workflows/module-oriented-development.md`
+- **Product specification scope:** The profile receives every exact
+  user-facing product authority that can own production web work.
+  - `authenticator-items.md`
+  - `browser-extension.md`
+  - `credit-card-items.md`
+  - `decentralized-auth.md`
+  - `devices-and-access.md`
+  - `file-attachments.md`
+  - `password-envelope.md`
+  - `password-manager.md`
+  - `secure-notes.md`
+  - `slip39-recovery.md`
+  - `vault-app-isolation.md`
+- **Extension release authority:** The profile receives only the exact
+  release-critical paths required by its extension security skill.
+  - `.github/scripts/ci-release-verify-extension.sh`
+  - `.github/workflows/main.yml`
+  - `.github/workflows/pr.yml`
+  - `.github/workflows/release.yml`
+  - `.task/ci-workflows.yml`
+  - `Taskfile.yml`
+  - `nook-app/ci/Taskfile.yml`
 - **Validation:** `web:check`, `web:test`, and `extension:check`.
-- **Negative space:** `nook-web-research` and generated-binding adaptation.
+- **Negative space:** `nook-web-research`, generated-binding adaptation,
+  monorepo setup policy, unrelated product records, and unrelated CI files.
 
 Split this grouped profile only when stable public interfaces and disjoint
 resource claims make independent ownership useful.

@@ -407,10 +407,16 @@ export async function verifyModuleExpertInvocationResult(
     processingVerificationFailed();
   }
   if (projectedTerminal.kind === TaskTerminalKind.Completed) {
-    const projectedOutput = decodeWorkflowTaskOutput(
-      JSON.stringify(projectedTerminal.output),
-    );
+    let projectedOutput: ReturnType<typeof decodeWorkflowTaskOutput>;
+    try {
+      projectedOutput = decodeWorkflowTaskOutput(
+        JSON.stringify(projectedTerminal.output),
+      );
+    } catch {
+      processingVerificationFailed();
+    }
     if (
+      projectedOutput.resultKind !== WorkflowResultKind.ModuleExpertEvidence ||
       JSON.stringify(projectedOutput) !==
         JSON.stringify(projectedTerminal.output) ||
       viewSerialized !==
@@ -435,6 +441,7 @@ export async function verifyModuleExpertInvocationResult(
     !firstEvent ||
     terminalEvents.length !== 1 ||
     !terminalEvent ||
+    firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
     firstEvent.runId !== result.runId ||
     firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
     firstEvent.workflowVersion !== MODULE_EXPERT_WORKFLOW_VERSION ||

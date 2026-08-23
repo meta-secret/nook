@@ -36,7 +36,12 @@ import {
   INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_AUTHORITY_PATHS,
   WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_PRODUCT_SPEC_PATHS,
+  WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
+  WEB_EXPERT_SCOPE_PATHS,
+  WEB_EXPERT_SKILL_AUTHORITY_PATHS,
   WEB_EXPERT_SKILL_PATHS,
 } from '../../src/module-experts/catalog.ts';
 import type {
@@ -395,6 +400,43 @@ describe('module expert audit', () => {
       '.agents/skills/design-taste-frontend/SKILL.md',
       '.agents/skills/browser-extension-release-security/SKILL.md',
     ]);
+    expect(WEB_EXPERT_SKILL_AUTHORITY_PATHS).toEqual([
+      '.cortex/AGENTS.md',
+      '.cortex/architecture/module-experts.md',
+      '.cortex/dynamic-skills/browser-extension-release-security.md',
+      '.cortex/dynamic-skills/module-expert.md',
+      '.cortex/workflows/module-oriented-development.md',
+    ]);
+    expect(WEB_EXPERT_AUTHORITY_PATHS).toEqual([
+      '.cortex/architecture/packages.md',
+      '.cortex/architecture/module-experts.md',
+    ]);
+    expect(WEB_EXPERT_PRODUCT_SPEC_PATHS).toEqual([
+      '.cortex/product-specs/authenticator-items.md',
+      '.cortex/product-specs/browser-extension.md',
+      '.cortex/product-specs/credit-card-items.md',
+      '.cortex/product-specs/decentralized-auth.md',
+      '.cortex/product-specs/devices-and-access.md',
+      '.cortex/product-specs/file-attachments.md',
+      '.cortex/product-specs/password-envelope.md',
+      '.cortex/product-specs/password-manager.md',
+      '.cortex/product-specs/secure-notes.md',
+      '.cortex/product-specs/slip39-recovery.md',
+      '.cortex/product-specs/vault-app-isolation.md',
+    ]);
+    expect(WEB_EXPERT_RELEASE_AUTHORITY_PATHS).toEqual([
+      '.github/scripts/ci-release-verify-extension.sh',
+      '.github/workflows/main.yml',
+      '.github/workflows/pr.yml',
+      '.github/workflows/release.yml',
+      '.task/ci-workflows.yml',
+      'Taskfile.yml',
+      'nook-app/ci/Taskfile.yml',
+    ]);
+    expect(WEB_EXPERT_SCOPE_PATHS).toEqual([
+      ...WEB_EXPERT_PRODUCT_SPEC_PATHS,
+      ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
+    ]);
     expect(INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS).toEqual([
       'nook-app/nook-platform/nook-app-common',
       'nook-app/nook-platform/nook-auth2',
@@ -450,6 +492,26 @@ describe('module expert audit', () => {
       },
       {
         ...webProfile,
+        scopePaths: webProfile.scopePaths.slice(1),
+      },
+      {
+        ...webProfile,
+        scopePaths: [...webProfile.scopePaths, '.github'],
+      },
+      {
+        ...webProfile,
+        scopePaths: [...webProfile.scopePaths].reverse(),
+      },
+      {
+        ...webProfile,
+        authorityPaths: webProfile.authorityPaths.slice(0, 1),
+      },
+      {
+        ...webProfile,
+        authorityPaths: [...webProfile.authorityPaths, '.github'],
+      },
+      {
+        ...webProfile,
         skillPaths: webProfile.skillPaths.slice(1),
       },
       {
@@ -471,6 +533,11 @@ describe('module expert audit', () => {
       'invalid-internal-api-rust-boundary-scope',
       'unexpected-boundary-scope',
       'invalid-canonical-expert-context',
+      'invalid-web-expert-scope',
+      'invalid-web-expert-scope',
+      'invalid-web-expert-scope',
+      'missing-web-expert-skill-authority',
+      'invalid-web-expert-authorities',
       'invalid-web-expert-skills',
       'invalid-web-expert-skills',
       'invalid-web-expert-skills',

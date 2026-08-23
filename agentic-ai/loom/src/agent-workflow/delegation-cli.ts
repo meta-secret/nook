@@ -19,6 +19,7 @@ import type {
   TaskTerminal,
   WorkflowAttemptNumber,
 } from './domain.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -79,7 +80,7 @@ async function main(): Promise<number> {
     runDirectory,
     runId: request.runId,
     workflow: DelegatedAgentWorkflowName.AgentWork,
-    workflowVersion: '1.0.0',
+    workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
     sourceCommit: request.sourceCommit,
     task: request.task,
     agent: request.agent,
