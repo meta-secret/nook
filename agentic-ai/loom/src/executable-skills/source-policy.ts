@@ -10,6 +10,11 @@ export type ExecutableSkillSourceAnalysis = {
   readonly moduleSpecifiers: readonly string[];
 };
 
+type ExecutableSkillSourceContext = {
+  readonly checker: ts.TypeChecker;
+  readonly sourceFile: ts.SourceFile;
+};
+
 const FORBIDDEN_NODE_MODULES = new Set([
   'child_process',
   'cluster',
@@ -18,10 +23,14 @@ const FORBIDDEN_NODE_MODULES = new Set([
   'fs',
   'http',
   'https',
+  'inspector',
   'module',
   'net',
   'process',
+  'repl',
   'tls',
+  'vm',
+  'wasi',
   'worker_threads',
 ]);
 const ALLOWED_BUN_ROOT_MEMBERS = new Set([
@@ -29,6 +38,12 @@ const ALLOWED_BUN_ROOT_MEMBERS = new Set([
   'stderr',
   'stdout',
   'write',
+]);
+const ALLOWED_OBJECT_ROOT_MEMBERS = new Set([
+  'freeze',
+  'hasOwn',
+  'keys',
+  'values',
 ]);
 const FORBIDDEN_PROCESS_MEMBERS = new Set([
   'chdir',
@@ -38,20 +53,30 @@ const FORBIDDEN_PROCESS_MEMBERS = new Set([
   'getBuiltinModule',
   'kill',
 ]);
+const FORBIDDEN_EVALUATOR_MEMBERS = new Set([
+  'AsyncFunction',
+  'Function',
+  'GeneratorFunction',
+  '__proto__',
+  'constructor',
+  'eval',
+  'prototype',
+]);
 
 export function analyzeExecutableSkillSource(
   request: AnalyzeExecutableSkillSourceRequest,
 ): ExecutableSkillSourceAnalysis {
-  const sourceFile = ts.createSourceFile(
-    request.relativePath,
-    request.source,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const context = createExecutableSkillSourceContext(request);
+  const sourceFile = context.sourceFile;
   const moduleSpecifiers: string[] = [];
   const visit = (node: ts.Node): void => {
-    if (request.auditCapabilities) assertNoForbiddenCapability(node);
+    if (request.auditCapabilities) {
+      const capabilityRequest: AssertNoForbiddenCapabilityRequest = {
+        checker: context.checker,
+        node,
+      };
+      assertNoForbiddenCapability(capabilityRequest);
+    }
     if (
       ts.isCallExpression(node) &&
       (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
@@ -96,7 +121,15 @@ export function analyzeExecutableSkillSource(
   return { moduleSpecifiers };
 }
 
-function assertNoForbiddenCapability(node: ts.Node): void {
+type AssertNoForbiddenCapabilityRequest = {
+  readonly checker: ts.TypeChecker;
+  readonly node: ts.Node;
+};
+
+function assertNoForbiddenCapability(
+  request: AssertNoForbiddenCapabilityRequest,
+): void {
+  const node = request.node;
   if (ts.isIdentifier(node) && isForbiddenAmbientIdentifier(node)) {
     throw new Error('Executable skill forbids ambient global capabilities.');
   }
@@ -107,7 +140,31 @@ function assertNoForbiddenCapability(node: ts.Node): void {
   ) {
     throw new Error('Executable skill forbids ambient network APIs.');
   }
+  if (ts.isBindingElement(node) && isForbiddenEvaluatorBinding(node)) {
+    throw new Error('Executable skill forbids dynamic code generation.');
+  }
+  if (ts.isElementAccessExpression(node)) {
+    const indexRequest: IsNumericElementIndexRequest = {
+      checker: request.checker,
+      expression: node.argumentExpression,
+    };
+    if (!isNumericElementIndex(indexRequest)) {
+      throw new Error(
+        'Executable skill forbids nonnumeric computed property access.',
+      );
+    }
+  }
   if (!ts.isPropertyAccessExpression(node)) return;
+  if (FORBIDDEN_EVALUATOR_MEMBERS.has(node.name.text)) {
+    throw new Error('Executable skill forbids dynamic code generation.');
+  }
+  if (
+    ts.isIdentifier(node.expression) &&
+    node.expression.text === 'Object' &&
+    !ALLOWED_OBJECT_ROOT_MEMBERS.has(node.name.text)
+  ) {
+    throw new Error('Executable skill forbids reflective Object APIs.');
+  }
   if (
     ts.isIdentifier(node.expression) &&
     node.expression.text === 'Bun' &&
@@ -147,12 +204,30 @@ function isForbiddenAmbientIdentifier(node: ts.Identifier): boolean {
   if (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) {
     return false;
   }
+  if (node.text === 'Object') {
+    return !(
+      ts.isPropertyAccessExpression(node.parent) &&
+      node.parent.expression === node &&
+      ALLOWED_OBJECT_ROOT_MEMBERS.has(node.parent.name.text)
+    );
+  }
   if (
     node.text === 'fetch' ||
+    node.text === 'eval' ||
+    node.text === 'Function' ||
+    node.text === 'AsyncFunction' ||
+    node.text === 'GeneratorFunction' ||
+    node.text === 'Reflect' ||
     node.text === 'WebSocket' ||
+    node.text === 'WebAssembly' ||
+    node.text === 'global' ||
     node.text === 'require' ||
     node.text === 'process' ||
-    node.text === 'globalThis'
+    node.text === 'globalThis' ||
+    node.text === 'self' ||
+    node.text === 'setInterval' ||
+    node.text === 'setTimeout' ||
+    node.text === 'window'
   ) {
     return true;
   }
@@ -161,6 +236,67 @@ function isForbiddenAmbientIdentifier(node: ts.Identifier): boolean {
     ts.isPropertyAccessExpression(node.parent) &&
     node.parent.expression === node
   );
+}
+
+function isForbiddenEvaluatorBinding(node: ts.BindingElement): boolean {
+  const propertyName = node.propertyName;
+  if (propertyName && ts.isComputedPropertyName(propertyName)) return true;
+  const candidate = propertyName ?? node.name;
+  if (ts.isIdentifier(candidate) || ts.isStringLiteral(candidate)) {
+    return FORBIDDEN_EVALUATOR_MEMBERS.has(candidate.text);
+  }
+  return false;
+}
+
+type IsNumericElementIndexRequest = {
+  readonly checker: ts.TypeChecker;
+  readonly expression: ts.Expression;
+};
+
+function isNumericElementIndex(request: IsNumericElementIndexRequest): boolean {
+  const valueType = request.checker.getTypeAtLocation(request.expression);
+  if (valueType.isUnion()) {
+    return valueType.types.every(
+      (member) => (member.flags & ts.TypeFlags.NumberLike) !== 0,
+    );
+  }
+  return (valueType.flags & ts.TypeFlags.NumberLike) !== 0;
+}
+
+function createExecutableSkillSourceContext(
+  request: AnalyzeExecutableSkillSourceRequest,
+): ExecutableSkillSourceContext {
+  const compilerOptions: ts.CompilerOptions = {
+    module: ts.ModuleKind.ESNext,
+    noLib: true,
+    strict: true,
+    target: ts.ScriptTarget.ES2022,
+  };
+  const sourceFile = ts.createSourceFile(
+    request.relativePath,
+    request.source,
+    ts.ScriptTarget.ES2022,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const missingSources = new Map<string, ts.SourceFile>();
+  const missingText = new Map<string, string>();
+  const compilerHost = ts.createCompilerHost(compilerOptions);
+  compilerHost.fileExists = (fileName) => fileName === request.relativePath;
+  compilerHost.getSourceFile = (fileName) =>
+    fileName === request.relativePath
+      ? sourceFile
+      : missingSources.get(fileName);
+  compilerHost.readFile = (fileName) =>
+    fileName === request.relativePath
+      ? request.source
+      : missingText.get(fileName);
+  const rootNames = [request.relativePath];
+  const program = ts.createProgram(rootNames, compilerOptions, compilerHost);
+  return {
+    checker: program.getTypeChecker(),
+    sourceFile,
+  };
 }
 
 function isBunOutputWrite(node: ts.Node): boolean {

@@ -24,7 +24,13 @@ export type MaterializeSkillClosureRequest = {
   readonly deadlineExpiresAt: number;
   readonly repositoryRoot: string;
   readonly signal: AbortSignal | false;
+  readonly sourceTree: string;
 };
+
+export type MaterializeSkillAcceptanceProbeClosureRequest = Omit<
+  MaterializeSkillClosureRequest,
+  'sourceTree'
+>;
 
 type MaterializeSkillClosureInternalRequest = MaterializeSkillClosureRequest & {
   readonly auditCapabilities: boolean;
@@ -65,11 +71,13 @@ export async function materializeSkillClosure(
 }
 
 export async function materializeSkillAcceptanceProbeClosure(
-  request: MaterializeSkillClosureRequest,
+  request: MaterializeSkillAcceptanceProbeClosureRequest,
 ): Promise<MaterializedSkillClosure> {
+  const sourceTree = await writeIndexTree(request);
   const internalRequest: MaterializeSkillClosureInternalRequest = {
     ...request,
     auditCapabilities: false,
+    sourceTree,
   };
   return materializeSkillClosureInternal(internalRequest);
 }
@@ -78,7 +86,10 @@ async function materializeSkillClosureInternal(
   request: MaterializeSkillClosureInternalRequest,
 ): Promise<MaterializedSkillClosure> {
   assertClosureActive(request);
-  const sourceTree = await writeIndexTree(request);
+  if (!TREE_HASH.test(request.sourceTree)) {
+    throw new Error('Executable skill source tree is invalid.');
+  }
+  const sourceTree = request.sourceTree;
   const pending = [request.definition.runnerPath];
   const sources = new Map<string, string>();
   const externalPackages = new Set<string>();
@@ -236,7 +247,7 @@ async function materializeSkillClosureInternal(
 }
 
 async function writeIndexTree(
-  request: MaterializeSkillClosureInternalRequest,
+  request: MaterializeSkillAcceptanceProbeClosureRequest,
 ): Promise<string> {
   const gitRequest: RunClosureGitRequest = {
     arguments: ['write-tree'],

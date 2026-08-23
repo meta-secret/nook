@@ -115,6 +115,7 @@ test('closure abort and deadline failures leave no temporary context', async () 
       definition: closureDefinition(),
       repositoryRoot,
       signal: controller.signal,
+      sourceTree: currentIndexTree(repositoryRoot),
     };
     await expect(materializeSkillClosure(abortedRequest)).rejects.toThrow(
       'cancelled',
@@ -124,6 +125,7 @@ test('closure abort and deadline failures leave no temporary context', async () 
       definition: closureDefinition(),
       repositoryRoot,
       signal: false,
+      sourceTree: currentIndexTree(repositoryRoot),
     };
     await expect(materializeSkillClosure(expiredRequest)).rejects.toThrow(
       'deadline expired',
@@ -160,6 +162,7 @@ test('post-mkdtemp cancellation removes the materialized context', async () => {
       definition: closureDefinition(),
       repositoryRoot,
       signal: controller.signal,
+      sourceTree: currentIndexTree(repositoryRoot),
     };
     const materialization = materializeSkillClosure(closureRequest);
     const waitRequest: WaitForClosureContextRequest = {
@@ -185,6 +188,27 @@ test('rejects forbidden capabilities in recursively imported sources', async () 
     "const load = require;\nload('node:child_process');\n",
     "import processRuntime from 'node:process';\nconst load = processRuntime.getBuiltinModule;\nload('node:child_process');\n",
     "import { getBuiltinModule as load } from 'process';\nload('child_process');\n",
+    "eval('1 + 1');\n",
+    "const execute = eval;\nexecute('1 + 1');\n",
+    "Function('return 1')();\n",
+    "new Function('return 1')();\n",
+    "const Constructor = Function;\nnew Constructor('return 1')();\n",
+    'const Constructor = ({}).constructor;\nvoid Constructor;\n',
+    "const Constructor = ({})['constructor'];\nvoid Constructor;\n",
+    "global.eval('1 + 1');\n",
+    "self.Function('return 1')();\n",
+    "Reflect.get(() => false, 'constructor')('return 1')();\n",
+    'const Constructor = (() => false)[`constructor`];\nvoid Constructor;\n',
+    "const { constructor: Constructor } = () => false;\nConstructor('return 1')();\n",
+    "const key = 'constructor';\n(() => false)[key]('return 1')();\n",
+    "Object.getOwnPropertyDescriptor(Object.getPrototypeOf(() => false), 'constructor')?.value('return 1')();\n",
+    "(async function* () {})['con' + 'structor']('return 1')();\n",
+    "import vm from 'node:vm';\nnew vm.Script('1 + 1');\n",
+    "import repl from 'repl';\nvoid repl;\n",
+    "import inspector from 'node:inspector';\nvoid inspector;\n",
+    "import { WASI } from 'node:wasi';\nvoid WASI;\n",
+    'const compile = WebAssembly.compile;\nvoid compile;\n',
+    "const schedule = setTimeout;\nschedule('1 + 1', 0);\n",
     "Bun.spawn(['true']);\n",
     "Bun.spawnSync(['true']);\n",
     'await Bun.$`echo forbidden`;\n',
@@ -259,6 +283,7 @@ test('bounds worktree verification and rejects nonregular descriptor swaps', asy
         definition: closureDefinition(),
         repositoryRoot,
         signal: false,
+        sourceTree: currentIndexTree(repositoryRoot),
       };
       await expect(materializeSkillClosure(closureRequest)).rejects.toThrow(
         'worktree/index drift',
@@ -280,6 +305,7 @@ test('rejects a worktree source that grows during bounded verification', async (
     definition: closureDefinition(),
     repositoryRoot,
     signal: false,
+    sourceTree: currentIndexTree(repositoryRoot),
   };
   const growth = setInterval(() => appendFileSync(dependencyPath, 'growth'), 0);
   try {
@@ -441,7 +467,13 @@ function closureRequestFor(
     definition: closureDefinition(),
     repositoryRoot,
     signal: false,
+    sourceTree: currentIndexTree(repositoryRoot),
   };
+}
+
+function currentIndexTree(repositoryRoot: string): string {
+  const gitOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
+  return execFileSync('git', ['write-tree'], gitOptions).trim();
 }
 
 function createClosureRepository(

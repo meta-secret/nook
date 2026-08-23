@@ -82,9 +82,14 @@ export type ExecutableSkillRegistryInspection =
       readonly findings: readonly [];
     };
 
-const auditedRepositoryRoots = new WeakMap<
+type AuditedExecutableSkillRegistryBinding = {
+  readonly repositoryRoot: string;
+  readonly sourceTree: string;
+};
+
+const auditedRegistryBindings = new WeakMap<
   AuditedExecutableSkillRegistry,
-  string
+  AuditedExecutableSkillRegistryBinding
 >();
 
 export async function inspectExecutableSkillRegistry(
@@ -109,18 +114,23 @@ export async function inspectExecutableSkillRegistry(
     ...request,
     repositoryRoot,
   };
-  const findings = await auditExecutableSkillRegistryCanonical(auditRequest);
-  if (findings.length > 0) {
+  const audit = await auditExecutableSkillRegistryCanonical(auditRequest);
+  if (audit.findings.length > 0) {
     return {
       kind: ExecutableSkillRegistryInspectionKind.Invalid,
-      findings,
+      findings: audit.findings,
     };
   }
   const authorityValue: AuditedExecutableSkillRegistry = {
     auditId: randomUUID(),
   };
   const authority = Object.freeze(authorityValue);
-  auditedRepositoryRoots.set(authority, repositoryRoot);
+  const bindingValue: AuditedExecutableSkillRegistryBinding = {
+    repositoryRoot,
+    sourceTree: audit.sourceTree,
+  };
+  const binding = Object.freeze(bindingValue);
+  auditedRegistryBindings.set(authority, binding);
   return {
     kind: ExecutableSkillRegistryInspectionKind.Verified,
     authority,
@@ -152,22 +162,29 @@ export type ResolveAuditedExecutableSkillRepositoryRequest = {
   readonly signal: AbortSignal | false;
 };
 
+export type ResolvedAuditedExecutableSkillRepository = {
+  readonly repositoryRoot: string;
+  readonly sourceTree: string;
+};
+
 export async function resolveAuditedExecutableSkillRepository(
   request: ResolveAuditedExecutableSkillRepositoryRequest,
-): Promise<string> {
-  const repositoryRoot = auditedRepositoryRoots.get(request.authority);
-  if (typeof repositoryRoot !== 'string') {
+): Promise<ResolvedAuditedExecutableSkillRepository> {
+  const binding = auditedRegistryBindings.get(request.authority);
+  if (!binding) {
     throw new Error('Executable skill registry authority is invalid.');
   }
-  const auditRequest: AuditExecutableSkillRegistryRequest = {
+  const treeRequest: AuditExecutableSkillRegistryRequest = {
     deadlineExpiresAt: request.deadlineExpiresAt,
-    repositoryRoot,
+    repositoryRoot: binding.repositoryRoot,
     signal: request.signal,
   };
-  if ((await auditExecutableSkillRegistryCanonical(auditRequest)).length > 0) {
-    throw new Error('Executable skill registry changed after authorization.');
+  if ((await writeFrozenRegistryTree(treeRequest)) !== binding.sourceTree) {
+    throw new Error(
+      'Executable skill registry source tree changed after authorization.',
+    );
   }
-  return repositoryRoot;
+  return binding;
 }
 
 export type ValidateRegisteredExecutableSkillResultRequest = {
@@ -202,7 +219,8 @@ export async function auditExecutableSkillRegistry(
       ...request,
       repositoryRoot,
     };
-    return auditExecutableSkillRegistryCanonical(canonicalRequest);
+    return (await auditExecutableSkillRegistryCanonical(canonicalRequest))
+      .findings;
   } catch {
     assertRegistryActive(request);
     return [unsafeRegistryRootFinding()];
@@ -211,7 +229,7 @@ export async function auditExecutableSkillRegistry(
 
 async function auditExecutableSkillRegistryCanonical(
   request: AuditExecutableSkillRegistryRequest,
-): Promise<readonly ExecutableSkillRegistryFinding[]> {
+): Promise<ExecutableSkillRegistryAudit> {
   assertRegistryActive(request);
   const discovery = await discoverManifestPaths(request);
   const manifestPaths = discovery.manifestPaths;
@@ -263,8 +281,16 @@ async function auditExecutableSkillRegistryCanonical(
     };
     findings.push(finding);
   }
-  return findings;
+  return {
+    findings,
+    sourceTree: discovery.sourceTree,
+  };
 }
+
+type ExecutableSkillRegistryAudit = {
+  readonly findings: ExecutableSkillRegistryFinding[];
+  readonly sourceTree: string;
+};
 
 type AuditRegistrationRequest = AuditExecutableSkillRegistryRequest & {
   readonly registration: RegisteredExecutableSkill;
@@ -316,6 +342,7 @@ async function auditRegistration(
     definition: request.registration,
     repositoryRoot: request.repositoryRoot,
     signal: request.signal,
+    sourceTree: request.sourceTree,
   };
   try {
     const closure = await materializeSkillClosure(closureRequest);
@@ -342,18 +369,7 @@ async function auditRegistration(
 async function discoverManifestPaths(
   request: AuditExecutableSkillRegistryRequest,
 ): Promise<FrozenManifestDiscovery> {
-  const writeTreeRequest: RunRegistryGitRequest = {
-    arguments: ['write-tree'],
-    deadlineExpiresAt: request.deadlineExpiresAt,
-    repositoryRoot: request.repositoryRoot,
-    signal: request.signal,
-  };
-  const sourceTree = (await runRegistryGit(writeTreeRequest)).trim();
-  if (!GIT_TREE_HASH.test(sourceTree)) {
-    throw new Error(
-      'Executable skill manifest index tree could not be frozen.',
-    );
-  }
+  const sourceTree = await writeFrozenRegistryTree(request);
   const listTreeRequest: RunRegistryGitRequest = {
     arguments: [
       'ls-tree',
@@ -379,6 +395,24 @@ async function discoverManifestPaths(
     sourceTree,
     manifestPaths: manifestPaths.sort(),
   };
+}
+
+async function writeFrozenRegistryTree(
+  request: AuditExecutableSkillRegistryRequest,
+): Promise<string> {
+  const writeTreeRequest: RunRegistryGitRequest = {
+    arguments: ['write-tree'],
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    repositoryRoot: request.repositoryRoot,
+    signal: request.signal,
+  };
+  const sourceTree = (await runRegistryGit(writeTreeRequest)).trim();
+  if (!GIT_TREE_HASH.test(sourceTree)) {
+    throw new Error(
+      'Executable skill manifest index tree could not be frozen.',
+    );
+  }
+  return sourceTree;
 }
 
 type FrozenManifestDiscovery = {

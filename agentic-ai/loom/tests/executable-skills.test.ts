@@ -82,6 +82,11 @@ function currentIndexTree(): string {
   return execFileSync('git', ['write-tree'], treeOptions).trim();
 }
 
+function currentIndexTreeFor(repositoryRoot: string): string {
+  const treeOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
+  return execFileSync('git', ['write-tree'], treeOptions).trim();
+}
+
 function executableSkillContainersForTree(
   sourceTree: string,
 ): ReadonlySet<string> {
@@ -508,6 +513,7 @@ test('execution is bound to the explicitly audited repository root', async () =>
     if (inspection.kind !== ExecutableSkillRegistryInspectionKind.Verified) {
       return;
     }
+    const auditedSourceTree = currentIndexTreeFor(repositoryRoot);
     const requestValue = {
       kind: CortexArticleContractKind.Request,
       documents: [],
@@ -523,11 +529,21 @@ test('execution is bound to the explicitly audited repository root', async () =>
       signal: false,
       skillId: 'cortex-article-structure',
     };
-    const execution = await executeRegisteredSkill(request);
-    const gitOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
-    expect(execution.sourceTree).toBe(
-      execFileSync('git', ['write-tree'], gitOptions).trim(),
+    const runnerPath = path.join(
+      repositoryRoot,
+      '.agents/skills/cortex-article-structure/src/runner.ts',
     );
+    const originalRunner = readFileSync(runnerPath, 'utf8');
+    writeFileSync(runnerPath, `${originalRunner}\nvoid 0;\n`);
+    const gitOptions = { cwd: repositoryRoot, encoding: 'utf8' } as const;
+    execFileSync('git', ['add', '--', runnerPath], gitOptions);
+    await expect(executeRegisteredSkill(request)).rejects.toThrow(
+      'source tree changed after authorization',
+    );
+    writeFileSync(runnerPath, originalRunner);
+    execFileSync('git', ['add', '--', runnerPath], gitOptions);
+    const execution = await executeRegisteredSkill(request);
+    expect(execution.sourceTree).toBe(auditedSourceTree);
   } finally {
     rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
   }
@@ -539,6 +555,27 @@ test('rejects forged audited repository authority', async () => {
   };
   const request: ExecuteRegisteredSkillRequest = {
     registryAuthority: forgedAuthority,
+    serializedRequest: '{}',
+    signal: false,
+    skillId: 'cortex-article-structure',
+  };
+  await expect(executeRegisteredSkill(request)).rejects.toThrow(
+    'authority is invalid',
+  );
+});
+
+test('rejects a structurally rebound audited registry authority', async () => {
+  const inspection = await inspectExecutableSkillRegistry(
+    registryAuditRequest(REPOSITORY_ROOT),
+  );
+  if (inspection.kind !== ExecutableSkillRegistryInspectionKind.Verified) {
+    throw new Error('Executable skill registry fixture is invalid.');
+  }
+  const reboundAuthority: AuditedExecutableSkillRegistry = {
+    ...inspection.authority,
+  };
+  const request: ExecuteRegisteredSkillRequest = {
+    registryAuthority: reboundAuthority,
     serializedRequest: '{}',
     signal: false,
     skillId: 'cortex-article-structure',
@@ -677,6 +714,27 @@ test('shared AST policy rejects forbidden forms in nested sources', async () => 
     "const load = require;\nload('node:child_process');\n",
     "import processRuntime from 'node:process';\nconst load = processRuntime.getBuiltinModule;\nload('node:child_process');\n",
     "import { getBuiltinModule as load } from 'process';\nload('child_process');\n",
+    "eval('1 + 1');\n",
+    "const execute = eval;\nexecute('1 + 1');\n",
+    "Function('return 1')();\n",
+    "new Function('return 1')();\n",
+    "const Constructor = Function;\nnew Constructor('return 1')();\n",
+    'const Constructor = ({}).constructor;\nvoid Constructor;\n',
+    "const Constructor = ({})['constructor'];\nvoid Constructor;\n",
+    "global.eval('1 + 1');\n",
+    "self.Function('return 1')();\n",
+    "Reflect.get(() => false, 'constructor')('return 1')();\n",
+    'const Constructor = (() => false)[`constructor`];\nvoid Constructor;\n',
+    "const { constructor: Constructor } = () => false;\nConstructor('return 1')();\n",
+    "const key = 'constructor';\n(() => false)[key]('return 1')();\n",
+    "Object.getOwnPropertyDescriptor(Object.getPrototypeOf(() => false), 'constructor')?.value('return 1')();\n",
+    "(async function* () {})['con' + 'structor']('return 1')();\n",
+    "import vm from 'node:vm';\nnew vm.Script('1 + 1');\n",
+    "import repl from 'repl';\nvoid repl;\n",
+    "import inspector from 'node:inspector';\nvoid inspector;\n",
+    "import { WASI } from 'node:wasi';\nvoid WASI;\n",
+    'const compile = WebAssembly.compile;\nvoid compile;\n',
+    "const schedule = setTimeout;\nschedule('1 + 1', 0);\n",
     'void Bun.env.SECRET;\n',
     'const runtime = Bun;\nvoid runtime;\n',
     "Bun.spawn(['true']);\n",

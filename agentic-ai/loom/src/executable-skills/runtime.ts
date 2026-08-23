@@ -55,6 +55,7 @@ type ExecuteSkillWithDefinitionRequest = ExecuteRegisteredSkillRequest & {
   readonly definition: RegisteredExecutableSkill;
   readonly provisioningDeadline: DockerDeadline;
   readonly repositoryRoot: string;
+  readonly sourceTree: string;
 };
 
 export type RunDockerSkillRequest = {
@@ -294,13 +295,14 @@ export async function executeRegisteredSkill(
     deadlineExpiresAt: provisioningDeadline.expiresAt,
     signal: request.signal,
   };
-  const repositoryRoot =
+  const repository =
     await resolveAuditedExecutableSkillRepository(repositoryRequest);
   const executionRequest: ExecuteSkillWithDefinitionRequest = {
     ...request,
     definition,
     provisioningDeadline,
-    repositoryRoot,
+    repositoryRoot: repository.repositoryRoot,
+    sourceTree: repository.sourceTree,
   };
   return executeSkillWithDefinition(executionRequest);
 }
@@ -328,6 +330,7 @@ async function executeSkillWithDefinition(
     definition: request.definition,
     repositoryRoot: request.repositoryRoot,
     signal: request.signal,
+    sourceTree: request.sourceTree,
   };
   const closure = await materializeSkillClosure(closureRequest);
   let dockerOutput: DockerSkillOutput;
