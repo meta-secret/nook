@@ -159,50 +159,44 @@ tasks:
   ci:main:publish-native-cache:
     desc: Promote verified native ARC state locally or publish fallback cache scopes.
     cmds:
-      - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
-           test "${GITHUB_REF:-}" = "refs/heads/main" &&
-           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
-          task ci:arc:promote-buildkit-cache
-        else
-          task _buildx:healthy BUILD_TASK=_ci:main:publish-native-cache:host
-        fi
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-native-cache:host }
 
   ci:main:publish-wasm-cache:
     desc: Promote verified WASM ARC state locally or publish fallback cache scopes.
     cmds:
-      - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
-           test "${GITHUB_REF:-}" = "refs/heads/main" &&
-           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
-          task ci:arc:promote-buildkit-cache
-        else
-          task _buildx:healthy BUILD_TASK=_ci:main:publish-wasm-cache:host
-        fi
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-wasm-cache:host }
 
   ci:main:publish-web-cache:
     desc: Promote verified web ARC state locally or publish fallback cache scopes.
     cmds:
-      - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
-           test "${GITHUB_REF:-}" = "refs/heads/main" &&
-           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
-          task ci:arc:promote-buildkit-cache
-        else
-          task _buildx:healthy BUILD_TASK=_ci:main:publish-web-cache:host
-        fi
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-web-cache:host }
 
   ci:main:publish-web-e2e-cache:
     desc: Promote verified browser ARC state locally or publish fallback cache scopes.
     cmds:
-      - |
-        if test "${NOOK_ARC_RUNNER:-}" = "1" &&
-           test "${GITHUB_REF:-}" = "refs/heads/main" &&
-           test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
-          task ci:arc:promote-buildkit-cache
-        else
-          task _buildx:healthy BUILD_TASK=_ci:main:publish-web-e2e-cache:host
-        fi
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-web-e2e-cache:host }
+
+  _ci:main:publish-cache:
+    internal: true
+    requires:
+      vars: [HOST_TASK]
+    vars:
+      CACHE_PUBLISH_TASK:
+        sh: |
+          if test "${NOOK_ARC_RUNNER:-}" = "1" &&
+             test "${GITHUB_REF:-}" = "refs/heads/main" &&
+             test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
+            printf '%s\n' ci:arc:promote-buildkit-cache
+          else
+            printf '%s\n' _buildx:healthy
+          fi
+    cmds:
+      - task: '{{.CACHE_PUBLISH_TASK}}'
+        vars: { BUILD_TASK: '{{.HOST_TASK}}' }
 
   ci:arc:promote-buildkit-cache:
     desc: Ask the trusted ARC sidecar to promote this successful job's private BuildKit state.
