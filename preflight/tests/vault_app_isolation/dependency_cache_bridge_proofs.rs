@@ -356,6 +356,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         verifier.contains("docker-container")
             && verifier.contains("NOOK_BUILDKIT_REMOTE")
             && verifier.contains("buildx prune")
+            && verifier.contains("refusing to prune non-job ARC BuildKit builder")
             && verifier.contains("--use")
             && !verifier.contains("--builder")
             && verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")

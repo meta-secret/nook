@@ -14,6 +14,12 @@ use_arc_sidecar=""
 if [ "${NOOK_BUILDKIT_REMOTE:-}" = "1" ]; then
   use_arc_sidecar=1
   : "${arc_builder:?missing NOOK_PR_BUILDX_BUILDER for ARC cache proof}"
+  expected_arc_builder="nook-arc-${GITHUB_RUN_ID:?missing GITHUB_RUN_ID}-${GITHUB_JOB:?missing GITHUB_JOB}-${GITHUB_RUN_ATTEMPT:?missing GITHUB_RUN_ATTEMPT}"
+  expected_arc_builder="$(printf '%s' "$expected_arc_builder" | tr -c 'a-zA-Z0-9_.-' '-')"
+  if [ "$arc_builder" != "$expected_arc_builder" ]; then
+    echo "refusing to prune non-job ARC BuildKit builder: $arc_builder" >&2
+    exit 2
+  fi
 fi
 
 bake_args=(

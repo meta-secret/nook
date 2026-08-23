@@ -439,6 +439,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         cache_verifier.contains("docker-container")
             && cache_verifier.contains("NOOK_BUILDKIT_REMOTE")
             && cache_verifier.contains("buildx prune")
+            && cache_verifier.contains("refusing to prune non-job ARC BuildKit builder")
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")

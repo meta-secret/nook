@@ -39,11 +39,30 @@ arc_calls="$fixture/arc-calls"
 run_proof \
   "$arc_calls" \
   NOOK_BUILDKIT_REMOTE=1 \
-  NOOK_PR_BUILDX_BUILDER=nook-arc-test
-grep -Fxq 'buildx use nook-arc-test' "$arc_calls"
+  NOOK_PR_BUILDX_BUILDER=nook-arc-32606198807-wasm-1 \
+  GITHUB_RUN_ID=32606198807 \
+  GITHUB_JOB=wasm \
+  GITHUB_RUN_ATTEMPT=1
+grep -Fxq 'buildx use nook-arc-32606198807-wasm-1' "$arc_calls"
 grep -Fxq 'buildx prune --all --force' "$arc_calls"
 if grep -Fq 'buildx create' "$arc_calls" || grep -Fq 'buildx rm' "$arc_calls"; then
   echo 'ARC cache proof must reuse, prune, and retain its private sidecar' >&2
+  exit 1
+fi
+
+refused_calls="$fixture/refused-calls"
+if run_proof \
+  "$refused_calls" \
+  NOOK_BUILDKIT_REMOTE=1 \
+  NOOK_PR_BUILDX_BUILDER=nook-arc-another-job \
+  GITHUB_RUN_ID=32606198807 \
+  GITHUB_JOB=wasm \
+  GITHUB_RUN_ATTEMPT=1; then
+  echo 'ARC cache proof must reject a non-job builder before pruning' >&2
+  exit 1
+fi
+if [ -e "$refused_calls" ]; then
+  echo 'ARC cache proof contacted the runtime before rejecting a non-job builder' >&2
   exit 1
 fi
 
