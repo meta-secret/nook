@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, rmSync } from 'node:fs';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { constants, rmSync } from 'node:fs';
+import { mkdir, mkdtemp, open, writeFile } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { RegisteredExecutableSkill } from './domain.ts';
@@ -285,16 +286,63 @@ async function assertWorktreeMatches(
   const indexed = await readTreeFile(request);
   assertClosureActive(request);
   const absolutePath = path.join(request.repositoryRoot, request.relativePath);
-  const stat = lstatSync(absolutePath);
-  if (
-    stat.isSymbolicLink() ||
-    !stat.isFile() ||
-    readFileSync(absolutePath, 'utf8') !== indexed
-  ) {
+  let handle: FileHandle | false = false;
+  let worktreeMatches = false;
+  try {
+    const flags =
+      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
+    handle = await open(absolutePath, flags);
+    const stat = await handle.stat();
+    assertClosureActive(request);
+    if (stat.isFile() && stat.size <= EXECUTABLE_SKILL_CLOSURE_LIMITS.bytes) {
+      const indexedBytes = Buffer.byteLength(indexed, 'utf8');
+      const maximumBytes = Math.min(
+        indexedBytes + 1,
+        EXECUTABLE_SKILL_CLOSURE_LIMITS.bytes + 1,
+      );
+      const readRequest: ReadWorktreeDescriptorRequest = {
+        handle,
+        lifecycle: request,
+        maximumBytes,
+      };
+      worktreeMatches = (await readWorktreeDescriptor(readRequest)) === indexed;
+    }
+  } catch {
+    assertClosureActive(request);
+  } finally {
+    if (handle !== false) await handle.close();
+  }
+  if (!worktreeMatches) {
     throw new Error(
       `Executable skill closure has worktree/index drift: ${request.relativePath}`,
     );
   }
+}
+
+type ReadWorktreeDescriptorRequest = {
+  readonly handle: FileHandle;
+  readonly lifecycle: ClosureActivity;
+  readonly maximumBytes: number;
+};
+
+async function readWorktreeDescriptor(
+  request: ReadWorktreeDescriptorRequest,
+): Promise<string> {
+  const content = Buffer.alloc(request.maximumBytes);
+  let offset = 0;
+  while (offset < content.byteLength) {
+    assertClosureActive(request.lifecycle);
+    const readResult = await request.handle.read(
+      content,
+      offset,
+      content.byteLength - offset,
+      offset,
+    );
+    assertClosureActive(request.lifecycle);
+    if (readResult.bytesRead === 0) break;
+    offset += readResult.bytesRead;
+  }
+  return content.subarray(0, offset).toString('utf8');
 }
 
 function assertClosureFileCount(count: number): void {

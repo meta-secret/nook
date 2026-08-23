@@ -680,6 +680,15 @@ test('shared AST policy rejects forbidden forms in nested sources', async () => 
     'void Bun.env.SECRET;\n',
     'const runtime = Bun;\nvoid runtime;\n',
     "Bun.spawn(['true']);\n",
+    "Bun.spawnSync(['true']);\n",
+    'await Bun.$`echo forbidden`;\n',
+    'const shell = Bun.$;\nvoid shell;\n',
+    'void Bun.futureProcessLauncher;\n',
+    "import { $ as shell } from 'bun';\nawait shell`echo forbidden`;\n",
+    "import { spawn as launch } from 'bun';\nlaunch(['true']);\n",
+    "import { spawnSync as launch } from 'bun';\nlaunch(['true']);\n",
+    "import * as runtime from 'bun';\nruntime.spawn(['true']);\n",
+    "import { dlopen } from 'bun:ffi';\nvoid dlopen;\n",
   ];
   for (const source of forbiddenSources) {
     const repositoryRoot = createAuditRepository();

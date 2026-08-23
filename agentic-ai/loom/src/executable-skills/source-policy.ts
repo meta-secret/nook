@@ -24,12 +24,11 @@ const FORBIDDEN_NODE_MODULES = new Set([
   'tls',
   'worker_threads',
 ]);
-const FORBIDDEN_BUN_MEMBERS = new Set([
-  'env',
-  'file',
-  'serve',
-  'spawn',
-  'spawnSync',
+const ALLOWED_BUN_ROOT_MEMBERS = new Set([
+  'stdin',
+  'stderr',
+  'stdout',
+  'write',
 ]);
 const FORBIDDEN_PROCESS_MEMBERS = new Set([
   'chdir',
@@ -90,7 +89,7 @@ export function analyzeExecutableSkillSource(
   visit(sourceFile);
   if (
     request.auditCapabilities &&
-    moduleSpecifiers.some(isForbiddenNodeModule)
+    moduleSpecifiers.some(isForbiddenRuntimeModule)
   ) {
     throw new Error('Executable skill requests a forbidden ambient module.');
   }
@@ -112,9 +111,11 @@ function assertNoForbiddenCapability(node: ts.Node): void {
   if (
     ts.isIdentifier(node.expression) &&
     node.expression.text === 'Bun' &&
-    FORBIDDEN_BUN_MEMBERS.has(node.name.text)
+    !ALLOWED_BUN_ROOT_MEMBERS.has(node.name.text)
   ) {
-    throw new Error('Executable skill forbids ambient Bun APIs.');
+    throw new Error(
+      'Executable skill forbids Bun APIs outside narrow standard I/O.',
+    );
   }
   if (
     ts.isIdentifier(node.expression) &&
@@ -174,7 +175,8 @@ function isBunOutputWrite(node: ts.Node): boolean {
   );
 }
 
-function isForbiddenNodeModule(specifier: string): boolean {
+function isForbiddenRuntimeModule(specifier: string): boolean {
+  if (specifier === 'bun' || specifier.startsWith('bun:')) return true;
   const normalized = specifier.startsWith('node:')
     ? specifier.slice('node:'.length)
     : specifier;

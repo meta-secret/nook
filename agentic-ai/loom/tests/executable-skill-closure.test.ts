@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process';
 import {
+  appendFileSync,
   lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -183,6 +185,16 @@ test('rejects forbidden capabilities in recursively imported sources', async () 
     "const load = require;\nload('node:child_process');\n",
     "import processRuntime from 'node:process';\nconst load = processRuntime.getBuiltinModule;\nload('node:child_process');\n",
     "import { getBuiltinModule as load } from 'process';\nload('child_process');\n",
+    "Bun.spawn(['true']);\n",
+    "Bun.spawnSync(['true']);\n",
+    'await Bun.$`echo forbidden`;\n',
+    'const shell = Bun.$;\nvoid shell;\n',
+    'void Bun.futureProcessLauncher;\n',
+    "import { $ as shell } from 'bun';\nawait shell`echo forbidden`;\n",
+    "import { spawn as launch } from 'bun';\nlaunch(['true']);\n",
+    "import { spawnSync as launch } from 'bun';\nlaunch(['true']);\n",
+    "import * as runtime from 'bun';\nruntime.spawn(['true']);\n",
+    "import { dlopen } from 'bun:ffi';\nvoid dlopen;\n",
   ];
   for (const source of forbiddenSources) {
     const repositoryRoot = createClosureRepository();
@@ -199,6 +211,84 @@ test('rejects forbidden capabilities in recursively imported sources', async () 
     } finally {
       rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
     }
+  }
+});
+
+test('keeps type-only Bun imports outside the runtime capability graph', async () => {
+  const runnerSource =
+    "import type { Subprocess } from 'bun';\n" +
+    "import { value } from './dependency.ts';\n" +
+    'export type ProcessType = Subprocess;\n' +
+    'void value;\n';
+  const repositoryRoot = createClosureRepository(runnerSource);
+  try {
+    const closure = await materializeSkillClosure(
+      closureRequestFor(repositoryRoot),
+    );
+    closure.dispose();
+  } finally {
+    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+  }
+});
+
+test('bounds worktree verification and rejects nonregular descriptor swaps', async () => {
+  const mutations = ['individual-growth', 'oversized', 'symlink', 'fifo'];
+  for (const mutation of mutations) {
+    const repositoryRoot = createClosureRepository();
+    try {
+      const dependencyPath = path.join(
+        repositoryRoot,
+        '.agents/skills/stub-skill/src/dependency.ts',
+      );
+      if (mutation === 'individual-growth') {
+        writeFileSync(dependencyPath, 'x'.repeat(1024));
+      } else if (mutation === 'oversized') {
+        writeFileSync(
+          dependencyPath,
+          'x'.repeat(EXECUTABLE_SKILL_CLOSURE_LIMITS.bytes + 1),
+        );
+      } else if (mutation === 'symlink') {
+        rmSync(dependencyPath);
+        symlinkSync('/tmp/outside-closure-source.ts', dependencyPath);
+      } else {
+        rmSync(dependencyPath);
+        execFileSync('mkfifo', [dependencyPath]);
+      }
+      const closureRequest: MaterializeSkillClosureRequest = {
+        deadlineExpiresAt: Date.now() + 5_000,
+        definition: closureDefinition(),
+        repositoryRoot,
+        signal: false,
+      };
+      await expect(materializeSkillClosure(closureRequest)).rejects.toThrow(
+        'worktree/index drift',
+      );
+    } finally {
+      rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
+    }
+  }
+});
+
+test('rejects a worktree source that grows during bounded verification', async () => {
+  const repositoryRoot = createClosureRepository();
+  const dependencyPath = path.join(
+    repositoryRoot,
+    '.agents/skills/stub-skill/src/dependency.ts',
+  );
+  const closureRequest: MaterializeSkillClosureRequest = {
+    deadlineExpiresAt: Date.now() + 5_000,
+    definition: closureDefinition(),
+    repositoryRoot,
+    signal: false,
+  };
+  const growth = setInterval(() => appendFileSync(dependencyPath, 'growth'), 0);
+  try {
+    await expect(materializeSkillClosure(closureRequest)).rejects.toThrow(
+      'worktree/index drift',
+    );
+  } finally {
+    clearInterval(growth);
+    rmSync(repositoryRoot, REMOVE_TREE_OPTIONS);
   }
 });
 
