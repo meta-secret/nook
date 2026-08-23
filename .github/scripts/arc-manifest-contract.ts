@@ -530,7 +530,8 @@ ciTasks.requireAll([
 runtimeSmoke.forbid("task ci:arc:promote-buildkit-cache");
 runners.requireAll([
   "name: prepare-cache-promotion-signal",
-  "install -d -o 1001 -g 1001 -m 0700 /var/run/nook-cache-promotion",
+  "chown 1001:1001 /var/run/nook-cache-promotion",
+  "chmod 0700 /var/run/nook-cache-promotion",
   "name: request-buildkit-promotion",
   "name: cache-promotion-signal",
   "NOOK_ARC_CACHE_PROMOTION_DIR",
