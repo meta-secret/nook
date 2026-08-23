@@ -221,8 +221,8 @@ kataValues.requireAll([
 ]);
 kataTasks.requireAll([
   "kubectl patch runtimeclass kata-qemu-runtime-rs --type=merge",
-  '\"cpu\":\"250m\",\"memory\":\"1280Mi\"',
-  "-o jsonpath='{.overhead.podFixed.memory}')\" = 1280Mi",
+  '\"cpu\":\"250m\",\"memory\":\"1792Mi\"',
+  "-o jsonpath='{.overhead.podFixed.memory}')\" = 1792Mi",
 ]);
 controller.requireAll([
   "updateStrategy: eventual",

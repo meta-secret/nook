@@ -29,7 +29,7 @@ tasks:
           --wait \
           --timeout 15m
         kubectl patch runtimeclass kata-qemu-runtime-rs --type=merge \
-          --patch '{"overhead":{"podFixed":{"cpu":"250m","memory":"1280Mi"}}}'
+          --patch '{"overhead":{"podFixed":{"cpu":"250m","memory":"1792Mi"}}}'
         kubectl rollout status daemonset/kata-deploy \
           --namespace kube-system \
           --timeout=10m
@@ -37,7 +37,7 @@ tasks:
         kubectl get runtimeclass kata-dragonball
         kubectl get runtimeclass kata-qemu-runtime-rs
         test "$(kubectl get runtimeclass kata-qemu-runtime-rs \
-          -o jsonpath='{.overhead.podFixed.memory}')" = 1280Mi
+          -o jsonpath='{.overhead.podFixed.memory}')" = 1792Mi
         REMOTE
       - task: kata:guest-seccomp:enable
 

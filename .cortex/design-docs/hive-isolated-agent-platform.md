@@ -631,11 +631,13 @@ receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
 node selectors are all qualified.
 
 The ordinary Pod requests 1 CPU and 4 GiB. The Hive Pod requests about 2 CPUs
-and 3.5 GiB. Both cap their concurrently running containers at 2 CPUs and 4
-GiB in aggregate. The QEMU RuntimeClass adds 1280 MiB of Pod overhead so a fully
-touched guest still leaves host-cgroup headroom for QEMU and virtiofs. These
-caps are Kata VM sizing boundaries. They keep ten concurrent
-microVMs within the 16-thread, 64 GiB Rise-S worker instead of multiplying the
+and 4 GiB. Ordinary containers are capped at 4 GiB in aggregate. Hive
+containers are capped at about 4.5 GiB. The QEMU RuntimeClass adds 1792 MiB of
+Pod overhead. This leaves host-cgroup headroom for QEMU and virtiofs after a
+guest touches its memory. These
+caps are Kata VM sizing boundaries. They keep ten concurrent ordinary
+microVMs at 57.5 GiB of limit memory within the worker's 62.3 GiB
+allocatable envelope instead of multiplying the
 former 12-vCPU and 16-GiB envelope across every job. The dedicated Hive set
 keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed
 service container with a Kubernetes-native sidecar. A second non-root sidecar
