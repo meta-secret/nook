@@ -159,51 +159,8 @@ template:
             accepted_file="$signal_dir/accepted"
             request_dir=/var/lib/nook-buildkit-requests
             intent_file="$request_dir/$POD_UID.intent"
-            intent_next="$intent_file.next"
-            request_file="$request_dir/$POD_UID.promote"
-            request_next="$request_file.next"
-
-            github_get() {
-              wget -qO- \
-                --header="Accept: application/vnd.github+json" \
-                --header="X-GitHub-Api-Version: 2022-11-28" \
-                "https://api.github.com/repos/$GITHUB_REPOSITORY/$1"
-            }
-
-            finalize_promotion() {
-              trap - TERM INT
-              deadline=$(($(date +%s) + 45))
-              while test "$(date +%s)" -lt "$deadline"; do
-                jobs="$(github_get \
-                  "actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100" || true)"
-                conclusion="$(printf '%s' "$jobs" | jq -r \
-                  --arg runner "$POD_NAME" \
-                  '[.jobs[]? | select(.runner_name == $runner)][0].conclusion // empty' \
-                  2>/dev/null || true)"
-                case "$conclusion" in
-                  success)
-                    if ! test -f "$intent_file"; then
-                      echo "ARC cache promotion skipped: host barrier expired" >&2
-                      exit 0
-                    fi
-                    umask 077
-                    printf '%s\n' "$POD_UID" > "$request_next"
-                    mv "$request_next" "$request_file"
-                    rm -f "$intent_file"
-                    exit 0
-                    ;;
-                  cancelled|failure|neutral|skipped|stale|timed_out)
-                    echo "ARC cache promotion rejected final conclusion: $conclusion" >&2
-                    rm -f "$intent_file"
-                    exit 0
-                    ;;
-                esac
-                sleep 1
-              done
-              echo "ARC cache promotion skipped: final conclusion unavailable" >&2
-              rm -f "$intent_file"
-              exit 0
-            }
+            candidate_file="$request_dir/$POD_UID.candidate"
+            candidate_next="$candidate_file.next"
 
             while ! test -f "$signal_file"; do sleep 0.2; done
             test ! -L "$signal_file"
@@ -227,20 +184,22 @@ template:
                 ;;
             esac
             test "${#head_sha}" -eq 40
-            run="$(github_get "actions/runs/$run_id")"
-            printf '%s' "$run" | jq -e \
-              --arg repository "$GITHUB_REPOSITORY" \
-              --arg sha "$head_sha" \
-              '.event == "push" and
-               .head_branch == "main" and
-               .head_sha == $sha and
-               .head_repository.full_name == $repository' >/dev/null
             umask 077
-            printf '%s\n' "$POD_UID" > "$intent_next"
-            mv "$intent_next" "$intent_file"
+            printf '%s:%s:%s:%s:%s\n' \
+              "$POD_UID" "$POD_NAME" "$run_id" "$run_attempt" "$head_sha" \
+              > "$candidate_next"
+            mv "$candidate_next" "$candidate_file"
+            deadline=$(($(date +%s) + 10))
+            while ! test -f "$intent_file"; do
+              if test "$(date +%s)" -ge "$deadline"; then
+                echo "ARC cache promotion host verifier rejected the request" >&2
+                rm -f "$candidate_file"
+                exit 1
+              fi
+              sleep 0.2
+            done
             printf '%s\n' "$POD_UID" > "$accepted_file.next"
             mv "$accepted_file.next" "$accepted_file"
-            trap finalize_promotion TERM INT
             while true; do sleep 1; done
         env:
           - name: POD_UID
@@ -251,8 +210,6 @@ template:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.name
-          - name: GITHUB_REPOSITORY
-            value: meta-secret/nook
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:

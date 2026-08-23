@@ -111,7 +111,7 @@ jobs:
     needs: [product-paths]
     if: needs.product-paths.outputs.changed == 'true'
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -173,7 +173,7 @@ jobs:
     # Serialize cache uploads after native verification while retaining the producer's
     # job-scoped builder for a no-rebuild export.
     needs: [rust]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -244,7 +244,7 @@ jobs:
   web:
     name: Verify web build
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -393,11 +393,10 @@ jobs:
 
   ui-demos:
     name: UI demos
-    # Cache-producing jobs are deliberately serialized. The host-side promotion
-    # intent blocks this job's clone until the web producer reaches a final
-    # successful conclusion and its state becomes the next seed generation.
-    needs: [wasm, web]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    # This is the final local cache producer. Serialize it behind web so it
+    # clones the promoted web generation instead of racing a sibling lineage.
+    needs: [web]
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read

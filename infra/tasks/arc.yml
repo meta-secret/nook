@@ -5,6 +5,7 @@ vars:
   ARC_CONTROLLER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
   ARC_RUNNER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
   ARC_RUNNER_LABEL: nook-k0s
+  ARC_CACHE_RUNNER_LABEL: nook-k0s-cache
   ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
   ARC_SMOKE_JOB_NAME: '{{default "Remote / preflight" .ARC_SMOKE_JOB_NAME}}'
@@ -43,15 +44,29 @@ tasks:
         set -euo pipefail
         ssh_target="{{.INFRA_SSH_TARGET}}"
         remote_dir="{{.INFRA_REMOTE_DIR}}"
-        token_file="${ARC_GITHUB_TOKEN_FILE:-}"
-        if test -z "$token_file"; then
+        credential_dir="$HOME/.nook/github"
+        credential_store="$credential_dir/arc-controller-token"
+        token_file="${ARC_GITHUB_TOKEN_FILE:-$credential_store}"
+        install -d -m 0700 "$HOME/.nook" "$credential_dir"
+        if test -n "${ARC_GITHUB_TOKEN_FILE:-}"; then
+          test -s "$ARC_GITHUB_TOKEN_FILE"
+          install -m 0600 "$ARC_GITHUB_TOKEN_FILE" "$credential_store"
+          token_file="$credential_store"
+        elif ! test -s "$credential_store"; then
+          credential_temp="$(mktemp)"
+          cleanup_local() { rm -f "$credential_temp"; }
+          trap cleanup_local EXIT
           if ! ssh -o BatchMode=yes "$ssh_target" \
-            "sudo -n k0s kubectl get secret nook-arc-github --namespace arc-runners >/dev/null"; then
+            "sudo -n k0s kubectl get secret nook-arc-github --namespace arc-runners -o jsonpath='{.data.github_token}'" \
+            | base64 -d > "$credential_temp"; then
             echo "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it" >&2
             exit 2
           fi
-          echo "Existing ARC repository credential retained; set ARC_GITHUB_TOKEN_FILE to rotate it"
-          exit 0
+          test -s "$credential_temp"
+          install -m 0600 "$credential_temp" "$credential_store"
+          cleanup_local
+          trap - EXIT
+          token_file="$credential_store"
         fi
         test -f "$token_file"
         test -s "$token_file"
@@ -79,7 +94,34 @@ tasks:
         printf -v ssh_command 'bash -c "$(printf %%s %s | base64 -d)" -- "$(printf %%s %s | base64 -d)"' \
           "$encoded_program" "$encoded_dir"
         ssh -o BatchMode=yes "$ssh_target" "$ssh_command" < "$token_file"
-        echo "ARC repository credential synchronized to the encrypted k0s Secret"
+        echo "ARC credential persisted under ~/.nook and synchronized to the encrypted k0s Secret"
+        BASH
+
+  arc:cache:auth:sync:
+    internal: true
+    deps: [arc:auth:sync]
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        credential_file="$HOME/.nook/github/arc-controller-token"
+        test -s "$credential_file"
+        remote_program='set -euo pipefail
+        credential_temp="$(mktemp)"
+        cleanup() { rm -f "$credential_temp"; }
+        trap cleanup EXIT
+        cat > "$credential_temp"
+        tr -d "\r\n" < "$credential_temp" > "$credential_temp.normalized"
+        mv "$credential_temp.normalized" "$credential_temp"
+        test -s "$credential_temp"
+        sudo -n install -d -m 0700 /etc/nook
+        sudo -n install -m 0600 "$credential_temp" /etc/nook/arc-cache-verifier-token'
+        encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
+        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+          "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
+          < "$credential_file"
+        echo "ARC host verifier credential synchronized outside runner Pods"
         BASH
 
   arc:render:check:
@@ -94,10 +136,12 @@ tasks:
         chart_version="{{.ARC_CHART_VERSION}}"
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
+        cache_render="$(mktemp)"
         hive_values="$(mktemp)"
         hive_render="$(mktemp)"
         cleanup() {
-          rm -f "$controller_render" "$runner_render" "$hive_values" "$hive_render"
+          rm -f "$controller_render" "$runner_render" "$cache_render" \
+            "$hive_values" "$hive_render"
         }
         trap cleanup EXIT
 
@@ -123,6 +167,13 @@ tasks:
           --namespace arc-runners \
           --values "$hive_values" \
           > "$hive_render"
+        helm template nook-k0s-cache \
+          "{{.ARC_RUNNER_CHART}}" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
+          --values "$remote_dir/infra/k0s/manifests/arc/runner-cache-primary-values.yaml" \
+          > "$cache_render"
 
         grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
         grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
@@ -243,13 +294,15 @@ tasks:
         fi
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
+        grep -q 'kind: AutoscalingRunnerSet' "$cache_render"
+        grep -q 'nook.nokey.sh/arc-cache-primary: "true"' "$cache_render"
         grep -q 'kind: AutoscalingRunnerSet' "$hive_render"
         echo "Pinned ARC renders satisfy the private microVM-builder contract"
         REMOTE
 
   arc:cache:pool:sync:
     internal: true
-    deps: [arc:build-host:sync]
+    deps: [arc:build-host:sync, arc:cache:auth:sync]
     silent: true
     cmds:
       - |
@@ -270,7 +323,7 @@ tasks:
 
         sudo -n apt-get update -qq
         sudo -n apt-get install -y -qq --no-install-recommends \
-          btrfs-progs e2fsprogs ruby util-linux
+          btrfs-progs curl e2fsprogs jq ruby util-linux
         sudo -n install -d -m 0700 "$pool_root"
         sudo -n install -d -m 0755 "$pool_mount"
         if ! sudo -n test -f "$pool_image"; then
@@ -374,6 +427,7 @@ tasks:
         ProtectHome=true
         ProtectSystem=strict
         ReadWritePaths=$pool_mount
+        ReadOnlyPaths=/etc/nook/arc-cache-verifier-token
 
         [Install]
         WantedBy=multi-user.target
@@ -418,7 +472,6 @@ tasks:
       - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
       - task: arc:render:check
-      - task: arc:auth:sync
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
@@ -444,6 +497,28 @@ tasks:
           -o jsonpath='{.overhead.podFixed.memory}')" = 1792Mi
         kubectl get runtimeclass kata-dragonball >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
+        cache_primaries="$(kubectl get nodes \
+          -l nook.nokey.sh/arc-cache-primary=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
+        cache_primary_count="$(printf '%s\n' "$cache_primaries" | sed '/^$/d' | wc -l | tr -d ' ')"
+        if test "$cache_primary_count" = 0; then
+          cache_candidates="$(kubectl get nodes \
+            -l nook.nokey.sh/arc-build=true \
+            -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+          if test "$(printf '%s\n' "$cache_candidates" | sed '/^$/d' | wc -l | tr -d ' ')" != 1; then
+            echo "Label exactly one ARC node nook.nokey.sh/arc-cache-primary=true" >&2
+            exit 1
+          fi
+          cache_primary="$(printf '%s\n' "$cache_candidates" | sed '/^$/d')"
+          kubectl label node "$cache_primary" \
+            nook.nokey.sh/arc-cache-primary=true --overwrite
+        elif test "$cache_primary_count" = 1; then
+          cache_primary="$(printf '%s\n' "$cache_primaries" | sed '/^$/d')"
+        else
+          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
+          exit 1
+        fi
+        echo "ARC cache producer lineage is pinned to $cache_primary"
         kubectl create configmap nook-arc-hive-test-runtime \
           --namespace arc-runners \
           --from-file=run-hive-test-runtime="$remote_dir/infra/k0s/scripts/run-hive-test-runtime" \
@@ -488,6 +563,14 @@ tasks:
           --values "$hive_values" \
           --wait \
           --timeout 10m
+        helm upgrade --install nook-k0s-cache \
+          "$runner_chart" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
+          --values "$remote_dir/infra/k0s/manifests/arc/runner-cache-primary-values.yaml" \
+          --wait \
+          --timeout 10m
 
         # Helm --wait covers the chart-owned AutoscalingRunnerSet, but not the
         # listener and EphemeralRunnerSet that ARC creates asynchronously. An
@@ -495,7 +578,7 @@ tasks:
         # not return while GitHub jobs could still target that transition.
         # Require six consecutive samples so a transient Running phase cannot
         # pass the gate while reconciliation is still converging.
-        for scale_set in nook-k0s nook-k0s-hive; do
+        for scale_set in nook-k0s nook-k0s-cache nook-k0s-hive; do
           arc_ready=false
           ready_samples=0
           for _ in $(seq 1 120); do
@@ -557,8 +640,9 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
+      - gh variable set NOOK_CACHE_RUNS_ON --repo meta-secret/nook --body "{{.ARC_CACHE_RUNNER_LABEL}}"
       - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body nook-k0s-hive
-      - echo "Opted-in workflows now target {{.ARC_RUNNER_LABEL}} and nook-k0s-hive"
+      - echo "Opted-in workflows now target {{.ARC_RUNNER_LABEL}}, {{.ARC_CACHE_RUNNER_LABEL}}, and nook-k0s-hive"
 
   arc:fallback:
     desc: Route opted-in workflows back to GitHub-hosted capacity.
@@ -567,6 +651,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
+      - gh variable set NOOK_CACHE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - echo "Opted-in workflows now target ubuntu-latest"
 

@@ -567,132 +567,9 @@ Deployment verification:
 
 ### ARC trusted-build boundary
 
-Actions Runner Controller runs focused, trusted GitHub Actions jobs as
-single-use Pods in the `kata-qemu-runtime-rs` RuntimeClass. The runner has no
-Kubernetes service-account token, host runtime socket, or Docker daemon.
-
-The Kata runner contains Docker client tooling but no Docker daemon. Buildx
-connects over Pod loopback to a private BuildKit sidecar in the same microVM.
-The general scale set also exposes a rootful Podman Docker-compatible API over
-Pod loopback. It executes images loaded by Main browser and runtime jobs inside
-that job's disposable Kata guest. BuildKit and Podman are privileged inside the
-guest. The Pod has no Kubernetes service-account token or host runtime socket.
-
-Each qualified ARC compute node maintains one loop-backed Btrfs pool on its
-local NVMe-backed ext4 filesystem. The sparse pool has 768 GiB of logical
-capacity for twenty fully allocated 32 GiB job images, one trusted 32 GiB ext4
-seed image, Btrfs metadata, and operational headroom. The 24 GB BuildKit
-garbage-collection target normally keeps physical use below that hard capacity
-envelope. Durable Hive and registry data never depend on this disposable pool.
-
-Runner startup follows this ordered storage boundary:
-
-1. A trusted init container mounts only the request directory.
-2. It submits the Pod UID.
-3. A root-owned host helper validates the UID.
-4. The helper creates a metadata-only reflink clone of the seed.
-5. The private BuildKit sidecar receives only `jobs/<Pod UID>`.
-6. The sidecar loop-mounts that ext4 file inside the guest.
-7. BuildKit uses overlayfs on the guest-mounted ext4 filesystem.
-
-The runner container never mounts the pool. Concurrent jobs use different
-writable ext4 files and different BuildKit daemons. Unchanged blocks remain
-shared through Btrfs copy-on-write. Changed blocks consume physical storage
-only in the job clone. Each job directory is a Btrfs subvolume with a 32 GiB
-exclusive quota, so a compromised guest cannot consume the rest of the shared
-pool through files beside its state image. The garbage-collection target is
-24 GB.
-
-A verified Main ARC job asks for seed promotion through an in-guest `emptyDir`
-signal. The runner never mounts the host request directory. A trusted sidecar
-uses the isolated ARC repository credential to verify the exact run is a Main
-push. It acknowledges the in-guest request without writing host state.
-
-When the runner exits, the sidecar queries GitHub for that exact Pod runner's
-final conclusion. It writes its Pod-UID-scoped host request only after GitHub
-reports `success`. Feature-branch dispatches, failures, and cancellations
-cannot request promotion. New clone requests wait behind an accepted host
-promotion so dependent jobs cannot start from the older seed.
-
-Promotion waits for API removal, kubelet volume teardown, containerd task
-removal, and Kata shim exit. The host validates the root-owned request, backing
-inode, and recorded seed generation. It replaces the seed atomically under the
-same lock used by clone creation. Stale concurrent jobs cannot overwrite a
-newer seed. The host never parses guest-controlled ext4 metadata; journal
-recovery occurs when a later Kata guest mounts its private clone. Failed,
-cancelled, non-Main, or active jobs cannot refresh the seed. The ordinary and
-Hive scale sets apply the same authenticated final-conclusion gate.
-Every smoke dispatch carries a unique nonce in the workflow run name. The
-operator matches both that nonce and the exact head SHA before monitoring or
-cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.
-
-Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
-guest lost its ttrpc sandbox when ARC jobs exercised private BuildKit and again
-when the dedicated Hive scale set ran its normal multi-sidecar verification.
-Both ARC scale sets therefore use the same release's QEMU runtime-rs backend.
-Persistent Hive workers remain on Dragonball, and QEMU is not the cluster
-default.
-
-Neither scale set keeps warm runners. ARC creates a new Pod and microVM for
-each job and removes it afterward. `nook-k0s` serves ordinary trusted Rust
-jobs. `nook-k0s-hive` serves Hive Rust verification with a pinned Neo4j
-native sidecar in the same Pod. Both set `maxRunners: 10`; this is concurrency,
-not a retained pool. A preparation taint prevents a new compute node from
-receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
-node selectors are all qualified.
-
-The ordinary Pod requests about 1 CPU and 4 GiB. The Hive Pod requests about 2
-CPUs and 4 GiB. Ordinary containers are capped at about 4.1 GiB in aggregate.
-Hive containers are capped at about 6.8 GiB.
-The QEMU RuntimeClass adds 1792 MiB of Pod overhead.
-This leaves host-cgroup headroom for QEMU and virtiofs after a guest touches
-its memory. These caps are Kata VM sizing boundaries.
-They keep ten concurrent ordinary microVMs at about 58.1 GiB of limit memory
-within the worker's 62.3 GiB
-allocatable envelope instead of multiplying the
-former 12-vCPU and 16-GiB envelope across every job. The dedicated Hive set
-keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed
-service container with a Kubernetes-native sidecar. A second non-root sidecar
-executes exported Hive test binaries in their pinned Debian Trixie runtime.
-One 64 GiB compute node safely sustains ten ordinary VMs or seven Hive VMs at
-their full limits. ARC may advertise ten Hive runners, but another compute node
-is required before ten memory-saturated Hive jobs can run without overcommit.
-Both helpers are restartable init sidecars, so Kubernetes stops them when the
-runner exits and the single-use Pod can terminate. The exchange directory is
-private to the job Pod. The Hive scale set omits Podman. No Docker daemon is
-introduced in either scale set.
-
-The ARC deployment contract explicitly prohibits:
-
-- Docker-in-Docker and any `dockerd` process;
-- Sysbox;
-- host Docker or containerd sockets; and
-- broad hostPath volumes.
-
-The only image runtime is the general scale set's job-scoped Podman API. It is
-reachable only on Pod loopback inside the Kata guest and uses disposable
-`emptyDir` state. It is not Docker-in-Docker and it cannot reach a host engine.
-
-Two narrow hostPaths are permitted for the Task-managed BuildKit pool. The
-trusted preparation container sees only the request directory. The trusted
-promotion verifier sees the same directory and may write markers only for its
-own Pod UID after authenticating public GitHub run metadata. The verifier has no
-repository credential. The BuildKit sidecar sees only its Pod UID job subpath.
-The runner sees neither path and receives no ARC credential.
-
-The runner image and its Docker CLI remain separate from BuildKit and Podman.
-The CLI does not create an engine. A chart-render check verifies the final Helm
-output before deployment so chart defaults cannot silently weaken these
-boundaries.
-
-Hive worker Pods have no hostPath volume and never mount the host repository,
-host `CODEX_HOME`, or host Docker socket. They contain no privileged containers
-and run no Docker daemon. The Hive worker image carries the pinned Rust, Bun,
-Node, and Task tools required by the repository. When `task format` detects the
-sealed guest marker it selects the native `hive:guest:format` Taskfile path,
-operating only on that task's disposable checkout. The image also carries npm
-so `hive:guest:pr:ready` can install and run the repository's existing read-only
-TypeScript PR audit without Docker.
+The dedicated [ARC Kata Runner Platform](arc-kata-runner-platform.md) owns
+ephemeral runner isolation, compute placement, job-scoped BuildKit state, local
+cache promotion, and ARC credential boundaries.
 
 ### Credential ownership
 
@@ -703,24 +580,9 @@ TypeScript PR audit without Docker.
   - Expose only short-lived tokens on one pre-established private channel.
 - **Repository-scoped GitHub token:** Mount into the Main-repair worker.
   - Expose it as `GH_TOKEN` for standard `git` and `gh` operations.
-- **ARC GitHub token:** Store in `arc-runners/nook-arc-github` for the ARC
-  controller and listener.
+- **ARC GitHub token:** Follow the credential ownership and rotation contract
+  in [ARC Kata Runner Platform](arc-kata-runner-platform.md#credential-ownership).
   - Never mount it into an ephemeral runner Pod.
-  - Use a fine-grained personal access token limited to `meta-secret/nook`.
-  - Grant only repository Administration read/write, which ARC needs to create
-    registration and just-in-time runner configuration tokens.
-  - Grant no organization permissions.
-  - The infrastructure operator owns rotation and revocation.
-  - On the first deployment, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file
-    outside the checkout and run `task infra:deploy` to bootstrap the Secret.
-  - Routine `infra:deploy` retains the installed Secret.
-  - To rotate it, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file outside the
-    checkout and run `task infra:arc:deploy`.
-  - Verify `task infra:arc:status` and `task infra:arc:smoke`, then revoke the
-    replaced token.
-  - For emergency revocation, run `task infra:arc:fallback`. It routes both
-    ordinary and Hive verification to hosted capacity. Then revoke the token
-    on GitHub and delete `nook-arc-github` from the `arc-runners` namespace.
 - **Reaper controller credential:** Mount into the Pod reaper, Workbench
   dispatcher, and dedicated controller only.
   - Do not expose it to workers or Codex.
@@ -1019,17 +881,25 @@ global ruleset.
 
 ## 11. Source map
 
-| Concern                                | Source of truth                                                                                                                 |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Rust platform implementation           | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/)                                                                |
-| Task dependencies and artifact lineage | [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs) |
-| Worker image and cache stages          | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile)                                                    |
-| Hive developer commands                | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml)                                                |
-| Infrastructure command composition     | [`infra/Taskfile.yml`](../../infra/Taskfile.yml)                                                                                |
-| Infrastructure operations and pins     | [`infra/tasks/`](../../infra/tasks/)                                                                                            |
-| k0s, Kata, Neo4j, and Hive manifests   | [`infra/k0s/`](../../infra/k0s/)                                                                                                |
-| Main failure handoff                   | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)                                |
-| Hive verification workflow             | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml)                                                                |
-| Main coalescing and delivery           | [`.github/workflows/main.yml`](../../.github/workflows/main.yml)                                                                |
-| Workbench issue contract               | [`workflows/issues.md`](../workflows/issues.md)                                                                                 |
-| Pull-request ownership contract        | [`workflows/pull-requests.md`](../workflows/pull-requests.md)                                                                   |
+- **Rust platform implementation:**
+  [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/)
+- **Task dependencies and artifact lineage:**
+  [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and
+  [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs)
+- **Worker image and cache stages:**
+  [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile)
+- **Hive developer commands:**
+  [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml)
+- **Infrastructure command composition:**
+  [`infra/Taskfile.yml`](../../infra/Taskfile.yml)
+- **Infrastructure operations and pins:** [`infra/tasks/`](../../infra/tasks/)
+- **k0s, Kata, Neo4j, and Hive manifests:** [`infra/k0s/`](../../infra/k0s/)
+- **Main failure handoff:**
+  [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)
+- **Hive verification workflow:**
+  [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml)
+- **Main coalescing and delivery:**
+  [`.github/workflows/main.yml`](../../.github/workflows/main.yml)
+- **Workbench issue contract:** [`workflows/issues.md`](../workflows/issues.md)
+- **Pull-request ownership contract:**
+  [`workflows/pull-requests.md`](../workflows/pull-requests.md)

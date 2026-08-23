@@ -29,7 +29,8 @@ Cluster roles:
 - WireGuard addresses `10.202.0.1` and `10.202.0.2` carry authenticated node and
   Pod traffic. The stable API address remains `10.201.0.1`.
 - ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
-  warm, and both scale sets can create up to ten concurrent runners.
+  warm. The general and Hive scale sets can each create up to ten concurrent
+  runners. A third cache-primary scale set owns serialized Main producers.
 
 Join or reconcile the compute node only through the Taskfile:
 
@@ -88,9 +89,10 @@ registry data.
 ARC storage uses a separate Task-managed Btrfs image under
 `/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
 filesystem remains ext4. Runner Pods receive two narrow host paths. The trusted
-preparation init container sees only the shared clone-request directory. The
-trusted promotion verifier sees that same directory so it can establish an
-authenticated intent and publish a final-success request for its own Pod UID.
+preparation init container sees only the shared clone-request directory. A
+credential-free sidecar forwards its Pod-scoped candidate through that path.
+The authenticated root-owned host verifier establishes the intent and checks
+the final job conclusion.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
 covers twenty fully allocated 32 GiB
@@ -98,20 +100,22 @@ job images, the reusable 32 GiB seed, and filesystem metadata. The 24 GB
 BuildKit garbage-collection target normally keeps physical use below that hard
 capacity envelope.
 
-Verified Main jobs signal through an in-guest `emptyDir`. A trusted sidecar
-authenticates the public run metadata without receiving a repository credential
-and creates an intent for its own Pod UID. That intent
-blocks the next cache-producing clone so parallel branches cannot discard a
-lineage. The verifier then waits for GitHub to report the exact Pod runner's
-final `success` conclusion. Only then does it convert the intent into a
-promotion request; the runner never sees the host request directory or any ARC
-repository credential. Promotion intents and requests stop blocking new clones
-after two minutes. The host abandons that promotion but retains unsafe job state
-until Kata teardown can be proven complete.
+Verified Main jobs signal through an in-guest `emptyDir`. The sidecar forwards
+the request without receiving a repository credential. The authenticated host
+verifier confirms that the exact Pod is currently running the selected Main
+job before creating an intent. It checks the same job's final `success`
+conclusion after teardown and only then promotes the seed. The runner never sees
+the host request directory or any ARC credential. Intents stop blocking new
+clones after two minutes. The host abandons that promotion but retains unsafe
+job state until Kata teardown can be proven complete.
 The host waits for complete Kata teardown, rejects a stale seed generation, and
 promotes the private state through an atomic Btrfs reflink. New clone requests
 wait behind accepted promotion. ARC jobs therefore skip registry export, while
 hosted fallback jobs retain Zot publication for cold-node recovery.
+Only `nook-k0s-cache` requires the one `arc-cache-primary` node label, so a
+larger cluster cannot divide Main's serialized lineage among node-local seeds.
+General and Hive jobs remain horizontally schedulable. Hive keeps an
+independent Zot publication path because its workflow may overlap Main.
 
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.

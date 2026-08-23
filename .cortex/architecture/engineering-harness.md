@@ -267,16 +267,17 @@ maintenance-only.
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
 - ARC starts each fresh Kata guest from a private reflink clone of a trusted
   32 GiB BuildKit seed.
-- A sidecar authenticates public GitHub run metadata without a repository
-  credential and promotes local state only after the exact Main runner job
+- A credential-free sidecar forwards a Pod-scoped candidate. The authenticated
+  host verifier promotes local state only after the exact Main runner job
   reaches a final `success` conclusion.
 - Main cache-producing jobs are serialized. Their authenticated promotion
   intents block the next producer clone until the preceding generation is
-  promoted, so divergent cache lineages are not silently discarded.
+  promoted. A cache-primary node selector keeps that lineage on one local seed.
 - Hosted fallback publication keeps Zot as the cross-node bootstrap source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
-  so ARC remains daemon-free and the helpers stop with the runner.
+  so ARC remains daemon-free and the helpers stop with the runner. Hive keeps
+  its independent Zot cache publication because its workflow may overlap Main.
 - Registry transfer time and local snapshot materialization time are separate
   performance dimensions.
 - A manifest lookup proves index availability. It does not prove that a fresh

@@ -7,6 +7,8 @@ request_dir="$pool_dir/requests"
 jobs_dir="$pool_dir/jobs"
 runtime_dir="$pool_dir/runtime"
 seed_lock="$pool_dir/.seed.lock"
+github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-token}"
+github_repository="${NOOK_ARC_GITHUB_REPOSITORY:-meta-secret/nook}"
 pod_root="${NOOK_K0S_POD_ROOT:-/var/lib/k0s/kubelet/pods}"
 job_exclusive_limit="${NOOK_ARC_BUILDKIT_JOB_EXCLUSIVE_LIMIT:-32G}"
 last_prune=0
@@ -15,6 +17,7 @@ last_sandbox_refresh=-1
 mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir"
 chmod 0700 "$runtime_dir"
 test -f "$seed_file"
+test -s "$github_token_file"
 
 valid_uid() {
   [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
@@ -31,6 +34,7 @@ delete_job_dir() {
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
     "$request_dir/$pod_uid.intent" "$request_dir/$pod_uid.intent.next" \
+    "$request_dir/$pod_uid.candidate" "$request_dir/$pod_uid.candidate.next" \
     "$request_dir/$pod_uid.promote" "$request_dir/$pod_uid.promote.next"
 }
 
@@ -56,7 +60,106 @@ promotion_requested() {
 }
 
 promotion_intended() {
-  valid_job_marker "$1" intent
+  local pod_uid="$1" intent intent_value intent_uid pod_name run_id run_attempt
+  local head_sha trailing
+  intent="$request_dir/$pod_uid.intent"
+  test -e "$intent" || return 1
+  if test -L "$intent" ||
+     test "$(stat -c '%F:%u:%g:%h' -- "$intent" 2>/dev/null || true)" != \
+       "regular file:0:0:1"; then
+    rm -f -- "$intent"
+    return 1
+  fi
+  intent_value="$(tr -d '\r\n' < "$intent")"
+  IFS=: read -r intent_uid pod_name run_id run_attempt head_sha trailing <<EOF
+$intent_value
+EOF
+  test -z "$trailing" && test "$intent_uid" = "$pod_uid" &&
+    [[ "$pod_name" =~ ^[a-z0-9-]+$ ]] &&
+    [[ "$run_id" =~ ^[0-9]+$ ]] &&
+    [[ "$run_attempt" =~ ^[0-9]+$ ]] &&
+    [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]
+}
+
+github_get() {
+  local endpoint="$1" token
+  token="$(tr -d '\r\n' < "$github_token_file")"
+  test -n "$token"
+  curl --fail --silent --show-error \
+    --header "Authorization: Bearer $token" \
+    --header "Accept: application/vnd.github+json" \
+    --header "X-GitHub-Api-Version: 2022-11-28" \
+    "https://api.github.com/repos/$github_repository/$endpoint"
+}
+
+promotion_job_conclusion() {
+  local pod_uid="$1" intent_value intent_uid pod_name run_id run_attempt
+  local head_sha trailing jobs
+  intent_value="$(tr -d '\r\n' < "$request_dir/$pod_uid.intent")"
+  IFS=: read -r intent_uid pod_name run_id run_attempt head_sha trailing <<EOF
+$intent_value
+EOF
+  jobs="$(github_get "actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100")" || return 1
+  printf '%s' "$jobs" | jq -r --arg runner "$pod_name" \
+    '[.jobs[]? | select(.runner_name == $runner)][0].conclusion // empty'
+}
+
+verify_promotion_candidates() {
+  local candidate candidate_value pod_uid candidate_uid pod_name run_id
+  local run_attempt head_sha trailing job_dir run jobs intent_next
+  shopt -s nullglob
+  for candidate in "$request_dir"/*.candidate; do
+    pod_uid="$(basename "$candidate" .candidate)"
+    if ! valid_uid "$pod_uid" || test -L "$candidate" ||
+       test "$(stat -c '%F:%u:%g:%h' -- "$candidate" 2>/dev/null || true)" != \
+         "regular file:0:0:1"; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    candidate_value="$(tr -d '\r\n' < "$candidate")"
+    IFS=: read -r candidate_uid pod_name run_id run_attempt head_sha trailing <<EOF
+$candidate_value
+EOF
+    if ! test -z "$trailing" || ! test "$candidate_uid" = "$pod_uid" ||
+       ! [[ "$pod_name" =~ ^[a-z0-9-]+$ ]] ||
+       ! [[ "$run_id" =~ ^[0-9]+$ ]] ||
+       ! [[ "$run_attempt" =~ ^[0-9]+$ ]] ||
+       ! [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    job_dir="$jobs_dir/$pod_uid"
+    if ! test -d "$job_dir"; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    if ! run="$(github_get "actions/runs/$run_id")"; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    if ! printf '%s' "$run" | jq -e \
+      --arg repository "$github_repository" --arg sha "$head_sha" \
+      '.event == "push" and .head_branch == "main" and .head_sha == $sha and
+       .head_repository.full_name == $repository' >/dev/null; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    if ! jobs="$(github_get "actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100")"; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    if ! printf '%s' "$jobs" | jq -e --arg runner "$pod_name" \
+      'any(.jobs[]?; .runner_name == $runner and .status == "in_progress" and .conclusion == null)' \
+      >/dev/null; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    intent_next="$request_dir/$pod_uid.intent.next"
+    printf '%s\n' "$candidate_value" > "$intent_next"
+    chmod 0600 "$intent_next"
+    mv "$intent_next" "$request_dir/$pod_uid.intent"
+    rm -f -- "$candidate"
+  done
 }
 
 promotion_intent_expired() {
@@ -151,8 +254,16 @@ promote_job_dir() {
       exit 0
     fi
     rm -f -- "$seed_next"
-    cp --reflink=always --sparse=auto "$job_file" "$seed_next"
-    mv "$seed_next" "$seed_file"
+    if ! cp --reflink=always --sparse=auto "$job_file" "$seed_next"; then
+      rm -f -- "$seed_next"
+      echo "Refusing ARC promotion for $pod_uid: seed reflink failed" >&2
+      exit 1
+    fi
+    if ! mv "$seed_next" "$seed_file"; then
+      rm -f -- "$seed_next"
+      echo "Refusing ARC promotion for $pod_uid: atomic seed replacement failed" >&2
+      exit 1
+    fi
     echo "Promoted ARC BuildKit state for $pod_uid"
   ) 9> "$seed_lock"
 }
@@ -290,7 +401,7 @@ clone_requests() {
 }
 
 prune_stale_jobs() {
-  local command_line command_line_file container_list job_dir pod_uid
+  local command_line command_line_file conclusion container_list job_dir pod_uid
   local sandbox_id sandbox_marker task_list
   while IFS= read -r -d '' job_dir; do
     pod_uid="$(basename "$job_dir")"
@@ -317,13 +428,18 @@ prune_stale_jobs() {
           *containerd-shim-kata-v2*) continue 2 ;;
         esac
       done
-      if promotion_requested "$pod_uid"; then
-        promote_job_dir "$job_dir" || true
-      elif promotion_intended "$pod_uid"; then
+      if promotion_intended "$pod_uid"; then
         if ! promotion_intent_expired "$pod_uid"; then
-          continue
+          conclusion="$(promotion_job_conclusion "$pod_uid" || true)"
+          case "$conclusion" in
+            success) promote_job_dir "$job_dir" || true ;;
+            cancelled|failure|neutral|skipped|stale|timed_out) ;;
+            *) continue ;;
+          esac
         fi
         rm -f -- "$request_dir/$pod_uid.intent"
+      elif promotion_requested "$pod_uid"; then
+        promote_job_dir "$job_dir" || true
       elif retention_active "$pod_uid"; then
         continue
       fi
@@ -348,13 +464,18 @@ prune_stale_jobs() {
         *containerd-shim-kata-v2*" -id $sandbox_id "*) continue 2 ;;
       esac
     done
-    if promotion_requested "$pod_uid"; then
-      promote_job_dir "$job_dir" || true
-    elif promotion_intended "$pod_uid"; then
+    if promotion_intended "$pod_uid"; then
       if ! promotion_intent_expired "$pod_uid"; then
-        continue
+        conclusion="$(promotion_job_conclusion "$pod_uid" || true)"
+        case "$conclusion" in
+          success) promote_job_dir "$job_dir" || true ;;
+          cancelled|failure|neutral|skipped|stale|timed_out) ;;
+          *) continue ;;
+        esac
       fi
       rm -f -- "$request_dir/$pod_uid.intent"
+    elif promotion_requested "$pod_uid"; then
+      promote_job_dir "$job_dir" || true
     elif retention_active "$pod_uid"; then
       continue
     fi
@@ -365,12 +486,15 @@ prune_stale_jobs() {
 }
 
 while true; do
+  verify_promotion_candidates
   clone_requests
   if (( SECONDS - last_sandbox_refresh >= 1 )); then
     record_active_sandboxes
     last_sandbox_refresh=$SECONDS
   fi
-  if promotion_barrier_pending || (( SECONDS - last_prune >= 30 )); then
+  prune_interval=30
+  promotion_barrier_pending && prune_interval=5
+  if (( SECONDS - last_prune >= prune_interval )); then
     prune_stale_jobs
     last_prune=$SECONDS
   fi

@@ -1,0 +1,11 @@
+runnerScaleSetName: nook-k0s-cache
+minRunners: 0
+maxRunners: 2
+
+template:
+  metadata:
+    labels:
+      nook.nokey.sh/role: arc-cache-runner
+  spec:
+    nodeSelector:
+      nook.nokey.sh/arc-cache-primary: "true"

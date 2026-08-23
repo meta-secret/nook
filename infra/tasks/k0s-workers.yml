@@ -349,7 +349,7 @@ tasks:
           --force \
           --token-file "$token_file" \
           --kubelet-extra-args="--node-ip=10.202.0.2 --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
-          --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"
+          --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"
         sudo -n systemctl daemon-reload
         sudo -n systemctl enable --now k0sworker'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"

@@ -71,6 +71,10 @@ const runners = contract({
   label: "ARC runner scale set",
   source: await read("infra/k0s/manifests/arc/runner-scale-set-values.yaml"),
 });
+const cacheRunners = contract({
+  label: "ARC cache-primary runner scale set",
+  source: await read("infra/k0s/manifests/arc/runner-cache-primary-values.yaml"),
+});
 const controller = contract({
   label: "ARC controller",
   source: await read("infra/k0s/manifests/arc/controller-values.yaml"),
@@ -374,7 +378,7 @@ tasks.requireAll([
   "kubectl delete ephemeralrunner --namespace arc-runners",
   "sudo -n k0s kubeconfig admin",
   'tr -d "\\r\\n"',
-  "Existing ARC repository credential retained; set ARC_GITHUB_TOKEN_FILE to rotate it",
+  "ARC credential persisted under ~/.nook and synchronized to the encrypted k0s Secret",
   "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it",
   'test -s "$token_file"',
   "gh workflow run remote.yml",
@@ -387,7 +391,7 @@ tasks.requireAll([
   '--raw-field "dispatch_nonce=$dispatch_nonce"',
   "--json databaseId,displayTitle,headSha",
   ".displayTitle == $title and .headSha == $sha",
-  "btrfs-progs e2fsprogs ruby util-linux",
+  "btrfs-progs curl e2fsprogs jq ruby util-linux",
   "mkfs.btrfs -q -f -L nook-arc-buildkit",
   'sudo -n mv "$pool_image_next" "$pool_image"',
   "Promoted successful ARC smoke state to the reusable seed",
@@ -398,6 +402,7 @@ tasks.requireAll([
   "runner_state_retained=1",
   "nook-arc-hive-test-runtime",
   "gh variable set NOOK_HIVE_RUNS_ON",
+  "gh variable set NOOK_CACHE_RUNS_ON",
   "route_variable=NOOK_HIVE_RUNS_ON",
   "refusing stale promotion",
 ]);
@@ -427,9 +432,13 @@ remoteWorkflow.requireAll([
 mainWorkflow.forbid("runs-on: ubuntu-latest");
 const mainCount = {
   fragment: "runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}",
-  expected: 8,
+  expected: 4,
 };
 mainWorkflow.count(mainCount);
+mainWorkflow.count({
+  fragment: "runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}",
+  expected: 4,
+});
 mainWorkflow.count({ fragment: "if: success()", expected: 4 });
 remoteBatch.require(
   'rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust',
@@ -464,7 +473,7 @@ buildkitCloner.requireAll([
   'if ! container_list="$(',
   "cp --reflink=always --sparse=auto",
   'test ! -e "$pod_root/$pod_uid" || continue',
-  "SECONDS - last_prune >= 30",
+  "prune_interval=30",
   'retain_marker="$runtime_dir/$pod_uid.retain"',
   "retain_expiry > now && retain_expiry <= now + 1800",
   "k0s ctr --namespace k8s.io tasks list -q",
@@ -491,9 +500,14 @@ buildkitCloner.requireAll([
   "Abandoning expired ARC promotion barrier",
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
-  'cp --reflink=always --sparse=auto "$job_file" "$seed_next"',
+  'if ! cp --reflink=always --sparse=auto "$job_file" "$seed_next"; then',
+  "verify_promotion_candidates",
+  'github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-token}"',
+  'any(.jobs[]?; .runner_name == $runner and .status == "in_progress" and .conclusion == null)',
+  'conclusion="$(promotion_job_conclusion "$pod_uid" || true)"',
   'if promotion_requested "$pod_uid"; then',
-  "if promotion_barrier_pending || (( SECONDS - last_prune >= 30 )); then",
+  "promotion_barrier_pending && prune_interval=5",
+  "if (( SECONDS - last_prune >= prune_interval )); then",
 ]);
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
 if (
@@ -513,8 +527,6 @@ hiveWorkflow.requireAll([
   "github.event.pull_request.head.repo.full_name != github.repository",
   "github.event.pull_request.user.login == 'dependabot[bot]'",
   "github.event.pull_request.user.login != 'dependabot[bot]'",
-  'test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"',
-  "task ci:arc:promote-buildkit-cache",
   "task hive:cache:publish",
 ]);
 ciTasks.requireAll([
@@ -534,22 +546,30 @@ runners.requireAll([
   "name: request-buildkit-promotion",
   "name: cache-promotion-signal",
   "NOOK_ARC_CACHE_PROMOTION_DIR",
-  'request_file="$request_dir/$POD_UID.promote"',
+  'candidate_file="$request_dir/$POD_UID.candidate"',
   'intent_file="$request_dir/$POD_UID.intent"',
   '"regular file:1001:1001:1"',
-  'mv "$request_next" "$request_file"',
-  'mv "$intent_next" "$intent_file"',
-  'rm -f "$intent_file"',
+  'mv "$candidate_next" "$candidate_file"',
+  'while ! test -f "$intent_file"; do',
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
-  "https://api.github.com/repos/$GITHUB_REPOSITORY/$1",
-  '.event == "push" and',
-  '.head_branch == "main" and',
-  '[.jobs[]? | select(.runner_name == $runner)][0].conclusion // empty',
-  "trap finalize_promotion TERM INT",
   "while true; do sleep 1; done",
 ]);
 runners.forbid("- name: GITHUB_TOKEN");
-mainWorkflow.require("needs: [wasm, web]");
+runners.forbid("https://api.github.com");
+cacheRunners.requireAll([
+  "runnerScaleSetName: nook-k0s-cache",
+  "maxRunners: 2",
+  'nook.nokey.sh/arc-cache-primary: "true"',
+]);
+tasks.requireAll([
+  'credential_store="$credential_dir/arc-controller-token"',
+  "ARC credential persisted under ~/.nook",
+  "/etc/nook/arc-cache-verifier-token",
+  "ReadOnlyPaths=/etc/nook/arc-cache-verifier-token",
+  "nook.nokey.sh/arc-cache-primary=true",
+]);
+workerTasks.require("nook.nokey.sh/arc-cache-primary=true");
+mainWorkflow.require("needs: [web]");
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",
   expected: 2,
@@ -567,6 +587,7 @@ hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");
 
 enum RunnerPlacement {
+  ArcCacheMain = "arc-cache-main",
   ArcGeneralMain = "arc-general-main",
   ArcGeneralPr = "arc-general-pr",
   ArcGeneralRemote = "arc-general-remote",
@@ -612,6 +633,7 @@ const hostedRunnerPlacements = new Set<RunnerPlacement>([
 ]);
 
 const runnerPlacementReasons: Record<RunnerPlacement, string> = {
+  [RunnerPlacement.ArcCacheMain]: "serialized Main producer on the cache-primary Kata scale set",
   [RunnerPlacement.ArcGeneralMain]: "trusted Main job with a disposable general Kata guest",
   [RunnerPlacement.ArcGeneralPr]: "trusted same-repository PR native job with hosted fork fallback",
   [RunnerPlacement.ArcGeneralRemote]: "explicitly allowlisted focused task with hosted fallback",
@@ -654,12 +676,12 @@ const workflowPlacementContracts: WorkflowPlacementContract[] = [
     jobs: {
       "product-paths": RunnerPlacement.ArcGeneralMain,
       "rust-ecosystem": RunnerPlacement.Reusable,
-      rust: RunnerPlacement.ArcGeneralMain,
-      wasm: RunnerPlacement.ArcGeneralMain,
-      web: RunnerPlacement.ArcGeneralMain,
+      rust: RunnerPlacement.ArcCacheMain,
+      wasm: RunnerPlacement.ArcCacheMain,
+      web: RunnerPlacement.ArcCacheMain,
       "web-e2e": RunnerPlacement.ArcGeneralMain,
       "extension-e2e": RunnerPlacement.ArcGeneralMain,
-      "ui-demos": RunnerPlacement.ArcGeneralMain,
+      "ui-demos": RunnerPlacement.ArcCacheMain,
       deploy: RunnerPlacement.ArcGeneralMain,
     },
   },
@@ -725,6 +747,9 @@ function expectedRunner(placement: RunnerPlacement): string {
   if (hostedRunnerPlacements.has(placement)) return "ubuntu-latest";
   if (placement === RunnerPlacement.LegacyCleanup) return "nook";
   if (placement === RunnerPlacement.ArcHive) return "nook-k0s-hive";
+  if (placement === RunnerPlacement.ArcCacheMain) {
+    return "${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}";
+  }
   if (placement === RunnerPlacement.ArcGeneralMain) {
     return "${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}";
   }
@@ -753,7 +778,10 @@ async function validateWorkflowPlacement(
     );
   }
 
-  if (Object.values(input.jobs).includes(RunnerPlacement.ArcGeneralMain)) {
+  if (
+    Object.values(input.jobs).includes(RunnerPlacement.ArcGeneralMain) ||
+    Object.values(input.jobs).includes(RunnerPlacement.ArcCacheMain)
+  ) {
     const eventNames = Object.keys(manifest.on).sort();
     const pushTrigger = manifest.on.push;
     const pushBranches = pushTrigger?.branches ?? [];
