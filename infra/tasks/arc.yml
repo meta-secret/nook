@@ -12,6 +12,38 @@ vars:
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 tasks:
+  arc:cache-primary:ensure:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        cache_primaries="$(kubectl get nodes \
+          -l nook.nokey.sh/arc-cache-primary=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
+        cache_primary_count="$(printf '%s\n' "$cache_primaries" | sed '/^$/d' | wc -l | tr -d ' ')"
+        if test "$cache_primary_count" = 0; then
+          cache_candidates="$(kubectl get nodes \
+            -l nook.nokey.sh/arc-build=true \
+            -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+          if test "$(printf '%s\n' "$cache_candidates" | sed '/^$/d' | wc -l | tr -d ' ')" != 1; then
+            echo "Label exactly one ARC node nook.nokey.sh/arc-cache-primary=true" >&2
+            exit 1
+          fi
+          cache_primary="$(printf '%s\n' "$cache_candidates" | sed '/^$/d')"
+          kubectl label node "$cache_primary" \
+            nook.nokey.sh/arc-cache-primary=true --overwrite
+        elif test "$cache_primary_count" = 1; then
+          cache_primary="$(printf '%s\n' "$cache_primaries" | sed '/^$/d')"
+        else
+          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
+          exit 1
+        fi
+        echo "ARC cache producer lineage is pinned to $cache_primary"
+        REMOTE
+
   arc:build-host:resolve:
     desc: Resolve and persist every Kubernetes ARC build SSH target.
     silent: true
@@ -30,15 +62,9 @@ tasks:
           exit 1
         fi
         primary_count="$(jq '[.items[] | select(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true")] | length' <<<"$build_nodes")"
-        if test "$primary_count" -gt 1; then
+        if test "$primary_count" != 1; then
           echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
           exit 1
-        fi
-        if test "$primary_count" = 0; then
-          primary_node="$(jq -r '.items | sort_by(.metadata.name) | first.metadata.name' <<<"$build_nodes")"
-          kubectl label node "$primary_node" \
-            nook.nokey.sh/arc-cache-primary=true --overwrite >/dev/null
-          build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
         fi
         jq -r '.items | sort_by(.metadata.name)[] |
           (.status.addresses[] | select(.type == "InternalIP") | .address) as $address |
@@ -571,6 +597,7 @@ tasks:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
+      - task: arc:cache-primary:ensure
       - task: arc:build-host:resolve
       - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
@@ -600,27 +627,10 @@ tasks:
           -o jsonpath='{.overhead.podFixed.memory}')" = 1792Mi
         kubectl get runtimeclass kata-dragonball >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
-        cache_primaries="$(kubectl get nodes \
+        cache_primary="$(kubectl get nodes \
           -l nook.nokey.sh/arc-cache-primary=true \
-          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
-        cache_primary_count="$(printf '%s\n' "$cache_primaries" | sed '/^$/d' | wc -l | tr -d ' ')"
-        if test "$cache_primary_count" = 0; then
-          cache_candidates="$(kubectl get nodes \
-            -l nook.nokey.sh/arc-build=true \
-            -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
-          if test "$(printf '%s\n' "$cache_candidates" | sed '/^$/d' | wc -l | tr -d ' ')" != 1; then
-            echo "Label exactly one ARC node nook.nokey.sh/arc-cache-primary=true" >&2
-            exit 1
-          fi
-          cache_primary="$(printf '%s\n' "$cache_candidates" | sed '/^$/d')"
-          kubectl label node "$cache_primary" \
-            nook.nokey.sh/arc-cache-primary=true --overwrite
-        elif test "$cache_primary_count" = 1; then
-          cache_primary="$(printf '%s\n' "$cache_primaries" | sed '/^$/d')"
-        else
-          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
-          exit 1
-        fi
+          -o jsonpath='{.items[0].metadata.name}')"
+        test -n "$cache_primary"
         echo "ARC cache producer lineage is pinned to $cache_primary"
         kubectl create configmap nook-arc-hive-test-runtime \
           --namespace arc-runners \

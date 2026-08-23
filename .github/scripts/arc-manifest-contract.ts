@@ -582,12 +582,14 @@ tasks.requireAll([
   "ReadOnlyPaths=/etc/nook/arc-cache-verifier-token",
   "nook.nokey.sh/arc-cache-primary=true",
   "arc:build-host:resolve:",
+  "arc:cache-primary:ensure:",
   "arc-cache-primary-ssh-target",
   "arc-build-ssh-targets",
   "synchronized to every build node",
   "Imported the pinned ARC BuildKit wrapper into every build node",
   "nook.nokey.sh/ssh-target",
 ]);
+tasks.forbid('primary_node="$(jq -r');
 workerTasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",
   '"nook.nokey.sh/ssh-target=debian@10.202.0.2"',
