@@ -154,9 +154,12 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Main-fix web and extension e2e run as independent artifact consumers on separate hosted runners.
   - Each Main-fix consumer builds only the browser image.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
-  - **`main.yml`** serializes the cache-writing native → WASM → web lanes.
-  - Every explicit Main job selects `NOOK_RUNS_ON`, with `ubuntu-latest` only
-    as the configuration fallback.
+  - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
+  - Those trusted Main producers select the cache-primary scale set through
+    `NOOK_CACHE_RUNS_ON`.
+  - Other explicit Main jobs select the general scale set through
+    `NOOK_RUNS_ON`.
+  - Both routes use `ubuntu-latest` only as their configuration fallback.
   - Each lane verifies, then exports only its already-solved local builder graph.
   - Export happens only after every lane-specific check succeeds.
   - The WASM dependency scope keeps its no-import, forced-zstd export.

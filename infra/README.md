@@ -100,16 +100,18 @@ stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
 `preflight`, `rust:ci`, and `arc:runtime` Remote selections use `nook-k0s`
-through the repository variable `NOOK_RUNS_ON`. Trusted Main jobs also select
-that scale set. Each general Kata guest has private loopback BuildKit and
-Podman services plus a shared runner work volume, so `type=docker`, `docker
-run`, and bind-mounted artifacts stay job-scoped without DinD or a host runtime
-socket. The Podman image is sparse, grows only with runtime data, and is
-discarded with the job. Trusted Hive Rust verification uses `nook-k0s-hive` through
-`NOOK_HIVE_RUNS_ON`; its browser job stays hosted. Unsupported focused tasks,
-forks, and Dependabot retain hosted routing.
-`task infra:arc:activate` sets the ARC route;
-`task infra:arc:fallback` immediately restores both routes to `ubuntu-latest`.
+through the repository variable `NOOK_RUNS_ON`. Non-producing trusted Main
+jobs use that general route. Main's native, WASM, web, and UI-demo cache
+producers use the cache-primary `nook-k0s-cache` scale set through
+`NOOK_CACHE_RUNS_ON`. Each general or cache-primary Kata guest has private
+loopback BuildKit and Podman services plus a shared runner work volume, so
+`type=docker`, `docker run`, and bind-mounted artifacts stay job-scoped without
+DinD or a host runtime socket. The Podman image is sparse, grows only with
+runtime data, and is discarded with the job. Trusted Hive Rust verification
+uses `nook-k0s-hive` through `NOOK_HIVE_RUNS_ON`; its browser job stays hosted.
+Unsupported focused tasks, forks, and Dependabot retain hosted routing.
+`task infra:arc:activate` sets all three ARC routes; `task infra:arc:fallback`
+immediately restores all three routes to `ubuntu-latest`.
 ARC Buildx uses
 the remote driver against the private BuildKit sidecar. Each job starts from
 the reusable local seed but writes only to its own Pod UID clone. The
