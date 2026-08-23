@@ -53,6 +53,31 @@ fn arc_smoke_retains_the_observed_sandbox_before_persisting_teardown_state() -> 
 }
 
 #[test]
+fn arc_smoke_discards_the_job_and_bounded_request_lane() -> anyhow::Result<()> {
+    let tasks = read("infra/tasks/arc-smoke.yml");
+    let validate_request = tasks
+        .find("btrfs subvolume show \"$request_lane\"")
+        .context("ARC smoke teardown must validate its bounded request lane")?;
+    let delete_job = tasks
+        .find("btrfs subvolume delete \"$job_dir\"")
+        .context("ARC smoke teardown must delete retained job state")?;
+    let delete_request = tasks
+        .find("btrfs subvolume delete \"$request_lane\"")
+        .context("ARC smoke teardown must delete the request lane and its qgroup")?;
+    let delete_intent = tasks
+        .find("\"$intent_dir/$pod_uid.intent\"")
+        .context("ARC smoke teardown must delete promotion intent state")?;
+
+    assert!(
+        validate_request < delete_job
+            && delete_job < delete_request
+            && delete_request < delete_intent,
+        "ARC smoke must validate both retained subvolumes before deleting the job, request lane, and promotion intent"
+    );
+    Ok(())
+}
+
+#[test]
 fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
     let root = repository_root();
     let output = Command::new("bash")

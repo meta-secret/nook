@@ -402,6 +402,8 @@ tasks.requireAll([
   "mkfs.btrfs -q -f -L nook-arc-buildkit",
   'sudo -n mv "$pool_image_next" "$pool_image"',
   "Validated and discarded successful ARC smoke state",
+  'btrfs subvolume delete "$request_lane"',
+  '"$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next"',
   'mktemp "${TMPDIR:-/tmp}/nook-arc-smoke-{{.ARC_SMOKE_RUNNER_LABEL}}.XXXXXX"',
   'test "$state_lines" -ne 4',
   "*containerd-shim-kata-v2*",
@@ -491,8 +493,11 @@ runtimeSmoke.requireAll([
 buildkitPrepare.requireAll([
   "printf '%s\\n' \"$pod_uid\"",
   'create_file="$request_dir/.create-$pod_uid"',
+  'create_temp="$request_dir/.creating-$pod_uid.tmp"',
+  "trap 'rm -f -- \"$create_temp\"' EXIT",
   'while ! test -d "$request_lane"; do',
 ]);
+buildkitPrepare.forbid('create_temp="$create_file.tmp"');
 buildkitPrepare.forbid('mkdir -p "$request_lane"');
 buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-34359738368");
 buildkitDockerfile.require("jq=1.8.1-r0");
@@ -657,6 +662,7 @@ workerTasks.requireAll([
   '--arg address "$worker_mesh_address"',
   '--arg name "$worker_node_name" --arg address "$worker_mesh_address"',
   'Kubernetes node $worker_node_name belongs to another InternalIP',
+  'WireGuard key already belongs to $(basename "$persisted_peer" .conf)',
   'live_fragment="$(mktemp)"',
   'delete rule inet bynull_filter " chain " handle " $NF',
   'sudo -n nft --file "$live_fragment"',

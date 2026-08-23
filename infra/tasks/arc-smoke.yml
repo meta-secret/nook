@@ -432,6 +432,8 @@ tasks:
         pool_dir=/var/lib/nook-arc-buildkit/pool
         job_dir="$pool_dir/jobs/$pod_uid"
         job_file="$job_dir/buildkit.ext4"
+        request_lane="$pool_dir/requests/$pod_uid"
+        intent_dir="$pool_dir/runtime/intents"
         sudo -n mountpoint -q "$pool_dir"
         sudo -n test -f "$job_dir/.ready"
         if sudo -n test -L "$job_file" ||
@@ -440,9 +442,17 @@ tasks:
           echo "ARC smoke BuildKit state is not the root-owned regular clone" >&2
           exit 1
         fi
+        if sudo -n test -L "$request_lane" ||
+           ! sudo -n btrfs subvolume show "$request_lane" >/dev/null 2>&1; then
+          echo "ARC smoke request lane is not the bounded Btrfs subvolume" >&2
+          exit 1
+        fi
         sudo -n btrfs subvolume delete "$job_dir" >/dev/null
+        sudo -n btrfs subvolume delete "$request_lane" >/dev/null
         sudo -n rm -f -- "$pool_dir/runtime/$pod_uid.sandbox" \
-          "$pool_dir/runtime/$pod_uid.retain"
+          "$pool_dir/runtime/$pod_uid.retain" \
+          "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
+          "$intent_dir/$pod_uid.accepted.next"
         sudo -n btrfs filesystem sync "$pool_dir"
         echo "Validated and discarded successful ARC smoke state"
         REMOTE

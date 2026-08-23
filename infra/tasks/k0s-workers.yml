@@ -89,6 +89,15 @@ tasks:
         worker_public_key="$2"
         worker_node_name="$3"
         peer_file="/etc/wireguard/nook-peers/$worker_mesh_address.conf"
+        sudo -n install -d -m 0700 /etc/wireguard/nook-peers
+        while IFS= read -r persisted_peer; do
+          test "$persisted_peer" != "$peer_file" || continue
+          persisted_public_key="$(sudo -n sed -n 's/^PublicKey = //p' "$persisted_peer")"
+          if test "$persisted_public_key" = "$worker_public_key"; then
+            echo "k0s mesh: WireGuard key already belongs to $(basename "$persisted_peer" .conf)" >&2
+            exit 2
+          fi
+        done < <(sudo -n find /etc/wireguard/nook-peers -maxdepth 1 -type f -name '*.conf' -print | sort)
         if sudo -n test -e "$peer_file"; then
           if sudo -n test -L "$peer_file" ||
              test "$(sudo -n stat -c '%F:%u:%g:%h' -- "$peer_file")" != \

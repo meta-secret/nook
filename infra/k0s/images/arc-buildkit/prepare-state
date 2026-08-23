@@ -14,15 +14,17 @@ esac
 
 request_lane="$request_dir/$pod_uid"
 create_file="$request_dir/.create-$pod_uid"
-create_temp="$create_file.tmp"
+create_temp="$request_dir/.creating-$pod_uid.tmp"
 request_file="$request_lane/request"
 request_temp="$request_file.tmp"
 ready_file="$request_lane/ready"
 
 test -d "$request_dir"
 umask 077
+trap 'rm -f -- "$create_temp"' EXIT
 printf '%s\n' "$pod_uid" > "$create_temp"
 mv "$create_temp" "$create_file"
+trap - EXIT
 deadline=$(($(date +%s) + 240))
 while ! test -d "$request_lane"; do
   if test "$(date +%s)" -ge "$deadline"; then
