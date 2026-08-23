@@ -1,0 +1,60 @@
+import type { RootContent } from 'mdast';
+import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { unified } from 'unified';
+import {
+  CortexArticleBlockKind,
+  type CortexArticleBlock,
+} from '../src/domain.ts';
+
+export function blocksFromMarkdown(
+  content: string,
+): readonly CortexArticleBlock[] {
+  const parser = unified().use(remarkParse).use(remarkGfm);
+  return parser.parse(content).children.map(blockFromNode);
+}
+
+function blockFromNode(node: RootContent): CortexArticleBlock {
+  const line = node.position?.start.line;
+  if (typeof line !== 'number') {
+    throw new Error('Test Markdown block lacks a source line.');
+  }
+  if (node.type === 'heading') {
+    return {
+      depth: node.depth,
+      line,
+      text: nodeText(node),
+      type: CortexArticleBlockKind.Heading,
+    };
+  }
+  if (node.type === 'paragraph' || node.type === 'definition') {
+    return {
+      line,
+      type:
+        node.type === 'paragraph'
+          ? CortexArticleBlockKind.Paragraph
+          : CortexArticleBlockKind.Definition,
+    };
+  }
+  if (node.type === 'list') {
+    return {
+      line,
+      ordered: node.ordered === true,
+      type: CortexArticleBlockKind.List,
+    };
+  }
+  if (node.type === 'html') {
+    return {
+      comment: /^\s*<!--[\s\S]*-->\s*$/u.test(node.value),
+      line,
+      type: CortexArticleBlockKind.Html,
+    };
+  }
+  return { line, type: CortexArticleBlockKind.Structure };
+}
+
+function nodeText(node: RootContent): string {
+  if ('value' in node && typeof node.value === 'string') return node.value;
+  if (!('children' in node)) return '';
+  return node.children.map((child) => nodeText(child as RootContent)).join('');
+}
