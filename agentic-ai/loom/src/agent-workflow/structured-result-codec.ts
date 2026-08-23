@@ -16,6 +16,11 @@ import {
   isRecord,
   untrustedYamlProperty,
 } from '../lib/guards.ts';
+import {
+  decodeStructuralTaskOutput,
+  isStructuralResultKind,
+  structuralTaskOutputSchema,
+} from './structural-result-codec.ts';
 import type {
   UntrustedYamlMap,
   UntrustedYamlNode,
@@ -165,6 +170,13 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
 export function workflowTaskOutputSchema(
   resultKind: WorkflowResultKind,
 ): UntrustedYamlMap {
+  if (isStructuralResultKind(resultKind)) {
+    const structuralRequest = {
+      baseSchema: WORKFLOW_TASK_OUTPUT_SCHEMA,
+      resultKind,
+    };
+    return structuralTaskOutputSchema(structuralRequest);
+  }
   if (resultKind === WorkflowResultKind.ModuleDevelopmentPlan) {
     return {
       ...WORKFLOW_TASK_OUTPUT_SCHEMA,
@@ -225,6 +237,11 @@ export function decodeWorkflowTaskOutput(
     )
   ) {
     invalidOutput('workflow resultKind is invalid');
+  }
+  const resultKind = resultKindValue as WorkflowResultKind;
+  if (isStructuralResultKind(resultKind)) {
+    const structuralRequest = { node, resultKind };
+    return decodeStructuralTaskOutput(structuralRequest);
   }
   const isModuleExpertEvidence =
     resultKindValue === WorkflowResultKind.ModuleExpertEvidence;
@@ -304,6 +321,49 @@ export function decodeWorkflowTaskOutput(
     continuation: decodeModuleExpertContinuation(
       readProperty([node, 'continuation']),
     ),
+  };
+}
+
+function decodeModuleExpertAuthorizationFields(
+  node: UntrustedYamlMap,
+): ModuleExpertAuthorization {
+  const task = stringValue(readProperty([node, 'task']));
+  const expert = stringValue(readProperty([node, 'expert']));
+  const attempt = integerValue(readProperty([node, 'attempt']));
+  const depth = integerValue(readProperty([node, 'depth']));
+  const parentNode = readProperty([node, 'parent']);
+  if (!isRecord(parentNode)) {
+    invalidOutput('expert authorization parent must be an object');
+  }
+  assertExactKeys([parentNode, ['kind', 'task', 'agent', 'attempt']]);
+  const parentKind = stringValue(readProperty([parentNode, 'kind']));
+  const parentTask = stringValue(readProperty([parentNode, 'task']));
+  const parentAgent = stringValue(readProperty([parentNode, 'agent']));
+  const parentAttempt = integerValue(readProperty([parentNode, 'attempt']));
+  if (
+    parentKind !== AgentAttemptParentKind.AgentAttempt ||
+    !safeIdentifier(task) ||
+    !safeIdentifier(expert) ||
+    !safeIdentifier(parentTask) ||
+    !safeIdentifier(parentAgent) ||
+    attempt < 1 ||
+    parentAttempt < 1 ||
+    (depth !== 2 && depth !== 3) ||
+    (task === parentTask && attempt === parentAttempt)
+  ) {
+    invalidOutput('expert authorization identity is invalid');
+  }
+  return {
+    task,
+    expert,
+    attempt,
+    depth,
+    parent: {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: parentTask,
+      agent: parentAgent,
+      attempt: parentAttempt,
+    },
   };
 }
 

@@ -22,6 +22,7 @@ export enum AgentAttemptAdapterKind {
   GenericDelegationRecorder = 'generic-delegation-recorder',
   ModuleExpertInvocation = 'module-expert-invocation',
   StaticWorkflowScheduler = 'static-workflow-scheduler',
+  StructuralExpertInvocation = 'structural-expert-invocation',
 }
 
 export enum AgentReasoningEffort {
@@ -70,11 +71,15 @@ export enum WorkflowFindingSeverity {
 }
 
 export enum WorkflowResultKind {
+  CodeRefactoringEvidence = 'code-refactoring-evidence',
   CortexEvidence = 'cortex-evidence',
+  CortexRefactoringEvidence = 'cortex-refactoring-evidence',
   CortexSynthesis = 'cortex-synthesis',
   LoomLeafEvidence = 'loom-leaf-evidence',
   ModuleDevelopmentPlan = 'module-development-plan',
   ModuleExpertEvidence = 'module-expert-evidence',
+  StructuralExpertPlan = 'structural-expert-plan',
+  SystemCoherenceSynthesis = 'system-coherence-synthesis',
 }
 
 export type WorkflowRunId = string;
@@ -456,6 +461,223 @@ export type ModuleExpertAuthorization = {
   readonly parent: ParentAgentAttempt;
 };
 
+export enum StructuralExpertAuthorizationKind {
+  RepositoryEvidence = 'repository-evidence',
+  VerifiedViewSynthesis = 'verified-view-synthesis',
+}
+
+export type StructuralChildProjectionAuthorization = {
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: WorkflowAttemptNumber;
+  readonly resultPath: string;
+  readonly resultSha256: string;
+  readonly viewPath: string;
+  readonly viewSha256: string;
+};
+
+export type StructuralChildLanePreauthorization = {
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: WorkflowAttemptNumber;
+};
+
+type StructuralExpertAuthorizationFields = {
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: WorkflowAttemptNumber;
+  readonly depth: 2;
+  readonly parent: ParentAgentAttempt;
+};
+
+export type StructuralEvidenceAuthorization =
+  StructuralExpertAuthorizationFields & {
+    readonly kind: StructuralExpertAuthorizationKind.RepositoryEvidence;
+    readonly evidencePaths: readonly string[];
+  };
+
+export type StructuralSynthesisPreauthorization =
+  StructuralExpertAuthorizationFields & {
+    readonly kind: StructuralExpertAuthorizationKind.VerifiedViewSynthesis;
+    readonly childLanes: readonly StructuralChildLanePreauthorization[];
+  };
+
+export type StructuralExpertAuthorization =
+  StructuralEvidenceAuthorization | StructuralSynthesisPreauthorization;
+
+export enum StructuralFindingCategory {
+  Architecture = 'architecture',
+  Design = 'design',
+  CodeQuality = 'code-quality',
+  TypeSafety = 'type-safety',
+  Tests = 'tests',
+  DependencyDirection = 'dependency-direction',
+  AuthorityConflict = 'authority-conflict',
+  ObsoleteClaim = 'obsolete-claim',
+  HistoricalClaim = 'historical-claim',
+  Duplication = 'duplication',
+  Complexity = 'complexity',
+  KnowledgeGraph = 'knowledge-graph',
+  DeterministicExtraction = 'deterministic-extraction',
+}
+
+export enum StructuralFindingSeverity {
+  Advisory = 'advisory',
+  Low = 'low',
+  Medium = 'medium',
+  High = 'high',
+  Critical = 'critical',
+}
+
+export enum StructuralFindingDisposition {
+  Keep = 'keep',
+  Simplify = 'simplify',
+  Merge = 'merge',
+  Split = 'split',
+  Relocate = 'relocate',
+  LabelHistorical = 'label-historical',
+  Remove = 'remove',
+  ProposeDeterministicExtraction = 'propose-deterministic-extraction',
+  Investigate = 'investigate',
+}
+
+export type StructuralFindingEvidence = {
+  readonly path: string;
+  readonly locator: string;
+  readonly observation: string;
+};
+
+export type StructuralFinding<
+  TCategory extends StructuralFindingCategory = StructuralFindingCategory,
+> = {
+  readonly findingId: string;
+  readonly category: TCategory;
+  readonly severity: StructuralFindingSeverity;
+  readonly disposition: StructuralFindingDisposition;
+  readonly summary: string;
+  readonly evidence: readonly StructuralFindingEvidence[];
+  readonly affectedPaths: readonly string[];
+  readonly currentOwner: string;
+  readonly proposedOwner: string;
+  readonly preservedInvariants: readonly string[];
+  readonly validation: readonly string[];
+  readonly unresolvedDecision: string;
+};
+
+export enum StructuralAssessmentKind {
+  Findings = 'findings',
+  None = 'none',
+}
+
+export type StructuralFindingsAssessment<
+  TCategory extends StructuralFindingCategory,
+> = {
+  readonly kind: StructuralAssessmentKind.Findings;
+  readonly findings: readonly [
+    StructuralFinding<TCategory>,
+    ...StructuralFinding<TCategory>[],
+  ];
+};
+
+export type StructuralNoneAssessment = {
+  readonly kind: StructuralAssessmentKind.None;
+  readonly reason: string;
+};
+
+export type StructuralFindingAssessment<
+  TCategory extends StructuralFindingCategory,
+> = StructuralFindingsAssessment<TCategory> | StructuralNoneAssessment;
+
+export enum StructuralInstructionClassificationKind {
+  ProjectKnowledge = 'project-knowledge',
+  AgentProtocol = 'agent-protocol',
+  ProjectWorkflow = 'project-workflow',
+  EphemeralKnowledge = 'ephemeral-knowledge',
+  DeterministicMechanic = 'deterministic-mechanic',
+  SemanticPolicy = 'semantic-policy',
+}
+
+export type StructuralInstructionClassification = {
+  readonly instructionId: string;
+  readonly classification: StructuralInstructionClassificationKind;
+  readonly authorityPath: string;
+  readonly summary: string;
+  readonly evidence: readonly StructuralFindingEvidence[];
+};
+
+export enum LoomExtractionClassification {
+  Deterministic = 'deterministic',
+  Mixed = 'mixed',
+  Semantic = 'semantic',
+}
+
+export enum LoomExtractionTarget {
+  LoomLeaf = 'loom-leaf',
+  LoomStaticWorkflow = 'loom-static-workflow',
+  TaskEntrypoint = 'task-entrypoint',
+}
+
+export type LoomExtractionCandidate = {
+  readonly candidateId: string;
+  readonly classification: LoomExtractionClassification;
+  readonly target: LoomExtractionTarget;
+  readonly summary: string;
+  readonly declaredInputs: readonly string[];
+  readonly declaredOutputs: readonly string[];
+  readonly failureBehavior: readonly string[];
+  readonly residualSemanticPolicy: readonly string[];
+  readonly evidence: readonly StructuralFindingEvidence[];
+};
+
+export type CodeRefactoringContinuation = {
+  readonly scopeModules: readonly string[];
+  readonly acceptedExternalContracts: readonly string[];
+  readonly preservedBehaviorInvariants: readonly string[];
+  readonly preservedSecurityInvariants: readonly string[];
+  readonly architectureFindings: StructuralFindingAssessment<StructuralFindingCategory.Architecture>;
+  readonly designFindings: StructuralFindingAssessment<StructuralFindingCategory.Design>;
+  readonly codeQualityFindings: StructuralFindingAssessment<StructuralFindingCategory.CodeQuality>;
+  readonly typeSafetyFindings: StructuralFindingAssessment<StructuralFindingCategory.TypeSafety>;
+  readonly testFindings: StructuralFindingAssessment<StructuralFindingCategory.Tests>;
+  readonly dependencyDirectionFindings: StructuralFindingAssessment<StructuralFindingCategory.DependencyDirection>;
+  readonly proposedSlices: readonly string[];
+  readonly focusedValidation: readonly string[];
+  readonly risks: readonly string[];
+  readonly unresolvedDecisions: readonly string[];
+  readonly parentActions: readonly string[];
+};
+
+export type CortexRefactoringContinuation = {
+  readonly authoritySet: readonly string[];
+  readonly canonicalOwners: readonly string[];
+  readonly conflicts: StructuralFindingAssessment<StructuralFindingCategory.AuthorityConflict>;
+  readonly obsoleteClaims: StructuralFindingAssessment<StructuralFindingCategory.ObsoleteClaim>;
+  readonly historicalClaims: StructuralFindingAssessment<StructuralFindingCategory.HistoricalClaim>;
+  readonly duplications: StructuralFindingAssessment<StructuralFindingCategory.Duplication>;
+  readonly complexityFindings: StructuralFindingAssessment<StructuralFindingCategory.Complexity>;
+  readonly instructionClassifications: readonly StructuralInstructionClassification[];
+  readonly loomExtractionCandidates: readonly LoomExtractionCandidate[];
+  readonly knowledgeGraphImpacts: StructuralFindingAssessment<StructuralFindingCategory.KnowledgeGraph>;
+  readonly proposedSlices: readonly string[];
+  readonly risks: readonly string[];
+  readonly unresolvedDecisions: readonly string[];
+  readonly parentActions: readonly string[];
+};
+
+export type SystemCoherenceContinuation = {
+  readonly consumedArtifacts: readonly string[];
+  readonly coverageGaps: readonly string[];
+  readonly crossSurfaceInvariants: readonly string[];
+  readonly contradictions: readonly string[];
+  readonly acceptedProposals: readonly string[];
+  readonly rejectedProposals: readonly string[];
+  readonly orderedSlices: readonly string[];
+  readonly serializationPoints: readonly string[];
+  readonly validationMatrix: readonly string[];
+  readonly unresolvedDecisions: readonly string[];
+  readonly deliveryOwnerActions: readonly string[];
+};
+
 type WorkflowTaskOutputFields = {
   readonly summary: string;
   readonly materializedViewMarkdown: string;
@@ -471,24 +693,65 @@ export type StandardWorkflowTaskOutput = WorkflowTaskOutputFields & {
     | WorkflowResultKind.LoomLeafEvidence;
   readonly continuation?: never;
   readonly moduleExpertAuthorizations?: never;
+  readonly structuralExpertAuthorizations?: never;
 };
 
 export type ModuleDevelopmentPlanTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.ModuleDevelopmentPlan;
   readonly continuation?: never;
   readonly moduleExpertAuthorizations: readonly ModuleExpertAuthorization[];
+  readonly structuralExpertAuthorizations?: never;
 };
 
 export type ModuleExpertTaskOutput = WorkflowTaskOutputFields & {
   readonly resultKind: WorkflowResultKind.ModuleExpertEvidence;
   readonly continuation: ModuleExpertContinuation;
   readonly moduleExpertAuthorizations?: never;
+  readonly structuralExpertAuthorizations?: never;
 };
 
+export type StructuralExpertPlanTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.StructuralExpertPlan;
+  readonly continuation?: never;
+  readonly moduleExpertAuthorizations?: never;
+  readonly structuralExpertAuthorizations: readonly StructuralExpertAuthorization[];
+};
+
+export type CodeRefactoringTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.CodeRefactoringEvidence;
+  readonly continuation: CodeRefactoringContinuation;
+  readonly moduleExpertAuthorizations?: never;
+  readonly structuralExpertAuthorizations?: never;
+};
+
+export type CortexRefactoringTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.CortexRefactoringEvidence;
+  readonly continuation: CortexRefactoringContinuation;
+  readonly moduleExpertAuthorizations?: never;
+  readonly structuralExpertAuthorizations?: never;
+};
+
+export type SystemCoherenceTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.SystemCoherenceSynthesis;
+  readonly continuation: SystemCoherenceContinuation;
+  readonly moduleExpertAuthorizations?: never;
+  readonly structuralExpertAuthorizations?: never;
+};
+
+export type StructuralTaskOutput =
+  | CodeRefactoringTaskOutput
+  | CortexRefactoringTaskOutput
+  | StructuralExpertPlanTaskOutput
+  | SystemCoherenceTaskOutput;
+
 export type WorkflowTaskOutput =
+  | CodeRefactoringTaskOutput
+  | CortexRefactoringTaskOutput
   | StandardWorkflowTaskOutput
   | ModuleDevelopmentPlanTaskOutput
-  | ModuleExpertTaskOutput;
+  | ModuleExpertTaskOutput
+  | StructuralExpertPlanTaskOutput
+  | SystemCoherenceTaskOutput;
 
 export type ProjectionReference = {
   readonly path: string;

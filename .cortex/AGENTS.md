@@ -96,6 +96,12 @@ Agents must follow this navigation and search protocol:
   read-only expertise through
   [architecture/module-experts.md](architecture/module-experts.md) and follow
   [workflows/module-oriented-development.md](workflows/module-oriented-development.md).
+- **Structural refactoring:** Route code and Cortex coherence audits through the
+  two read-only structural experts. Use synthesis-only system coherence when
+  both evidence streams need a shared join. The delivery owner applies every
+  correction. See
+  [architecture/refactoring-experts.md](architecture/refactoring-experts.md)
+  and [workflows/structural-refactoring.md](workflows/structural-refactoring.md).
 - **Feature ownership boundary:** Keep this rule: agents mutate only their owned feature.
   - Another active agent's work is read-only.
   - When ownership is missing or ambiguous, wait for an explicit user, owner, or orchestrator handoff.
@@ -133,6 +139,9 @@ Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) 
   worker boundaries, event streams, semantic views, and parent aggregation.
 - [Module expert registry](architecture/module-experts.md) owns named read-only
   expert routing, internal API scope, production coverage, and exclusions.
+- [Structural refactoring expert registry](architecture/refactoring-experts.md)
+  owns the two repository-reading refactoring roles and the synthesis-only
+  system coherence role.
 
 - **Dynamic Skills Registry:** [dynamic-skills/index.md](dynamic-skills/index.md) (executable rules for Rust, TypeScript, Svelte, Testing, UI Design, and Code Hygiene).
 - **Product Specifications:** [product-specs/index.md](product-specs/index.md) (living specifications for user-facing features, item schemas, and UX workflows).

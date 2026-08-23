@@ -232,6 +232,32 @@ behavior, security, and compatibility invariants, owning tests, focused
 validation, risks, unresolved decisions, and parent actions. Parent actions are
 evidence only and never schedule work.
 
+## Structural refactoring experts
+
+Structural refactoring roles use a sibling registry because their evidence
+scopes overlap production modules. Validate the exact catalog and role
+definitions from the repository root:
+
+```bash
+task loom:structural-experts:validate
+```
+
+Invoke one role after recording a replay-verifiable depth-one
+`StructuralExpertPlan` with the exact depth-two authorization:
+
+```bash
+task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json
+```
+
+Repository-reading requests select exact files or strict descendants of one
+reviewed scope cap. They cannot select an aggregate cap such as `.cortex` or
+`nook-app/nook-web`. Synthesis requests have no repository scope; their parent
+authorization freezes the exact ordered all-terminal child projection barrier.
+Loom accepts replay-valid completed and failed child evidence, preserves the
+failure view, and rejects missing, extra, reordered, rebound, or unrelated
+lanes. Every role uses the shared isolated read-only runtime, cannot delegate,
+and returns typed evidence for the delivery owner rather than write authority.
+
 The pinned Codex runtime retains inert non-process helpers in addition to the
 three repository tools. The enforced security claim is that the model has no
 process or write path. It is not a defense against a separate hostile process

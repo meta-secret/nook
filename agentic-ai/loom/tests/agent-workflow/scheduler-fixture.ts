@@ -111,10 +111,14 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
         : WorkflowResultKind.LoomLeafEvidence;
     if (
       resultKind === WorkflowResultKind.ModuleDevelopmentPlan ||
-      resultKind === WorkflowResultKind.ModuleExpertEvidence
+      resultKind === WorkflowResultKind.ModuleExpertEvidence ||
+      resultKind === WorkflowResultKind.StructuralExpertPlan ||
+      resultKind === WorkflowResultKind.CodeRefactoringEvidence ||
+      resultKind === WorkflowResultKind.CortexRefactoringEvidence ||
+      resultKind === WorkflowResultKind.SystemCoherenceSynthesis
     ) {
       throw new Error(
-        'The generic scheduler fixture cannot synthesize module expert continuation evidence.',
+        'The generic scheduler fixture cannot synthesize specialized expert evidence.',
       );
     }
     const output: WorkflowTaskOutput = {

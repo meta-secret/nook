@@ -172,9 +172,15 @@ function normalizedTerminal(
   terminal: TaskTerminal<string>,
 ): TaskTerminal<string> {
   if (terminal.kind !== TaskTerminalKind.Completed) return terminal;
-  if (terminal.output.resultKind === WorkflowResultKind.ModuleExpertEvidence) {
+  if (
+    terminal.output.resultKind === WorkflowResultKind.ModuleExpertEvidence ||
+    terminal.output.resultKind === WorkflowResultKind.CodeRefactoringEvidence ||
+    terminal.output.resultKind ===
+      WorkflowResultKind.CortexRefactoringEvidence ||
+    terminal.output.resultKind === WorkflowResultKind.SystemCoherenceSynthesis
+  ) {
     throw new Error(
-      'Generic delegation cannot record isolated module expert evidence.',
+      'Generic delegation cannot record isolated expert evidence.',
     );
   }
   return {

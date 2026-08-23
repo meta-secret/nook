@@ -7,6 +7,7 @@ import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
+  MaterializedViewAuthorKind,
   MaterializedViewPresence,
   TaskTerminalKind,
   WorkflowResultKind,
@@ -17,8 +18,11 @@ import type {
 } from '../agent-workflow/agent-events.ts';
 import type {
   CompletedTaskTerminal,
+  FailedTaskTerminal,
+  MaterializedViewReference,
   ModuleExpertAuthorization,
   ParentAgentAttempt,
+  ProjectionReference,
 } from '../agent-workflow/domain.ts';
 import { replayAgentAttemptJournal } from '../agent-workflow/agent-replay.ts';
 import {
@@ -71,14 +75,14 @@ const VERIFIED_PARENT_AUTHORIZATIONS = new WeakMap<
   string
 >();
 
-type ParentAttemptIdentity = {
+export type ParentAttemptIdentity = {
   readonly task: string;
   readonly agent: string;
   readonly attempt: number;
   readonly depth: number;
 };
 
-type ReadParentAttemptArgs = {
+export type ReadParentAttemptArgs = {
   readonly runDirectory: string;
   readonly runId: string;
   readonly workflowVersion: string;
@@ -86,9 +90,20 @@ type ReadParentAttemptArgs = {
   readonly identity: ParentAttemptIdentity;
 };
 
-type VerifiedParentAttempt = {
+export type VerifiedParentAttempt = {
   readonly firstEvent: AgentAttemptEvent;
+  readonly result: ProjectionReference;
   readonly terminal: CompletedTaskTerminal<string>;
+  readonly view: MaterializedViewReference;
+};
+
+export type VerifiedBarrierAttempt = {
+  readonly firstEvent: AgentAttemptEvent;
+  readonly result: ProjectionReference;
+  readonly terminal: CompletedTaskTerminal<string> | FailedTaskTerminal<string>;
+  readonly view: MaterializedViewReference;
+  readonly resultJson: string;
+  readonly viewMarkdown: string;
 };
 
 type ReadBoundedParentProjectionArgs = {
@@ -113,7 +128,7 @@ export async function verifyModuleExpertParentAuthorization(
     sourceCommit: args.request.sourceCommit,
     identity: immediateIdentity,
   };
-  const immediate = await readParentAttempt(immediateRead);
+  const immediate = await readVerifiedParentAttempt(immediateRead);
   const depthThreeArgs: ReadDepthThreeAuthorityArgs = { args, immediate };
   const authority =
     args.request.depth === 2
@@ -197,12 +212,27 @@ async function readDepthThreeAuthority(
     sourceCommit: input.args.request.sourceCommit,
     identity: authorityIdentity,
   };
-  return readParentAttempt(authorityRead);
+  return readVerifiedParentAttempt(authorityRead);
 }
 
-async function readParentAttempt(
+export async function readVerifiedParentAttempt(
   args: ReadParentAttemptArgs,
 ): Promise<VerifiedParentAttempt> {
+  const attempt = await readVerifiedBarrierAttempt(args);
+  if (attempt.terminal.kind !== TaskTerminalKind.Completed) {
+    authorizationFailed();
+  }
+  return {
+    firstEvent: attempt.firstEvent,
+    result: attempt.result,
+    terminal: attempt.terminal,
+    view: attempt.view,
+  };
+}
+
+export async function readVerifiedBarrierAttempt(
+  args: ReadParentAttemptArgs,
+): Promise<VerifiedBarrierAttempt> {
   const attemptDirectory = join(
     args.runDirectory,
     'agents',
@@ -240,13 +270,14 @@ async function readParentAttempt(
     authorizationFailed();
   }
   let events: readonly AgentAttemptEvent[];
-  let terminal: CompletedTaskTerminal<string>;
+  let terminal: CompletedTaskTerminal<string> | FailedTaskTerminal<string>;
   try {
     events = eventsSerialized
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line) as AgentAttemptEvent);
-    terminal = JSON.parse(resultSerialized) as CompletedTaskTerminal<string>;
+    terminal = JSON.parse(resultSerialized) as
+      CompletedTaskTerminal<string> | FailedTaskTerminal<string>;
   } catch {
     authorizationFailed();
   }
@@ -266,8 +297,10 @@ async function readParentAttempt(
     !firstEvent ||
     !terminalEvent ||
     terminalEvents.length !== 1 ||
-    replayed.terminalKind !== TaskTerminalKind.Completed ||
-    terminalEvent.terminalKind !== TaskTerminalKind.Completed ||
+    (terminal.kind !== TaskTerminalKind.Completed &&
+      terminal.kind !== TaskTerminalKind.Failed) ||
+    replayed.terminalKind !== terminal.kind ||
+    terminalEvent.terminalKind !== terminal.kind ||
     firstEvent.runId !== args.runId ||
     firstEvent.workflow !== DelegatedAgentWorkflowName.AgentWork ||
     firstEvent.workflowVersion !== args.workflowVersion ||
@@ -276,11 +309,9 @@ async function readParentAttempt(
     firstEvent.agent !== args.identity.agent ||
     firstEvent.attempt !== args.identity.attempt ||
     firstEvent.depth !== args.identity.depth ||
-    !completedTerminalHasExactKeys(terminal) ||
-    terminal.kind !== TaskTerminalKind.Completed ||
+    !barrierTerminalHasExactKeys(terminal) ||
     terminal.task !== args.identity.task ||
     terminal.attempt !== args.identity.attempt ||
-    terminal.threadId.trim() === '' ||
     terminalEvent.result.path !==
       join(
         'agents',
@@ -302,22 +333,52 @@ async function readParentAttempt(
   ) {
     authorizationFailed();
   }
+  if (terminal.kind === TaskTerminalKind.Failed) {
+    const expectedView = failedAttemptView(terminal);
+    if (
+      terminal.summary.trim() === '' ||
+      terminal.summary.length > 4096 ||
+      viewSerialized !== expectedView ||
+      terminalEvent.view.authorKind !== MaterializedViewAuthorKind.LoomRuntime
+    ) {
+      authorizationFailed();
+    }
+    return {
+      firstEvent,
+      result: terminalEvent.result,
+      terminal,
+      view: terminalEvent.view,
+      resultJson: JSON.stringify(terminal),
+      viewMarkdown: viewSerialized,
+    };
+  }
+  if (terminal.threadId.trim() === '') authorizationFailed();
   let decodedOutput: ReturnType<typeof decodeWorkflowTaskOutput>;
   try {
     decodedOutput = decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
   } catch {
     authorizationFailed();
   }
-  if (viewSerialized !== `${decodedOutput.materializedViewMarkdown.trim()}\n`) {
-    authorizationFailed();
-  }
   if (
-    decodedOutput.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
-    firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation
+    viewSerialized !== `${decodedOutput.materializedViewMarkdown.trim()}\n` ||
+    terminalEvent.view.authorKind !== MaterializedViewAuthorKind.Agent ||
+    (decodedOutput.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
+      firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation)
   ) {
     authorizationFailed();
   }
-  return { firstEvent, terminal: { ...terminal, output: decodedOutput } };
+  const normalizedTerminal: CompletedTaskTerminal<string> = {
+    ...terminal,
+    output: decodedOutput,
+  };
+  return {
+    firstEvent,
+    result: terminalEvent.result,
+    terminal: normalizedTerminal,
+    view: terminalEvent.view,
+    resultJson: JSON.stringify(normalizedTerminal),
+    viewMarkdown: viewSerialized,
+  };
 }
 
 async function readBoundedParentProjection(
@@ -405,14 +466,31 @@ function pathEscapesRunDirectory(relativePath: string): boolean {
   );
 }
 
-function completedTerminalHasExactKeys(
-  terminal: CompletedTaskTerminal<string>,
+function barrierTerminalHasExactKeys(
+  terminal: CompletedTaskTerminal<string> | FailedTaskTerminal<string>,
 ): boolean {
-  const expected = new Set(['kind', 'task', 'attempt', 'threadId', 'output']);
+  const expected = new Set(
+    terminal.kind === TaskTerminalKind.Completed
+      ? ['kind', 'task', 'attempt', 'threadId', 'output']
+      : ['kind', 'task', 'attempt', 'summary'],
+  );
   const keys = Object.keys(terminal);
   return (
     keys.length === expected.size && keys.every((key) => expected.has(key))
   );
+}
+
+function failedAttemptView(terminal: FailedTaskTerminal<string>): string {
+  return [
+    '# Agent attempt failure view',
+    '',
+    `Status: ${terminal.kind}`,
+    '',
+    'This view was produced by Loom because the agent did not complete an authored semantic view.',
+    '',
+    `Normalized outcome: ${terminal.summary}`,
+    '',
+  ].join('\n');
 }
 
 function sha256(value: string): string {

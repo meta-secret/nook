@@ -1,7 +1,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import type { SpawnSyncOptionsWithStringEncoding } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -132,6 +132,27 @@ export type ModuleExpertRuntimeIsolationRequest = {
   readonly workingDirectory: string;
 };
 
+export type ReadOnlyExpertContextFile = {
+  readonly path: string;
+  readonly content: string;
+};
+
+export type ReadOnlyExpertSnapshot = {
+  readonly excludedPaths: readonly string[];
+  readonly optionalScopePaths: readonly string[];
+  readonly scopePaths: readonly string[];
+  readonly contextFiles: readonly ReadOnlyExpertContextFile[];
+};
+
+export type ReadOnlyExpertRuntimeIsolationRequest = {
+  readonly expertName: string;
+  readonly parentEnvironment: NodeJS.ProcessEnv;
+  readonly snapshot: ReadOnlyExpertSnapshot;
+  readonly sourceCommit: string;
+  readonly temporaryRoot?: string;
+  readonly workingDirectory: string;
+};
+
 export type ModuleExpertRuntimeIsolation = {
   readonly codexHome: string;
   readonly codexOptions: ModuleExpertCodexOptions;
@@ -179,6 +200,28 @@ export type ModuleExpertCodexOptions = ReturnType<
 export async function createModuleExpertRuntimeIsolation(
   request: ModuleExpertRuntimeIsolationRequest,
 ): Promise<ModuleExpertRuntimeIsolation> {
+  const profile = moduleExpertProfile(request.expertName);
+  const sharedRequest: ReadOnlyExpertRuntimeIsolationRequest = {
+    expertName: request.expertName,
+    parentEnvironment: request.parentEnvironment,
+    snapshot: {
+      excludedPaths: profile.excludedPaths,
+      optionalScopePaths: profile.generatedScopePaths.map(
+        (scope) => scope.path,
+      ),
+      scopePaths: moduleExpertSnapshotPaths(profile),
+      contextFiles: [],
+    },
+    sourceCommit: request.sourceCommit,
+    workingDirectory: request.workingDirectory,
+    ...(request.temporaryRoot ? { temporaryRoot: request.temporaryRoot } : {}),
+  };
+  return createReadOnlyExpertRuntimeIsolation(sharedRequest);
+}
+
+export async function createReadOnlyExpertRuntimeIsolation(
+  request: ReadOnlyExpertRuntimeIsolationRequest,
+): Promise<ModuleExpertRuntimeIsolation> {
   assertSourceCommit(request.sourceCommit);
   const temporaryRoot = request.temporaryRoot ?? tmpdir();
   const codexHome = mkdtempSync(
@@ -187,7 +230,6 @@ export async function createModuleExpertRuntimeIsolation(
   let authenticationBroker: ModuleExpertAuthenticationBroker | false = false;
   let contextServer: ModuleExpertReadContextServer | false = false;
   try {
-    const profile = moduleExpertProfile(request.expertName);
     const processEnvironment = allowlistedEnvironment(
       request.parentEnvironment,
     );
@@ -196,16 +238,23 @@ export async function createModuleExpertRuntimeIsolation(
       codexHome,
       environment: processEnvironment,
       sourceCommit: request.sourceCommit,
-      excludedPaths: profile.excludedPaths,
-      optionalScopePaths: profile.generatedScopePaths.map(
-        (scope) => scope.path,
-      ),
-      scopePaths: moduleExpertSnapshotPaths(profile),
+      excludedPaths: request.snapshot.excludedPaths,
+      optionalScopePaths: request.snapshot.optionalScopePaths,
+      scopePaths: request.snapshot.scopePaths,
       workingDirectory: request.workingDirectory,
     };
-    const repositorySnapshot = materializeRepositorySnapshot(
-      repositorySnapshotRequest,
-    );
+    const contextOnlyRequest: MaterializeContextOnlySnapshotRequest = {
+      codexHome,
+    };
+    const repositorySnapshot =
+      request.snapshot.scopePaths.length > 0
+        ? materializeRepositorySnapshot(repositorySnapshotRequest)
+        : materializeContextOnlySnapshot(contextOnlyRequest);
+    const contextWriteRequest: WriteReadOnlyExpertContextFilesRequest = {
+      contextFiles: request.snapshot.contextFiles,
+      repositorySnapshot,
+    };
+    writeReadOnlyExpertContextFiles(contextWriteRequest);
     const isolatedWorkspace = join(codexHome, ISOLATED_WORKSPACE_NAME);
     mkdirSync(isolatedWorkspace);
     const authenticationBrokerRequest: ModuleExpertAuthenticationBrokerRequest =
@@ -471,6 +520,52 @@ type RepositorySnapshotRequest = {
   readonly scopePaths: readonly string[];
   readonly workingDirectory: string;
 };
+
+type MaterializeContextOnlySnapshotRequest = {
+  readonly codexHome: string;
+};
+
+function materializeContextOnlySnapshot(
+  request: MaterializeContextOnlySnapshotRequest,
+): string {
+  const snapshotPath = join(request.codexHome, REPOSITORY_SNAPSHOT_NAME);
+  mkdirSync(snapshotPath);
+  return snapshotPath;
+}
+
+type WriteReadOnlyExpertContextFilesRequest = {
+  readonly contextFiles: readonly ReadOnlyExpertContextFile[];
+  readonly repositorySnapshot: string;
+};
+
+function writeReadOnlyExpertContextFiles(
+  request: WriteReadOnlyExpertContextFilesRequest,
+): void {
+  let totalBytes = 0;
+  for (const file of request.contextFiles) {
+    totalBytes += Buffer.byteLength(file.content, 'utf8');
+  }
+  if (request.contextFiles.length > 64 || totalBytes > 1_048_576) {
+    throw new Error('Read-only expert context files exceed their bounds.');
+  }
+  for (const file of request.contextFiles) {
+    if (
+      file.path === '' ||
+      file.path.startsWith('/') ||
+      file.path.includes('\\') ||
+      file.path.includes('\u0000') ||
+      file.path.split('/').includes('..') ||
+      Buffer.byteLength(file.content, 'utf8') > 131_072
+    ) {
+      throw new Error('Read-only expert context file is unsafe.');
+    }
+    const target = join(request.repositorySnapshot, file.path);
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(join(target, '..'), directoryOptions);
+    const writeOptions = { encoding: 'utf8', flag: 'wx' } as const;
+    writeFileSync(target, file.content, writeOptions);
+  }
+}
 
 function materializeRepositorySnapshot(
   request: RepositorySnapshotRequest,

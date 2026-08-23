@@ -24,12 +24,14 @@ import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
 import {
   MODULE_EXPERT_CONTEXT_MCP,
+  createReadOnlyExpertRuntimeIsolation,
   moduleExpertThreadOptions,
   withModuleExpertRuntimeIsolation,
 } from '../module-experts/runtime-contract.ts';
 import type {
   ModuleExpertRuntimeIsolationRequest,
   ModuleExpertRuntimeIsolationUse,
+  ReadOnlyExpertRuntimeIsolationRequest,
 } from '../module-experts/runtime-contract.ts';
 import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../module-experts/read-context-mcp.ts';
 
@@ -108,6 +110,35 @@ export async function runIsolatedModuleExpertCodex<
       },
     };
   return withModuleExpertRuntimeIsolation(isolationUse);
+}
+
+export type RunIsolatedReadOnlyExpertCodexRequest<
+  TTask extends string,
+  TAgent extends string,
+> = {
+  readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly isolationRequest: ReadOnlyExpertRuntimeIsolationRequest;
+};
+
+export async function runIsolatedReadOnlyExpertCodex<
+  TTask extends string,
+  TAgent extends string,
+>(
+  request: RunIsolatedReadOnlyExpertCodexRequest<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
+  const isolation = await createReadOnlyExpertRuntimeIsolation(
+    request.isolationRequest,
+  );
+  try {
+    const execution: GuardedAgentExecution<TTask, TAgent> = {
+      codex: new Codex(isolation.codexOptions),
+      invocation: request.invocation,
+      threadOptions: isolation.threadOptions,
+    };
+    return await executeGuardedAgent(execution);
+  } finally {
+    await isolation.dispose();
+  }
 }
 
 type GuardedAgentExecution<TTask extends string, TAgent extends string> = {

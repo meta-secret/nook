@@ -455,6 +455,18 @@ paths remain disabled. Successful experts return a typed
 `ModuleExpertEvidence` continuation; parent actions are evidence, not scheduler
 authority.
 
+Structural refactoring uses a separate read-only expert registry so overlapping
+maintenance scopes do not pretend to own production modules. Run
+**`task loom:structural-experts:validate`** to verify the exact code, Cortex,
+and synthesis profiles. Invoke one preauthorized role with
+**`task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json`**.
+`code_refactoring_expert` and `cortex_refactoring_expert` inspect only bounded
+exact-commit evidence. `system_coherence_synthesizer` receives only
+replay-verified child results and views. The parent plan freezes the read scope
+or synthesis barrier; every role remains nondelegating and read-only. See the
+[structural refactoring registry](.cortex/architecture/refactoring-experts.md)
+and [workflow](.cortex/workflows/structural-refactoring.md).
+
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
@@ -462,6 +474,8 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
+task loom:structural-experts:validate # exact structural role and bounded-scope audit
+task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
