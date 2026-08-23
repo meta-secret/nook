@@ -1,12 +1,5 @@
 # Cortex Knowledge Graph & Navigation Map
 
-Central knowledge graph and index of all specifications, architecture documents, rules, skills, workflows, and references in Nook Cortex.
-
-## Overview
-
-This central knowledge graph provides complete hierarchical navigation across all Cortex documents.
-AI agents must always consult this knowledge graph first to discover relevant knowledge and retrieve exact section anchors without loading entire documents into context.
-
 ## Golden Principles & Entry Points
 
 - [Nook Agent Map & Operating Contract](AGENTS.md)
@@ -80,8 +73,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [9. Docker Cache Model](architecture/engineering-harness.md#9-docker-cache-model)
   - [10. Execution Consequences](architecture/engineering-harness.md#10-execution-consequences)
   - [11. Build & Verify](architecture/engineering-harness.md#11-build--verify)
-- [Architecture Specifications](architecture/index.md)
-  - [Overview](architecture/index.md#overview)
+- [Architecture Specifications](architecture/index.md): [Overview](architecture/index.md#overview).
 - [Module Expert Registry](architecture/module-experts.md)
   - [Overview](architecture/module-experts.md#overview)
   - [Registry contract](architecture/module-experts.md#registry-contract)
@@ -240,9 +232,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Examples](dynamic-skills/github-actions-only-validation.md#examples)
   - [Application Checklist](dynamic-skills/github-actions-only-validation.md#application-checklist)
   - [Validation](dynamic-skills/github-actions-only-validation.md#validation)
-- [Project Skill Registry](dynamic-skills/index.md)
-  - [Skill catalog](dynamic-skills/index.md#skill-catalog)
-  - [How to add one](dynamic-skills/index.md#how-to-add-one)
+- [Project Skill Registry](dynamic-skills/index.md): [Skill catalog](dynamic-skills/index.md#skill-catalog); [How to add one](dynamic-skills/index.md#how-to-add-one).
 - [Workbench Scope Management](dynamic-skills/issue-scope-management.md)
   - [Purpose](dynamic-skills/issue-scope-management.md#purpose)
   - [Preferred pattern](dynamic-skills/issue-scope-management.md#preferred-pattern)
@@ -547,9 +537,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Executable scenarios](product-specs/file-attachments.md#executable-scenarios)
   - [Out of scope (for now)](product-specs/file-attachments.md#out-of-scope-for-now)
   - [Status](product-specs/file-attachments.md#status)
-- [Product Specifications Index](product-specs/index.md)
-  - [Overview](product-specs/index.md#overview)
-  - [Product catalog](product-specs/index.md#product-catalog)
+- [Product Specifications Index](product-specs/index.md): [Overview](product-specs/index.md#overview); [Product catalog](product-specs/index.md#product-catalog).
 - [Product Spec: Monorepo & Toolchain Setup](product-specs/monorepo-setup.md)
   - [1. Goal & Context](product-specs/monorepo-setup.md#1-goal--context)
   - [2. Core Requirements](product-specs/monorepo-setup.md#2-core-requirements)
@@ -626,6 +614,8 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Overview](product-specs/vault-app-isolation.md#overview)
   - [Product Surfaces](product-specs/vault-app-isolation.md#product-surfaces)
   - [Enforcement](product-specs/vault-app-isolation.md#enforcement)
+    - [Startup boundary](product-specs/vault-app-isolation.md#startup-boundary)
+    - [Extension boundary](product-specs/vault-app-isolation.md#extension-boundary)
   - [Deployment](product-specs/vault-app-isolation.md#deployment)
 
 ## Design Documents (`design-docs/`)
@@ -720,8 +710,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Browser extension boundary](design-docs/identity-vault-architecture.md#browser-extension-boundary)
   - [Invariants](design-docs/identity-vault-architecture.md#invariants)
   - [Related records](design-docs/identity-vault-architecture.md#related-records)
-- [Design Docs Index](design-docs/index.md)
-  - [Overview](design-docs/index.md#overview)
+- [Design Docs Index](design-docs/index.md): [Overview](design-docs/index.md#overview).
 - [Website Passkey Manager](design-docs/passkey-manager.md)
   - [Overview](design-docs/passkey-manager.md#overview)
   - [Trust and ownership boundaries](design-docs/passkey-manager.md#trust-and-ownership-boundaries)
@@ -922,9 +911,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Delivery owner](workflows/module-oriented-development.md#delivery-owner)
   - [Validation](workflows/module-oriented-development.md#validation)
   - [Non-goals](workflows/module-oriented-development.md#non-goals)
-- [Cross-Package Changes](workflows/monorepo.md)
-  - [Overview](workflows/monorepo.md#overview)
-  - [New vault item type checklist](workflows/monorepo.md#new-vault-item-type-checklist)
+- [Cross-Package Changes](workflows/monorepo.md): [Overview](workflows/monorepo.md#overview); [New vault item type checklist](workflows/monorepo.md#new-vault-item-type-checklist).
 - [Pull Request Workflow](workflows/pull-requests.md)
   - [Overview](workflows/pull-requests.md#overview)
   - [PR-first agent contract](workflows/pull-requests.md#pr-first-agent-contract)

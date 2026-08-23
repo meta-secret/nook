@@ -1,0 +1,614 @@
+import { expect, test } from 'bun:test';
+import { auditCortexArticleStructure } from '../src/audit.ts';
+import {
+  CortexArticleFindingCode,
+  CortexArticleContractKind,
+  type AuditCortexArticleStructureRequest,
+  type CortexArticleDocument,
+} from '../src/domain.ts';
+import { blocksFromMarkdown } from './markdown-fixture.ts';
+
+type MakeDocumentArgs = {
+  readonly path: string;
+  readonly content: string;
+};
+
+function makeDocument(args: MakeDocumentArgs): CortexArticleDocument {
+  return {
+    relativePath: args.path,
+    blocks: blocksFromMarkdown(args.content),
+  };
+}
+
+function audit(documents: readonly CortexArticleDocument[]) {
+  const request: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents,
+    migrationBaselineEntries: false,
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: false,
+    },
+  };
+  return auditCortexArticleStructure(request);
+}
+
+const STRUCTURED_DOCUMENT_ARGS: MakeDocumentArgs = {
+  path: '.cortex/structured.md',
+  content: `# Structured
+
+## Purpose
+
+This article explains the durable outcome.
+
+- One parallel fact.
+- Another parallel fact.
+
+## Delivery procedure
+
+Follow the steps in order.
+
+1. Prepare the input.
+2. Produce the result.
+3. Validate the result.
+`,
+};
+
+test('accepts explanatory, rule-list, and ordered procedure structure', () => {
+  const document = makeDocument(STRUCTURED_DOCUMENT_ARGS);
+  expect(audit([document])).toEqual([]);
+});
+
+test('rejects excessive consecutive prose blocks', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/dense.md',
+    content: `# Dense
+
+## Explanation
+
+First paragraph.
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.DenseArticle,
+  );
+});
+
+test('requires procedure-like articles to expose ordered actions', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/procedure.md',
+    content: `# Procedure
+
+## Recovery procedure
+
+- Prepare the input.
+- Repair the state.
+- Validate the result.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.UnorderedProcedure,
+  );
+});
+
+test('recognizes qualified procedure and runbook headings', () => {
+  const headings = [
+    'Procedure for recovery',
+    'Runbook: release',
+    'Release steps',
+    'Staged delivery sequence',
+    'Ordered delivery for production',
+    'Recovery procedures',
+    'Deployment runbooks',
+    'Delivery sequences for recovery',
+    'Ordered deliveries for production',
+  ];
+  for (const heading of headings) {
+    const anchor = heading.toLowerCase().replaceAll(/[^a-z]+/g, '-');
+    const documentArgs: MakeDocumentArgs = {
+      path: `.cortex/${anchor}.md`,
+      content: `# Qualified procedure
+
+## ${heading}
+
+- Prepare the input.
+- Perform the action.
+- Validate the result.
+`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(audit([document]).map((finding) => finding.code)).toContain(
+      CortexArticleFindingCode.UnorderedProcedure,
+    );
+  }
+});
+
+test('allows workflow and migration headings that define unordered rules', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/reference-rules.md',
+    content: `# Reference rules
+
+## Workflow concurrency policy
+
+- Separate pull requests use separate concurrency groups.
+- Main runs serialize cache publication.
+
+## Migration
+
+- The ledger may shrink.
+- The ledger must not grow.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document])).toEqual([]);
+});
+
+test('rejects substantive articles with no body content', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/empty.md',
+    content: `# Empty
+
+## Empty article
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
+test('does not count an invisible comment as article content', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/comment-only.md',
+    content: `# Comment only
+
+## Empty article
+
+<!-- TODO: write the article -->
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
+test('treats thematic breaks as invisible density-resetting separators', () => {
+  const emptyArgs: MakeDocumentArgs = {
+    path: '.cortex/break-only.md',
+    content: '# Break only\n\n## Empty article\n\n---\n',
+  };
+  const resetArgs: MakeDocumentArgs = {
+    path: '.cortex/break-density.md',
+    content:
+      '# Break density\n\n## Explanation\n\nOne.\n\nTwo.\n\nThree.\n\n---\n\nFour.\n\nFive.\n\nSix.\n',
+  };
+  const visibleArgs: MakeDocumentArgs = {
+    path: '.cortex/code-structure.md',
+    content: '# Code structure\n\n## Reference\n\n```text\nvalue\n```\n',
+  };
+  expect(
+    audit([
+      makeDocument(emptyArgs),
+      makeDocument(resetArgs),
+      makeDocument(visibleArgs),
+    ]).map((finding) => finding.code),
+  ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+});
+
+test('audits empty, dense, and procedure articles without a document map', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/no-articles.md',
+    content: `# Direct articles
+
+## Empty article
+
+## Dense explanation
+
+First paragraph.
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+
+## Recovery procedure
+
+- Prepare the input.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toEqual([
+    CortexArticleFindingCode.EmptyArticle,
+    CortexArticleFindingCode.DenseArticle,
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
+test('treats Markdown comments as transparent to dense prose runs', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/commented-prose.md',
+    content: `# Commented prose
+
+## Explanation
+
+First paragraph.
+
+<!-- internal authoring note -->
+
+Second paragraph.
+
+<!-- another internal note -->
+
+Third paragraph.
+
+<!-- final internal note -->
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.DenseArticle,
+  );
+});
+
+test('treats a GFM table as visible article structure', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/table-structure.md',
+    content: `# Table structure
+
+## Reference
+
+Introductory paragraph.
+
+| Shape | Use |
+| --- | --- |
+| Rule | Parallel constraints |
+| Procedure | Ordered actions |
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document])).toEqual([]);
+});
+
+test('recognizes a GFM table without outer pipes as visible structure', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/compact-table.md',
+    content: `# Compact table
+
+## Reference
+
+First paragraph.
+
+Shape | Use
+--- | ---
+Rule | Parallel constraints
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  expect(audit([makeDocument(documentArgs)])).toEqual([]);
+});
+
+test('recognizes indented ATX and Setext article headings with exact lines', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/heading-forms.md',
+    content: `# Heading forms
+
+ ## Recovery procedure
+
+- Prepare the input.
+
+Release *steps*
+---------------
+
+- Publish the artifact.
+`,
+  };
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toHaveLength(2);
+  expect(findings.map((finding) => finding.line)).toEqual([3, 7]);
+  expect(findings.map((finding) => finding.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
+test('recognizes multiline Setext heading text from its first source line', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/multiline-setext.md',
+    content: `# Multiline Setext
+
+Release
+steps
+-----
+
+- Publish the artifact.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  const expectedHeading = {
+    text: 'Release\nsteps',
+    type: 'heading',
+  } as const;
+  expect(document.blocks.find((block) => block.line === 3)).toMatchObject(
+    expectedHeading,
+  );
+  const findings = audit([document]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.line).toBe(3);
+});
+
+test('normalizes linked and escaped heading text without losing source line', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/decorated-heading.md',
+    content: `# Decorated heading
+
+## [Recovery *procedure*](#recovery-procedure) \#1 with \`code_value\`
+
+- Prepare the input.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  const expectedHeading = {
+    text: 'Recovery procedure #1 with code_value',
+    type: 'heading',
+  } as const;
+  expect(document.blocks.find((block) => block.line === 3)).toMatchObject(
+    expectedHeading,
+  );
+  const findings = audit([document]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.line).toBe(3);
+});
+
+test('resets prose density at thematic breaks and non-comment HTML blocks', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/prose-boundaries.md',
+    content: `# Prose boundaries
+
+## Explanation
+
+First paragraph.
+
+Second paragraph.
+
+---
+
+Third paragraph.
+
+<aside>
+Rendered callout.
+</aside>
+
+Fourth paragraph.
+`,
+  };
+  expect(audit([makeDocument(documentArgs)])).toEqual([]);
+});
+
+test('terminates every supported HTML block form before later articles', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/html-boundaries.md',
+    content: `# HTML boundaries
+
+## Examples
+
+<aside>Same-line callout.</aside>
+
+<hr>
+
+<br />
+
+<section>
+Multiline callout.
+</section>
+
+<article>
+Unclosed block ends at the blank line.
+
+## Recovery procedure
+
+- Prepare the input.
+`,
+  };
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+  expect(findings[0]?.line).toBe(18);
+});
+
+test('keeps multiline definitions transparent to dense prose', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/multiline-definition.md',
+    content: `# Multiline definition
+
+## Explanation
+
+First paragraph.
+
+[manual]: https://example.com/manual
+  "Reference manual"
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  expect(
+    audit([makeDocument(documentArgs)]).map((finding) => finding.code),
+  ).toContain(CortexArticleFindingCode.DenseArticle);
+});
+
+test('does not treat a partial table delimiter as structure', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/not-a-table.md',
+    content: `# Not a table
+
+## Explanation
+
+First | paragraph.
+--- not-a-table
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  expect(
+    audit([makeDocument(documentArgs)]).map((finding) => finding.code),
+  ).toContain(CortexArticleFindingCode.DenseArticle);
+});
+
+test('does not expose nested headings or code examples as root articles', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/nested-forms.md',
+    content: `# Nested forms
+
+## Examples
+
+- Parent item.
+
+  ## Nested procedure
+
+    ## Indented procedure
+
+> ## Quoted procedure
+
+\`\`\`markdown
+
+## Fenced procedure
+
+\`\`\`
+`,
+  };
+  expect(audit([makeDocument(documentArgs)])).toEqual([]);
+});
+
+test('does not accept an overlong ordered-list marker as procedure structure', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/ordered-marker.md',
+    content: `# Ordered marker
+
+## Recovery procedure
+
+1234567890. This is prose, not a CommonMark ordered-list item.
+`,
+  };
+  expect(
+    audit([makeDocument(documentArgs)]).map((finding) => finding.code),
+  ).toContain(CortexArticleFindingCode.UnorderedProcedure);
+});
+
+test('does not count a link definition as article content', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/definition-only.md',
+    content: `# Definition only
+
+## Empty article
+
+[manual]: https://example.com
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.EmptyArticle,
+  );
+});
+
+test('treats link definitions as transparent to dense prose runs', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/defined-prose.md',
+    content: `# Defined prose
+
+## Explanation
+
+First paragraph.
+
+[first]: https://example.com/first
+
+Second paragraph.
+
+[second]: https://example.com/second
+
+Third paragraph.
+
+[third]: https://example.com/third
+
+Fourth paragraph.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document]).map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.DenseArticle,
+  );
+});
+
+test('ignores procedure-like headings inside examples and quotes', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/examples.md',
+    content: `# Examples
+
+## Examples
+
+Literal examples do not create structural articles.
+
+\`\`\`markdown
+## Broken workflow
+
+- This is literal example text.
+\`\`\`
+
+> ## Quoted procedure
+>
+> - This is quoted text.
+
+<div>
+## HTML procedure
+</div>
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document])).toEqual([]);
+});
+
+test('rejects article migration exemptions added after the baseline', () => {
+  const document = makeDocument(STRUCTURED_DOCUMENT_ARGS);
+  const request: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents: [document],
+    migrationBaselineEntries: [],
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: '.cortex/structured.md\n',
+    },
+  };
+  const findings = auditCortexArticleStructure(request);
+  expect(findings.map((finding) => finding.code)).toContain(
+    CortexArticleFindingCode.InvalidMigrationLedger,
+  );
+});

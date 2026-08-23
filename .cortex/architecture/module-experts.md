@@ -82,8 +82,10 @@ The generic delegation recorder rejects that result kind.
 Depth-three authorization requires replay-verified evidence from the isolated
 adapter, not merely an expert name in a generic journal.
 
-Every role is read-only.
-Role files contain thin routing instructions instead of copied domain facts.
+Role definitions preserve two structural rules:
+
+- Every role is read-only.
+- Role files contain thin routing instructions instead of copied domain facts.
 
 The role TOML is an identity and behavioral default.
 It is not the capability boundary because a native child inherits the parent
@@ -128,9 +130,11 @@ under the same operating-system account or from memory forensics.
 That stronger boundary requires managed workload identity or operating-system
 account isolation.
 
-This isolation belongs only to the module-expert adapter.
-Generic Loom workflows retain the ordinary Codex home and authentication store,
-including keyring-backed sessions.
+Adapter scope remains explicit:
+
+- This isolation belongs only to the module-expert adapter.
+- Generic Loom workflows retain the ordinary Codex home and authentication
+  store, including keyring-backed sessions.
 
 Direct custom-agent spawning from a write-capable delivery session is not an
 authorized module-expert invocation.

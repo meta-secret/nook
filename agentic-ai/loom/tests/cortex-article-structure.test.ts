@@ -82,16 +82,6 @@ test('rejects excessive consecutive prose blocks', () => {
     path: '.cortex/dense.md',
     content: `# Dense
 
-## Relationships
-
-- None.
-
-## Document map
-
-- [Explanation](#explanation)
-  - Explains the topic.
-  - Read for rationale.
-
 ## Explanation
 
 First paragraph.
@@ -114,17 +104,11 @@ test('requires procedure-like articles to expose ordered actions', () => {
     path: '.cortex/procedure.md',
     content: `# Procedure
 
-## Relationships
+## Delivery policy
 
-- None.
+This article owns the recovery sequence.
 
-## Document map
-
-- [Recovery procedure](#recovery-procedure)
-  - Defines recovery.
-  - Follow after failure.
-
-## Recovery procedure
+### Recovery procedure
 
 - Prepare the input.
 - Repair the state.
@@ -212,20 +196,10 @@ test('allows workflow and migration headings that define unordered rules', () =>
   expect(audit([document])).toEqual([]);
 });
 
-test('rejects mapped articles with no body content', () => {
+test('rejects mapless substantive articles with no body content', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/empty.md',
     content: `# Empty
-
-## Relationships
-
-- None.
-
-## Document map
-
-- [Empty article](#empty-article)
-  - Names the empty article.
-  - Read to find the failure.
 
 ## Empty article
 `,
@@ -262,22 +236,36 @@ test('does not count an invisible comment as article content', () => {
   );
 });
 
-test('rejects documents with no content articles after the map', () => {
+test('treats thematic breaks as invisible density-resetting separators', () => {
+  const emptyArgs: MakeDocumentArgs = {
+    path: '.cortex/break-only.md',
+    content: '# Break only\n\n## Empty article\n\n---\n',
+  };
+  const resetArgs: MakeDocumentArgs = {
+    path: '.cortex/break-density.md',
+    content:
+      '# Break density\n\n## Explanation\n\nOne.\n\nTwo.\n\nThree.\n\n---\n\nFour.\n\nFive.\n\nSix.\n',
+  };
+  const visibleArgs: MakeDocumentArgs = {
+    path: '.cortex/code-structure.md',
+    content: '# Code structure\n\n## Reference\n\n```text\nvalue\n```\n',
+  };
+  expect(
+    audit([
+      makeDocument(emptyArgs),
+      makeDocument(resetArgs),
+      makeDocument(visibleArgs),
+    ]).map((finding) => finding.code),
+  ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+});
+
+test('does not treat an H1 title as a substantive article', () => {
   const documentArgs: MakeDocumentArgs = {
-    path: '.cortex/no-articles.md',
-    content: `# No articles
-
-## Relationships
-
-- None.
-
-## Document map
-`,
+    path: '.cortex/title-only.md',
+    content: '# Title only\n',
   };
   const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.EmptyArticle,
-  );
+  expect(audit([document])).toEqual([]);
 });
 
 test('treats Markdown comments as transparent to dense prose runs', () => {

@@ -2,6 +2,8 @@
 
 ## Overview
 
+This index catalogs the durable design authorities and their current status.
+
 ## Document catalog
 
 - **[core-beliefs.md](core-beliefs.md)**
