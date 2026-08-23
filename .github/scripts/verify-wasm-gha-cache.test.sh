@@ -67,7 +67,10 @@ if [ -e "$refused_calls" ]; then
 fi
 
 hosted_calls="$fixture/hosted-calls"
-run_proof "$hosted_calls"
+run_proof \
+  "$hosted_calls" \
+  NOOK_BUILDKIT_REMOTE= \
+  NOOK_PR_BUILDX_BUILDER=
 grep -Fq 'buildx create --name nook-wasm-cache-proof-' "$hosted_calls"
 grep -Fq ' --driver docker-container --use --bootstrap' "$hosted_calls"
 grep -Fq 'buildx rm nook-wasm-cache-proof-' "$hosted_calls"

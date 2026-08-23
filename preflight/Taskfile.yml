@@ -94,6 +94,7 @@ tasks:
     desc: Enforce source architecture and repository language boundaries.
     dir: '{{.ROOT_DIR}}'
     cmds:
+      - bash .github/scripts/verify-wasm-gha-cache.test.sh
       - >-
         cargo test
         --locked
