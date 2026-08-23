@@ -93,7 +93,10 @@ const kataTasks = contract({
 });
 const tasks = contract({
   label: "ARC tasks",
-  source: await read("infra/tasks/arc.yml"),
+  source: [
+    await read("infra/tasks/arc.yml"),
+    await read("infra/tasks/arc-smoke.yml"),
+  ].join("\n"),
 });
 const workerTasks = contract({
   label: "k0s worker tasks",

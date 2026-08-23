@@ -67,6 +67,10 @@ includes:
     taskfile: tasks/arc-operations.yml
     dir: ..
     flatten: true
+  arc-smoke:
+    taskfile: tasks/arc-smoke.yml
+    dir: ..
+    flatten: true
   sccache:
     taskfile: tasks/sccache.yml
     dir: ..
