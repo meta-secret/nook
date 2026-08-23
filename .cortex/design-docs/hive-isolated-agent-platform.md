@@ -885,7 +885,9 @@ global ruleset.
 Worker admission rejects a mesh address or Kubernetes node name already owned
 by a different node before controller mutation. Reconciliation replaces only
 the comment-owned mesh rules in one checked nftables transaction. Docker and
-unrelated dynamic firewall state remain live.
+unrelated dynamic firewall state remain live on both the controller and worker.
+The ARC cache verifier binds every claimed runner name to host-observed CRI
+metadata for that request lane's Pod UID before creating a promotion intent.
 
 ## 11. Source map
 

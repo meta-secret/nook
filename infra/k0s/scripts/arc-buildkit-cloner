@@ -84,6 +84,21 @@ github_get() {
     "https://api.github.com/repos/$github_repository/$endpoint"
 }
 
+pod_name_for_uid() {
+  local pod_uid="$1" sandbox_id pod_name
+  sandbox_id="$(
+    k0s ctr --namespace k8s.io containers list -q \
+      "labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox"
+  )"
+  [[ "$sandbox_id" =~ ^[0-9a-f]{64}$ ]] || return 1
+  pod_name="$(
+    k0s ctr --namespace k8s.io containers info "$sandbox_id" |
+      jq -r '.Labels["io.kubernetes.pod.name"] // empty'
+  )"
+  [[ "$pod_name" =~ ^[a-z0-9-]+$ ]] || return 1
+  printf '%s\n' "$pod_name"
+}
+
 candidate_expired() {
   test -n "$(find "$1" -mmin +1 -print -quit 2>/dev/null)"
 }
@@ -103,6 +118,7 @@ EOF
 verify_promotion_candidates() {
   local candidate candidate_value pod_uid candidate_uid pod_name run_id
   local run_attempt head_sha trailing job_dir request_lane run jobs intent_next
+  local trusted_pod_name
   local accepted_next
   shopt -s nullglob
   if ! test -s "$github_token_file"; then
@@ -138,6 +154,11 @@ EOF
        ! [[ "$run_id" =~ ^[0-9]+$ ]] ||
        ! [[ "$run_attempt" =~ ^[0-9]+$ ]] ||
        ! [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    if ! trusted_pod_name="$(pod_name_for_uid "$pod_uid")" ||
+       test "$trusted_pod_name" != "$pod_name"; then
       rm -f -- "$candidate"
       continue
     fi

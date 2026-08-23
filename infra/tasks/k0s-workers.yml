@@ -283,30 +283,32 @@ tasks:
         set -euo pipefail
         controller_public_ip="$1"
         config="$(mktemp)"
-        trap 'rm -f "$config"' EXIT
+        bootstrap="$(mktemp)"
+        live_fragment="$(mktemp)"
+        trap 'rm -f "$config" "$bootstrap" "$live_fragment"' EXIT
         cat > "$config" <<EOF
         flush ruleset
         table inet bynull_filter {
           chain input {
             type filter hook input priority filter; policy drop;
-            ct state invalid drop
-            ct state established,related accept
-            iifname "lo" accept
-            ip protocol icmp accept
-            ip6 nexthdr ipv6-icmp accept
-            tcp dport 22 accept
-            ip saddr $controller_public_ip udp dport 51820 accept
-            iifname "wg-nook" ip saddr 10.202.0.0/24 accept
-            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept
-            iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept
+            ct state invalid drop comment "nook k0s worker invalid input"
+            ct state established,related accept comment "nook k0s worker established input"
+            iifname "lo" accept comment "nook k0s worker loopback"
+            ip protocol icmp accept comment "nook k0s worker icmp"
+            ip6 nexthdr ipv6-icmp accept comment "nook k0s worker icmpv6"
+            tcp dport 22 accept comment "nook k0s worker ssh"
+            ip saddr $controller_public_ip udp dport 51820 accept comment "nook k0s worker wireguard"
+            iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s worker mesh input"
+            iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"
+            iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet pods"
           }
           chain forward {
             type filter hook forward priority filter; policy drop;
-            ct state invalid drop
-            ct state established,related accept
-            iifname "wg-nook" accept
-            oifname "wg-nook" accept
-            iifname "kube-bridge" ip saddr 10.244.0.0/16 accept
+            ct state invalid drop comment "nook k0s worker invalid forward"
+            ct state established,related accept comment "nook k0s worker established forward"
+            iifname "wg-nook" accept comment "nook k0s worker mesh ingress"
+            oifname "wg-nook" accept comment "nook k0s worker mesh egress"
+            iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s worker pod egress"
           }
           chain output {
             type filter hook output priority filter; policy accept;
@@ -314,8 +316,44 @@ tasks:
         }
         EOF
         sudo -n nft --check --file "$config"
+        if ! sudo -n nft list table inet bynull_filter >/dev/null 2>&1; then
+          grep -Ev '^[[:space:]]*flush ruleset[[:space:]]*$' "$config" > "$bootstrap"
+          sudo -n nft --check --file "$bootstrap"
+          sudo -n nft --file "$bootstrap"
+        else
+          sudo -n nft list chain inet bynull_filter input |
+            grep -Fq 'type filter hook input priority filter; policy drop;'
+          sudo -n nft list chain inet bynull_filter forward |
+            grep -Fq 'type filter hook forward priority filter; policy drop;'
+          sudo -n nft list chain inet bynull_filter output |
+            grep -Fq 'type filter hook output priority filter; policy accept;'
+          for chain in input forward; do
+            sudo -n nft --handle list chain inet bynull_filter "$chain" |
+              awk -v chain="$chain" \
+                '/comment "nook k0s worker / { print "delete rule inet bynull_filter " chain " handle " $NF }' \
+                >> "$live_fragment"
+          done
+          cat >> "$live_fragment" <<EOF
+        add rule inet bynull_filter input ct state invalid drop comment "nook k0s worker invalid input"
+        add rule inet bynull_filter input ct state established,related accept comment "nook k0s worker established input"
+        add rule inet bynull_filter input iifname "lo" accept comment "nook k0s worker loopback"
+        add rule inet bynull_filter input ip protocol icmp accept comment "nook k0s worker icmp"
+        add rule inet bynull_filter input ip6 nexthdr ipv6-icmp accept comment "nook k0s worker icmpv6"
+        add rule inet bynull_filter input tcp dport 22 accept comment "nook k0s worker ssh"
+        add rule inet bynull_filter input ip saddr $controller_public_ip udp dport 51820 accept comment "nook k0s worker wireguard"
+        add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s worker mesh input"
+        add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"
+        add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet pods"
+        add rule inet bynull_filter forward ct state invalid drop comment "nook k0s worker invalid forward"
+        add rule inet bynull_filter forward ct state established,related accept comment "nook k0s worker established forward"
+        add rule inet bynull_filter forward iifname "wg-nook" accept comment "nook k0s worker mesh ingress"
+        add rule inet bynull_filter forward oifname "wg-nook" accept comment "nook k0s worker mesh egress"
+        add rule inet bynull_filter forward iifname "kube-bridge" ip saddr 10.244.0.0/16 accept comment "nook k0s worker pod egress"
+        EOF
+          sudo -n nft --check --file "$live_fragment"
+          sudo -n nft --file "$live_fragment"
+        fi
         sudo -n install -m 0644 "$config" /etc/nftables.conf
-        sudo -n nft --file /etc/nftables.conf
         sudo -n systemctl enable nftables.service >/dev/null
         REMOTE
         }

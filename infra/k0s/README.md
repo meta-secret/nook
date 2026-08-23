@@ -102,7 +102,10 @@ host-private runtime directory and checks the final job conclusion. Pods cannot
 traverse another Pod's request files. Each Pod sees only its own untrusted
 candidate lane and a host-created acceptance marker. The verifier creates that
 marker in its private runtime directory and atomically renames it into the lane,
-so an untrusted lane cannot redirect host writes through a symlink.
+so an untrusted lane cannot redirect host writes through a symlink. Before
+accepting a candidate, the verifier also resolves the lane's Pod UID through
+host CRI metadata and requires its observed Pod name to match the claimed
+GitHub runner.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
 covers twenty fully allocated 32 GiB
@@ -133,7 +136,10 @@ nftables include without reloading the global ruleset.
 Worker reconciliation rejects both mesh addresses and Kubernetes node names
 owned by another node before changing controller state. It replaces only its
 comment-owned live mesh rules in one checked nftables transaction, preserving
-Docker and every unrelated dynamic rule.
+Docker and every unrelated dynamic rule. Worker-side reconciliation follows
+the same comment-owned transaction rule. A fresh host creates the Nook table
+without flushing the ruleset; an existing host retains all unrelated live
+rules.
 The Hive lifecycle controller continuously reconciles Neo4j's live post-DNAT
 Pod endpoint into the workers' and Workbench dispatcher's narrow Bolt egress
 policies, including after automatic StatefulSet or kubelet replacement.

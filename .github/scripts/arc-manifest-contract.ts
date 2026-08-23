@@ -521,6 +521,10 @@ buildkitCloner.requireAll([
   'for candidate in "$request_dir"/*/candidate; do',
   'for request in "$request_dir"/*/request; do',
   'request_lane_valid "$request_lane"',
+  'pod_name_for_uid() {',
+  '.Labels["io.kubernetes.pod.name"] // empty',
+  'trusted_pod_name="$(pod_name_for_uid "$pod_uid")"',
+  'test "$trusted_pod_name" != "$pod_name"',
   'accepted_next="$intent_dir/$pod_uid.accepted.next"',
   'mv -T "$accepted_next" "$request_lane/accepted"',
   'find "$intent" -mmin +2',
@@ -639,8 +643,12 @@ workerTasks.requireAll([
   'live_fragment="$(mktemp)"',
   'delete rule inet bynull_filter " chain " handle " $NF',
   'sudo -n nft --file "$live_fragment"',
+  'comment "nook k0s worker wireguard"',
+  '/comment "nook k0s worker /',
+  'grep -Ev \'^[[:space:]]*flush ruleset[[:space:]]*$\' "$config" > "$bootstrap"',
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute"',
 ]);
+workerTasks.forbid('sudo -n nft --file /etc/nftables.conf');
 workerTasks.forbid(
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"',
 );
