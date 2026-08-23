@@ -147,12 +147,13 @@ tasks:
         configure_controller_peer() {
           ssh -o BatchMode=yes "$controller_target" bash -s -- \
             "$worker_mesh_address" "$worker_endpoint_mode" \
-            "$worker_public_ip" "$worker_public_key" <<'REMOTE'
+            "$worker_public_ip" "$worker_public_key" "$worker_node_name" <<'REMOTE'
         set -euo pipefail
         peer_address="$1"
         peer_endpoint_mode="$2"
         peer_public_ip="$3"
         peer_public_key="$4"
+        worker_node_name="$5"
         private_key="$(sudo -n cat /etc/wireguard/nook-private.key)"
         config="$(mktemp)"
         peer="$(mktemp)"
@@ -203,10 +204,22 @@ tasks:
         done < <(sudo -n find /etc/wireguard/nook-peers -maxdepth 1 \
           -type f -name 'legacy-*.conf' -exec grep -Fl \
           "PublicKey = $peer_public_key" {} + 2>/dev/null || true)
+        worker_pod_cidr="$(sudo -n k0s kubectl get node "$worker_node_name" \
+          -o jsonpath='{.spec.podCIDR}' 2>/dev/null || true)"
+        if test -n "$worker_pod_cidr"; then
+          if ! [[ "$worker_pod_cidr" =~ ^10\.244\.([0-9]{1,3})\.0/([0-9]{1,2})$ ]] ||
+             test "${BASH_REMATCH[1]}" -gt 255 ||
+             test "${BASH_REMATCH[2]}" -lt 16 ||
+             test "${BASH_REMATCH[2]}" -gt 32; then
+            echo "k0s mesh: refusing invalid worker Pod CIDR" >&2
+            exit 2
+          fi
+        fi
+        allowed_ips="$peer_address/32${worker_pod_cidr:+,$worker_pod_cidr}"
         cat > "$peer" <<EOF
         [Peer]
         PublicKey = $peer_public_key
-        AllowedIPs = $peer_address/32
+        AllowedIPs = $allowed_ips
         EOF
         if test "$peer_endpoint_mode" = direct; then
           cat >> "$peer" <<EOF

@@ -108,6 +108,37 @@ fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
 }
 
 #[test]
+fn arc_promotion_and_mesh_reconciliation_fail_closed() {
+    let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
+    let workers = read("infra/tasks/k0s-workers.yml");
+    let claim = cloner
+        .find("mv -T \"$candidate\" \"$candidate_claim\"")
+        .expect("promotion candidates must move into host-private storage");
+    let read_claim = cloner
+        .find("candidate_value=\"$(tr -d '\\r\\n' < \"$candidate_claim\")\"")
+        .expect("promotion verification must read the host-private claim");
+
+    assert!(
+        claim < read_claim,
+        "candidate content must be claimed before reading"
+    );
+    assert!(
+        cloner.contains("pod_is_cache_primary_runner") && cloner.contains("arc-cache-runner"),
+        "only cache-primary runner Pods may request seed promotion"
+    );
+    assert!(
+        cloner.contains("publish_ready_marker \"$pod_uid\" \"$ready_file\"")
+            && !cloner.contains("touch \"$ready_file\""),
+        "host ready publication must replace rather than follow guest-controlled paths"
+    );
+    assert!(
+        workers.contains("worker_pod_cidr=\"$(sudo -n k0s kubectl get node")
+            && workers.contains("AllowedIPs = $allowed_ips"),
+        "peer reconciliation must preserve the registered worker Pod CIDR"
+    );
+}
+
+#[test]
 fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let values = read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");

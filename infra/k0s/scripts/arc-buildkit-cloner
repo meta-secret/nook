@@ -44,7 +44,8 @@ delete_job_dir() {
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
     "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
-    "$intent_dir/$pod_uid.accepted.next"
+    "$intent_dir/$pod_uid.accepted.next" "$runtime_dir/$pod_uid.ready.next"
+  rm -rf -- "$intent_dir/$pod_uid.candidate"
   request_lane="$request_dir/$pod_uid"
   if valid_uid "$pod_uid" && test ! -L "$request_lane"; then
     delete_request_lane "$request_lane"
@@ -143,6 +144,61 @@ pod_name_for_uid() {
   printf '%s\n' "$pod_name"
 }
 
+pod_is_cache_primary_runner() {
+  local pod_uid="$1" pod_name="$2" sandbox_id metadata
+  sandbox_id="$(
+    k0s ctr --namespace k8s.io containers list -q \
+      "labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox"
+  )"
+  [[ "$sandbox_id" =~ ^[0-9a-f]{64}$ ]] || return 1
+  metadata="$(
+    k0s ctr --namespace k8s.io containers info "$sandbox_id" |
+      jq -r '.Extensions["io.cri-containerd.sandbox.metadata"].value // empty' |
+      base64 -d
+  )" || return 1
+  printf '%s' "$metadata" | jq -e --arg uid "$pod_uid" --arg name "$pod_name" \
+    '.Metadata.Config.labels["io.kubernetes.pod.uid"] == $uid and
+     .Metadata.Config.labels["io.kubernetes.pod.name"] == $name and
+     .Metadata.Config.labels["io.kubernetes.pod.namespace"] == "arc-runners" and
+     .Metadata.Config.labels["actions.github.com/scale-set-name"] == "nook-k0s-cache" and
+     .Metadata.Config.labels["nook.nokey.sh/role"] == "arc-cache-runner"' >/dev/null
+}
+
+claim_promotion_candidates() {
+  local candidate candidate_claim pod_uid request_lane
+  shopt -s nullglob
+  for candidate in "$request_dir"/*/candidate; do
+    request_lane="$(dirname "$candidate")"
+    pod_uid="$(basename "$request_lane")"
+    if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
+      continue
+    fi
+    candidate_claim="$intent_dir/$pod_uid.candidate"
+    if test -e "$candidate_claim"; then
+      rm -f -- "$candidate"
+      continue
+    fi
+    mv -T "$candidate" "$candidate_claim" 2>/dev/null || true
+  done
+}
+
+discard_candidate_claim() {
+  rm -rf -- "$1"
+}
+
+publish_ready_marker() {
+  local pod_uid="$1" ready_file="$2" ready_next
+  ready_next="$runtime_dir/$pod_uid.ready.next"
+  rm -f -- "$ready_next"
+  printf '%s\n' "$pod_uid" > "$ready_next"
+  chmod 0600 "$ready_next"
+  rm -rf -- "$ready_file"
+  if ! mv -T "$ready_next" "$ready_file"; then
+    rm -f -- "$ready_next"
+    return 1
+  fi
+}
+
 candidate_expired() {
   test -n "$(find "$1" -mmin +1 -print -quit 2>/dev/null)"
 }
@@ -160,36 +216,39 @@ EOF
 }
 
 verify_promotion_candidates() {
-  local candidate candidate_value pod_uid candidate_uid pod_name run_id
+  local candidate_claim candidate_value pod_uid candidate_uid pod_name run_id
   local run_attempt head_sha trailing job_dir request_lane run jobs intent_next
   local trusted_pod_name
   local accepted_next
   shopt -s nullglob
+  claim_promotion_candidates
   if ! test -s "$github_token_file"; then
-    for candidate in "$request_dir"/*/candidate; do
-      request_lane="$(dirname "$candidate")"
-      pod_uid="$(basename "$request_lane")"
+    for candidate_claim in "$intent_dir"/*.candidate; do
+      pod_uid="$(basename "$candidate_claim" .candidate)"
+      request_lane="$request_dir/$pod_uid"
       if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
+        discard_candidate_claim "$candidate_claim"
         continue
       fi
       echo "Rejecting ARC promotion candidate without a host verifier credential" >&2
-      rm -f -- "$candidate"
+      discard_candidate_claim "$candidate_claim"
     done
     return 0
   fi
-  for candidate in "$request_dir"/*/candidate; do
-    request_lane="$(dirname "$candidate")"
-    pod_uid="$(basename "$request_lane")"
+  for candidate_claim in "$intent_dir"/*.candidate; do
+    pod_uid="$(basename "$candidate_claim" .candidate)"
+    request_lane="$request_dir/$pod_uid"
     if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
-    if test -L "$candidate" ||
-       test "$(stat -c '%F:%u:%g:%h' -- "$candidate" 2>/dev/null || true)" != \
+    if test -L "$candidate_claim" ||
+       test "$(stat -c '%F:%u:%g:%h' -- "$candidate_claim" 2>/dev/null || true)" != \
          "regular file:0:0:1"; then
-      rm -f -- "$candidate"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
-    candidate_value="$(tr -d '\r\n' < "$candidate")"
+    candidate_value="$(tr -d '\r\n' < "$candidate_claim")"
     IFS=: read -r candidate_uid pod_name run_id run_attempt head_sha trailing <<EOF
 $candidate_value
 EOF
@@ -198,22 +257,23 @@ EOF
        ! [[ "$run_id" =~ ^[0-9]+$ ]] ||
        ! [[ "$run_attempt" =~ ^[0-9]+$ ]] ||
        ! [[ "$head_sha" =~ ^[0-9a-f]{40}$ ]]; then
-      rm -f -- "$candidate"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
     if ! trusted_pod_name="$(pod_name_for_uid "$pod_uid")" ||
-       test "$trusted_pod_name" != "$pod_name"; then
-      rm -f -- "$candidate"
+       test "$trusted_pod_name" != "$pod_name" ||
+       ! pod_is_cache_primary_runner "$pod_uid" "$pod_name"; then
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
     job_dir="$jobs_dir/$pod_uid"
     if ! test -d "$job_dir"; then
-      rm -f -- "$candidate"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
     if ! run="$(github_get "actions/runs/$run_id")"; then
-      if candidate_expired "$candidate"; then
-        rm -f -- "$candidate"
+      if candidate_expired "$candidate_claim"; then
+        discard_candidate_claim "$candidate_claim"
       fi
       continue
     fi
@@ -221,19 +281,19 @@ EOF
       --arg repository "$github_repository" --arg sha "$head_sha" \
       '.event == "push" and .head_branch == "main" and .head_sha == $sha and
        .head_repository.full_name == $repository' >/dev/null; then
-      rm -f -- "$candidate"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
     if ! jobs="$(github_get "actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100")"; then
-      if candidate_expired "$candidate"; then
-        rm -f -- "$candidate"
+      if candidate_expired "$candidate_claim"; then
+        discard_candidate_claim "$candidate_claim"
       fi
       continue
     fi
     if ! printf '%s' "$jobs" | jq -e --arg runner "$pod_name" \
       'any(.jobs[]?; .runner_name == $runner and .status == "in_progress" and .conclusion == null)' \
       >/dev/null; then
-      rm -f -- "$candidate"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
     intent_next="$intent_dir/$pod_uid.intent.next"
@@ -241,7 +301,8 @@ EOF
     printf '%s\n' "$candidate_value" > "$intent_next"
     chmod 0600 "$intent_next"
     if ! ln "$intent_next" "$intent_dir/$pod_uid.intent"; then
-      rm -f -- "$intent_next" "$candidate"
+      rm -f -- "$intent_next"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
     rm -f -- "$intent_next"
@@ -251,10 +312,11 @@ EOF
     chmod 0600 "$accepted_next"
     rm -rf -- "$request_lane/accepted"
     if ! mv -T "$accepted_next" "$request_lane/accepted"; then
-      rm -f -- "$accepted_next" "$intent_dir/$pod_uid.intent" "$candidate"
+      rm -f -- "$accepted_next" "$intent_dir/$pod_uid.intent"
+      discard_candidate_claim "$candidate_claim"
       continue
     fi
-    rm -f -- "$candidate"
+    discard_candidate_claim "$candidate_claim"
   done
 }
 
@@ -510,7 +572,7 @@ clone_requests() {
        test -f "$job_dir/buildkit.ext4" &&
        test -f "$job_dir/.seed-generation"; then
       if record_sandbox_id "$pod_uid"; then
-        touch "$ready_file"
+        publish_ready_marker "$pod_uid" "$ready_file"
         rm -f -- "$request"
       fi
       continue
@@ -530,7 +592,7 @@ clone_requests() {
       delete_job_dir "$job_dir"
       continue
     fi
-    touch "$ready_file"
+    publish_ready_marker "$pod_uid" "$ready_file"
     rm -f -- "$request"
   done
 }
