@@ -61,7 +61,7 @@ type SearchTextPayload = {
 };
 
 type SerializedMcpToolResult = {
-  readonly content: readonly [{ readonly text: string; readonly type: 'text' }];
+  readonly content: readonly [{ readonly text: string; readonly type: string }];
 };
 
 type WriteNumberedFilesRequest = {
