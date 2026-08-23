@@ -93,6 +93,11 @@ const SAFE_CODEX_OPTIONS_REQUEST: ModuleExpertCodexOptionsRequest = {
     PATH: '/usr/bin',
   },
 };
+const SAFE_CODEX_ENVIRONMENT = {
+  CODEX_HOME: '/isolated/codex-home',
+  PATH: '/usr/bin',
+} as const;
+const SAFE_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
 const SAFE_CODEX_OPTIONS = buildModuleExpertCodexOptions(
   SAFE_CODEX_OPTIONS_REQUEST,
 );
@@ -140,6 +145,32 @@ const RUNTIME_POLICY_DRIFTS: readonly ModuleExpertRuntimePolicyDrift[] = [
         shell_environment_policy: {
           ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
           inherit: 'all',
+        },
+      },
+    },
+  },
+  {
+    description: 'injected SDK process environment secret',
+    codexOptions: {
+      ...SAFE_CODEX_OPTIONS,
+      env: {
+        ...SAFE_CODEX_OPTIONS.env,
+        GITHUB_TOKEN: 'inherited-secret',
+      },
+    },
+  },
+  {
+    description: 'injected shell process environment secret',
+    codexOptions: {
+      ...SAFE_CODEX_OPTIONS,
+      config: {
+        ...SAFE_CODEX_OPTIONS.config,
+        shell_environment_policy: {
+          ...SAFE_CODEX_OPTIONS.config.shell_environment_policy,
+          set: {
+            ...SAFE_CODEX_OPTIONS.config.shell_environment_policy.set,
+            GITHUB_TOKEN: 'inherited-secret',
+          },
         },
       },
     },
@@ -695,6 +726,8 @@ describe('module expert audit', () => {
       authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
       codexOptions: SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+      safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
+      safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
       threadOptions,
     };
     expect(auditModuleExpertRuntimePolicy(auditArgs)).toEqual([]);
@@ -707,6 +740,8 @@ describe('module expert audit', () => {
         authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
         codexOptions: drift.codexOptions,
         processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+        safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
+        safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
         threadOptions: moduleExpertIsolatedThreadOptions(threadOptionsArgs),
       };
       const findings = auditModuleExpertRuntimePolicy(auditArgs);
@@ -727,6 +762,8 @@ describe('module expert audit', () => {
       ],
       codexOptions: SAFE_CODEX_OPTIONS,
       processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+      safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
+      safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
       threadOptions,
     };
     const processDriftArgs: AuditModuleExpertRuntimePolicyArgs = {
@@ -736,6 +773,8 @@ describe('module expert audit', () => {
         ...MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
         'GITHUB_TOKEN',
       ],
+      safeCodexEnvironment: SAFE_CODEX_ENVIRONMENT,
+      safeShellEnvironment: SAFE_SHELL_ENVIRONMENT,
       threadOptions,
     };
 

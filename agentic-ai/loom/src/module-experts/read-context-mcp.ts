@@ -3,7 +3,8 @@ import { lstatSync, readFileSync, readdirSync, realpathSync } from 'node:fs';
 import type { Dirent, ObjectEncodingOptions } from 'node:fs';
 import { isAbsolute, relative, resolve, sep } from 'node:path';
 
-const MAX_DIRECTORY_DEPTH = 4;
+const MAX_DIRECTORY_DEPTH = 64;
+const MAX_WALKED_ENTRIES = 20_000;
 const MAX_LISTED_FILES = 200;
 const MAX_SEARCHED_FILES = 5_000;
 const MAX_SEARCHED_BYTES = 4 * 1024 * 1024;
@@ -141,7 +142,13 @@ type WalkRequest = {
   readonly context: RepositoryContext;
   readonly depth: number;
   readonly path: ResolvedRepositoryPath;
+  readonly state: WalkState;
   readonly visit: (path: ResolvedRepositoryPath) => boolean;
+};
+
+type WalkState = {
+  truncated: boolean;
+  walkedEntries: number;
 };
 
 type SearchState = {
@@ -150,6 +157,8 @@ type SearchState = {
   outputBytes: number;
   searchedBytes: number;
   searchedFiles: number;
+  truncated: boolean;
+  walkedEntries: number;
 };
 
 type DirectoryEntryComparison = [Dirent, Dirent];
@@ -518,10 +527,12 @@ function listFiles(request: ToolValuesRequest): string {
   };
   const start = resolveRepositoryPath(resolveRequest);
   const paths: string[] = [];
+  const state: WalkState = { truncated: false, walkedEntries: 0 };
   const walkRequest: WalkRequest = {
     context: request.context,
     depth,
     path: start,
+    state,
     visit: (path) => {
       paths[paths.length] = path.relativePath;
       return paths.length < MAX_LISTED_FILES;
@@ -530,7 +541,7 @@ function listFiles(request: ToolValuesRequest): string {
   walkFiles(walkRequest);
   const result: ListedFilesResult = {
     files: paths,
-    truncated: paths.length >= MAX_LISTED_FILES,
+    truncated: state.truncated,
   };
   return JSON.stringify(result);
 }
@@ -590,11 +601,14 @@ function searchText(request: ToolValuesRequest): string {
     query,
     searchedBytes: 0,
     searchedFiles: 0,
+    truncated: false,
+    walkedEntries: 0,
   };
   const walkRequest: WalkRequest = {
     context: request.context,
     depth: MAX_DIRECTORY_DEPTH,
     path: start,
+    state,
     visit: (path) => {
       const searchFileRequest: SearchFileRequest = { maxResults, path, state };
       return searchFile(searchFileRequest);
@@ -605,11 +619,7 @@ function searchText(request: ToolValuesRequest): string {
     matches: state.matches,
     searchedBytes: state.searchedBytes,
     searchedFiles: state.searchedFiles,
-    truncated:
-      state.matches.length >= maxResults ||
-      state.outputBytes >= MAX_RESPONSE_BYTES ||
-      state.searchedBytes >= MAX_SEARCHED_BYTES ||
-      state.searchedFiles >= MAX_SEARCHED_FILES,
+    truncated: state.truncated,
   };
   return JSON.stringify(result);
 }
@@ -630,7 +640,11 @@ function searchFile(request: SearchFileRequest): boolean {
     return false;
   }
   const stats = lstatSync(request.path.absolutePath);
-  if (!stats.isFile() || stats.size > MAX_READ_BYTES) return true;
+  if (!stats.isFile()) return true;
+  if (stats.size > MAX_READ_BYTES) {
+    request.state.truncated = true;
+    return true;
+  }
   if (request.state.searchedBytes + stats.size > MAX_SEARCHED_BYTES)
     return false;
   request.state.searchedFiles += 1;
@@ -656,9 +670,17 @@ function searchFile(request: SearchFileRequest): boolean {
 }
 
 function walkFiles(request: WalkRequest): boolean {
-  if (request.depth < 0) return true;
+  if (request.depth < 0) {
+    request.state.truncated = true;
+    return true;
+  }
   const entries = sortedDirectoryEntries(request.path.absolutePath);
   for (const entry of entries) {
+    if (request.state.walkedEntries >= MAX_WALKED_ENTRIES) {
+      request.state.truncated = true;
+      return false;
+    }
+    request.state.walkedEntries += 1;
     const relativePath = relative(
       request.context.root,
       resolve(request.path.absolutePath, entry.name),
@@ -671,7 +693,10 @@ function walkFiles(request: WalkRequest): boolean {
     };
     const child = resolveRepositoryPath(resolveRequest);
     if (entry.isDirectory()) {
-      if (request.depth === 0) continue;
+      if (request.depth === 0) {
+        request.state.truncated = true;
+        continue;
+      }
       const nested: WalkRequest = {
         ...request,
         depth: request.depth - 1,
@@ -680,7 +705,10 @@ function walkFiles(request: WalkRequest): boolean {
       if (!walkFiles(nested)) return false;
       continue;
     }
-    if (entry.isFile() && !request.visit(child)) return false;
+    if (entry.isFile() && !request.visit(child)) {
+      request.state.truncated = true;
+      return false;
+    }
   }
   return true;
 }

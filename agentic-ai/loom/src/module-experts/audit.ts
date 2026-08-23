@@ -46,6 +46,8 @@ import {
   auditModuleExpertRuntimeRouting,
 } from './runtime-routing-audit.ts';
 import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
+import { validModuleExpertRuntimeEnvironment } from './runtime-environment-audit.ts';
+import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
 export { auditModuleExpertRuntimeRouting };
 export type { AuditModuleExpertRuntimeRoutingArgs };
 
@@ -70,6 +72,8 @@ export type AuditModuleExpertRuntimePolicyArgs = {
   readonly authEnvironmentKeys: readonly string[];
   readonly codexOptions: CodexOptions;
   readonly processEnvironmentKeys: readonly string[];
+  readonly safeCodexEnvironment: Readonly<Record<string, string>>;
+  readonly safeShellEnvironment: Readonly<Record<string, string>>;
   readonly threadOptions: ThreadOptions;
 };
 
@@ -95,6 +99,11 @@ const EXPECTED_PROCESS_ENVIRONMENT_KEYS = [
   'SystemRoot',
   'WINDIR',
 ] as const;
+const AUDIT_CODEX_ENVIRONMENT = {
+  CODEX_HOME: '/isolated/codex-home',
+  PATH: '/usr/bin',
+} as const;
+const AUDIT_SHELL_ENVIRONMENT = { PATH: '/usr/bin' } as const;
 const EXPECTED_DISABLED_FEATURES = {
   apps: false,
   code_mode: { enabled: false },
@@ -193,6 +202,16 @@ export function auditModuleExpertRuntimePolicy(
     actual: args.processEnvironmentKeys,
     expected: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
   };
+  const runtimeEnvironmentValidation: ValidateModuleExpertRuntimeEnvironmentArgs =
+    {
+      actualProcessEnvironment: args.codexOptions.env,
+      actualShellEnvironment: shellEnvironmentPolicy
+        ? (shellEnvironmentPolicy.set ?? false)
+        : false,
+      allowedShellKeys: EXPECTED_PROCESS_ENVIRONMENT_KEYS,
+      safeCodexEnvironment: args.safeCodexEnvironment,
+      safeShellEnvironment: args.safeShellEnvironment,
+    };
   const valid =
     args.threadOptions.sandboxMode === 'read-only' &&
     args.threadOptions.approvalPolicy === 'never' &&
@@ -220,6 +239,7 @@ export function auditModuleExpertRuntimePolicy(
     !Array.isArray(shellEnvironmentPolicy) &&
     shellEnvironmentPolicy.inherit === 'none' &&
     shellEnvironmentPolicy.ignore_default_excludes === false &&
+    validModuleExpertRuntimeEnvironment(runtimeEnvironmentValidation) &&
     sameOrderedValues(authEnvironmentComparison) &&
     sameOrderedValues(processEnvironmentComparison);
   if (valid) return [];
@@ -773,6 +793,8 @@ function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
     authEnvironmentKeys: MODULE_EXPERT_AUTH_ENVIRONMENT_KEYS,
     codexOptions: buildModuleExpertCodexOptions(codexOptionsRequest),
     processEnvironmentKeys: MODULE_EXPERT_PROCESS_ENVIRONMENT_KEYS,
+    safeCodexEnvironment: AUDIT_CODEX_ENVIRONMENT,
+    safeShellEnvironment: AUDIT_SHELL_ENVIRONMENT,
     threadOptions,
   };
   for (const finding of auditModuleExpertRuntimePolicy(auditArgs)) {

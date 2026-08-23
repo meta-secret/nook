@@ -137,6 +137,58 @@ describe('module expert read-context MCP', () => {
     }
   });
 
+  test('discovers deep scoped web files without an exact path', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-read-context-deep-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const repository = await createTestRepository(fixtureRoot);
+      const serverRequest: ModuleExpertReadContextServerRequest = {
+        repositoryRoot: repository.root,
+      };
+      const server = createModuleExpertReadContextServer(serverRequest);
+      try {
+        const shallowListCall: ToolCall = {
+          arguments: { depth: 4 },
+          id: 10,
+          name: 'list_files',
+          server,
+        };
+        const shallowList = await toolCall(shallowListCall);
+        const shallowText = shallowList.result?.content?.[0]?.text ?? '';
+        expect(shallowText).not.toContain('provider-types.ts');
+        expect(shallowText).toContain('"truncated":true');
+
+        const deepListCall: ToolCall = {
+          arguments: { depth: 16 },
+          id: 11,
+          name: 'list_files',
+          server,
+        };
+        const deepList = await toolCall(deepListCall);
+        expect(deepList.result?.content?.[0]?.text).toContain(
+          'nook-app/nook-web/nook-web-shared/src/vault-app/lib/auth/providers/provider-types.ts',
+        );
+
+        const searchCall: ToolCall = {
+          arguments: { query: 'deep-web-binding-consumer' },
+          id: 12,
+          name: 'search_text',
+          server,
+        };
+        const search = await toolCall(searchCall);
+        expect(search.result?.content?.[0]?.text).toContain(
+          'provider-types.ts:1',
+        );
+      } finally {
+        await server.dispose();
+      }
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
   test('rejects path escapes, symlinks, denied files, and extra arguments', async () => {
     const fixtureRoot = await mkdtemp(
       join(tmpdir(), 'loom-read-context-deny-'),
@@ -340,6 +392,23 @@ async function createTestRepository(
   await writeFile(
     join(sourceDirectory, 'expanding.txt'),
     '\\"'.repeat(110_000),
+    'utf8',
+  );
+  const deepWebDirectory = join(
+    root,
+    'nook-app',
+    'nook-web',
+    'nook-web-shared',
+    'src',
+    'vault-app',
+    'lib',
+    'auth',
+    'providers',
+  );
+  await mkdir(deepWebDirectory, recursiveDirectoryOptions);
+  await writeFile(
+    join(deepWebDirectory, 'provider-types.ts'),
+    'export const bindingConsumer = "deep-web-binding-consumer";\n',
     'utf8',
   );
   await writeFile(join(root, '.env'), 'SECRET=value\n', 'utf8');
