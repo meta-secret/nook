@@ -60,6 +60,10 @@ type SearchTextPayload = {
   readonly truncated: boolean;
 };
 
+type SerializedMcpToolResult = {
+  readonly content: readonly [{ readonly text: string; readonly type: 'text' }];
+};
+
 type WriteNumberedFilesRequest = {
   readonly content: string;
   readonly count: number;
@@ -75,6 +79,10 @@ type McpRequestStreamController = {
 type McpRequestStreamSource = {
   readonly start: (controller: McpRequestStreamController) => void;
 };
+
+const MAX_READ_FILE_BYTES = 256 * 1024;
+const MAX_MCP_RESPONSE_BYTES = 256 * 1024;
+const EXPANDING_FILE_CONTENT = '"'.repeat(200_000);
 
 describe('module expert read-context MCP', () => {
   test('implements initialize, exact tool discovery, read, list, and literal search', async () => {
@@ -381,6 +389,35 @@ describe('module expert read-context MCP', () => {
         expect(response.error?.message).toContain('byte limit');
         const chunkedResponse = await callChunkedOversizedMcp(server);
         expect(chunkedResponse.error?.message).toContain('byte limit');
+      } finally {
+        await server.dispose();
+      }
+    } finally {
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('rejects a read result whose serialized MCP result exceeds the response bound', async () => {
+    const fixtureRoot = await mkdtemp(
+      join(tmpdir(), 'loom-read-context-response-bound-'),
+    );
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    const serializedResult: SerializedMcpToolResult = {
+      content: [{ text: EXPANDING_FILE_CONTENT, type: 'text' }],
+    };
+    expect(
+      Buffer.byteLength(EXPANDING_FILE_CONTENT, 'utf8'),
+    ).toBeLessThanOrEqual(MAX_READ_FILE_BYTES);
+    expect(
+      Buffer.byteLength(JSON.stringify(serializedResult), 'utf8'),
+    ).toBeGreaterThan(MAX_MCP_RESPONSE_BYTES);
+    try {
+      const repository = await createTestRepository(fixtureRoot);
+      const serverRequest: ModuleExpertReadContextServerRequest = {
+        repositoryRoot: repository.root,
+      };
+      const server = createModuleExpertReadContextServer(serverRequest);
+      try {
         const expandingFileCall: ToolCall = {
           arguments: { path: 'src/expanding.txt' },
           id: 43,
@@ -388,8 +425,9 @@ describe('module expert read-context MCP', () => {
           server,
         };
         const expandingFile = await toolCall(expandingFileCall);
-        expect(expandingFile.error?.message).toContain(
-          'response exceeds the byte limit',
+        expect(expandingFile.error?.code).toBe(-32_602);
+        expect(expandingFile.error?.message).toBe(
+          'MCP tool response exceeds the byte limit.',
         );
       } finally {
         await server.dispose();
@@ -506,7 +544,7 @@ async function createTestRepository(
   );
   await writeFile(
     join(sourceDirectory, 'expanding.txt'),
-    '\\"'.repeat(110_000),
+    EXPANDING_FILE_CONTENT,
     'utf8',
   );
   const deepWebDirectory = join(
