@@ -194,7 +194,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let activate = tasks
         .rfind("- task: arc:controller-build:activate")
         .expect("ARC deployment must activate the controller build node");
-    assert!(prepare < cache_primary && cache_primary < pool && pool < activate);
+    assert!(cache_primary < prepare && prepare < pool && pool < activate);
     for contract in [
         "tolerations:",
         "key: nook.nokey.sh/arc-build",
