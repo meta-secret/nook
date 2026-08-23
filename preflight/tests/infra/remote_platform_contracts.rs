@@ -127,6 +127,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "registry",
         "arc",
         "arc-operations",
+        "arc-smoke",
         "sccache",
         "hive",
         "hive-queue",
