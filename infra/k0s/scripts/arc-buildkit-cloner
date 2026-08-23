@@ -236,15 +236,6 @@ EOF
       rm -f -- "$candidate"
       continue
     fi
-    accepted_next="$intent_dir/$pod_uid.accepted.next"
-    rm -f -- "$accepted_next"
-    printf '%s\n' "$pod_uid" > "$accepted_next"
-    chmod 0600 "$accepted_next"
-    rm -rf -- "$request_lane/accepted"
-    if ! mv -T "$accepted_next" "$request_lane/accepted"; then
-      rm -f -- "$accepted_next"
-      continue
-    fi
     intent_next="$intent_dir/$pod_uid.intent.next"
     rm -f -- "$intent_next"
     printf '%s\n' "$candidate_value" > "$intent_next"
@@ -254,6 +245,15 @@ EOF
       continue
     fi
     rm -f -- "$intent_next"
+    accepted_next="$intent_dir/$pod_uid.accepted.next"
+    rm -f -- "$accepted_next"
+    printf '%s\n' "$pod_uid" > "$accepted_next"
+    chmod 0600 "$accepted_next"
+    rm -rf -- "$request_lane/accepted"
+    if ! mv -T "$accepted_next" "$request_lane/accepted"; then
+      rm -f -- "$accepted_next" "$intent_dir/$pod_uid.intent" "$candidate"
+      continue
+    fi
     rm -f -- "$candidate"
   done
 }

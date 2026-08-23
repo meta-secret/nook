@@ -73,7 +73,9 @@ const runners = contract({
 });
 const cacheRunners = contract({
   label: "ARC cache-primary runner scale set",
-  source: await read("infra/k0s/manifests/arc/runner-cache-primary-values.yaml"),
+  source: await read(
+    "infra/k0s/manifests/arc/runner-cache-primary-values.yaml",
+  ),
 });
 const controller = contract({
   label: "ARC controller",
@@ -175,8 +177,9 @@ runners.requireAll([
   "requests:\n            cpu: 500m\n            memory: 2560Mi",
   "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 250m\n            memory: 1Gi",
-  'limits:\n            cpu: 500m\n            memory: 1Gi',
+  "limits:\n            cpu: 500m\n            memory: 1Gi",
   "runAsNonRoot: true",
+  "listenerTemplate:\n  spec:\n    nodeSelector:\n      nook.nokey.sh/node-role: control-storage\n    tolerations:",
   "runtimeClassName: kata-qemu-runtime-rs",
   'nodeSelector:\n      nook.nokey.sh/arc-build: "true"',
   "preferredDuringSchedulingIgnoredDuringExecution:",
@@ -198,7 +201,7 @@ runners.requireAll([
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
   'limits:\n            cpu: "1.25"\n            memory: 2560Mi',
-  'limits:\n            cpu: 250m\n            memory: 512Mi',
+  "limits:\n            cpu: 250m\n            memory: 512Mi",
   '- "24000"',
   'value: "34359738368"',
   "path: /var/lib/nook-arc-buildkit/pool/requests",
@@ -244,10 +247,7 @@ for (const prohibited of [
   runners.forbid(prohibited);
 }
 kataValues.require("qemu-runtime-rs:\n    enabled: true");
-kataValues.requireAll([
-  "key: nook.nokey.sh/arc-build",
-  "value: preparing",
-]);
+kataValues.requireAll(["key: nook.nokey.sh/arc-build", "value: preparing"]);
 kataTasks.requireAll([
   "kubectl patch runtimeclass kata-qemu-runtime-rs --type=merge",
   '\"cpu\":\"250m\",\"memory\":\"1792Mi\"',
@@ -264,7 +264,7 @@ network.require("policyTypes:\n    - Ingress");
 workerTasks.requireAll([
   "10.202.0.1",
   "INFRA_WORKER_MESH_ADDRESS",
-  "nook-peers",
+  "legacy-%03d.conf",
   "assert_mesh_address_available",
   'persisted_public_key="$(sudo -n sed -n',
   'test "$persisted_public_key" != "$worker_public_key"',
@@ -434,7 +434,7 @@ tasks.requireAll([
   "trap 'exit 130' INT",
   "trap 'exit 143' TERM",
   'test ! -f "$state_file"',
-  'rm -f -- \'/var/lib/nook-arc-buildkit/pool/runtime/$runner_uid.retain\'',
+  "rm -f -- '/var/lib/nook-arc-buildkit/pool/runtime/$runner_uid.retain'",
   "nook-arc-hive-test-runtime",
   "gh variable set NOOK_HIVE_RUNS_ON",
   "gh variable set NOOK_CACHE_RUNS_ON",
@@ -443,7 +443,9 @@ tasks.requireAll([
   "ARC_SMOKE_RUNNER_LABEL: nook-k0s-cache",
   '--raw-field "runner_label=$smoke_runner_label"',
 ]);
-runtimeSmoke.forbid("Successful ARC smoke lost its current Kata sandbox before teardown tracking");
+runtimeSmoke.forbid(
+  "Successful ARC smoke lost its current Kata sandbox before teardown tracking",
+);
 tasks.forbidAll([
   "import yaml",
   "e2fsck",
@@ -504,7 +506,7 @@ runtimeSmoke.requireAll([
   "tcp://127.0.0.1:2375",
   "docker buildx build --load",
   "docker info --format '{{.Driver}}'",
-  'docker run --rm \\',
+  "docker run --rm \\",
   '--volume "$shared_dir:/nook-output"',
   "ARC BuildKit-to-Podman runtime smoke passed",
 ]);
@@ -551,14 +553,14 @@ buildkitCloner.requireAll([
   'labels.\\"io.kubernetes.pod.uid\\"==$pod_uid',
   ".seed-generation",
   '"regular file:0:0:1"',
-  'promotion_barrier_pending && return 0',
+  "promotion_barrier_pending && return 0",
   "promotion_intents_pending",
   'intent_dir="$runtime_dir/intents"',
   'intent="$intent_dir/$pod_uid.intent"',
   'for candidate in "$request_dir"/*/candidate; do',
   'for request in "$request_dir"/*/request; do',
   'request_lane_valid "$request_lane"',
-  'pod_name_for_uid() {',
+  "pod_name_for_uid() {",
   '.Labels["io.kubernetes.pod.name"] // empty',
   'trusted_pod_name="$(pod_name_for_uid "$pod_uid")"',
   'test "$trusted_pod_name" != "$pod_name"',
@@ -597,10 +599,10 @@ if (
   );
 }
 if (
-  buildkitCloner.index('mv -T "$accepted_next" "$request_lane/accepted"') >
-  buildkitCloner.index('ln "$intent_next" "$intent_dir/$pod_uid.intent"')
+  buildkitCloner.index('ln "$intent_next" "$intent_dir/$pod_uid.intent"') >
+  buildkitCloner.index('mv -T "$accepted_next" "$request_lane/accepted"')
 ) {
-  throw new Error("ARC acceptance must publish before promotion intent");
+  throw new Error("ARC promotion intent must persist before acceptance");
 }
 platformTasks.require("--no-cache");
 hiveWorkflow.requireAll([
@@ -615,8 +617,8 @@ hiveWorkflow.requireAll([
 ]);
 ciTasks.requireAll([
   "ci:main:wasm-node-test:",
-  'GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test',
-  'GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test',
+  "GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test",
+  "GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test",
   "ci:arc:promote-buildkit-cache:",
   'if test "${NOOK_ARC_RUNNER:-}" = "1" &&',
   'test "${GITHUB_REF:-}" = "refs/heads/main" &&',
@@ -682,7 +684,7 @@ tasks.requireAll([
   "synchronized only to the cache-primary node",
   "sudo -n rm -f /etc/nook/arc-cache-verifier-token",
   "Imported the pinned ARC BuildKit wrapper into every build node",
-  "nook.nokey.sh/ssh-target",
+  '"nook.nokey.sh/ssh-target=$controller_ssh_user@$internal_ip"',
   "nook.nokey.sh/infra-remote-dir",
   "build_remote_dir",
   'printf "%s\\n" "$HOME/.local/share/nook-infra"',
@@ -707,7 +709,7 @@ workerTasks.requireAll([
   '--kubelet-extra-args="--node-ip=$worker_mesh_address',
   '--arg address "$worker_mesh_address"',
   '--arg name "$worker_node_name" --arg address "$worker_mesh_address"',
-  'Kubernetes node $worker_node_name belongs to another InternalIP',
+  "Kubernetes node $worker_node_name belongs to another InternalIP",
   'WireGuard key already belongs to $(basename "$persisted_peer" .conf)',
   'live_fragment="$(mktemp)"',
   'delete rule inet bynull_filter " chain " handle " $NF',
@@ -717,17 +719,14 @@ workerTasks.requireAll([
   'grep -Ev \'^[[:space:]]*flush ruleset[[:space:]]*$\' "$config" > "$bootstrap"',
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute,nook.nokey.sh/arc-tier=$worker_arc_tier"',
 ]);
-workerTasks.forbid('sudo -n nft --file /etc/nftables.conf');
+workerTasks.forbid("sudo -n nft --file /etc/nftables.conf");
 workerTasks.forbid("systemctl restart wg-quick@wg-nook.service");
 workerTasks.forbid(
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"',
 );
-mainWorkflow.requireAll([
-  "needs: [web]",
-  "task ci:main:wasm-node-test",
-]);
+mainWorkflow.requireAll(["needs: [web]", "task ci:main:wasm-node-test"]);
 mainWorkflow.forbid(
-  "# The exporter commits only after the Node-test Docker stage succeeds.\n          GHA_CACHE_WRITE_ENABLED: \"1\"",
+  '# The exporter commits only after the Node-test Docker stage succeeds.\n          GHA_CACHE_WRITE_ENABLED: "1"',
 );
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",
@@ -762,25 +761,15 @@ enum RunnerPlacement {
   Reusable = "reusable",
 }
 
-interface WorkflowJob {
-  "runs-on"?: string;
-  uses?: string;
-}
-
-interface WorkflowEventTrigger {
-  branches?: string[];
-  paths?: string[];
-}
+type WorkflowJob = { "runs-on"?: string; uses?: string };
+type WorkflowEventTrigger = { branches?: string[]; paths?: string[] };
 
 interface WorkflowManifest {
   on: Record<string, WorkflowEventTrigger>;
   jobs: Record<string, WorkflowJob>;
 }
 
-interface WorkflowPlacementContract {
-  workflow: string;
-  jobs: Record<string, RunnerPlacement>;
-}
+type Placement = { workflow: string; jobs: Record<string, RunnerPlacement> };
 
 const hostedRunnerPlacements = new Set<RunnerPlacement>([
   RunnerPlacement.HostedAi,
@@ -791,25 +780,11 @@ const hostedRunnerPlacements = new Set<RunnerPlacement>([
   RunnerPlacement.HostedUntrusted,
 ]);
 
-const runnerPlacementReasons: Record<RunnerPlacement, string> = {
-  [RunnerPlacement.ArcCacheMain]: "serialized Main producer on the cache-primary Kata scale set",
-  [RunnerPlacement.ArcGeneralMain]: "trusted Main job with a disposable general Kata guest",
-  [RunnerPlacement.ArcGeneralPr]: "trusted same-repository PR native job with hosted fork fallback",
-  [RunnerPlacement.ArcGeneralRemote]: "explicitly allowlisted focused task with hosted fallback",
-  [RunnerPlacement.ArcGeneralRustReusable]: "trusted push or same-repository PR Rust job with hosted fallback",
-  [RunnerPlacement.ArcHive]: "trusted Hive job with isolated native service sidecars",
-  [RunnerPlacement.HostedAi]: "AI credentials and agent execution stay outside the private cluster",
-  [RunnerPlacement.HostedControl]: "small orchestration work avoids consuming scarce ARC build capacity",
-  [RunnerPlacement.HostedDeployment]: "release or deployment credentials stay outside the private cluster",
-  [RunnerPlacement.HostedRuntime]: "non-Main browser, WASM, coverage, or arbitrary-ref runtime",
-  [RunnerPlacement.HostedScheduled]: "scheduled maintenance avoids consuming ARC build capacity",
-  [RunnerPlacement.HostedUntrusted]: "fork or Dependabot code must not enter the private cluster",
-  [RunnerPlacement.LegacyCleanup]: "maintenance only for the separately registered persistent Docker pool",
-  [RunnerPlacement.Reusable]: "caller-owned placement for a reusable workflow",
-};
-
-const workflowPlacementContracts: WorkflowPlacementContract[] = [
-  { workflow: "agent-implement.yml", jobs: { "agent-implement": RunnerPlacement.HostedAi } },
+const workflowPlacementContracts: Placement[] = [
+  {
+    workflow: "agent-implement.yml",
+    jobs: { "agent-implement": RunnerPlacement.HostedAi },
+  },
   { workflow: "ci-agent-smoke.yml", jobs: { smoke: RunnerPlacement.HostedAi } },
   { workflow: "e2e-pr.yml", jobs: { e2e: RunnerPlacement.HostedRuntime } },
   {
@@ -828,8 +803,14 @@ const workflowPlacementContracts: WorkflowPlacementContract[] = [
       close: RunnerPlacement.HostedDeployment,
     },
   },
-  { workflow: "main-build-stats.yml", jobs: { record: RunnerPlacement.HostedControl } },
-  { workflow: "main-failure-handoff.yml", jobs: { record: RunnerPlacement.HostedControl } },
+  {
+    workflow: "main-build-stats.yml",
+    jobs: { record: RunnerPlacement.HostedControl },
+  },
+  {
+    workflow: "main-failure-handoff.yml",
+    jobs: { record: RunnerPlacement.HostedControl },
+  },
   {
     workflow: "main.yml",
     jobs: {
@@ -844,8 +825,14 @@ const workflowPlacementContracts: WorkflowPlacementContract[] = [
       deploy: RunnerPlacement.ArcGeneralMain,
     },
   },
-  { workflow: "pr-coverage.yml", jobs: { coverage: RunnerPlacement.HostedRuntime } },
-  { workflow: "pr-validation-handoff.yml", jobs: { promote: RunnerPlacement.HostedControl } },
+  {
+    workflow: "pr-coverage.yml",
+    jobs: { coverage: RunnerPlacement.HostedRuntime },
+  },
+  {
+    workflow: "pr-validation-handoff.yml",
+    jobs: { promote: RunnerPlacement.HostedControl },
+  },
   {
     workflow: "pr.yml",
     jobs: {
@@ -862,7 +849,10 @@ const workflowPlacementContracts: WorkflowPlacementContract[] = [
       "full-extension-e2e": RunnerPlacement.HostedRuntime,
     },
   },
-  { workflow: "release.yml", jobs: { deploy: RunnerPlacement.HostedDeployment } },
+  {
+    workflow: "release.yml",
+    jobs: { deploy: RunnerPlacement.HostedDeployment },
+  },
   {
     workflow: "remote.yml",
     jobs: {
@@ -870,8 +860,14 @@ const workflowPlacementContracts: WorkflowPlacementContract[] = [
       "rust-cache-promote": RunnerPlacement.HostedControl,
     },
   },
-  { workflow: "repository-policy.yml", jobs: { verify: RunnerPlacement.HostedUntrusted } },
-  { workflow: "runner-cleanup.yml", jobs: { "docker-prune": RunnerPlacement.LegacyCleanup } },
+  {
+    workflow: "repository-policy.yml",
+    jobs: { verify: RunnerPlacement.HostedUntrusted },
+  },
+  {
+    workflow: "runner-cleanup.yml",
+    jobs: { "docker-prune": RunnerPlacement.LegacyCleanup },
+  },
   {
     workflow: "rust-dependency-updates.yml",
     jobs: {
@@ -924,9 +920,7 @@ function expectedRunner(placement: RunnerPlacement): string {
   throw new Error(`Runner placement ${placement} does not own runs-on`);
 }
 
-async function validateWorkflowPlacement(
-  input: WorkflowPlacementContract,
-): Promise<void> {
+async function validateWorkflowPlacement(input: Placement): Promise<void> {
   const relativePath = `.github/workflows/${input.workflow}`;
   const manifest = Bun.YAML.parse(await read(relativePath)) as WorkflowManifest;
   const actualJobs = Object.keys(manifest.jobs).sort();
@@ -962,17 +956,20 @@ async function validateWorkflowPlacement(
   for (const jobName of actualJobs) {
     const job = manifest.jobs[jobName];
     const placement = input.jobs[jobName];
-    if (!job || !placement) throw new Error(`${input.workflow}/${jobName} is unclassified`);
+    if (!job || !placement)
+      throw new Error(`${input.workflow}/${jobName} is unclassified`);
     if (placement === RunnerPlacement.Reusable) {
       if (!job.uses?.startsWith("./.github/workflows/")) {
-        throw new Error(`${input.workflow}/${jobName} must call a local reusable workflow`);
+        throw new Error(
+          `${input.workflow}/${jobName} must call a local reusable workflow`,
+        );
       }
       continue;
     }
     const expected = expectedRunner(placement);
     if (job["runs-on"] !== expected) {
       throw new Error(
-        `${input.workflow}/${jobName} must use ${expected}: ${runnerPlacementReasons[placement]}`,
+        `${input.workflow}/${jobName} must use ${expected} for ${placement}`,
       );
     }
   }

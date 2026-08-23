@@ -17,8 +17,16 @@ tasks:
     silent: true
     cmds:
       - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        controller_ssh_user="$(ssh -n -o BatchMode=yes "$controller_target" 'id -un')"
+        if ! [[ "$controller_ssh_user" =~ ^[a-z_][a-z0-9_-]*$ ]]; then
+          echo "ARC controller has an invalid SSH user" >&2
+          exit 2
+        fi
+        ssh -o BatchMode=yes "$controller_target" bash -s -- \
+          "$controller_ssh_user" <<'REMOTE'
         set -euo pipefail
+        controller_ssh_user="$1"
         kubectl() { sudo -n k0s kubectl "$@"; }
         node="$(kubectl get nodes \
           -l nook.nokey.sh/node-role=control-storage \
@@ -42,7 +50,7 @@ tasks:
           nook.nokey.sh/arc-tier=overflow \
           --overwrite
         kubectl annotate node "$node" \
-          "nook.nokey.sh/ssh-target=debian@$internal_ip" \
+          "nook.nokey.sh/ssh-target=$controller_ssh_user@$internal_ip" \
           "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}" \
           --overwrite
         echo "ARC controller build node $node is qualified and held for convergence"
@@ -692,8 +700,8 @@ tasks:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
-      - task: arc:cache-primary:ensure
       - task: arc:controller-build:prepare
+      - task: arc:cache-primary:ensure
       - task: arc:build-host:resolve
       - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync

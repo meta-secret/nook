@@ -157,13 +157,33 @@ tasks:
         config="$(mktemp)"
         peer="$(mktemp)"
         stripped="$(mktemp)"
+        legacy_dir=""
         cleanup() {
           private_key=
           rm -f "$config" "$peer" "$stripped"
+          test -z "$legacy_dir" || rm -rf -- "$legacy_dir"
           sudo -n rm -f /etc/wireguard/.nook-syncconf
         }
         trap cleanup EXIT
         sudo -n install -d -m 0700 /etc/wireguard/nook-peers
+        inventory_count="$(sudo -n find /etc/wireguard/nook-peers \
+          -maxdepth 1 -type f -name '*.conf' -print | wc -l | tr -d ' ')"
+        if test "$inventory_count" = 0 &&
+           sudo -n grep -Fq '[Peer]' /etc/wireguard/wg-nook.conf; then
+          legacy_dir="$(mktemp -d)"
+          sudo -n awk -v directory="$legacy_dir" '
+            /^\[Peer\]$/ { count += 1; file = sprintf("%s/legacy-%03d.conf", directory, count) }
+            count > 0 { print > file }
+          ' /etc/wireguard/wg-nook.conf
+          for legacy_peer in "$legacy_dir"/*.conf; do
+            grep -Eq '^PublicKey = [A-Za-z0-9+/]{43}=$' "$legacy_peer"
+            grep -Eq '^AllowedIPs = [^[:space:]]+' "$legacy_peer"
+            sudo -n install -m 0600 "$legacy_peer" \
+              "/etc/wireguard/nook-peers/$(basename "$legacy_peer")"
+          done
+          rm -rf -- "$legacy_dir"
+          legacy_dir=""
+        fi
         if sudo -n wg show wg-nook >/dev/null 2>&1; then
           while IFS= read -r live_public_key; do
             match_count="$({
@@ -177,6 +197,12 @@ tasks:
             fi
           done < <(sudo -n wg show wg-nook peers)
         fi
+        while IFS= read -r legacy_peer; do
+          test -n "$legacy_peer"
+          sudo -n rm -f -- "$legacy_peer"
+        done < <(sudo -n find /etc/wireguard/nook-peers -maxdepth 1 \
+          -type f -name 'legacy-*.conf' -exec grep -Fl \
+          "PublicKey = $peer_public_key" {} + 2>/dev/null || true)
         cat > "$peer" <<EOF
         [Peer]
         PublicKey = $peer_public_key

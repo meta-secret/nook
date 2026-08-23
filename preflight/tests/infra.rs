@@ -141,6 +141,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "arc:controller-build:prepare:",
         "nook.nokey.sh/arc-build=preparing:NoSchedule",
         "nook.nokey.sh/arc-tier=overflow",
+        "nook.nokey.sh/ssh-target=$controller_ssh_user@$internal_ip",
         "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}",
         "arc:controller-build:activate:",
         "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
@@ -153,13 +154,16 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let prepare = tasks
         .find("- task: arc:controller-build:prepare")
         .expect("ARC deployment must prepare the controller build node");
+    let cache_primary = tasks
+        .find("- task: arc:cache-primary:ensure")
+        .expect("ARC deployment must select its cache primary");
     let pool = tasks
         .find("- task: arc:cache:pool:sync")
         .expect("ARC deployment must converge every build-node pool");
     let activate = tasks
         .rfind("- task: arc:controller-build:activate")
         .expect("ARC deployment must activate the controller build node");
-    assert!(prepare < pool && pool < activate);
+    assert!(prepare < cache_primary && cache_primary < pool && pool < activate);
     for contract in [
         "tolerations:",
         "key: nook.nokey.sh/arc-build",
@@ -167,8 +171,8 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "effect: NoSchedule",
     ] {
         assert!(
-            controller_values.contains(contract),
-            "ARC controller must tolerate build preparation: {contract}"
+            controller_values.contains(contract) && values.contains(contract),
+            "ARC control pods must tolerate build preparation: {contract}"
         );
     }
 }

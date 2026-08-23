@@ -13,6 +13,11 @@ listenerTemplate:
   spec:
     nodeSelector:
       nook.nokey.sh/node-role: control-storage
+    tolerations:
+      - key: nook.nokey.sh/arc-build
+        operator: Equal
+        value: preparing
+        effect: NoSchedule
     containers:
       - name: listener
         securityContext:
