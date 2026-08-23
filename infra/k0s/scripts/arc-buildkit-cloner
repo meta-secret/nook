@@ -405,6 +405,36 @@ request_expired() {
   test -z "$container_list"
 }
 
+prune_orphan_request_lanes() {
+  local command_line command_line_file container_list pod_uid request_lane
+  while IFS= read -r -d '' request_lane; do
+    pod_uid="$(basename "$request_lane")"
+    valid_uid "$pod_uid" || continue
+    request_lane_valid "$request_lane" || continue
+    test ! -e "$request_lane/request" || continue
+    test ! -e "$jobs_dir/$pod_uid" || continue
+    test -n "$(find "$request_lane" -mmin +5 -print -quit)" || continue
+    test ! -e "$pod_root/$pod_uid" || continue
+    if ! container_list="$(
+      k0s ctr --namespace k8s.io containers list -q \
+        "labels.\"io.kubernetes.pod.uid\"==$pod_uid" 2>/dev/null
+    )"; then
+      continue
+    fi
+    test -z "$container_list" || continue
+    for command_line_file in /proc/[0-9]*/cmdline; do
+      test -r "$command_line_file" || continue
+      command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
+      case "$command_line" in
+        *containerd-shim-kata-v2*) continue 2 ;;
+      esac
+    done
+    delete_request_lane "$request_lane"
+  done < <(
+    find "$request_dir" -mindepth 1 -maxdepth 1 -type d -print0
+  )
+}
+
 clone_requests() {
   local request pod_uid request_lane request_value ready_file job_dir temporary
   promotion_barrier_pending && return 0
@@ -570,6 +600,7 @@ while true; do
   prune_interval=30
   promotion_barrier_pending && prune_interval=5
   if (( SECONDS - last_prune >= prune_interval )); then
+    prune_orphan_request_lanes
     prune_stale_jobs
     last_prune=$SECONDS
   fi

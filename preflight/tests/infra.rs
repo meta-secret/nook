@@ -78,6 +78,32 @@ fn arc_smoke_discards_the_job_and_bounded_request_lane() -> anyhow::Result<()> {
 }
 
 #[test]
+fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
+    let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
+    let reaper = cloner
+        .split("prune_orphan_request_lanes() {")
+        .nth(1)
+        .and_then(|tail| tail.split("\n}\n").next())
+        .expect("ARC cloner must define orphan request-lane cleanup");
+
+    for guard in [
+        "request_lane_valid",
+        "test ! -e \"$request_lane/request\"",
+        "test ! -e \"$jobs_dir/$pod_uid\"",
+        "find \"$request_lane\" -mmin +5",
+        "test ! -e \"$pod_root/$pod_uid\"",
+        "io.kubernetes.pod.uid",
+        "containerd-shim-kata-v2",
+    ] {
+        assert!(
+            reaper.contains(guard),
+            "orphan-lane reaper is missing: {guard}"
+        );
+    }
+    assert!(reaper.contains("delete_request_lane \"$request_lane\""));
+}
+
+#[test]
 fn neo4j_credentials_reconcile_exact_bytes_before_tls_mutation() -> anyhow::Result<()> {
     let root = repository_root();
     let output = Command::new("bash")

@@ -520,6 +520,9 @@ buildkitCloner.requireAll([
   'if ! record_sandbox_id "$pod_uid"; then',
   'if request_expired "$pod_uid" "$request"; then',
   'find "$request" -mmin +5',
+  "prune_orphan_request_lanes",
+  'test ! -e "$jobs_dir/$pod_uid" || continue',
+  'find "$request_lane" -mmin +5',
   'test ! -e "$pod_root/$pod_uid" || return 1',
   'if ! container_list="$(\n    k0s ctr --namespace k8s.io containers list -q',
   'test ! -e "$request_dir/$pod_uid/request" || continue',
@@ -557,6 +560,7 @@ buildkitCloner.requireAll([
   'conclusion="$(promotion_job_conclusion "$pod_uid" || true)"',
   "promotion_barrier_pending && prune_interval=5",
   "if (( SECONDS - last_prune >= prune_interval )); then",
+  "prune_orphan_request_lanes\n    prune_stale_jobs",
 ]);
 buildkitCloner.forbid('accepted_next="$request_lane/accepted.next"');
 buildkitCloner.forbid('mv "$intent_next" "$intent_dir/$pod_uid.intent"');
