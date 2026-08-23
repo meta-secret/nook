@@ -330,8 +330,9 @@ tasks:
           exit 1
         fi
 
-        sudo -n install -d -m 0755 \
-          "$pool_mount/seed" "$pool_mount/jobs" "$pool_mount/requests"
+        sudo -n install -d -m 0755 "$pool_mount/seed" "$pool_mount/jobs"
+        sudo -n install -d -m 0700 "$pool_mount/requests"
+        sudo -n chmod 0700 "$pool_mount/requests"
         seed_file="$pool_mount/seed/buildkit.ext4"
         if ! sudo -n test -f "$seed_file"; then
           seed_temp="$pool_mount/seed/buildkit.ext4.tmp"

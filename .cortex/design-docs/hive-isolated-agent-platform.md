@@ -615,8 +615,9 @@ inode, and recorded seed generation. It replaces the seed atomically under the
 same lock used by clone creation. Stale concurrent jobs cannot overwrite a
 newer seed. The host never parses guest-controlled ext4 metadata; journal
 recovery occurs when a later Kata guest mounts its private clone. Failed,
-cancelled, or active jobs cannot refresh the seed. The ordinary and Hive smoke
-tasks apply the same gate to both scale sets.
+cancelled, or active jobs that never reach the verified publication step cannot
+refresh the seed. The ordinary and Hive smoke tasks apply the same gate to both
+scale sets.
 Every smoke dispatch carries a unique nonce in the workflow run name. The
 operator matches both that nonce and the exact head SHA before monitoring or
 cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.

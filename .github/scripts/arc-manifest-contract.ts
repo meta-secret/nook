@@ -351,6 +351,8 @@ tasks.requireAll([
   '"buildkit-requests" => ["prepare-buildkit-state", "request-buildkit-promotion"]',
   '"buildkit-jobs" => ["buildkit"]',
   'install -d -m 0700 "$pool_root"',
+  'install -d -m 0700 "$pool_mount/requests"',
+  'chmod 0700 "$pool_mount/requests"',
   "pool_size=768G",
   'btrfs quota enable "$pool_mount"',
   'btrfs filesystem resize max "$pool_mount"',
@@ -518,7 +520,7 @@ runners.requireAll([
   'request_file="$request_dir/$POD_UID.promote"',
   '"regular file:1001:1001:1"',
   'mv "$request_next" "$request_file"',
-  'chown 1001:1001 "$accepted_file.next"',
+  'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
   "while true; do sleep 3600; done",
 ]);
 hiveWorkflow.count({
