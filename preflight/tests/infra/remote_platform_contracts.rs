@@ -121,6 +121,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "host-services",
         "kubernetes-tools",
         "k0s",
+        "k0s-workers",
         "kata",
         "neo4j",
         "registry",
