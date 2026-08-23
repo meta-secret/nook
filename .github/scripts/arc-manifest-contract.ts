@@ -306,8 +306,8 @@ try {
   }
   const hiveBuildkit = sidecars.get("buildkit");
   if (
-    hiveBuildkit?.resources?.requests?.memory !== "2560Mi" ||
-    hiveBuildkit.resources.limits?.memory !== "2560Mi"
+    hiveBuildkit?.resources?.requests?.memory !== "4Gi" ||
+    hiveBuildkit.resources.limits?.memory !== "4Gi"
   ) {
     throw new Error("Hive ARC BuildKit must retain its Rust linker memory");
   }
