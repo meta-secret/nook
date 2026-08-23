@@ -358,8 +358,9 @@ tasks:
             "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\""
         token=
 
-        ssh -o BatchMode=yes "$controller_target" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$worker_target" <<'REMOTE'
         set -euo pipefail
+        worker_target="$1"
         for _ in $(seq 1 150); do
           node="$(sudo -n k0s kubectl get nodes \
             -l nook.nokey.sh/arc-build=true \
@@ -373,6 +374,8 @@ tasks:
         test -n "$node"
         sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m
         test "$(sudo -n k0s kubectl get "node/$node" -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')" = 10.202.0.2
+        sudo -n k0s kubectl annotate "node/$node" \
+          "nook.nokey.sh/ssh-target=$worker_target" --overwrite
         REMOTE
         ssh -n -o BatchMode=yes "$worker_target" \
           'sudo -n rm -f /etc/k0s/worker-token'

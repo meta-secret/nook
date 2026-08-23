@@ -34,7 +34,8 @@ Deploy and inspect the stack from the repository root:
 
 ```sh
 # First deployment only: create a repository-scoped fine-grained token file
-# with Administration read/write, then bootstrap the controller Secret.
+# with Administration read/write and Actions read, then bootstrap the
+# controller Secret.
 ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token task infra:deploy
 
 # Routine deployments retain the installed Secret.

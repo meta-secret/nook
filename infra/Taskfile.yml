@@ -3,7 +3,6 @@ version: '3'
 vars:
   INFRA_SSH_TARGET: '{{default "debian@ssh-ovh-borg-1.bynull.link" .INFRA_SSH_TARGET}}'
   INFRA_WORKER_SSH_TARGET: '{{default "" .INFRA_WORKER_SSH_TARGET}}'
-  ARC_BUILD_SSH_TARGET: '{{default .INFRA_SSH_TARGET .INFRA_WORKER_SSH_TARGET}}'
   INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
   INFRA_MESH_SSH_TARGET: '{{default "ssh.bynull.link" .INFRA_MESH_SSH_TARGET}}'
   INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'

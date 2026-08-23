@@ -164,8 +164,8 @@ template:
 
             while ! test -f "$signal_file"; do sleep 0.2; done
             test ! -L "$signal_file"
-            test "$(stat -c '%F:%u:%g:%h' "$signal_file")" = \
-              "regular file:1001:1001:1"
+            test "$(stat -c '%F:%u:%g:%a:%h' "$signal_file")" = \
+              "regular file:1001:1001:640:1"
             signal_value="$(tr -d '\r\n' < "$signal_file")"
             IFS=: read -r run_id run_attempt head_sha trailing <<EOF
             $signal_value

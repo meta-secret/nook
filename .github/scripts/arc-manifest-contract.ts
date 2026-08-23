@@ -385,7 +385,7 @@ tasks.requireAll([
   "ARC repository credential is not installed; set ARC_GITHUB_TOKEN_FILE to bootstrap it",
   'test -s "$token_file"',
   "gh workflow run remote.yml",
-  "bash <<'BASH'\n        set -euo pipefail\n        smoke_task=",
+  "smoke_task='{{.ARC_SMOKE_TASK}}'",
   '--raw-field "tasks=$smoke_task"',
   "for _ in $(seq 1 500)",
   "did not complete within 25 minutes",
@@ -506,6 +506,8 @@ buildkitCloner.requireAll([
   'if ! cp --reflink=always --sparse=auto "$job_file" "$seed_next"; then',
   "verify_promotion_candidates",
   'github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-token}"',
+  "curl --config - --fail --silent --show-error",
+  "--connect-timeout 5 --max-time 15",
   'any(.jobs[]?; .runner_name == $runner and .status == "in_progress" and .conclusion == null)',
   'conclusion="$(promotion_job_conclusion "$pod_uid" || true)"',
   'if promotion_requested "$pod_uid"; then',
@@ -539,6 +541,7 @@ ciTasks.requireAll([
   "task _buildx:healthy BUILD_TASK=_ci:main:publish-native-cache:host",
   'test "${GITHUB_EVENT_NAME:-}" = "push"',
   'signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"',
+  "umask 027",
   'mv "$signal_dir/request.next" "$signal_dir/request"',
   'test -f "$signal_dir/accepted" && exit 0',
 ]);
@@ -551,7 +554,7 @@ runners.requireAll([
   "NOOK_ARC_CACHE_PROMOTION_DIR",
   'candidate_file="$request_dir/$POD_UID.candidate"',
   'intent_file="$request_dir/$POD_UID.intent"',
-  '"regular file:1001:1001:1"',
+  '"regular file:1001:1001:640:1"',
   'mv "$candidate_next" "$candidate_file"',
   'while ! test -f "$intent_file"; do',
   'printf \'%s\\n\' "$POD_UID" > "$accepted_file.next"',
@@ -568,10 +571,17 @@ tasks.requireAll([
   'credential_store="$credential_dir/arc-controller-token"',
   "ARC credential persisted under ~/.nook",
   "/etc/nook/arc-cache-verifier-token",
+  "actions/runs?per_page=1",
   "ReadOnlyPaths=/etc/nook/arc-cache-verifier-token",
   "nook.nokey.sh/arc-cache-primary=true",
+  "arc:build-host:resolve:",
+  "arc-cache-primary-ssh-target",
+  "nook.nokey.sh/ssh-target",
 ]);
-workerTasks.require("nook.nokey.sh/arc-cache-primary=true");
+workerTasks.requireAll([
+  "nook.nokey.sh/arc-cache-primary=true",
+  '"nook.nokey.sh/ssh-target=$worker_target"',
+]);
 mainWorkflow.require("needs: [web]");
 hiveWorkflow.count({
   fragment: "github.event.pull_request.user.login != 'dependabot[bot]'",

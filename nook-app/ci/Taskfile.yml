@@ -216,7 +216,9 @@ tasks:
         signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"
         test -d "$signal_dir"
         test ! -L "$signal_dir"
-        umask 077
+        # The runner owns the signal, while the capability-free verifier reads
+        # it through the Pod fsGroup. Keep it inaccessible outside that group.
+        umask 027
         printf '%s:%s:%s\n' \
           "${GITHUB_RUN_ID:?missing GitHub run ID}" \
           "${GITHUB_RUN_ATTEMPT:?missing GitHub run attempt}" \

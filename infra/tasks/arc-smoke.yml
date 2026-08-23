@@ -34,6 +34,7 @@ tasks:
 
   arc:smoke:
     desc: Run a trusted exact-branch task and promote its stopped ARC state.
+    deps: [arc:build-host:resolve]
     vars:
       ARC_SMOKE_STATE_FILE:
         sh: 'mktemp "${TMPDIR:-/tmp}/nook-arc-smoke-{{.ARC_SMOKE_RUNNER_LABEL}}.XXXXXX"'
@@ -62,6 +63,7 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
         smoke_task='{{.ARC_SMOKE_TASK}}'
         smoke_job_name='{{.ARC_SMOKE_JOB_NAME}}'
         smoke_runner_label='{{.ARC_SMOKE_RUNNER_LABEL}}'
@@ -160,7 +162,7 @@ tasks:
               exit 1
             fi
             completion_sandbox_id="$(
-              ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+              ssh -o BatchMode=yes "$build_target" \
                 "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
             )"
             if test -z "$completion_sandbox_id"; then
@@ -218,7 +220,7 @@ tasks:
                 exit 1
               fi
               current_sandbox_id="$(
-                ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+                ssh -o BatchMode=yes "$build_target" \
                   "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
                 )"
               if test -z "$current_sandbox_id"; then
@@ -236,7 +238,7 @@ tasks:
                 exit 1
               fi
               if test -z "$runner_state_retained" &&
-                 ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+                 ssh -o BatchMode=yes "$build_target" \
                    "sudo -n sh -ceu 'job_dir=\"/var/lib/nook-arc-buildkit/pool/jobs/\$1\"; runtime_dir=/var/lib/nook-arc-buildkit/pool/runtime; test -f \"\$job_dir/buildkit.ext4\"; umask 077; printf \"%s\\n\" \"\$((\$(date +%s) + 1800))\" > \"\$runtime_dir/\$1.retain.tmp\"; mv \"\$runtime_dir/\$1.retain.tmp\" \"\$runtime_dir/\$1.retain\"' sh '$runner_uid'"; then
                 runner_state_retained=1
               fi
@@ -329,7 +331,7 @@ tasks:
         echo "ARC smoke Pod $pod_uid remained in the API after completion" >&2
         exit 1
         REMOTE
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+        ssh -o BatchMode=yes "$build_target" \
           bash -s -- "$runner_uid" "$runner_sandbox_id" <<'REMOTE'
         set -euo pipefail
         pod_uid="$1"

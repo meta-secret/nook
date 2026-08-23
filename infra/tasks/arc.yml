@@ -12,15 +12,49 @@ vars:
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 tasks:
-  arc:build-host:sync:
+  arc:build-host:resolve:
     internal: true
-    deps: [k0s:sync]
     silent: true
     cmds:
       - |
         bash <<'BASH'
         set -euo pipefail
-        build_target="{{.ARC_BUILD_SSH_TARGET}}"
+        target="${INFRA_WORKER_SSH_TARGET:-}"
+        if test -z "$target"; then
+          target="$(ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+            "sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-cache-primary=true -o jsonpath='{.items[0].metadata.annotations.nook\\.nokey\\.sh/ssh-target}'")"
+        fi
+        user="${target%%@*}"
+        host="${target#*@}"
+        if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
+          echo "ARC cache-primary node lacks a valid nook.nokey.sh/ssh-target annotation" >&2
+          exit 1
+        fi
+        case "$user:$host" in
+          *[!A-Za-z0-9_.:-]*|*:*@*)
+            echo "ARC cache-primary node has an unsafe nook.nokey.sh/ssh-target annotation" >&2
+            exit 1
+            ;;
+        esac
+        target_dir="$HOME/.nook/infra"
+        target_file="$target_dir/arc-cache-primary-ssh-target"
+        target_next="$target_file.next"
+        install -d -m 0700 "$HOME/.nook" "$target_dir"
+        umask 077
+        printf '%s\n' "$target" > "$target_next"
+        mv "$target_next" "$target_file"
+        chmod 0600 "$target_file"
+        BASH
+
+  arc:build-host:sync:
+    internal: true
+    deps: [k0s:sync, arc:build-host:resolve]
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
         controller_target="{{.INFRA_SSH_TARGET}}"
         if test "$build_target" = "$controller_target"; then
           exit 0
@@ -99,14 +133,26 @@ tasks:
 
   arc:cache:auth:sync:
     internal: true
-    deps: [arc:auth:sync]
+    deps: [arc:auth:sync, arc:build-host:resolve]
     silent: true
     cmds:
       - |
         bash <<'BASH'
         set -euo pipefail
         credential_file="$HOME/.nook/github/arc-controller-token"
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
         test -s "$credential_file"
+        token="$(tr -d '\r\n' < "$credential_file")"
+        [[ "$token" =~ ^[A-Za-z0-9_]+$ ]]
+        {
+          printf 'header = "Authorization: Bearer %s"\n' "$token"
+          printf 'header = "Accept: application/vnd.github+json"\n'
+          printf 'header = "X-GitHub-Api-Version: 2022-11-28"\n'
+        } | curl --config - --fail --silent --show-error \
+          --connect-timeout 5 --max-time 15 \
+          'https://api.github.com/repos/meta-secret/nook/actions/runs?per_page=1' \
+          >/dev/null
+        token=
         remote_program='set -euo pipefail
         credential_temp="$(mktemp)"
         cleanup() { rm -f "$credential_temp"; }
@@ -118,7 +164,7 @@ tasks:
         sudo -n install -d -m 0700 /etc/nook
         sudo -n install -m 0600 "$credential_temp" /etc/nook/arc-cache-verifier-token'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+        ssh -o BatchMode=yes "$build_target" \
           "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
           < "$credential_file"
         echo "ARC host verifier credential synchronized outside runner Pods"
@@ -306,7 +352,8 @@ tasks:
     silent: true
     cmds:
       - |
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
+        ssh -o BatchMode=yes "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         pool_root=/var/lib/nook-arc-buildkit
@@ -443,11 +490,13 @@ tasks:
 
   arc:buildkit:image:sync:
     internal: true
+    deps: [arc:build-host:resolve]
     silent: true
     cmds:
       - |
         bash <<'BASH'
         set -euo pipefail
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
         temp_dir="$(mktemp -d)"
         artifact="$temp_dir/nook-arc-buildkit.tar"
         cleanup() { rm -rf "$temp_dir"; }
@@ -459,7 +508,7 @@ tasks:
           --tag localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1 \
           --output "type=oci,dest=$artifact" \
           infra/k0s/images/arc-buildkit
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
+        ssh -o BatchMode=yes "$build_target" \
           'sudo -n k0s ctr --namespace k8s.io images import -' \
           < "$artifact"
         echo "Imported the pinned ARC BuildKit wrapper into k0s containerd"

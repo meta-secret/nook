@@ -136,6 +136,7 @@ mounted into an ephemeral runner Pod.
 
 - Limit it to `meta-secret/nook`.
 - Grant repository Administration read/write for ARC registration.
+- Grant repository Actions read for host-side run and job verification.
 - Grant no organization permissions.
 - Persist rotations automatically under `~/.nook`.
 - Run `task infra:arc:fallback` before emergency revocation.

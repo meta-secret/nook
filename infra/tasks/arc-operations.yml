@@ -4,6 +4,7 @@ version: '3'
 tasks:
   arc:status:
     desc: Show bounded ARC controller, listener, scale-set, and runner state.
+    deps: [arc:build-host:resolve]
     silent: true
     cmds:
       - |
@@ -19,7 +20,8 @@ tasks:
         kubectl get pods --namespace arc-runners -o wide
         REMOTE
       - |
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
+        ssh -o BatchMode=yes "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl is-active nook-arc-buildkit-cloner.service
         sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
@@ -30,6 +32,7 @@ tasks:
 
   arc:diagnose:
     desc: Show bounded ARC events and recent controller/listener logs.
+    deps: [arc:build-host:resolve]
     silent: true
     cmds:
       - |
@@ -50,7 +53,8 @@ tasks:
         fi
         REMOTE
       - |
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        build_target="$(cat "$HOME/.nook/infra/arc-cache-primary-ssh-target")"
+        ssh -o BatchMode=yes "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl status nook-arc-buildkit-cloner.service \
           --no-pager --lines=40 || true

@@ -84,11 +84,13 @@ EOF
 github_get() {
   local endpoint="$1" token
   token="$(tr -d '\r\n' < "$github_token_file")"
-  test -n "$token"
-  curl --fail --silent --show-error \
-    --header "Authorization: Bearer $token" \
-    --header "Accept: application/vnd.github+json" \
-    --header "X-GitHub-Api-Version: 2022-11-28" \
+  [[ "$token" =~ ^[A-Za-z0-9_]+$ ]]
+  {
+    printf 'header = "Authorization: Bearer %s"\n' "$token"
+    printf 'header = "Accept: application/vnd.github+json"\n'
+    printf 'header = "X-GitHub-Api-Version: 2022-11-28"\n'
+  } | curl --config - --fail --silent --show-error \
+    --connect-timeout 5 --max-time 15 \
     "https://api.github.com/repos/$github_repository/$endpoint"
 }
 
