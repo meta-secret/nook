@@ -76,7 +76,7 @@ tasks:
           while IFS= read -r candidate_target; do
             test -n "$candidate_target"
             candidate_sandbox="$(
-              ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
                 -J "$controller_target" "$candidate_target" \
                 "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
             )"

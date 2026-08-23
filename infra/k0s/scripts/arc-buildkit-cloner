@@ -17,7 +17,6 @@ last_sandbox_refresh=-1
 mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir"
 chmod 0700 "$runtime_dir"
 test -f "$seed_file"
-test -s "$github_token_file"
 
 valid_uid() {
   [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
@@ -93,6 +92,13 @@ verify_promotion_candidates() {
   local candidate candidate_value pod_uid candidate_uid pod_name run_id
   local run_attempt head_sha trailing job_dir run jobs intent_next
   shopt -s nullglob
+  if ! test -s "$github_token_file"; then
+    for candidate in "$request_dir"/*.candidate; do
+      echo "Rejecting ARC promotion candidate without a host verifier credential" >&2
+      rm -f -- "$candidate"
+    done
+    return 0
+  fi
   for candidate in "$request_dir"/*.candidate; do
     pod_uid="$(basename "$candidate" .candidate)"
     if ! valid_uid "$pod_uid" || test -L "$candidate" ||

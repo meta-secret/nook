@@ -33,10 +33,12 @@ generated credentials.
 Deploy and inspect the stack from the repository root:
 
 ```sh
-# First deployment only: create a repository-scoped fine-grained token file
-# with Administration read/write and Actions read, then bootstrap the
-# controller Secret.
-ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token task infra:deploy
+# First deployment only: create separate repository-scoped fine-grained token
+# files. The controller needs Administration read/write. The host verifier
+# needs Actions read only. Both are persisted automatically under ~/.nook.
+ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token \
+  ARC_CACHE_VERIFIER_TOKEN_FILE=/secure/path/nook-arc-verifier-token \
+  task infra:deploy
 
 # Routine deployments retain the installed Secret.
 task infra:deploy
@@ -116,10 +118,10 @@ the authenticated fallback shared with hosted builders. Its traffic resolves
 through cluster TLS ingress while preserving the public certificate and
 registry host.
 
-Every qualified ARC build node owns a local pool, cloner, verifier credential,
-and pinned BuildKit image. General and Hive runners may schedule across those
-nodes. Exactly one node carries the cache-primary label and receives Main cache
-producer jobs.
+Every qualified ARC build node owns a local pool, cloner, and pinned BuildKit
+image. General and Hive runners may schedule across those nodes. Exactly one
+node carries the cache-primary label, receives the Actions-read host verifier
+credential, and runs Main cache producer jobs.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

@@ -208,9 +208,26 @@ tasks:
       - |
         bash <<'BASH'
         set -euo pipefail
-        credential_file="$HOME/.nook/github/arc-controller-token"
+        credential_dir="$HOME/.nook/github"
+        credential_store="$credential_dir/arc-cache-verifier-token"
+        credential_file="${ARC_CACHE_VERIFIER_TOKEN_FILE:-$credential_store}"
         controller_target="{{.INFRA_SSH_TARGET}}"
+        primary_target_file="$HOME/.nook/infra/arc-cache-primary-ssh-target"
+        inventory_file="$HOME/.nook/infra/arc-build-ssh-targets"
+        install -d -m 0700 "$HOME/.nook" "$credential_dir"
+        if test -n "${ARC_CACHE_VERIFIER_TOKEN_FILE:-}"; then
+          test -s "$ARC_CACHE_VERIFIER_TOKEN_FILE"
+          install -m 0600 "$ARC_CACHE_VERIFIER_TOKEN_FILE" "$credential_store"
+          credential_file="$credential_store"
+        elif ! test -s "$credential_store"; then
+          echo "ARC cache verifier credential is not installed; set ARC_CACHE_VERIFIER_TOKEN_FILE to a meta-secret/nook Actions-read token" >&2
+          exit 2
+        fi
         test -s "$credential_file"
+        test -s "$primary_target_file"
+        test -s "$inventory_file"
+        primary_target="$(tr -d '\r\n' < "$primary_target_file")"
+        test -n "$primary_target"
         token="$(tr -d '\r\n' < "$credential_file")"
         [[ "$token" =~ ^[A-Za-z0-9_]+$ ]]
         {
@@ -223,24 +240,30 @@ tasks:
           >/dev/null
         token=
         remote_program='set -euo pipefail
+        credential_raw="$(mktemp)"
         credential_temp="$(mktemp)"
-        cleanup() { rm -f "$credential_temp"; }
+        cleanup() { rm -f "$credential_raw" "$credential_temp"; }
         trap cleanup EXIT
-        cat > "$credential_temp"
-        tr -d "\r\n" < "$credential_temp" > "$credential_temp.normalized"
-        mv "$credential_temp.normalized" "$credential_temp"
+        cat > "$credential_raw"
+        tr -d "\r\n" < "$credential_raw" > "$credential_temp"
         test -s "$credential_temp"
         sudo -n install -d -m 0700 /etc/nook
         sudo -n install -m 0600 "$credential_temp" /etc/nook/arc-cache-verifier-token'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
         while IFS= read -r build_target; do
           test -n "$build_target"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            -J "$controller_target" "$build_target" \
-            "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
-            < "$credential_file"
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"
-        echo "ARC host verifier credential synchronized to every build node"
+          if test "$build_target" = "$primary_target"; then
+            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              -J "$controller_target" "$build_target" \
+              "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
+              < "$credential_file"
+          else
+            ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+              -J "$controller_target" "$build_target" \
+              'sudo -n rm -f /etc/nook/arc-cache-verifier-token'
+          fi
+        done < "$inventory_file"
+        echo "ARC Actions-read verifier credential persisted under ~/.nook and synchronized only to the cache-primary node"
         BASH
 
   arc:render:check:

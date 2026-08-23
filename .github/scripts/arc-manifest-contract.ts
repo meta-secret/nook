@@ -578,6 +578,8 @@ cacheRunners.requireAll([
 tasks.requireAll([
   'credential_store="$credential_dir/arc-controller-token"',
   "ARC credential persisted under ~/.nook",
+  'credential_store="$credential_dir/arc-cache-verifier-token"',
+  "ARC_CACHE_VERIFIER_TOKEN_FILE",
   "/etc/nook/arc-cache-verifier-token",
   "actions/runs?per_page=1",
   "ReadOnlyPaths=/etc/nook/arc-cache-verifier-token",
@@ -588,10 +590,14 @@ tasks.requireAll([
   "arc-build-ssh-targets",
   'mktemp "$target_file.next.XXXXXX"',
   'mktemp "$inventory_file.next.XXXXXX"',
-  "synchronized to every build node",
+  "synchronized only to the cache-primary node",
+  "sudo -n rm -f /etc/nook/arc-cache-verifier-token",
   "Imported the pinned ARC BuildKit wrapper into every build node",
   "nook.nokey.sh/ssh-target",
 ]);
+buildkitCloner.forbid('test -s "$github_token_file"\n\nvalid_uid');
+tasks.require("ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new");
+tasks.forbid("$credential_temp.normalized");
 tasks.forbid('primary_node="$(jq -r');
 workerTasks.requireAll([
   "nook.nokey.sh/arc-cache-primary=true",

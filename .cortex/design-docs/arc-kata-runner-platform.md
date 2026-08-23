@@ -85,10 +85,11 @@ A verified Main job writes its run ID, run attempt, and head SHA to a writable
 in-guest `emptyDir`. The trusted sidecar forwards a Pod-UID-scoped candidate to
 the host. It performs no GitHub API call and receives no repository credential.
 
-The root-owned host verifier uses the ARC controller credential from
-`/etc/nook/arc-cache-verifier-token`. Deployment also persists the reusable
-credential under `~/.nook/github/arc-controller-token` with mode `0600`.
-Credential bytes never enter runner Pods or repository publication surfaces.
+The root-owned host verifier uses a repository-scoped Actions-read credential
+from `/etc/nook/arc-cache-verifier-token`. Deployment persists its reusable
+source under `~/.nook/github/arc-cache-verifier-token` with mode `0600` and
+installs it only on the cache-primary host. Credential bytes never enter runner
+Pods, other build hosts, or repository publication surfaces.
 
 Before creating a promotion intent, the host verifies:
 
@@ -129,20 +130,22 @@ ensures Main dependencies cannot diverge across node-local seeds when the
 cluster grows.
 
 Every node labeled `nook.nokey.sh/arc-build=true` receives its own local pool,
-cloner service, verifier credential, and pinned BuildKit image. General and Hive
-jobs may use any qualified build node. Exactly one node also owns
-`nook.nokey.sh/arc-cache-primary=true`; only the Main producer scale set uses
-that selector.
+cloner service, and pinned BuildKit image. General and Hive jobs may use any
+qualified build node. Exactly one node also owns the host verifier credential
+and `nook.nokey.sh/arc-cache-primary=true`; only the Main producer scale set
+uses that selector.
 
 ## Credential ownership
 
-The ARC GitHub token is stored in `arc-runners/nook-arc-github` for the
-controller and listener and in a root-only host verifier file. It is never
+Two repository-scoped GitHub credentials have separate authority. Neither is
 mounted into an ephemeral runner Pod.
 
-- Limit it to `meta-secret/nook`.
-- Grant repository Administration read/write for ARC registration.
-- Grant repository Actions read for host-side run and job verification.
+- Store the ARC controller token in `arc-runners/nook-arc-github` and
+  `~/.nook/github/arc-controller-token`. Limit it to `meta-secret/nook` and
+  grant repository Administration read/write for runner registration.
+- Store the verifier token in
+  `~/.nook/github/arc-cache-verifier-token` and the cache-primary host file.
+  Limit it to `meta-secret/nook` and grant only repository Actions read.
 - Grant no organization permissions.
 - Persist rotations automatically under `~/.nook`.
 - Run `task infra:arc:fallback` before emergency revocation.
