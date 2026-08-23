@@ -630,7 +630,7 @@ not a retained pool. A preparation taint prevents a new compute node from
 receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
 node selectors are all qualified.
 
-The ordinary Pod requests 1 CPU and 5 GiB. The Hive Pod requests about 2 CPUs
+The ordinary Pod requests 1 CPU and 4.5 GiB. The Hive Pod requests about 2 CPUs
 and 4.5 GiB. Both cap their concurrently running containers at 2 CPUs and 5
 GiB in aggregate. This cap is a Kata VM sizing boundary. It keeps ten concurrent
 microVMs within the 16-thread, 64 GiB Rise-S worker instead of multiplying the

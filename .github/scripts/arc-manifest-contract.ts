@@ -154,7 +154,7 @@ runners.requireAll([
   "minRunners: 0",
   "maxRunners: 10",
   "requests:\n            cpu: 500m\n            memory: 3Gi",
-  "requests:\n            cpu: 250m\n            memory: 1Gi\n            ephemeral-storage: 1Gi",
+  "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 250m\n            memory: 1Gi",
   'limits:\n            cpu: 500m\n            memory: 1Gi',
   "runAsNonRoot: true",
