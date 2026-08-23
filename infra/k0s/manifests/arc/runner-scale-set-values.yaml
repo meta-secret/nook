@@ -39,6 +39,9 @@ template:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
     runtimeClassName: kata-qemu-runtime-rs
+    securityContext:
+      fsGroup: 1001
+      fsGroupChangePolicy: OnRootMismatch
     automountServiceAccountToken: false
     enableServiceLinks: false
     terminationGracePeriodSeconds: 60
@@ -70,32 +73,6 @@ template:
           limits:
             cpu: 100m
             memory: 128Mi
-      - name: prepare-cache-promotion-signal
-        image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
-        imagePullPolicy: Never
-        command: ["/bin/sh", "-ceu"]
-        args:
-          - |
-            chown 1001:1001 /var/run/nook-cache-promotion
-            chmod 0700 /var/run/nook-cache-promotion
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop: ["ALL"]
-          readOnlyRootFilesystem: true
-          runAsUser: 0
-          seccompProfile:
-            type: RuntimeDefault
-        volumeMounts:
-          - name: cache-promotion-signal
-            mountPath: /var/run/nook-cache-promotion
-        resources:
-          requests:
-            cpu: 10m
-            memory: 16Mi
-          limits:
-            cpu: 100m
-            memory: 64Mi
       - name: prepare-buildkit-state
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
