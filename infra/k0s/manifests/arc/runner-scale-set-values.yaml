@@ -158,8 +158,8 @@ template:
             signal_file="$signal_dir/request"
             accepted_file="$signal_dir/accepted"
             request_dir=/var/lib/nook-buildkit-requests
-            host_accepted_file="$request_dir/$POD_UID.accepted"
-            candidate_file="$request_dir/$POD_UID.candidate"
+            host_accepted_file="$request_dir/accepted"
+            candidate_file="$request_dir/candidate"
             candidate_next="$candidate_file.next"
 
             while ! test -f "$signal_file"; do sleep 0.2; done
@@ -225,6 +225,7 @@ template:
         volumeMounts:
           - name: buildkit-requests
             mountPath: /var/lib/nook-buildkit-requests
+            subPathExpr: $(POD_UID)
           - name: cache-promotion-signal
             mountPath: /var/run/nook-cache-promotion
           - name: temporary

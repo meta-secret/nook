@@ -105,18 +105,21 @@ Security and cache rules:
 - Back Podman with a sparse 24 GiB ext4 image inside the guest. Native overlay
   must not fall back to `fuse-overlayfs` on the Kata shared volume.
 - Permit only the Task-managed ARC BuildKit request and job hostPaths.
-  - A trusted init container sees only the request directory and submits its
-    Kubernetes Pod UID for a private clone.
-  - A credential-free sidecar forwards its Pod-scoped candidate through the
-    request directory. The runner sees neither host path.
+  - Before untrusted job containers start, a trusted init container briefly
+    sees only the request root. It creates a root-owned, mode-`0700` lane for
+    its Kubernetes Pod UID and submits that UID for a private clone.
+  - A credential-free sidecar mounts only its Pod lane through `subPathExpr`
+    and forwards its candidate there. It cannot traverse another Pod's lane.
+    The runner sees neither host path.
   - A root-owned authenticated host verifier binds that candidate to the exact
     in-progress runner job before writing an intent in a mode-`0700`,
     host-private runtime directory. Pods receive only an acceptance marker in
     their untrusted request lane.
   - The intent blocks the next cache producer until the host observes the final
     conclusion. Only a successful Main job promotes the seed.
-  - Abandon an intent or request that blocks clones for more than two minutes.
-    Retain unsafe job state until complete Kata teardown is proven.
+  - Retry a failed promotion while its verified intent is live. Abandon an
+    intent or request that blocks clones for more than two minutes. Retain
+    unsafe job state until complete Kata teardown is proven.
   - Pin the dedicated Main producer scale set to the one cache-primary compute
     node. Keep general and Hive scale sets eligible for every qualified worker.
   - The host helper creates a reflink clone from the trusted seed.

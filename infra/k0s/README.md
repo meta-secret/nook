@@ -90,12 +90,15 @@ Service at `10.96.90.10:5000`. Traefik publishes it at
 registry data.
 ARC storage uses a separate Task-managed Btrfs image under
 `/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
-filesystem remains ext4. Runner Pods receive two narrow host paths. The trusted
-preparation init container sees only the shared clone-request directory. A
-credential-free sidecar forwards its Pod-scoped candidate through that path.
+filesystem remains ext4. The trusted preparation init container briefly sees
+only the shared clone-request root before untrusted job containers start. It
+creates a root-owned, mode-`0700` filesystem lane for that Pod UID. A
+credential-free sidecar mounts only its own lane through `subPathExpr` and
+forwards its Pod-scoped candidate there.
 The authenticated root-owned host verifier establishes the intent under the
-host-private runtime directory and checks the final job conclusion. Pods see
-only an untrusted candidate lane and a host-created acceptance marker.
+host-private runtime directory and checks the final job conclusion. Pods cannot
+traverse another Pod's request files. Each Pod sees only its own untrusted
+candidate lane and a host-created acceptance marker.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
 covers twenty fully allocated 32 GiB
@@ -109,8 +112,9 @@ verifier confirms that the exact Pod is currently running the selected Main
 job before creating a host-private intent. It checks the same job's final `success`
 conclusion after teardown and only then promotes the seed. The runner never sees
 the host-private intent directory or any ARC credential. Intents stop blocking new
-clones after two minutes. The host abandons that promotion but retains unsafe
-job state until Kata teardown can be proven complete.
+clones after two minutes. A failed promotion keeps its verified intent and job
+state for retry until that deadline. An expired promotion retains unsafe job
+state until Kata teardown can be proven complete.
 The host waits for complete Kata teardown, rejects a stale seed generation, and
 promotes the private state through an atomic Btrfs reflink. New clone requests
 wait behind accepted promotion. ARC jobs therefore skip registry export, while

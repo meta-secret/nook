@@ -504,7 +504,7 @@ buildkitCloner.requireAll([
   'find "$request" -mmin +5',
   'test ! -e "$pod_root/$pod_uid" || return 1',
   'if ! container_list="$(\n    k0s ctr --namespace k8s.io containers list -q',
-  'test ! -e "$request_dir/$pod_uid.request" || continue',
+  'test ! -e "$request_dir/$pod_uid/request" || continue',
   "*containerd-shim-kata-v2*) continue 2",
   '*containerd-shim-kata-v2*" -id $sandbox_id "*',
   'labels.\\"io.kubernetes.pod.uid\\"==$pod_uid',
@@ -514,11 +514,15 @@ buildkitCloner.requireAll([
   "promotion_intents_pending",
   'intent_dir="$runtime_dir/intents"',
   'intent="$intent_dir/$pod_uid.intent"',
-  'accepted_next="$request_dir/$pod_uid.accepted.next"',
+  'for candidate in "$request_dir"/*/candidate; do',
+  'for request in "$request_dir"/*/request; do',
+  'request_lane_valid "$request_lane"',
+  'accepted_next="$request_lane/accepted.next"',
   'find "$intent" -mmin +2',
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
   'if ! cp --reflink=always --sparse=auto "$job_file" "$seed_next"; then',
+  'success) promote_job_dir "$job_dir" || continue ;;',
   "verify_promotion_candidates",
   'github_token_file="${NOOK_ARC_GITHUB_TOKEN_FILE:-/etc/nook/arc-cache-verifier-token}"',
   "curl --config - --fail --silent --show-error",
@@ -532,6 +536,7 @@ buildkitCloner.requireAll([
 ]);
 buildkitCloner.forbid(".promote");
 buildkitCloner.forbid('retain_marker="$job_dir/.retain"');
+buildkitCloner.forbid('promote_job_dir "$job_dir" || true');
 buildkitPrepare.require("deadline=$(($(date +%s) + 240))");
 if (
   buildkitCloner.index('if ! record_sandbox_id "$pod_uid"; then') >
@@ -576,8 +581,9 @@ runners.requireAll([
   "name: request-buildkit-promotion",
   "name: cache-promotion-signal",
   "NOOK_ARC_CACHE_PROMOTION_DIR",
-  'candidate_file="$request_dir/$POD_UID.candidate"',
-  'host_accepted_file="$request_dir/$POD_UID.accepted"',
+  'candidate_file="$request_dir/candidate"',
+  'host_accepted_file="$request_dir/accepted"',
+  "subPathExpr: $(POD_UID)",
   '"regular file:1001:1001:640:1"',
   'mv "$candidate_next" "$candidate_file"',
   'while ! test -f "$host_accepted_file"; do',

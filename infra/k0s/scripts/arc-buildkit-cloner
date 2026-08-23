@@ -16,7 +16,7 @@ last_prune=0
 last_sandbox_refresh=-1
 
 mkdir -p "$request_dir" "$jobs_dir" "$runtime_dir" "$intent_dir"
-chmod 0700 "$runtime_dir" "$intent_dir"
+chmod 0700 "$request_dir" "$runtime_dir" "$intent_dir"
 test -f "$seed_file"
 
 valid_uid() {
@@ -25,7 +25,7 @@ valid_uid() {
 
 delete_job_dir() {
   local job_dir="$1"
-  local pod_uid
+  local pod_uid request_lane
   pod_uid="$(basename "$job_dir")"
   if btrfs subvolume show "$job_dir" >/dev/null 2>&1; then
     btrfs subvolume delete "$job_dir" >/dev/null
@@ -33,9 +33,18 @@ delete_job_dir() {
     rm -rf -- "$job_dir"
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
-    "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
-    "$request_dir/$pod_uid.accepted" "$request_dir/$pod_uid.accepted.next" \
-    "$request_dir/$pod_uid.candidate" "$request_dir/$pod_uid.candidate.next"
+    "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next"
+  request_lane="$request_dir/$pod_uid"
+  if valid_uid "$pod_uid" && test ! -L "$request_lane"; then
+    rm -rf -- "$request_lane"
+  fi
+}
+
+request_lane_valid() {
+  local request_lane="$1"
+  test ! -L "$request_lane" &&
+    test "$(stat -c '%F:%u:%g:%a' -- "$request_lane" 2>/dev/null || true)" = \
+      "directory:0:0:700"
 }
 
 promotion_intended() {
@@ -92,18 +101,28 @@ EOF
 
 verify_promotion_candidates() {
   local candidate candidate_value pod_uid candidate_uid pod_name run_id
-  local run_attempt head_sha trailing job_dir run jobs intent_next accepted_next
+  local run_attempt head_sha trailing job_dir request_lane run jobs intent_next
+  local accepted_next
   shopt -s nullglob
   if ! test -s "$github_token_file"; then
-    for candidate in "$request_dir"/*.candidate; do
+    for candidate in "$request_dir"/*/candidate; do
+      request_lane="$(dirname "$candidate")"
+      pod_uid="$(basename "$request_lane")"
+      if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
+        continue
+      fi
       echo "Rejecting ARC promotion candidate without a host verifier credential" >&2
       rm -f -- "$candidate"
     done
     return 0
   fi
-  for candidate in "$request_dir"/*.candidate; do
-    pod_uid="$(basename "$candidate" .candidate)"
-    if ! valid_uid "$pod_uid" || test -L "$candidate" ||
+  for candidate in "$request_dir"/*/candidate; do
+    request_lane="$(dirname "$candidate")"
+    pod_uid="$(basename "$request_lane")"
+    if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
+      continue
+    fi
+    if test -L "$candidate" ||
        test "$(stat -c '%F:%u:%g:%h' -- "$candidate" 2>/dev/null || true)" != \
          "regular file:0:0:1"; then
       rm -f -- "$candidate"
@@ -155,11 +174,11 @@ EOF
     printf '%s\n' "$candidate_value" > "$intent_next"
     chmod 0600 "$intent_next"
     mv "$intent_next" "$intent_dir/$pod_uid.intent"
-    accepted_next="$request_dir/$pod_uid.accepted.next"
-    rm -f -- "$request_dir/$pod_uid.accepted" "$accepted_next"
+    accepted_next="$request_lane/accepted.next"
+    rm -f -- "$request_lane/accepted" "$accepted_next"
     printf '%s\n' "$pod_uid" > "$accepted_next"
     chmod 0600 "$accepted_next"
-    mv "$accepted_next" "$request_dir/$pod_uid.accepted"
+    mv "$accepted_next" "$request_lane/accepted"
     rm -f -- "$candidate"
   done
 }
@@ -312,20 +331,23 @@ request_expired() {
 }
 
 clone_requests() {
-  local request pod_uid request_value job_dir temporary
+  local request pod_uid request_lane request_value ready_file job_dir temporary
   promotion_barrier_pending && return 0
   shopt -s nullglob
-  for request in "$request_dir"/*.request; do
+  for request in "$request_dir"/*/request; do
     test -f "$request" || continue
-    test ! -L "$request" || {
-      rm -f -- "$request"
+    request_lane="$(dirname "$request")"
+    pod_uid="$(basename "$request_lane")"
+    if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
       continue
-    }
-    pod_uid="$(basename "$request" .request)"
-    if ! valid_uid "$pod_uid"; then
+    fi
+    if test -L "$request" ||
+       test "$(stat -c '%F:%u:%g:%h' -- "$request" 2>/dev/null || true)" != \
+         "regular file:0:0:1"; then
       rm -f -- "$request"
       continue
     fi
+    ready_file="$request_lane/ready"
     request_value="$(tr -d '\r\n' < "$request")"
     if test "$request_value" != "$pod_uid"; then
       rm -f -- "$request"
@@ -339,7 +361,7 @@ clone_requests() {
     fi
     if ! record_sandbox_id "$pod_uid"; then
       if request_expired "$pod_uid" "$request"; then
-        rm -f -- "$request" "$request_dir/$pod_uid.ready" \
+        rm -f -- "$request" "$ready_file" \
           "$runtime_dir/$pod_uid.sandbox"
       fi
       continue
@@ -353,7 +375,7 @@ clone_requests() {
        test -f "$job_dir/buildkit.ext4" &&
        test -f "$job_dir/.seed-generation"; then
       if record_sandbox_id "$pod_uid"; then
-        touch "$request_dir/$pod_uid.ready"
+        touch "$ready_file"
         rm -f -- "$request"
       fi
       continue
@@ -373,7 +395,7 @@ clone_requests() {
       delete_job_dir "$job_dir"
       continue
     fi
-    touch "$request_dir/$pod_uid.ready"
+    touch "$ready_file"
     rm -f -- "$request"
   done
 }
@@ -398,7 +420,7 @@ prune_stale_jobs() {
     if test -L "$sandbox_marker" ||
        test "$(stat -c '%F:%u:%g:%h' -- "$sandbox_marker" 2>/dev/null || true)" != \
          "regular file:0:0:1"; then
-      test ! -e "$request_dir/$pod_uid.request" || continue
+      test ! -e "$request_dir/$pod_uid/request" || continue
       for command_line_file in /proc/[0-9]*/cmdline; do
         test -r "$command_line_file" || continue
         command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
@@ -410,13 +432,13 @@ prune_stale_jobs() {
         if ! promotion_intent_expired "$pod_uid"; then
           conclusion="$(promotion_job_conclusion "$pod_uid" || true)"
           case "$conclusion" in
-            success) promote_job_dir "$job_dir" || true ;;
+            success) promote_job_dir "$job_dir" || continue ;;
             cancelled|failure|neutral|skipped|stale|timed_out) ;;
             *) continue ;;
           esac
         fi
         rm -f -- "$intent_dir/$pod_uid.intent" \
-          "$request_dir/$pod_uid.accepted"
+          "$request_dir/$pod_uid/accepted"
       elif retention_active "$pod_uid"; then
         continue
       fi
@@ -445,13 +467,13 @@ prune_stale_jobs() {
       if ! promotion_intent_expired "$pod_uid"; then
         conclusion="$(promotion_job_conclusion "$pod_uid" || true)"
         case "$conclusion" in
-          success) promote_job_dir "$job_dir" || true ;;
+          success) promote_job_dir "$job_dir" || continue ;;
           cancelled|failure|neutral|skipped|stale|timed_out) ;;
           *) continue ;;
         esac
       fi
       rm -f -- "$intent_dir/$pod_uid.intent" \
-        "$request_dir/$pod_uid.accepted"
+        "$request_dir/$pod_uid/accepted"
     elif retention_active "$pod_uid"; then
       continue
     fi

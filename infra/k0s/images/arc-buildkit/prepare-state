@@ -12,11 +12,19 @@ case "$pod_uid" in
     ;;
 esac
 
-request_file="$request_dir/$pod_uid.request"
+request_lane="$request_dir/$pod_uid"
+request_file="$request_lane/request"
 request_temp="$request_file.tmp"
-ready_file="$request_dir/$pod_uid.ready"
+ready_file="$request_lane/ready"
 
 test -d "$request_dir"
+if test -L "$request_lane"; then
+  echo "ARC BuildKit request lane must not be a symlink" >&2
+  exit 2
+fi
+mkdir -p "$request_lane"
+chmod 0700 "$request_lane"
+test "$(stat -c '%F:%u:%g:%a' "$request_lane")" = "directory:0:0:700"
 rm -f "$ready_file"
 printf '%s\n' "$pod_uid" > "$request_temp"
 mv "$request_temp" "$request_file"

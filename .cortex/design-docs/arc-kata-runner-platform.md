@@ -82,8 +82,11 @@ and BuildKit daemons. A Btrfs exclusive quota limits each job subvolume to
 ## Authenticated promotion
 
 A verified Main job writes its run ID, run attempt, and head SHA to a writable
-in-guest `emptyDir`. The trusted sidecar forwards a Pod-UID-scoped candidate to
-the host. It performs no GitHub API call and receives no repository credential.
+in-guest `emptyDir`. Before untrusted job containers start, the trusted init
+creates a root-owned, mode-`0700` request lane. The credential-free sidecar
+mounts only that Pod-UID-scoped lane through `subPathExpr` and forwards its
+candidate to the host. It cannot traverse another Pod's lane. It performs no
+GitHub API call and receives no repository credential.
 
 The root-owned host verifier uses a repository-scoped Actions-read credential
 from `/etc/nook/arc-cache-verifier-token`. Deployment persists its reusable
@@ -109,8 +112,9 @@ fork, or unrelated runner cannot create a clone barrier by replaying a public
 Main run identity.
 
 After Pod teardown, the host queries the same runner job once more. It promotes
-only a `success` conclusion. Failures, cancellations, missing conclusions, and
-expired intents do not refresh the seed.
+only a `success` conclusion. A failed reflink keeps the verified intent and job
+state for retry until the intent expires. Failures, cancellations, missing
+conclusions, and expired intents do not refresh the seed.
 
 Both host-private intent and promotion barriers expire after two minutes.
 Expiration removes only the barrier. Unsafe job state remains retained while the Pod directory,
