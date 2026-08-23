@@ -18,6 +18,12 @@ export enum AgentWorkspacePolicy {
   ReadOnly = 'read-only',
 }
 
+export enum AgentAttemptAdapterKind {
+  GenericDelegationRecorder = 'generic-delegation-recorder',
+  ModuleExpertInvocation = 'module-expert-invocation',
+  StaticWorkflowScheduler = 'static-workflow-scheduler',
+}
+
 export enum AgentReasoningEffort {
   Low = 'low',
   Medium = 'medium',
@@ -67,6 +73,8 @@ export enum WorkflowResultKind {
   CortexEvidence = 'cortex-evidence',
   CortexSynthesis = 'cortex-synthesis',
   LoomLeafEvidence = 'loom-leaf-evidence',
+  ModuleDevelopmentPlan = 'module-development-plan',
+  ModuleExpertEvidence = 'module-expert-evidence',
 }
 
 export type WorkflowRunId = string;
@@ -426,14 +434,61 @@ export type WorkflowArtifactReference = {
   readonly description: string;
 };
 
-export type WorkflowTaskOutput = {
-  readonly resultKind: WorkflowResultKind;
+export type ModuleExpertContinuation = {
+  readonly externalApi: readonly string[];
+  readonly dependencies: readonly string[];
+  readonly consumers: readonly string[];
+  readonly behaviorInvariants: readonly string[];
+  readonly securityInvariants: readonly string[];
+  readonly compatibilityInvariants: readonly string[];
+  readonly owningTests: readonly string[];
+  readonly focusedValidation: readonly string[];
+  readonly risks: readonly string[];
+  readonly unresolvedDecisions: readonly string[];
+  readonly parentActions: readonly string[];
+};
+
+export type ModuleExpertAuthorization = {
+  readonly task: string;
+  readonly expert: string;
+  readonly attempt: WorkflowAttemptNumber;
+  readonly depth: number;
+  readonly parent: ParentAgentAttempt;
+};
+
+type WorkflowTaskOutputFields = {
   readonly summary: string;
   readonly materializedViewMarkdown: string;
   readonly findings: readonly WorkflowFinding[];
   readonly notesForParent: readonly string[];
   readonly artifacts: readonly WorkflowArtifactReference[];
 };
+
+export type StandardWorkflowTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind:
+    | WorkflowResultKind.CortexEvidence
+    | WorkflowResultKind.CortexSynthesis
+    | WorkflowResultKind.LoomLeafEvidence;
+  readonly continuation?: never;
+  readonly moduleExpertAuthorizations?: never;
+};
+
+export type ModuleDevelopmentPlanTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.ModuleDevelopmentPlan;
+  readonly continuation?: never;
+  readonly moduleExpertAuthorizations: readonly ModuleExpertAuthorization[];
+};
+
+export type ModuleExpertTaskOutput = WorkflowTaskOutputFields & {
+  readonly resultKind: WorkflowResultKind.ModuleExpertEvidence;
+  readonly continuation: ModuleExpertContinuation;
+  readonly moduleExpertAuthorizations?: never;
+};
+
+export type WorkflowTaskOutput =
+  | StandardWorkflowTaskOutput
+  | ModuleDevelopmentPlanTaskOutput
+  | ModuleExpertTaskOutput;
 
 export type ProjectionReference = {
   readonly path: string;

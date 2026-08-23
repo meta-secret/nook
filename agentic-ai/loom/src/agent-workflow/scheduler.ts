@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import {
+  AgentAttemptAdapterKind,
   TaskTargetKind,
   TaskTerminalKind,
   TaskProcessingKind,
@@ -769,6 +770,7 @@ function resolveAgentJournalConfiguration<
         }
       : { kind: AgentAttemptParentKind.WorkflowRoot };
   return {
+    adapter: AgentAttemptAdapterKind.StaticWorkflowScheduler,
     runDirectory: resolution.configuration.journal.runDirectory,
     runId: resolution.configuration.runId,
     workflow: resolution.configuration.journal.identity.workflow,

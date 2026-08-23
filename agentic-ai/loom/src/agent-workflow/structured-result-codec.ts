@@ -1,9 +1,12 @@
 import {
+  AgentAttemptParentKind,
   WorkflowArtifactKind,
   WorkflowFindingSeverity,
   WorkflowResultKind,
 } from './domain.ts';
 import type {
+  ModuleExpertContinuation,
+  ModuleExpertAuthorization,
   WorkflowArtifactReference,
   WorkflowFinding,
   WorkflowTaskOutput,
@@ -13,13 +16,81 @@ import {
   isRecord,
   untrustedYamlProperty,
 } from '../lib/guards.ts';
-
-export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
 import type {
   UntrustedYamlMap,
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
+
+export const MAX_MATERIALIZED_VIEW_MARKDOWN_LENGTH = 65_536;
+const MAX_CONTINUATION_ENTRIES = 100;
+const MAX_CONTINUATION_ENTRY_LENGTH = 4096;
+const MAX_MODULE_EXPERT_AUTHORIZATIONS = 100;
+
+const STANDARD_WORKFLOW_RESULT_KINDS = [
+  WorkflowResultKind.CortexEvidence,
+  WorkflowResultKind.CortexSynthesis,
+  WorkflowResultKind.LoomLeafEvidence,
+] as const;
+
+const MODULE_EXPERT_CONTINUATION_FIELDS = [
+  'externalApi',
+  'dependencies',
+  'consumers',
+  'behaviorInvariants',
+  'securityInvariants',
+  'compatibilityInvariants',
+  'owningTests',
+  'focusedValidation',
+  'risks',
+  'unresolvedDecisions',
+  'parentActions',
+] as const;
+
+const MODULE_EXPERT_CONTINUATION_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: MODULE_EXPERT_CONTINUATION_FIELDS,
+  properties: {
+    externalApi: continuationSequenceSchema(),
+    dependencies: continuationSequenceSchema(),
+    consumers: continuationSequenceSchema(),
+    behaviorInvariants: continuationSequenceSchema(),
+    securityInvariants: continuationSequenceSchema(),
+    compatibilityInvariants: continuationSequenceSchema(),
+    owningTests: continuationSequenceSchema(),
+    focusedValidation: continuationSequenceSchema(),
+    risks: continuationSequenceSchema(),
+    unresolvedDecisions: continuationSequenceSchema(),
+    parentActions: continuationSequenceSchema(),
+  },
+} as const;
+
+const MODULE_EXPERT_AUTHORIZATION_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['task', 'expert', 'attempt', 'depth', 'parent'],
+  properties: {
+    task: { type: 'string', minLength: 1, maxLength: 128 },
+    expert: { type: 'string', minLength: 1, maxLength: 128 },
+    attempt: { type: 'integer', minimum: 1 },
+    depth: { type: 'integer', enum: [2, 3] },
+    parent: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['kind', 'task', 'agent', 'attempt'],
+      properties: {
+        kind: {
+          type: 'string',
+          enum: [AgentAttemptParentKind.AgentAttempt],
+        },
+        task: { type: 'string', minLength: 1, maxLength: 128 },
+        agent: { type: 'string', minLength: 1, maxLength: 128 },
+        attempt: { type: 'integer', minimum: 1 },
+      },
+    },
+  },
+} as const;
 
 export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
   type: 'object',
@@ -33,7 +104,7 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
     'artifacts',
   ],
   properties: {
-    resultKind: { type: 'string', enum: Object.values(WorkflowResultKind) },
+    resultKind: { type: 'string', enum: STANDARD_WORKFLOW_RESULT_KINDS },
     summary: { type: 'string', minLength: 1, maxLength: 4096, pattern: '\\S' },
     materializedViewMarkdown: {
       type: 'string',
@@ -94,6 +165,37 @@ export const WORKFLOW_TASK_OUTPUT_SCHEMA = {
 export function workflowTaskOutputSchema(
   resultKind: WorkflowResultKind,
 ): UntrustedYamlMap {
+  if (resultKind === WorkflowResultKind.ModuleDevelopmentPlan) {
+    return {
+      ...WORKFLOW_TASK_OUTPUT_SCHEMA,
+      required: [
+        ...WORKFLOW_TASK_OUTPUT_SCHEMA.required,
+        'moduleExpertAuthorizations',
+      ],
+      properties: {
+        ...WORKFLOW_TASK_OUTPUT_SCHEMA.properties,
+        resultKind: { type: 'string', enum: [resultKind] },
+        moduleExpertAuthorizations: {
+          type: 'array',
+          minItems: 1,
+          maxItems: MAX_MODULE_EXPERT_AUTHORIZATIONS,
+          uniqueItems: true,
+          items: MODULE_EXPERT_AUTHORIZATION_SCHEMA,
+        },
+      },
+    };
+  }
+  if (resultKind === WorkflowResultKind.ModuleExpertEvidence) {
+    return {
+      ...WORKFLOW_TASK_OUTPUT_SCHEMA,
+      required: [...WORKFLOW_TASK_OUTPUT_SCHEMA.required, 'continuation'],
+      properties: {
+        ...WORKFLOW_TASK_OUTPUT_SCHEMA.properties,
+        resultKind: { type: 'string', enum: [resultKind] },
+        continuation: MODULE_EXPERT_CONTINUATION_SCHEMA,
+      },
+    };
+  }
   return {
     ...WORKFLOW_TASK_OUTPUT_SCHEMA,
     properties: {
@@ -116,17 +218,6 @@ export function decodeWorkflowTaskOutput(
   if (!isRecord(node)) {
     invalidOutput('workflow output must be an object');
   }
-  assertExactKeys([
-    node,
-    [
-      'resultKind',
-      'summary',
-      'materializedViewMarkdown',
-      'findings',
-      'notesForParent',
-      'artifacts',
-    ],
-  ]);
   const resultKindValue = stringValue(readProperty([node, 'resultKind']));
   if (
     !Object.values(WorkflowResultKind).includes(
@@ -135,6 +226,41 @@ export function decodeWorkflowTaskOutput(
   ) {
     invalidOutput('workflow resultKind is invalid');
   }
+  const isModuleExpertEvidence =
+    resultKindValue === WorkflowResultKind.ModuleExpertEvidence;
+  const isModuleDevelopmentPlan =
+    resultKindValue === WorkflowResultKind.ModuleDevelopmentPlan;
+  assertExactKeys([
+    node,
+    isModuleExpertEvidence
+      ? [
+          'resultKind',
+          'summary',
+          'materializedViewMarkdown',
+          'findings',
+          'notesForParent',
+          'artifacts',
+          'continuation',
+        ]
+      : isModuleDevelopmentPlan
+        ? [
+            'resultKind',
+            'summary',
+            'materializedViewMarkdown',
+            'findings',
+            'notesForParent',
+            'artifacts',
+            'moduleExpertAuthorizations',
+          ]
+        : [
+            'resultKind',
+            'summary',
+            'materializedViewMarkdown',
+            'findings',
+            'notesForParent',
+            'artifacts',
+          ],
+  ]);
   const materializedViewMarkdown = stringValue(
     readProperty([node, 'materializedViewMarkdown']),
   );
@@ -147,14 +273,179 @@ export function decodeWorkflowTaskOutput(
       'workflow materialized view must be non-empty, bounded Markdown without control characters',
     );
   }
-  return {
-    resultKind: resultKindValue as WorkflowResultKind,
+  const outputFields = {
     summary: boundedNonBlankString(readProperty([node, 'summary'])),
     materializedViewMarkdown,
     findings: decodeFindings(readProperty([node, 'findings'])),
     notesForParent: stringSequence(readProperty([node, 'notesForParent'])),
     artifacts: decodeArtifacts(readProperty([node, 'artifacts'])),
   };
+  if (isModuleDevelopmentPlan) {
+    return {
+      ...outputFields,
+      resultKind: WorkflowResultKind.ModuleDevelopmentPlan,
+      moduleExpertAuthorizations: decodeModuleExpertAuthorizations(
+        readProperty([node, 'moduleExpertAuthorizations']),
+      ),
+    };
+  }
+  if (!isModuleExpertEvidence) {
+    return {
+      ...outputFields,
+      resultKind: resultKindValue as
+        | WorkflowResultKind.CortexEvidence
+        | WorkflowResultKind.CortexSynthesis
+        | WorkflowResultKind.LoomLeafEvidence,
+    };
+  }
+  return {
+    ...outputFields,
+    resultKind: WorkflowResultKind.ModuleExpertEvidence,
+    continuation: decodeModuleExpertContinuation(
+      readProperty([node, 'continuation']),
+    ),
+  };
+}
+
+function decodeModuleExpertAuthorizations(
+  node: UntrustedYamlNode,
+): readonly ModuleExpertAuthorization[] {
+  if (
+    !Array.isArray(node) ||
+    node.length === 0 ||
+    node.length > MAX_MODULE_EXPERT_AUTHORIZATIONS
+  ) {
+    invalidOutput(
+      'module development plan requires bounded expert authorizations',
+    );
+  }
+  const authorizations = node.map((entry) =>
+    decodeModuleExpertAuthorization(entry),
+  );
+  if (
+    new Set(
+      authorizations.map((entry) => `${entry.task}\u0000${entry.attempt}`),
+    ).size !== authorizations.length
+  ) {
+    invalidOutput(
+      'module expert authorization journal storage keys must be unique',
+    );
+  }
+  return authorizations;
+}
+
+function decodeModuleExpertAuthorization(
+  node: UntrustedYamlNode,
+): ModuleExpertAuthorization {
+  if (!isRecord(node)) {
+    invalidOutput('module expert authorization must be an object');
+  }
+  assertExactKeys([node, ['task', 'expert', 'attempt', 'depth', 'parent']]);
+  const task = stringValue(readProperty([node, 'task']));
+  const expert = stringValue(readProperty([node, 'expert']));
+  const attempt = integerValue(readProperty([node, 'attempt']));
+  const depth = integerValue(readProperty([node, 'depth']));
+  const parentNode = readProperty([node, 'parent']);
+  if (!isRecord(parentNode)) {
+    invalidOutput('module expert authorization parent must be an object');
+  }
+  assertExactKeys([parentNode, ['kind', 'task', 'agent', 'attempt']]);
+  const parentKind = stringValue(readProperty([parentNode, 'kind']));
+  const parentTask = stringValue(readProperty([parentNode, 'task']));
+  const parentAgent = stringValue(readProperty([parentNode, 'agent']));
+  const parentAttempt = integerValue(readProperty([parentNode, 'attempt']));
+  if (
+    parentKind !== AgentAttemptParentKind.AgentAttempt ||
+    !safeIdentifier(task) ||
+    !safeIdentifier(expert) ||
+    !safeIdentifier(parentTask) ||
+    !safeIdentifier(parentAgent) ||
+    attempt < 1 ||
+    parentAttempt < 1 ||
+    (depth !== 2 && depth !== 3) ||
+    (task === parentTask && attempt === parentAttempt)
+  ) {
+    invalidOutput('module expert authorization identity is invalid');
+  }
+  return {
+    task,
+    expert,
+    attempt,
+    depth,
+    parent: {
+      kind: AgentAttemptParentKind.AgentAttempt,
+      task: parentTask,
+      agent: parentAgent,
+      attempt: parentAttempt,
+    },
+  };
+}
+
+function continuationSequenceSchema(): UntrustedYamlMap {
+  return {
+    type: 'array',
+    minItems: 1,
+    maxItems: MAX_CONTINUATION_ENTRIES,
+    uniqueItems: true,
+    items: {
+      type: 'string',
+      minLength: 1,
+      maxLength: MAX_CONTINUATION_ENTRY_LENGTH,
+      pattern: '\\S',
+    },
+  };
+}
+
+function decodeModuleExpertContinuation(
+  node: UntrustedYamlNode,
+): ModuleExpertContinuation {
+  if (!isRecord(node)) {
+    invalidOutput('module expert continuation must be an object');
+  }
+  assertExactKeys([node, MODULE_EXPERT_CONTINUATION_FIELDS]);
+  return {
+    externalApi: continuationSequence(readProperty([node, 'externalApi'])),
+    dependencies: continuationSequence(readProperty([node, 'dependencies'])),
+    consumers: continuationSequence(readProperty([node, 'consumers'])),
+    behaviorInvariants: continuationSequence(
+      readProperty([node, 'behaviorInvariants']),
+    ),
+    securityInvariants: continuationSequence(
+      readProperty([node, 'securityInvariants']),
+    ),
+    compatibilityInvariants: continuationSequence(
+      readProperty([node, 'compatibilityInvariants']),
+    ),
+    owningTests: continuationSequence(readProperty([node, 'owningTests'])),
+    focusedValidation: continuationSequence(
+      readProperty([node, 'focusedValidation']),
+    ),
+    risks: continuationSequence(readProperty([node, 'risks'])),
+    unresolvedDecisions: continuationSequence(
+      readProperty([node, 'unresolvedDecisions']),
+    ),
+    parentActions: continuationSequence(readProperty([node, 'parentActions'])),
+  };
+}
+
+function continuationSequence(node: UntrustedYamlNode): readonly string[] {
+  const values = stringSequence(node);
+  if (
+    values.length === 0 ||
+    values.length > MAX_CONTINUATION_ENTRIES ||
+    new Set(values).size !== values.length ||
+    values.some(
+      (entry) =>
+        entry.trim() === '' ||
+        entry.length > MAX_CONTINUATION_ENTRY_LENGTH ||
+        containsForbiddenControlCharacter(entry),
+    )
+  ) {
+    invalidOutput(
+      'module expert continuation fields require bounded non-empty entries',
+    );
+  }
+  return values;
 }
 
 function containsForbiddenControlCharacter(value: string): boolean {
@@ -252,6 +543,17 @@ function stringValue(node: UntrustedYamlNode): string {
     invalidOutput('workflow structured result expected a string');
   }
   return node;
+}
+
+function integerValue(node: UntrustedYamlNode): number {
+  if (typeof node !== 'number' || !Number.isSafeInteger(node)) {
+    invalidOutput('workflow structured result expected an integer');
+  }
+  return node;
+}
+
+function safeIdentifier(value: string): boolean {
+  return value.length <= 128 && /^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(value);
 }
 
 function boundedNonBlankString(node: UntrustedYamlNode): string {

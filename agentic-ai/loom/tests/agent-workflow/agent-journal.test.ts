@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, test } from 'bun:test';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
@@ -24,6 +25,10 @@ import type { AgentAttemptJournalConfiguration } from '../../src/agent-workflow/
 import type { AgentAttemptEventWithoutMetadata } from '../../src/agent-workflow/agent-events.ts';
 import type { AgentAttemptEvent } from '../../src/agent-workflow/agent-events.ts';
 import type { ReplayAgentAttemptJournalRequest } from '../../src/agent-workflow/agent-replay.ts';
+import {
+  CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+} from '../../src/agent-workflow/agent-attempt-version.ts';
 
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const FIXED_TIME = '2026-08-21T00:00:00.000Z';
@@ -145,6 +150,34 @@ describe('agent attempt journal', () => {
       expect(() => replayAgentAttemptJournal(malformedParentRequest)).toThrow(
         'lineage',
       );
+      const excessiveDepthEvents = parsedEvents.map((event) => ({
+        ...event,
+        depth: 4,
+      }));
+      const excessiveDepthRequest = { events: excessiveDepthEvents };
+      expect(() => replayAgentAttemptJournal(excessiveDepthRequest)).toThrow(
+        'identity is invalid',
+      );
+      const mismatchedAdapterEvents = parsedEvents.map((event) =>
+        event.kind === AgentAttemptEventKind.AttemptTerminalRecorded
+          ? {
+              ...event,
+              adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+            }
+          : event,
+      );
+      const mismatchedAdapterRequest = { events: mismatchedAdapterEvents };
+      expect(() => replayAgentAttemptJournal(mismatchedAdapterRequest)).toThrow(
+        'identity changed within the stream',
+      );
+      const unknownAdapterEvents = parsedEvents.map((event) => ({
+        ...event,
+        adapter: 'caller-forged-adapter',
+      })) as never as readonly AgentAttemptEvent[];
+      const unknownAdapterRequest = { events: unknownAdapterEvents };
+      expect(() => replayAgentAttemptJournal(unknownAdapterRequest)).toThrow(
+        'identity is invalid',
+      );
       const wrongAuthorEvents = parsedEvents.map((event) => {
         if (
           event.kind !== AgentAttemptEventKind.ViewProjected &&
@@ -213,20 +246,134 @@ describe('agent attempt journal', () => {
     }
   });
 
+  test('rejects module expert evidence from a generic journal adapter', async () => {
+    const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-origin-'));
+    const removeOptions: RmOptions = { recursive: true, force: true };
+    try {
+      const genericConfiguration: AgentAttemptJournalConfiguration = {
+        ...configuration(runDirectory),
+        adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+      };
+      const journal = new AgentAttemptJournal<'inspect'>(genericConfiguration);
+      await journal.initialize();
+      const terminal: CompletedTaskTerminal<'inspect'> = {
+        kind: TaskTerminalKind.Completed,
+        task: 'inspect',
+        attempt: 1,
+        threadId: 'generic-thread',
+        output: {
+          resultKind: WorkflowResultKind.ModuleExpertEvidence,
+          summary: 'Caller-forged expert evidence.',
+          materializedViewMarkdown: '# Forged evidence\n\nRejected.',
+          findings: [],
+          notesForParent: [],
+          artifacts: [],
+          continuation: {
+            externalApi: ['Public facade.'],
+            dependencies: ['Direct provider.'],
+            consumers: ['Immediate consumer.'],
+            behaviorInvariants: ['Preserve behavior.'],
+            securityInvariants: ['Preserve security.'],
+            compatibilityInvariants: ['Preserve compatibility.'],
+            owningTests: ['Provider tests.'],
+            focusedValidation: ['Focused validation.'],
+            risks: ['No additional risk.'],
+            unresolvedDecisions: ['No unresolved decision.'],
+            parentActions: ['Review evidence without scheduling from it.'],
+          },
+        },
+      };
+
+      await expect(journal.finalize(terminal)).rejects.toThrow(
+        'isolated invocation adapter',
+      );
+    } finally {
+      await rm(runDirectory, removeOptions);
+    }
+  });
+
+  test('rejects a structurally forged module expert journal adapter', () => {
+    const forgedConfiguration = configuration('/tmp');
+    Reflect.set(
+      forgedConfiguration,
+      'adapter',
+      AgentAttemptAdapterKind.ModuleExpertInvocation,
+    );
+
+    expect(() => new AgentAttemptJournal(forgedConfiguration)).toThrow(
+      'runtime completion authority',
+    );
+  });
+
   test('rejects path traversal in attempt identities', () => {
     const unsafe = { ...configuration('/tmp'), task: '../escape' };
     expect(() => new AgentAttemptJournal(unsafe)).toThrow(
       'Unsafe agent processing identifier',
     );
   });
+
+  test('rejects hierarchy depth greater than three', () => {
+    const excessiveDepth = { ...configuration('/tmp'), depth: 4 };
+    expect(() => new AgentAttemptJournal(excessiveDepth)).toThrow(
+      'hierarchy depth must be bounded',
+    );
+  });
+
+  test('rejects legacy and unsupported attempt journal schemas', () => {
+    const legacyConfiguration: AgentAttemptJournalConfiguration = {
+      ...configuration('/tmp'),
+      workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+    };
+    expect(() => new AgentAttemptJournal(legacyConfiguration)).toThrow(
+      'legacy and cannot establish adapter provenance',
+    );
+
+    const legacyWithoutAdapter = {
+      kind: AgentAttemptEventKind.AttemptStarted,
+      runId: 'run-1',
+      workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
+      workflowVersion: LEGACY_AGENT_ATTEMPT_WORKFLOW_VERSION,
+      sourceCommit: SOURCE_COMMIT,
+      task: 'inspect',
+      agent: 'auditor',
+      attempt: 1,
+      depth: 1,
+      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
+      sequence: 1,
+      occurredAt: FIXED_TIME,
+    } as never as AgentAttemptEvent;
+    const legacyReplayRequest = { events: [legacyWithoutAdapter] };
+    expect(() => replayAgentAttemptJournal(legacyReplayRequest)).toThrow(
+      'Remove or explicitly migrate the persisted attempt',
+    );
+
+    const currentWithoutAdapter = {
+      ...legacyWithoutAdapter,
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+    };
+    const currentReplayRequest = { events: [currentWithoutAdapter] };
+    expect(() => replayAgentAttemptJournal(currentReplayRequest)).toThrow(
+      'identity is invalid',
+    );
+
+    const unsupportedVersion = {
+      ...legacyWithoutAdapter,
+      workflowVersion: '3.0.0',
+    };
+    const unsupportedReplayRequest = { events: [unsupportedVersion] };
+    expect(() => replayAgentAttemptJournal(unsupportedReplayRequest)).toThrow(
+      'version is unsupported',
+    );
+  });
 });
 
 function configuration(runDirectory: string): AgentAttemptJournalConfiguration {
   return {
+    adapter: AgentAttemptAdapterKind.StaticWorkflowScheduler,
     runDirectory,
     runId: 'run-1',
     workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-    workflowVersion: '1.0.0',
+    workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
     sourceCommit: SOURCE_COMMIT,
     task: 'inspect',
     agent: 'auditor',

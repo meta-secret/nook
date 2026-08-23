@@ -24,6 +24,10 @@ Before dispatch:
    The parent finalizes it with
    `task loom:agent-delegation:record REQUEST=<request.json>`. Static Loom
    workflows record the same contract automatically.
+5. Keep hierarchy depth at three or less.
+   - Normal work uses synthesis at depth 1 and experts at depth 2.
+   - Depth 3 must be exceptional and predeclared by the reviewed parent.
+   - A child must not freely delegate or create another tier.
 
 For every reached agent attempt:
 
@@ -44,3 +48,8 @@ Before continuation or completion:
 
 Never allow a child stream to become an independent scheduling authority.
 Never parse Markdown to decide workflow transitions.
+
+For module-oriented work, also load
+[`module-oriented-development.md`](../../../.cortex/workflows/module-oriented-development.md)
+and the named
+[`module expert registry`](../../../.cortex/architecture/module-experts.md).

@@ -111,6 +111,40 @@ A retry is a new attempt of the same logical task.
 - The parent validates the result against current task state.
 - The parent does not merge worker conclusions blindly.
 
+## Module-oriented feature development
+
+Module-oriented work follows
+[module-oriented-development.md](module-oriented-development.md).
+
+- Keep the feature dependency DAG separate from agent parent lineage.
+- Use the named read-only profiles in the
+  [module expert registry](../architecture/module-experts.md).
+- Run module experts only through Loom's isolated non-delegating SDK runtime.
+  Native child spawning inherits the delivery session's live permissions and
+  is not an authorized read-only boundary.
+- Invoke `internal_api_expert` when a changed contract crosses a module
+  boundary.
+- Freeze provider-consumer edges before implementation.
+- Continue from accepted providers to immediate consumers.
+- Keep shared files and lifecycle state with the delivery owner.
+
+The hierarchy has a hard maximum depth of three.
+
+- Depth 1 is feature synthesis or materialization.
+- Depth 2 contains named module and internal API experts.
+- Depth 3 is exceptional and must be declared before dispatch.
+- Depth greater than three is invalid.
+
+Children cannot freely create grandchildren.
+No agent may add a task, create a new tier, or schedule a successor.
+The completed depth-one parent publishes a typed `ModuleDevelopmentPlan` with
+the exact task, expert, attempt, depth, and immediate-parent identity before a
+named expert is invoked.
+Loom replay-verifies that plan before creating the child journal.
+Only this parent plan may predeclare a bounded depth-three specialist.
+The immediate depth-two parent must also be completed before depth three runs.
+`ModuleExpertEvidence` and `parentActions` are never scheduling authority.
+
 ## Hierarchical event protocol
 
 Subagent work is an event-sourced hierarchy.
@@ -142,8 +176,20 @@ The stream records bounded observable actions and outcomes. It never records:
 - raw command output;
 - raw SDK errors or stack traces.
 
-Every event carries the exact workflow, version, source commit, task, agent,
-attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
+Every event carries the exact adapter, workflow, version, source commit, task,
+agent, attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
+
+The current adapter-bearing attempt schema uses workflow version `2.0.0`.
+
+- Generic delegation, named module experts, and compiled static agent tasks emit
+  that version.
+- Version `1.0.0` is the legacy pre-provenance schema.
+- Loom rejects legacy attempt creation and replay with migration guidance.
+- A disposable legacy local run must be removed before retrying.
+- A retained legacy run requires an explicit trusted migration.
+- A migration must not infer a missing adapter from paths, result kinds, or
+  terminal content.
+- Missing adapter provenance under version `2.0.0` is invalid evidence.
 
 - Sequence is monotonic inside one stream.
 - Cross-stream global ordering is not claimed.
@@ -167,6 +213,9 @@ The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
 contract used by compiled workflows. It rejects reuse of an existing attempt
 directory. This gives collaboration-tool subagents a journal boundary without
 making their transcript or Markdown output into scheduling authority.
+The generic adapter cannot record `ModuleExpertEvidence`.
+Named module experts use their isolated invocation adapter and its separately
+verified authorization boundary.
 
 The record request contains:
 
@@ -358,6 +407,8 @@ Before integration, verify:
   view;
 - every projection path and digest matches its recorded bytes;
 - every child records the correct parent lineage;
+- every attempt depth is at most three;
+- no child dynamically created a task or tier;
 - every parent aggregate covers the declared child terminal barrier;
 - the root aggregate is the input to the delivery owner's final report;
 - skipped branches are recorded;

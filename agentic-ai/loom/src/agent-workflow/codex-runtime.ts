@@ -1,15 +1,18 @@
 import { Codex } from '@openai/codex-sdk';
 import type {
+  McpToolCallItem,
   ModelReasoningEffort,
   ThreadEvent,
   ThreadOptions,
   TurnOptions,
 } from '@openai/codex-sdk';
 import { AgentReasoningEffort, AgentWorkspacePolicy } from './domain.ts';
+import type { WorkflowResultKind } from './domain.ts';
 import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
   AgentTaskRuntime,
+  RuntimeActivityObserver,
 } from './runtime.ts';
 import {
   decodeWorkflowTaskOutput,
@@ -19,6 +22,16 @@ import { WorkflowRuntimeActivityKind } from './events.ts';
 import type { RuntimeActivityObservation } from './events.ts';
 import { runCommand } from '../lib/run.ts';
 import type { RunCommandArgs } from '../lib/run.ts';
+import {
+  MODULE_EXPERT_CONTEXT_MCP,
+  moduleExpertThreadOptions,
+  withModuleExpertRuntimeIsolation,
+} from '../module-experts/runtime-contract.ts';
+import type {
+  ModuleExpertRuntimeIsolationRequest,
+  ModuleExpertRuntimeIsolationUse,
+} from '../module-experts/runtime-contract.ts';
+import { MODULE_EXPERT_READ_CONTEXT_TOOLS } from '../module-experts/read-context-mcp.ts';
 
 export enum AgentSourceStabilityPhase {
   BeforeAttempt = 'before attempt',
@@ -35,84 +48,188 @@ export class CodexSdkAgentRuntime<
   TTask extends string,
   TAgent extends string,
 > implements AgentTaskRuntime<TTask, TAgent> {
-  readonly codex: Codex;
-
-  constructor() {
-    this.codex = new Codex();
-  }
+  readonly codex = new Codex();
 
   async executeAgent(
     invocation: AgentExecutionInvocation<TTask, TAgent>,
   ): Promise<AgentExecutionCompletion> {
-    if (
-      invocation.agentProfile.workspacePolicy !== AgentWorkspacePolicy.ReadOnly
-    ) {
-      throw new Error('Write-capable Codex workflow workers are not enabled.');
-    }
-    const beforeAttempt: AgentSourceStabilityCheck = {
-      workingDirectory: invocation.workingDirectory,
-      sourceCommit: invocation.sourceCommit,
-      phase: AgentSourceStabilityPhase.BeforeAttempt,
+    const execution: GuardedAgentExecution<TTask, TAgent> = {
+      codex: this.codex,
+      invocation,
     };
-    assertAgentSourceStable(beforeAttempt);
-    try {
-      const threadOptions: ThreadOptions = {
-        workingDirectory: invocation.workingDirectory,
-        sandboxMode: 'read-only',
-        approvalPolicy: 'never',
-        modelReasoningEffort: reasoningEffort(
-          invocation.agentProfile.reasoningEffort,
-        ),
-        networkAccessEnabled: false,
-      };
-      const thread = this.codex.startThread(threadOptions);
-      const prompt = buildPrompt(invocation);
-      const outputSchema = workflowTaskOutputSchema(
-        invocation.execution.resultKind,
-      );
-      const turnOptions: TurnOptions = {
-        outputSchema,
-        signal: invocation.signal,
-      };
-      const streamedTurn = await thread.runStreamed(prompt, turnOptions);
-      let threadId = '';
-      let serializedOutput = '';
-      for await (const event of streamedTurn.events) {
-        if (event.type === 'thread.started') {
-          threadId = event.thread_id;
-        }
-        if (
-          event.type === 'item.completed' &&
-          event.item.type === 'agent_message'
-        ) {
-          serializedOutput = event.item.text;
-        }
-        const observation = normalizeEvent(event);
-        if (observation) {
-          await invocation.observe(observation);
-        }
-      }
-      if (threadId.length === 0 || serializedOutput.length === 0) {
-        throw new Error(
-          'Codex completed without a thread identity or structured result.',
-        );
-      }
-      const output = decodeWorkflowTaskOutput(serializedOutput);
-      if (output.resultKind !== invocation.execution.resultKind) {
-        throw new Error(
-          `Codex result kind ${output.resultKind} does not match ${invocation.execution.resultKind}.`,
-        );
-      }
-      return { threadId, output };
-    } finally {
-      const afterAttempt: AgentSourceStabilityCheck = {
-        workingDirectory: invocation.workingDirectory,
-        sourceCommit: invocation.sourceCommit,
-        phase: AgentSourceStabilityPhase.AfterAttempt,
-      };
-      assertAgentSourceStable(afterAttempt);
+    return executeGuardedAgent(execution);
+  }
+}
+
+export class ModuleExpertCodexSdkAgentRuntime<
+  TTask extends string,
+  TAgent extends string,
+> implements AgentTaskRuntime<TTask, TAgent> {
+  async executeAgent(
+    invocation: AgentExecutionInvocation<TTask, TAgent>,
+  ): Promise<AgentExecutionCompletion> {
+    const executionArgs: RunIsolatedModuleExpertCodexArgs<TTask, TAgent> = {
+      invocation,
+    };
+    return runIsolatedModuleExpertCodex(executionArgs);
+  }
+}
+
+export type RunIsolatedModuleExpertCodexArgs<
+  TTask extends string,
+  TAgent extends string,
+> = {
+  readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+};
+
+export async function runIsolatedModuleExpertCodex<
+  TTask extends string,
+  TAgent extends string,
+>(
+  args: RunIsolatedModuleExpertCodexArgs<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
+  const invocation = args.invocation;
+  const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+    expertName: invocation.agentProfile.name,
+    parentEnvironment: process.env,
+    sourceCommit: invocation.sourceCommit,
+    workingDirectory: invocation.workingDirectory,
+  };
+  const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
+    {
+      isolationRequest,
+      run: async (isolation) => {
+        const execution: GuardedAgentExecution<TTask, TAgent> = {
+          codex: new Codex(isolation.codexOptions),
+          invocation,
+          threadOptions: isolation.threadOptions,
+        };
+        return executeGuardedAgent(execution);
+      },
+    };
+  return withModuleExpertRuntimeIsolation(isolationUse);
+}
+
+type GuardedAgentExecution<TTask extends string, TAgent extends string> = {
+  readonly codex: Codex;
+  readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly threadOptions?: ThreadOptions;
+};
+
+export type CollectCodexTurnArgs = {
+  readonly events: AsyncIterable<ThreadEvent>;
+  readonly expectedResultKind: WorkflowResultKind;
+  readonly observe: RuntimeActivityObserver;
+};
+
+async function executeGuardedAgent<TTask extends string, TAgent extends string>(
+  execution: GuardedAgentExecution<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
+  if (
+    execution.invocation.agentProfile.workspacePolicy !==
+    AgentWorkspacePolicy.ReadOnly
+  ) {
+    throw new Error('Write-capable Codex workflow workers are not enabled.');
+  }
+  const beforeAttempt: AgentSourceStabilityCheck = {
+    workingDirectory: execution.invocation.workingDirectory,
+    sourceCommit: execution.invocation.sourceCommit,
+    phase: AgentSourceStabilityPhase.BeforeAttempt,
+  };
+  assertAgentSourceStable(beforeAttempt);
+  try {
+    return await executeStableAgent(execution);
+  } finally {
+    const afterAttempt: AgentSourceStabilityCheck = {
+      workingDirectory: execution.invocation.workingDirectory,
+      sourceCommit: execution.invocation.sourceCommit,
+      phase: AgentSourceStabilityPhase.AfterAttempt,
+    };
+    assertAgentSourceStable(afterAttempt);
+  }
+}
+
+async function executeStableAgent<TTask extends string, TAgent extends string>(
+  execution: GuardedAgentExecution<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
+  const moduleExpertThreadOptionsArgs = {
+    workingDirectory: execution.invocation.workingDirectory,
+  };
+  const baseThreadOptions =
+    execution.threadOptions ??
+    moduleExpertThreadOptions(moduleExpertThreadOptionsArgs);
+  const threadOptions: ThreadOptions = {
+    ...baseThreadOptions,
+    modelReasoningEffort: reasoningEffort(
+      execution.invocation.agentProfile.reasoningEffort,
+    ),
+  };
+  const thread = execution.codex.startThread(threadOptions);
+  const prompt = buildPrompt(execution.invocation);
+  const outputSchema = workflowTaskOutputSchema(
+    execution.invocation.execution.resultKind,
+  );
+  const turnOptions: TurnOptions = {
+    outputSchema,
+    signal: execution.invocation.signal,
+  };
+  const streamedTurn = await thread.runStreamed(prompt, turnOptions);
+  const collectionArgs: CollectCodexTurnArgs = {
+    events: streamedTurn.events,
+    expectedResultKind: execution.invocation.execution.resultKind,
+    observe: execution.invocation.observe,
+  };
+  return collectCodexTurn(collectionArgs);
+}
+
+export async function collectCodexTurn(
+  args: CollectCodexTurnArgs,
+): Promise<AgentExecutionCompletion> {
+  let threadId = '';
+  let serializedOutput = '';
+  let turnCompleted = false;
+  let terminalFailureSeen = false;
+  for await (const event of args.events) {
+    if (event.type === 'thread.started') {
+      threadId = event.thread_id;
+    }
+    if (event.type === 'turn.completed') {
+      turnCompleted = true;
+    }
+    if (event.type === 'turn.failed' || event.type === 'error') {
+      terminalFailureSeen = true;
+    }
+    if (
+      !terminalFailureSeen &&
+      event.type === 'item.completed' &&
+      event.item.type === 'agent_message'
+    ) {
+      serializedOutput = event.item.text;
+    }
+    const observation = normalizeEvent(event);
+    if (observation) {
+      await args.observe(observation);
     }
   }
+  if (terminalFailureSeen) {
+    throw new Error('Codex turn failed before a valid structured result.');
+  }
+  if (
+    !turnCompleted ||
+    threadId.length === 0 ||
+    serializedOutput.length === 0
+  ) {
+    throw new Error(
+      'Codex completed without a thread identity or structured result.',
+    );
+  }
+  const output = decodeWorkflowTaskOutput(serializedOutput);
+  if (output.resultKind !== args.expectedResultKind) {
+    throw new Error(
+      `Codex result kind ${output.resultKind} does not match ${args.expectedResultKind}.`,
+    );
+  }
+  return { threadId, output };
 }
 
 export function assertAgentSourceStable(
@@ -216,6 +333,9 @@ function normalizeEvent(
       `File change ${event.item.status}.`,
     ]);
   }
+  if (event.item.type === 'mcp_tool_call') {
+    return sourceReadObservation(event.item);
+  }
   if (event.item.type === 'agent_message') {
     return observation([
       WorkflowRuntimeActivityKind.AgentMessageCompleted,
@@ -223,6 +343,45 @@ function normalizeEvent(
     ]);
   }
   return false;
+}
+
+function sourceReadObservation(
+  item: McpToolCallItem,
+): RuntimeActivityObservation | false {
+  if (item.server !== MODULE_EXPERT_CONTEXT_MCP) {
+    return false;
+  }
+  const action = sourceReadAction(item.tool);
+  if (!action) {
+    return false;
+  }
+  return observation([
+    WorkflowRuntimeActivityKind.SourceReadCompleted,
+    `Repository ${action} ${sourceReadStatus(item.status)}.`,
+  ]);
+}
+
+function sourceReadAction(tool: string): string | false {
+  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[0]) {
+    return 'file listing';
+  }
+  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[1]) {
+    return 'file read';
+  }
+  if (tool === MODULE_EXPERT_READ_CONTEXT_TOOLS[2]) {
+    return 'text search';
+  }
+  return false;
+}
+
+function sourceReadStatus(status: McpToolCallItem['status']): string {
+  if (status === 'completed') {
+    return 'completed';
+  }
+  if (status === 'failed') {
+    return 'failed';
+  }
+  return 'ended without a terminal status';
 }
 
 type ObservationValues = readonly [WorkflowRuntimeActivityKind, string];

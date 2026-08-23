@@ -88,6 +88,14 @@ Agents must follow this navigation and search protocol:
   the root delivery owner authors the final report. Treat bypasses as P1
   violations. See [workflows/subagent-delegation.md](workflows/subagent-delegation.md)
   and [the executable skill](../.agents/skills/subagent-delegation/SKILL.md).
+- **Flat agent hierarchy:** Keep every local agent lineage at depth three or
+  less. Normal work uses synthesis at depth 1 and named experts at depth 2.
+  Depth 3 is exceptional and predeclared. Children cannot add tasks or tiers.
+- **Module-oriented development:** Plan feature contracts top-down and continue
+  implementation bottom-up from accepted providers to their consumers. Route
+  read-only expertise through
+  [architecture/module-experts.md](architecture/module-experts.md) and follow
+  [workflows/module-oriented-development.md](workflows/module-oriented-development.md).
 - **Feature ownership boundary:** Keep this rule: agents mutate only their owned feature.
   - Another active agent's work is read-only.
   - When ownership is missing or ambiguous, wait for an explicit user, owner, or orchestrator handoff.
@@ -122,6 +130,8 @@ Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) 
 
 - [Subagent delegation](workflows/subagent-delegation.md) owns hierarchical
   worker boundaries, event streams, semantic views, and parent aggregation.
+- [Module expert registry](architecture/module-experts.md) owns named read-only
+  expert routing, internal API scope, production coverage, and exclusions.
 
 - **Dynamic Skills Registry:** [dynamic-skills/index.md](dynamic-skills/index.md) (executable rules for Rust, TypeScript, Svelte, Testing, UI Design, and Code Hygiene).
 - **Product Specifications:** [product-specs/index.md](product-specs/index.md) (living specifications for user-facing features, item schemas, and UX workflows).

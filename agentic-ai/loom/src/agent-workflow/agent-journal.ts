@@ -8,11 +8,13 @@ import {
 } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   MaterializedViewAuthorKind,
   MaterializedViewPresence,
   TaskTerminalKind,
   TaskProcessingKind,
+  WorkflowResultKind,
 } from './domain.ts';
 import type {
   AgentAttemptParent,
@@ -35,12 +37,29 @@ import type {
   AgentAttemptEventWithoutMetadata,
 } from './agent-events.ts';
 import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
+import { MAX_AGENT_HIERARCHY_DEPTH } from './hierarchy.ts';
+import {
+  consumeModuleExpertCompletionAuthority,
+  consumeModuleExpertJournalAuthority,
+} from '../module-experts/trusted-runtime.ts';
+import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
+import type {
+  ModuleExpertJournalAuthority,
+  ModuleExpertJournalBinding,
+  ModuleExpertRuntimeIdentity,
+  TrustedModuleExpertExecution,
+} from '../module-experts/trusted-runtime.ts';
 
 const RECURSIVE_DIRECTORY_OPTIONS: { readonly recursive: true } = {
   recursive: true,
 };
 
+export type AgentAttemptJournalAdapter =
+  | AgentAttemptAdapterKind.GenericDelegationRecorder
+  | AgentAttemptAdapterKind.StaticWorkflowScheduler;
+
 export type AgentAttemptJournalConfiguration = {
+  readonly adapter: AgentAttemptJournalAdapter;
   readonly runDirectory: string;
   readonly runId: WorkflowRunId;
   readonly workflow: AgentProcessingWorkflowName;
@@ -54,6 +73,32 @@ export type AgentAttemptJournalConfiguration = {
   readonly now: () => IsoTimestamp;
 };
 
+export type ModuleExpertAttemptJournalConfiguration = Omit<
+  AgentAttemptJournalConfiguration,
+  'adapter'
+>;
+
+export type CreateModuleExpertAttemptJournalArgs = {
+  readonly configuration: ModuleExpertAttemptJournalConfiguration;
+  readonly authority: ModuleExpertJournalAuthority;
+  readonly identity: ModuleExpertRuntimeIdentity;
+};
+
+type ConfigurationIdentityMatchArgs = {
+  readonly configuration: ModuleExpertAttemptJournalConfiguration;
+  readonly identity: ModuleExpertRuntimeIdentity;
+};
+
+export type FinalizeModuleExpertAttemptArgs<TTask extends string> = {
+  readonly terminal: TaskTerminal<TTask>;
+  readonly execution: TrustedModuleExpertExecution;
+};
+
+const PENDING_MODULE_EXPERT_CONFIGURATIONS = new WeakMap<
+  AgentAttemptJournalConfiguration,
+  ModuleExpertJournalBinding
+>();
+
 export class AgentAttemptJournal<TTask extends string> {
   readonly attemptDirectory: string;
   readonly eventsPath: string;
@@ -61,8 +106,25 @@ export class AgentAttemptJournal<TTask extends string> {
   private sequence: WorkflowEventSequence;
   private pendingAppend: Promise<void>;
   private finalized: boolean;
+  private readonly moduleExpertJournalBinding:
+    ModuleExpertJournalBinding | false;
+  private trustedModuleExpertFinalization: boolean;
 
   constructor(configuration: AgentAttemptJournalConfiguration) {
+    const pendingBinding =
+      PENDING_MODULE_EXPERT_CONFIGURATIONS.get(configuration);
+    const adapter = configuration.adapter as AgentAttemptAdapterKind;
+    if (adapter === AgentAttemptAdapterKind.ModuleExpertInvocation) {
+      if (!pendingBinding) {
+        throw new Error(
+          'Module expert journals require runtime completion authority.',
+        );
+      }
+      PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(configuration);
+    } else if (!Object.values(AgentAttemptAdapterKind).includes(adapter)) {
+      throw new Error('Agent attempt adapter provenance is invalid.');
+    }
+    assertCurrentAgentAttemptWorkflowVersion(configuration.workflowVersion);
     assertFilesystemIdentifier(configuration.task);
     assertFilesystemIdentifier(configuration.agent);
     assertFilesystemIdentifier(configuration.runId);
@@ -72,7 +134,7 @@ export class AgentAttemptJournal<TTask extends string> {
       configuration.attempt < 1 ||
       !Number.isSafeInteger(configuration.depth) ||
       configuration.depth < 1 ||
-      configuration.depth > 64
+      configuration.depth > MAX_AGENT_HIERARCHY_DEPTH
     ) {
       throw new Error('Agent attempt and hierarchy depth must be bounded.');
     }
@@ -95,6 +157,8 @@ export class AgentAttemptJournal<TTask extends string> {
     this.sequence = 0;
     this.pendingAppend = Promise.resolve();
     this.finalized = false;
+    this.moduleExpertJournalBinding = pendingBinding ?? false;
+    this.trustedModuleExpertFinalization = false;
   }
 
   get eventHighWaterMark(): WorkflowEventSequence {
@@ -128,6 +192,7 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent attempt event timestamp is invalid.');
     }
     const metadata: AgentAttemptEventMetadata = {
+      adapter: this.configuration.adapter,
       runId: this.configuration.runId,
       workflow: this.configuration.workflow,
       workflowVersion: this.configuration.workflowVersion,
@@ -189,6 +254,34 @@ export class AgentAttemptJournal<TTask extends string> {
     return { kind: TaskProcessingKind.AgentAttempt, events, result, view };
   }
 
+  async finalizeModuleExpert(
+    args: FinalizeModuleExpertAttemptArgs<TTask>,
+  ): Promise<AgentAttemptProcessingReference> {
+    if (!this.moduleExpertJournalBinding) {
+      throw new Error('Module expert journal binding is missing.');
+    }
+    const terminal = args.terminal;
+    if (terminal.kind !== TaskTerminalKind.Completed) {
+      throw new Error('Module expert completion terminal is invalid.');
+    }
+    const terminalCompletion = {
+      threadId: terminal.threadId,
+      output: terminal.output,
+    };
+    const consumeArgs = {
+      binding: this.moduleExpertJournalBinding,
+      execution: args.execution,
+      terminalCompletion,
+    };
+    consumeModuleExpertCompletionAuthority(consumeArgs);
+    this.trustedModuleExpertFinalization = true;
+    try {
+      return await this.finalize(terminal);
+    } finally {
+      this.trustedModuleExpertFinalization = false;
+    }
+  }
+
   private assertTerminal(terminal: TaskTerminal<TTask>): void {
     if (
       terminal.task !== this.configuration.task ||
@@ -197,7 +290,17 @@ export class AgentAttemptJournal<TTask extends string> {
       throw new Error('Agent terminal identity differs from its journal.');
     }
     if (terminal.kind === TaskTerminalKind.Completed) {
-      decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
+      const output = decodeWorkflowTaskOutput(JSON.stringify(terminal.output));
+      const adapter = this.configuration.adapter as AgentAttemptAdapterKind;
+      if (
+        output.resultKind === WorkflowResultKind.ModuleExpertEvidence &&
+        (adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
+          !this.trustedModuleExpertFinalization)
+      ) {
+        throw new Error(
+          'Module expert evidence requires the isolated invocation adapter.',
+        );
+      }
       const view = terminal.output?.materializedViewMarkdown;
       if (
         typeof terminal.threadId !== 'string' ||
@@ -294,6 +397,41 @@ export class AgentAttemptJournal<TTask extends string> {
   }
 }
 
+export function createModuleExpertAttemptJournal<TTask extends string>(
+  args: CreateModuleExpertAttemptJournalArgs,
+): AgentAttemptJournal<TTask> {
+  const matchArgs: ConfigurationIdentityMatchArgs = {
+    configuration: args.configuration,
+    identity: args.identity,
+  };
+  if (!configurationMatchesIdentity(matchArgs)) {
+    throw new Error('Module expert journal identity is invalid.');
+  }
+  const consumeArgs = {
+    authority: args.authority,
+    identity: args.identity,
+  };
+  const binding = consumeModuleExpertJournalAuthority(consumeArgs);
+  const parentValue: AgentAttemptParent = { ...args.configuration.parent };
+  const parent = Object.freeze(parentValue);
+  const configuration: AgentAttemptJournalConfiguration = {
+    ...args.configuration,
+    parent,
+    adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
+  };
+  PENDING_MODULE_EXPERT_CONFIGURATIONS.set(configuration, binding);
+  const adapterSet = Reflect.set(
+    configuration,
+    'adapter',
+    AgentAttemptAdapterKind.ModuleExpertInvocation,
+  );
+  if (!adapterSet) {
+    PENDING_MODULE_EXPERT_CONFIGURATIONS.delete(configuration);
+    throw new Error('Module expert journal provenance could not be sealed.');
+  }
+  return new AgentAttemptJournal<TTask>(configuration);
+}
+
 type JsonProjectionInput<TTask extends string> = {
   readonly filename: string;
   readonly value: TaskTerminal<TTask>;
@@ -317,6 +455,24 @@ async function atomicWrite(operation: AtomicWriteOperation): Promise<void> {
 
 function sha256(serialized: string): string {
   return createHash('sha256').update(serialized).digest('hex');
+}
+
+function configurationMatchesIdentity(
+  args: ConfigurationIdentityMatchArgs,
+): boolean {
+  const { configuration, identity } = args;
+  return (
+    configuration.runDirectory === identity.runDirectory &&
+    configuration.workflow === identity.workflow &&
+    configuration.workflowVersion === identity.workflowVersion &&
+    configuration.runId === identity.runId &&
+    configuration.sourceCommit === identity.sourceCommit &&
+    configuration.task === identity.task &&
+    configuration.agent === identity.agent &&
+    configuration.attempt === identity.attempt &&
+    configuration.depth === identity.depth &&
+    JSON.stringify(configuration.parent) === JSON.stringify(identity.parent)
+  );
 }
 
 function assertFilesystemIdentifier(identifier: string): void {

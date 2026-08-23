@@ -36,6 +36,7 @@ import type {
   WorkflowJournalConfiguration,
 } from '../../src/agent-workflow/journal.ts';
 import type { ReplayWorkflowJournalRequest } from '../../src/agent-workflow/replay.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
 
 enum TestTask {
   Inspect = 'inspect',
@@ -55,7 +56,7 @@ describe('workflow journal', () => {
         identity: {
           runId: 'exclusive-run',
           workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-          workflowVersion: '1.0.0',
+          workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
           sourceCommit: SOURCE_COMMIT,
         },
         now: () => STARTED_AT,
@@ -79,7 +80,7 @@ describe('workflow journal', () => {
         identity: {
           runId: 'run-1',
           workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-          workflowVersion: '1.0.0',
+          workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
           sourceCommit: SOURCE_COMMIT,
         },
         now: () => STARTED_AT,
@@ -169,7 +170,7 @@ describe('workflow journal', () => {
         kind: WorkflowTerminalKind.Completed,
         runId: 'run-1',
         workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-        version: '1.0.0',
+        version: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
         sourceCommit: SOURCE_COMMIT,
         taskTerminals: [taskTerminal],
         materializedView: await journal.projectWorkflowView(rootViewInput),
@@ -373,7 +374,7 @@ describe('workflow journal', () => {
       kind: WorkflowEventKind.WorkflowStarted,
       runId: 'run-1',
       workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-      workflowVersion: '1.0.0',
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sequence: 1,
       occurredAt: STARTED_AT,
       sourceCommit: SOURCE_COMMIT,
@@ -383,7 +384,7 @@ describe('workflow journal', () => {
       kind: WorkflowEventKind.TaskTerminalRecorded,
       runId: 'run-2',
       workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-      workflowVersion: '1.0.0',
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sequence: 3,
       occurredAt: FINISHED_AT,
       sourceCommit: SOURCE_COMMIT,
@@ -420,7 +421,7 @@ describe('workflow journal', () => {
       kind: WorkflowEventKind.WorkflowStarted,
       runId: 'run-1',
       workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-      workflowVersion: '1.0.0',
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sequence: 1,
       occurredAt: STARTED_AT,
       sourceCommit: SOURCE_COMMIT,
@@ -430,7 +431,7 @@ describe('workflow journal', () => {
       kind: WorkflowEventKind.TaskTerminalRecorded,
       runId: 'run-2',
       workflow: StaticAgentWorkflowName.CortexFullGarbageCollection,
-      workflowVersion: '1.0.0',
+      workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
       sequence: 2,
       occurredAt: FINISHED_AT,
       sourceCommit: SOURCE_COMMIT,
