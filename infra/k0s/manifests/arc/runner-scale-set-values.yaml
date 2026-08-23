@@ -11,6 +11,8 @@ controllerServiceAccount:
 
 listenerTemplate:
   spec:
+    nodeSelector:
+      nook.nokey.sh/node-role: control-storage
     containers:
       - name: listener
         securityContext:
@@ -34,6 +36,8 @@ template:
     labels:
       nook.nokey.sh/role: arc-runner
   spec:
+    nodeSelector:
+      nook.nokey.sh/arc-build: "true"
     runtimeClassName: kata-qemu-runtime-rs
     automountServiceAccountToken: false
     enableServiceLinks: false

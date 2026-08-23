@@ -238,7 +238,7 @@ tasks:
              find '$remote_dir/agentic-ai/minds' \
                -type d -name target -prune -exec rm -rf -- {} +; \
            fi"
-        tar -C "$repo_root" \
+        COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" \
           --exclude='agentic-ai/minds/target' \
           --exclude='agentic-ai/minds/*/target' \
           -cf - \

@@ -3,7 +3,9 @@
 This directory is deployed only through `infra/Taskfile.yml`. From the
 repository root, `task infra:deploy` validates the target, installs k0s and
 Kata, deploys persistent Neo4j and Zot, publishes the Hive image to Zot through
-the target's loopback endpoint, and rolls out four Kata-backed workers.
+the target's loopback endpoint, and rolls out four Kata-backed workers. A
+dedicated compute node joins through WireGuard and receives only ephemeral ARC
+runner Pods.
 
 Pinned platform:
 
@@ -17,6 +19,27 @@ Pinned platform:
 - Kata runtime-rs classes `kata-dragonball` for persistent Hive workers and
   `kata-qemu-runtime-rs` for ARC builds, including the dedicated Hive scale set
 - A loop-backed Btrfs ARC pool with private 32 GiB reflinked BuildKit images
+
+Cluster roles:
+
+- The KS-6 node owns the control plane, Neo4j, Zot, Hive, ARC controllers, and
+  ARC listeners. It is labeled `nook.nokey.sh/node-role=control-storage`.
+- The Rise-S NVMe node owns ARC runner microVMs and their disposable caches. It
+  is labeled `nook.nokey.sh/arc-build=true`.
+- WireGuard addresses `10.202.0.1` and `10.202.0.2` carry authenticated node and
+  Pod traffic. The stable API address remains `10.201.0.1`.
+- ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
+  warm, and both scale sets can create up to ten concurrent runners.
+
+Join or reconcile the compute node only through the Taskfile:
+
+```text
+task --taskfile infra/Taskfile.yml k0s:worker:deploy \
+  INFRA_WORKER_SSH_TARGET=debian@167.114.209.184
+```
+
+The worker stays tainted until Kata, the local cache pool, the BuildKit image,
+and ARC converge. The task removes that taint only after qualification.
 
 Install the pinned operator console and its credential-free kubeconfig through
 the root Taskfile, then use it directly after SSH login:
@@ -63,7 +86,8 @@ Service at `10.96.90.10:5000`. Traefik publishes it at
 `:5000` listener and no `kubectl port-forward`. k0s uninstall never removes the
 registry data.
 ARC storage uses a separate Task-managed Btrfs image under
-`/var/lib/nook-arc-buildkit`. The host filesystem remains ext4. Runner Pods
+`/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
+filesystem remains ext4. Runner Pods
 receive two narrow mounts. The trusted preparation init container sees only the
 shared clone-request directory. The private BuildKit native sidecar sees only
 the pool entry selected for its Kubernetes Pod UID. No other container mounts

@@ -24,3 +24,12 @@ runtimeClasses:
 
 node-feature-discovery:
   enabled: false
+
+# A new compute node stays gated from ARC until its local BuildKit pool and
+# image are ready. The installer must tolerate that gate so Kata can be
+# qualified before ARC removes it.
+tolerations:
+  - key: nook.nokey.sh/arc-build
+    operator: Equal
+    value: preparing
+    effect: NoSchedule

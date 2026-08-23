@@ -5,9 +5,10 @@
 Status: Implemented in the repository; deployment and live-state verification
 are performed through the infrastructure Taskfile.
 
-Hive is Nook's self-hosted, stateful AI-agent platform. It runs on the dedicated
-Linux machine addressed by the default infrastructure target
-`debian@ssh-ovh-borg-1.bynull.link`. k0s manages the Kubernetes cluster,
+Hive is Nook's self-hosted, stateful AI-agent platform. Its control and storage
+services run on the dedicated Linux machine addressed by the default
+infrastructure target `debian@ssh-ovh-borg-1.bynull.link`. Dedicated compute
+nodes join the same k0s cluster through authenticated WireGuard transport.
 containerd starts Kata Containers microVMs, and Neo4j persists the task graph,
 leases, attempts, results, and dependency artifacts.
 
@@ -49,7 +50,8 @@ or durable Hive state.
 
 ```mermaid
 flowchart TB
-  subgraph host["Dedicated Debian host"]
+  subgraph cluster["k0s cluster"]
+    subgraph host["Control and storage node"]
     k0s["k0s + containerd"]
     registry["Authenticated Zot registry"]
 
@@ -68,6 +70,12 @@ flowchart TB
       end
       reaper_controller["Reaper controller (runc)"]
     end
+    end
+
+    subgraph compute["NVMe compute node"]
+      arc["Ephemeral ARC runner Pods (Kata QEMU)"]
+      buildkit["Per-job BuildKit + reflink cache"]
+    end
   end
 
   workbench["Nook Workbench"] --> dispatcher
@@ -80,15 +88,24 @@ flowchart TB
   reaper --> reaper_controller
   reaper_controller --> k0s
   k0s --> pod
+  k0s --> arc
+  arc --> buildkit
   registry --> k0s
 ```
 
-The initial cluster is deliberately single-node. Neo4j runs with the normal
-container runtime because it is a persistent infrastructure service. The
-dispatcher and every task worker use `kata-dragonball`. Dragonball is the
-Rust-based VMM built into Kata runtime-rs; it provides the full CRI and
-virtio-fs behavior required by Hive with lower startup and memory overhead than
-QEMU. The authoritative
+The cluster separates durable control and storage from disposable build
+compute. The control node is labeled
+`nook.nokey.sh/node-role=control-storage`. Neo4j, Zot, Hive, ARC controllers,
+and ARC listeners remain there. Compute nodes are labeled
+`nook.nokey.sh/arc-build=true`; both ARC runner scale sets select only those
+nodes. Node and Pod traffic crosses an authenticated WireGuard mesh on
+`10.202.0.0/24`. The Kubernetes API retains its stable `10.201.0.1` address.
+
+Neo4j runs with the normal container runtime because it is a persistent
+infrastructure service. The dispatcher and every task worker use
+`kata-dragonball`. Dragonball is the Rust-based VMM built into Kata runtime-rs;
+it provides the full CRI and virtio-fs behavior required by Hive with lower
+startup and memory overhead than QEMU. The authoritative
 version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
 [`infra/Taskfile.yml`](../../infra/Taskfile.yml) composition root and its
 reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
@@ -561,12 +578,12 @@ Pod loopback. It executes images loaded by Main browser and runtime jobs inside
 that job's disposable Kata guest. BuildKit and Podman are privileged inside the
 guest. The Pod has no Kubernetes service-account token or host runtime socket.
 
-The host maintains one loop-backed Btrfs pool on its existing ext4 filesystem.
-This avoids repartitioning the production node. The sparse pool has 768 GiB of
-logical capacity for twenty fully allocated 32 GiB job images, one trusted
-32 GiB ext4 seed image, Btrfs metadata, and operational headroom. The 24 GB
-BuildKit garbage-collection target normally keeps physical use below that hard
-capacity envelope.
+Each qualified ARC compute node maintains one loop-backed Btrfs pool on its
+local NVMe-backed ext4 filesystem. The sparse pool has 768 GiB of logical
+capacity for twenty fully allocated 32 GiB job images, one trusted 32 GiB ext4
+seed image, Btrfs metadata, and operational headroom. The 24 GB BuildKit
+garbage-collection target normally keeps physical use below that hard capacity
+envelope. Durable Hive and registry data never depend on this disposable pool.
 
 Runner startup follows this ordered storage boundary:
 
@@ -609,7 +626,9 @@ Neither scale set keeps warm runners. ARC creates a new Pod and microVM for
 each job and removes it afterward. `nook-k0s` serves ordinary trusted Rust
 jobs. `nook-k0s-hive` serves Hive Rust verification with a pinned Neo4j
 native sidecar in the same Pod. Both set `maxRunners: 10`; this is concurrency,
-not a retained pool.
+not a retained pool. A preparation taint prevents a new compute node from
+receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
+node selectors are all qualified.
 
 The ordinary Pod requests 1 CPU and 5 GiB. The Hive Pod requests 1.25 CPUs and
 5 GiB. Both retain a 16 GiB aggregate container limit. The dedicated Hive set

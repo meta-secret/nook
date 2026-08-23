@@ -87,6 +87,10 @@ const tasks = contract({
   label: "ARC tasks",
   source: await read("infra/tasks/arc.yml"),
 });
+const workerTasks = contract({
+  label: "k0s worker tasks",
+  source: await read("infra/tasks/k0s-workers.yml"),
+});
 const remoteWorkflow = contract({
   label: "remote workflow",
   source: await read(".github/workflows/remote.yml"),
@@ -155,6 +159,7 @@ runners.requireAll([
   'limits:\n            cpu: "2"\n            memory: 2Gi',
   "runAsNonRoot: true",
   "runtimeClassName: kata-qemu-runtime-rs",
+  'nodeSelector:\n      nook.nokey.sh/arc-build: "true"',
   "--oci-worker-snapshotter",
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
@@ -205,8 +210,26 @@ for (const prohibited of [
   runners.forbid(prohibited);
 }
 kataValues.require("qemu-runtime-rs:\n    enabled: true");
-controller.require("updateStrategy: eventual");
+kataValues.requireAll([
+  "key: nook.nokey.sh/arc-build",
+  "value: preparing",
+]);
+controller.requireAll([
+  "updateStrategy: eventual",
+  "nodeSelector:\n  nook.nokey.sh/node-role: control-storage",
+]);
 network.require("policyTypes:\n    - Ingress");
+workerTasks.requireAll([
+  "10.202.0.1",
+  "10.202.0.2",
+  "wg-quick@wg-nook.service",
+  "hive.nook.sh/storage=local",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule",
+  "k0s token create --role worker --expiry 15m",
+  "sudo -n rm -f /etc/k0s/worker-token",
+  "runtimeClassName: kata-qemu-runtime-rs",
+  "task: arc:deploy",
+]);
 
 const renderedDirectory = mkdtempSync(join(tmpdir(), "nook-arc-hive-values-"));
 try {
@@ -233,6 +256,7 @@ try {
     template: {
       spec: {
         runtimeClassName: string;
+        nodeSelector: Record<string, string>;
         initContainers: Array<{
           name: string;
           image: string;
@@ -257,6 +281,9 @@ try {
   const hivePod = hiveValues.template.spec;
   if (hivePod.runtimeClassName !== "kata-qemu-runtime-rs")
     throw new Error("Hive ARC must use Kata QEMU");
+  if (hivePod.nodeSelector["nook.nokey.sh/arc-build"] !== "true") {
+    throw new Error("Hive ARC must run only on qualified build nodes");
+  }
   const sidecars = new Map(
     hivePod.initContainers.map((item) => [item.name, item]),
   );
