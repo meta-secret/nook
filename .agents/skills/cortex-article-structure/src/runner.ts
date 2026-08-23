@@ -8,6 +8,7 @@ import {
   CortexArticleContractKind,
   type CortexArticleStructureResult,
 } from './domain.ts';
+import { verifyCortexArticleStructureResult } from './verification.ts';
 
 type ValidateCortexArticleOutputRequest = {
   readonly serializedRequest: string;
@@ -28,37 +29,10 @@ async function executeCortexArticleStructure(
 async function validateCortexArticleStructure(
   request: ValidateCortexArticleOutputRequest,
 ): Promise<void> {
-  const decodedRequest = decodeCortexArticleRequest(request.serializedRequest);
-  const decodedResult = decodeCortexArticleResult(request.serializedResult);
-  const maximumLines = new Map(
-    decodedRequest.documents.map((document) => [
-      document.relativePath,
-      lineCount(document.content),
-    ]),
-  );
-  if (decodedRequest.migrationLedger.content !== false) {
-    maximumLines.set(
-      decodedRequest.migrationLedger.relativePath,
-      lineCount(decodedRequest.migrationLedger.content),
-    );
-  }
-  const findingIdentities = new Set<string>();
-  for (const finding of decodedResult.findings) {
-    const availableLines = maximumLines.get(finding.file);
-    const identity = JSON.stringify(finding);
-    if (
-      typeof availableLines !== 'number' ||
-      finding.line > availableLines ||
-      findingIdentities.has(identity)
-    ) {
-      throw new Error('Cortex article-structure result validation failed.');
-    }
-    findingIdentities.add(identity);
-  }
-}
-
-function lineCount(content: string): number {
-  return content.split(/\r?\n/u).length;
+  const auditRequest = decodeCortexArticleRequest(request.serializedRequest);
+  const result = decodeCortexArticleResult(request.serializedResult);
+  const verificationRequest = { auditRequest, result };
+  verifyCortexArticleStructureResult(verificationRequest);
 }
 
 export async function runCortexArticleStructureSkill(

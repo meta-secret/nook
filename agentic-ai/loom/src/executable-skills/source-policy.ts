@@ -225,6 +225,8 @@ function isForbiddenAmbientIdentifier(node: ts.Identifier): boolean {
     node.text === 'Reflect' ||
     node.text === 'WebSocket' ||
     node.text === 'WebAssembly' ||
+    node.text === 'Worker' ||
+    node.text === 'SharedWorker' ||
     node.text === 'global' ||
     node.text === 'module' ||
     node.text === 'require' ||

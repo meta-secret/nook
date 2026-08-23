@@ -345,23 +345,63 @@ test('rejects malformed or wrong-kind results before trust promotion', () => {
 });
 
 test('container denies repository writes and network access', async () => {
+  const dockerConfig = mkdtempSync(
+    path.join(tmpdir(), 'nook-docker-proxy-config-'),
+  );
+  const proxySentinel = 'nook-host-proxy-credential';
+  const proxyConfig = {
+    proxies: {
+      default: {
+        allProxy: `socks5://${proxySentinel}`,
+        ftpProxy: `http://${proxySentinel}`,
+        httpProxy: `http://${proxySentinel}`,
+        httpsProxy: `https://${proxySentinel}`,
+        noProxy: proxySentinel,
+      },
+    },
+  };
+  writeFileSync(
+    path.join(dockerConfig, 'config.json'),
+    JSON.stringify(proxyConfig),
+  );
+  const probeRequest = {
+    probe: ExecutableSkillAcceptanceProbe.Containment,
+    rebuildImage: false,
+    signal: false,
+  } as const;
+  await executeExecutableSkillAcceptanceProbe(probeRequest);
   const mutationRequest: ApplyHostEnvironmentRequest = {
-    values: { [HOST_CREDENTIAL_NAME]: 'synthetic-host-credential' },
+    values: {
+      [HOST_CREDENTIAL_NAME]: 'synthetic-host-credential',
+      DOCKER_CONFIG: dockerConfig,
+    },
   };
   const originalEnvironment = applyHostEnvironment(mutationRequest);
   try {
-    const probeRequest = {
-      probe: ExecutableSkillAcceptanceProbe.Containment,
-      rebuildImage: false,
-      signal: false,
-    } as const;
     const result = await executeExecutableSkillAcceptanceProbe(probeRequest);
-    const expectedContainment = {
-      credentialAbsent: true,
-      networkBlocked: true,
-      writeBlocked: true,
-    };
-    expect(JSON.parse(result.serializedOutput)).toEqual(expectedContainment);
+    const containment = JSON.parse(result.serializedOutput);
+    expect(containment.credentialAbsent).toBe(true);
+    expect(containment.networkBlocked).toBe(true);
+    expect(containment.writeBlocked).toBe(true);
+    expect(Array.isArray(containment.environment)).toBe(true);
+    expect(containment.environment.join('\n')).not.toContain(proxySentinel);
+    expect(result.containerEnvironment.join('\n')).not.toContain(proxySentinel);
+    const proxyVariables = [
+      'ALL_PROXY',
+      'FTP_PROXY',
+      'HTTPS_PROXY',
+      'HTTP_PROXY',
+      'NO_PROXY',
+      'all_proxy',
+      'ftp_proxy',
+      'http_proxy',
+      'https_proxy',
+      'no_proxy',
+    ];
+    for (const variable of proxyVariables) {
+      expect(result.containerEnvironment).toContain(`${variable}=`);
+      expect(containment.environment).toContain(`${variable}=`);
+    }
     const forbiddenFile = lstatSync(
       path.join(
         REPOSITORY_ROOT,
@@ -375,6 +415,7 @@ test('container denies repository writes and network access', async () => {
       values: originalEnvironment,
     };
     restoreHostEnvironment(restoreRequest);
+    rmSync(dockerConfig, REMOVE_TREE_OPTIONS);
   }
 });
 
@@ -744,6 +785,18 @@ test('shared AST policy rejects forbidden forms in nested sources', async () => 
     "import { WASI } from 'node:wasi';\nvoid WASI;\n",
     'const compile = WebAssembly.compile;\nvoid compile;\n',
     "const schedule = setTimeout;\nschedule('1 + 1', 0);\n",
+    "new Worker('data:text/javascript,postMessage(1)');\n",
+    "new Worker('./worker.ts');\n",
+    "const WorkerLauncher = Worker;\nnew WorkerLauncher('./worker.ts');\n",
+    'void Worker;\n',
+    "new SharedWorker('data:text/javascript,postMessage(1)');\n",
+    "const SharedLauncher = SharedWorker;\nSharedLauncher('./worker.ts');\n",
+    "new globalThis.Worker('./worker.ts');\n",
+    "new self.Worker('./worker.ts');\n",
+    "new window.Worker('./worker.ts');\n",
+    "new globalThis['Worker']('./worker.ts');\n",
+    "import { Worker as ThreadWorker } from 'node:worker_threads';\nnew ThreadWorker('./worker.ts');\n",
+    "new Bun.Worker('./worker.ts');\n",
     'void Bun.env.SECRET;\n',
     'const runtime = Bun;\nvoid runtime;\n',
     "Bun.spawn(['true']);\n",

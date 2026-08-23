@@ -21,5 +21,8 @@ try {
 
 const credentialAbsent =
   typeof Bun.env.NOOK_EXECUTABLE_SKILL_HOST_CREDENTIAL !== 'string';
-const result = { credentialAbsent, networkBlocked, writeBlocked };
+const environment = Object.keys(Bun.env)
+  .sort()
+  .map((name) => `${name}=${Bun.env[name] ?? ''}`);
+const result = { credentialAbsent, environment, networkBlocked, writeBlocked };
 await Bun.write(Bun.stdout, JSON.stringify(result));

@@ -25,6 +25,7 @@ export enum ExecutableSkillAcceptanceProbe {
 }
 
 export type ExecutableSkillAcceptanceEvidence = {
+  readonly containerEnvironment: readonly string[];
   readonly probe: ExecutableSkillAcceptanceProbe;
   readonly serializedOutput: string;
 };
@@ -41,10 +42,7 @@ export async function executeExecutableSkillAcceptanceProbe(
   assertExecutableSkillNotCancelled(request.signal);
   const repositoryRoot = findRepoRoot();
   const fixtureRoot = '.agents/skills/cortex-article-structure/tests/fixtures';
-  const manifestName =
-    request.probe === ExecutableSkillAcceptanceProbe.Timeout
-      ? 'timeout-manifest.json'
-      : 'containment-manifest.json';
+  const manifestName = acceptanceManifestName(request.probe);
   const manifestPath = path.join(repositoryRoot, fixtureRoot, manifestName);
   const manifest = decodeExecutableSkillManifest(
     readFileSync(manifestPath, 'utf8'),
@@ -89,8 +87,19 @@ export async function executeExecutableSkillAcceptanceProbe(
     throw new Error('Executable skill acceptance container failed.');
   }
   const evidence: ExecutableSkillAcceptanceEvidence = {
+    containerEnvironment: output.containerEnvironment,
     probe: request.probe,
     serializedOutput: output.stdout,
   };
   return Object.freeze(evidence);
+}
+
+function acceptanceManifestName(probe: ExecutableSkillAcceptanceProbe): string {
+  if (probe === ExecutableSkillAcceptanceProbe.Timeout) {
+    return 'timeout-manifest.json';
+  }
+  if (probe === ExecutableSkillAcceptanceProbe.Overflow) {
+    return 'overflow-manifest.json';
+  }
+  return 'containment-manifest.json';
 }

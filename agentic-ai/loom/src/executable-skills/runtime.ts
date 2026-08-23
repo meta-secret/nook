@@ -78,6 +78,7 @@ type RunAttachedContainerRequest = {
 };
 
 export type DockerSkillOutput = {
+  readonly containerEnvironment: readonly string[];
   readonly exitCode: number;
   readonly stderr: string;
   readonly stdout: string;
@@ -122,6 +123,18 @@ const CONTAINER_SKILLS_ROOT = '/skills';
 const SEALED_IMAGE_LABEL = 'nook.executable-skill-closure';
 const SEALED_RECIPE_LABEL = 'nook.executable-skill-recipe';
 const CONTAINER_SOURCE_TREE_LABEL = 'nook.executable-skill-source-tree';
+const SANITIZED_CONTAINER_PROXY_VARIABLES = [
+  'ALL_PROXY',
+  'FTP_PROXY',
+  'HTTPS_PROXY',
+  'HTTP_PROXY',
+  'NO_PROXY',
+  'all_proxy',
+  'ftp_proxy',
+  'http_proxy',
+  'https_proxy',
+  'no_proxy',
+] as const;
 export const PROVISIONING_TIMEOUT_MS = EXECUTABLE_SKILL_PROVISIONING_TIMEOUT_MS;
 const TEARDOWN_TIMEOUT_MS = EXECUTABLE_SKILL_TEARDOWN_ATTEMPT_TIMEOUT_MS;
 
@@ -398,6 +411,9 @@ export async function runDockerSkill(
   const deadline = request.deadline;
   const image = request.image;
   const containerRunner = request.closure.runnerImagePath;
+  const sanitizedProxyArguments = SANITIZED_CONTAINER_PROXY_VARIABLES.flatMap(
+    (variable) => ['--env', `${variable}=`],
+  );
   const createCommand = [
     'docker',
     'create',
@@ -423,6 +439,7 @@ export async function runDockerSkill(
     '65532:65532',
     '--env',
     'HOME=/tmp',
+    ...sanitizedProxyArguments,
     '--tmpfs',
     '/tmp:rw,noexec,nosuid,size=16m',
     '--workdir',
@@ -469,8 +486,19 @@ export async function runDockerSkill(
     serializedRequest: request.serializedRequest,
     signal: request.signal,
   };
-  let attached: Omit<DockerSkillOutput, 'runtimeImageDigest'>;
+  let attached: Omit<
+    DockerSkillOutput,
+    'containerEnvironment' | 'runtimeImageDigest'
+  >;
+  let containerEnvironment: readonly string[];
   try {
+    const environmentRequest: InspectContainerEnvironmentRequest = {
+      containerName,
+      deadline,
+      signal: request.signal,
+    };
+    containerEnvironment =
+      await inspectContainerEnvironment(environmentRequest);
     attached = await runAttachedContainer(attachedRequest);
   } catch (error) {
     await forceRemoveWithRetry(containerName);
@@ -479,8 +507,57 @@ export async function runDockerSkill(
   await forceRemoveWithRetry(containerName);
   return {
     ...attached,
+    containerEnvironment,
     runtimeImageDigest: image.digest,
   };
+}
+
+type InspectContainerEnvironmentRequest = {
+  readonly containerName: string;
+  readonly deadline: DockerDeadline;
+  readonly signal: AbortSignal | false;
+};
+
+async function inspectContainerEnvironment(
+  request: InspectContainerEnvironmentRequest,
+): Promise<readonly string[]> {
+  const command = [
+    'docker',
+    'container',
+    'inspect',
+    '--format',
+    '{{json .Config.Env}}',
+    request.containerName,
+  ];
+  const controlRequest: RunDockerControlRequest = {
+    command,
+    deadline: request.deadline,
+    maximumStderrBytes: 8192,
+    maximumStdoutBytes: 16 * 1024,
+    signal: request.signal,
+    stdin: false,
+  };
+  const inspection = await runDockerControl(controlRequest);
+  if (inspection.exitCode !== 0 || inspection.stderr !== '') {
+    throw new Error(
+      'Executable skill container environment inspection failed.',
+    );
+  }
+  const environment = JSON.parse(inspection.stdout);
+  if (
+    !Array.isArray(environment) ||
+    !environment.every((entry) => typeof entry === 'string')
+  ) {
+    throw new Error('Executable skill container environment is invalid.');
+  }
+  for (const variable of SANITIZED_CONTAINER_PROXY_VARIABLES) {
+    const expected = `${variable}=`;
+    const matches = environment.filter((entry) => entry.startsWith(expected));
+    if (matches.length !== 1 || matches[0] !== expected) {
+      throw new Error('Executable skill container proxy environment leaked.');
+    }
+  }
+  return Object.freeze([...environment]);
 }
 
 async function forceRemoveWithRetry(containerName: string): Promise<void> {
@@ -493,7 +570,9 @@ async function forceRemoveWithRetry(containerName: string): Promise<void> {
 
 async function runAttachedContainer(
   request: RunAttachedContainerRequest,
-): Promise<Omit<DockerSkillOutput, 'runtimeImageDigest'>> {
+): Promise<
+  Omit<DockerSkillOutput, 'containerEnvironment' | 'runtimeImageDigest'>
+> {
   const executionTimeoutMs = remainingMilliseconds(request.deadline);
   const spawnOptions = {
     env: resolveDockerControlEnvironment(),
