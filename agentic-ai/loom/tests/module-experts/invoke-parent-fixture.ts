@@ -1,6 +1,7 @@
 import { join, resolve } from 'node:path';
 import { AgentAttemptJournal } from '../../src/agent-workflow/agent-journal.ts';
 import type { AgentAttemptJournalConfiguration } from '../../src/agent-workflow/agent-journal.ts';
+import type { AgentAttemptJournalAdapter } from '../../src/agent-workflow/agent-journal.ts';
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -38,11 +39,6 @@ export type CreateFailedAttemptArgs = Omit<
   'output'
 >;
 
-export type CreateCompletedAttemptWithAdapterArgs =
-  CreateCompletedAttemptArgs & {
-    readonly adapter: AgentAttemptAdapterKind;
-  };
-
 export async function createAuthorizedDirectParent(
   request: ModuleExpertInvocationRequest,
 ): Promise<void> {
@@ -73,17 +69,11 @@ export async function createAuthorizedDirectParent(
 export async function createCompletedAttempt(
   args: CreateCompletedAttemptArgs,
 ): Promise<void> {
-  const adapterArgs: CreateCompletedAttemptWithAdapterArgs = {
+  const adapterArgs: CreateJournalArgs = {
     ...args,
     adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
   };
-  await createCompletedAttemptWithAdapter(adapterArgs);
-}
-
-export async function createCompletedAttemptWithAdapter(
-  args: CreateCompletedAttemptWithAdapterArgs,
-): Promise<void> {
-  const journal = await createJournal(args);
+  const journal = await createJournal(adapterArgs);
   const terminal: TaskTerminal<string> = {
     kind: TaskTerminalKind.Completed,
     task: args.task,
@@ -127,12 +117,12 @@ export function moduleDevelopmentPlanOutput(
 
 export function moduleExpertEvidenceOutput(): ModuleExpertTaskOutput {
   return {
-    resultKind: WorkflowResultKind.ModuleExpertEvidence,
     summary: 'Inspected module boundary.',
     materializedViewMarkdown: '# Module boundary\n\nInspected.',
     findings: [],
     notesForParent: [],
     artifacts: [],
+    resultKind: WorkflowResultKind.ModuleExpertEvidence,
     continuation: {
       externalApi: ['Public facade.'],
       dependencies: ['Direct provider.'],
@@ -150,7 +140,7 @@ export function moduleExpertEvidenceOutput(): ModuleExpertTaskOutput {
 }
 
 type CreateJournalArgs = CreateFailedAttemptArgs & {
-  readonly adapter: AgentAttemptAdapterKind;
+  readonly adapter: AgentAttemptJournalAdapter;
 };
 
 async function createJournal(

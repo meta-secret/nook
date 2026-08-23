@@ -38,6 +38,8 @@ import type {
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
 import { createAuthorizedDirectParent } from '../module-experts/invoke-parent-fixture.ts';
+import { registerModuleExpertRuntimeMock } from '../module-experts/module-expert-runtime-mock.ts';
+import type { RegisterModuleExpertRuntimeMockArgs } from '../module-experts/module-expert-runtime-mock.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -219,10 +221,14 @@ describe('Codex streamed turn terminal state', () => {
     );
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -243,6 +249,7 @@ describe('Codex streamed turn terminal state', () => {
       );
       expect(eventsSerialized).not.toContain('private streamed failure');
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });

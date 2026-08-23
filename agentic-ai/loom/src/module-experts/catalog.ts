@@ -39,6 +39,10 @@ const PACKAGE_AUTHORITY_PATH = '.cortex/architecture/packages.md';
 const EXPERT_AUTHORITY_PATH = '.cortex/architecture/module-experts.md';
 const MODULE_EXPERT_SKILL_PATH = '.agents/skills/module-expert/SKILL.md';
 const INTERNAL_API_SKILL_PATH = '.agents/skills/internal-api-expert/SKILL.md';
+const DESIGN_TASTE_FRONTEND_SKILL_PATH =
+  '.agents/skills/design-taste-frontend/SKILL.md';
+const EXTENSION_RELEASE_SECURITY_SKILL_PATH =
+  '.agents/skills/browser-extension-release-security/SKILL.md';
 const RESEARCH_ROOT = 'nook-app/nook-web/nook-web-research';
 const APP_COMMON_ROOT = 'nook-app/nook-platform/nook-app-common';
 const AUTH2_ROOT = 'nook-app/nook-platform/nook-auth2';
@@ -57,6 +61,18 @@ export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
 export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/dynamic-skills/internal-api-expert.md',
   ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+] as const;
+
+export const WEB_EXPERT_CANONICAL_CONTEXT_PATHS = [
+  '.cortex/AGENTS.md',
+  '.cortex/dynamic-skills/browser-extension-release-security.md',
+  ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+] as const;
+
+export const WEB_EXPERT_SKILL_PATHS = [
+  MODULE_EXPERT_SKILL_PATH,
+  DESIGN_TASTE_FRONTEND_SKILL_PATH,
+  EXTENSION_RELEASE_SECURITY_SKILL_PATH,
 ] as const;
 
 export const INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS = [
@@ -450,7 +466,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'Read-only expert for production Nook Svelte and TypeScript packages; excludes research and generated-binding adaptation.',
     agentDefinitionPath: '.codex/agents/module-experts/web_expert.toml',
     boundaryScopePaths: [],
-    canonicalContextPaths: MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    canonicalContextPaths: WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
     moduleRoots: [
       'nook-app/nook-web/nook-vault-sentinel',
       'nook-app/nook-web/nook-vault-simple',
@@ -473,7 +489,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'nook-app/nook-web/nook-web-shared/package.json',
     ],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
-    skillPaths: [MODULE_EXPERT_SKILL_PATH],
+    skillPaths: WEB_EXPERT_SKILL_PATHS,
     validationSelectors: ['web:check', 'web:test', 'extension:check'],
   },
 ];

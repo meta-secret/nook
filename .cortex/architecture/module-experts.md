@@ -254,7 +254,21 @@ It identifies:
 - **Dependencies:** Published Rust/WASM contracts and shared web components.
 - **Consumers:** Browser users, extension contexts, and hosted test harnesses.
 - **Entry points:** Each production package's `package.json`.
-- **Skills:** `module-expert` plus task-specific frontend or extension skills.
+- **Skills:** The profile receives one exact fixed bundle.
+  - `module-expert` owns read-only module analysis.
+  - `design-taste-frontend` owns production Svelte interface guidance.
+  - `browser-extension-release-security` owns extension release boundaries.
+- **Skill routing:** Every `web_expert` invocation receives the full bundle.
+  The catalog audit rejects missing, reordered, or additional skill paths.
+- **Skill authority:** `design-taste-frontend` is complete in its executable
+  skill card. `browser-extension-release-security` routes to a canonical
+  Cortex authority. The exact-commit snapshot contains both the executable
+  cards and that linked authority.
+- **Canonical skill context:** The fixed profile adds these exact authorities.
+  - `.cortex/AGENTS.md`
+  - `.cortex/dynamic-skills/browser-extension-release-security.md`
+  - `.cortex/dynamic-skills/module-expert.md`
+  - `.cortex/workflows/module-oriented-development.md`
 - **Validation:** `web:check`, `web:test`, and `extension:check`.
 - **Negative space:** `nook-web-research` and generated-binding adaptation.
 

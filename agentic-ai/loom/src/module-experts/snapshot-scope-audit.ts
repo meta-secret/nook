@@ -1,10 +1,13 @@
 import {
   INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_SKILL_PATHS,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 
 const INTERNAL_API_EXPERT_NAME = 'internal_api_expert';
+const WEB_EXPERT_NAME = 'web_expert';
 const RUST_MODULE_ROOT_PREFIX = 'nook-app/nook-platform/';
 
 export type ModuleExpertSnapshotScopeFinding = {
@@ -30,10 +33,14 @@ export function auditModuleExpertSnapshotScopes(
     (profile) => profile.name === INTERNAL_API_EXPERT_NAME,
   );
   for (const profile of args.profiles) {
-    const expectedContext =
-      profile.name === INTERNAL_API_EXPERT_NAME
-        ? INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS
-        : MODULE_EXPERT_CANONICAL_CONTEXT_PATHS;
+    let expectedContext: readonly string[] =
+      MODULE_EXPERT_CANONICAL_CONTEXT_PATHS;
+    if (profile.name === INTERNAL_API_EXPERT_NAME) {
+      expectedContext = INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS;
+    }
+    if (profile.name === WEB_EXPERT_NAME) {
+      expectedContext = WEB_EXPERT_CANONICAL_CONTEXT_PATHS;
+    }
     const contextComparison: OrderedSnapshotPaths = {
       actual: profile.canonicalContextPaths,
       expected: expectedContext,
@@ -46,6 +53,21 @@ export function auditModuleExpertSnapshotScopes(
           'Module expert snapshots require the exact transitive canonical skill and workflow context.',
       };
       findings.push(finding);
+    }
+    if (profile.name === WEB_EXPERT_NAME) {
+      const skillComparison: OrderedSnapshotPaths = {
+        actual: profile.skillPaths,
+        expected: WEB_EXPERT_SKILL_PATHS,
+      };
+      if (!sameOrderedPaths(skillComparison)) {
+        const finding: ModuleExpertSnapshotScopeFinding = {
+          code: 'invalid-web-expert-skills',
+          path: profile.agentDefinitionPath,
+          message:
+            'web_expert requires the exact cataloged module, frontend, and browser-extension skill bundle.',
+        };
+        findings.push(finding);
+      }
     }
     if (
       profile.name !== INTERNAL_API_EXPERT_NAME &&

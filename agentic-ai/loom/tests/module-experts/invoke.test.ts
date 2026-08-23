@@ -40,6 +40,8 @@ import type {
   ModuleExpertInvocationRequest,
 } from '../../src/module-experts/invoke.ts';
 import { createAuthorizedDirectParent } from './invoke-parent-fixture.ts';
+import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
+import type { RegisterModuleExpertRuntimeMockArgs } from './module-expert-runtime-mock.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -68,12 +70,12 @@ class RecordingAgentRuntime implements AgentTaskRuntime<string, string> {
     return {
       threadId: 'module-expert-thread',
       output: {
-        resultKind: WorkflowResultKind.ModuleExpertEvidence,
         summary: 'Core contract inspected.',
         materializedViewMarkdown: '# Core contract\n\nInspected.',
         findings: [],
         notesForParent: [],
         artifacts: [],
+        resultKind: WorkflowResultKind.ModuleExpertEvidence,
         continuation: moduleExpertContinuation(),
       },
     };
@@ -269,10 +271,14 @@ describe('module expert invocation', () => {
     const request = directRequest(uniqueRunId('module-expert-success'));
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -302,7 +308,11 @@ describe('module expert invocation', () => {
       expect(runtime.invocation).not.toBe(false);
       if (!runtime.invocation) throw new Error('Expected captured invocation.');
       expect(runtime.invocation.runId).toBe(request.runId);
+      expect(runtime.invocation.task).toBe(request.task);
       expect(runtime.invocation.attempt).toBe(request.attempt);
+      expect(runtime.invocation.sourceCommit).toBe(request.sourceCommit);
+      expect(runtime.invocation.signal).toBe(controller.signal);
+      expect(runtime.invocation.upstreamOutputs).toEqual([]);
       expect(runtime.invocation.agentProfile.name).toBe('core_expert');
       expect(runtime.invocation.agentProfile.workspacePolicy).toBe(
         AgentWorkspacePolicy.ReadOnly,
@@ -378,6 +388,7 @@ describe('module expert invocation', () => {
         moduleExpertContinuation(),
       );
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
@@ -387,10 +398,14 @@ describe('module expert invocation', () => {
     const request = directRequest(uniqueRunId('module-expert-duplicate'));
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -400,6 +415,7 @@ describe('module expert invocation', () => {
       await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow();
       expect(runtime.executionCount).toBe(1);
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
@@ -409,10 +425,14 @@ describe('module expert invocation', () => {
     const request = directRequest(uniqueRunId('module-expert-failure'));
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -462,6 +482,7 @@ describe('module expert invocation', () => {
       const resultSerialized = await readFile(resultPath, 'utf8');
       expect(JSON.parse(resultSerialized)).toEqual(result.terminal);
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
@@ -471,10 +492,14 @@ describe('module expert invocation', () => {
     const request = directRequest(uniqueRunId('module-expert-invalid-result'));
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -500,6 +525,7 @@ describe('module expert invocation', () => {
         ),
       ).toHaveLength(1);
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
@@ -509,10 +535,14 @@ describe('module expert invocation', () => {
     const request = directRequest(uniqueRunId('module-expert-incomplete'));
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -534,6 +564,7 @@ describe('module expert invocation', () => {
       ).toHaveLength(1);
       expect(JSON.stringify(events)).not.toContain('Complete-looking report');
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
@@ -543,10 +574,14 @@ describe('module expert invocation', () => {
     const request = directRequest(uniqueRunId('module-expert-corruption'));
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
     try {
@@ -574,6 +609,7 @@ describe('module expert invocation', () => {
         await writeFile(absolutePath, original, 'utf8');
       }
     } finally {
+      runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   });
@@ -620,21 +656,29 @@ describe('module expert invocation', () => {
       selfParentRequest,
     ];
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: valid.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
 
-    for (const request of invalidRequests) {
-      const invokeArgs: InvokeModuleExpertArgs = {
-        repoRoot: REPO_ROOT,
-        request,
-        runtime,
-        signal: controller.signal,
-      };
-      await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-        'request is invalid',
-      );
+    try {
+      for (const request of invalidRequests) {
+        const invokeArgs: InvokeModuleExpertArgs = {
+          repoRoot: REPO_ROOT,
+          request,
+          signal: controller.signal,
+        };
+        await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
+          'request is invalid',
+        );
+      }
+      expect(runtime.executionCount).toBe(0);
+      const runDirectory = processingRunDirectory(valid.runId);
+      expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
+    } finally {
+      runtimeMock.dispose();
     }
-    expect(runtime.executionCount).toBe(0);
-    const runDirectory = processingRunDirectory(valid.runId);
-    expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
   });
 
   test('revalidates the complete direct request before runtime execution', async () => {
@@ -654,21 +698,29 @@ describe('module expert invocation', () => {
     };
     const invalidRequests = [oversizedRequest, controlRequest, extendedRequest];
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: valid.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
 
-    for (const request of invalidRequests) {
-      const invokeArgs: InvokeModuleExpertArgs = {
-        repoRoot: REPO_ROOT,
-        request,
-        runtime,
-        signal: controller.signal,
-      };
-      await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-        'request is invalid',
-      );
+    try {
+      for (const request of invalidRequests) {
+        const invokeArgs: InvokeModuleExpertArgs = {
+          repoRoot: REPO_ROOT,
+          request,
+          signal: controller.signal,
+        };
+        await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
+          'request is invalid',
+        );
+      }
+      expect(runtime.executionCount).toBe(0);
+      const runDirectory = processingRunDirectory(valid.runId);
+      expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
+    } finally {
+      runtimeMock.dispose();
     }
-    expect(runtime.executionCount).toBe(0);
-    const runDirectory = processingRunDirectory(valid.runId);
-    expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
   });
 
   test('rejects an unregistered expert before creating attempt evidence', async () => {
@@ -680,18 +732,26 @@ describe('module expert invocation', () => {
     };
     const runDirectory = processingRunDirectory(request.runId);
     const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: REPO_ROOT,
       request,
-      runtime,
       signal: controller.signal,
     };
 
-    await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
-      'not registered',
-    );
-    expect(runtime.invocation).toBe(false);
-    expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
+    try {
+      await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
+        'not registered',
+      );
+      expect(runtime.executionCount).toBe(0);
+      expect(Bun.file(runDirectory).exists()).resolves.toBe(false);
+    } finally {
+      runtimeMock.dispose();
+    }
   });
 
   test('parses validate and invoke CLI commands without scheduler state', () => {

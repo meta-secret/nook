@@ -246,7 +246,7 @@ describe('agent attempt journal', () => {
     const runDirectory = await mkdtemp(join(tmpdir(), 'loom-agent-origin-'));
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const genericConfiguration = {
+      const genericConfiguration: AgentAttemptJournalConfiguration = {
         ...configuration(runDirectory),
         adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
       };
@@ -286,6 +286,19 @@ describe('agent attempt journal', () => {
     } finally {
       await rm(runDirectory, removeOptions);
     }
+  });
+
+  test('rejects a structurally forged module expert journal adapter', () => {
+    const forgedConfiguration = configuration('/tmp');
+    Reflect.set(
+      forgedConfiguration,
+      'adapter',
+      AgentAttemptAdapterKind.ModuleExpertInvocation,
+    );
+
+    expect(() => new AgentAttemptJournal(forgedConfiguration)).toThrow(
+      'runtime completion authority',
+    );
   });
 
   test('rejects path traversal in attempt identities', () => {

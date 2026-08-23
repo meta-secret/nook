@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { ModuleExpertCodexSdkAgentRuntime } from '../agent-workflow/codex-runtime.ts';
 import { TaskTerminalKind } from '../agent-workflow/domain.ts';
 import { auditModuleExperts } from './audit.ts';
 import type { AuditModuleExpertsArgs } from './audit.ts';
@@ -46,11 +45,9 @@ async function main(): Promise<number> {
   if (commandLine.kind === ModuleExpertCommandKind.Invoke) {
     const serialized = await readFile(commandLine.requestPath, 'utf8');
     const request = decodeModuleExpertInvocationRequest(serialized);
-    const runtime = new ModuleExpertCodexSdkAgentRuntime<string, string>();
     const invokeArgs: InvokeModuleExpertArgs = {
       repoRoot: commandLine.workingDirectory,
       request,
-      runtime,
       signal: AbortSignal.timeout(300_000),
     };
     const result = await invokeModuleExpert(invokeArgs);

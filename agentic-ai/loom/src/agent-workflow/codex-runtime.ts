@@ -65,26 +65,46 @@ export class ModuleExpertCodexSdkAgentRuntime<
   async executeAgent(
     invocation: AgentExecutionInvocation<TTask, TAgent>,
   ): Promise<AgentExecutionCompletion> {
-    const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
-      expertName: invocation.agentProfile.name,
-      parentEnvironment: process.env,
-      sourceCommit: invocation.sourceCommit,
-      workingDirectory: invocation.workingDirectory,
+    const executionArgs: RunIsolatedModuleExpertCodexArgs<TTask, TAgent> = {
+      invocation,
     };
-    const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
-      {
-        isolationRequest,
-        run: async (isolation) => {
-          const execution: GuardedAgentExecution<TTask, TAgent> = {
-            codex: new Codex(isolation.codexOptions),
-            invocation,
-            threadOptions: isolation.threadOptions,
-          };
-          return executeGuardedAgent(execution);
-        },
-      };
-    return withModuleExpertRuntimeIsolation(isolationUse);
+    return runIsolatedModuleExpertCodex(executionArgs);
   }
+}
+
+export type RunIsolatedModuleExpertCodexArgs<
+  TTask extends string,
+  TAgent extends string,
+> = {
+  readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+};
+
+export async function runIsolatedModuleExpertCodex<
+  TTask extends string,
+  TAgent extends string,
+>(
+  args: RunIsolatedModuleExpertCodexArgs<TTask, TAgent>,
+): Promise<AgentExecutionCompletion> {
+  const invocation = args.invocation;
+  const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+    expertName: invocation.agentProfile.name,
+    parentEnvironment: process.env,
+    sourceCommit: invocation.sourceCommit,
+    workingDirectory: invocation.workingDirectory,
+  };
+  const isolationUse: ModuleExpertRuntimeIsolationUse<AgentExecutionCompletion> =
+    {
+      isolationRequest,
+      run: async (isolation) => {
+        const execution: GuardedAgentExecution<TTask, TAgent> = {
+          codex: new Codex(isolation.codexOptions),
+          invocation,
+          threadOptions: isolation.threadOptions,
+        };
+        return executeGuardedAgent(execution);
+      },
+    };
+  return withModuleExpertRuntimeIsolation(isolationUse);
 }
 
 type GuardedAgentExecution<TTask extends string, TAgent extends string> = {

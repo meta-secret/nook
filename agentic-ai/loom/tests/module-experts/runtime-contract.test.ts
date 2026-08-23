@@ -326,6 +326,22 @@ describe('module expert runtime isolation', () => {
         await createModuleExpertRuntimeIsolation(isolationRequest);
       try {
         const webProfile = profile('web_expert');
+        for (const skillPath of webProfile.skillPaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, skillPath),
+              'utf8',
+            ),
+          ).toBe(`committed:${skillPath}\n`);
+        }
+        for (const contextPath of webProfile.canonicalContextPaths) {
+          expect(
+            await readFile(
+              join(isolation.repositorySnapshot, contextPath),
+              'utf8',
+            ),
+          ).toBe(`committed:${contextPath}\n`);
+        }
         for (const excludedPath of webProfile.excludedPaths) {
           await expect(
             access(join(isolation.repositorySnapshot, excludedPath)),
@@ -858,6 +874,9 @@ async function createProfileRepositoryFixture(
   );
   for (const scopePath of selected.scopePaths) {
     await writeFile(join(root, scopePath), 'mutable scope content\n', 'utf8');
+  }
+  for (const skillPath of selected.skillPaths) {
+    await writeFile(join(root, skillPath), 'mutable skill content\n', 'utf8');
   }
   return { committedEntryContent, root, sourceCommit };
 }

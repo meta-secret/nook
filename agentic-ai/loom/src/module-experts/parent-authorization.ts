@@ -43,6 +43,24 @@ export type VerifyModuleExpertParentAuthorizationArgs = {
   readonly expertNames: readonly string[];
 };
 
+export enum ModuleExpertParentAuthorizationKind {
+  Verified = 'verified-module-expert-parent-authorization',
+}
+
+export type VerifiedModuleExpertParentAuthorization = {
+  readonly kind: ModuleExpertParentAuthorizationKind.Verified;
+};
+
+export type ConsumeModuleExpertParentAuthorizationArgs =
+  VerifyModuleExpertParentAuthorizationArgs & {
+    readonly authorization: VerifiedModuleExpertParentAuthorization;
+  };
+
+const VERIFIED_PARENT_AUTHORIZATIONS = new WeakMap<
+  VerifiedModuleExpertParentAuthorization,
+  string
+>();
+
 type ParentAttemptIdentity = {
   readonly task: string;
   readonly agent: string;
@@ -65,7 +83,7 @@ type VerifiedParentAttempt = {
 
 export async function verifyModuleExpertParentAuthorization(
   args: VerifyModuleExpertParentAuthorizationArgs,
-): Promise<void> {
+): Promise<VerifiedModuleExpertParentAuthorization> {
   const immediateIdentity: ParentAttemptIdentity = {
     task: args.request.parent.task,
     agent: args.request.parent.agent,
@@ -111,6 +129,26 @@ export async function verifyModuleExpertParentAuthorization(
   ) {
     authorizationFailed();
   }
+  const authorizationValue = {
+    kind: ModuleExpertParentAuthorizationKind.Verified,
+  } as const;
+  const authorization: VerifiedModuleExpertParentAuthorization =
+    Object.freeze(authorizationValue);
+  VERIFIED_PARENT_AUTHORIZATIONS.set(
+    authorization,
+    parentAuthorizationDigest(args),
+  );
+  return authorization;
+}
+
+export function consumeModuleExpertParentAuthorization(
+  args: ConsumeModuleExpertParentAuthorizationArgs,
+): void {
+  const expected = parentAuthorizationDigest(args);
+  if (VERIFIED_PARENT_AUTHORIZATIONS.get(args.authorization) !== expected) {
+    authorizationFailed();
+  }
+  VERIFIED_PARENT_AUTHORIZATIONS.delete(args.authorization);
 }
 
 type ReadDepthThreeAuthorityArgs = {
@@ -267,6 +305,18 @@ function completedTerminalHasExactKeys(
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function parentAuthorizationDigest(
+  args: VerifyModuleExpertParentAuthorizationArgs,
+): string {
+  const identity = {
+    runDirectory: args.runDirectory,
+    workflowVersion: args.workflowVersion,
+    request: args.request,
+    expertNames: args.expertNames,
+  };
+  return sha256(JSON.stringify(identity));
 }
 
 function authorizationFailed(): never {

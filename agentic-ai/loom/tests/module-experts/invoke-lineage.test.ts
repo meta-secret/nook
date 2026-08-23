@@ -27,11 +27,15 @@ import type {
 } from '../../src/module-experts/invoke.ts';
 import {
   createCompletedAttempt,
-  createCompletedAttemptWithAdapter,
   createFailedAttempt,
   moduleDevelopmentPlanOutput,
   moduleExpertEvidenceOutput,
 } from './invoke-parent-fixture.ts';
+import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
+import type {
+  ModuleExpertRuntimeMockRegistration,
+  RegisterModuleExpertRuntimeMockArgs,
+} from './module-expert-runtime-mock.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -40,6 +44,15 @@ const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
 class CountingRuntime implements AgentTaskRuntime<string, string> {
   executionCount = 0;
+  readonly registration: ModuleExpertRuntimeMockRegistration;
+
+  constructor(runId: string) {
+    const registrationArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId,
+      runtime: this,
+    };
+    this.registration = registerModuleExpertRuntimeMock(registrationArgs);
+  }
 
   async executeAgent(
     invocation: AgentExecutionInvocation<string, string>,
@@ -49,6 +62,10 @@ class CountingRuntime implements AgentTaskRuntime<string, string> {
       threadId: `thread-${invocation.task}`,
       output: moduleExpertEvidenceOutput(),
     };
+  }
+
+  dispose(): void {
+    this.registration.dispose();
   }
 }
 
@@ -64,11 +81,11 @@ test('rejects absent, failed, source-drifted, unauthorized, or corrupted parents
   for (const setupCase of setupCases) {
     const request = directRequest(`parent-${setupCase.name}-${randomUUID()}`);
     const runDirectory = processingRunDirectory(request.runId);
-    const runtime = new CountingRuntime();
+    const runtime = new CountingRuntime(request.runId);
     try {
       const setupArgs: ParentSetupArgs = { request };
       await setupCase.setup(setupArgs);
-      const invocationInput: InvocationArgs = { request, runtime };
+      const invocationInput: InvocationArgs = { request };
       const invokeArgs = invocationArgs(invocationInput);
       await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
         'parent authorization failed',
@@ -82,6 +99,7 @@ test('rejects absent, failed, source-drifted, unauthorized, or corrupted parents
       );
       expect(existsSync(childAttemptDirectory)).toBe(false);
     } finally {
+      runtime.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   }
@@ -90,20 +108,21 @@ test('rejects absent, failed, source-drifted, unauthorized, or corrupted parents
 test('runs a depth-three expert only when the root plan predeclares the exact child', async () => {
   const request = depthThreeRequest(`depth-three-${randomUUID()}`);
   const runDirectory = processingRunDirectory(request.runId);
-  const runtime = new CountingRuntime();
+  const runtime = new CountingRuntime(request.runId);
   try {
     const lineageArgs: CreateDepthThreeLineageArgs = {
       request,
       authorization: authorization(request),
     };
     await createDepthThreeLineage(lineageArgs);
-    const invocationInput: InvocationArgs = { request, runtime };
+    const invocationInput: InvocationArgs = { request };
     const invokeArgs = invocationArgs(invocationInput);
     const result = await invokeModuleExpert(invokeArgs);
 
     expect(result.terminal.kind).toBe(TaskTerminalKind.Completed);
     expect(runtime.executionCount).toBe(1);
   } finally {
+    runtime.dispose();
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }
 });
@@ -111,7 +130,7 @@ test('runs a depth-three expert only when the root plan predeclares the exact ch
 test('does not treat depth-two expert evidence as authority for a grandchild', async () => {
   const request = depthThreeRequest(`depth-three-unplanned-${randomUUID()}`);
   const runDirectory = processingRunDirectory(request.runId);
-  const runtime = new CountingRuntime();
+  const runtime = new CountingRuntime(request.runId);
   const unrelated = {
     ...authorization(request),
     task: 'different-child',
@@ -122,13 +141,14 @@ test('does not treat depth-two expert evidence as authority for a grandchild', a
       authorization: unrelated,
     };
     await createDepthThreeLineage(lineageArgs);
-    const invocationInput: InvocationArgs = { request, runtime };
+    const invocationInput: InvocationArgs = { request };
     const invokeArgs = invocationArgs(invocationInput);
     await expect(invokeModuleExpert(invokeArgs)).rejects.toThrow(
       'parent authorization failed',
     );
     expect(runtime.executionCount).toBe(0);
   } finally {
+    runtime.dispose();
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }
 });
@@ -178,7 +198,9 @@ test('rejects depth-three lineage without a registered expert evidence parent', 
   const cases: readonly InvalidDepthThreeParentCase[] = [
     {
       request: unregisteredRequest,
-      immediateOutput: moduleExpertEvidenceOutput(),
+      immediateOutput: moduleDevelopmentPlanOutput([
+        authorization(unregisteredRequest),
+      ]),
     },
     {
       request: registeredRequest,
@@ -190,18 +212,18 @@ test('rejects depth-three lineage without a registered expert evidence parent', 
 
   for (const testCase of cases) {
     const runDirectory = processingRunDirectory(testCase.request.runId);
-    const runtime = new CountingRuntime();
+    const runtime = new CountingRuntime(testCase.request.runId);
     try {
       await createDepthThreeFixtureLineage(testCase);
       const invocationInput: InvocationArgs = {
         request: testCase.request,
-        runtime,
       };
       await expect(
         invokeModuleExpert(invocationArgs(invocationInput)),
       ).rejects.toThrow('parent authorization failed');
       expect(runtime.executionCount).toBe(0);
     } finally {
+      runtime.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
     }
   }
@@ -210,7 +232,7 @@ test('rejects depth-three lineage without a registered expert evidence parent', 
 test('rejects depth-three evidence whose event provenance was downgraded', async () => {
   const request = depthThreeRequest(`downgraded-origin-${randomUUID()}`);
   const runDirectory = processingRunDirectory(request.runId);
-  const runtime = new CountingRuntime();
+  const runtime = new CountingRuntime(request.runId);
   try {
     const lineageArgs: CreateDepthThreeLineageArgs = {
       request,
@@ -239,12 +261,13 @@ test('rejects depth-three evidence whose event provenance was downgraded', async
       'utf8',
     );
 
-    const invocationInput: InvocationArgs = { request, runtime };
+    const invocationInput: InvocationArgs = { request };
     await expect(
       invokeModuleExpert(invocationArgs(invocationInput)),
     ).rejects.toThrow('parent authorization failed');
     expect(runtime.executionCount).toBe(0);
   } finally {
+    runtime.dispose();
     await rm(runDirectory, REMOVE_RECURSIVELY);
   }
 });
@@ -288,9 +311,8 @@ async function createDepthThreeFixtureLineage(
     depth: 2,
     parent: root,
     output: args.immediateOutput,
-    adapter: AgentAttemptAdapterKind.ModuleExpertInvocation,
   } as const;
-  await createCompletedAttemptWithAdapter(immediateArgs);
+  await createCompletedAttempt(immediateArgs);
 }
 
 type ParentSetupArgs = {
@@ -424,22 +446,24 @@ async function createDepthThreeLineage(
     ]),
   } as const;
   await createCompletedAttempt(rootPlanArgs);
-  const runtime = new CountingRuntime();
+  const runtime = new CountingRuntime(intermediateRequest.runId);
   const invocationInput: InvocationArgs = {
     request: intermediateRequest,
-    runtime,
   };
-  const intermediateResult = await invokeModuleExpert(
-    invocationArgs(invocationInput),
-  );
-  if (intermediateResult.terminal.kind !== TaskTerminalKind.Completed) {
-    throw new Error('Expected completed intermediate module expert fixture.');
+  try {
+    const intermediateResult = await invokeModuleExpert(
+      invocationArgs(invocationInput),
+    );
+    if (intermediateResult.terminal.kind !== TaskTerminalKind.Completed) {
+      throw new Error('Expected completed intermediate module expert fixture.');
+    }
+  } finally {
+    runtime.dispose();
   }
 }
 
 type InvocationArgs = {
   readonly request: ModuleExpertInvocationRequest;
-  readonly runtime: CountingRuntime;
 };
 
 function invocationArgs(args: InvocationArgs): InvokeModuleExpertArgs {
@@ -447,7 +471,6 @@ function invocationArgs(args: InvocationArgs): InvokeModuleExpertArgs {
   return {
     repoRoot: REPO_ROOT,
     request: args.request,
-    runtime: args.runtime,
     signal: controller.signal,
   };
 }

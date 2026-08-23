@@ -8,7 +8,6 @@ import {
   relative,
 } from 'node:path';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
-import * as ts from 'typescript';
 import {
   MODULE_EXPERT_AGENT_INSTRUCTIONS,
   MODULE_EXPERT_CATALOG,
@@ -40,6 +39,15 @@ import {
   discoverCargoWorkspace,
 } from './cargo-workspace.ts';
 import type { DiscoverCargoWorkspaceArgs } from './cargo-workspace.ts';
+import {
+  AGENT_WORKFLOW_CLI,
+  MODULE_EXPERT_CLI,
+  MODULE_EXPERT_TRUSTED_RUNTIME,
+  auditModuleExpertRuntimeRouting,
+} from './runtime-routing-audit.ts';
+import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
+export { auditModuleExpertRuntimeRouting };
+export type { AuditModuleExpertRuntimeRoutingArgs };
 
 export type ModuleExpertAuditFinding = {
   readonly code: string;
@@ -65,11 +73,6 @@ export type AuditModuleExpertRuntimePolicyArgs = {
   readonly threadOptions: ThreadOptions;
 };
 
-export type AuditModuleExpertRuntimeRoutingArgs = {
-  readonly agentWorkflowCliSource: string;
-  readonly moduleExpertCliSource: string;
-};
-
 type ParsedAgentDefinition = {
   readonly name: string;
   readonly description: string;
@@ -80,8 +83,6 @@ type ParsedAgentDefinition = {
 
 const CODEX_AGENT_DIRECTORY = '.codex/agents';
 const AGENT_DIRECTORY = `${CODEX_AGENT_DIRECTORY}/module-experts`;
-const AGENT_WORKFLOW_CLI = 'agentic-ai/loom/src/agent-workflow/cli.ts';
-const MODULE_EXPERT_CLI = 'agentic-ai/loom/src/module-experts/cli.ts';
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 const WEB_ROOT = 'nook-app/nook-web';
 const EXPECTED_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
@@ -299,60 +300,6 @@ function validContextServerRegistry(
   } catch {
     return false;
   }
-}
-
-export function auditModuleExpertRuntimeRouting(
-  args: AuditModuleExpertRuntimeRoutingArgs,
-): readonly ModuleExpertAuditFinding[] {
-  const findings: ModuleExpertAuditFinding[] = [];
-  const moduleExpertRuntimeNames = constructedRuntimeNames(
-    args.moduleExpertCliSource,
-  );
-  const agentWorkflowRuntimeNames = constructedRuntimeNames(
-    args.agentWorkflowCliSource,
-  );
-  if (
-    !moduleExpertRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime') ||
-    moduleExpertRuntimeNames.includes('CodexSdkAgentRuntime')
-  ) {
-    findings[findings.length] = {
-      code: 'unsafe-module-expert-runtime-routing',
-      path: MODULE_EXPERT_CLI,
-      message:
-        'Module expert invocation must use only the isolated module-expert Codex runtime.',
-    };
-  }
-  if (
-    !agentWorkflowRuntimeNames.includes('CodexSdkAgentRuntime') ||
-    agentWorkflowRuntimeNames.includes('ModuleExpertCodexSdkAgentRuntime')
-  ) {
-    findings[findings.length] = {
-      code: 'unsafe-generic-runtime-routing',
-      path: AGENT_WORKFLOW_CLI,
-      message:
-        'Generic agent workflows must retain the ordinary Codex runtime and authentication store.',
-    };
-  }
-  return findings;
-}
-
-function constructedRuntimeNames(source: string): readonly string[] {
-  const sourceFile = ts.createSourceFile(
-    'runtime-routing.ts',
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const names: string[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isNewExpression(node) && ts.isIdentifier(node.expression)) {
-      names[names.length] = node.expression.text;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return names;
 }
 
 type OrderedValuesComparison = {
@@ -836,12 +783,19 @@ function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
 function validateRuntimeRouting(context: ModuleExpertValidationContext): void {
   const agentWorkflowCliPath = join(context.repoRoot, AGENT_WORKFLOW_CLI);
   const moduleExpertCliPath = join(context.repoRoot, MODULE_EXPERT_CLI);
+  const trustedRuntimePath = join(
+    context.repoRoot,
+    MODULE_EXPERT_TRUSTED_RUNTIME,
+  );
   const auditArgs: AuditModuleExpertRuntimeRoutingArgs = {
     agentWorkflowCliSource: existsSync(agentWorkflowCliPath)
       ? readFileSync(agentWorkflowCliPath, 'utf8')
       : '',
     moduleExpertCliSource: existsSync(moduleExpertCliPath)
       ? readFileSync(moduleExpertCliPath, 'utf8')
+      : '',
+    trustedRuntimeSource: existsSync(trustedRuntimePath)
+      ? readFileSync(trustedRuntimePath, 'utf8')
       : '',
   };
   for (const finding of auditModuleExpertRuntimeRouting(auditArgs)) {

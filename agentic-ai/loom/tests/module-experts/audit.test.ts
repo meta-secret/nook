@@ -36,6 +36,8 @@ import {
   INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS,
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_SKILL_PATHS,
 } from '../../src/module-experts/catalog.ts';
 import type {
   ModuleExpertGeneratedMarker,
@@ -343,7 +345,7 @@ describe('module expert audit', () => {
     expect(report.auditOk).toBe(true);
   });
 
-  test('requires exact canonical context and registered Rust boundary scope', () => {
+  test('requires exact canonical context, web skills, and Rust boundary scope', () => {
     expect(MODULE_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/dynamic-skills/module-expert.md',
       '.cortex/workflows/module-oriented-development.md',
@@ -351,6 +353,16 @@ describe('module expert audit', () => {
     expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/dynamic-skills/internal-api-expert.md',
       ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    ]);
+    expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
+      '.cortex/AGENTS.md',
+      '.cortex/dynamic-skills/browser-extension-release-security.md',
+      ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+    ]);
+    expect(WEB_EXPERT_SKILL_PATHS).toEqual([
+      '.agents/skills/module-expert/SKILL.md',
+      '.agents/skills/design-taste-frontend/SKILL.md',
+      '.agents/skills/browser-extension-release-security/SKILL.md',
     ]);
     expect(INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS).toEqual([
       'nook-app/nook-platform/nook-app-common',
@@ -370,6 +382,10 @@ describe('module expert audit', () => {
       (profile) => profile.name === 'core_expert',
     );
     if (!coreProfile) throw new Error('core_expert test fixture is missing.');
+    const webProfile = MODULE_EXPERT_CATALOG.find(
+      (profile) => profile.name === 'web_expert',
+    );
+    if (!webProfile) throw new Error('web_expert test fixture is missing.');
     const driftedProfiles: readonly ModuleExpertProfile[] = [
       {
         ...internalApiProfile,
@@ -397,6 +413,25 @@ describe('module expert audit', () => {
         ...coreProfile,
         boundaryScopePaths: ['nook-app/nook-platform/nook-auth2'],
       },
+      {
+        ...webProfile,
+        canonicalContextPaths: webProfile.canonicalContextPaths.slice(1),
+      },
+      {
+        ...webProfile,
+        skillPaths: webProfile.skillPaths.slice(1),
+      },
+      {
+        ...webProfile,
+        skillPaths: [
+          ...webProfile.skillPaths,
+          '.agents/skills/coding-bro/SKILL.md',
+        ],
+      },
+      {
+        ...webProfile,
+        skillPaths: [...webProfile.skillPaths].reverse(),
+      },
     ];
     const expectedCodes = [
       'invalid-canonical-expert-context',
@@ -404,6 +439,10 @@ describe('module expert audit', () => {
       'invalid-internal-api-rust-boundary-scope',
       'invalid-internal-api-rust-boundary-scope',
       'unexpected-boundary-scope',
+      'invalid-canonical-expert-context',
+      'invalid-web-expert-skills',
+      'invalid-web-expert-skills',
+      'invalid-web-expert-skills',
     ];
     for (const [index, driftedProfile] of driftedProfiles.entries()) {
       const expectedCode = expectedCodes[index];
@@ -713,24 +752,57 @@ describe('module expert audit', () => {
   });
 
   test('rejects generic and module-expert runtime routing drift', () => {
-    const moduleRoutingDrift: AuditModuleExpertRuntimeRoutingArgs = {
-      agentWorkflowCliSource:
-        'const runtime = new CodexSdkAgentRuntime<Task, Agent>();',
-      moduleExpertCliSource:
-        '// new ModuleExpertCodexSdkAgentRuntime<string, string>();\nconst runtime = new CodexSdkAgentRuntime<string, string>();',
-    };
+    const safeGenericSource =
+      'const runtime = new CodexSdkAgentRuntime<Task, Agent>();';
+    const safeModuleCliSource = 'invokeModuleExpert(invokeArgs);';
+    const safeTrustedRuntimeSource =
+      'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs);';
+    const moduleRoutingMutations: readonly AuditModuleExpertRuntimeRoutingArgs[] =
+      [
+        {
+          agentWorkflowCliSource: safeGenericSource,
+          moduleExpertCliSource: 'validateModuleExpertRequest(request);',
+          trustedRuntimeSource: safeTrustedRuntimeSource,
+        },
+        {
+          agentWorkflowCliSource: safeGenericSource,
+          moduleExpertCliSource:
+            'invokeModuleExpert(invokeArgs); new CodexSdkAgentRuntime<string, string>();',
+          trustedRuntimeSource: safeTrustedRuntimeSource,
+        },
+        {
+          agentWorkflowCliSource: safeGenericSource,
+          moduleExpertCliSource: safeModuleCliSource,
+          trustedRuntimeSource:
+            'executeIsolatedModuleExpertAgent(executionArgs); consumeIsolatedModuleExpertExecution(consumeArgs); new CodexSdkAgentRuntime<string, string>();',
+        },
+        {
+          agentWorkflowCliSource: safeGenericSource,
+          moduleExpertCliSource: safeModuleCliSource,
+          trustedRuntimeSource:
+            'consumeIsolatedModuleExpertExecution(consumeArgs);',
+        },
+        {
+          agentWorkflowCliSource: safeGenericSource,
+          moduleExpertCliSource: safeModuleCliSource,
+          trustedRuntimeSource:
+            'executeIsolatedModuleExpertAgent(executionArgs);',
+        },
+      ];
     const genericRoutingDrift: AuditModuleExpertRuntimeRoutingArgs = {
       agentWorkflowCliSource:
         '// new CodexSdkAgentRuntime<Task, Agent>();\nconst runtime = new ModuleExpertCodexSdkAgentRuntime<Task, Agent>();',
-      moduleExpertCliSource:
-        'const runtime = new ModuleExpertCodexSdkAgentRuntime<string, string>();',
+      moduleExpertCliSource: safeModuleCliSource,
+      trustedRuntimeSource: safeTrustedRuntimeSource,
     };
 
-    expect(
-      auditModuleExpertRuntimeRouting(moduleRoutingDrift).map(
-        (finding) => finding.code,
-      ),
-    ).toEqual(['unsafe-module-expert-runtime-routing']);
+    for (const mutation of moduleRoutingMutations) {
+      expect(
+        auditModuleExpertRuntimeRouting(mutation).map(
+          (finding) => finding.code,
+        ),
+      ).toEqual(['unsafe-module-expert-runtime-routing']);
+    }
     expect(
       auditModuleExpertRuntimeRouting(genericRoutingDrift).map(
         (finding) => finding.code,
