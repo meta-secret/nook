@@ -11,6 +11,28 @@ vars:
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 tasks:
+  arc:build-host:sync:
+    internal: true
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        build_target="{{.ARC_BUILD_SSH_TARGET}}"
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        if test "$build_target" = "$controller_target"; then
+          exit 0
+        fi
+        repo_root="$(git rev-parse --show-toplevel)"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        ssh -n -o BatchMode=yes "$build_target" \
+          "install -d -m 0750 '$remote_dir'"
+        COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" -cf - infra/k0s |
+          ssh -o BatchMode=yes "$build_target" \
+            "tar -xf - -C '$remote_dir'"
+        BASH
+
   arc:auth:sync:
     internal: true
     deps: [k0s:sync]
@@ -227,11 +249,11 @@ tasks:
 
   arc:cache:pool:sync:
     internal: true
-    deps: [k0s:sync]
+    deps: [arc:build-host:sync]
     silent: true
     cmds:
       - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
         remote_dir="{{.INFRA_REMOTE_DIR}}"
         pool_root=/var/lib/nook-arc-buildkit
@@ -273,7 +295,7 @@ tasks:
         [Unit]
         Description=Nook ARC BuildKit copy-on-write pool
         After=local-fs.target
-        Before=k0scontroller.service
+        Before=k0scontroller.service k0sworker.service
 
         [Mount]
         What=$pool_image
@@ -339,7 +361,7 @@ tasks:
         Description=Nook ARC BuildKit reflink cloner
         Requires=$mount_unit
         After=$mount_unit
-        Before=k0scontroller.service
+        Before=k0scontroller.service k0sworker.service
 
         [Service]
         Type=simple
@@ -382,7 +404,7 @@ tasks:
           --tag localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1 \
           --output "type=oci,dest=$artifact" \
           infra/k0s/images/arc-buildkit
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
           'sudo -n k0s ctr --namespace k8s.io images import -' \
           < "$artifact"
         echo "Imported the pinned ARC BuildKit wrapper into k0s containerd"
@@ -417,6 +439,8 @@ tasks:
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
         kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
+        test "$(kubectl get runtimeclass kata-qemu-runtime-rs \
+          -o jsonpath='{.overhead.podFixed.memory}')" = 1792Mi
         kubectl get runtimeclass kata-dragonball >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
         kubectl create configmap nook-arc-hive-test-runtime \
@@ -544,54 +568,6 @@ tasks:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - echo "Opted-in workflows now target ubuntu-latest"
-
-  arc:status:
-    desc: Show bounded ARC controller, listener, scale-set, and runner state.
-    silent: true
-    cmds:
-      - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        kubectl() { sudo -n k0s kubectl "$@"; }
-        kubectl get deployment --namespace arc-systems -o wide
-        kubectl get networkpolicy --namespace arc-runners -o wide
-        kubectl get autoscalingrunnerset,ephemeralrunnerset \
-          --namespace arc-runners -o wide
-        kubectl get autoscalinglistener --namespace arc-systems -o wide
-        kubectl get pods --namespace arc-systems -o wide
-        kubectl get pods --namespace arc-runners -o wide
-        sudo -n systemctl is-active nook-arc-buildkit-cloner.service
-        sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
-        sudo -n btrfs filesystem usage -b /var/lib/nook-arc-buildkit/pool
-        sudo -n btrfs filesystem du -s \
-          /var/lib/nook-arc-buildkit/pool/seed/buildkit.ext4
-        REMOTE
-
-  arc:diagnose:
-    desc: Show bounded ARC events and recent controller/listener logs.
-    silent: true
-    cmds:
-      - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        kubectl() { sudo -n k0s kubectl "$@"; }
-        kubectl get events --namespace arc-systems \
-          --sort-by=.metadata.creationTimestamp | tail -n 40
-        kubectl get events --namespace arc-runners \
-          --sort-by=.metadata.creationTimestamp | tail -n 60
-        kubectl logs deployment/nook-arc-gha-rs-controller \
-          --namespace arc-systems --tail=120 || true
-        sudo -n systemctl status nook-arc-buildkit-cloner.service \
-          --no-pager --lines=40 || true
-        sudo -n journalctl --unit nook-arc-buildkit-cloner.service \
-          --no-pager --lines=80 || true
-        listener="$(kubectl get pods --namespace arc-systems \
-          -l app.kubernetes.io/component=runner-scale-set-listener \
-          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-        if test -n "$listener"; then
-          kubectl logs "$listener" --namespace arc-systems --tail=120 || true
-        fi
-        REMOTE
 
   arc:smoke:
     desc: Run a trusted exact-branch task and promote its stopped ARC state.
@@ -721,7 +697,7 @@ tasks:
               exit 1
             fi
             completion_sandbox_id="$(
-              ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+              ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
                 "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
             )"
             if test -z "$completion_sandbox_id"; then
@@ -779,7 +755,7 @@ tasks:
                 exit 1
               fi
               current_sandbox_id="$(
-                ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
                   "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$runner_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
                 )"
               if test -z "$current_sandbox_id"; then
@@ -797,7 +773,7 @@ tasks:
                 exit 1
               fi
               if test -z "$runner_state_retained" &&
-                 ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+                 ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
                    "sudo -n sh -ceu 'job_dir=\"/var/lib/nook-arc-buildkit/pool/jobs/\$1\"; runtime_dir=/var/lib/nook-arc-buildkit/pool/runtime; test -f \"\$job_dir/buildkit.ext4\"; umask 077; printf \"%s\\n\" \"\$((\$(date +%s) + 1800))\" > \"\$runtime_dir/\$1.retain.tmp\"; mv \"\$runtime_dir/\$1.retain.tmp\" \"\$runtime_dir/\$1.retain\"' sh '$runner_uid'"; then
                 runner_state_retained=1
               fi
@@ -876,6 +852,21 @@ tasks:
           exit 1
         fi
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          bash -s -- "$runner_uid" <<'REMOTE'
+        set -euo pipefail
+        pod_uid="$1"
+        for _ in $(seq 1 180); do
+          if ! sudo -n k0s kubectl get pods --namespace arc-runners \
+            -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}' |
+            grep -Fxq "$pod_uid"; then
+            exit 0
+          fi
+          sleep 1
+        done
+        echo "ARC smoke Pod $pod_uid remained in the API after completion" >&2
+        exit 1
+        REMOTE
+        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" \
           bash -s -- "$runner_uid" "$runner_sandbox_id" <<'REMOTE'
         set -euo pipefail
         pod_uid="$1"
@@ -888,19 +879,12 @@ tasks:
           echo "Invalid ARC smoke sandbox ID" >&2
           exit 2
         fi
-        kubectl() { sudo -n k0s kubectl "$@"; }
         runtime_stopped=false
         for _ in $(seq 1 180); do
-          api_present=false
           kubelet_present=false
           container_present=false
           task_present=false
           shim_present=false
-          if kubectl get pods --namespace arc-runners \
-            -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}' |
-            grep -Fxq "$pod_uid"; then
-            api_present=true
-          fi
           test ! -e "/var/lib/k0s/kubelet/pods/$pod_uid" || kubelet_present=true
           if sudo -n k0s ctr --namespace k8s.io containers info \
             "$sandbox_id" >/dev/null 2>&1; then
@@ -924,8 +908,7 @@ tasks:
                 ;;
             esac
           done
-          if test "$api_present" = false &&
-             test "$kubelet_present" = false &&
+          if test "$kubelet_present" = false &&
              test "$container_present" = false &&
              test "$task_present" = false &&
              test "$shim_present" = false; then

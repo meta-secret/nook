@@ -189,7 +189,9 @@ spec:
               path: /startupz
               port: registry
             periodSeconds: 5
-            failureThreshold: 24
+            # A restart rebuilds Zot metadata across thousands of immutable
+            # cache repositories. Do not kill that bounded recovery scan.
+            failureThreshold: 360
           readinessProbe:
             httpGet:
               path: /readyz

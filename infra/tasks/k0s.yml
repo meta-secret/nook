@@ -505,7 +505,13 @@ tasks:
         fi
         sudo -n k0s kubectl get secrets --all-namespaces -o json |
           sudo -n k0s kubectl replace -f -
-        sudo -n k0s kubectl label node --all \
+        storage_node="$(
+          sudo -n k0s kubectl get nodes \
+            -l nook.nokey.sh/node-role=control-storage \
+            -o jsonpath='{.items[0].metadata.name}'
+        )"
+        test -n "$storage_node"
+        sudo -n k0s kubectl label node "$storage_node" \
           hive.nook.sh/storage=local \
           hive.nook.sh/kata=enabled \
           --overwrite
