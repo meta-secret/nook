@@ -40,7 +40,10 @@ Cluster roles:
   that same worker. Reusing another worker's address fails closed. A `direct`
   worker has a fixed endpoint. A `roaming` worker has no public endpoint; its
   persistent outbound handshake lets the controller learn the current NAT
-  mapping.
+  mapping. Deployment then reconciles a direct authenticated WireGuard peer
+  between every worker. Each peer owns only that worker's node address and Pod
+  CIDR. Worker-to-worker Pod traffic never depends on the controller as a
+  forwarding hop.
 - ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
   warm. The general and Hive scale sets can each create up to ten concurrent
   runners. A third cache-primary scale set owns serialized Main producers.
@@ -125,8 +128,8 @@ marker in its private runtime directory and atomically renames it into the lane,
 so an untrusted lane cannot redirect host writes through a symlink. Before
 accepting a candidate, the verifier also resolves the lane's Pod UID through
 host CRI metadata and requires its observed Pod name to match the claimed
-GitHub runner. Acceptance is published before the host installs a promotion
-intent with an exclusive link. A repeated candidate can neither refresh an
+GitHub runner. The host installs a promotion intent with an exclusive link
+before publishing acceptance. A repeated candidate can neither refresh an
 existing intent nor extend its two-minute barrier.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool

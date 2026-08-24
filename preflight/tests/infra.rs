@@ -111,6 +111,7 @@ fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
 fn arc_promotion_and_mesh_reconciliation_fail_closed() {
     let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
     let workers = read("infra/tasks/k0s-workers.yml");
+    let worker_mesh = read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
     let claim = cloner
         .find("mv -T \"$candidate\" \"$candidate_claim\"")
         .expect("promotion candidates must move into host-private storage");
@@ -135,6 +136,22 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
         workers.contains("worker_pod_cidr=\"$(sudo -n k0s kubectl get node")
             && workers.contains("AllowedIPs = $allowed_ips"),
         "peer reconciliation must preserve the registered worker Pod CIDR"
+    );
+    assert!(
+        worker_mesh.contains("AllowedIPs = $address/32,$pod_cidr")
+            && worker_mesh.contains("sudo -n wg syncconf wg-nook")
+            && worker_mesh.contains("Authenticated direct worker mesh is healthy"),
+        "compute nodes must receive direct authenticated routes to every worker Pod CIDR"
+    );
+    let reconcile = workers
+        .find("task: k0s:worker-mesh:reconcile")
+        .expect("worker deployment must reconcile the direct worker mesh");
+    let qualify = workers
+        .find("task: kata:install")
+        .expect("worker deployment must qualify Kata");
+    assert!(
+        reconcile < qualify,
+        "the direct worker mesh must converge before Kata and ARC qualification"
     );
 }
 

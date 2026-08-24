@@ -70,6 +70,12 @@ home-router port is required. Loss of the home network removes only disposable
 runner capacity; GitHub keeps queued jobs and Kubernetes schedules new Pods on
 the remaining qualified nodes.
 
+Every compute node also has a direct authenticated WireGuard peer for every
+other compute node. The controller learns a roaming worker's NAT endpoint and
+reconciles it to the other peers. A peer may route only that worker's mesh
+address and Pod CIDR. The controller is the control-plane hub, but it is not a
+worker-to-worker Pod data-plane hop.
+
 ## Job-scoped BuildKit state
 
 The cache-primary node maintains a loop-backed Btrfs pool on local NVMe-backed

@@ -50,6 +50,10 @@ includes:
     taskfile: tasks/k0s-workers.yml
     dir: ..
     flatten: true
+  k0s-worker-mesh:
+    taskfile: tasks/k0s-worker-mesh.yml
+    dir: ..
+    flatten: true
   kata:
     taskfile: tasks/kata.yml
     dir: ..

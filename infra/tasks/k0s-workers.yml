@@ -411,9 +411,8 @@ tasks:
         }
 
         configure_worker_firewall() {
-          ssh -o BatchMode=yes "$worker_target" bash -s -- "$controller_public_ip" <<'REMOTE'
+          ssh -o BatchMode=yes "$worker_target" bash -s <<'REMOTE'
         set -euo pipefail
-        controller_public_ip="$1"
         config="$(mktemp)"
         bootstrap="$(mktemp)"
         live_fragment="$(mktemp)"
@@ -429,7 +428,7 @@ tasks:
             ip protocol icmp accept comment "nook k0s worker icmp"
             ip6 nexthdr ipv6-icmp accept comment "nook k0s worker icmpv6"
             tcp dport 22 accept comment "nook k0s worker ssh"
-            ip saddr $controller_public_ip udp dport 51820 accept comment "nook k0s worker wireguard"
+            udp dport 51820 accept comment "nook k0s worker wireguard"
             iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s worker mesh input"
             iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"
             iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet pods"
@@ -472,7 +471,7 @@ tasks:
         add rule inet bynull_filter input ip protocol icmp accept comment "nook k0s worker icmp"
         add rule inet bynull_filter input ip6 nexthdr ipv6-icmp accept comment "nook k0s worker icmpv6"
         add rule inet bynull_filter input tcp dport 22 accept comment "nook k0s worker ssh"
-        add rule inet bynull_filter input ip saddr $controller_public_ip udp dport 51820 accept comment "nook k0s worker wireguard"
+        add rule inet bynull_filter input udp dport 51820 accept comment "nook k0s worker wireguard"
         add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.202.0.0/24 accept comment "nook k0s worker mesh input"
         add rule inet bynull_filter input iifname "wg-nook" ip saddr 10.201.0.1 tcp dport 10250 accept comment "nook k0s worker kubelet controller"
         add rule inet bynull_filter input iifname "kube-bridge" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet pods"
@@ -842,6 +841,7 @@ tasks:
       - task: k0s:mesh:ensure
       - task: k0s:controller:mesh:activate
       - task: k0s:worker:install
+      - task: k0s:worker-mesh:reconcile
       - task: kata:install
       - task: k0s:worker:kata:verify
       - task: arc:deploy
