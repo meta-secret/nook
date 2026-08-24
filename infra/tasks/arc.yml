@@ -722,9 +722,29 @@ tasks:
         loop_device="$(sudo -n losetup --find --show "$seed_file")"
         cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
         trap cleanup_loop EXIT
-        sudo -n resize2fs "$loop_device"
-        cleanup_loop
-        trap - EXIT
+        if sudo -n resize2fs "$loop_device"; then
+          cleanup_loop
+          trap - EXIT
+        else
+          cleanup_loop
+          trap - EXIT
+          seed_backup="$pool_mount/seed/buildkit.ext4.pre-48g"
+          if sudo -n test -e "$seed_backup"; then
+            echo "ARC BuildKit seed migration backup already exists" >&2
+            exit 1
+          fi
+          seed_temp="$pool_mount/seed/buildkit.ext4.tmp"
+          sudo -n mv "$seed_file" "$seed_backup"
+          sudo -n truncate -s "$state_size" "$seed_temp"
+          loop_device="$(sudo -n losetup --find --show "$seed_temp")"
+          cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
+          trap cleanup_loop EXIT
+          sudo -n mkfs.ext4 -q -F -m 0 "$loop_device"
+          cleanup_loop
+          trap - EXIT
+          sudo -n mv "$seed_temp" "$seed_file"
+          echo "Retained the unresizable ARC seed at $seed_backup"
+        fi
         reflink_probe="$pool_mount/seed/.reflink-probe"
         sudo -n cp --reflink=always --sparse=auto "$seed_file" "$reflink_probe"
         sudo -n rm -f "$reflink_probe"
