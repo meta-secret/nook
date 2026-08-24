@@ -12,9 +12,9 @@ inputs:
     default: "false"
   isolated-cache-write:
     description: >-
-      Publish only an isolated remote-buildcache ref keyed by git commit SHA
-      (-git-<sha>) while using Main when that exact ref is absent. Never writes Main's
-      nook/buildcache refs.
+      Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
+      git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
+      keeps the graph job-local. Never writes Main's nook/buildcache refs.
     required: false
     default: "false"
   require-e2e-cache:
