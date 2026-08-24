@@ -130,13 +130,13 @@ if (
   throw new Error("general ARC must scale from zero through 25 runners");
 }
 const pod = values.template.spec;
-if (pod.runtimeClassName !== undefined) {
+if ("runtimeClassName" in pod) {
   throw new Error("general ARC must use the default Kubernetes runtime");
 }
 if (pod.automountServiceAccountToken !== false) {
   throw new Error("ARC runners must not receive Kubernetes credentials");
 }
-if (pod.volumes.some((volume) => volume.hostPath !== undefined)) {
+if (pod.volumes.some((volume) => "hostPath" in volume)) {
   throw new Error("ARC runners must not mount host paths");
 }
 if (

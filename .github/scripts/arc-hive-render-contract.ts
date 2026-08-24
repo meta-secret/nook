@@ -72,7 +72,7 @@ export async function assertHiveRenderContract(
       throw new Error("Hive ARC must scale from zero through ten fresh runners");
     }
     const hivePod = hiveValues.template.spec;
-    if (hivePod.runtimeClassName !== undefined) {
+    if ("runtimeClassName" in hivePod) {
       throw new Error("Hive ARC must use the default Kubernetes runtime");
     }
     if (hivePod.nodeSelector["nook.nokey.sh/arc-build"] !== "true") {
