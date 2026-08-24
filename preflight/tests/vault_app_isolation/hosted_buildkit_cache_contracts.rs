@@ -541,8 +541,10 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task ci:main:e2e:web:artifacts")
-            && main.contains("needs: [web, web-e2e]"),
-        "Main must split native Rust, WASM, web verify, and browser suites without a duplicate cache publisher"
+            && main.contains("\n  wasm-cache-proof:\n")
+            && main.contains("NOOK_DEFER_FRESH_WASM_CACHE_PROOF: \"1\"")
+            && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
+        "Main must split native Rust, WASM, fresh registry cache proof, web verify, and browser suites without a duplicate cache publisher"
     );
     let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")
