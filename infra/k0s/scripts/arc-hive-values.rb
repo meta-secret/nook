@@ -35,7 +35,7 @@ buildkit = named(pod.fetch("initContainers"), "buildkit")
 buildkit.fetch("resources").fetch("requests")["cpu"] = "1"
 buildkit.fetch("resources").fetch("requests")["memory"] = "4Gi"
 buildkit.fetch("resources").fetch("limits")["cpu"] = "4"
-buildkit.fetch("resources").fetch("limits")["memory"] = "4Gi"
+buildkit.fetch("resources").fetch("limits")["memory"] = "6Gi"
 
 pod.fetch("initContainers").concat(
   [

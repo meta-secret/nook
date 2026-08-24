@@ -88,9 +88,11 @@ export async function assertHiveRenderContract(
     if (
       hiveBuildkit?.resources?.limits?.cpu !== "4" ||
       hiveBuildkit?.resources?.requests?.memory !== "4Gi" ||
-      hiveBuildkit.resources.limits?.memory !== "4Gi"
+      hiveBuildkit.resources.limits?.memory !== "6Gi"
     ) {
-      throw new Error("Hive ARC BuildKit must retain its 4 CPU and 4 GiB budget");
+      throw new Error(
+        "Hive ARC BuildKit must retain its 4 CPU, 4 GiB request, and 6 GiB ceiling",
+      );
     }
     const hiveRunner = hivePod.containers.find((item) => item.name === "runner");
     if (hiveRunner?.resources?.limits?.cpu !== "1") {

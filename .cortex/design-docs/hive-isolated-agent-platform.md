@@ -712,7 +712,8 @@ The Dockerfile follows Nook's cargo-chef boundary:
 
 Each parallel Cargo branch uses two build jobs. Together, the test and Clippy
 branches consume the runner's four-CPU BuildKit envelope without launching
-eight competing compiler processes or exhausting its 4 GiB memory budget.
+eight competing compiler processes. BuildKit requests 4 GiB and may burst to
+6 GiB for rustc and linker peaks.
 
 Pull requests restore the `nook-hive-linux-amd64-v2` GitHub Actions BuildKit
 scope read-only. After the BuildKit verification target succeeds, an internal
