@@ -1,5 +1,8 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
-import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  authenticationWorkflowFormsHaveActionableControl,
+  summarizeAuthenticationWorkflowForms,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
@@ -43,7 +46,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     sender.id === chrome.runtime.id &&
     isQueryLoginDetectionMessage(message)
   ) {
-    const detected = summarizeAuthenticationWorkflowForms().length > 0
+    const observations = summarizeAuthenticationWorkflowForms()
+    const actionabilityQuery: Parameters<
+      typeof authenticationWorkflowFormsHaveActionableControl
+    >[0] = { observations }
+    const detected =
+      authenticationWorkflowFormsHaveActionableControl(actionabilityQuery)
     const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = {
       ok: true,
       status: detected

@@ -173,6 +173,52 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       widget.getByRole('button', { name: 'Open vault' }),
     ).toBeVisible()
 
+    const loginSubmit = loginPage.locator('form button[type="submit"]')
+    await loginSubmit.evaluate((button) => {
+      button.textContent = ''
+      button.setAttribute('aria-label', 'Save')
+    })
+    await expect(widget).toHaveCount(0)
+    await loginSubmit.evaluate((button) => {
+      button.setAttribute('aria-label', 'Sign in')
+    })
+    await expect(widget).toBeVisible()
+
+    await loginSubmit.evaluate((button) => {
+      const unrelatedForm = document.createElement('form')
+      unrelatedForm.id = 'unrelated-form'
+      document.body.append(unrelatedForm)
+      button.setAttribute('form', unrelatedForm.id)
+    })
+    await expect(widget).toHaveCount(0)
+    await loginSubmit.evaluate((button) => {
+      button.removeAttribute('form')
+      button.ownerDocument.getElementById('unrelated-form')?.remove()
+    })
+    await expect(widget).toBeVisible()
+
+    const loginForm = loginPage.locator('form')
+    await loginForm.evaluate((form) => form.setAttribute('style', 'opacity: 0'))
+    await expect(widget).toHaveCount(0)
+    await loginForm.evaluate((form) => form.removeAttribute('style'))
+    await expect(widget).toBeVisible()
+
+    await loginForm.evaluate((form) => form.setAttribute('inert', ''))
+    await expect(widget).toHaveCount(0)
+    await loginForm.evaluate((form) => form.removeAttribute('inert'))
+    await expect(widget).toBeVisible()
+
+    await loginPage.setViewportSize({ width: 900, height: 700 })
+    await loginPage.addStyleTag({
+      content:
+        '@media (max-width: 600px) { form button[type="submit"] { display: none !important; } }',
+    })
+    await expect(widget).toBeVisible()
+    await loginPage.setViewportSize({ width: 500, height: 700 })
+    await expect(widget).toHaveCount(0)
+    await loginPage.setViewportSize({ width: 900, height: 700 })
+    await expect(widget).toBeVisible()
+
     const hiddenHeaderLoginPage = await context.newPage()
     await hiddenHeaderLoginPage.goto(
       `${loginServer.origin}/login-with-hidden-header`,
@@ -186,6 +232,10 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(hiddenHeaderWidget.getByText('Manual checkpoint')).toHaveCount(
       0,
     )
+
+    const inertAccountPage = await context.newPage()
+    await inertAccountPage.goto(`${loginServer.origin}/inert-account-field`)
+    await expect(inertAccountPage.locator('#nook-auth-widget')).toHaveCount(0)
 
     await widget.evaluate((host) => {
       host.shadowRoot
@@ -206,7 +256,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       widget.getByRole('button', { name: /Expand Nook: Nook Pilot · 1\/3/ }),
     ).toBeVisible()
-    await widget.getByTestId('nook-auth-gate-expand').click()
+    await widget.getByTestId('nook-auth-gate-expand').press('Enter')
     await expect(
       widget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()

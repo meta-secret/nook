@@ -7,16 +7,24 @@ const validMessage = {
     origin: 'https://login.example.com',
     observations: [
       {
-        usernameFieldCount: 1,
-        manualCheckpointPresent: false,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-        passkeyControlPresent: false,
-        matchingPasskeyAccountCount: 0,
-        currentPasswordFieldCount: 1,
-        newPasswordFieldCount: 0,
-        genericPasswordFieldCount: 0,
-        oneTimeCodeFieldCount: 0,
+        fields: {
+          usernameFieldCount: 1,
+          currentPasswordFieldCount: 1,
+          newPasswordFieldCount: 0,
+          genericPasswordFieldCount: 0,
+          oneTimeCodeFieldCount: 0,
+        },
+        ceremony: {
+          manualCheckpoint: 'absent',
+          advanceControl: 'present',
+          oneTimeCodeProgression: 'advance-control-required',
+        },
+        authenticator: {
+          authenticatorSetup: 'absent',
+          backupCodes: 'absent',
+          passkeyControl: 'absent',
+          matchingPasskeyAccountCount: 0,
+        },
       },
     ],
   },
@@ -30,10 +38,11 @@ describe('authentication workflow snapshot messages', () => {
   test('rejects missing, negative, and fractional counts structurally', () => {
     const observationWithoutOneTimeCodeCount = {
       ...validMessage.payload.observations[0],
+      fields: { ...validMessage.payload.observations[0].fields },
     }
     expect(
       Reflect.deleteProperty(
-        observationWithoutOneTimeCodeCount,
+        observationWithoutOneTimeCodeCount.fields,
         'oneTimeCodeFieldCount',
       ),
     ).toBe(true)
@@ -56,13 +65,58 @@ describe('authentication workflow snapshot messages', () => {
             observations: [
               {
                 ...validMessage.payload.observations[0],
-                oneTimeCodeFieldCount: invalidCount,
+                fields: {
+                  ...validMessage.payload.observations[0].fields,
+                  oneTimeCodeFieldCount: invalidCount,
+                },
               },
             ],
           },
         }),
       ).toBe(false)
     }
+  })
+
+  test('requires explicit one-time-code progression facts', () => {
+    const observationWithoutProgression = {
+      ...validMessage.payload.observations[0],
+      ceremony: { ...validMessage.payload.observations[0].ceremony },
+    }
+    expect(
+      Reflect.deleteProperty(
+        observationWithoutProgression.ceremony,
+        'oneTimeCodeProgression',
+      ),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [observationWithoutProgression],
+        },
+      }),
+    ).toBe(false)
+  })
+
+  test('leaves semantic evidence vocabulary to Rust', () => {
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              ceremony: {
+                ...validMessage.payload.observations[0].ceremony,
+                oneTimeCodeProgression: 'future-progression',
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
   })
 
   test('leaves portable upper bounds to the Rust workflow policy', () => {
@@ -74,7 +128,10 @@ describe('authentication workflow snapshot messages', () => {
           observations: [
             {
               ...validMessage.payload.observations[0],
-              oneTimeCodeFieldCount: 101,
+              fields: {
+                ...validMessage.payload.observations[0].fields,
+                oneTimeCodeFieldCount: 101,
+              },
             },
           ],
         },
@@ -88,7 +145,10 @@ describe('authentication workflow snapshot messages', () => {
           observations: [
             {
               ...validMessage.payload.observations[0],
-              matchingPasskeyAccountCount: 101,
+              authenticator: {
+                ...validMessage.payload.observations[0].authenticator,
+                matchingPasskeyAccountCount: 101,
+              },
             },
           ],
         },

@@ -14,6 +14,7 @@ type PendingAuthenticatorPicker = {
 }
 
 type PendingLoginPicker = PendingAuthenticatorPicker
+type ScanTimerFactory = () => number
 export enum ScanScheduleKind {
   Idle = 'idle',
   Scheduled = 'scheduled',
@@ -98,22 +99,27 @@ export type PendingSaveWatch = {
   observer?: MutationObserver
 }
 
-class ScanState {
+export class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
   sequence = 0
   schedule: () => void = () => {}
   get scheduleState(): ScanSchedule {
     return this.currentSchedule
   }
-  scheduleTimer(timer: number): void {
-    this.currentSchedule = { kind: ScanScheduleKind.Scheduled, timer }
+  scheduleTimer(createTimer: ScanTimerFactory): boolean {
+    if (this.currentSchedule.kind === ScanScheduleKind.Scheduled) return false
+    this.currentSchedule = {
+      kind: ScanScheduleKind.Scheduled,
+      timer: createTimer(),
+    }
+    return true
   }
   clearPendingTimer(): void {
     this.currentSchedule = { kind: ScanScheduleKind.Idle }
   }
 }
 
-class WidgetState {
+export class WidgetState {
   private hostState: WidgetHost = { kind: WidgetHostKind.Detached }
   private workflowKeyState: WidgetWorkflowKey = {
     kind: WidgetWorkflowKeyKind.Unassigned,
@@ -126,7 +132,25 @@ class WidgetState {
   }
   dismissed = false
   busy = false
-  collapsed = false
+  private collapsedState = false
+  private collapseWasSelectedByUser = false
+  get collapsed(): boolean {
+    return this.collapsedState
+  }
+  applyAutomaticCollapse(value: boolean): void {
+    if (!this.collapseWasSelectedByUser) this.collapsedState = value
+  }
+  beginEnrollmentWorkflow(): void {
+    this.applyAutomaticCollapse(false)
+  }
+  collapseByUser(): void {
+    this.collapseWasSelectedByUser = true
+    this.collapsedState = true
+  }
+  expandByUser(): void {
+    this.collapseWasSelectedByUser = true
+    this.collapsedState = false
+  }
   get host(): WidgetHost {
     return this.hostState
   }
@@ -161,6 +185,8 @@ class WidgetState {
     this.hostState = { kind: WidgetHostKind.Detached }
     this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }
     this.workflowRootState = { kind: WidgetWorkflowRootKind.Unassigned }
+    this.collapsedState = false
+    this.collapseWasSelectedByUser = false
   }
 }
 

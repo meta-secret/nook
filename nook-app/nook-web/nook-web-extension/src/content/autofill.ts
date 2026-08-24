@@ -1,5 +1,8 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
-import { AuthenticationWorkflowSnapshotResponseKind } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationPageObservationFacts,
+  AuthenticationWorkflowRuntimeResponse,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { summarizeAuthenticationWorkflowForms } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
 import {
@@ -7,6 +10,11 @@ import {
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
 } from '../lib/auth-workflow-messages'
 import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticator-actions'
+import {
+  AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
+  AUTHENTICATION_VIEWPORT_EVENTS,
+  authenticationPageObservation,
+} from './autofill/authentication-observation'
 import {
   cancelPendingLoginPickerRequest,
   RuntimeMessageDeliveryKind,
@@ -24,7 +32,6 @@ import { removeScannedWidget } from './autofill/message-router'
 import {
   SaveOfferDisplayKind,
   SavePageWatchKind,
-  ScanScheduleKind,
   WidgetWorkflowKeyKind,
   saveOfferState,
   scanState,
@@ -34,6 +41,7 @@ import {
   renderEnrollmentWidget,
   renderWidget,
 } from './autofill/widget-rendering'
+import { clampMountedWidgetPosition } from './autofill/widget-position'
 import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
@@ -93,24 +101,25 @@ async function scanAndRender(): Promise<void> {
     return
   }
 
+  const observations: AuthenticationPageObservationFacts[] = workflowForms.map(
+    ({ summary }) => {
+      const observationRequest: Parameters<
+        typeof authenticationPageObservation
+      >[0] = {
+        summary,
+        authenticatorSetupPresent: enrollmentHints.qr,
+        backupCodesPresent: enrollmentHints.backupCodes,
+      }
+      return authenticationPageObservation(observationRequest)
+    },
+  )
   const message: Parameters<
     typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
   >[0] = {
     type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
     payload: {
       origin: location.origin,
-      observations: workflowForms.map(({ summary }) => ({
-        usernameFieldCount: summary.usernameFieldCount,
-        currentPasswordFieldCount: summary.currentPasswordFieldCount,
-        newPasswordFieldCount: summary.newPasswordFieldCount,
-        genericPasswordFieldCount: summary.genericPasswordFieldCount,
-        oneTimeCodeFieldCount: summary.oneTimeCodeFieldCount,
-        manualCheckpointPresent: summary.manualCheckpointPresent,
-        authenticatorSetupHint: detectEnrollmentHints().qr,
-        backupCodesHint: detectEnrollmentHints().backupCodes,
-        passkeyControlPresent: summary.passkeyControlPresent,
-        matchingPasskeyAccountCount: 0,
-      })),
+      observations,
     },
   }
   const delivery =
@@ -120,11 +129,10 @@ async function scanAndRender(): Promise<void> {
     removeScannedWidget()
     return
   }
-  const { response } = delivery
-  if (
-    response.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
-    !('snapshot' in response)
-  ) {
+  const runtimeResponse: AuthenticationWorkflowRuntimeResponse =
+    delivery.response
+  const { workflow: response, loginMatches } = runtimeResponse
+  if (response.kind !== 'matched' || !('snapshot' in response)) {
     removeScannedWidget()
     return
   }
@@ -140,21 +148,23 @@ async function scanAndRender(): Promise<void> {
     snapshot,
     workflow: selected,
     vaultConnection,
+    loginMatches,
   }
   renderWidget(nookTypedArgs0_1)
 }
 
 function scheduleScan() {
-  if (scanState.scheduleState.kind === ScanScheduleKind.Scheduled) {
-    window.clearTimeout(scanState.scheduleState.timer)
-  }
-
-  scanState.scheduleTimer(
+  scanState.scheduleTimer(() =>
     window.setTimeout(() => {
       scanState.clearPendingTimer()
       void scanAndRender()
     }, 150),
   )
+}
+
+function handleViewportChange(): void {
+  clampMountedWidgetPosition()
+  scheduleScan()
 }
 
 scanState.schedule = scheduleScan
@@ -169,19 +179,17 @@ void companionWasmReady.then(() => {
   const observer = new MutationObserver(scheduleScan)
   const nookTypedArgs0_1: Parameters<typeof observer.observe>[1] = {
     attributes: true,
-    attributeFilter: [
-      'aria-hidden',
-      'autocomplete',
-      'class',
-      'disabled',
-      'hidden',
-      'id',
-      'name',
-      'style',
-      'type',
-    ],
+    attributeFilter: [...AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER],
     childList: true,
+    characterData: true,
     subtree: true,
   }
   observer.observe(document.documentElement, nookTypedArgs0_1)
+  for (const eventName of AUTHENTICATION_VIEWPORT_EVENTS) {
+    const nookTypedArgs0_2: AddEventListenerOptions = {
+      capture: eventName === 'scroll',
+      passive: true,
+    }
+    window.addEventListener(eventName, handleViewportChange, nookTypedArgs0_2)
+  }
 })

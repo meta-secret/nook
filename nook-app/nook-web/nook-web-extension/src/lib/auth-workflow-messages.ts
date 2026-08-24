@@ -1,20 +1,20 @@
-import type { PasswordFormSummary } from '../../../nook-web-shared/src/extension/password-forms'
-import type { AuthenticationWorkflowSnapshot } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  AuthenticationPageObservationFacts,
+  AuthenticationWorkflowRuntimeResponse,
+  AuthenticationWorkflowRuntimeResponseWire,
+  AuthenticationWorkflowSnapshot,
+  WebsiteLoginMatchAvailability,
+  WebsiteLoginMatchAvailabilityWire,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
-export type AuthenticationPageObservationView = Pick<
-  PasswordFormSummary,
-  | 'usernameFieldCount'
-  | 'currentPasswordFieldCount'
-  | 'newPasswordFieldCount'
-  | 'genericPasswordFieldCount'
-  | 'oneTimeCodeFieldCount'
-  | 'manualCheckpointPresent'
-  | 'passkeyControlPresent'
-> & {
-  authenticatorSetupHint: boolean
-  backupCodesHint: boolean
-  matchingPasskeyAccountCount: number
+export type {
+  AuthenticationWorkflowRuntimeResponse,
+  AuthenticationWorkflowRuntimeResponseWire,
+  WebsiteLoginMatchAvailability,
+  WebsiteLoginMatchAvailabilityWire,
 }
+export type AuthenticationPageObservationView =
+  AuthenticationPageObservationFacts
 
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
@@ -57,24 +57,37 @@ export function isAuthenticationWorkflowSnapshotMessage(
   return message.payload.observations.every((value) => {
     if (!value || typeof value !== 'object') return false
     const observation = value as AuthenticationPageObservationView
+    if (
+      !observation.fields ||
+      typeof observation.fields !== 'object' ||
+      !observation.ceremony ||
+      typeof observation.ceremony !== 'object' ||
+      !observation.authenticator ||
+      typeof observation.authenticator !== 'object'
+    ) {
+      return false
+    }
     return (
       [
-        observation.usernameFieldCount,
-        observation.currentPasswordFieldCount,
-        observation.newPasswordFieldCount,
-        observation.genericPasswordFieldCount,
-        observation.oneTimeCodeFieldCount,
+        observation.fields.usernameFieldCount,
+        observation.fields.currentPasswordFieldCount,
+        observation.fields.newPasswordFieldCount,
+        observation.fields.genericPasswordFieldCount,
+        observation.fields.oneTimeCodeFieldCount,
       ].every(
         (count) =>
           typeof count === 'number' && Number.isInteger(count) && count >= 0,
       ) &&
-      typeof observation.manualCheckpointPresent === 'boolean' &&
-      typeof observation.authenticatorSetupHint === 'boolean' &&
-      typeof observation.backupCodesHint === 'boolean' &&
-      typeof observation.passkeyControlPresent === 'boolean' &&
-      typeof observation.matchingPasskeyAccountCount === 'number' &&
-      Number.isInteger(observation.matchingPasskeyAccountCount) &&
-      observation.matchingPasskeyAccountCount >= 0
+      typeof observation.ceremony.manualCheckpoint === 'string' &&
+      typeof observation.ceremony.oneTimeCodeProgression === 'string' &&
+      typeof observation.ceremony.advanceControl === 'string' &&
+      typeof observation.authenticator.authenticatorSetup === 'string' &&
+      typeof observation.authenticator.backupCodes === 'string' &&
+      typeof observation.authenticator.passkeyControl === 'string' &&
+      typeof observation.authenticator.matchingPasskeyAccountCount ===
+        'number' &&
+      Number.isInteger(observation.authenticator.matchingPasskeyAccountCount) &&
+      observation.authenticator.matchingPasskeyAccountCount >= 0
     )
   })
 }

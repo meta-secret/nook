@@ -6,7 +6,14 @@ import {
   isExtensionPairedVaultUnlockRequestMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import { normalizeOpenCompanionLauncherMessage } from '../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
-import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
+import {
+  isAuthenticationWorkflowSnapshotMessage,
+  type WebsiteLoginMatchAvailabilityWire,
+} from '../lib/auth-workflow-messages'
+import {
+  authentication_workflow_saved_login_capability,
+  type AuthenticationSavedLoginCapability,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   isAuthenticatorPickerCancelMessage,
   isAuthenticatorPickerQueryMessage,
@@ -46,7 +53,11 @@ import {
   isWebsitePasskeyOptionsMessage,
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
-import { websiteLoginOptions } from './service-worker/account-pickers'
+import {
+  loginMatchAvailabilityForOriginSafe,
+  invalidateLoginMatchAvailabilityForOrigin,
+  websiteLoginOptions,
+} from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
   openWebsiteAuthenticatorPicker,
@@ -320,35 +331,55 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       return false
     }
     const needsPasskeyLookup = message.payload.observations.some(
-      (observation) => observation.passkeyControlPresent,
+      (observation) => observation.authenticator.passkeyControl === 'present',
     )
-    void (
-      needsPasskeyLookup
-        ? matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
-        : Promise.resolve(0)
-    )
-      .then((matchingPasskeyAccountCount) => {
+    const passkeyLookup = needsPasskeyLookup
+      ? matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
+      : Promise.resolve(0)
+    void passkeyLookup
+      .then(async (matchingPasskeyAccountCount) => {
         const observations = message.payload.observations.map(
           (observation) => ({
             ...observation,
-            matchingPasskeyAccountCount: observation.passkeyControlPresent
-              ? matchingPasskeyAccountCount
-              : 0,
+            authenticator: {
+              ...observation.authenticator,
+              matchingPasskeyAccountCount:
+                observation.authenticator.passkeyControl === 'present'
+                  ? matchingPasskeyAccountCount
+                  : 0,
+            },
           }),
         )
         const workflowInput: Parameters<
           typeof authenticationWorkflowSnapshot
         >[0] = { observations }
-        return authenticationWorkflowSnapshot(workflowInput)
+        const workflow = await authenticationWorkflowSnapshot(workflowInput)
+        const savedLoginCapability =
+          workflow.kind === AuthenticationWorkflowSnapshotKind.Matched
+            ? authentication_workflow_saved_login_capability(workflow.snapshot)
+            : ('unavailable' satisfies AuthenticationSavedLoginCapability)
+        const loginMatches: WebsiteLoginMatchAvailabilityWire =
+          savedLoginCapability ===
+          ('fill-saved-login' satisfies AuthenticationSavedLoginCapability)
+            ? await loginMatchAvailabilityForOriginSafe(message.payload.origin)
+            : { kind: 'unavailable' }
+        return {
+          workflow,
+          loginMatches,
+        }
       })
-      .then((result) => {
-        const matchedResponse: Parameters<typeof sendResponse>[0] = {
+      .then(({ workflow, loginMatches }) => {
+        const workflowResponse: Parameters<typeof sendResponse>[0] = {
           ok: true,
-          ...(result.kind === AuthenticationWorkflowSnapshotKind.Matched
-            ? { snapshot: result.snapshot }
+          ...(workflow.kind === AuthenticationWorkflowSnapshotKind.Matched
+            ? { snapshot: workflow.snapshot }
             : {}),
         }
-        return sendResponse(matchedResponse)
+        const response: Parameters<typeof sendResponse>[0] = {
+          workflow: workflowResponse,
+          loginMatches,
+        }
+        return sendResponse(response)
       })
       .catch(() => {
         const nookArrowArgs10: Parameters<typeof sendResponse>[0] = {
@@ -551,6 +582,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sender,
     }
     void websiteLoginSaveCommit(nookTypedArgs0_15)
+      .then((response) => {
+        if (response.kind === 'completed') {
+          const invalidation: Parameters<
+            typeof invalidateLoginMatchAvailabilityForOrigin
+          >[0] = { origin: message.payload.origin }
+          invalidateLoginMatchAvailabilityForOrigin(invalidation)
+        }
+        return response
+      })
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs22: Parameters<typeof sendResponse>[0] = {

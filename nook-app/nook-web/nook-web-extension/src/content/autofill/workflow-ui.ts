@@ -4,7 +4,7 @@ import {
 } from '../../lib/browser-message-keys'
 import { compactProgressState } from '../../lib/auth-widget-policy'
 import type { WebsiteLoginFillResponse } from '../../lib/login-fill-messages'
-import { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { AuthenticationWorkflowKind } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   ExtensionSetupLoadKind,
   loadExtensionSetupState,
@@ -17,8 +17,6 @@ export type PilotVaultConnection = {
 }
 
 export const WIDGET_HOST_ID = 'nook-auth-widget'
-
-export const DRAG_THRESHOLD_PX = 4
 
 export const OUTCOME_EVIDENCE_TIMEOUT_MS = 8_000
 
@@ -33,28 +31,28 @@ export type WorkflowCopy = {
 
 export function workflowCopy(kind: AuthenticationWorkflowKind): WorkflowCopy {
   switch (kind) {
-    case AuthenticationWorkflowKind.Login:
+    case 'login':
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetLoginDescription,
       }
-    case AuthenticationWorkflowKind.Signup:
+    case 'signup':
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetSignupTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetSignupDescription,
       }
-    case AuthenticationWorkflowKind.PasswordChange:
+    case 'password-change':
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetPasswordChangeDescription,
       }
-    case AuthenticationWorkflowKind.TotpChallenge:
+    case 'totp-challenge':
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetAuthenticatorDescription,
       }
-    case AuthenticationWorkflowKind.TotpEnrollment:
-    case AuthenticationWorkflowKind.Manual:
+    case 'totp-enrollment':
+    case 'manual':
       return {
         titleKey: BROWSER_MESSAGE_KEYS.WidgetManualTitle,
         descriptionKey: BROWSER_MESSAGE_KEYS.WidgetManualDescription,

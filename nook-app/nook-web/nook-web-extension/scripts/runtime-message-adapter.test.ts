@@ -2,7 +2,6 @@ import { describe, expect, test } from 'bun:test'
 import {
   AuthenticationOutcomeVerdict,
   AuthenticationOutcomeResponseKind,
-  AuthenticationWorkflowSnapshotResponseKind,
   AuthenticatorBackupAttachResponseKind,
   AuthenticatorCodeResponseKind,
   AuthenticatorEnrollmentConfirmResponseKind,
@@ -32,7 +31,10 @@ import {
   sendGeneratePasswordRuntimeMessage,
 } from '../src/content/autofill/runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../nook-web-shared/src/extension/runtime-messages'
-import { AuthenticationWorkflowSnapshotMessageType } from '../src/lib/auth-workflow-messages'
+import {
+  AuthenticationWorkflowSnapshotMessageType,
+  type WebsiteLoginMatchAvailability,
+} from '../src/lib/auth-workflow-messages'
 import { WebsiteAuthenticatorPickerOpenMessageType } from '../src/lib/authenticator-picker-messages'
 import {
   WebsiteAuthenticatorBackupAttachMessageMode,
@@ -354,15 +356,20 @@ describe('runtime message adapters', () => {
 
   test('decodes a valid workflow snapshot through Rust', async () => {
     const response = {
-      ok: true,
-      snapshot: {
-        kind: 0,
-        stage: 0,
-        action: 0,
-        currentStep: 1,
-        totalSteps: 3,
-        requiresHumanApproval: true,
-        observationIndex: 0,
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 'login',
+          stage: 'credentials',
+          action: 'continue-with-nook',
+          currentStep: 1,
+          totalSteps: 3,
+          observationIndex: 0,
+        },
+      },
+      loginMatches: {
+        kind: 'ready',
+        count: 0,
       },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
@@ -373,9 +380,12 @@ describe('runtime message adapters', () => {
 
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
     if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.kind).toBe(
-        AuthenticationWorkflowSnapshotResponseKind.Matched,
-      )
+      expect(delivery.response.workflow.kind).toBe('matched')
+      const expectedLoginMatches: WebsiteLoginMatchAvailability = {
+        kind: 'ready',
+        count: 0,
+      }
+      expect(delivery.response.loginMatches).toEqual(expectedLoginMatches)
     }
   })
 
@@ -623,18 +633,41 @@ describe('runtime message adapters', () => {
 
   test('rejects an out-of-range workflow snapshot through Rust', async () => {
     const response = {
-      ok: true,
-      snapshot: {
-        kind: 0,
-        stage: 0,
-        action: 0,
-        currentStep: -1,
-        totalSteps: 300,
-        requiresHumanApproval: true,
-        observationIndex: -1,
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 0,
+          stage: 0,
+          action: 0,
+          currentStep: -1,
+          totalSteps: 300,
+          observationIndex: -1,
+        },
       },
+      loginMatches: { kind: 'unavailable' },
     }
     installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+      workflowSnapshotMessage,
+    )
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
+  })
+
+  test('rejects malformed login-match availability before rendering', async () => {
+    const response = {
+      workflow: { ok: true },
+      loginMatches: {
+        kind: 'ready',
+        count: -1,
+      },
+    }
+    const runtimeMock: RuntimeMock = {
+      kind: RuntimeMockKind.Response,
+      response,
+    }
+    installRuntimeMock(runtimeMock)
 
     const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
       workflowSnapshotMessage,

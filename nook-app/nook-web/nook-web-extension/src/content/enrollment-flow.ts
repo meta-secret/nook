@@ -142,6 +142,9 @@ async function commitStagedEnrollment({
   stageId,
   vaultStoreId,
 }: CommitStagedEnrollmentArgs): Promise<void> {
+  // The evidence watch is stopped before this async commit begins. Hold the
+  // current widget across that gap so a success-page rescan cannot remove it.
+  holdEnrollmentWidgetAfterSave = true
   const nookTypedArgs0_0: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollWorking),
@@ -176,10 +179,6 @@ async function commitStagedEnrollment({
       }
       renderEnrollmentActions(nookTypedArgs0_2)
     }
-    // Success pages often mention backup codes; without this hold, the next
-    // MutationObserver scan rebuilds the enrollment CTA and wipes the saved
-    // confirmation before the user (or e2e) can observe it.
-    holdEnrollmentWidgetAfterSave = true
   } else if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.kind ===
@@ -187,12 +186,14 @@ async function commitStagedEnrollment({
     'reason' in confirmDelivery.response &&
     confirmDelivery.response.reason === 'authenticator-locked'
   ) {
+    holdEnrollmentWidgetAfterSave = false
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
       host,
       text: lockedEnrollMessage(host),
     }
     setHostDescription(nookTypedArgs0_3)
   } else {
+    holdEnrollmentWidgetAfterSave = false
     const nookTypedArgs0_4: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),

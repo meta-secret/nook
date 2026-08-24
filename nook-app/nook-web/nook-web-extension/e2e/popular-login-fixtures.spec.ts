@@ -46,7 +46,7 @@ test.describe('popular login fixture coverage', () => {
     }
   })
 
-  test('shows Pilot Continue with Nook on every unique shell template', async ({
+  test('starts Pilot compact on every empty-vault login shell', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -60,10 +60,18 @@ test.describe('popular login fixture coverage', () => {
         const page = await paired.context.newPage()
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
+        const compactLauncher = widget.getByTestId('nook-auth-gate-expand')
         await expect(
-          widget.getByRole('button', { name: 'Continue with Nook' }),
+          compactLauncher,
           `Pilot missing for template ${templateId}`,
         ).toBeVisible({ timeout: 20_000 })
+        await expect(
+          widget.getByRole('button', { name: 'Continue with Nook' }),
+        ).toBeHidden()
+        await compactLauncher.click()
+        await expect(
+          widget.getByRole('button', { name: 'Continue with Nook' }),
+        ).toBeVisible()
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
           `${templateId}-login`,
         )

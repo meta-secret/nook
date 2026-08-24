@@ -8,6 +8,7 @@
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
+  import InertAccountField from './pages/InertAccountField.svelte'
   import NotFound from './pages/NotFound.svelte'
   import PlainLogin from './pages/PlainLogin.svelte'
   import Success from './pages/Success.svelte'
@@ -83,6 +84,8 @@
   <DetectionSpa />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
+{:else if pathname === '/inert-account-field'}
+  <InertAccountField />
 {:else if templateMatch?.[1]}
   <DetectionFromFixture templateId={templateMatch[1]} />
 {:else if siteMatch?.[1]}

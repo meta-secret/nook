@@ -10,7 +10,7 @@ import {
 import type {
   AuthenticationOutcomeClassification,
   AuthenticationOutcomeObservation,
-  AuthenticationPageObservations,
+  AuthenticationPageObservationFactsBatch,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import initNookWasm, {
   configure_vault_application,
@@ -30,7 +30,10 @@ import type {
   ExtensionPairingState,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { AuthenticationWorkflowSnapshotView } from '../lib/auth-workflow-messages'
+import type {
+  AuthenticationPageObservationView,
+  AuthenticationWorkflowSnapshotView,
+} from '../lib/auth-workflow-messages'
 import type {
   AuthenticationOutcomeObservationView,
   AuthenticationOutcomeVerdictView,
@@ -140,10 +143,17 @@ export type AuthenticationWorkflowSnapshot =
       snapshot: AuthenticationWorkflowSnapshotView
     }
 
+type AuthenticationWorkflowSnapshotRequest = {
+  observations: AuthenticationPageObservationView[]
+}
+
 export async function authenticationWorkflowSnapshot(
-  input: AuthenticationPageObservations,
+  request: AuthenticationWorkflowSnapshotRequest,
 ): Promise<AuthenticationWorkflowSnapshot> {
   await companionWasmReady
+  const input: AuthenticationPageObservationFactsBatch = {
+    observations: request.observations,
+  }
   const workflowMatch = classify_companion_authentication_workflow(input)
   const matchKind = companion_authentication_workflow_match_kind(workflowMatch)
   if (matchKind === CompanionAuthenticationWorkflowMatchKind.Rejected) {

@@ -1,6 +1,10 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
-import type { AuthenticationWorkflowSnapshotMessage } from '../../lib/auth-workflow-messages'
+import {
+  type AuthenticationWorkflowRuntimeResponse,
+  type AuthenticationWorkflowRuntimeResponseWire,
+  type AuthenticationWorkflowSnapshotMessage,
+} from '../../lib/auth-workflow-messages'
 import type {
   AuthenticatorPickerCancelMessage,
   WebsiteAuthenticatorPickerOpenMessage,
@@ -33,7 +37,7 @@ import {
   decode_login_picker_open_response,
   decode_authenticator_picker_open_response,
   decode_authentication_outcome_response,
-  decode_authentication_workflow_snapshot_response,
+  decode_authentication_workflow_runtime_response,
   decode_authenticator_backup_attach_response,
   decode_authenticator_code_response,
   decode_authenticator_enrollment_confirm_response,
@@ -45,8 +49,6 @@ import {
   decode_website_login_save_offer_response,
   decode_website_login_save_pending_response,
   decode_website_login_options,
-  type AuthenticationWorkflowSnapshotResponse,
-  type AuthenticationWorkflowSnapshotResponseWire,
   type AuthenticatorBackupAttachResponse,
   type AuthenticatorBackupAttachResponseWire,
   type AuthenticatorCodeResponse,
@@ -106,7 +108,6 @@ export type ExtensionRuntimeRequest =
   | WebsiteLoginSavePendingMessage
 
 export type {
-  AuthenticationWorkflowSnapshotResponse,
   AuthenticatorBackupAttachResponse,
   AuthenticatorCodeResponse,
   AuthenticatorEnrollmentConfirmResponse,
@@ -296,7 +297,7 @@ export async function sendAuthenticatorPickerOpenRuntimeMessage(
 
 export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
   message: AuthenticationWorkflowSnapshotMessage,
-): Promise<RuntimeMessageDelivery<AuthenticationWorkflowSnapshotResponse>> {
+): Promise<RuntimeMessageDelivery<AuthenticationWorkflowRuntimeResponse>> {
   const delivery = await sendRuntimeMessage(message)
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     return unavailable()
@@ -304,10 +305,10 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
   try {
     await companionWasmReady
     const responseWire =
-      delivery.response as AuthenticationWorkflowSnapshotResponseWire
+      delivery.response as AuthenticationWorkflowRuntimeResponseWire
     return {
       kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authentication_workflow_snapshot_response(responseWire),
+      response: decode_authentication_workflow_runtime_response(responseWire),
     }
   } catch {
     return unavailable()

@@ -541,7 +541,7 @@ export function mountWidgetShell({
   }
 
   collapseButton.addEventListener('click', () => {
-    widgetState.collapsed = true
+    widgetState.collapseByUser()
     applyCollapsedState()
   })
 
@@ -567,7 +567,7 @@ export function mountWidgetShell({
     {
       kind: PointerDragBehaviorKind.Tappable,
       onTap: () => {
-        widgetState.collapsed = false
+        widgetState.expandByUser()
         applyCollapsedState()
       },
     }

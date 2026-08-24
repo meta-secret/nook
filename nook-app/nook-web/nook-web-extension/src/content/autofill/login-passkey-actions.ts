@@ -6,7 +6,7 @@ import type { PasswordFormObservation } from '../../../../nook-web-shared/src/ex
 import {
   fillGeneratedPassword,
   fillLoginCredentials,
-  findPasskeyControl,
+  findPasskeyControlForScope,
   PasskeyControlLookupKind,
   PasswordFormQueryKind,
   submitLoginForm,
@@ -21,7 +21,7 @@ import {
   WebsiteLoginPickerOpenMessageType,
 } from '../../lib/login-picker-messages'
 import {
-  AuthenticationWorkflowAction,
+  type AuthenticationWorkflowAction,
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
@@ -70,10 +70,6 @@ export type {
   RuntimeMessageDelivery,
   RuntimeMessageResponseDecoder,
 } from './runtime-message-adapter'
-
-export type PasskeyWidgetAction =
-  | AuthenticationWorkflowAction.UsePasskey
-  | AuthenticationWorkflowAction.CreatePasskey
 
 type PasskeyWidgetStatusUpdate = {
   description: HTMLParagraphElement
@@ -512,13 +508,15 @@ export async function generatePasswordWithNook({
 type ProposePasskeyWithNookArgs = {
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  action: PasskeyWidgetAction
+  action: AuthenticationWorkflowAction
+  workflow: PasswordFormObservation
 }
 
 export async function proposePasskeyWithNook({
   description,
   continueButton,
   action,
+  workflow,
 }: ProposePasskeyWithNookArgs): Promise<void> {
   if (widgetState.busy) return
   widgetState.busy = true
@@ -527,7 +525,7 @@ export async function proposePasskeyWithNook({
     description,
     continueButton,
     text: translatedMessage(
-      action === AuthenticationWorkflowAction.UsePasskey
+      action === 'use-passkey'
         ? BROWSER_MESSAGE_KEYS.WidgetUsePasskeyWorking
         : BROWSER_MESSAGE_KEYS.WidgetCreatePasskeyWorking,
     ),
@@ -535,7 +533,12 @@ export async function proposePasskeyWithNook({
   }
   setStatus(nookTypedArgs0_28)
   try {
-    const control = findPasskeyControl(document)
+    const passkeyLookupArgs: Parameters<typeof findPasskeyControlForScope>[0] =
+      {
+        root: workflow.root,
+        formScope: workflow.formScope,
+      }
+    const control = findPasskeyControlForScope(passkeyLookupArgs)
     if (control.kind === PasskeyControlLookupKind.Absent) {
       const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,

@@ -231,6 +231,11 @@ The layers have intentionally different responsibilities:
   contents or secret material;
 - Simple Vault remains the complete management and recovery surface.
 
+Pilot observations cross the Rust/WASM boundary as named evidence enums and
+bounded quantities. They do not use positional boolean bags or numeric enum
+discriminants. Decisions derived entirely from an observation live on the Rust
+observation model and return an exhaustive named state.
+
 The initial production slice classifies login (including email-first /
 username-only steps used by Microsoft, Slack, and similar SSO shells),
 signup, password-change, and standalone one-time-code structures through
@@ -312,11 +317,22 @@ icon → title → description → primary action pattern as the extension devic
 form so every site gets a universal authentication surface instead of forcing
 users through site-specific login chrome.
 
+Credential-shaped fields are not sufficient by themselves.
+At least one visible, enabled control must be able to advance the detected
+authentication ceremony.
+For an auto-submit second-factor challenge, its visible, enabled one-time-code
+input is the advancing control; a separate submit button is not required.
+An inert account, profile, newsletter, or settings field must not mount the HUD.
+
 The gate must:
 
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
 - support collapsing to a compact Nook mark and expanding again;
+- start as the compact Nook mark when the unlocked extension confirms that a
+  detected login flow has zero saved login matches for the origin;
+- start expanded when a saved login matches, or when the extension is locked or
+  unavailable and the next useful action is unlock or connect;
 - preserve current/total progress in the compact state and accessible label;
 - support dismissal without blocking the host page;
 - show the requesting hostname, Rust-classified workflow, current step, and

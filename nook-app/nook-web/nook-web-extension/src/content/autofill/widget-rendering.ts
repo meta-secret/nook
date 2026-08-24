@@ -1,8 +1,14 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
-import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
-import type { AuthenticationWorkflowSnapshotView } from '../../lib/auth-workflow-messages'
-import { AuthenticationWorkflowAction } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authWidgetStartsCollapsed,
+  isTrustedAuthAction,
+} from '../../lib/auth-widget-policy'
+import { type WebsiteLoginMatchAvailability } from '../../lib/auth-workflow-messages'
+import {
+  authentication_workflow_saved_login_capability,
+  type AuthenticationWorkflowSnapshot,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   detectEnrollmentHints,
   renderEnrollmentActions,
@@ -46,6 +52,7 @@ export function renderEnrollmentWidget({
     removeWidget()
     return
   }
+  widgetState.beginEnrollmentWorkflow()
   const workflowKey = [
     'enrollment',
     hints.qr ? 'qr' : '',
@@ -99,15 +106,17 @@ export function renderEnrollmentWidget({
 }
 
 type RenderWidgetArgs = {
-  snapshot: AuthenticationWorkflowSnapshotView
+  snapshot: AuthenticationWorkflowSnapshot
   workflow: PasswordFormObservation
   vaultConnection: PilotVaultConnection
+  loginMatches: WebsiteLoginMatchAvailability
 }
 
 export function renderWidget({
   snapshot,
   workflow,
   vaultConnection,
+  loginMatches,
 }: RenderWidgetArgs): void {
   if (widgetState.dismissed) {
     removeWidget()
@@ -120,6 +129,10 @@ export function renderWidget({
     snapshot.currentStep,
     snapshot.totalSteps,
     snapshot.observationIndex,
+    loginMatches.kind,
+    loginMatches.kind === 'ready' && 'count' in loginMatches
+      ? loginMatches.count
+      : '',
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
@@ -140,6 +153,16 @@ export function renderWidget({
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 
+  const savedLoginCapability =
+    authentication_workflow_saved_login_capability(snapshot)
+  const nookTypedArgs0_0: Parameters<typeof authWidgetStartsCollapsed>[0] = {
+    savedLoginCapability,
+    loginMatches,
+  }
+  widgetState.applyAutomaticCollapse(
+    authWidgetStartsCollapsed(nookTypedArgs0_0),
+  )
+
   const nookTypedArgs0_3: Parameters<typeof createWidgetShell>[0] = {
     copy: workflowCopy(snapshot.kind),
     vaultConnection,
@@ -150,19 +173,19 @@ export function renderWidget({
   const { body, step, title, description, continueButton, openVaultButton } =
     shell
   const canContinueWithNook =
-    snapshot.action === AuthenticationWorkflowAction.ContinueWithNook ||
-    snapshot.action === AuthenticationWorkflowAction.FillTotp ||
-    snapshot.action === AuthenticationWorkflowAction.GeneratePassword ||
-    snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
-    snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+    snapshot.action === 'continue-with-nook' ||
+    snapshot.action === 'fill-totp' ||
+    snapshot.action === 'generate-password' ||
+    snapshot.action === 'use-passkey' ||
+    snapshot.action === 'create-passkey'
   const continueMessageKey =
-    snapshot.action === AuthenticationWorkflowAction.FillTotp
+    snapshot.action === 'fill-totp'
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
-      : snapshot.action === AuthenticationWorkflowAction.GeneratePassword
+      : snapshot.action === 'generate-password'
         ? BROWSER_MESSAGE_KEYS.WidgetGeneratePassword
-        : snapshot.action === AuthenticationWorkflowAction.UsePasskey
+        : snapshot.action === 'use-passkey'
           ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
-          : snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+          : snapshot.action === 'create-passkey'
             ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
             : canContinueWithNook
               ? BROWSER_MESSAGE_KEYS.WidgetContinue
@@ -182,7 +205,7 @@ export function renderWidget({
       removeWidget()
       return
     }
-    if (snapshot.action === AuthenticationWorkflowAction.FillTotp) {
+    if (snapshot.action === 'fill-totp') {
       const nookTypedArgs0_4: Parameters<typeof continueWithAuthenticator>[0] =
         {
           workflow,
@@ -192,9 +215,7 @@ export function renderWidget({
           continueButton,
         }
       void continueWithAuthenticator(nookTypedArgs0_4)
-    } else if (
-      snapshot.action === AuthenticationWorkflowAction.GeneratePassword
-    ) {
+    } else if (snapshot.action === 'generate-password') {
       const nookTypedArgs0_5: Parameters<typeof generatePasswordWithNook>[0] = {
         workflow,
         step,
@@ -204,13 +225,14 @@ export function renderWidget({
       }
       void generatePasswordWithNook(nookTypedArgs0_5)
     } else if (
-      snapshot.action === AuthenticationWorkflowAction.UsePasskey ||
-      snapshot.action === AuthenticationWorkflowAction.CreatePasskey
+      snapshot.action === 'use-passkey' ||
+      snapshot.action === 'create-passkey'
     ) {
       const nookTypedArgs0_6: Parameters<typeof proposePasskeyWithNook>[0] = {
         description,
         continueButton,
         action: snapshot.action,
+        workflow,
       }
       void proposePasskeyWithNook(nookTypedArgs0_6)
     } else {

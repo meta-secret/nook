@@ -1,0 +1,71 @@
+import { describe, expect, test } from 'bun:test'
+import { ScanState, WidgetState } from '../src/content/autofill/state'
+
+describe('authentication scan scheduling', () => {
+  test('keeps the first pending timer under continuous mutations', () => {
+    const state = new ScanState()
+    let timerCreations = 0
+    const createTimer = () => {
+      timerCreations++
+      return timerCreations
+    }
+
+    expect(state.scheduleTimer(createTimer)).toBe(true)
+    expect(state.scheduleTimer(createTimer)).toBe(false)
+    expect(timerCreations).toBe(1)
+
+    state.clearPendingTimer()
+    expect(state.scheduleTimer(createTimer)).toBe(true)
+    expect(timerCreations).toBe(2)
+  })
+})
+
+describe('Nook Pilot presentation state', () => {
+  test('recomputes automatic collapse as login availability changes', () => {
+    const state = new WidgetState()
+
+    state.applyAutomaticCollapse(true)
+    expect(state.collapsed).toBe(true)
+
+    state.applyAutomaticCollapse(false)
+    expect(state.collapsed).toBe(false)
+  })
+
+  test('preserves an explicit user presentation across availability changes', () => {
+    const collapsed = new WidgetState()
+    collapsed.collapseByUser()
+    collapsed.applyAutomaticCollapse(false)
+    expect(collapsed.collapsed).toBe(true)
+
+    const expanded = new WidgetState()
+    expanded.expandByUser()
+    expanded.applyAutomaticCollapse(true)
+    expect(expanded.collapsed).toBe(false)
+  })
+
+  test('clears only automatic collapse when enrollment begins', () => {
+    const automatic = new WidgetState()
+    automatic.applyAutomaticCollapse(true)
+    automatic.beginEnrollmentWorkflow()
+    expect(automatic.collapsed).toBe(false)
+
+    const explicit = new WidgetState()
+    explicit.collapseByUser()
+    explicit.beginEnrollmentWorkflow()
+    expect(explicit.collapsed).toBe(true)
+  })
+
+  test('scopes explicit presentation choices to the rendered workflow', () => {
+    const state = new WidgetState()
+    state.collapseByUser()
+    state.clearRenderedWidget()
+
+    state.applyAutomaticCollapse(false)
+    expect(state.collapsed).toBe(false)
+
+    state.expandByUser()
+    state.clearRenderedWidget()
+    state.applyAutomaticCollapse(true)
+    expect(state.collapsed).toBe(true)
+  })
+})

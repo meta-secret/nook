@@ -80,6 +80,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const loginWidget = loginPage.locator('#nook-auth-widget')
+      await expect(
+        loginWidget.getByTestId('nook-auth-gate-expand'),
+      ).toBeVisible()
+      await loginWidget.getByTestId('nook-auth-gate-expand').click()
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
       await loginWidget
         .getByRole('button', { name: 'Continue with Nook' })

@@ -9,8 +9,17 @@ import {
 } from '../pairing-grants'
 import {
   extensionSessionInteractiveDeadline,
+  extensionSessionProbeDeadline,
+  type ExtensionSessionQueue,
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../../offscreen/session-request-adapter'
+import type { WebsiteLoginMatchAvailabilityWire } from '../../lib/auth-workflow-messages'
+import {
+  LoginMatchAvailabilityCache,
+  type LoginMatchAvailabilityCacheInvalidation,
+  type LoginMatchAvailabilityCacheOptions,
+  type LoginMatchAvailabilityCacheRequest,
+} from '../../lib/login-match-availability-cache'
 import {
   availableWebsiteGrants,
   getSessionStorage,
@@ -50,7 +59,16 @@ const pendingAuthenticatorPickers = new Map<
 >()
 const pendingLoginPickers = new Map<string, PendingLoginPicker>()
 
-function sessionResponseAccounts(response: unknown): unknown[] {
+enum SessionAccountListKind {
+  Available = 'available',
+  Invalid = 'invalid',
+}
+
+type SessionAccountList =
+  | { kind: SessionAccountListKind.Available; accounts: unknown[] }
+  | { kind: SessionAccountListKind.Invalid }
+
+function sessionResponseAccounts(response: unknown): SessionAccountList {
   if (
     !response ||
     typeof response !== 'object' ||
@@ -59,9 +77,9 @@ function sessionResponseAccounts(response: unknown): unknown[] {
     !('accounts' in response) ||
     !Array.isArray(response.accounts)
   ) {
-    return []
+    return { kind: SessionAccountListKind.Invalid }
   }
-  return response.accounts
+  return { kind: SessionAccountListKind.Available, accounts: response.accounts }
 }
 
 function authenticatorPickerStorageKey(requestId: string): string {
@@ -182,7 +200,9 @@ export async function authenticatorAccounts({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
-    for (const account of sessionResponseAccounts(response)) {
+    const responseAccounts = sessionResponseAccounts(response)
+    if (responseAccounts.kind === SessionAccountListKind.Invalid) continue
+    for (const account of responseAccounts.accounts) {
       if (
         !account ||
         typeof account !== 'object' ||
@@ -253,12 +273,16 @@ type LoginAccountsForOriginArgs = {
   grants: StoredExtensionPairingGrant[]
   origin: string
   query?: string
+  queue?: ExtensionSessionQueue
+  requireCompleteResponses?: boolean
 }
 
 export async function loginAccountsForOrigin({
   grants,
   origin,
   query = '',
+  queue = MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+  requireCompleteResponses = false,
 }: LoginAccountsForOriginArgs): Promise<WebsiteLoginAccountOption[]> {
   const accounts: WebsiteLoginAccountOption[] = []
   const needle = query.trim().toLowerCase()
@@ -268,11 +292,18 @@ export async function loginAccountsForOrigin({
       payload: {
         ...extensionSessionGrantIdentity(grant),
         origin,
-        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+        queue,
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_5)
-    for (const account of sessionResponseAccounts(response)) {
+    const responseAccounts = sessionResponseAccounts(response)
+    if (responseAccounts.kind === SessionAccountListKind.Invalid) {
+      if (requireCompleteResponses) {
+        throw new Error('Extension session login lookup failed.')
+      }
+      continue
+    }
+    for (const account of responseAccounts.accounts) {
       if (
         !account ||
         typeof account !== 'object' ||
@@ -285,6 +316,11 @@ export async function loginAccountsForOrigin({
         !('websiteHost' in account) ||
         typeof account.websiteHost !== 'string'
       ) {
+        if (requireCompleteResponses) {
+          throw new Error(
+            'Extension session returned an invalid login account.',
+          )
+        }
         continue
       }
       const option: WebsiteLoginAccountOption = {
@@ -310,6 +346,91 @@ export async function loginAccountsForOrigin({
     }
   }
   return accounts
+}
+
+const LOGIN_MATCH_LOOKUP_TIMEOUT_MS = 1_500
+const LOGIN_MATCH_CACHE_TTL_MS = 2_000
+const loginMatchCacheOptions: LoginMatchAvailabilityCacheOptions = {
+  ttlMs: LOGIN_MATCH_CACHE_TTL_MS,
+}
+const loginMatchAvailabilityCache = new LoginMatchAvailabilityCache(
+  loginMatchCacheOptions,
+)
+
+type LoginMatchAvailabilityCandidates = readonly [
+  Promise<WebsiteLoginMatchAvailabilityWire>,
+  Promise<WebsiteLoginMatchAvailabilityWire>,
+]
+
+enum LoginMatchAvailabilityKind {
+  Ready = 'ready',
+  Locked = 'locked',
+  Unavailable = 'unavailable',
+}
+
+async function loginMatchAvailabilityForOrigin(
+  origin: string,
+): Promise<WebsiteLoginMatchAvailabilityWire> {
+  const grants = await passwordPairingGrants()
+  if (grants.length === 0) {
+    return { kind: LoginMatchAvailabilityKind.Unavailable }
+  }
+  await ensureExtensionSessionDocument()
+  const expiresAt = Date.now() + LOGIN_MATCH_LOOKUP_TIMEOUT_MS
+  const nookTypedArgs0_6: Parameters<typeof sendSessionMessage>[0] = {
+    type: 'nook:extension-session-status',
+    payload: { queue: extensionSessionProbeDeadline(expiresAt) },
+  }
+  const status = await sendSessionMessage(nookTypedArgs0_6)
+  if (!isUnlockedSessionStatus(status)) {
+    return { kind: LoginMatchAvailabilityKind.Locked }
+  }
+  const nookTypedArgs0_7: Parameters<typeof loginAccountsForOrigin>[0] = {
+    grants,
+    origin,
+    queue: extensionSessionProbeDeadline(expiresAt),
+    requireCompleteResponses: true,
+  }
+  const accounts = await loginAccountsForOrigin(nookTypedArgs0_7)
+  return {
+    kind: LoginMatchAvailabilityKind.Ready,
+    count: accounts.length,
+  }
+}
+
+async function loginMatchAvailabilityForOriginSafeUncached(
+  origin: string,
+): Promise<WebsiteLoginMatchAvailabilityWire> {
+  const unavailable: WebsiteLoginMatchAvailabilityWire = {
+    kind: LoginMatchAvailabilityKind.Unavailable,
+  }
+  try {
+    const candidates: LoginMatchAvailabilityCandidates = [
+      loginMatchAvailabilityForOrigin(origin),
+      new Promise<WebsiteLoginMatchAvailabilityWire>((resolve) => {
+        setTimeout(() => resolve(unavailable), LOGIN_MATCH_LOOKUP_TIMEOUT_MS)
+      }),
+    ]
+    return await Promise.race(candidates)
+  } catch {
+    return unavailable
+  }
+}
+
+export function invalidateLoginMatchAvailabilityForOrigin(
+  request: LoginMatchAvailabilityCacheInvalidation,
+): void {
+  loginMatchAvailabilityCache.invalidate(request)
+}
+
+export function loginMatchAvailabilityForOriginSafe(
+  origin: string,
+): Promise<WebsiteLoginMatchAvailabilityWire> {
+  const request: LoginMatchAvailabilityCacheRequest = {
+    origin,
+    load: () => loginMatchAvailabilityForOriginSafeUncached(origin),
+  }
+  return loginMatchAvailabilityCache.resolve(request)
 }
 
 type WebsiteLoginOptionsArgs = {
