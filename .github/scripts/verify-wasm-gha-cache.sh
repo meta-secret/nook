@@ -8,6 +8,19 @@ sccache_mode="${SCCACHE_S3_MODE:-external}"
 sccache_endpoint="${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
 sccache_bucket="${SCCACHE_BUCKET:-nook-sccache}"
 registry_host="${NOOK_REGISTRY_CACHE_HOST:-registry.dev.nokey.sh}"
+arc_builder="${NOOK_PR_BUILDX_BUILDER:-}"
+use_arc_sidecar=""
+
+if [ "${NOOK_BUILDKIT_REMOTE:-}" = "1" ]; then
+  use_arc_sidecar=1
+  : "${arc_builder:?missing NOOK_PR_BUILDX_BUILDER for ARC cache proof}"
+  expected_arc_builder="nook-arc-${GITHUB_RUN_ID:?missing GITHUB_RUN_ID}-${GITHUB_JOB:?missing GITHUB_JOB}-${GITHUB_RUN_ATTEMPT:?missing GITHUB_RUN_ATTEMPT}"
+  expected_arc_builder="$(printf '%s' "$expected_arc_builder" | tr -c 'a-zA-Z0-9_.-' '-')"
+  if [ "$arc_builder" != "$expected_arc_builder" ]; then
+    echo "refusing to prune non-job ARC BuildKit builder: $arc_builder" >&2
+    exit 2
+  fi
+fi
 
 bake_args=(
   --allow="fs.read=$repo_root"
@@ -35,19 +48,35 @@ require_cached_step() {
 }
 
 for attempt in 1 2 3; do
-  proof_builder="nook-wasm-cache-proof-${GITHUB_RUN_ID:-local}-${attempt}-${RANDOM}"
+  proof_builder="$arc_builder"
+  remove_proof_builder=""
   proof_log="$(mktemp)"
   cleanup() {
-    "$docker_bin" buildx rm "$proof_builder" >/dev/null 2>&1 || true
+    if [ -n "$remove_proof_builder" ]; then
+      "$docker_bin" buildx rm "$proof_builder" >/dev/null 2>&1 || true
+    fi
     rm -f "$proof_log"
   }
   trap cleanup EXIT
 
-  "$docker_bin" buildx create \
-    --name "$proof_builder" \
-    --driver docker-container \
-    --use \
-    --bootstrap >/dev/null
+  if [ -n "$use_arc_sidecar" ]; then
+    # ARC exposes one private, job-scoped BuildKit sidecar and intentionally has
+    # no usable Docker daemon for nested BuildKit containers. Clear the
+    # sidecar before every attempt so the proof can only restore published
+    # registry layers, including after an earlier incomplete attempt.
+    "$docker_bin" buildx use "$proof_builder"
+    "$docker_bin" buildx prune \
+      --all \
+      --force >/dev/null
+  else
+    proof_builder="nook-wasm-cache-proof-${GITHUB_RUN_ID:-local}-${attempt}-${RANDOM}"
+    remove_proof_builder=1
+    "$docker_bin" buildx create \
+      --name "$proof_builder" \
+      --driver docker-container \
+      --use \
+      --bootstrap >/dev/null
+  fi
 
   if "$docker_bin" buildx bake \
     --progress=plain \
