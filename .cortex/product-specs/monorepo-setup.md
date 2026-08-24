@@ -105,8 +105,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 - **CI runners:**
   - Trusted same-repository PR Rust jobs and Main build producers use ARC.
   - Main's portable WASM dependency writer/proof uses two fresh GitHub-hosted
-    builders. Zot must report every manifest descriptor present with its
-    declared size and readable bytes. Deployment then waits until the second
+    builders. Zot must prove child manifest digests and sizes plus every blob's
+    declared size and readability. Deployment then waits until the second
     cache-only solve reports every expensive dependency vertex cached.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.

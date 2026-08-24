@@ -112,8 +112,8 @@ It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
 and non-Main runtime-dependent, browser, WASM, and deployment validation execute
 on ephemeral GitHub-hosted runners. Main's portable WASM dependency-cache writer
 and proof is the narrow hosted exception. One fresh hosted builder publishes the
-portable Zot metadata. A registry audit requires every descriptor to exist with
-its declared size and return readable bytes. Another cache-only builder then
+portable Zot metadata. A registry audit verifies child manifest digest/size and
+every blob's declared size and readability. Another cache-only builder then
 requires every expensive dependency vertex to hit before deployment without
 hydrating the complete dependency filesystem. The self-hosted `nook` pool
 remains maintenance-only.

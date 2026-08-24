@@ -595,8 +595,8 @@ producers run in disposable ordinary ARC Pods. The Docker CLI connects to the
 persistent rootless BuildKit shard on the selected node. ARC runners receive no
 Docker daemon, Podman API, DinD process, host runtime socket, host path, or Kata
 runtime. ARC keeps its warm WASM source graph, while one narrow GitHub-hosted
-job alone publishes the portable WASM dependency ref. Zot proves every declared
-blob present, correctly sized, and readable before a second fresh cache-only
+job alone publishes the portable WASM dependency ref. Zot proves child manifest
+digests and sizes plus every declared blob's size and readability before a fresh
 builder verifies dependency-vertex hits. Development deployment waits for both.
 
 The `nook-buildkit` StatefulSet keeps one 64 GiB local shard on each qualified

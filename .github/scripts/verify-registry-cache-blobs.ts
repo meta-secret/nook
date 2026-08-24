@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto'
+
 interface RegistryDescriptor {
   digest: string
   mediaType: string
@@ -20,6 +22,11 @@ interface RegistryRequest {
   method?: string
   path: string
   range?: string
+}
+
+interface ManifestInput {
+  descriptor?: RegistryDescriptor
+  reference: string
 }
 
 const registryRef = process.argv[2]
@@ -69,17 +76,35 @@ const registryRequest = async (input: RegistryRequest): Promise<Response> => {
 const descriptors = new Map<string, RegistryDescriptor>()
 const visitedManifests = new Set<string>()
 const manifestRequest = (reference: string): RegistryRequest => ({ path: `manifests/${reference}` })
+const childManifestInput = (descriptor: RegistryDescriptor): ManifestInput => ({
+  descriptor,
+  reference: descriptor.digest,
+})
 const blobHeadRequest = (path: string): RegistryRequest => ({ method: 'HEAD', path })
 const blobByteRequest = (path: string): RegistryRequest => ({ path, range: 'bytes=0-0' })
 
-const collectManifest = async (reference: string): Promise<void> => {
-  if (visitedManifests.has(reference)) return
-  visitedManifests.add(reference)
-  const response = await registryRequest(manifestRequest(reference))
-  const document = JSON.parse(await response.text()) as RegistryDocument
+const collectManifest = async (input: ManifestInput): Promise<void> => {
+  if (visitedManifests.has(input.reference)) return
+  visitedManifests.add(input.reference)
+  const response = await registryRequest(manifestRequest(input.reference))
+  const bytes = new Uint8Array(await response.arrayBuffer())
+  const digest = `sha256:${createHash('sha256').update(bytes).digest('hex')}`
+  if (input.descriptor) {
+    if (bytes.length !== input.descriptor.size || digest !== input.descriptor.digest) {
+      throw new Error(
+        `${input.descriptor.digest} manifest has digest ${digest} and ${bytes.length} bytes; expected ${input.descriptor.size}`,
+      )
+    }
+  } else {
+    const registryDigest = response.headers.get('docker-content-digest')
+    if (registryDigest && registryDigest !== digest) {
+      throw new Error(`tagged manifest digest ${digest} does not match registry digest ${registryDigest}`)
+    }
+  }
+  const document = JSON.parse(new TextDecoder().decode(bytes)) as RegistryDocument
   if (document.config) descriptors.set(document.config.digest, document.config)
   for (const layer of document.layers ?? []) descriptors.set(layer.digest, layer)
-  for (const manifest of document.manifests ?? []) await collectManifest(manifest.digest)
+  for (const manifest of document.manifests ?? []) await collectManifest(childManifestInput(manifest))
 }
 
 const verifyBlob = async (descriptor: RegistryDescriptor): Promise<void> => {
@@ -103,7 +128,8 @@ const verifyBlob = async (descriptor: RegistryDescriptor): Promise<void> => {
   }
 }
 
-await collectManifest(location.reference)
+const rootManifest: ManifestInput = { reference: location.reference }
+await collectManifest(rootManifest)
 if (descriptors.size === 0) throw new Error(`${registryRef} contains no cache blob descriptors`)
 for (const descriptor of descriptors.values()) await verifyBlob(descriptor)
 let totalBytes = 0

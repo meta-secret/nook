@@ -845,8 +845,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   persistent rootless BuildKit shard on the selected node.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
 - Main's portable WASM cache writer uses one fresh hosted builder rather than
-  ARC-local metadata. Zot must report every descriptor with its declared size
-  and readable bytes. A second fresh cache-only builder then requires the
+  ARC-local metadata. Zot must prove child manifest digest/size plus every
+  declared blob's size and readability. A second fresh builder then requires the
   dependency compiler vertices to be `CACHED`. The target stays in the same
   Rust Dockerfile and context lineage; a named-context wrapper is invalid
   because it changes BuildKit cache-key identity.

@@ -144,8 +144,8 @@ public blob is fetched centrally once and then retained.
 
 Main build producers run on ARC and retain their persistent local graph. One
 narrow GitHub-hosted job creates a fresh BuildKit builder and alone publishes
-the portable WASM dependency ref. Zot then proves every manifest descriptor
-present with its declared size and readable bytes. A second fresh cache-only
+the portable WASM dependency ref. Zot then proves child manifest digest/size
+plus every declared blob's size and readability. A second fresh cache-only
 builder requires each expensive dependency vertex to hit. This hosted exception
 prevents a persistent ARC shard from masking missing registry data.
 

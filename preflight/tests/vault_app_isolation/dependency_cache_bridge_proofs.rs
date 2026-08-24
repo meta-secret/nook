@@ -383,8 +383,10 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         blob_verifier.contains("method: 'HEAD'")
             && blob_verifier.contains("content-length")
             && blob_verifier.contains("range: 'bytes=0-0'")
+            && blob_verifier.contains("createHash('sha256')")
+            && blob_verifier.contains("bytes.length !== input.descriptor.size")
             && blob_verifier.contains("descriptor.size"),
-        "portable cache proof must validate every declared Zot blob without hydrating its filesystem"
+        "portable cache proof must validate child manifests and every declared Zot blob without hydrating its filesystem"
     );
     Ok(())
 }

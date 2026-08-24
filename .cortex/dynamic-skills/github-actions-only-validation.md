@@ -34,7 +34,7 @@ Validation has three layers:
   - General ARC provides Main's job-scoped image runtime inside the disposable
     ARC runner Pod.
   - Main's portable WASM dependency job writes from one fresh hosted builder.
-    Zot verifies every manifest descriptor's size and readability. A second
+    Zot verifies child manifest digest/size and every blob's readability. A second
     cache-only builder requires the expensive dependency vertices to hit before
     deployment without hydrating their full snapshots.
   - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
