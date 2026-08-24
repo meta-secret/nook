@@ -565,7 +565,10 @@ jobs:
   deploy:
     name: Deploy development
     needs: [web, web-e2e, wasm-cache-proof]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    # This lane still invokes the sealed image through Docker while direct
+    # BuildKit artifact deployment is migrated separately. Keep that runtime
+    # boundary on a fresh hosted VM; daemon-free ARC owns build producers only.
+    runs-on: ubuntu-latest
     environment:
       name: development
       url: https://dev.nokey.sh/
