@@ -155,7 +155,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - The hosted fallback WASM dependency export keeps its no-import,
     forced-zstd behavior.
   - Later browser/UI consumers remain read-only.
-  - Development deploy waits on web verify + web e2e.
+  - Development deploy waits on web verify, web e2e, and the fresh Zot hydration
+    proof.
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.
   - That includes browser E2E and UI-demo failures.
   - Real-provider sync-live checks run only through explicit manual validation.
