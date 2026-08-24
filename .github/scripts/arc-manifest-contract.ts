@@ -23,7 +23,6 @@ class TextContract {
       );
     }
   }
-
   requireAll(fragments: string[]): void {
     for (const fragment of fragments) this.require(fragment);
   }
@@ -690,6 +689,7 @@ tasks.requireAll([
 ]);
 buildkitCloner.forbid('test -s "$github_token_file"\n\nvalid_uid');
 tasks.require("ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new");
+tasks.forbid(`ssh -n -o BatchMode=yes "$controller_target" 'bash -s'`);
 tasks.forbid("$credential_temp.normalized");
 tasks.forbid('primary_node="$(jq -r');
 workerTasks.requireAll([

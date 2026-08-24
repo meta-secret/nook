@@ -67,7 +67,7 @@ tasks:
         while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
           test -n "$build_remote_dir"
-          node="$(ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
+          node="$(ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
         set -euo pipefail
         build_target="$1"
         sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json |
@@ -77,7 +77,7 @@ tasks:
           )"
           test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
           node="$(printf '%s\n' "$node" | sed '/^$/d')"
-          ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$node" <<'REMOTE'
+          ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$node" <<'REMOTE'
         set -euo pipefail
         node="$1"
         sudo -n k0s kubectl taint node "$node" \
@@ -412,7 +412,7 @@ tasks:
               'sudo -n rm -f /etc/nook/arc-cache-verifier-token'
             verifier_annotation='nook.nokey.sh/arc-cache-verifier-owner-'
           fi
-          node="$(ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
+          node="$(ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
         set -euo pipefail
         build_target="$1"
         sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json |
