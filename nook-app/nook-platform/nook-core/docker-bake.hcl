@@ -54,6 +54,18 @@ target "builder-wasm-deps-restore" {
   cache-from = rust_wasm_deps_cache_from
 }
 
+// Clean hosted proof target. Its uncached hydration child forces BuildKit to
+// fetch and mount the restored snapshots, then exports one tiny marker.
+target "builder-wasm-deps-cache-proof" {
+  context    = "."
+  dockerfile = ".github/cache-proof/wasm-deps.Dockerfile"
+  target     = "builder-wasm-deps-cache-proof"
+  platforms  = ["linux/amd64"]
+  contexts = {
+    wasm-deps = "target:builder-wasm-deps-restore"
+  }
+}
+
 // Explicit writer for the WASM deps Zot scope. Main writes
 // GHA_RUST_WASM_DEPS_SCOPE; isolated writes use the exact git scope.
 target "builder-wasm-deps-publish" {

@@ -45,7 +45,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Commit and invocation scoping prevent concurrent builds from consuming each other's artifacts.
   - `builder-wasm` is never a parent or context of `nook-web`.
 - **Delivery BuildKit uses persistent node-local shards and portable Zot refs.**
-  - Trusted same-repository PR Rust jobs and explicit Main jobs use disposable
+  - Trusted same-repository PR Rust jobs and Main build producers use disposable
     ordinary ARC Pods.
   - Hive Rust verification uses a dedicated scale-to-zero ARC set with ten-job
     concurrency.
@@ -103,7 +103,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Run it unconditionally before every push. Product validation remains remote.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
-  - Trusted same-repository PR Rust jobs and every explicit Main job use ARC.
+  - Trusted same-repository PR Rust jobs and Main build producers use ARC.
+  - Main's clean-room Zot hydration proof uses a fresh GitHub-hosted builder.
+    Deployment waits for its exported hydration marker.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
   - Every ARC job receives a fresh ordinary Pod.
@@ -145,8 +147,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Each Main-fix consumer builds only the browser image.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
-  - Every explicit Main job selects the general scale set through
-    `NOOK_RUNS_ON`.
+  - Main build producers select the general scale set through `NOOK_RUNS_ON`.
+  - The fresh Zot hydration proof selects `ubuntu-latest` explicitly.
   - `ubuntu-latest` remains the configuration fallback.
   - Each producer publishes its already-solved registry graph only after its
     lane-specific check succeeds.
