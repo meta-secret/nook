@@ -291,7 +291,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Purpose](dynamic-skills/pre-push-hygiene.md#purpose)
   - [Problem Pattern](dynamic-skills/pre-push-hygiene.md#problem-pattern)
   - [Preferred Pattern](dynamic-skills/pre-push-hygiene.md#preferred-pattern)
-    - [Host-format rule](dynamic-skills/pre-push-hygiene.md#host-format-rule)
+    - [Shared formatter rule](dynamic-skills/pre-push-hygiene.md#shared-formatter-rule)
     - [UI demo contract paths](dynamic-skills/pre-push-hygiene.md#ui-demo-contract-paths)
   - [Scope](dynamic-skills/pre-push-hygiene.md#scope)
   - [Examples](dynamic-skills/pre-push-hygiene.md#examples)

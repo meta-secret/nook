@@ -331,9 +331,10 @@ maintenance-only.
 ## 10. Execution Consequences
 
 - **Diff emission:** Source-sealed images emit `git diff` outputs instead of directly mutating host files.
-- **`task format` host application:** The agent/developer entrypoint runs pinned
-  host Rustfmt and Prettier directly before commit/push. Formatting must not
-  enter Docker, BuildKit, product compilation, tests, or registry-cache paths.
+- **`task format` host application:** The agent/developer entrypoint runs one
+  content-addressed, tool-only Docker image shared by all worktrees. The image
+  formats the mounted working tree but must never contain project source,
+  compile products, run tests, or use registry-cache paths.
 - **`dist` hand-off:** CI deploys isolated `dist/site`, Simple, and Sentinel artifacts to respective Cloudflare Pages branch aliases.
 
 ---

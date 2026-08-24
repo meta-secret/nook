@@ -108,12 +108,14 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - PR CI deploys native `pr-<number>` aliases for all three isolated projects.
   - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
   - Release extracts production artifacts via `task docker:extract:dist`.
-- **`task format` is a host-only write task.**
-  - It runs repository-pinned Rustfmt and Prettier versions directly against the
-    working tree.
-  - It may install a missing pinned formatter toolchain or frozen Bun dependency
-    tree once.
-  - It never builds images, compiles products, runs tests, or reads or publishes
+- **`task format` uses one shared tool-only image.**
+  - The content-addressed image contains repository-pinned Rustfmt, Prettier, and
+    Svelte formatting support. Every worktree reuses the same local image.
+  - Rustfmt covers the three Rust workspaces. Prettier touches only files changed
+    from the branch merge base or the current working tree.
+  - The image build context contains only formatter files, never project source.
+  - A warm format never builds an image or installs per-worktree dependencies.
+  - Formatting never compiles products, runs tests, or reads or publishes
     registry caches.
   - Run it unconditionally before every push. Product validation remains remote.
   - `task rust:coverage:update` still prints a host-applicable diff.

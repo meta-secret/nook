@@ -724,8 +724,9 @@ The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stab
 ## Task commands
 
 Product checks run remotely in containerized jobs. The mandatory local format
-command runs pinned host formatters only. The root `Taskfile.yml` is the repo
-entrypoint; app commands are included through `nook-app/Taskfile.yml`, with
+command reuses one content-addressed tool-only image across worktrees. The root
+`Taskfile.yml` is the repo entrypoint; app commands are included through
+`nook-app/Taskfile.yml`, with
 cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
 `nook-app/nook-platform/docker/Taskfile.yml`, and web-family tasks in
 `nook-app/nook-web/Taskfile.yml` and package Taskfiles under
@@ -939,7 +940,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
 - Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
 - Explicit local build tasks may upload source-free Rust/WASM dependency stages
-  to unique candidate tags. Host formatting never reads or writes those caches.
+  to unique candidate tags. The shared formatter never reads or writes those
+  caches.
 - The Main-defined allowlisted Remote workflow completely downloads each
   candidate.
 - It uploads and downloads a hosted-normalized tag before atomically assigning

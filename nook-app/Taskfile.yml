@@ -171,8 +171,8 @@ tasks:
 
   format:
     desc: >-
-      Format all projects directly on the host with pinned tools. This task never
-      builds images, compiles products, runs tests, or publishes caches.
+      Format all projects with one shared tool-only image. This task never
+      compiles products, runs tests, or reads or publishes registry caches.
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
 

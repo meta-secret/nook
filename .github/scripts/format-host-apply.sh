@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Apply repository formatters directly to the host working tree.
+# Apply repository formatters from one shared, tool-only Docker image.
 #
-# Formatting is the only mandatory local code operation. Keep it independent
-# from Docker, BuildKit, compilation, tests, and remote cache publication; those
-# checks belong to GitHub Actions.
+# The image is shared by every worktree and contains only pinned Rustfmt,
+# Prettier, and their plugins. It never contains project source, compiles a
+# product, or reads or publishes a remote build cache.
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
@@ -16,47 +16,54 @@ if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
   exit 0
 fi
 
-rust_toolchain=1.97.0
-bun_version=1.3.14
-if [[ "$(bun --version)" != "$bun_version" ]]; then
-  echo "task format requires Bun $bun_version" >&2
-  exit 1
+formatter_dir="$repo_root/.github/formatting"
+formatter_hash="$(
+  shasum -a 256 \
+    "$formatter_dir/Dockerfile" \
+    "$formatter_dir/package.json" \
+    "$formatter_dir/bun.lock" \
+    "$formatter_dir/format.sh" \
+    | shasum -a 256 \
+    | cut -c1-16
+)"
+case "$(uname -m)" in
+  arm64 | aarch64)
+    formatter_arch=arm64
+    formatter_platform=linux/arm64
+    ;;
+  x86_64 | amd64)
+    formatter_arch=amd64
+    formatter_platform=linux/amd64
+    ;;
+  *)
+    echo "task format does not support host architecture $(uname -m)" >&2
+    exit 1
+    ;;
+esac
+formatter_image="nook-source-formatter:${formatter_hash}-${formatter_arch}"
+changed_files="$(mktemp)"
+trap 'rm -f "$changed_files"' EXIT
+base_ref="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
+{
+  git diff --name-only --diff-filter=ACMR "$base_ref"
+  git ls-files --others --exclude-standard
+} | sort -u >"$changed_files"
+
+if ! docker image inspect "$formatter_image" >/dev/null 2>&1; then
+  docker build \
+    --platform "$formatter_platform" \
+    --tag "$formatter_image" \
+    --file "$formatter_dir/Dockerfile" \
+    "$formatter_dir"
 fi
-if ! rustup toolchain list | grep -q "^${rust_toolchain}-"; then
-  rustup toolchain install "$rust_toolchain" --profile minimal --component rustfmt
-fi
 
-ensure_bun_dependencies() {
-  local directory="$1"
-  if [[ ! -x "$directory/node_modules/.bin/prettier" ]]; then
-    bun install --cwd "$directory" --frozen-lockfile --ignore-scripts
-  fi
-}
-
-rustup run "$rust_toolchain" cargo fmt \
-  --manifest-path "$repo_root/nook-app/nook-platform/Cargo.toml" --all
-rustup run "$rust_toolchain" cargo fmt \
-  --manifest-path "$repo_root/preflight/Cargo.toml"
-rustup run "$rust_toolchain" cargo fmt \
-  --manifest-path "$repo_root/agentic-ai/minds/Cargo.toml" --all
-
-web_app="$repo_root/nook-app/nook-web/nook-web-app"
-web_extension="$repo_root/nook-app/nook-web/nook-web-extension"
-web_research="$repo_root/nook-app/nook-web/nook-web-research"
-hive_console="$repo_root/agentic-ai/minds/hive-console"
-loom="$repo_root/agentic-ai/loom"
-
-ensure_bun_dependencies "$web_app"
-ensure_bun_dependencies "$web_research"
-ensure_bun_dependencies "$hive_console"
-ensure_bun_dependencies "$loom"
-if [[ ! -e "$web_extension/node_modules" ]]; then
-  ln -s ../nook-web-app/node_modules "$web_extension/node_modules"
-fi
-
-bun run --cwd "$web_app" format
-bun run --cwd "$web_extension" format
-bun run --cwd "$web_research" format
-bun run --cwd "$hive_console" format
-task loom:format
+docker run \
+  --rm \
+  --platform "$formatter_platform" \
+  --env NODE_PATH=/opt/nook-formatter/node_modules \
+  --user "$(id -u):$(id -g)" \
+  --env HOME=/tmp \
+  --volume "$repo_root:/workspace" \
+  --volume "$changed_files:/tmp/nook-format-files:ro" \
+  "$formatter_image"
 git status --short --untracked-files=no
