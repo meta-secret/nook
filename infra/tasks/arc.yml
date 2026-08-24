@@ -56,7 +56,40 @@ tasks:
         echo "ARC controller build node $node is qualified and held for convergence"
         REMOTE
 
-  arc:controller-build:activate:
+  arc:build-hosts:activate:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        while IFS=$'\t' read -r build_target build_remote_dir; do
+          test -n "$build_target"
+          test -n "$build_remote_dir"
+          node="$(ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
+        set -euo pipefail
+        build_target="$1"
+        sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json |
+          jq -r --arg target "$build_target" \
+            '.items[] | select(.metadata.annotations["nook.nokey.sh/ssh-target"] == $target) | .metadata.name'
+        REMOTE
+          )"
+          test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+          node="$(printf '%s\n' "$node" | sed '/^$/d')"
+          ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$node" <<'REMOTE'
+        set -euo pipefail
+        node="$1"
+        sudo -n k0s kubectl taint node "$node" \
+          nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true
+        test -z "$(sudo -n k0s kubectl get node "$node" \
+          -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
+        REMOTE
+          echo "ARC build node $node is active"
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
+        BASH
+
+  arc:cache-primary:preserve:
     internal: true
     silent: true
     cmds:
@@ -64,16 +97,28 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
         kubectl() { sudo -n k0s kubectl "$@"; }
-        node="$(kubectl get nodes \
-          -l nook.nokey.sh/node-role=control-storage,nook.nokey.sh/arc-build=true \
-          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
-        test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
-        node="$(printf '%s\n' "$node" | sed '/^$/d')"
-        kubectl taint node "$node" \
-          nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true
-        test -z "$(kubectl get node "$node" \
-          -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
-        echo "ARC controller build node $node is active"
+        cache_primary_count="$(kubectl get nodes \
+          -l nook.nokey.sh/arc-cache-primary=true \
+          -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | wc -w | tr -d ' ')"
+        if test "$cache_primary_count" -gt 1; then
+          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
+          exit 1
+        fi
+        if test "$cache_primary_count" = 0; then
+          legacy_build_nodes="$(kubectl get nodes \
+            -l nook.nokey.sh/arc-build=true \
+            -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
+          legacy_build_count="$(printf '%s\n' "$legacy_build_nodes" | sed '/^$/d' | wc -l | tr -d ' ')"
+          if test "$legacy_build_count" = 1; then
+            legacy_primary="$(printf '%s\n' "$legacy_build_nodes" | sed '/^$/d')"
+            kubectl label node "$legacy_primary" \
+              nook.nokey.sh/arc-cache-primary=true --overwrite
+            echo "Preserved legacy ARC cache primary $legacy_primary"
+          elif test "$legacy_build_count" -gt 1; then
+            echo "Label exactly one legacy ARC node nook.nokey.sh/arc-cache-primary=true" >&2
+            exit 1
+          fi
+        fi
         REMOTE
 
   arc:cache-primary:ensure:
@@ -716,6 +761,7 @@ tasks:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
+      - task: arc:cache-primary:preserve
       - task: arc:controller-build:prepare
       - task: arc:cache-primary:ensure
       - task: arc:build-host:resolve
@@ -865,4 +911,4 @@ tasks:
         done
         echo "ARC scale sets are dispatch-ready"
         REMOTE
-      - task: arc:controller-build:activate
+      - task: arc:build-hosts:activate

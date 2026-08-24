@@ -120,17 +120,6 @@ tasks:
             "$config"
         )" = false
         REMOTE
-          ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$node" <<'REMOTE'
-        set -euo pipefail
-        node="$1"
-        sudo -n k0s kubectl taint node "$node" \
-          nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true
-        remaining="$(
-          sudo -n k0s kubectl get node "$node" -o json |
-            jq '[.spec.taints[]? | select(.key == "nook.nokey.sh/arc-build" and .value == "preparing" and .effect == "NoSchedule")] | length'
-        )"
-        test "$remaining" = 0
-        REMOTE
         done <<< "$inventory"
         BASH
 

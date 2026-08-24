@@ -353,7 +353,7 @@ EOF
 promotion_intent_expired() {
   local pod_uid="$1" intent
   intent="$intent_dir/$pod_uid.intent"
-  test -n "$(find "$intent" -mmin +2 -print -quit 2>/dev/null)"
+  test -n "$(find "$intent" -mmin +1 -print -quit 2>/dev/null)"
 }
 
 promotion_intents_pending() {
@@ -636,7 +636,7 @@ clone_requests() {
   for request in "$request_dir"/*.request; do
     pod_uid="$(basename "$request" .request)"
     if ! valid_uid "$pod_uid"; then
-      rm -f -- "$request"
+      remove_untrusted_path "$request"
       continue
     fi
     ready_file="$request_dir/$pod_uid.ready"

@@ -192,10 +192,7 @@ tasks:
         }
         trap cleanup EXIT
         sudo -n install -d -m 0700 /etc/wireguard/nook-peers
-        inventory_count="$(sudo -n find /etc/wireguard/nook-peers \
-          -maxdepth 1 -type f -name '*.conf' -print | wc -l | tr -d ' ')"
-        if test "$inventory_count" = 0 &&
-           sudo -n grep -Fq '[Peer]' /etc/wireguard/wg-nook.conf; then
+        if sudo -n grep -Fq '[Peer]' /etc/wireguard/wg-nook.conf; then
           legacy_dir="$(mktemp -d)"
           sudo -n awk -v directory="$legacy_dir" '
             /^\[Peer\]$/ { count += 1; file = sprintf("%s/legacy-%03d.conf", directory, count) }
@@ -204,8 +201,24 @@ tasks:
           for legacy_peer in "$legacy_dir"/*.conf; do
             grep -Eq '^PublicKey = [A-Za-z0-9+/]{43}=$' "$legacy_peer"
             grep -Eq '^AllowedIPs = [^[:space:]]+' "$legacy_peer"
-            sudo -n install -m 0600 "$legacy_peer" \
-              "/etc/wireguard/nook-peers/$(basename "$legacy_peer")"
+            legacy_public_key="$(sed -n 's/^PublicKey = //p' "$legacy_peer")"
+            persisted_matches="$({
+              sudo -n find /etc/wireguard/nook-peers -maxdepth 1 \
+                -type f -name '*.conf' -exec grep -Fl \
+                "PublicKey = $legacy_public_key" {} + 2>/dev/null || true
+            } | wc -l | tr -d ' ')"
+            if test "$persisted_matches" -gt 1; then
+              echo "k0s mesh: legacy peer appears more than once in durable inventory" >&2
+              exit 2
+            fi
+            if test "$persisted_matches" = 0; then
+              legacy_target="/etc/wireguard/nook-peers/$(basename "$legacy_peer")"
+              if sudo -n test -e "$legacy_target"; then
+                echo "k0s mesh: refusing colliding partial legacy inventory" >&2
+                exit 2
+              fi
+              sudo -n install -m 0600 "$legacy_peer" "$legacy_target"
+            fi
           done
           rm -rf -- "$legacy_dir"
           legacy_dir=""

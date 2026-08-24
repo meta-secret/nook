@@ -340,6 +340,8 @@ workerTasks.requireAll([
   "10.202.0.1",
   "INFRA_WORKER_MESH_ADDRESS",
   "legacy-%03d.conf",
+  "persisted_matches",
+  "refusing colliding partial legacy inventory",
   "assert_mesh_address_available",
   'persisted_public_key="$(sudo -n sed -n',
   'test "$persisted_public_key" != "$worker_public_key"',
@@ -555,7 +557,8 @@ buildkitCloner.requireAll([
   'accepted_next="$intent_dir/$pod_uid.accepted.next"',
   'mv -T "$accepted_next" "$request_lane/accepted"',
   'ln "$intent_next" "$intent_dir/$pod_uid.intent"',
-  'find "$intent" -mmin +2',
+  'find "$intent" -mmin +1',
+  'remove_untrusted_path "$request"',
   'seed_next="$pool_dir/seed/buildkit.ext4.next.$pod_uid"',
   'if test "$current_generation" != "$expected_generation"; then',
   'if ! cp --reflink=always --sparse=auto "$job_file" "$seed_next"; then',
@@ -659,14 +662,15 @@ tasks.requireAll([
   "ReadOnlyPaths=-/etc/nook/arc-cache-verifier-token",
   "nook.nokey.sh/arc-cache-primary=true",
   "arc:build-host:resolve:",
+  "arc:cache-primary:preserve:",
   "arc:cache-primary:ensure:",
   "arc:controller-build:prepare:",
-  "arc:controller-build:activate:",
+  "arc:build-hosts:activate:",
   "nook.nokey.sh/node-role=control-storage",
   "nook.nokey.sh/arc-build=preparing:NoSchedule",
   "nook.nokey.sh/arc-tier=overflow",
   "nook.nokey.sh/arc-tier=primary --overwrite",
-  "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true",
   "arc-cache-primary-ssh-target",
   "arc-build-ssh-targets",
   "ARC cache-primary node $node is unreachable",
@@ -721,6 +725,7 @@ workerMesh.requireAll([
   'if ! sudo -n test -s "$endpoint_inventory"; then',
 ]);
 workerMesh.forbid('test "$inventory_count" != 0');
+workerMesh.forbid('$0 ~ "ip saddr " controller_ip');
 mainWorkflow.requireAll(["needs: [web]", "task ci:main:wasm-node-test"]);
 mainWorkflow.forbid(
   '# The exporter commits only after the Node-test Docker stage succeeds.\n          GHA_CACHE_WRITE_ENABLED: "1"',

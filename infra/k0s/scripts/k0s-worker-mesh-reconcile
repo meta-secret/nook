@@ -227,16 +227,13 @@ while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_
   test "$address" != "$local_address" || continue
   sudo -n ip route replace "$pod_cidr" dev wg-nook
 done < <(printf '%s' "$inventory_payload" | base64 -d)
-escaped_controller_ip="${controller_public_ip//./\\.}"
 if sudo -n nft list table inet bynull_filter >/dev/null 2>&1; then
   sudo -n sed -E -i \
-    -e "s/ip saddr $escaped_controller_ip udp dport 51820 accept([[:space:]]*)$/udp dport 51820 accept comment \"nook k0s worker wireguard\"/" \
     -e 's/ip saddr ([0-9]{1,3}\.){3}[0-9]{1,3} udp dport 51820 accept comment "nook k0s worker wireguard"/udp dport 51820 accept comment "nook k0s worker wireguard"/' \
     /etc/nftables.conf
   sudo -n nft --handle list chain inet bynull_filter input |
-    awk -v controller_ip="$controller_public_ip" '
-      /udp dport 51820 accept.*comment "nook k0s worker wireguard"/ ||
-      $0 ~ "ip saddr " controller_ip " udp dport 51820 accept([[:space:]]|$)" {
+    awk '
+      /udp dport 51820 accept.*comment "nook k0s worker wireguard"/ {
         print "delete rule inet bynull_filter input handle " $NF
       }' > "$live"
   printf '%s\n' \

@@ -235,7 +235,7 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
         claim < read_claim,
         "candidate content must be claimed before reading"
     );
-    for marker in ["$create", "$candidate"] {
+    for marker in ["$create", "$candidate", "$request"] {
         assert!(
             cloner.contains(&format!("remove_untrusted_path \"{marker}\"")),
             "guest-controlled marker cleanup must accept arbitrary path types: {marker}"
@@ -284,15 +284,20 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
             && worker_mesh.contains("comment \"nook k0s worker wireguard\"")
             && worker_mesh.contains("nook.nokey.sh/mesh=pending:NoSchedule")
             && worker_mesh.contains("nook.nokey.sh/mesh:NoSchedule-")
-            && worker_mesh.contains("escaped_controller_ip=\"${controller_public_ip//./\\\\.}\"")
             && worker_mesh.contains("nft --json list chain ip filter INPUT")
             && worker_mesh.contains("Authenticated direct worker mesh is healthy"),
         "compute nodes must receive direct authenticated routes to every worker Pod CIDR"
     );
     assert!(
+        !worker_mesh.contains("$0 ~ \"ip saddr \" controller_ip"),
+        "mesh reconciliation must delete only comment-owned firewall rules"
+    );
+    assert!(
         workers.contains("WireGuard key already belongs to a legacy peer")
-            && workers.contains("belongs to a legacy WireGuard peer"),
-        "worker admission must reject legacy WireGuard key and address collisions"
+            && workers.contains("belongs to a legacy WireGuard peer")
+            && workers.contains("persisted_matches")
+            && workers.contains("refusing colliding partial legacy inventory"),
+        "worker admission must reject collisions and resume partial legacy migration"
     );
     let empty_worker_check = worker_mesh
         .find("if test \"$(printf '%s' \"$compute_nodes\" | jq '.items | length')\" = 0")
@@ -343,7 +348,6 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
     let controller_values = read("infra/k0s/manifests/arc/controller-values.yaml");
     let tasks = read("infra/tasks/arc.yml");
-    let kata_tasks = read("infra/tasks/kata.yml");
 
     for contract in [
         "topologySpreadConstraints:",
@@ -374,8 +378,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "nook.nokey.sh/arc-tier=overflow",
         "nook.nokey.sh/ssh-target=$controller_ssh_user@$internal_ip",
         "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}",
-        "arc:controller-build:activate:",
-        "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
+        "arc:cache-primary:preserve:",
+        "Preserved legacy ARC cache primary $legacy_primary",
+        "arc:build-hosts:activate:",
+        "nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true",
         "ARC cache-primary node $node is unreachable",
         "Deferred offline non-primary ARC node",
         "select(.type == \"InternalIP\")",
@@ -387,20 +393,9 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "KS-6 ARC qualification is missing: {contract}"
         );
     }
-    let guest_seccomp_verified = kata_tasks
-        .find(")\" = false\n        REMOTE")
-        .expect("Kata qualification must verify the guest seccomp setting");
-    let recovery_taint_removed = kata_tasks
-        .find("nook.nokey.sh/arc-build=preparing:NoSchedule-")
-        .expect("Kata qualification must clear the recovery taint");
-    let recovery_taint_verified = kata_tasks
-        .find("test \"$remaining\" = 0")
-        .expect("Kata qualification must verify the recovery taint was cleared");
-    assert!(
-        guest_seccomp_verified < recovery_taint_removed
-            && recovery_taint_removed < recovery_taint_verified,
-        "recovered nodes must be activated only after guest seccomp converges"
-    );
+    let preserve = tasks
+        .find("- task: arc:cache-primary:preserve")
+        .expect("ARC deployment must preserve a sole legacy primary");
     let prepare = tasks
         .find("- task: arc:controller-build:prepare")
         .expect("ARC deployment must prepare the controller build node");
@@ -410,10 +405,20 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let pool = tasks
         .find("- task: arc:cache:pool:sync")
         .expect("ARC deployment must converge every build-node pool");
+    let scale_sets_ready = tasks
+        .find("ARC scale sets are dispatch-ready")
+        .expect("ARC deployment must wait for every scale set");
     let activate = tasks
-        .rfind("- task: arc:controller-build:activate")
-        .expect("ARC deployment must activate the controller build node");
-    assert!(prepare < cache_primary && cache_primary < pool && pool < activate);
+        .rfind("- task: arc:build-hosts:activate")
+        .expect("ARC deployment must activate every converged build node");
+    assert!(
+        preserve < prepare
+            && prepare < cache_primary
+            && cache_primary < pool
+            && pool < scale_sets_ready
+            && scale_sets_ready < activate,
+        "legacy selection and recovered-node activation must bracket ARC convergence"
+    );
     for contract in [
         "tolerations:",
         "key: nook.nokey.sh/arc-build",
