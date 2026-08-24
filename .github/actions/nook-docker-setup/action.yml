@@ -109,6 +109,7 @@ runs:
           "$NOOK_BUILDKIT_ADDR"
         docker buildx inspect "$builder" --bootstrap
         echo "name=$builder" >> "$GITHUB_OUTPUT"
+        echo "NOOK_BUILDKIT_REMOTE=1" >> "$GITHUB_ENV"
 
     - name: Verify ARC container runtime
       if: ${{ startsWith(runner.name, 'nook-k0s-') && env.NOOK_CONTAINER_RUNTIME == 'podman' }}
