@@ -166,7 +166,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - The successful UI-demo lane publishes the warm browser-image graph.
 - 90-day artifact + 10 largest recordings on the merged PR's Linear issue.
 - Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
-  the fresh Zot hydration proof.
+  the portable WASM cache publication proof.
 
 **`main-build-stats.yml`**
 
@@ -392,8 +392,8 @@ PRs, release jobs, and non-Main runtime-dependent, browser, WASM, deployment,
 AI, scheduled, manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`.
 ARC scales single-use Pods instead of queueing work on one persistent Docker
 host.
-Main's clean-room Zot hydration proof also uses `ubuntu-latest`. This narrow
-post-publication job must not reuse an ARC node-local cache.
+Main's portable WASM cache writer/proof also uses `ubuntu-latest`. This narrow
+job must not reuse an ARC node-local cache.
 
 **Zot cache policy:**
 
@@ -411,9 +411,9 @@ post-publication job must not reuse an ARC node-local cache.
 - Once an exact PR scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.
 - Exact-input handoffs own repeat-run acceleration without mutable branch refs.
-- The WASM dependency target reads Main's dedicated, complete WASM dependency export instead of competing with the larger native dependency lineage.
-- Main's preparation selects both dependency targets and the native source target as explicit cache-only outputs.
-- Consuming them as named build contexts is not sufficient to run their dedicated exporters.
+- WASM consumers read the hosted-published dependency ref instead of competing with the larger native dependency lineage.
+- Main ARC prepares native dependency/source and WASM source targets as cache-only outputs.
+- A fresh hosted builder selects the WASM dependency target and owns its exporter.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, and manual workflows are read-only unless they use an
   explicitly isolated git-commit publisher.
@@ -436,8 +436,8 @@ post-publication job must not reuse an ARC node-local cache.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
 - Complete PR graphs place only their trusted native Rust jobs on ARC. Main
-  build producers use ARC. The fresh Zot hydration proof, remaining PR jobs,
-  and the release graph stay hosted.
+  build producers use ARC. The portable WASM cache writer/proof, remaining PR
+  jobs, and the release graph stay hosted.
 
 **BuildKit cache propagation:**
 
@@ -844,12 +844,12 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - On ARC, the shared setup creates a `remote` Buildx builder connected to the
   persistent rootless BuildKit shard on the selected node.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
-- Main's clean-room cache proof uses that hosted builder after ARC publication.
-  It enters a marker stage in the same Rust Dockerfile and context lineage as
-  the publisher, requires the dependency compiler vertices to be `CACHED`,
-  forces snapshot hydration, and exports only a small marker. A proof built by
-  wrapping the dependency target as a named context is invalid because that
-  changes BuildKit cache-key identity.
+- Main's portable WASM cache writer uses one fresh hosted builder rather than
+  ARC-local metadata. Zot must report every descriptor with its declared size
+  and readable bytes. A second fresh cache-only builder then requires the
+  dependency compiler vertices to be `CACHED`. The target stays in the same
+  Rust Dockerfile and context lineage; a named-context wrapper is invalid
+  because it changes BuildKit cache-key identity.
 - Hosted placements restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.
@@ -891,10 +891,10 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- Trusted same-repository PR jobs and Main build producers use ARC. Main's fresh
-  Zot hydration proof, fork PRs, other PR jobs, and release jobs use
-  GitHub-hosted runners.
-- Main verifies each native/WASM/web lane, then publishes its shared Zot refs.
+- Trusted same-repository PR jobs and Main build producers use ARC. Main's WASM
+  cache writer/proof, fork PRs, other PR jobs, and releases use hosted runners.
+- Main verifies each lane. ARC publishes source/tool refs; the hosted writer
+  alone publishes the portable WASM dependency ref.
 - Hosted fallback jobs use the same portable Zot contract.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
 - Protected default-branch Zot refs remain available to every node and hosted

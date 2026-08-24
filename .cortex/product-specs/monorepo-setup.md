@@ -150,15 +150,15 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.
-  - The fresh Zot hydration proof selects `ubuntu-latest` explicitly.
+  - The portable WASM cache writer/proof selects `ubuntu-latest` explicitly.
   - `ubuntu-latest` remains the configuration fallback.
   - Each producer publishes its already-solved registry graph only after its
     lane-specific check succeeds.
   - The hosted fallback WASM dependency export keeps its no-import,
     forced-zstd behavior.
   - Later browser/UI consumers remain read-only.
-  - Development deploy waits on web verify, web e2e, and the fresh Zot hydration
-    proof.
+  - Development deploy waits on web verify, web e2e, and the portable WASM
+    cache publication proof.
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.
   - That includes browser E2E and UI-demo failures.
   - Real-provider sync-live checks run only through explicit manual validation.

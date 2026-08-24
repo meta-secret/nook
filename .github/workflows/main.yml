@@ -5,7 +5,7 @@
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on hosted
 # runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
-# Pages only after web verify, web e2e, and the fresh Zot hydration proof succeed.
+# Pages only after web verify, web e2e, and the portable WASM cache proof succeed.
 # Extension e2e and UI demos remain required for the workflow but do not gate the development
 # deploy. Immutable releases remain
 # responsible for production wasm optimization.

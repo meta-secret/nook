@@ -594,9 +594,10 @@ Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
 producers run in disposable ordinary ARC Pods. The Docker CLI connects to the
 persistent rootless BuildKit shard on the selected node. ARC runners receive no
 Docker daemon, Podman API, DinD process, host runtime socket, host path, or Kata
-runtime. After the ARC WASM producer publishes its Zot cache, one narrow
-GitHub-hosted job hydrates that cache with a fresh builder and exports a marker.
-Development deployment waits for that clean-room proof.
+runtime. ARC keeps its warm WASM source graph, while one narrow GitHub-hosted
+job alone publishes the portable WASM dependency ref. Zot proves every declared
+blob present, correctly sized, and readable before a second fresh cache-only
+builder verifies dependency-vertex hits. Development deployment waits for both.
 
 The `nook-buildkit` StatefulSet keeps one 64 GiB local shard on each qualified
 node. A node-local Service prevents cross-node BuildKit traffic. Concurrent jobs
@@ -609,11 +610,11 @@ Trixie test-runtime sidecars. Fork PRs, Dependabot PRs, releases, and unsupporte
 runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
 Pull requests use exact-SHA refs under `nook/remote-buildcache`.
 Same-repository PR jobs may publish only exact-SHA generations under
-`nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
-producer restores Main's dedicated, complete WASM dependency boundary so it
-does not compete with the larger native dependency lineage. Main explicitly
-publishes the native source target as well as both dependency targets; merely
-consuming those targets as BuildKit contexts does not run their cache exporters.
+`nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM writer
+publishes Main's dedicated, complete WASM dependency boundary so it does not
+compete with the larger native dependency lineage. ARC publishes verified
+native/WASM source state and the native dependency ref. Merely consuming those
+targets as BuildKit contexts does not run their cache exporters.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
