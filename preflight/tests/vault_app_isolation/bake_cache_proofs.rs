@@ -629,7 +629,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Result<()> {
+fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
     let root = repository_root();
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let workflow = read(&root, ".github/workflows/hive.yml");
@@ -649,9 +649,11 @@ fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Resu
             && workflow.contains(
                 "main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
             )
-            && workflow.contains("isolated-cache-write: \"false\"")
+            && workflow.contains(
+                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+            )
             && tasks.contains("${NOOK_ARC_HIVE:-}"),
-        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and avoid per-PR registry export"
+        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and publish only its isolated exact cache"
     );
     let verify = taskfile_task_body(&tasks, "verify")?;
     assert!(
