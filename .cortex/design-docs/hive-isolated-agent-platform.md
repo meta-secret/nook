@@ -99,8 +99,10 @@ compute. The control node is labeled
 `nook.nokey.sh/node-role=control-storage`. Neo4j, Zot, Hive, ARC controllers,
 and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
 qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
-select those nodes and prefer hostname spreading. The cache-primary scale set
-remains pinned to one node. Node and Pod traffic crosses an authenticated
+select those nodes. They enforce a maximum hostname skew of two, then use the
+primary, secondary, and overflow tiers to assign the extra slots. Container
+CPU requests provide the aggregate capacity boundary across scale sets. The
+cache-primary scale set remains pinned to one node. Node and Pod traffic crosses an authenticated
 WireGuard mesh on `10.202.0.0/24`. Each worker address has one owner. Before
 mutating a controller peer, deployment verifies that any persisted peer key
 and Kubernetes `InternalIP` assignment identify that same worker. Address collisions fail

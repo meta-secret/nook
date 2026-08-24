@@ -66,9 +66,9 @@ template:
                   operator: In
                   values: [overflow]
     topologySpreadConstraints:
-      - maxSkew: 3
+      - maxSkew: 2
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: ScheduleAnyway
+        whenUnsatisfiable: DoNotSchedule
         nodeAffinityPolicy: Honor
         nodeTaintsPolicy: Honor
         labelSelector:
@@ -394,7 +394,7 @@ template:
             mountPath: /var/run/nook-cache-promotion
         resources:
           requests:
-            cpu: "1"
+            cpu: 500m
             memory: 1Gi
             ephemeral-storage: 25Gi
           limits:

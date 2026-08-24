@@ -168,10 +168,13 @@ hosted fallback jobs retain Zot publication for cold-node recovery.
 Only `nook-k0s-cache` requires the one `arc-cache-primary` node label, so a
 larger cluster cannot divide Main's serialized lineage among node-local seeds.
 General and Hive jobs prefer Rise-S, then the home 7950X3D worker, then KS-6.
-The preference is soft so an unavailable or resource-saturated node never
-blocks the queue. Hostname spreading has a wide skew allowance and therefore
-acts as a safety valve rather than overriding the tier order. Hive keeps an
-independent Zot publication path because its workflow may overlap Main.
+Hostname spreading permits at most two more Pods on one eligible node than
+another. This keeps the tier order for the extra slots while preventing the
+primary node from absorbing an unsafe burst. CPU requests enforce the shared
+capacity boundary across the general, Hive, and cache-primary scale sets. A
+tainted or unavailable node leaves the eligible topology, so work can continue
+on the remaining nodes. Hive keeps an independent Zot publication path because
+its workflow may overlap Main.
 
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
