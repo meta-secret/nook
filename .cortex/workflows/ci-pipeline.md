@@ -920,10 +920,14 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 **Hive workflow cache:**
 
 - Manual e2e, research, and every AI-agent job also use isolated GitHub-hosted runners and may restore the same scoped BuildKit layers.
-- The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.
+- The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v2` scope.
 - Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
 - The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.
-- Pull requests restore Main's scope read-only; only Main exports both graphs, in a final step after check and behavior tests pass.
+- Each parallel Cargo branch is capped at two jobs, matching the shared four-CPU
+  and 4 GiB Hive BuildKit envelope.
+- Pull requests restore Main's scope read-only and may publish only a
+  quarantined exact-head cache. Only Main exports both shared graphs, in a
+  final step after check and behavior tests pass.
 - Hive check and test tasks use the same job-scoped Buildx builder, so the behavior image reuses the dependency graph produced earlier in the run without allowing parallel PRs or failed validation to replace the trusted cache.
 - Unlike the product delivery graph, trusted same-repository Hive runs also mount `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` into compiler steps and use SeaweedFS S3 `sccache` with the isolated `nook-hive` key prefix.
 - GitHub withholds those secrets from forked pull requests, and the shared wrapper then falls back to direct compilation.

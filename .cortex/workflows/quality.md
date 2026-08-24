@@ -336,6 +336,13 @@ Use this workflow for quality, CI, and deployment changes.
     Main seeds crate-a and crate-b in one Dockerfile leaf.
     A PR that edits only crate-b restores crate-a as CACHED.
     It compiles crate-b and the leaf, then replays the exact graph.
+    Scenario Y mirrors Hive's Cargo dependency graph.
+    Main publishes the manifest, vendor, fetch, test-dependency, and
+    Clippy-dependency lineage to Zot.
+    Two concurrent PR sources restore those source-free stages on independent
+    ARC-shaped builders and publish separate exact-head v2 graphs.
+    Fresh builders replay each PR graph without executing the cargo-fetch
+    analogue, and neither PR can consume or overwrite the other's source graph.
 
     #### SeaweedFS sccache
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.

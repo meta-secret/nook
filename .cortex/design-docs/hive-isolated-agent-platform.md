@@ -710,11 +710,17 @@ The Dockerfile follows Nook's cargo-chef boundary:
 5. run format/Clippy and behavior tests; and
 6. publish both already-verified BuildKit graphs only from `main`.
 
-Pull requests restore the `nook-hive-linux-amd64-v1` GitHub Actions BuildKit
-scope read-only. Only Main publishes it after both Hive checks and Neo4j-backed
-behavior tests pass. SeaweedFS S3 compiler hits avoid recompilation, while the
-parallel BuildKit stages also remove Cargo metadata and linking work from the
-serial critical path.
+Each parallel Cargo branch uses two build jobs. Together, the test and Clippy
+branches consume the runner's four-CPU BuildKit envelope without launching
+eight competing compiler processes or exhausting its 4 GiB memory budget.
+
+Pull requests restore the `nook-hive-linux-amd64-v2` GitHub Actions BuildKit
+scope read-only. After the BuildKit verification target succeeds, an internal
+pull request may publish only a quarantined exact-head cache under
+`remote-buildcache`. Only Main publishes the shared scope, after both Hive
+checks and Neo4j-backed behavior tests pass. SeaweedFS S3 compiler hits avoid
+recompilation, while the parallel BuildKit stages also remove Cargo metadata
+and linking work from the serial critical path.
 
 Trusted same-repository Hive runs also use the remote SeaweedFS S3 compiler
 cache:

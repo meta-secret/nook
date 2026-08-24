@@ -66,7 +66,7 @@ jobs:
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
       REQUESTED_RUNNER_LABEL: ${{ inputs.runner_label }}
       REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
-      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache' || '' }}
+      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache' || '' }}
       HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
       HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
       HIVE_NEO4J_TEST_PASSWORD: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'hive-integration-password' || '' }}
@@ -106,7 +106,7 @@ jobs:
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
           cache-write: "false"
           main-cache-only: "true"
-          isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+          isolated-cache-write: "true"
       - name: Start hosted Hive Neo4j service
         if: >-
           env.REQUEST_INCLUDES_HIVE == 'true' &&

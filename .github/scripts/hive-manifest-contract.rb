@@ -830,6 +830,9 @@ unless hive_taskfile.include?("--target cache-publish") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export release and parallel verification dependency graphs"
 end
+unless hive_dockerfile.include?("ENV CARGO_BUILD_JOBS=2")
+  raise "Hive parallel Cargo branches must fit the ARC CPU and memory envelope"
+end
 unless hive_taskfile.scan('command+=(--cache-from "$HIVE_CACHE_SEED_FROM")').length == 4
   raise "Hive verification must restore its git-scoped Remote cache before trusted Main fallback"
 end

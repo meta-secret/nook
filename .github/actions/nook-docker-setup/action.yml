@@ -213,7 +213,7 @@ runs:
             exit 1
           fi
           scope_suffix="-git-$scope_sha"
-          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
+          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
           echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
@@ -316,7 +316,7 @@ runs:
 
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
-          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v1:buildcache"
+          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v2:buildcache"
           hive_probe_status=0
           cache_ref_status "$hive_ref" || hive_probe_status=$?
           case "$hive_probe_status" in
