@@ -47,12 +47,14 @@ fn assert_workflow_runtime_contract(root: &Path) {
         "trusted PR Rust jobs must select configured ARC and preserve hosted fork and release capacity"
     );
     assert!(
-        main.matches("runs-on: ubuntu-latest").count() == 3
+        main.matches("runs-on: ubuntu-latest").count() == 4
             && main
                 .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
                 .count()
-                == 5,
-        "daemon-free Main jobs must use ARC while three container-runtime browser jobs stay hosted"
+                == 5
+            && main.contains("name: Fresh WASM cache restore proof")
+            && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
+        "daemon-free Main jobs must use ARC while browser jobs and the clean Zot cache proof stay hosted"
     );
 }
 
@@ -709,7 +711,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  ui-demos:\n",
         "\n  deploy:\n",
         "needs: [wasm]",
-        "needs: [web, web-e2e]",
+        "needs: [web, web-e2e, wasm-cache-proof]",
         "task ci:main:e2e:web:artifacts",
         "task ci:main:e2e:extension:artifacts",
         "task ci:main:ui-demo:artifacts",

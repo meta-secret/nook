@@ -104,13 +104,15 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Web checks consume only web dependencies plus the generated WASM package.
 - They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
 
-Trusted same-repository PR native Rust plus Rust ecosystem validation and every
-explicit Main job execute in disposable ordinary Pods through ARC. Focused
+Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
+build producers execute in disposable ordinary Pods through ARC. Focused
 `preflight`, `rust:ci`, and `arc:runtime` jobs may use the same scale set. The
 Docker CLI connects only to the persistent rootless BuildKit shard on its node.
 It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
 and non-Main runtime-dependent, browser, WASM, and deployment validation execute
-on ephemeral GitHub-hosted runners. The self-hosted `nook` pool remains
+on ephemeral GitHub-hosted runners. Main's post-publication cache proof is the
+narrow hosted exception. Its fresh builder hydrates Zot snapshots and exports
+only a marker before deployment. The self-hosted `nook` pool remains
 maintenance-only.
 
 ---

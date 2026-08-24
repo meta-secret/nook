@@ -450,11 +450,13 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
-            && cache_verifier.contains("builder-wasm-deps-restore 2>&1")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=local")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof 2>&1")
+            && cache_verifier.contains("hydrated-wasm-dependency-cache")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
+        "Main must reject a published WASM cache until a fresh builder hydrates every dependency layer without --builder"
     );
     let base_dockerfile = read(
         root,
@@ -541,8 +543,10 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task ci:main:e2e:web:artifacts")
-            && main.contains("needs: [web, web-e2e]"),
-        "Main must split native Rust, WASM, web verify, and browser suites without a duplicate cache publisher"
+            && main.contains("\n  wasm-cache-proof:\n")
+            && main.contains("NOOK_DEFER_FRESH_WASM_CACHE_PROOF: \"1\"")
+            && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
+        "Main must split native Rust, WASM, fresh registry cache proof, web verify, and browser suites without a duplicate cache publisher"
     );
     let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")

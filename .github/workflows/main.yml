@@ -5,8 +5,9 @@
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on hosted
 # runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
-# Pages only after web verify and web e2e succeed; extension e2e and UI demos remain required
-# for the workflow but do not gate the development deploy. Immutable releases remain
+# Pages only after web verify, web e2e, and the fresh Zot hydration proof succeed.
+# Extension e2e and UI demos remain required for the workflow but do not gate the development
+# deploy. Immutable releases remain
 # responsible for production wasm optimization.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor, and
 # non-minds agentic-AI-only changes do not need this workflow. Minds-only
@@ -238,7 +239,33 @@ jobs:
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
+          # ARC publishes from its persistent shard. A separate clean hosted
+          # builder proves that Zot received every required dependency layer.
+          NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"
           WASM_BUILD_MODE: dev
+
+  wasm-cache-proof:
+    name: Fresh WASM cache restore proof
+    needs: [wasm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+
+      - name: Prove fresh hosted restore from Zot
+        run: bash .github/scripts/verify-wasm-gha-cache.sh
 
   web:
     name: Verify web build
@@ -537,7 +564,7 @@ jobs:
 
   deploy:
     name: Deploy development
-    needs: [web, web-e2e]
+    needs: [web, web-e2e, wasm-cache-proof]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     environment:
       name: development

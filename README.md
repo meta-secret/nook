@@ -590,11 +590,13 @@ change, update this README in the same change (see
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
-Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-explicit Main job run in disposable ordinary ARC Pods. The Docker CLI connects
-to the persistent rootless BuildKit shard on the selected node. ARC runners
-receive no Docker daemon, Podman API, DinD process, host runtime socket, host
-path, or Kata runtime.
+Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
+producers run in disposable ordinary ARC Pods. The Docker CLI connects to the
+persistent rootless BuildKit shard on the selected node. ARC runners receive no
+Docker daemon, Podman API, DinD process, host runtime socket, host path, or Kata
+runtime. After the ARC WASM producer publishes its Zot cache, one narrow
+GitHub-hosted job hydrates that cache with a fresh builder and exports a marker.
+Development deployment waits for that clean-room proof.
 
 The `nook-buildkit` StatefulSet keeps one 64 GiB local shard on each qualified
 node. A node-local Service prevents cross-node BuildKit traffic. Concurrent jobs

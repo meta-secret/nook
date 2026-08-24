@@ -158,8 +158,9 @@ Use this workflow for quality, CI, and deployment changes.
 10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
-    - Trusted native Rust and Rust ecosystem PR jobs and every explicit Main
-      job use ARC.
+    - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
+      use ARC.
+    - Main's clean-room Zot hydration proof uses a fresh GitHub-hosted builder.
     - General ARC exposes only a Buildx client connected to the persistent
       rootless BuildKit shard on its selected node.
     - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,

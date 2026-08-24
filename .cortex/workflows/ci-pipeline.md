@@ -165,7 +165,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Each browser solve is read-only.
 - The successful UI-demo lane publishes the warm browser-image graph.
 - 90-day artifact + 10 largest recordings on the merged PR's Linear issue.
-- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e.
+- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
+  the fresh Zot hydration proof.
 
 **`main-build-stats.yml`**
 
@@ -381,8 +382,8 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-explicit Main job use the configured ARC scale set. Focused `preflight`,
+Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
+producers use the configured ARC scale set. Focused `preflight`,
 `rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
 `hive:verify` uses the dedicated
 `nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
@@ -391,6 +392,8 @@ PRs, release jobs, and non-Main runtime-dependent, browser, WASM, deployment,
 AI, scheduled, manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`.
 ARC scales single-use Pods instead of queueing work on one persistent Docker
 host.
+Main's clean-room Zot hydration proof also uses `ubuntu-latest`. This narrow
+post-publication job must not reuse an ARC node-local cache.
 
 **Zot cache policy:**
 
@@ -432,9 +435,9 @@ host.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
-- Complete PR graphs place only their trusted native Rust jobs on ARC. Every
-  explicit Main job uses ARC. Remaining PR jobs and the release graph stay
-  hosted.
+- Complete PR graphs place only their trusted native Rust jobs on ARC. Main
+  build producers use ARC. The fresh Zot hydration proof, remaining PR jobs,
+  and the release graph stay hosted.
 
 **BuildKit cache propagation:**
 
@@ -833,13 +836,15 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Delivery CI uses isolated ARC or GitHub-hosted runners with remote BuildKit layers.**
 
-- Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-  explicit Main job run in disposable ARC Pods.
+- Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
+  producers run in disposable ARC Pods.
 - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
   WASM, and deployment jobs run on fresh `ubuntu-latest` VMs.
 - On ARC, the shared setup creates a `remote` Buildx builder connected to the
   persistent rootless BuildKit shard on the selected node.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
+- Main's clean-room cache proof uses that hosted builder after ARC publication.
+  It forces snapshot hydration and exports only a small marker.
 - Hosted placements restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.
@@ -881,8 +886,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- Trusted same-repository PR jobs and every explicit Main job use ARC. Fork PRs,
-  other PR jobs, and release jobs use GitHub-hosted runners.
+- Trusted same-repository PR jobs and Main build producers use ARC. Main's fresh
+  Zot hydration proof, fork PRs, other PR jobs, and release jobs use
+  GitHub-hosted runners.
 - Main verifies each native/WASM/web lane, then publishes its shared Zot refs.
 - Hosted fallback jobs use the same portable Zot contract.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
