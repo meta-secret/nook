@@ -369,7 +369,7 @@ macOS has no inotify; Docker workloads use the inotify implementation in Docker
 Desktop's Linux VM. Reapply after Docker Desktop restarts:
 
 ```sh
-docker run --rm --privileged --pid=host busybox:1.37.0 \
+docker run --rm --privileged --pid=host registry.dev.nokey.sh/library/busybox:1.37.0 \
   sysctl -w \
   fs.inotify.max_user_instances=2500 \
   fs.inotify.max_user_watches=10485760

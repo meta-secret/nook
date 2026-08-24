@@ -170,6 +170,15 @@ cache instead. Hive retains its independent Zot lineage because its separate
 workflow can overlap Main. This keeps fork, Dependabot, fallback, and recovery
 paths independent from private node state.
 
+Production Dockerfiles name Zot directly, and the ARC BuildKit daemon also
+routes unqualified `docker.io` resolution through Zot as defense in depth. Zot
+is an unrestricted on-demand Docker Hub mirror and preserves upstream digests.
+Public upstream mirror content is anonymously readable, so kubelet, BuildKit,
+and Actions service-container pulls need no registry secret. Runner credentials
+retain their narrow Nook cache-publication permissions but cannot administer
+Zot. A missing digest is fetched centrally once; later jobs and nodes reuse the
+retained Zot copy.
+
 Main cache producers are serialized in workflow dependencies. Hive publication
 does not enter or overwrite that lineage. The cache-primary node selector
 ensures Main dependencies cannot diverge across node-local seeds when the

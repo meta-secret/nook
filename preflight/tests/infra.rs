@@ -23,6 +23,89 @@ fn read_fallible(path: &str) -> anyhow::Result<String> {
 }
 
 #[test]
+fn arc_buildkit_resolves_docker_hub_only_through_zot() {
+    let dockerfile = read("infra/k0s/images/arc-buildkit/Dockerfile");
+    let config = read("infra/k0s/images/arc-buildkit/buildkitd.toml");
+
+    assert!(dockerfile.contains("COPY buildkitd.toml /etc/buildkit/buildkitd.toml"));
+    assert_eq!(
+        config,
+        "[registry.\"docker.io\"]\n  mirrors = [\"registry.dev.nokey.sh\"]\n"
+    );
+    assert!(!config.contains("registry-1.docker.io"));
+
+    let proof = read("infra/tasks/bake-cache.yml");
+    let zot = read("infra/sim/bake-cache/zot-config.json");
+    let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
+    assert!(proof.contains("mirrors = [\\\"${registry_ref}\\\"]"));
+    assert!(proof.contains("library/alpine"));
+    assert!(zot.contains("\"onDemand\": true"));
+    assert!(zot.contains("\"preserveDigest\": true"));
+    assert!(hive_values.contains("registry.dev.nokey.sh/library/neo4j:"));
+}
+
+#[test]
+fn production_dockerfiles_never_resolve_docker_hub_directly() {
+    let output = Command::new("git")
+        .args(["ls-files", "-z", "*Dockerfile*"])
+        .current_dir(repository_root())
+        .output()
+        .expect("Dockerfile inventory must be readable");
+    assert!(output.status.success());
+
+    for path in String::from_utf8(output.stdout)
+        .expect("Dockerfile paths must be UTF-8")
+        .split('\0')
+        .filter(|path| !path.is_empty() && !path.starts_with("infra/sim/bake-cache/"))
+    {
+        let dockerfile = read(path);
+        let mut image_arguments = std::collections::HashMap::new();
+        let mut stages = std::collections::HashSet::new();
+
+        for line in dockerfile.lines().map(str::trim) {
+            if let Some(frontend) = line.strip_prefix("# syntax=") {
+                assert!(
+                    frontend.starts_with("registry.dev.nokey.sh/"),
+                    "{path} resolves its Dockerfile frontend outside Zot: {frontend}"
+                );
+            }
+            if let Some(argument) = line.strip_prefix("ARG ") {
+                if let Some((name, value)) = argument.split_once('=') {
+                    image_arguments.insert(name, value);
+                }
+            }
+            let Some(from) = line.strip_prefix("FROM ") else {
+                continue;
+            };
+            let mut tokens = from.split_whitespace();
+            let reference = tokens
+                .find(|token| !token.starts_with("--"))
+                .expect("FROM must contain an image or prior stage");
+            let resolved = reference
+                .strip_prefix("${")
+                .and_then(|name| name.strip_suffix('}'))
+                .map_or(reference, |name| {
+                    image_arguments
+                        .get(name)
+                        .copied()
+                        .unwrap_or_else(|| panic!("{path} has no default for FROM ${{{name}}}"))
+                });
+            assert!(
+                resolved == "scratch"
+                    || stages.contains(reference)
+                    || matches!(reference, "rust-base" | "web-base")
+                    || resolved.starts_with("registry.dev.nokey.sh/"),
+                "{path} resolves a production base outside Zot: {resolved}"
+            );
+            let remainder: Vec<_> = tokens.collect();
+            if remainder.len() >= 2 && remainder[remainder.len() - 2].eq_ignore_ascii_case("AS") {
+                stages.insert(remainder[remainder.len() - 1]);
+            }
+        }
+    }
+}
+
+#[test]
 fn arc_smoke_retains_the_observed_sandbox_before_persisting_teardown_state() -> anyhow::Result<()> {
     let tasks = read("infra/tasks/arc-smoke.yml");
     let completion = tasks

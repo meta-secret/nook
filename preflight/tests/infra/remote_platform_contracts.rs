@@ -433,7 +433,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "jsonpath='{.status.phase}'",
         "Host must not listen on :5000",
         "https://$host/v2/",
-        "test \"$public_code\" = 401",
+        "test \"$public_code\" = 200",
         "test \"$public_auth\" = 200",
         "test \"$remote_main_write\" = 403",
         "test \"$remote_branch_write\" = 202",

@@ -455,7 +455,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && base_dockerfile.contains("ARG DEBIAN_RELEASE=")
             && base_dockerfile.contains("ARG RUST_DIGEST=sha256:")
             && base_dockerfile
-                .contains("RUST_IMAGE=rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}")
+                .contains("RUST_IMAGE=registry.dev.nokey.sh/library/rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}")
             && base_dockerfile.contains("FROM ${RUST_IMAGE} AS rust-base")
             && base_dockerfile.contains("FROM rust-base AS chef-deps")
             && base_dockerfile.contains("cargo chef prepare --recipe-path recipe.json")

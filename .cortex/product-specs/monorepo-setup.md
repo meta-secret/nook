@@ -14,7 +14,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 ## 3. Toolchain & Runtime Specs
 
-- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/product.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
+- **Rust Version**: `1.97` (using the digest-pinned Zot mirror of `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/product.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.52.0` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
   GitHub Actions `go-task/setup-task` steps must pin this exact version.

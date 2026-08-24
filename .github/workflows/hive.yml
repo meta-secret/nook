@@ -160,7 +160,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       neo4j:
-        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        image: registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
         env:
           NEO4J_AUTH: neo4j/hive-integration-password
         ports:
@@ -222,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       neo4j:
-        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        image: registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
         env:
           NEO4J_AUTH: neo4j/hive-integration-password
         ports:

@@ -41,7 +41,7 @@ is_unattributed_syntax_frontend_exit() {
   # so require the directive evidence before retrying this otherwise-generic
   # status.
   grep -Eiq 'Dockerfile:[0-9]+' "$log_file" \
-    && grep -Eiq '>>> # syntax=docker/dockerfile:' "$log_file" \
+    && grep -Eiq '>>> # syntax=(registry\.dev\.nokey\.sh/)?docker/dockerfile:' "$log_file" \
     && grep -Eiq 'failed to solve: exit code: 2' "$log_file"
 }
 

@@ -229,7 +229,7 @@ runners.requireAll([
   "mountPath: /home/runner/_work",
   "automountServiceAccountToken: false",
   "ghcr.io/actions/actions-runner:2.336.0@sha256:",
-  "docker:29.1.3-cli@sha256:",
+  "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
   "githubConfigSecret",
   "actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda",
 ]);

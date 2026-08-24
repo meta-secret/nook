@@ -62,6 +62,9 @@ data:
                   "actions": ["read", "create", "update"]
                 }
               ]
+            },
+            "**": {
+              "anonymousPolicy": ["read"]
             }
           },
           "adminPolicy": {
@@ -72,6 +75,23 @@ data:
       },
       "log": {
         "level": "info"
+      },
+      "extensions": {
+        "sync": {
+          "enable": true,
+          "registries": [
+            {
+              "urls": ["https://index.docker.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "preserveDigest": true,
+              "maxRetries": 6,
+              "retryDelay": "5s",
+              "maxRetryDelay": "30s",
+              "syncTimeout": "15m"
+            }
+          ]
+        }
       }
     }
 ---
@@ -173,7 +193,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: zot
-          image: ghcr.io/project-zot/zot-linux-amd64@sha256:34f18f783037f967dba10df02f9d4086c4d626f5643ef9f5e51e4a4547280a0b
+          image: ghcr.io/project-zot/zot-linux-amd64@sha256:95a837a0afacf5b7edc0c92493f04beee6891989b8d2fd50a00cf65a1e6d4fd5
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false

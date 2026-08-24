@@ -114,6 +114,13 @@ Service at `10.96.90.10:5000`. Traefik publishes it at
 `https://registry.dev.nokey.sh` with htpasswd authentication. There is no host
 `:5000` listener and no `kubectl port-forward`. k0s uninstall never removes the
 registry data.
+Zot is also the unrestricted, on-demand Docker Hub mirror for ARC. Production
+Dockerfiles name the public Zot endpoint directly; BuildKit's mirror setting is
+defense in depth for unqualified test fixtures. ARC uses only the read-only
+registry identity when it publishes Nook cache data; it does not receive Zot
+administration. Public upstream mirror content is anonymously readable and has
+no client-side write path. Zot preserves upstream digests and stores a missing
+image once for reuse by every runner and node.
 ARC storage uses a separate Task-managed Btrfs image under
 `/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
 filesystem remains ext4. The trusted preparation init container briefly sees

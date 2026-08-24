@@ -498,7 +498,8 @@ tasks:
           raise "Hive ARC must not carry the general Podman runtime"
         end
         neo4j_image = hive_init_containers.fetch("neo4j", {}).fetch("image", "")
-        unless neo4j_image.split("@", 2).first == "neo4j:2026.06.0-community"
+        unless neo4j_image.split("@", 2).first == \
+               "registry.dev.nokey.sh/library/neo4j:2026.06.0-community"
           raise "Hive ARC scale set lacks its pinned Neo4j sidecar"
         end
         ["neo4j", "hive-test-runtime"].each do |sidecar_name|

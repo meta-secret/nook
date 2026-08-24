@@ -106,7 +106,7 @@ tasks:
         docker compose --file "$compose_file" up --detach --wait
         docker compose --file "$compose_file" ps
         code="$(curl -sS -o /dev/null -w '%{http_code}' https://registry.dev.nokey.sh/v2/ || true)"
-        test "$code" = 401
+        test "$code" = 200
         REMOTE
 
   services:diagnose:

@@ -375,6 +375,20 @@ end
 unless zot_config.dig("http", "compat") == ["docker2s2"]
   raise "Zot must preserve Docker Schema 2 manifests and digests"
 end
+zot_mirror = zot_config.dig("extensions", "sync", "registries")&.find do |registry|
+  registry["urls"] == ["https://index.docker.io"]
+end
+unless zot_config.dig("extensions", "sync", "enable") == true &&
+       zot_mirror&.fetch("onDemand") == true &&
+       zot_mirror&.fetch("tlsVerify") == true &&
+       zot_mirror&.fetch("preserveDigest") == true
+  raise "Zot must be the digest-preserving on-demand Docker Hub mirror"
+end
+unless zot_config.dig(
+  "http", "accessControl", "repositories", "**", "anonymousPolicy"
+) == ["read"]
+  raise "Public upstream images must be readable through Zot without runner credentials"
+end
 zot_pv = zot_resource.call("PersistentVolume", "nook-zot-data")
 unless zot_pv.dig("spec", "persistentVolumeReclaimPolicy") == "Retain" &&
        zot_pv.dig("spec", "local", "path") == "/var/lib/hive/zot"

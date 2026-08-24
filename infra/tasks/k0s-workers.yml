@@ -791,7 +791,7 @@ tasks:
               effect: NoSchedule
           containers:
             - name: smoke
-              image: busybox:1.37.0@sha256:d82f458899c9696cb26a7c02d5568f81c8c8223f8661bb2a7988b269c8b9051e
+              image: registry.dev.nokey.sh/library/busybox:1.37.0@sha256:d82f458899c9696cb26a7c02d5568f81c8c8223f8661bb2a7988b269c8b9051e
               command: ["uname", "-r"]
               securityContext:
                 allowPrivilegeEscalation: false

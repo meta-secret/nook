@@ -40,14 +40,16 @@ for path in "${changed_files[@]}"; do
 done
 
 format_changed_files() {
-  local directory="$1"
-  shift
+  local config="$1"
+  local directory="$2"
+  shift 2
   if [[ "$#" -eq 0 ]]; then
     return
   fi
   (
     cd "$directory"
     "$prettier" \
+      --config "$config" \
       --plugin "$svelte_plugin" \
       --write \
       --ignore-unknown \
@@ -56,14 +58,22 @@ format_changed_files() {
 }
 
 web_app="$repo_root/nook-app/nook-web/nook-web-app"
-format_changed_files "$web_app" "${web_app_files[@]}"
+web_config=/opt/nook-formatter/prettier-web.json
+default_config=/opt/nook-formatter/prettier-default.json
+format_changed_files "$web_config" "$web_app" "${web_app_files[@]}"
 format_changed_files \
+  "$web_config" \
   "$repo_root/nook-app/nook-web/nook-web-extension" \
   "${extension_files[@]}"
 format_changed_files \
+  "$web_config" \
   "$repo_root/nook-app/nook-web/nook-web-research" \
   "${research_files[@]}"
 format_changed_files \
+  "$default_config" \
   "$repo_root/agentic-ai/minds/hive-console" \
   "${hive_console_files[@]}"
-format_changed_files "$repo_root/agentic-ai/loom" "${loom_files[@]}"
+format_changed_files \
+  "$default_config" \
+  "$repo_root/agentic-ai/loom" \
+  "${loom_files[@]}"

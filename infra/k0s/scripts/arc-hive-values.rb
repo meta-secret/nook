@@ -41,7 +41,7 @@ pod.fetch("initContainers").concat(
   [
     {
       "name" => "prepare-hive-neo4j",
-      "image" => "neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
+      "image" => "registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
       "command" => ["/bin/sh", "-ceu", "chown 7474:7474 /data"],
       "securityContext" => {
         "allowPrivilegeEscalation" => false,
@@ -57,7 +57,7 @@ pod.fetch("initContainers").concat(
     },
     {
       "name" => "prepare-hive-test-runtime",
-      "image" => "rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
+      "image" => "registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
       "command" => [
         "/bin/sh",
         "-ceu",
@@ -98,7 +98,7 @@ pod.fetch("initContainers").concat(
   [
     {
       "name" => "neo4j",
-      "image" => "neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
+      "image" => "registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
       "restartPolicy" => "Always",
       "env" => [
         { "name" => "NEO4J_AUTH", "value" => "neo4j/hive-integration-password" },
@@ -136,7 +136,7 @@ pod.fetch("initContainers").concat(
     },
     {
       "name" => "hive-test-runtime",
-      "image" => "rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
+      "image" => "registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
       "restartPolicy" => "Always",
       "command" => ["/bin/bash", "/opt/nook/run-hive-test-runtime"],
       "env" => [

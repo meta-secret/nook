@@ -22,7 +22,7 @@ docker run --rm \
   --user "$(id -u):$(id -g)" \
   --volume "$PWD:/workspace" \
   --workdir /workspace \
-  node:24-trixie-slim \
+  registry.dev.nokey.sh/library/node:24-trixie-slim \
   sh -euc '
     for spec in \
       "nook-app/nook-web/nook-vault-simple/dist:nokey-simple" \

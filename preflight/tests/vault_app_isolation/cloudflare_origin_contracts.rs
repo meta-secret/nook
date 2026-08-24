@@ -65,7 +65,7 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     for required in [
         "nook-vault-simple/dist",
         "nook-vault-sentinel/dist",
-        "node:24-trixie-slim",
+        "registry.dev.nokey.sh/library/node:24-trixie-slim",
         "docker run --rm",
         "npx --yes wrangler@4",
     ] {

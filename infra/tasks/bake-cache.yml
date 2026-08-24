@@ -4,7 +4,7 @@ version: '3'
 # Fixtures live under infra/sim/bake-cache/.
 
 vars:
-  BAKE_CACHE_ZOT_IMAGE: 'ghcr.io/project-zot/zot-linux-amd64@sha256:34f18f783037f967dba10df02f9d4086c4d626f5643ef9f5e51e4a4547280a0b'
+  BAKE_CACHE_ZOT_IMAGE: 'ghcr.io/project-zot/zot-linux-amd64@sha256:95a837a0afacf5b7edc0c92493f04beee6891989b8d2fd50a00cf65a1e6d4fd5'
 
 tasks:
   bake-cache:prove:
@@ -188,6 +188,9 @@ tasks:
 
         buildkit_cfg="$(mktemp)"
         printf '%s\n' \
+          "[registry.\"docker.io\"]" \
+          "  mirrors = [\"${registry_ref}\"]" \
+          "" \
           "[registry.\"${registry_ref}\"]" \
           "  http = true" \
           "  insecure = true" \
@@ -227,6 +230,9 @@ tasks:
         create_builder "nook-bake-sim-a-${suffix}"
         bake_plain "$proof_log" base-publish
         require_uncached_step "$proof_log" "bake-sim-base-layer"
+        test "$(registry_ref_code \
+          "library/alpine" \
+          "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b")" = 200
         bake_plain "$proof_log" parent-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         # Fat nested parent with bare base (no base cache-from) for Scenario L.

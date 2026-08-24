@@ -18,7 +18,14 @@ fi
 
 formatter_dir="$repo_root/.github/formatting"
 formatter_hash="$(
-  (cd "$formatter_dir" && shasum -a 256 Dockerfile package.json bun.lock format.sh) \
+  (cd "$formatter_dir" && \
+    shasum -a 256 \
+      Dockerfile \
+      package.json \
+      bun.lock \
+      prettier-default.json \
+      prettier-web.json \
+      format.sh) \
     | shasum -a 256 \
     | cut -c1-16
 )"

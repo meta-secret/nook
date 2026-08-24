@@ -1,11 +1,11 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 # Web/e2e lineage. Independent of the Rust toolchain and Cargo target/. Bun owns package installs;
 # a pinned Node binary is present only for Playwright workers.
 
 ARG DEBIAN_RELEASE=trixie
 
-FROM debian:${DEBIAN_RELEASE}-slim AS web-base
+FROM registry.dev.nokey.sh/library/debian:${DEBIAN_RELEASE}-slim AS web-base
 
 ARG BUN_VERSION=1.3.14
 ARG TASK_VERSION=3.52.0

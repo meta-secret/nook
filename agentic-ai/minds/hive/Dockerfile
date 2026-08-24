@@ -1,12 +1,12 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 ARG RUST_VERSION=1.97
 ARG DEBIAN_RELEASE=trixie
 ARG RUST_DIGEST=sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769
 
-FROM oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun
-FROM node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS node
-FROM rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST} AS toolchain
+FROM registry.dev.nokey.sh/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS bun
+FROM registry.dev.nokey.sh/library/node:24-trixie-slim@sha256:0711b541c1c33a8a530ac4f0d391baa9a15b3d804695b1b24a47daa5fb60e74d AS node
+FROM registry.dev.nokey.sh/library/rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST} AS toolchain
 
 ARG SCCACHE_VERSION=0.17.0
 ARG SCCACHE_SHA256=67c4a96dd237c1f518f6b36083f270f9976d516f1e57fce891755ea782e50006
