@@ -1,0 +1,1 @@
+export const MAX_AGENT_HIERARCHY_DEPTH = 3;

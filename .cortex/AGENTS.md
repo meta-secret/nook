@@ -88,12 +88,27 @@ Agents must follow this navigation and search protocol:
   the root delivery owner authors the final report. Treat bypasses as P1
   violations. See [workflows/subagent-delegation.md](workflows/subagent-delegation.md)
   and [the executable skill](../.agents/skills/subagent-delegation/SKILL.md).
+- **Flat agent hierarchy:** Keep every local agent lineage at depth three or
+  less. Normal work uses synthesis at depth 1 and named experts at depth 2.
+  Depth 3 is exceptional and predeclared. Children cannot add tasks or tiers.
+- **Module-oriented development:** Plan feature contracts top-down and continue
+  implementation bottom-up from accepted providers to their consumers. Route
+  read-only expertise through
+  [architecture/module-experts.md](architecture/module-experts.md) and follow
+  [workflows/module-oriented-development.md](workflows/module-oriented-development.md).
+- **Structural refactoring:** Route code and Cortex coherence audits through the
+  two read-only structural experts. Use synthesis-only system coherence when
+  both evidence streams need a shared join. The delivery owner applies every
+  correction. See
+  [architecture/refactoring-experts.md](architecture/refactoring-experts.md)
+  and [workflows/structural-refactoring.md](workflows/structural-refactoring.md).
 - **Feature ownership boundary:** Keep this rule: agents mutate only their owned feature.
   - Another active agent's work is read-only.
   - When ownership is missing or ambiguous, wait for an explicit user, owner, or orchestrator handoff.
   - See [dynamic-skills/agent-feature-ownership.md](dynamic-skills/agent-feature-ownership.md).
 - **Source file size limit (1,000 lines):** Every authored file, including Rust, stays at or below 1,000 lines. Oversized Rust signals excessive domain responsibility and requires cohesive domain or architectural decomposition; extracting unit tests alone is prohibited while integration tests remain separate. See [dynamic-skills/source-file-size.md](dynamic-skills/source-file-size.md).
 - **No Python (P1 hard rule):** Repository-authored code, scripts, tests, automation, dependency manifests, containers, and Taskfiles must not use Python. Use Bun/TypeScript for scripting and controllers, Rust for compiled domain or systems behavior, and Taskfiles for orchestration. There are no baselines or grandfathered exceptions. See [dynamic-skills/typescript-rust-automation-only.md](dynamic-skills/typescript-rust-automation-only.md).
+- **Provider credentials persist automatically (P1 hard rule):** Use authenticated provider MCP first, then the official API or CLI. Use a browser only for authorization bootstrap or an unavailable capability. Automatically save every reusable credential under `~/.nook` with `0700` directories and `0600` files. Never place credential material in the repository or agent-visible publication surfaces. See [references/infrastructure-provider-operations.md](references/infrastructure-provider-operations.md).
 - **Format on host before every push:** Always run `task loom:pre-push` before pushing to apply host formatting and check the UI demo contract. See [dynamic-skills/pre-push-hygiene.md](dynamic-skills/pre-push-hygiene.md).
 - **Heavy work runs remotely on GitHub Actions:** Heavy builds and tests do not run locally. Trusted same-repository pull requests and every explicit Main job use fresh ARC Kata microVMs through the configured runner route. Fork pull requests, Dependabot, releases, and emergency fallbacks retain GitHub-hosted capacity. See [dynamic-skills/github-actions-only-validation.md](dynamic-skills/github-actions-only-validation.md) and [workflows/remote-execution.md](workflows/remote-execution.md).
 - **Container harness safety:** Never stop, restart, or kill the Docker daemon (`dockerd`, Docker VM); prohibit Dockerfile `RUN --mount=type=cache`. See [dynamic-skills/docker-container-harness.md](dynamic-skills/docker-container-harness.md).
@@ -122,6 +137,11 @@ Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) 
 
 - [Subagent delegation](workflows/subagent-delegation.md) owns hierarchical
   worker boundaries, event streams, semantic views, and parent aggregation.
+- [Module expert registry](architecture/module-experts.md) owns named read-only
+  expert routing, internal API scope, production coverage, and exclusions.
+- [Structural refactoring expert registry](architecture/refactoring-experts.md)
+  owns the two repository-reading refactoring roles and the synthesis-only
+  system coherence role.
 
 - **Dynamic Skills Registry:** [dynamic-skills/index.md](dynamic-skills/index.md) (executable rules for Rust, TypeScript, Svelte, Testing, UI Design, and Code Hygiene).
 - **Product Specifications:** [product-specs/index.md](product-specs/index.md) (living specifications for user-facing features, item schemas, and UX workflows).

@@ -12,6 +12,11 @@ graph, finalize every reached child attempt with
 `task loom:agent-delegation:record REQUEST=<request.json>` and consume its
 verified semantic view before continuing the parent workflow.
 
+Cross-module implementation also follows
+[`module-oriented-development.md`](module-oriented-development.md).
+Plan behavior top-down, freeze the external contracts, and implement accepted
+providers before their consumers.
+
 ## PR-first mandate
 
 AI agents must treat every implementation task as PR-bound from the start.
@@ -57,6 +62,9 @@ Default PR-first loop:
    - Aggregate child views before continuation, integration, or completion.
    - Estimate authored changed lines.
    - Identify module and interface boundaries.
+   - Record the feature module DAG, named experts, provider-consumer contract
+     edges, acceptance evidence, and bottom-up continuation order.
+   - Invoke `internal_api_expert` for every changed module boundary.
    - Publish the public-safe start snapshot to Nook Workbench.
    - Create ignored session memory under `.cortex/.session/` for substantial
      work.
@@ -67,7 +75,11 @@ Default PR-first loop:
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
 3. **Implement functionality:**
-   - Make the module-focused changes for the current slice.
+   - Implement the lowest ready provider API and its owning tests first.
+   - Continue upward by writing each immediate consumer against the accepted
+     provider contract.
+   - Keep the module DAG separate from the agent hierarchy.
+   - Reject hierarchy depths greater than three.
    - Capture meaningful discoveries and evidence in temporary session memory.
    - When implementation, chat dialogues, or debugging reveal new product requirements, rules, or edge cases, update the owning specification in [`.cortex/product-specs/`](../product-specs/) (or author a new specification) in the same PR.
    - Re-estimate when the scope changes.

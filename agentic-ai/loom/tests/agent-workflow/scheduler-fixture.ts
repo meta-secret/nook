@@ -109,6 +109,18 @@ class ScriptedWorkflowRuntime implements WorkflowTaskRuntime<
       invocation.execution.kind === WorkflowExecutorKind.Agent
         ? invocation.execution.resultKind
         : WorkflowResultKind.LoomLeafEvidence;
+    if (
+      resultKind === WorkflowResultKind.ModuleDevelopmentPlan ||
+      resultKind === WorkflowResultKind.ModuleExpertEvidence ||
+      resultKind === WorkflowResultKind.StructuralExpertPlan ||
+      resultKind === WorkflowResultKind.CodeRefactoringEvidence ||
+      resultKind === WorkflowResultKind.CortexRefactoringEvidence ||
+      resultKind === WorkflowResultKind.SystemCoherenceSynthesis
+    ) {
+      throw new Error(
+        'The generic scheduler fixture cannot synthesize specialized expert evidence.',
+      );
+    }
     const output: WorkflowTaskOutput = {
       resultKind,
       summary: `${invocation.task} completed.`,

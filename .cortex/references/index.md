@@ -28,3 +28,6 @@ Reference documents provide durable technology cheat sheets, runtime configurati
 - **[cloudflare-operations.md](cloudflare-operations.md)**
   - Description: Cloudflare MCP connection, Pages deployment, and control-plane operation rules
   - Topics: MCP `cloudflare-api`, DNS, Pages, deployment verification
+- **[infrastructure-provider-operations.md](infrastructure-provider-operations.md)**
+  - Description: Provider interface priority, automatic local credential persistence, and mutation verification
+  - Topics: MCP, API, CLI, `~/.nook`, credential permissions, exact-target checks

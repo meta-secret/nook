@@ -1,5 +1,6 @@
 import { AgentAttemptEventKind } from './agent-events.ts';
 import {
+  AgentAttemptAdapterKind,
   AgentAttemptParentKind,
   DelegatedAgentWorkflowName,
   MaterializedViewAuthorKind,
@@ -12,10 +13,12 @@ import type {
   AgentAttemptEvent,
   AgentAttemptEventMetadata,
 } from './agent-events.ts';
+import { MAX_AGENT_HIERARCHY_DEPTH } from './hierarchy.ts';
 import type {
   MaterializedViewReference,
   ProjectionReference,
 } from './domain.ts';
+import { assertCurrentAgentAttemptWorkflowVersion } from './agent-attempt-version.ts';
 
 export type ReplayAgentAttemptJournalRequest = {
   readonly events: readonly AgentAttemptEvent[];
@@ -28,6 +31,9 @@ export type ReplayedAgentAttempt = {
 };
 
 const AGENT_EVENT_KINDS = new Set<string>(Object.values(AgentAttemptEventKind));
+const AGENT_ATTEMPT_ADAPTER_KINDS = new Set<string>(
+  Object.values(AgentAttemptAdapterKind),
+);
 const RUNTIME_ACTIVITY_KINDS = new Set<string>(
   Object.values(WorkflowRuntimeActivityKind),
 );
@@ -49,6 +55,7 @@ export function replayAgentAttemptJournal(
   if (!first || first.kind !== AgentAttemptEventKind.AttemptStarted) {
     throw new Error('Agent attempt journal must start with attempt-started.');
   }
+  assertCurrentAgentAttemptWorkflowVersion(first.workflowVersion);
   let projectedResult: ProjectionReference | false = false;
   let sawView = false;
   let terminal: ReplayedAgentAttempt | false = false;
@@ -66,6 +73,7 @@ export function replayAgentAttemptJournal(
         `Agent attempt journal sequence ${event.sequence} must equal ${index + 1}.`,
       );
     }
+    assertCurrentAgentAttemptWorkflowVersion(event.workflowVersion);
     const identityPair: AgentAttemptIdentityPair = {
       expected: first,
       actual: event,
@@ -170,6 +178,7 @@ export function replayAgentAttemptJournal(
 
 function assertValidIdentity(event: AgentAttemptEventMetadata): void {
   if (
+    !AGENT_ATTEMPT_ADAPTER_KINDS.has(event.adapter) ||
     !safeIdentifier(event.task) ||
     !safeIdentifier(event.agent) ||
     !safeIdentifier(event.runId) ||
@@ -182,7 +191,7 @@ function assertValidIdentity(event: AgentAttemptEventMetadata): void {
     event.attempt < 1 ||
     !Number.isSafeInteger(event.depth) ||
     event.depth < 1 ||
-    event.depth > 64
+    event.depth > MAX_AGENT_HIERARCHY_DEPTH
   ) {
     throw new Error('Agent attempt journal identity is invalid.');
   }
@@ -234,6 +243,7 @@ function assertSameIdentity(pair: AgentAttemptIdentityPair): void {
   const expected = pair.expected;
   const actual = pair.actual;
   if (
+    actual.adapter !== expected.adapter ||
     actual.runId !== expected.runId ||
     actual.workflow !== expected.workflow ||
     actual.workflowVersion !== expected.workflowVersion ||

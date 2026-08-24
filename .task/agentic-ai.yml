@@ -68,6 +68,44 @@ tasks:
       - task: loom:lint
       - task: loom:check
       - task: loom:test
+      - task: loom:module-experts:validate
+      - task: loom:structural-experts:validate
+
+  loom:module-experts:validate:
+    desc: Validate named read-only module experts and complete production-module routing.
+    deps: [loom:install]
+    cmds:
+      - >-
+        bun run --cwd agentic-ai/loom module-experts --
+        validate --working-directory "{{.REPO_ROOT}}"
+
+  loom:module-experts:invoke:
+    desc: Invoke and journal one registered module expert through the isolated read-only Codex runtime.
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - >-
+        bun agentic-ai/loom/src/module-experts/cli.ts
+        invoke --request "{{.REQUEST}}" --working-directory "{{.REPO_ROOT}}"
+
+  loom:structural-experts:validate:
+    desc: Validate bounded read-only structural refactoring experts.
+    deps: [loom:install]
+    cmds:
+      - >-
+        bun run --cwd agentic-ai/loom structural-experts --
+        validate --working-directory "{{.REPO_ROOT}}"
+
+  loom:structural-experts:invoke:
+    desc: Invoke and journal one authorized structural expert through the isolated runtime.
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - >-
+        bun agentic-ai/loom/src/structural-experts/cli.ts
+        invoke --request "{{.REQUEST}}" --working-directory "{{.REPO_ROOT}}"
 
   loom:run:
     desc: Run Loom with a domain YAML request (CONFIG=<request.yaml>).

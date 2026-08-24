@@ -77,7 +77,7 @@ It returns typed evidence and a typed synthesis.
 
 It does not edit files or mutate GitHub or Workbench state.
 
-### Local event store, semantic views, and Hive
+### Local event store and semantic views
 
 A local workflow run writes processing evidence beneath
 `workflow/processing/<workflow>/<run-id>/`.
@@ -116,19 +116,152 @@ They do not contain raw SDK errors, stacks, or command failure objects.
 
 Every event carries the workflow version and exact source commit.
 
+Adapter-bearing attempt streams currently use workflow version `2.0.0`.
+Version `1.0.0` is a legacy pre-provenance schema. Loom rejects it with local
+cleanup or explicit migration guidance. Replay never infers a missing adapter.
+
 Terminal projections are content-hashed and referenced by journal events.
 
-The current implementation runs locally and does not enqueue Hive tasks.
+Local software-development workflows remain local.
+Hive is outside this workflow architecture.
 
-Future Hive-backed execution has a different authority boundary.
+## Module expert catalog
 
-Neo4j owns durable readiness, claims, leases, attempts, cancellation, and
-results.
+Named read-only project agents live under `.codex/agents/module-experts/`.
 
-Loom must map the static graph onto Hive tasks without running a competing
-authoritative local scheduler.
+The typed catalog owns production module routes, boundary scope, canonical
+context, authorities, skills, entry points, and focused validation selectors.
 
-One Hive task remains one Pod and one Codex thread.
+Validate the catalog from the repository root:
+
+```bash
+task loom:module-experts:validate
+```
+
+The audit verifies all production Rust and web modules are routed exactly once.
+It also enforces the research exclusion and the single `internal_api_expert`
+boundary for both WASM crates and generated bindings.
+
+Invoke one registered expert with an agent-owned JSON request:
+
+First finalize a depth-one parent attempt whose structured output uses
+`ModuleDevelopmentPlan` and includes an exact authorization such as:
+
+```json
+{
+  "task": "inspect-core-contract",
+  "expert": "core_expert",
+  "attempt": 1,
+  "depth": 2,
+  "parent": {
+    "kind": "agent-attempt",
+    "task": "feature-synthesis",
+    "agent": "delivery-owner",
+    "attempt": 1
+  }
+}
+```
+
+The authorization is an entry in `moduleExpertAuthorizations`; it is not a
+standalone request or Markdown instruction. Record the completed parent through
+the ordinary Loom delegation journal before invoking the child.
+
+```json
+{
+  "runId": "feature-vault-api-20260822",
+  "expert": "core_expert",
+  "sourceCommit": "<40-character-commit-sha>",
+  "task": "inspect-core-contract",
+  "attempt": 1,
+  "depth": 2,
+  "parent": {
+    "kind": "agent-attempt",
+    "task": "feature-synthesis",
+    "agent": "delivery-owner",
+    "attempt": 1
+  },
+  "instruction": "Describe the smallest external API required by nook-wasm."
+}
+```
+
+```bash
+task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
+```
+
+Invocation requires a non-empty `CODEX_API_KEY`. The isolated runtime never
+copies `auth.json` or accepts refreshable ChatGPT authentication state.
+The credential is redeemed once through a trusted runtime helper and is absent
+from the Codex process environment, provider configuration, arguments, and
+disposable repository snapshot. The helper source is embedded in the running
+Loom module instead of loaded from the analyzed commit or live worktree.
+
+The command validates the complete catalog and selected TOML definition before
+starting one isolated Codex thread. The request accepts no runtime permissions,
+tools, model, successors, or graph. It must declare the run, attempt, depth, and
+parent agent-attempt lineage. Direct named experts run only at depth two or
+three; workflow-root, depth-one, self-parent, and invalid parent-attempt
+lineage are rejected before runtime. Loom replay-verifies the completed parent,
+its source commit and projections, and the exact typed child authorization
+before creating the child journal. A depth-three child must also have a
+completed immediate parent named by the depth-one plan. Expert evidence and
+`parentActions` cannot authorize descendants. The expert receives an immutable,
+catalog-scoped snapshot of the exact commit through three bounded loopback
+tools: file listing, file reading, and literal text search. Every snapshot
+contains the canonical module-expert skill and workflow authorities.
+The internal API snapshot also contains every registered portable Rust module
+root for provider-consumer boundary inspection. Catalog exclusions are removed
+from the snapshot. Generated scopes are included only when their entries are
+tracked at that exact commit; otherwise the expert receives their tracked
+producer contract instead of mutable workspace output. No
+model-controlled process, write, general
+network, web-search, native delegation, app, or plugin path is enabled. Before
+the command
+returns, Loom finalizes the immutable attempt stream, result, and materialized
+view under
+`workflow/processing/delegated-agent-work/<runId>/agents/<task>/attempt-<n>/`.
+The JSON response contains the typed terminal and content-addressed processing
+references. Before returning them, Loom rereads all three projections, verifies
+their digests and exact identity, and replays the terminal stream. Runtime
+errors and invalid resolved completions produce a sanitized failed terminal and
+a Loom-authored failure view. The delivery owner remains responsible for
+aggregation, continuation, and lifecycle state.
+
+A successful expert must return the dedicated `ModuleExpertEvidence` result.
+Its exact structured continuation covers external API, dependencies, consumers,
+behavior, security, and compatibility invariants, owning tests, focused
+validation, risks, unresolved decisions, and parent actions. Parent actions are
+evidence only and never schedule work.
+
+## Structural refactoring experts
+
+Structural refactoring roles use a sibling registry because their evidence
+scopes overlap production modules. Validate the exact catalog and role
+definitions from the repository root:
+
+```bash
+task loom:structural-experts:validate
+```
+
+Invoke one role after recording a replay-verifiable depth-one
+`StructuralExpertPlan` with the exact depth-two authorization:
+
+```bash
+task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json
+```
+
+Repository-reading requests select exact files or strict descendants of one
+reviewed scope cap. They cannot select an aggregate cap such as `.cortex` or
+`nook-app/nook-web`. Synthesis requests have no repository scope; their parent
+authorization freezes the exact ordered all-terminal child projection barrier.
+Loom accepts replay-valid completed and failed child evidence, preserves the
+failure view, and rejects missing, extra, reordered, rebound, or unrelated
+lanes. Every role uses the shared isolated read-only runtime, cannot delegate,
+and returns typed evidence for the delivery owner rather than write authority.
+
+The pinned Codex runtime retains inert non-process helpers in addition to the
+three repository tools. The enforced security claim is that the model has no
+process or write path. It is not a defense against a separate hostile process
+already running under the same operating-system account.
 
 ## Prerequisites
 

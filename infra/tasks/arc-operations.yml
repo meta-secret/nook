@@ -1,0 +1,59 @@
+version: '3'
+
+# ARC operational inspection and fallback controls.
+tasks:
+  arc:status:
+    desc: Show bounded ARC controller, listener, scale-set, and runner state.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get deployment --namespace arc-systems -o wide
+        kubectl get networkpolicy --namespace arc-runners -o wide
+        kubectl get autoscalingrunnerset,ephemeralrunnerset \
+          --namespace arc-runners -o wide
+        kubectl get autoscalinglistener --namespace arc-systems -o wide
+        kubectl get pods --namespace arc-systems -o wide
+        kubectl get pods --namespace arc-runners -o wide
+        REMOTE
+      - |
+        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n systemctl is-active nook-arc-buildkit-cloner.service
+        sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
+        sudo -n btrfs filesystem usage -b /var/lib/nook-arc-buildkit/pool
+        sudo -n btrfs filesystem du -s \
+          /var/lib/nook-arc-buildkit/pool/seed/buildkit.ext4
+        REMOTE
+
+  arc:diagnose:
+    desc: Show bounded ARC events and recent controller/listener logs.
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl get events --namespace arc-systems \
+          --sort-by=.metadata.creationTimestamp | tail -n 40
+        kubectl get events --namespace arc-runners \
+          --sort-by=.metadata.creationTimestamp | tail -n 60
+        kubectl logs deployment/nook-arc-gha-rs-controller \
+          --namespace arc-systems --tail=120 || true
+        listener="$(kubectl get pods --namespace arc-systems \
+          -l app.kubernetes.io/component=runner-scale-set-listener \
+          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+        if test -n "$listener"; then
+          kubectl logs "$listener" --namespace arc-systems --tail=120 || true
+        fi
+        REMOTE
+      - |
+        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n systemctl status nook-arc-buildkit-cloner.service \
+          --no-pager --lines=40 || true
+        sudo -n journalctl --unit nook-arc-buildkit-cloner.service \
+          --no-pager --lines=80 || true
+        REMOTE

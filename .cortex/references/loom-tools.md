@@ -7,6 +7,8 @@
 - **Leaf protocol:** Domain YAML exposes mechanical leaf operations.
 - **Static workflows:** A separate module and CLI own reviewed graphs.
   - They may call leaf operations through typed adapters.
+- **Module expert audit:** A separate typed catalog validates named read-only
+  experts and complete production-module routing.
 
 See
 [agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
@@ -34,6 +36,7 @@ Use the repository Task wrapper:
 
 ```bash
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
+task loom:module-experts:validate
 ```
 
 Add `PLAN=1` for topology validation without worker execution.
@@ -67,8 +70,8 @@ The workflow audit lane also classifies:
     journal.
   - Parents consume views and typed artifacts by default. Raw streams are
     diagnostic evidence.
-- **Durability:** The current workflow implementation is local-only.
-  - Future Hive-backed execution uses Neo4j as durable authority.
+- **Durability:** The workflow implementation is local-only.
+  - Hive is outside local software-development orchestration.
 - **Protocol scope:** The YAML rules below apply only to Loom leaf tools.
 
 ## Invoke a leaf tool

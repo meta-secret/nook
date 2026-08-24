@@ -4,6 +4,13 @@ import {
   CortexAuditTask,
 } from '../../src/agent-workflow/cortex-workflow.ts';
 import { WorkflowExecutorKind } from '../../src/agent-workflow/domain.ts';
+import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from '../../src/agent-workflow/agent-attempt-version.ts';
+
+test('uses the current adapter-bearing attempt journal schema', () => {
+  expect(CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.version).toBe(
+    CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+  );
+});
 
 test('declares executable skill mirrors in the skill audit scope', () => {
   const task =

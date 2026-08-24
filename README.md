@@ -422,11 +422,60 @@ bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
 
+Project-scoped module experts are named Codex roles backed by one typed registry
+and an isolated read-only Loom runtime. Direct native child spawning is not the
+capability boundary because it inherits the delivery session's permissions.
+Run **`task loom:module-experts:validate`** to verify complete production-module
+routing, runtime isolation, generated WASM binding contracts, the
+`internal_api_expert` boundary, and research exclusions. Loom journal creation
+and replay reject agent lineage deeper than three levels.
+Invoke one selected role with
+**`task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json`**.
+Invocation requires a non-empty **`CODEX_API_KEY`**. It does not reuse or copy
+interactive ChatGPT login state.
+The request binds an exact source commit, registered expert, stable run/task
+identity, attempt, parent lineage, and bounded instruction. Loom finalizes the
+attempt journal and returns its content-addressed evidence references, but does
+not schedule a successor or mutate lifecycle state. Before invocation, Loom
+replay-verifies a completed depth-one `ModuleDevelopmentPlan` with an exact
+typed authorization for that child. Depth-three work also requires its
+completed immediate parent. Direct named experts are agent-attempt children at
+depth two or three; they never use workflow-root lineage, and their evidence
+cannot authorize descendants.
+Each expert reads an immutable, catalog-scoped commit snapshot through bounded
+loopback list, read, and literal-search tools. Every snapshot includes its
+canonical skill and workflow authorities. The internal API expert also receives
+the exact registered portable Rust roots needed for boundary inspection.
+The credential is redeemed once
+through helper source embedded in the running Loom module, rather than loaded
+from the analyzed commit or live worktree. It is absent from the Codex process
+environment, provider configuration, arguments, and repository snapshot.
+Model-controlled process, write, general network, web-search, and delegation
+paths remain disabled. Successful experts return a typed
+`ModuleExpertEvidence` continuation; parent actions are evidence, not scheduler
+authority.
+
+Structural refactoring uses a separate read-only expert registry so overlapping
+maintenance scopes do not pretend to own production modules. Run
+**`task loom:structural-experts:validate`** to verify the exact code, Cortex,
+and synthesis profiles. Invoke one preauthorized role with
+**`task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json`**.
+`code_refactoring_expert` and `cortex_refactoring_expert` inspect only bounded
+exact-commit evidence. `system_coherence_synthesizer` receives only
+replay-verified child results and views. The parent plan freezes the read scope
+or synthesis barrier; every role remains nondelegating and read-only. See the
+[structural refactoring registry](.cortex/architecture/refactoring-experts.md)
+and [workflow](.cortex/workflows/structural-refactoring.md).
+
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
+task loom:module-experts:validate # named read-only expert and production-module routing audit
+task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
+task loom:structural-experts:validate # exact structural role and bounded-scope audit
+task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD

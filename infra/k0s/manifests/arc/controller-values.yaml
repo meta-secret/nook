@@ -9,6 +9,9 @@ flags:
 podLabels:
   nook.nokey.sh/role: arc-controller
 
+nodeSelector:
+  nook.nokey.sh/node-role: control-storage
+
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000

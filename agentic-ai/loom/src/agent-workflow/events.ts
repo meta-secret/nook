@@ -28,6 +28,7 @@ export enum WorkflowRuntimeActivityKind {
   CommandStarted = 'command-started',
   CommandCompleted = 'command-completed',
   FileChangeCompleted = 'file-change-completed',
+  SourceReadCompleted = 'source-read-completed',
   AgentMessageCompleted = 'agent-message-completed',
   TurnCompleted = 'turn-completed',
   TurnFailed = 'turn-failed',
