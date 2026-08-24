@@ -181,7 +181,7 @@ template:
             ephemeral-storage: 4Gi
           limits:
             cpu: "4"
-            memory: 4Gi
+            memory: 6Gi
             ephemeral-storage: 32Gi
       - name: request-buildkit-promotion
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1

@@ -270,6 +270,9 @@ maintenance-only.
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
 - ARC starts each fresh Kata guest from a private reflink clone of a trusted
   32 GiB BuildKit seed.
+- General BuildKit requests 4 GiB and may burst to 6 GiB. The burst ceiling
+  covers memory peaks from large parallel web and Rust builds without reducing
+  the scheduler's 25-runner aggregate capacity.
 - A credential-free sidecar forwards a Pod-scoped candidate. The authenticated
   host verifier promotes local state only after the exact Main runner job
   reaches a final `success` conclusion.

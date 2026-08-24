@@ -203,7 +203,7 @@ runners.requireAll([
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
-  'limits:\n            cpu: "4"\n            memory: 4Gi',
+  'limits:\n            cpu: "4"\n            memory: 6Gi',
   'limits:\n            cpu: "4"\n            memory: 2Gi',
   '- "24000"',
   'value: "34359738368"',
@@ -281,7 +281,7 @@ requiredLimit({
   containers: generalSidecars,
   name: "buildkit",
   cpu: "4",
-  memory: "4Gi",
+  memory: "6Gi",
 });
 requiredLimit({
   containers: generalSidecars,
