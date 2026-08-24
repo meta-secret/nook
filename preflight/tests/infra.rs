@@ -233,6 +233,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
     let buildkit = read("infra/k0s/manifests/arc/buildkit.yaml");
     let tasks = read("infra/tasks/arc.yml");
+    let pull_request_workflow = read(".github/workflows/pr.yml");
 
     for contract in [
         "maxRunners: 25",
@@ -275,7 +276,14 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         3,
         "all three BuildKit PVs must carry the operational status label"
     );
-    assert!(!buildkit.contains("--oci-worker-no-process-sandbox"));
+    assert!(buildkit.contains("--oci-worker-no-process-sandbox"));
+    assert!(
+        pull_request_workflow
+            .contains("github.event.pull_request.head.repo.full_name == github.repository")
+    );
+    assert!(
+        pull_request_workflow.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+    );
     assert!(tasks.contains("test \"$available_bytes\" -ge 68719476736"));
     assert!(tasks.contains("ARC requires exactly three build hosts"));
     assert!(tasks.contains("expected_build_nodes"));
