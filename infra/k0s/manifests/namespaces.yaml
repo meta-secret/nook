@@ -14,10 +14,9 @@ metadata:
   name: arc-runners
   labels:
     nook.nokey.sh/role: arc-runners
-    # BuildKit needs build privileges inside each Kata guest. Repository
-    # contracts require every job Pod to select a microVM runtime and prohibit
-    # Docker daemons, host sockets, broad host paths, and Sysbox. ARC permits
-    # only its Task-managed copy-on-write BuildKit pool.
+    # Rootless BuildKit needs unconfined seccomp and AppArmor profiles for its
+    # user-namespace worker. Repository contracts still prohibit privileged
+    # containers, DinD, Podman, host runtime sockets, and runner host paths.
     pod-security.kubernetes.io/enforce: privileged
     pod-security.kubernetes.io/audit: restricted
     pod-security.kubernetes.io/warn: restricted

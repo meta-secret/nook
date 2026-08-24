@@ -59,20 +59,19 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
 
 #[test]
 fn arc_buildkit_resolves_docker_hub_only_through_zot() {
-    let dockerfile = read("infra/k0s/images/arc-buildkit/Dockerfile");
-    let config = read("infra/k0s/images/arc-buildkit/buildkitd.toml");
+    let manifest = read("infra/k0s/manifests/arc/buildkit.yaml");
 
-    assert!(dockerfile.contains("COPY buildkitd.toml /etc/buildkit/buildkitd.toml"));
-    assert_eq!(
-        config,
-        "[registry.\"docker.io\"]\n  mirrors = [\"registry.dev.nokey.sh\"]\n"
-    );
-    assert!(!config.contains("registry-1.docker.io"));
+    assert!(manifest.contains(r#"[registry."docker.io"]"#));
+    assert!(manifest.contains(r#"mirrors = ["registry.dev.nokey.sh"]"#));
+    assert!(!manifest.contains("registry-1.docker.io"));
+    assert!(manifest.contains("internalTrafficPolicy: Local"));
+    assert!(manifest.contains("kind: StatefulSet"));
+    assert_eq!(manifest.matches("kind: PersistentVolume\n").count(), 3);
 
     let proof = read("infra/tasks/bake-cache.yml");
     let zot = read("infra/sim/bake-cache/zot-config.json");
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
-    assert!(proof.contains("mirrors = [\\\"${registry_ref}\\\"]"));
+    assert!(proof.contains("registry_ref"));
     assert!(proof.contains("library/alpine"));
     assert!(zot.contains("\"onDemand\": true"));
     assert!(zot.contains("\"preserveDigest\": true"));
@@ -134,138 +133,24 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
 }
 
 #[test]
-fn arc_smoke_retains_the_observed_sandbox_before_persisting_teardown_state() -> anyhow::Result<()> {
+fn arc_smoke_uses_only_supported_persistent_buildkit_routes() {
     let tasks = read("infra/tasks/arc-smoke.yml");
-    let completion = tasks
-        .split("if test \"$status\" = completed; then")
-        .nth(1)
-        .and_then(|tail| tail.split("discovered_runner=\"$(").next())
-        .context("ARC smoke must define its completed-run branch")?;
-    let retention_check = completion
-        .find("test -z \"$runner_state_retained\"")
-        .context("ARC smoke completion must require retained BuildKit state")?;
-    let persist = completion
-        .find("\"$run_id\" \"$runner_uid\" \"$runner_sandbox_id\" \"$build_target\" > \"$state_file\"")
-        .context("ARC smoke completion must persist teardown state")?;
-    let completion_recheck = completion
-        .find("completed_sandbox=\"$(find_sandbox \"$runner_uid\")\"")
-        .context("ARC smoke completion must recheck the current Kata sandbox")?;
 
-    assert!(
-        tasks.contains("$pool_dir/runtime/$pod_uid.retain")
-            && tasks.contains("runner_state_retained=1"),
-        "ARC smoke must retain the observed BuildKit state while the runner is active"
-    );
-    assert!(
-        retention_check < completion_recheck && completion_recheck < persist,
-        "ARC smoke must require retained state and recheck its current sandbox before persisting teardown authority"
-    );
-    Ok(())
+    assert!(tasks.contains("ARC_RUNNER_LABEL: nook-k0s"));
+    assert!(tasks.contains("ARC_HIVE_RUNNER_LABEL: nook-k0s-hive"));
+    assert!(tasks.contains("ARC_SMOKE_TASK: arc:runtime"));
+    assert!(tasks.contains("gh run watch"));
+    assert!(tasks.contains("runnerName"));
+    assert!(!tasks.contains("nook-k0s-cache"));
+    assert!(!tasks.contains("Kata sandbox"));
+    assert!(!tasks.contains("gh variable set NOOK_CACHE_RUNS_ON"));
 }
 
 #[test]
-fn arc_smoke_discards_the_job_and_bounded_request_lane() -> anyhow::Result<()> {
-    let tasks = read("infra/tasks/arc-smoke.yml");
-    let validate_request = tasks
-        .find("btrfs subvolume show \"$request_lane\"")
-        .context("ARC smoke teardown must validate its bounded request lane")?;
-    let delete_job = tasks
-        .find("btrfs subvolume delete \"$job_dir\"")
-        .context("ARC smoke teardown must delete retained job state")?;
-    let delete_request = tasks
-        .find("btrfs subvolume delete \"$request_lane\"")
-        .context("ARC smoke teardown must delete the request lane and its qgroup")?;
-    let delete_intent = tasks
-        .find("\"$intent_dir/$pod_uid.intent\"")
-        .context("ARC smoke teardown must delete promotion intent state")?;
-
-    assert!(
-        validate_request < delete_request
-            && delete_request < delete_job
-            && delete_job < delete_intent,
-        "ARC smoke must preserve the job recovery index until the request lane is deleted"
-    );
-    Ok(())
-}
-
-#[test]
-fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
-    let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
-    let reaper = cloner
-        .split("prune_orphan_request_lanes() {")
-        .nth(1)
-        .and_then(|tail| tail.split("\n}\n").next())
-        .expect("ARC cloner must define orphan request-lane cleanup");
-
-    for guard in [
-        "request_lane_valid",
-        "test ! -e \"$request_lane/request\"",
-        "test ! -e \"$jobs_dir/$pod_uid\"",
-        "find \"$request_lane\" -mmin +5",
-        "test ! -e \"$pod_root/$pod_uid\"",
-        "io.kubernetes.pod.uid",
-        "sandbox_marker=\"$runtime_dir/$pod_uid.sandbox\"",
-        "k0s ctr --namespace k8s.io tasks list -q",
-        "containerd-shim-kata-v2*\" -id $sandbox_id \"",
-    ] {
-        assert!(
-            reaper.contains(guard),
-            "orphan-lane reaper is missing: {guard}"
-        );
-    }
-    assert!(cloner.contains("record_sandbox_id \"$pod_uid\""));
-    assert!(reaper.contains("delete_request_lane \"$request_lane\""));
-    assert!(!reaper.contains("*containerd-shim-kata-v2*) continue 2"));
-}
-
-#[test]
-fn arc_promotion_and_mesh_reconciliation_fail_closed() {
-    let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
+fn arc_mesh_reconciliation_fails_closed() {
     let services = read("infra/tasks/host-services.yml");
     let workers = read("infra/tasks/k0s-workers.yml");
     let worker_mesh = read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
-    let claim = cloner
-        .find("claim_untrusted_marker \"$candidate\" \"$candidate_claim\" 256")
-        .expect("promotion candidates must be copied into host-private storage safely");
-    let read_claim = cloner
-        .find("candidate_value=\"$(tr -d '\\r\\n' < \"$candidate_claim\")\"")
-        .expect("promotion verification must read the host-private claim");
-
-    assert!(
-        claim < read_claim,
-        "candidate content must be claimed before reading"
-    );
-    for marker in ["$create", "$candidate", "$request"] {
-        assert!(
-            cloner.contains(&format!("remove_untrusted_path \"{marker}\"")),
-            "guest-controlled marker cleanup must accept arbitrary path types: {marker}"
-        );
-        assert!(
-            !cloner.contains(&format!("rm -f -- \"{marker}\"")),
-            "guest-controlled markers must not use file-only cleanup: {marker}"
-        );
-    }
-    assert!(
-        cloner.contains("pod_is_cache_primary_runner") && cloner.contains("arc-cache-runner"),
-        "only cache-primary runner Pods may request seed promotion"
-    );
-    assert!(
-        cloner.contains("publish_ready_marker \"$pod_uid\" \"$ready_file\"")
-            && !cloner.contains("touch \"$ready_file\""),
-        "host ready publication must replace rather than follow guest-controlled paths"
-    );
-    for contract in [
-        "iflag=nofollow,nonblock,count_bytes",
-        "timeout 1 dd",
-        "create-claim",
-        "request_dir\"/*.request",
-        "request-claim",
-    ] {
-        assert!(
-            cloner.contains(contract),
-            "untrusted and legacy marker handling is missing: {contract}"
-        );
-    }
     assert!(
         workers.contains("worker_pod_cidr=\"$(sudo -n k0s kubectl get node")
             && workers.contains("AllowedIPs = $allowed_ips"),
@@ -346,90 +231,97 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
 fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let values = read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
-    let controller_values = read("infra/k0s/manifests/arc/controller-values.yaml");
+    let buildkit = read("infra/k0s/manifests/arc/buildkit.yaml");
     let tasks = read("infra/tasks/arc.yml");
+    let pull_request_workflow = read(".github/workflows/pr.yml");
 
     for contract in [
+        "maxRunners: 25",
         "topologySpreadConstraints:",
-        "maxSkew: 3",
+        "maxSkew: 5",
         "topologyKey: kubernetes.io/hostname",
-        "whenUnsatisfiable: ScheduleAnyway",
+        "whenUnsatisfiable: DoNotSchedule",
         "nodeAffinityPolicy: Honor",
         "nodeTaintsPolicy: Honor",
         "nook.nokey.sh/arc-spread-group: general",
-        "preferredDuringSchedulingIgnoredDuringExecution:",
         "values: [primary]",
         "values: [secondary]",
         "values: [overflow]",
+        "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ] {
         assert!(
             values.contains(contract),
             "ARC spreading is missing: {contract}"
         );
     }
+    for forbidden in ["runtimeClassName:", "podman", "docker.sock", "hostPath:"] {
+        assert!(
+            !values.contains(forbidden),
+            "ARC runner contains {forbidden}"
+        );
+    }
     assert!(
-        hive_values.contains("nook.nokey.sh/arc-spread-group\"] = \"hive\"")
-            && hive_values.contains("topologySpreadConstraints"),
-        "Hive ARC must own an independent hostname-spread group"
+        hive_values.contains("hive_values[\"maxRunners\"] = 10")
+            && hive_values.contains("nook.nokey.sh/arc-spread-group\"] = \"hive\""),
+        "Hive ARC must own its bounded independent spread group"
     );
+    assert_eq!(buildkit.matches("kind: PersistentVolume\n").count(), 3);
+    assert!(buildkit.contains("internalTrafficPolicy: Local"));
+    assert!(buildkit.contains("replicas: 3"));
+    assert!(buildkit.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+    assert_eq!(
+        buildkit
+            .matches("  labels:\n    app.kubernetes.io/name: nook-buildkit")
+            .count(),
+        3,
+        "all three BuildKit PVs must carry the operational status label"
+    );
+    assert!(buildkit.contains("--oci-worker-no-process-sandbox"));
+    assert!(
+        pull_request_workflow
+            .contains("github.event.pull_request.head.repo.full_name == github.repository")
+    );
+    assert!(
+        pull_request_workflow.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+    );
+    assert!(tasks.contains("usable_bytes=$((available_bytes + state_bytes + legacy_bytes))"));
+    assert!(tasks.contains("test \"$((available_bytes + state_bytes))\" -ge 68719476736"));
+    assert!(tasks.contains("- task: arc:auth:sync"));
+    assert!(tasks.contains("nook.nokey.sh/buildkit-config-sha256"));
+    assert!(tasks.contains("ARC requires exactly three build hosts"));
+    assert!(tasks.contains("expected_build_nodes"));
+    assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));
+    assert!(tasks.contains("$legacy_image_next"));
+    assert!(buildkit.contains("storage: 64Gi"));
+
     for contract in [
         "arc:controller-build:prepare:",
         "nook.nokey.sh/arc-build=preparing:NoSchedule",
         "nook.nokey.sh/arc-tier=overflow",
-        "nook.nokey.sh/ssh-target=$controller_ssh_user@$internal_ip",
-        "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}",
-        "arc:cache-primary:preserve:",
-        "Preserved legacy ARC cache primary $legacy_primary",
+        "arc:buildkit:storage:prepare:",
+        "rollout status statefulset/nook-buildkit",
+        "autoscalingrunnerset/nook-k0s",
+        "autoscalingrunnerset/nook-k0s-hive",
         "arc:build-hosts:activate:",
-        "nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true",
-        "ARC cache-primary node $node is unreachable",
-        "Deferred offline non-primary ARC node",
-        "select(.type == \"InternalIP\")",
-        "test \"$host\" != \"$internal_ip\"",
-        "SSH host does not match its Kubernetes InternalIP",
     ] {
         assert!(
             tasks.contains(contract),
-            "KS-6 ARC qualification is missing: {contract}"
+            "ARC orchestration is missing: {contract}"
         );
     }
-    let preserve = tasks
-        .find("- task: arc:cache-primary:preserve")
-        .expect("ARC deployment must preserve a sole legacy primary");
     let prepare = tasks
         .find("- task: arc:controller-build:prepare")
         .expect("ARC deployment must prepare the controller build node");
-    let cache_primary = tasks
-        .find("- task: arc:cache-primary:ensure")
-        .expect("ARC deployment must select its cache primary");
-    let pool = tasks
-        .find("- task: arc:cache:pool:sync")
-        .expect("ARC deployment must converge every build-node pool");
-    let scale_sets_ready = tasks
-        .find("ARC scale sets are dispatch-ready")
-        .expect("ARC deployment must wait for every scale set");
+    let storage = tasks
+        .find("- task: arc:buildkit:storage:prepare")
+        .expect("ARC deployment must prepare retained storage");
+    let rollout = tasks
+        .find("rollout status statefulset/nook-buildkit")
+        .expect("ARC deployment must wait for BuildKit");
     let activate = tasks
         .rfind("- task: arc:build-hosts:activate")
-        .expect("ARC deployment must activate every converged build node");
-    assert!(
-        preserve < prepare
-            && prepare < cache_primary
-            && cache_primary < pool
-            && pool < scale_sets_ready
-            && scale_sets_ready < activate,
-        "legacy selection and recovered-node activation must bracket ARC convergence"
-    );
-    for contract in [
-        "tolerations:",
-        "key: nook.nokey.sh/arc-build",
-        "value: preparing",
-        "effect: NoSchedule",
-    ] {
-        assert!(
-            controller_values.contains(contract) && values.contains(contract),
-            "ARC control pods must tolerate build preparation: {contract}"
-        );
-    }
+        .expect("ARC deployment must activate converged nodes");
+    assert!(prepare < storage && storage < rollout && rollout < activate);
 }
 
 #[test]

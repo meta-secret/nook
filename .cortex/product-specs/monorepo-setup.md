@@ -44,60 +44,41 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - It then passes that directory as the web solve's named context.
   - Commit and invocation scoping prevent concurrent builds from consuming each other's artifacts.
   - `builder-wasm` is never a parent or context of `nook-web`.
-- **Delivery BuildKit is remote-cached across isolated runners.**
-  - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-    explicit Main job use fresh ARC Kata microVMs.
+- **Delivery BuildKit uses persistent node-local shards and portable Zot refs.**
+  - Trusted same-repository PR Rust jobs and explicit Main jobs use disposable
+    ordinary ARC Pods.
   - Hive Rust verification uses a dedicated scale-to-zero ARC set with ten-job
-    concurrency and a private Neo4j native sidecar.
-  - Hive test binaries execute through a pinned Trixie native sidecar inside
-    the Kata guest, without Docker run. Both helpers stop with the runner.
-  - The general ARC set exposes a job-scoped Podman Docker-compatible API only
-    inside each disposable Kata guest for Main runtime and browser jobs.
-  - Trusted same-repository PR Rust, WASM-build, and WASM-node-test jobs use
-    fresh ARC Kata microVMs. Fork PRs, Dependabot PRs, release jobs, and
-    non-Main browser, deployment, and other runtime-dependent jobs use
-    ephemeral GitHub-hosted VMs.
-  - They use authenticated private Zot `type=registry` cache refs.
-  - Each fresh ARC guest starts from a private reflink clone of a trusted
-    32 GiB BuildKit seed.
-  - A 768 GiB sparse Btrfs pool covers twenty fully allocated 32 GiB job
-    images, the reusable seed, and metadata. The 24 GB BuildKit
-    garbage-collection target normally keeps physical use lower.
-  - Each job clone is a Btrfs subvolume with a 32 GiB exclusive quota.
-  - The reflink shares unchanged blocks without sharing a writable daemon or
-    writable filesystem.
-  - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.
-  - Parallel targets cannot overwrite one another.
-  - Main seeds the default-branch cache visible to new PRs.
-  - Remote writes git-commit refs (`-git-<sha>`).
-  - Docker setup probes each exact ref before selecting its restore inputs.
+    concurrency.
+  - Hive's pinned Neo4j and Rust test-runtime sidecars stop with the runner.
+  - The Docker CLI connects only to the rootless BuildKit shard on its node.
+  - ARC runners receive no Docker daemon, Podman API, DinD process, host runtime
+    socket, host path, or Kata runtime.
+  - Every qualified node owns one retained 64 GiB BuildKit volume.
+  - The node-local Service never sends a runner to another node's shard.
+  - Rust/WASM, web dependencies, browser-free web, and e2e web use separate
+    versioned refs.
+  - Main publishes shared refs under `nook/buildcache/**`.
+  - Pull requests use exact-commit refs under `nook/remote-buildcache/**`.
+  - BuildKit owns concurrent content-addressed deduplication on each node.
+  - Zot carries cache state between nodes and hosted runners.
+  - A local miss imports from Zot once and remains warm on that node.
+  - Docker setup probes each exact ref before selecting restore inputs.
   - A present exact ref is imported alone.
-  - Native and WASM source restores import a present Main source graph alone.
-  - Shorter dependency indexes join that solve only while Main source is absent.
-  - Other missing exact refs use the source-free fingerprint and trusted Main as seeds.
-  - A known-absent exact preflight ref is not passed to BuildKit before its
-    trusted Main fallback.
-  - Local Bake restores those git-commit refs when Remote credentials exist.
-  - Commit-scoped local publish requires a clean worktree.
-  - Local formatting may publish source-free dependency stages by content
-    fingerprint when cache recipes are clean.
+  - Other missing exact refs use source-free fingerprints and trusted Main.
+  - Local Bake restores commit refs when Remote credentials exist.
   - Opt out with `NOOK_REGISTRY_CACHE=0`.
-- **Main owns the shared trusted BuildKit lineage.**
-  - Cache-primary ARC Main lanes promote their already-solved private BuildKit
-    state into the node-local copy-on-write seed after verification succeeds.
-  - ARC promotion does not export the full Rust, WASM, web, or e2e builder
-    graphs to Zot.
-  - GitHub-hosted fallback Main lanes export those builder graphs to Zot.
-  - Every PR job restores its exact SHA alone when that scope exists.
-  - A new native or WASM source scope restores Main source alone when that ref exists.
+- **Main owns the shared trusted registry lineage.**
+  - Main publishes shared cache refs only after its producer check succeeds.
+  - Every PR restores its exact SHA alone when that scope exists.
+  - A new source scope restores Main source when that ref exists.
   - Other new exact scopes restore source-free dependencies and trusted Main.
   - PR jobs publish only isolated exact-SHA generations under
     `nook/remote-buildcache`.
-  - `web-deps` runs `bun install --frozen-lockfile` directly in its Dockerfile layer.
-  - There is no host/daemon cache mount for `web-deps`.
-  - Debian's single `chromium` package is installed only in the main/manual `web-e2e-base`.
-  - E2e selects it through `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`.
-  - Never install Playwright's duplicate bundled Chromium + headless-shell payload.
+  - BuildKit's persistent local shard is an acceleration layer.
+  - Zot is the portable authority for cross-node and hosted recovery.
+  - `web-deps` runs `bun install --frozen-lockfile` in its Dockerfile layer.
+  - Debian's single `chromium` package exists only in `web-e2e-base`.
+  - Never install Playwright's duplicate Chromium payload.
   - Never put a browser in the PR `web-base`.
 - **Two WASM packages, not per-app rebuilds.**
   - `nook-wasm` is the featureless vault bridge shared by Unified, Simple, Sentinel, and extension background/popup consumers.
@@ -122,17 +103,15 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Run it unconditionally before every push. Product validation remains remote.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
-  - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every explicit Main job use the configured ARC scale set.
-  - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use the configured ARC scale set.
-  - Focused `hive:verify` jobs use the dedicated Hive ARC scale set with its native service runtime.
-  - Every ARC job receives a fresh Kata microVM and private BuildKit worker.
-  - Both ARC scale sets use the approved QEMU fallback.
-  - The private worker mounts only its Pod UID reflink state.
-  - Fork PRs, Dependabot PRs, release jobs, and non-Main runtime-dependent,
-    browser, WASM, deployment, long-running AI, and scheduled/manual validation
-    use GitHub-hosted `ubuntu-latest`.
-  - Delivery jobs restore scoped BuildKit layers through private Zot.
-  - The self-hosted `nook` label remains only for maintenance cleanup.
+  - Trusted same-repository PR Rust jobs and every explicit Main job use ARC.
+  - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
+  - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
+  - Every ARC job receives a fresh ordinary Pod.
+  - The job reuses the persistent BuildKit shard on its selected node.
+  - Fork PRs, Dependabot PRs, releases, and unsupported runtime lanes use
+    GitHub-hosted `ubuntu-latest`.
+  - Delivery jobs restore portable cache layers through private Zot.
+  - The self-hosted `nook` label remains maintenance-only.
   - Do not use Blacksmith or other third-party runner labels.
 - **PR workflow cancellation:**
   - `concurrency` with `cancel-in-progress: true` on `pr-<number>` lets a newly requested validation or PR close cancel an older labeled run.
@@ -141,8 +120,8 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
-  - `preflight`, `rust:ci`, and `arc:runtime` may run on a fresh general ARC Kata microVM.
-  - `hive:verify` may run on a fresh dedicated Hive ARC Kata microVM.
+  - `preflight`, `rust:ci`, and `arc:runtime` may run on a fresh general ARC Pod.
+  - `hive:verify` may run on a fresh dedicated Hive ARC Pod.
   - Other selections run on an ephemeral GitHub-hosted runner.
   - A batch shares one checkout, Docker setup, and cache connection.
   - Selected tasks run sequentially.
@@ -166,15 +145,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Each Main-fix consumer builds only the browser image.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
-  - Those trusted Main producers select the cache-primary scale set through
-    `NOOK_CACHE_RUNS_ON`.
-  - Other explicit Main jobs select the general scale set through
+  - Every explicit Main job selects the general scale set through
     `NOOK_RUNS_ON`.
-  - Both routes use `ubuntu-latest` only as their configuration fallback.
-  - Each cache-primary ARC lane verifies, then promotes its already-solved
-    local BuildKit state into the node-local seed.
-  - Hosted fallback lanes export only their already-solved builder graphs.
-  - Promotion or hosted export happens only after every lane-specific check succeeds.
+  - `ubuntu-latest` remains the configuration fallback.
+  - Each producer publishes its already-solved registry graph only after its
+    lane-specific check succeeds.
   - The hosted fallback WASM dependency export keeps its no-import,
     forced-zstd behavior.
   - Later browser/UI consumers remain read-only.

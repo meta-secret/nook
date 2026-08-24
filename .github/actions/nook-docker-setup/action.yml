@@ -14,7 +14,8 @@ inputs:
     description: >-
       Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
       git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
-      keeps the graph job-local. Never writes Main's nook/buildcache refs.
+      keeps large graphs in its node-local persistent shard. Never writes Main's
+      nook/buildcache refs.
     required: false
     default: "false"
   require-e2e-cache:
@@ -77,26 +78,26 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # GitHub-hosted VMs use their job-scoped BuildKit container. Each general
-    # ARC microVM has native BuildKit and Podman API sidecars on Pod loopback.
-    # The runner carries only Docker client tooling and never receives a
-    # Docker daemon or host runtime socket.
+    # GitHub-hosted VMs use their job-scoped BuildKit container. ARC runners
+    # use the persistent rootless BuildKit shard on their Kubernetes node.
+    # The runner carries only client tooling and never receives a Docker daemon
+    # or host runtime socket.
     # Taskfiles never pass --builder; the health wrapper selects it.
     - name: Setup hosted Buildx
       id: hosted-buildx
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
       uses: docker/setup-buildx-action@v4
 
-    - name: Connect ARC Buildx to the private BuildKit sidecar
+    - name: Connect ARC Buildx to the node-local BuildKit shard
       id: arc-buildx
       if: ${{ startsWith(runner.name, 'nook-k0s-') }}
       shell: bash
       run: |
         set -euo pipefail
         case "${NOOK_BUILDKIT_ADDR:-}" in
-          tcp://127.0.0.1:1234) ;;
+          tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
           *)
-            echo "ARC BuildKit must use the private Pod loopback endpoint" >&2
+            echo "ARC BuildKit must use the node-local Kubernetes service" >&2
             exit 2
             ;;
         esac
@@ -109,15 +110,6 @@ runs:
           "$NOOK_BUILDKIT_ADDR"
         docker buildx inspect "$builder" --bootstrap
         echo "name=$builder" >> "$GITHUB_OUTPUT"
-
-    - name: Verify ARC container runtime
-      if: ${{ startsWith(runner.name, 'nook-k0s-') && env.NOOK_CONTAINER_RUNTIME == 'podman' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        test "${DOCKER_HOST:-}" = tcp://127.0.0.1:2375
-        test "$(docker version --format '{{.Server.Version}}')" = 5.8.4
-        docker info >/dev/null
 
     - name: Login to Nook OCI registry
       uses: docker/login-action@v4
@@ -319,8 +311,8 @@ runs:
           hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v2:buildcache"
           hive_export_mode=max
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            # The disposable VM already retains the full graph in its local
-            # BuildKit state for the job. Export only the minimal exact-SHA
+            # The selected node retains the full graph in its persistent
+            # BuildKit shard. Export only the minimal exact-SHA
             # handoff; exporting the full graph added minutes after a green
             # Hive build while sccache already preserves compiler artifacts.
             hive_export_mode=min
@@ -347,7 +339,7 @@ runs:
             # Even mode=min includes the final result layer. Rust dependency
             # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
             # HDD and turn a successful verification into a cache failure.
-            # ARC keeps this job-local and reads Main plus sccache instead.
+            # ARC keeps this node-local and reads Main plus sccache instead.
             echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
           else
             cache_write_enabled=1

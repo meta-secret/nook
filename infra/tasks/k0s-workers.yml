@@ -775,16 +775,6 @@ tasks:
           --overwrite
         sudo -n k0s kubectl label "node/$node" \
           "nook.nokey.sh/arc-tier=$worker_arc_tier" --overwrite
-        primary_count="$(sudo -n k0s kubectl get nodes \
-          -l nook.nokey.sh/arc-cache-primary=true \
-          -o jsonpath='{.items[*].metadata.name}' | wc -w | tr -d ' ')"
-        if test "$primary_count" = 0; then
-          sudo -n k0s kubectl label "node/$node" \
-            nook.nokey.sh/arc-cache-primary=true --overwrite
-        elif test "$primary_count" -gt 1; then
-          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
-          exit 1
-        fi
         REMOTE
         ssh -n -o BatchMode=yes "$worker_target" \
           'sudo -n rm -f /etc/k0s/worker-token'

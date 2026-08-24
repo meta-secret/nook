@@ -2,27 +2,39 @@
 
 ## Overview
 
-Trusted focused tasks run on Nook's ephemeral ARC scale sets in the k0s
-cluster. General `nook-k0s` runners provide private BuildKit and rootful Podman
-services inside each Kata microVM. This supports Docker-compatible image loading
-and execution without DinD, Sysbox, or a host runtime socket. Podman uses a
-sparse 24 GiB ext4 image and native overlay inside the guest. Complete PR
-validation uses ARC for trusted native and ecosystem Rust jobs while unsupported
-or untrusted lanes remain hosted. Agent machines remain responsive for editing,
-repository inspection, host-applied formatting, the UI demo contract, and
-interactive development servers.
+Trusted focused tasks run on Nook's ARC scale sets in the k0s cluster.
+
+General `nook-k0s` runners are disposable ordinary Pods. Their Docker CLI
+connects to the persistent rootless BuildKit shard on the selected node.
+
+ARC runners receive no:
+
+- Docker daemon;
+- Podman API;
+- DinD process;
+- host runtime socket;
+- host path;
+- privileged context; or
+- Kata runtime.
+
+Unsupported or untrusted lanes remain on GitHub-hosted runners. Agent machines
+remain available for editing, inspection, host-applied formatting, UI demos, and
+interactive servers.
 
 ## Two remote surfaces
 
-Nook intentionally separates iterative investigation from merge authorization:
+Nook separates iterative evidence from merge authorization.
 
-1. **Focused remote tasks** run through the manually dispatched [`.github/workflows/remote.yml`](../../.github/workflows/remote.yml). They are repeatable debugging evidence and do not authorize merge.
-2. **Complete PR validation** runs through [`.github/workflows/pr.yml`](../../.github/workflows/pr.yml) only after an agent explicitly applies a validation label. Its exact-head checks and deployment are required for readiness.
+1. **Focused remote tasks**
+   - Run through `.github/workflows/remote.yml`.
+   - Provide repeatable debugging evidence.
+   - Do not authorize merge.
+2. **Complete PR validation**
+   - Runs through `.github/workflows/pr.yml`.
+   - Starts only after the agent explicitly requests validation.
+   - Provides the exact-head checks and deployment required for readiness.
 
-Ordinary PR pushes do not start complete validation. This lets an agent commit
-and push several experimental iterations, use focused remote tasks between
-iterations, and spend the full parallel PR pipeline only when the head
-is ready.
+Ordinary PR pushes do not start complete validation.
 
 ## Focused remote tasks
 
@@ -38,283 +50,129 @@ Dispatch one task:
 task remote TASK_NAME=rust:test
 ```
 
-Use the BuildKit-native Rust validation lane on ARC:
+Dispatch one ARC-native Rust task:
 
 ```bash
 task remote TASK_NAME=rust:ci
 ```
 
-Dispatch several tasks in one remote job:
+Reuse one hosted job for a batch:
 
 ```bash
 task remote TASK_NAMES=rust:test,web:check,web:test
 ```
 
-Batch behavior:
+Routing rules:
 
-- Provision one runner and perform Docker setup once.
-- Route single `preflight`, `rust:ci`, and `arc:runtime` selections to ARC when
+- Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
-- Keep batches and catalog selections not explicitly approved for ARC on
-  `ubuntu-latest`.
-- Run tasks sequentially in the requested order.
+- Trusted `hive:verify` uses `NOOK_HIVE_RUNS_ON=nook-k0s-hive`.
+- Mixed batches and unsupported selections use `ubuntu-latest`.
+- Fork and Dependabot jobs stay hosted and secret-free.
+- The Hive Control Center browser job stays hosted.
+
+Batch rules:
+
+- Provision one runner.
+- Perform checkout and cache setup once.
+- Run selected tasks sequentially.
 - Accept at most eight tasks.
-- Continue after a task fails and fail the final job when any selection failed.
-- Keep each task's 15-to-45-minute timeout.
-- On timeout, every runner:
-  1. send `TERM` to the task and its process group;
-  2. force termination after a one-minute grace period;
-  3. restore tracked source and remove non-ignored untracked files; and
-  4. continue to later selections after marking the timed-out task failed.
-- On GitHub-hosted runners, timeout recovery also removes task-created Docker
-  containers and restarts the job-scoped BuildKit container.
-- On ARC, the private BuildKit sidecar is probed but never treated as a Docker
-  container. Focused Remote state is discarded with the microVM and cannot
-  promote the trusted seed. Only authenticated successful Main jobs may request
-  local promotion. Zot retains the hosted cross-node bootstrap cache.
-- After every task, reselect the job-scoped Buildx builder.
-  - This prevents temporary builders from affecting later selections.
-- Report every task result in the GitHub job summary.
+- Continue after a failure.
+- Report every result.
+- Fail the final job when any selection failed.
+- Keep the configured per-task timeout.
+- Restore the checkout after timeout before continuing.
 
-Security and cache rules:
+ARC cache rules:
 
-- Accept only catalog names.
-  - Each name maps to a literal Taskfile command in
-    `.github/scripts/remote-task-batch.sh`.
-  - Never evaluate user input as shell.
-- Grant remote jobs read-only repository and Actions permissions.
-- Select the runner through `NOOK_RUNS_ON`, with `ubuntu-latest` as the
-  repository-safe fallback.
-- On ARC, run the job in a single-use `kata-qemu-runtime-rs` Pod and connect
-  Buildx to its private BuildKit sidecar over Pod loopback.
-- Route trusted Hive Rust verification through `NOOK_HIVE_RUNS_ON`.
-  - `nook-k0s-hive` is the active ARC route.
-  - `ubuntu-latest` is the emergency fallback and restores the hosted Neo4j
-    service flow. Trusted same-repository jobs retain Zot and SeaweedFS
-    credentials there, and trusted Main continues publishing the shared Hive
-    cache.
-  - Keep the Control Center browser job on hosted capacity.
-  - Run Neo4j as a pinned Pod sidecar, not a Docker service container.
-  - Execute exported Hive tests in a pinned Trixie runtime sidecar inside the
-    guest.
-  - Keep fork and Dependabot PR verification on GitHub-hosted capacity.
-- Prohibit Docker-in-Docker, Docker daemons, Sysbox, host runtime sockets, and
-  broad hostPath volumes.
-- Permit the general scale set's job-scoped Podman API only on Pod loopback
-  inside the disposable Kata guest. Hive omits it.
-- Back Podman with a sparse 24 GiB ext4 image inside the guest. Native overlay
-  must not fall back to `fuse-overlayfs` on the Kata shared volume.
-- Permit only the Task-managed ARC BuildKit request and job hostPaths.
-  - Before untrusted job containers start, a trusted init container briefly
-    sees only the request root. It creates a root-owned, mode-`0700` lane for
-    its Kubernetes Pod UID and submits that UID for a private clone.
-  - A credential-free sidecar mounts only its Pod lane through `subPathExpr`
-    and forwards its candidate there. It cannot traverse another Pod's lane.
-    The runner sees neither host path.
-  - A root-owned authenticated host verifier binds that candidate to the exact
-    in-progress runner job before writing an intent in a mode-`0700`,
-    host-private runtime directory. Pods receive only an acceptance marker in
-    their untrusted request lane.
-  - The intent blocks the next cache producer until the host observes the final
-    conclusion. Only a successful Main job promotes the seed.
-  - Retry a failed promotion while its verified intent is live. Abandon an
-    intent or request that blocks clones for more than two minutes. Retain
-    unsafe job state until complete Kata teardown is proven.
-  - Pin the dedicated Main producer scale set to the one cache-primary compute
-    node. Keep general and Hive scale sets eligible for every qualified worker.
-  - The host helper creates a reflink clone from the trusted seed.
-  - The BuildKit sidecar mounts only its `jobs/<Pod UID>` subpath.
-  - The runner container never mounts the pool.
-- Serialize Main cache-producing jobs so each producer starts from the seed
-  generation published by its predecessor. Non-producing validation remains
-  parallel.
-- BuildKit and the general Podman sidecar may be privileged only inside the
-  isolated Kata guest.
-- Import an exact BuildKit lineage alone when it exists.
-- Do not pass a probed, absent exact preflight ref to BuildKit.
-- Seed that scope from trusted Main when it exists.
-- Write git-commit Zot refs under `nook/remote-buildcache/**`.
-- Give the Remote identity read-only access to `nook/buildcache/**`.
-  - Tag selection alone is not the Main security boundary.
+- Register the node-local BuildKit Service as a remote Buildx builder.
+- Keep one retained 64 GiB BuildKit shard on every qualified node.
+- Route each runner only to its local shard.
+- Let concurrent jobs share BuildKit's content-addressed store.
+- Import an exact Zot ref alone when it exists.
+- Otherwise restore source-free dependencies and trusted Main.
+- Publish commit-scoped refs only under `nook/remote-buildcache/**`.
+- Publish shared Main refs only from trusted Main.
+- Keep Hive's exact-head lineage separate.
+- Never use GitHub Actions cache for BuildKit layers.
 
-**SeaweedFS identity:**
+Zot carries cache state between nodes and hosted runners. SeaweedFS carries
+compiler objects. These systems solve different cold-start costs.
 
-- Rust compiler vertices use a separate SeaweedFS identity.
-- It can read/list `nook-sccache` but cannot write compiler objects.
-- Remote jobs cannot replace Main Zot refs or SeaweedFS compiler objects.
-- Remote jobs cannot administer SeaweedFS identities and buckets.
+Security rules:
 
-The two cache layers solve different cold-start costs:
+- Accept only literal catalog names.
+- Never evaluate user input as shell.
+- Disable runner Kubernetes service-account tokens.
+- Prohibit DinD, Docker daemons, Podman, Sysbox, host runtime sockets, runner
+  host paths, privileged runners, and Kata runtime classes.
+- Give Remote read-only access to Main cache refs.
+- Give Remote write access only to commit-scoped refs.
+- Mount SeaweedFS credentials only as fixed BuildKit secrets.
+- Never place credential bytes in build arguments, layers, or cache checksums.
 
-- **Zot** stores BuildKit layers, Cargo downloads, and completed dependency
-  stages.
-  - A Remote branch imports its own ref alone when present.
-  - Otherwise it seeds from source-free dependencies and Main.
-  - It exports only its own ref.
-  - Both repositories use Zot's content-addressed blob deduplication.
-- **SeaweedFS** stores compiler objects published by trusted Main/local/Hive writers. Remote reads those objects; genuinely new branch results persist in its Zot OCI layers until trusted Main publishes the corresponding compiler objects.
+The narrow ARC tasks avoid a general container-runtime requirement:
 
-Credentials enter compiler vertices only through fixed optional BuildKit secret IDs and target paths.
+- `rust:ci` executes formatting, Clippy, tests, and coverage in BuildKit stages.
+- `arc:runtime` exports and verifies a BuildKit result without `docker run`.
+- `hive:verify` executes exported tests through its pinned native runtime
+  sidecar.
 
-- Secret contents are never build arguments or image state.
-- They do not participate in the layer cache checksum.
-- Local and credentialed hosted builds fail closed when SeaweedFS credentials or reachability are wrong.
-- Only an explicit `SCCACHE_OPTIONAL=1` path (fork/release/secret-free hosted jobs) falls back to direct compilation.
-
-The most frequently used checks have remote-only narrow orchestration:
-
-- `rust:ci` runs Rust format, Clippy, tests, and coverage entirely in BuildKit
-  stages. It exports portable coverage files and never requests a Docker image
-  runtime.
-- `rust:test` loads a source-sealed native dependency image.
-- `web:check`, `web:test`, and `extension:check` load a source-sealed web dependency + generated WASM image.
-
-This avoids building full coverage, WASM test, browser, verification, and production-dist branches before a focused command. It does not change the local task semantics or move branch execution onto persistent infrastructure.
-
-`preflight`, `rust:ci`, `arc:runtime`, and trusted `hive:verify` currently
-satisfy the ARC contract. Hive uses its dedicated `nook-k0s-hive` scale set,
-private Neo4j native sidecar, and pinned test-runtime native sidecar.
-An exact standalone `hive:verify` dispatch reuses its COW seed without a
-per-branch Hive registry export. A mixed batch remains hosted. Its non-Hive
-tasks retain their exact-SHA handoffs, while the Hive task explicitly clears
-its cache exporter.
-The general ARC scale set has a job-scoped Podman Docker-compatible API. Its
-rootful service binds only to Pod loopback and shares the runner work volume so
-`type=docker`, `docker run`, and bind-mounted UI artifacts remain inside the
-same Kata guest. Its sparse 24 GiB ext4 store grows on demand and is discarded
-with the job; it is not copied from a 24 GiB template. Do not expose that API through the Pod IP or attach a host
-runtime socket. Focused task routing remains an explicit allowlist even when the
-runtime can execute a task.
-
-Every remote result is tied to source GitHub can reproduce. Before dispatch, `task remote` requires:
+Every dispatch requires:
 
 - a non-`main` branch;
 - a clean worktree;
 - a branch present on `origin`; and
-- the remote branch SHA to equal local `HEAD`.
-
-The normal iteration is:
-
-```bash
-task loom:pre-push
-git add -u
-git commit -m "Describe the coherent experiment"
-git push -u origin HEAD
-task remote TASK_NAME=rust:test
-```
-
-Inspect and watch the run printed by the dispatcher:
-
-```bash
-gh run list \
-  --workflow=remote.yml \
-  --branch="$(git branch --show-current)" \
-  --commit="$(git rev-parse HEAD)" \
-  --event=workflow_dispatch
-gh run watch <run-id> --compact --exit-status
-```
-
-Prefer one batch when several tasks need the same pushed head:
-
-```bash
-task remote TASK_NAMES=rust:test,wasm:test,web:test
-```
-
-- A batch avoids repeated checkout, Docker setup, and cache connection work.
-- Use separate dispatches when parallel compute is more valuable than runner
-  startup cost.
-- The workflow accepts neither arbitrary environment variables nor commands.
-- Its only credentials are the reviewed Zot login and scoped SeaweedFS build
-  identity.
-- Add a reviewed catalog entry for any new stable remote capability.
+- a remote branch SHA equal to local `HEAD`.
 
 ## Explicit complete PR validation
 
-When the current PR head is ready for merge validation, trigger its required checks explicitly:
+When the pushed head is coherent, run:
 
 ```bash
 task pr:validate PR=<number>
 ```
 
-For a PR repairing a failure observed on `main`, request the Main-equivalent browser suites as part of the same validation:
+Use `FULL_E2E=1` when the change needs the Main-equivalent browser suites.
 
-```bash
-task pr:validate PR=<number> FULL_E2E=1
-```
+Complete validation:
 
-The command verifies local `HEAD` equals the PR head, then removes and re-adds the relevant label:
+- binds every result to the exact PR head;
+- runs repository-owned merge gates;
+- requests the configured exact-head review;
+- proves preview deployment when required; and
+- becomes stale after any later push.
 
-- `ci:validate` for normal validation;
-- `ci:full-e2e` for Main-fix validation.
-
-GitHub Actions cannot filter `pull_request` triggers by label name before
-creating a workflow run. Therefore `pr.yml`:
-
-- listens for label events
-- runs a small request guard that rejects every unsupported label
-- allocates product-validation workers only for these two labels
-
-- Agents must use the Task command so an existing label is toggled and produces
-  a new event.
-- When `ci:full-e2e` remains on a Main-fix PR:
-  - every later validation keeps browser and extension gates active; and
-  - `ci:validate` cannot downgrade Main-equivalent coverage.
-
-- Remote browser tasks preserve Playwright `test-results` as run artifacts.
-  - Artifacts include traces, screenshots, videos, and attached
-    `nook-app-logs.json`.
-  - They remain available when a selected task fails.
-
-- Before dispatching `web:e2e`, `extension:e2e`, `check`, `ci:pr`, or
-  `ci:pr:e2e`, the Task command:
-  - refreshes `origin/main`; and
-  - fails closed unless the local exact head contains it.
-- `task pr:validate` applies the same guard to the PR's declared base branch
-  before toggling a validation label.
-- Update, format, and push a stale branch before spending an expensive hosted
-  cycle.
-
-- Cheap focused tasks remain available for isolated diagnosis.
-  - They are not a prerequisite for complete PR validation.
-- Prefer complete validation when parallel PR jobs have a shorter critical path
-  than a sequential focused batch.
-
-- The final readiness audit detects when the base advances after a run starts.
-- Any later push changes the PR head.
-  - Checks and deployment for the earlier SHA do not authorize the new head.
-  - `task pr:ready` must reject it until validation runs again.
-- Do not push while complete validation is running.
-- When the tested commit is obsolete:
-  1. cancel that run explicitly;
-  2. push the complete replacement; and
-  3. trigger fresh validation.
+Focused task success never replaces complete validation.
 
 ## Failure loop
 
-Focused task failure:
+When a remote task or complete check fails:
 
-```text
-read failed run logs → fix → task loom:pre-push → commit → push
-→ dispatch the useful focused task again
-```
+1. Inspect the exact job log.
+2. Identify the first failing product or infrastructure boundary.
+3. Fix only the causal defect.
+4. Apply host formatting.
+5. Commit and push the coherent change.
+6. Rerun focused evidence when useful.
+7. Request complete validation again for the new head.
 
-Complete PR validation failure:
-
-```text
-read failed PR logs and app artifacts → fix → task loom:pre-push → commit → push
-→ optional focused remote tasks → task pr:validate → monitor exact-head checks
-```
-
-Never treat a focused remote task as a substitute for complete PR validation. Never fall back to heavy local product gates merely because an Actions task failed. Interactive local servers and browser inspection remain appropriate when the debugging work intrinsically requires a persistent local session.
+Treat a transient unchanged-head registry or BuildKit read failure as
+infrastructure evidence. Replay the unchanged head before changing product code.
 
 ## Merge boundary
 
-Before squash merge:
+A PR is ready only when `task pr:ready PR=<number>` succeeds for the current
+head.
 
-1. the latest pushed SHA has a successful explicitly triggered PR workflow;
-2. the required `github-pages` deployment belongs to that exact SHA;
-3. applicable Main-fix browser jobs are green;
-4. all actionable feedback is resolved; and
-5. `task pr:ready PR=<number>` succeeds.
+Readiness requires:
 
-The successful exact-head audit, not the continued presence of a label, is the merge authorization boundary.
+- a current base;
+- successful required exact-head checks;
+- successful required deployment;
+- mergeability;
+- no unresolved actionable review thread; and
+- a clean Cortex session directory.
+
+The delivery owner then squash-merges the PR and verifies the resulting Main
+state.

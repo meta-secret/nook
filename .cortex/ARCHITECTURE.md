@@ -337,12 +337,11 @@ All development tasks and builds in Nook run containerized via a unified `Taskfi
 - **Split Image Lineages:** Rust compilation and Web packaging run in independent BuildKit lineages; only small generated artifacts (WASM packages, coverage reports) cross the host handoff boundary.
 - **Distributed BuildKit & Compiler Caching:** Builds leverage Zot OCI registry layer caches (`registry.dev.nokey.sh`) and SeaweedFS S3-backed `sccache` (`sccache.dev.nokey.sh`) for fast remote and local warm builds.
 - **Ephemeral Remote Execution:** Trusted Main jobs and selected focused tasks
-  execute in ephemeral ARC Kata Pods. Each general runner gets private
-  loopback-only BuildKit and Podman services inside its microVM, so image-backed
-  jobs have a Docker-compatible API without DinD or a host runtime socket.
-  Podman uses a sparse 24 GiB ext4 store with native overlay inside the guest.
-  Untrusted and unsupported lanes retain ephemeral GitHub-hosted fallback
-  capacity.
+  execute in disposable ordinary ARC Pods. The Docker CLI connects to the
+  persistent rootless BuildKit shard on the same node. Runner Pods receive no
+  Docker daemon, Podman service, DinD process, host runtime socket, host path,
+  or Kata runtime. Untrusted and unsupported lanes retain ephemeral
+  GitHub-hosted fallback capacity.
 
 See [architecture/engineering-harness.md](architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
 
