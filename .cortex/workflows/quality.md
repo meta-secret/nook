@@ -175,8 +175,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Every ARC build node receives the same pool, cloner, verifier, and pinned
       BuildKit image contract before it becomes schedulable.
     - Private Zot is the authenticated fallback for hosted jobs and recovery.
-    - The k0s Zot Pod reserves one CPU and 2 GiB of memory.
-    - It may burst to four CPUs and 8 GiB during parallel cache transfers.
+    - The k0s Zot Pod reserves two CPUs and 4 GiB of memory.
+    - It may burst to eight CPUs and 12 GiB during parallel cache transfers.
     - Raise that ceiling only after production telemetry proves Zot is the
       bottleneck.
     - Host-network Traefik reserves 2 GiB for the public registry edge.
