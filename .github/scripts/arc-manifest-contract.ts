@@ -173,7 +173,7 @@ namespaces.requireAll([
 runners.requireAll([
   "runnerScaleSetName: nook-k0s",
   "minRunners: 0",
-  "maxRunners: 10",
+  "maxRunners: 25",
   "requests:\n            cpu: 500m\n            memory: 2560Mi",
   "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 250m\n            memory: 1Gi",
@@ -190,7 +190,7 @@ runners.requireAll([
   "weight: 1",
   "values: [overflow]",
   "topologySpreadConstraints:",
-  "maxSkew: 8",
+  "maxSkew: 3",
   "topologyKey: kubernetes.io/hostname",
   "whenUnsatisfiable: ScheduleAnyway",
   "nodeAffinityPolicy: Honor",

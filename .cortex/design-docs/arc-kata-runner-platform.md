@@ -39,7 +39,13 @@ not keep warm runners.
 - `nook-k0s` serves parallel ordinary trusted jobs on every qualified node.
 - `nook-k0s-cache` serves serialized Main cache producers on one primary node.
 - `nook-k0s-hive` serves Hive Rust verification on every qualified node.
-- The general and Hive scale sets each advertise `maxRunners: 10`.
+- The general scale set advertises `maxRunners: 25` across the three qualified
+  nodes.
+  - Rise-S targets roughly 8-10 runners.
+  - The home worker targets roughly 8-10 runners.
+  - KS-6 targets roughly 5-7 runners.
+  - Placement retains the configured tier preference.
+- The Hive scale set advertises `maxRunners: 10`.
 - The cache-primary set advertises two runners, although workflow dependencies
   permit only one producer at a time.
 - A preparation taint blocks an unqualified compute node.

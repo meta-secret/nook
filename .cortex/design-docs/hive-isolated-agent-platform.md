@@ -2,8 +2,9 @@
 
 ## Overview
 
-Status: Implemented in the repository; deployment and live-state verification
-are performed through the infrastructure Taskfile.
+Status: Paused. Every Hive deployment declares zero replicas after duplicate
+repair PRs were generated for one ARC cache incident. Re-enabling Hive requires
+a verified single-incident and single-repair invariant.
 
 Hive is Nook's self-hosted, stateful AI-agent platform. Its control and storage
 services run on the dedicated Linux machine addressed by the default
@@ -106,10 +107,11 @@ and Kubernetes `InternalIP` assignment identify that same worker. Address collis
 closed. The Kubernetes API retains its stable `10.201.0.1` address.
 
 Neo4j runs with the normal container runtime because it is a persistent
-infrastructure service. The dispatcher and every task worker use
-`kata-dragonball`. Dragonball is the Rust-based VMM built into Kata runtime-rs;
-it provides the full CRI and virtio-fs behavior required by Hive with lower
-startup and memory overhead than QEMU. The authoritative
+infrastructure service. Task workers use `kata-dragonball`. The dispatcher uses
+Kata QEMU because it does not share the worker sidecar socket and must avoid the
+Dragonball network churn observed on KS-6. Dragonball is the Rust-based VMM
+built into Kata runtime-rs. It provides the full CRI and virtio-fs behavior
+required by Hive workers with lower startup and memory overhead than QEMU. The authoritative
 version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
 [`infra/Taskfile.yml`](../../infra/Taskfile.yml) composition root and its
 reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
@@ -529,9 +531,10 @@ That command:
 
 ### Kata boundary
 
-Every dispatcher and worker Pod selects `kata-dragonball`. There is no
-fallback to `runc`. The host, KVM support, runtime class, and guest-kernel
-identity are verified by infrastructure tasks before Hive deploys.
+Every worker Pod selects `kata-dragonball`. The dispatcher selects Kata QEMU.
+Neither workload falls back to `runc`. The host, KVM support, runtime class,
+and guest-kernel identity are verified by infrastructure tasks before Hive
+deploys.
 
 The worker container alone uses the pinned, node-local
 `nook/hive-bubblewrap.json` seccomp profile. Rootless Bubblewrap must create and

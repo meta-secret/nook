@@ -207,6 +207,7 @@ tasks:
       - task: services:ensure-edge-firewall
       - task: sccache:bucket:ensure
       - task: k0s:install
+      - task: k0s:worker-mesh:reconcile
       - task: services:ensure-edge-firewall
       - task: registry:deploy
       - task: kata:install

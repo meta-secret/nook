@@ -110,11 +110,12 @@ fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
 #[test]
 fn arc_promotion_and_mesh_reconciliation_fail_closed() {
     let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
+    let services = read("infra/tasks/host-services.yml");
     let workers = read("infra/tasks/k0s-workers.yml");
     let worker_mesh = read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
     let claim = cloner
-        .find("mv -T \"$candidate\" \"$candidate_claim\"")
-        .expect("promotion candidates must move into host-private storage");
+        .find("claim_untrusted_marker \"$candidate\" \"$candidate_claim\" 256")
+        .expect("promotion candidates must be copied into host-private storage safely");
     let read_claim = cloner
         .find("candidate_value=\"$(tr -d '\\r\\n' < \"$candidate_claim\")\"")
         .expect("promotion verification must read the host-private claim");
@@ -132,6 +133,18 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
             && !cloner.contains("touch \"$ready_file\""),
         "host ready publication must replace rather than follow guest-controlled paths"
     );
+    for contract in [
+        "iflag=nofollow,nonblock,count_bytes",
+        "timeout 1 dd",
+        "create-claim",
+        "request_dir\"/*.request",
+        "request-claim",
+    ] {
+        assert!(
+            cloner.contains(contract),
+            "untrusted and legacy marker handling is missing: {contract}"
+        );
+    }
     assert!(
         workers.contains("worker_pod_cidr=\"$(sudo -n k0s kubectl get node")
             && workers.contains("AllowedIPs = $allowed_ips"),
@@ -140,9 +153,48 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
     assert!(
         worker_mesh.contains("AllowedIPs = $address/32,$pod_cidr")
             && worker_mesh.contains("sudo -n wg syncconf wg-nook")
+            && worker_mesh.contains("Deferred offline worker")
+            && worker_mesh.contains("Deferred offline roaming worker")
+            && worker_mesh.contains("ssh_host=\"${ssh_target#*@}\"")
+            && worker_mesh.contains("comment \"nook k0s worker wireguard\"")
+            && worker_mesh.contains("nook.nokey.sh/mesh=pending:NoSchedule")
+            && worker_mesh.contains("nook.nokey.sh/mesh:NoSchedule-")
+            && worker_mesh.contains("escaped_controller_ip=\"${controller_public_ip//./\\\\.}\"")
+            && worker_mesh.contains("nft --json list chain ip filter INPUT")
             && worker_mesh.contains("Authenticated direct worker mesh is healthy"),
         "compute nodes must receive direct authenticated routes to every worker Pod CIDR"
     );
+    let empty_worker_check = worker_mesh
+        .find("if test \"$(printf '%s' \"$compute_nodes\" | jq '.items | length')\" = 0")
+        .expect("mesh reconciliation must detect an empty compute tier");
+    let controller_key = worker_mesh
+        .find("controller_public_key=\"$(sudo -n cat /etc/wireguard/nook-public.key)\"")
+        .expect("mesh reconciliation must read the controller WireGuard key");
+    let peer_verification = worker_mesh
+        .find("ping -c 1 -W 3 '$target_address'")
+        .expect("reachable workers must verify direct peer connectivity");
+    let taint_all = worker_mesh
+        .find("set_mesh_pending \"$node_name\"\ndone <<<\"$workers\"")
+        .expect("all workers must become unschedulable before reconciliation");
+    let connection_preflight = worker_mesh
+        .find("-o ConnectTimeout=5")
+        .expect("workers must be checked before configuration");
+    let clear_pending = worker_mesh
+        .rfind("clear_mesh_pending \"$node_name\"")
+        .expect("verified workers must become schedulable");
+    assert!(empty_worker_check < controller_key);
+    assert!(taint_all < connection_preflight);
+    assert!(peer_verification < clear_pending);
+    let install = services
+        .find("- task: k0s:install")
+        .expect("standard deployment must install k0s");
+    let standard_reconcile = services
+        .find("- task: k0s:worker-mesh:reconcile")
+        .expect("standard deployment must reconcile the direct worker mesh");
+    let standard_arc = services
+        .find("- task: arc:deploy")
+        .expect("standard deployment must install ARC");
+    assert!(install < standard_reconcile && standard_reconcile < standard_arc);
     let reconcile = workers
         .find("task: k0s:worker-mesh:reconcile")
         .expect("worker deployment must reconcile the direct worker mesh");
@@ -164,7 +216,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
 
     for contract in [
         "topologySpreadConstraints:",
-        "maxSkew: 8",
+        "maxSkew: 3",
         "topologyKey: kubernetes.io/hostname",
         "whenUnsatisfiable: ScheduleAnyway",
         "nodeAffinityPolicy: Honor",
@@ -211,7 +263,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let activate = tasks
         .rfind("- task: arc:controller-build:activate")
         .expect("ARC deployment must activate the controller build node");
-    assert!(cache_primary < prepare && prepare < pool && pool < activate);
+    assert!(prepare < cache_primary && cache_primary < pool && pool < activate);
     for contract in [
         "tolerations:",
         "key: nook.nokey.sh/arc-build",
@@ -223,6 +275,37 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC control pods must tolerate build preparation: {contract}"
         );
     }
+}
+
+#[test]
+fn hive_dispatcher_avoids_dragonball_network_churn_and_bounds_terminal_pods() {
+    let workers = read("infra/k0s/manifests/hive/deployment.yaml");
+    let dispatcher = read("infra/k0s/manifests/hive/dispatcher.yaml");
+    let observer = read("infra/k0s/manifests/hive/observer.yaml");
+    let reaper = read("infra/k0s/manifests/hive/reaper-controller.yaml");
+    let k0s = read("infra/k0s/config/k0s.yaml");
+
+    for manifest in [&workers, &dispatcher, &observer, &reaper] {
+        assert!(
+            manifest.contains("replicas: 0"),
+            "Hive must remain paused until duplicate repair orchestration is corrected"
+        );
+    }
+    assert!(
+        workers.contains("runtimeClassName: kata-dragonball")
+            && workers.contains("nook.nokey.sh/node-role: compute"),
+        "Hive workers must keep their private sidecar channel inside Dragonball compute VMs"
+    );
+    assert!(
+        dispatcher.contains("runtimeClassName: kata-qemu-runtime-rs")
+            && dispatcher.contains("nook.nokey.sh/node-role: compute")
+            && dispatcher.contains("sizeLimit: 1Gi"),
+        "the persistent Hive dispatcher must use QEMU Kata on the compute tier with enough bounded checkout space"
+    );
+    assert!(
+        k0s.contains("terminated-pod-gc-threshold: \"200\""),
+        "k0s must bound retained terminal Pods for operational diagnosis"
+    );
 }
 
 #[test]

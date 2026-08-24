@@ -46,7 +46,29 @@ tasks:
     silent: true
     cmds:
       - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        bash <<'BASH'
+        set -euo pipefail
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        inventory="$(ssh -o BatchMode=yes "$controller_target" 'sudo -n k0s kubectl get nodes -l katacontainers.io/kata-runtime=true -o json' |
+          jq -r '.items | sort_by(.metadata.name)[] |
+            [.metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"]] | @tsv')"
+        test -n "$inventory"
+        while IFS=$'\t' read -r node target; do
+          if test -z "$target" || test "$target" = null; then
+            echo "Kata node $node lacks nook.nokey.sh/ssh-target" >&2
+            exit 1
+          fi
+          ssh_user="${target%%@*}"
+          ssh_host="${target#*@}"
+          if test "$ssh_user" = "$target" ||
+             ! [[ "$ssh_user" =~ ^[A-Za-z0-9_.-]+$ ]] ||
+             ! [[ "$ssh_host" =~ ^[A-Za-z0-9_.:-]+$ ]]; then
+            echo "Kata node $node has an unsafe SSH target" >&2
+            exit 1
+          fi
+          echo "Enabling guest seccomp on $node"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         config=/opt/kata/share/defaults/kata-containers/runtime-rs/runtimes/dragonball/configuration-dragonball.toml
         sudo -n test -f "$config"
@@ -81,6 +103,8 @@ tasks:
             "$config"
         )" = false
         REMOTE
+        done <<< "$inventory"
+        BASH
 
   kata:diagnose:
     desc: Show bounded Kata installer diagnostics when its rollout fails.

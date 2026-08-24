@@ -24,6 +24,26 @@ valid_uid() {
   [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
 }
 
+claim_untrusted_marker() {
+  local source="$1" destination="$2" maximum_bytes="$3" temporary
+  temporary="$destination.next"
+  rm -f -- "$temporary"
+  install -m 0600 /dev/null "$temporary"
+  if ! timeout 1 dd if="$source" of="$temporary" \
+    iflag=nofollow,nonblock,count_bytes count="$maximum_bytes" \
+    conv=notrunc status=none; then
+    rm -f -- "$source" "$temporary"
+    return 1
+  fi
+  rm -f -- "$source"
+  if test "$(stat -c '%F:%u:%g:%a:%h' -- "$temporary")" != \
+    "regular file:0:0:600:1"; then
+    rm -f -- "$temporary"
+    return 1
+  fi
+  mv -T "$temporary" "$destination"
+}
+
 delete_request_lane() {
   local request_lane="$1"
   if btrfs subvolume show "$request_lane" >/dev/null 2>&1; then
@@ -43,6 +63,8 @@ delete_job_dir() {
     rm -rf -- "$job_dir"
   fi
   rm -f -- "$runtime_dir/$pod_uid.sandbox" "$runtime_dir/$pod_uid.retain" \
+    "$runtime_dir/$pod_uid.request-claim" \
+    "$runtime_dir/$pod_uid.request-claim.next" \
     "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
     "$intent_dir/$pod_uid.accepted.next" "$runtime_dir/$pod_uid.ready.next"
   rm -rf -- "$intent_dir/$pod_uid.candidate"
@@ -53,19 +75,22 @@ delete_job_dir() {
 }
 
 prepare_request_lanes() {
-  local create create_value pod_uid request_lane
+  local create create_claim create_value pod_uid request_lane
   shopt -s nullglob
   for create in "$request_dir"/.create-*; do
-    if test -L "$create" ||
-       test "$(stat -c '%F:%u:%g:%a:%h' -- "$create" 2>/dev/null || true)" != \
-         "regular file:0:0:600:1"; then
+    pod_uid="${create##*/.create-}"
+    if ! valid_uid "$pod_uid"; then
       rm -f -- "$create"
       continue
     fi
-    pod_uid="${create##*/.create-}"
-    create_value="$(tr -d '\r\n' < "$create")"
-    if ! valid_uid "$pod_uid" || test "$create_value" != "$pod_uid"; then
-      rm -f -- "$create"
+    create_claim="$runtime_dir/$pod_uid.create-claim"
+    rm -f -- "$create_claim" "$create_claim.next"
+    if ! claim_untrusted_marker "$create" "$create_claim" 256; then
+      continue
+    fi
+    create_value="$(tr -d '\r\n' < "$create_claim")"
+    rm -f -- "$create_claim"
+    if test "$create_value" != "$pod_uid"; then
       continue
     fi
     request_lane="$request_dir/$pod_uid"
@@ -178,12 +203,12 @@ claim_promotion_candidates() {
       rm -f -- "$candidate"
       continue
     fi
-    mv -T "$candidate" "$candidate_claim" 2>/dev/null || true
+    claim_untrusted_marker "$candidate" "$candidate_claim" 256 || true
   done
 }
 
 discard_candidate_claim() {
-  rm -rf -- "$1"
+  rm -f -- "$1"
 }
 
 publish_ready_marker() {
@@ -526,74 +551,91 @@ prune_orphan_request_lanes() {
   )
 }
 
+clone_request() {
+  local request="$1" pod_uid="$2" ready_file="$3" request_lane="$4"
+  local request_claim request_value job_dir temporary
+  job_dir="$jobs_dir/$pod_uid"
+  if test -L "$job_dir"; then
+    rm -f -- "$request"
+    return
+  fi
+  if ! record_sandbox_id "$pod_uid"; then
+    if request_expired "$pod_uid" "$request"; then
+      rm -f -- "$request" "$ready_file" "$runtime_dir/$pod_uid.sandbox"
+      if test -n "$request_lane"; then
+        delete_request_lane "$request_lane"
+      fi
+    fi
+    return
+  fi
+  request_claim="$runtime_dir/$pod_uid.request-claim"
+  rm -f -- "$request_claim" "$request_claim.next"
+  if ! claim_untrusted_marker "$request" "$request_claim" 256; then
+    return
+  fi
+  request_value="$(tr -d '\r\n' < "$request_claim")"
+  if test "$request_value" != "$pod_uid"; then
+    rm -f -- "$request_claim"
+    return
+  fi
+
+  if ! test -d "$job_dir"; then
+    btrfs subvolume create "$job_dir" >/dev/null
+  fi
+  chmod 0755 "$job_dir"
+  btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"
+  if test -f "$job_dir/.ready" &&
+     test -f "$job_dir/buildkit.ext4" &&
+     test -f "$job_dir/.seed-generation"; then
+    if record_sandbox_id "$pod_uid"; then
+      publish_ready_marker "$pod_uid" "$ready_file"
+    fi
+    rm -f -- "$request_claim"
+    return
+  fi
+
+  temporary="$job_dir/buildkit.ext4.tmp"
+  rm -f -- "$temporary"
+  (
+    flock -s 9
+    cp --reflink=always --sparse=auto "$seed_file" "$temporary"
+    stat -c '%i:%s:%Y:%Z' "$seed_file" > "$job_dir/.seed-generation"
+    chmod 0400 "$job_dir/.seed-generation"
+  ) 9> "$seed_lock"
+  mv "$temporary" "$job_dir/buildkit.ext4"
+  touch "$job_dir/.ready"
+  if ! record_sandbox_id "$pod_uid"; then
+    rm -f -- "$request_claim"
+    delete_job_dir "$job_dir"
+    return
+  fi
+  publish_ready_marker "$pod_uid" "$ready_file"
+  rm -f -- "$request_claim"
+}
+
 clone_requests() {
-  local request pod_uid request_lane request_value ready_file job_dir temporary
+  local request pod_uid request_lane ready_file
   promotion_barrier_pending && return 0
   shopt -s nullglob
   for request in "$request_dir"/*/request; do
-    test -f "$request" || continue
     request_lane="$(dirname "$request")"
     pod_uid="$(basename "$request_lane")"
     if ! valid_uid "$pod_uid" || ! request_lane_valid "$request_lane"; then
       continue
     fi
-    if test -L "$request" ||
-       test "$(stat -c '%F:%u:%g:%h' -- "$request" 2>/dev/null || true)" != \
-         "regular file:0:0:1"; then
-      rm -f -- "$request"
-      continue
-    fi
     ready_file="$request_lane/ready"
-    request_value="$(tr -d '\r\n' < "$request")"
-    if test "$request_value" != "$pod_uid"; then
+    clone_request "$request" "$pod_uid" "$ready_file" "$request_lane"
+  done
+
+  # Keep accepting the legacy marker layout until every pre-upgrade runner exits.
+  for request in "$request_dir"/*.request; do
+    pod_uid="$(basename "$request" .request)"
+    if ! valid_uid "$pod_uid"; then
       rm -f -- "$request"
       continue
     fi
-
-    job_dir="$jobs_dir/$pod_uid"
-    if test -L "$job_dir"; then
-      rm -f -- "$request"
-      continue
-    fi
-    if ! record_sandbox_id "$pod_uid"; then
-      if request_expired "$pod_uid" "$request"; then
-        rm -f -- "$request" "$ready_file" \
-          "$runtime_dir/$pod_uid.sandbox"
-        delete_request_lane "$request_lane"
-      fi
-      continue
-    fi
-    if ! test -d "$job_dir"; then
-      btrfs subvolume create "$job_dir" >/dev/null
-    fi
-    chmod 0755 "$job_dir"
-    btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"
-    if test -f "$job_dir/.ready" &&
-       test -f "$job_dir/buildkit.ext4" &&
-       test -f "$job_dir/.seed-generation"; then
-      if record_sandbox_id "$pod_uid"; then
-        publish_ready_marker "$pod_uid" "$ready_file"
-        rm -f -- "$request"
-      fi
-      continue
-    fi
-
-    temporary="$job_dir/buildkit.ext4.tmp"
-    rm -f -- "$temporary"
-    (
-      flock -s 9
-      cp --reflink=always --sparse=auto "$seed_file" "$temporary"
-      stat -c '%i:%s:%Y:%Z' "$seed_file" > "$job_dir/.seed-generation"
-      chmod 0400 "$job_dir/.seed-generation"
-    ) 9> "$seed_lock"
-    mv "$temporary" "$job_dir/buildkit.ext4"
-    touch "$job_dir/.ready"
-    if ! record_sandbox_id "$pod_uid"; then
-      delete_job_dir "$job_dir"
-      continue
-    fi
-    publish_ready_marker "$pod_uid" "$ready_file"
-    rm -f -- "$request"
+    ready_file="$request_dir/$pod_uid.ready"
+    clone_request "$request" "$pod_uid" "$ready_file" ""
   done
 }
 
@@ -618,6 +660,7 @@ prune_stale_jobs() {
        test "$(stat -c '%F:%u:%g:%h' -- "$sandbox_marker" 2>/dev/null || true)" != \
          "regular file:0:0:1"; then
       test ! -e "$request_dir/$pod_uid/request" || continue
+      test ! -e "$request_dir/$pod_uid.request" || continue
       for command_line_file in /proc/[0-9]*/cmdline; do
         test -r "$command_line_file" || continue
         command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"

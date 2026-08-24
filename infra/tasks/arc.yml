@@ -700,8 +700,8 @@ tasks:
     desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
     silent: true
     cmds:
-      - task: arc:cache-primary:ensure
       - task: arc:controller-build:prepare
+      - task: arc:cache-primary:ensure
       - task: arc:build-host:resolve
       - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
