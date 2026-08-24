@@ -2,8 +2,8 @@
 # Rust ecosystem gates beside the product pipeline. Serialize the native, WASM, and web
 # cache-writing lanes so each verifies read-only and exports its already-solved local graph
 # without competing uploads. After the verified
-# WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on separate
-# configured runners. Each browser solve is read-only. The successful UI-demo lane then exports its
+# WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on hosted
+# runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
 # Pages only after web verify and web e2e succeed; extension e2e and UI demos remain required
 # for the workflow but do not gate the development deploy. Immutable releases remain
@@ -298,7 +298,8 @@ jobs:
   web-e2e:
     name: Web e2e
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    # This lane runs a browser container and therefore needs a general runtime.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -345,7 +346,8 @@ jobs:
   extension-e2e:
     name: Extension e2e
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    # This lane runs a browser container and therefore needs a general runtime.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
@@ -395,7 +397,8 @@ jobs:
     # This is the final local cache producer. Serialize it behind web so it
     # clones the promoted web generation instead of racing a sibling lineage.
     needs: [web]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    # This lane runs a browser container and therefore needs a general runtime.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read

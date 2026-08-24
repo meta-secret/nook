@@ -118,12 +118,12 @@ eligible node.
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.
 
-The BuildKit container requests 4 GiB and may use 10 GiB; the runner requests
-1 GiB and may use 2 GiB. The larger limit is deliberate: QEMU and virtiofs can
-charge guest-backed pages more than once to the Pod cgroup. The scheduler still
-uses requests, so Rise-S admits at most eight ARC microVMs from its 16 logical
-CPUs while a memory-heavy Rust solve has enough cgroup headroom to avoid killing
-the whole VM.
+Each node's shared BuildKit Pod requests 4 CPU and 8 GiB, has no CPU limit, and
+may use 48 GiB during a large parallel solve. Each disposable runner requests
+0.5 CPU and 1 GiB and may use 4 CPU and 6 GiB, with a 32 GiB ephemeral work
+volume. These are ordinary Pods, not per-job microVMs. Kubernetes admits work
+from requests and live node pressure; the scale-set ceilings are queue limits,
+not promises that one node can run every runner simultaneously.
 
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 

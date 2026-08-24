@@ -90,6 +90,15 @@ Each replica uses:
 - a 4 CPU request without a CPU limit; and
 - an 8 GiB memory request with a 48 GiB limit.
 
+Rootless BuildKit keeps its normal OCI process sandbox. The deployment must not
+use `--oci-worker-no-process-sandbox`, because concurrent jobs share a daemon
+and must not gain ptrace or signal access to another solve's processes.
+
+The manifest and deployment currently own exactly three qualified build nodes:
+Rise-S, Home, and KS-6. Adding a fourth node requires adding its retained PV and
+increasing the StatefulSet replica count in the same change. Deployment fails
+closed when the qualified-node inventory differs.
+
 The node-local Service uses `internalTrafficPolicy: Local`. A runner therefore
 reaches only the BuildKit endpoint on its own node.
 

@@ -268,6 +268,19 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(buildkit.contains("internalTrafficPolicy: Local"));
     assert!(buildkit.contains("replicas: 3"));
     assert!(buildkit.contains("requiredDuringSchedulingIgnoredDuringExecution"));
+    assert_eq!(
+        buildkit
+            .matches("  labels:\n    app.kubernetes.io/name: nook-buildkit")
+            .count(),
+        3,
+        "all three BuildKit PVs must carry the operational status label"
+    );
+    assert!(!buildkit.contains("--oci-worker-no-process-sandbox"));
+    assert!(tasks.contains("test \"$available_bytes\" -ge 68719476736"));
+    assert!(tasks.contains("ARC requires exactly three build hosts"));
+    assert!(tasks.contains("expected_build_nodes"));
+    assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));
+    assert!(tasks.contains("$legacy_image_next"));
     assert!(buildkit.contains("storage: 64Gi"));
 
     for contract in [

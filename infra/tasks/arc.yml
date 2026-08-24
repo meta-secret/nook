@@ -60,6 +60,12 @@ tasks:
         bash <<'BASH'
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
+        targets_file="$HOME/.nook/infra/arc-build-ssh-targets"
+        target_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$targets_file")"
+        if test "$target_count" != 3; then
+          echo "ARC requires exactly three build hosts; found $target_count" >&2
+          exit 1
+        fi
         while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
           test -n "$build_remote_dir"
@@ -257,12 +263,42 @@ tasks:
         bash <<'BASH'
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
+        targets_file="$HOME/.nook/infra/arc-build-ssh-targets"
+        target_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$targets_file")"
+        if test "$target_count" != 3; then
+          echo "ARC requires exactly three build hosts; found $target_count" >&2
+          exit 1
+        fi
         while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
           test -n "$build_remote_dir"
           ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             -J "$controller_target" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
+        pool_root=/var/lib/nook-arc-buildkit
+        legacy_pool="$pool_root/pool"
+        legacy_image="$pool_root/pool.btrfs"
+        legacy_image_next="$pool_root/pool.btrfs.next"
+        legacy_mount_unit="$(systemd-escape --path --suffix=mount "$legacy_pool")"
+        sudo -n systemctl disable --now nook-arc-buildkit-cloner.service \
+          >/dev/null 2>&1 || true
+        sudo -n systemctl disable --now "$legacy_mount_unit" \
+          >/dev/null 2>&1 || true
+        if sudo -n mountpoint -q "$legacy_pool"; then
+          sudo -n umount "$legacy_pool"
+        fi
+        for legacy_loop in $(sudo -n losetup -j "$legacy_image" -O NAME --noheadings 2>/dev/null); do
+          sudo -n losetup -d "$legacy_loop"
+        done
+        sudo -n rm -f -- \
+          /etc/systemd/system/nook-arc-buildkit-cloner.service \
+          "/etc/systemd/system/$legacy_mount_unit" \
+          /usr/local/sbin/nook-arc-buildkit-cloner \
+          /etc/nook/arc-cache-verifier-token \
+          "$legacy_image" \
+          "$legacy_image_next"
+        sudo -n rmdir "$legacy_pool" 2>/dev/null || true
+        sudo -n systemctl daemon-reload
         state_dir=/var/lib/nook-arc-buildkit/state
         sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         test "$(sudo -n stat -c %u "$state_dir")" = 1000
@@ -270,9 +306,9 @@ tasks:
         filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         test "$filesystem_bytes" -ge 68719476736
-        test "$available_bytes" -ge 8589934592
+        test "$available_bytes" -ge 68719476736
         REMOTE
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"
+        done < "$targets_file"
         BASH
 
   arc:render:check:
@@ -347,6 +383,15 @@ tasks:
         chmod 0600 "$kubeconfig"
         export KUBECONFIG="$kubeconfig"
         kubectl() { sudo -n k0s kubectl "$@"; }
+
+        expected_build_nodes="$(printf '%s\n' bynull-servo nook-rise-s-1 ovh-us | sort)"
+        actual_build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        if test "$actual_build_nodes" != "$expected_build_nodes"; then
+          echo "ARC BuildKit manifest requires exactly bynull-servo, nook-rise-s-1, and ovh-us" >&2
+          printf 'Actual qualified nodes:\n%s\n' "$actual_build_nodes" >&2
+          exit 1
+        fi
 
         ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
           "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \

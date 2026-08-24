@@ -192,7 +192,6 @@ buildkit.requireAll([
   "requiredDuringSchedulingIgnoredDuringExecution:",
   "nook.nokey.sh/arc-build: \"true\"",
   "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
-  "--oci-worker-no-process-sandbox",
   "--oci-worker-gc-keepstorage",
   'cpu: "4"',
   "memory: 8Gi",
@@ -209,6 +208,7 @@ buildkit.count({
 buildkit.forbidAll([
   "runtimeClassName:",
   "privileged: true",
+  "--oci-worker-no-process-sandbox",
   "docker.sock",
   "containerd.sock",
 ]);
@@ -245,8 +245,20 @@ tasks.requireAll([
   "one persistent rootless BuildKit shard per build node",
   "for scale_set in nook-k0s nook-k0s-hive",
   "helm uninstall nook-k0s-cache",
+  "ARC requires exactly three build hosts",
+  "expected_build_nodes",
+  'test "$available_bytes" -ge 68719476736',
+  "disable --now nook-arc-buildkit-cloner.service",
+  '"$legacy_image_next"',
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
+mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 3 });
+mainWorkflow.requireAll([
+  "web-e2e:",
+  "extension-e2e:",
+  "ui-demos:",
+  "This lane runs a browser container and therefore needs a general runtime.",
+]);
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",
