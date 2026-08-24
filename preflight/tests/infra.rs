@@ -1,4 +1,4 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{fs, path::PathBuf};
 
 use anyhow::Context;
 
@@ -20,6 +20,41 @@ fn read(path: &str) -> String {
 fn read_fallible(path: &str) -> anyhow::Result<String> {
     fs::read_to_string(repository_root().join(path))
         .with_context(|| format!("failed to read {path}"))
+}
+
+fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
+    let mut dockerfiles = Vec::new();
+    let mut pending = vec![directory];
+
+    while let Some(path) = pending.pop() {
+        for entry in fs::read_dir(&path)
+            .unwrap_or_else(|error| panic!("failed to inventory {}: {error}", path.display()))
+        {
+            let entry = entry.expect("repository entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("repository entries must stay beneath the root");
+                let directory_name = path.file_name().expect("directory must have a name");
+                if matches!(
+                    directory_name.to_str(),
+                    Some(".git" | "target" | "node_modules")
+                ) || relative == std::path::Path::new("infra/sim/bake-cache")
+                {
+                    continue;
+                }
+                pending.push(path);
+            } else if path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().contains("Dockerfile"))
+            {
+                dockerfiles.push(path);
+            }
+        }
+    }
+
+    dockerfiles
 }
 
 #[test]
@@ -46,19 +81,12 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
 
 #[test]
 fn production_dockerfiles_never_resolve_docker_hub_directly() {
-    let output = Command::new("git")
-        .args(["ls-files", "-z", "*Dockerfile*"])
-        .current_dir(repository_root())
-        .output()
-        .expect("Dockerfile inventory must be readable");
-    assert!(output.status.success());
-
-    for path in String::from_utf8(output.stdout)
-        .expect("Dockerfile paths must be UTF-8")
-        .split('\0')
-        .filter(|path| !path.is_empty() && !path.starts_with("infra/sim/bake-cache/"))
-    {
-        let dockerfile = read(path);
+    for path in production_dockerfiles(repository_root()) {
+        let relative = path
+            .strip_prefix(repository_root())
+            .expect("Dockerfile must stay beneath the repository root");
+        let path = relative.to_string_lossy();
+        let dockerfile = read(&path);
         let mut image_arguments = std::collections::HashMap::new();
         let mut stages = std::collections::HashSet::new();
 

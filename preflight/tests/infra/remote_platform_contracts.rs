@@ -366,7 +366,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
     );
     assert!(
         manifest.contains(
-            "resources:\n            requests:\n              cpu: \"1\"\n              memory: 2Gi\n            limits:\n              cpu: \"4\"\n              memory: 8Gi"
+            "resources:\n            requests:\n              cpu: \"2\"\n              memory: 4Gi\n            limits:\n              cpu: \"8\"\n              memory: 12Gi"
         ),
         "Zot must reserve capacity and allow enough burst headroom for concurrent BuildKit cache traffic"
     );
