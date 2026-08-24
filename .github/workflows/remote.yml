@@ -56,9 +56,9 @@ jobs:
   batch:
     if: inputs.task != 'rust-cache:promote' || inputs.tasks != ''
     name: Remote / ${{ inputs.tasks || inputs.task }}
-    # Every trusted remote batch uses ARC. Explicit selections retain their
-    # dedicated cache or Hive pools; ordinary mixed batches use general ARC.
-    runs-on: ${{ inputs.runner_label == 'nook-k0s-cache' && (vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || (contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (vars.NOOK_RUNS_ON || 'ubuntu-latest')) }}
+    # Focused ARC selections use the private BuildKit worker. The explicit
+    # runtime smoke also proves the job-scoped Podman Docker API in Kata.
+    runs-on: ${{ inputs.runner_label == 'nook-k0s-cache' && (vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || ((inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest')) }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}

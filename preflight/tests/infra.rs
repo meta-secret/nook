@@ -69,10 +69,10 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
                     "{path} resolves its Dockerfile frontend outside Zot: {frontend}"
                 );
             }
-            if let Some(argument) = line.strip_prefix("ARG ") {
-                if let Some((name, value)) = argument.split_once('=') {
-                    image_arguments.insert(name, value);
-                }
+            if let Some(argument) = line.strip_prefix("ARG ")
+                && let Some((name, value)) = argument.split_once('=')
+            {
+                image_arguments.insert(name, value);
             }
             let Some(from) = line.strip_prefix("FROM ") else {
                 continue;

@@ -306,6 +306,13 @@ tasks:
         public_code="$(curl -sS -o /dev/null -w '%{http_code}' \
           "https://$host/v2/")"
         test "$public_code" = 200
+        anonymous_private_read="$(curl -sS -o /dev/null -w '%{http_code}' \
+          "https://$host/v2/nook/buildcache/nook-authz-probe/manifests/missing")"
+        test "$anonymous_private_read" = 401
+        anonymous_mirror_write="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -X POST \
+          "https://$host/v2/library/nook-authz-probe/blobs/uploads/")"
+        test "$anonymous_mirror_write" = 401
         public_auth="$(curl -sS -o /dev/null -w '%{http_code}' \
           -u "$username:$password" \
           "https://$host/v2/")"
