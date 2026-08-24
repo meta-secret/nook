@@ -344,10 +344,14 @@ runs:
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "GHA_CACHE_EXPORT_MODE=min" >> "$GITHUB_ENV"
-            echo "ARC publishes a minimal exact-SHA handoff; full graph remains in private BuildKit state"
+            # Even mode=min includes the final result layer. Rust dependency
+            # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
+            # HDD and turn a successful verification into a cache failure.
+            # ARC keeps this job-local and reads Main plus sccache instead.
+            echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
+          else
+            cache_write_enabled=1
           fi
-          cache_write_enabled=1
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
         fi

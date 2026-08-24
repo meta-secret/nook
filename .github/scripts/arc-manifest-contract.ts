@@ -483,6 +483,11 @@ dockerSetup.requireAll([
   "tcp://127.0.0.1:2375",
   "docker info >/dev/null",
 ]);
+dockerSetup.requireAll([
+  "ARC skips general exact-SHA registry export; Main and sccache remain reusable",
+  'else\n            cache_write_enabled=1',
+]);
+dockerSetup.forbid("ARC publishes a minimal exact-SHA handoff");
 dockerSetup.forbid("docker-in-docker");
 runtimeSmoke.requireAll([
   "NOOK_CONTAINER_RUNTIME",

@@ -263,16 +263,16 @@ Use this workflow for quality, CI, and deployment changes.
       validated BuildKit seed.
     - Hive PRs may import the trusted Main registry seed when the local clone
       does not already contain the needed graph.
-    - Hive PRs do not export an isolated exact-SHA registry cache. The guarded
-      ARC smoke workflow promotes a validated local seed instead.
+    - Hive PRs export one minimal isolated exact-SHA registry handoff because
+      that handoff is small and has proven fast enough for retries.
     - Main remains the only workflow writer of the shared Hive registry seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Hosted and Main Native publishers stage
       `docker:ci:cache:publish:rust-base` before deps/source scopes so one Bake
       cannot rewrite apt while cooking chef.
-    - ARC Native publishes each minimal exact-SHA handoff from its verified
-      solve. It must not reconstruct the four graphs in a second publish pass.
+    - ARC Native and ecosystem jobs do not export per-PR Rust target trees.
+      Even `mode=min` can contain a result layer larger than 15 GiB.
     - WASM publishers stage deps-publish and source export before rust-base.
     - Staging rust-base first on WASM imports the shorter parent index and
       orphans local chef cook layers for the next bake.
@@ -355,8 +355,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
       into private job-local BuildKit state.
-    - They publish minimal exact-SHA retry handoffs before the disposable state
-      is removed.
+    - They do not publish general exact-SHA handoffs. Concurrent multi-gigabyte
+      result layers would serialize the cluster behind Zot's HDD.
+    - Hive alone keeps a small minimal exact-SHA retry handoff.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow

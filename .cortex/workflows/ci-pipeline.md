@@ -974,8 +974,10 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.
 - The Remote credential can update only `nook/remote-buildcache/**` and has read-only access to Main's `nook/buildcache/**` repository path.
-- Same-repository pull requests use that same Remote registry identity for
+- Hosted same-repository pull requests use that Remote registry identity for
   git-commit exporters under `nook/remote-buildcache/**`.
+- General ARC pull requests remain registry-read-only and reuse Main plus
+  SeaweedFS sccache. Hive keeps its small minimal exact-SHA handoff.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
 - Hive images also publish and pull through Zot.

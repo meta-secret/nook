@@ -156,8 +156,11 @@ maintenance-only.
 - Every PR job restores Main's complete lineage plus any existing PR remote-buildcache scope.
 - Hosted PR jobs and local Task Bake export only isolated remote-buildcache refs.
 - Trusted ARC PR jobs reuse their full private node-local BuildKit state.
-- They publish a minimal exact-SHA registry handoff so retries remain reusable
-  after the disposable VM state is removed.
+- They do not export general Rust target trees to Zot. Even minimal result
+  layers can exceed 15 GiB and concurrent uploads overload the registry HDD.
+- They restore Main's registry lineage and reuse compiler objects through
+  SeaweedFS sccache.
+- Hive retains a small minimal exact-SHA handoff for fast retries.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -300,7 +303,9 @@ maintenance-only.
 - Main alone refreshes shared refs under `nook/buildcache/**`.
 - Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
 - Trusted ARC PR jobs read Main and exact-SHA refs.
-- They may write only minimal exact-SHA refs under `nook/remote-buildcache/**`.
+- General trusted ARC PR jobs do not write registry cache refs.
+- Trusted Hive ARC jobs may write only their minimal exact-SHA ref under
+  `nook/remote-buildcache/**`.
 - Their fresh Kata guests start from the private node-local COW seed.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
