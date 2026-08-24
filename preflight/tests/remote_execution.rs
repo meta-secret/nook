@@ -766,7 +766,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         "--add-label \"$validation_label\"",
         "task remote TASK_NAME=rust:test",
         "task pr:validate PR=<number>",
-        "Any later push changes the PR head",
+        "becomes stale after any later push",
     ] {
         assert!(
             remote_tasks.contains(required) || remote_doc.contains(required),
