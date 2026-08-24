@@ -229,8 +229,9 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
             && ci_tasks.contains("GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test")
             && ci_tasks.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test")
             && pr_node.contains("isolated-cache-write: \"true\"")
-            && pr_node.contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
-        "trusted Main must retain hosted publication without exporting registry cache from ARC, and PR Node jobs must publish only their exact head"
+            && pr_node.contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:wasm:node-test")
+            && pr_node.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test"),
+        "trusted Main and hosted PR fallback must retain publication without exporting WASM Node graphs from ARC"
     );
     Ok(())
 }
