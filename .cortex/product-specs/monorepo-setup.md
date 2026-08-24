@@ -53,8 +53,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     the Kata guest, without Docker run. Both helpers stop with the runner.
   - The general ARC set exposes a job-scoped Podman Docker-compatible API only
     inside each disposable Kata guest for Main runtime and browser jobs.
-  - Fork PRs, Dependabot PRs, release jobs, and non-Main runtime-dependent,
-    browser, WASM, and deployment jobs use ephemeral GitHub-hosted VMs.
+  - Trusted same-repository PR Rust, WASM-build, and WASM-node-test jobs use
+    fresh ARC Kata microVMs. Fork PRs, Dependabot PRs, release jobs, and
+    non-Main browser, deployment, and other runtime-dependent jobs use
+    ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
   - Each fresh ARC guest starts from a private reflink clone of a trusted
     32 GiB BuildKit seed.

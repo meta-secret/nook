@@ -36,7 +36,10 @@ fn assert_workflow_runtime_contract(root: &Path) {
     assert!(
         pr.contains("runs-on: ubuntu-latest")
             && release.contains("runs-on: ubuntu-latest")
-            && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && pr
+                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .count()
+                >= 3
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()

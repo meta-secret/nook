@@ -158,8 +158,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
 - Classifies changed paths and skips the product job chain for minds-only pushes.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
-- Native Rust uses the configured ARC scale set. WASM and browser-free web
-  verification use fresh `ubuntu-latest` runners.
+- Native Rust and WASM producers use the configured ARC scale set. Browser-free
+  web verification uses a fresh `ubuntu-latest` runner.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
 - Each browser solve is read-only.
