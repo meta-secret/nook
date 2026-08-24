@@ -16,6 +16,25 @@ const companionWasmPath = join(
 )
 const originalFetch = globalThis.fetch?.bind(globalThis)
 
+const nativeElementBounds = HTMLElement.prototype.getBoundingClientRect
+
+function createDefaultElementBounds(): DOMRect {
+  const bounds = nativeElementBounds.call(document.createElement('div'))
+  Object.defineProperties(bounds, {
+    bottom: { configurable: true, value: 32 },
+    height: { configurable: true, value: 32 },
+    left: { configurable: true, value: 0 },
+    right: { configurable: true, value: 100 },
+    top: { configurable: true, value: 0 },
+    width: { configurable: true, value: 100 },
+    x: { configurable: true, value: 0 },
+    y: { configurable: true, value: 0 },
+  })
+  return bounds
+}
+
+HTMLElement.prototype.getBoundingClientRect = createDefaultElementBounds
+
 Reflect.deleteProperty(WebAssembly, 'instantiateStreaming')
 
 globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {

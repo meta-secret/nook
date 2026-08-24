@@ -33,7 +33,6 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
           action: authenticationWorkflow.fillTotpAction,
           currentStep: 2,
           totalSteps: 3,
-          requiresHumanApproval: false,
           observationIndex: 0,
         },
       },
@@ -47,8 +46,12 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
 
 test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   const messages = await loadPilotMessages()
+  const compactLoginStub = {
+    ...loginPilotStubArgs(messages),
+    loginMatchCount: 0,
+  }
 
-  await page.addInitScript(installDemoChromeStub, loginPilotStubArgs(messages))
+  await page.addInitScript(installDemoChromeStub, compactLoginStub)
 
   await page.goto('/')
   await page.setContent(`<!doctype html>
@@ -124,10 +127,17 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
         if (status) status.textContent = 'Secure sign-in submitted'
       })
   })
-  await page.evaluate(installDemoChromeStub, loginPilotStubArgs(messages))
+  await page.evaluate(installDemoChromeStub, compactLoginStub)
   await injectPilotAutofill(page)
 
   const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
+  await expect(
+    widget.getByRole('button', { name: 'Continue with Nook' }),
+  ).toBeHidden()
+  await demoBeat(page)
+
+  await widget.getByTestId('nook-auth-gate-expand').click()
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(

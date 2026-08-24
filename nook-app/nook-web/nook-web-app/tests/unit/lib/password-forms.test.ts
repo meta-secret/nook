@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  authenticationWorkflowFormsHaveActionableControl,
   fillLoginCredentials,
-  fillOneTimeCode,
   findOneTimeCodeFields,
-  findPasskeyControl,
-  pageHasPasskeyControl,
-  PasskeyControlLookupKind,
   PasswordFormQueryKind,
-  PasswordFormScopeKind,
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
   summarizePasswordForms,
@@ -83,6 +79,357 @@ describe('website one-time-code fields', () => {
     `
 
     expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+  })
+
+  test('keeps unrelated page controls outside an inert account form', () => {
+    document.body.innerHTML = `
+      <form id="profile-form">
+        <input type="email" name="email" autocomplete="email" />
+      </form>
+      <button type="button">Continue</button>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: false,
+    })
+  })
+
+  test('does not treat an ordinary account email submit as login', () => {
+    document.body.innerHTML = `
+      <form id="account-settings">
+        <input type="email" autocomplete="email" />
+        <button type="submit">Apply</button>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: false,
+    })
+  })
+
+  test('rejects profile submits, unrelated unowned controls, and effectively disabled controls', () => {
+    document.body.innerHTML = `
+      <form id="profile-form">
+        <input type="email" name="email" autocomplete="email" />
+        <button type="submit">Save</button>
+      </form>
+      <section>
+        <input type="email" name="unowned-email" autocomplete="email" />
+      </section>
+      <button type="button">Next</button>
+      <form id="disabled-login">
+        <input type="password" autocomplete="current-password" />
+        <fieldset disabled>
+          <button type="submit">Sign in</button>
+        </fieldset>
+      </form>
+      <form id="aria-disabled-login">
+        <input type="password" autocomplete="current-password" />
+        <div aria-disabled="true">
+          <button type="submit">Sign in</button>
+        </div>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(3)
+    expect(
+      observations.map(
+        ({ summary }) => summary.authenticationAdvanceControlPresent,
+      ),
+    ).toEqual([false, false, false])
+    const actionabilityQuery: Parameters<
+      typeof authenticationWorkflowFormsHaveActionableControl
+    >[0] = { observations }
+    expect(
+      authenticationWorkflowFormsHaveActionableControl(actionabilityQuery),
+    ).toBe(false)
+  })
+
+  test('rejects credential fields inside inert subtrees', () => {
+    document.body.innerHTML = `
+      <form>
+        <div inert><input type="email" autocomplete="username" /></div>
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
+  })
+
+  test('rejects credential forms inside fully transparent subtrees', () => {
+    document.body.innerHTML = `
+      <section style="opacity: 0">
+        <form>
+          <input type="email" autocomplete="username" />
+          <button type="submit">Sign in</button>
+        </form>
+      </section>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
+  })
+
+  test('accepts a localized semantic submit for a password ceremony', () => {
+    document.body.innerHTML = `
+      <form id="signup-form">
+        <input type="email" autocomplete="username" />
+        <input type="password" autocomplete="new-password" />
+        <button type="submit">Crear cuenta</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      newPasswordFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts update password for a new-password ceremony', () => {
+    document.body.innerHTML = `
+      <form id="account-settings">
+        <input type="password" autocomplete="current-password" />
+        <input type="password" autocomplete="new-password" />
+        <input type="password" autocomplete="new-password" />
+        <button type="submit">Update password</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      newPasswordFieldCount: 2,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts a contextual save label for a new-password ceremony', () => {
+    document.body.innerHTML = `
+      <form id="account-settings">
+        <input type="password" autocomplete="current-password" />
+        <input type="password" autocomplete="new-password" />
+        <input type="password" autocomplete="new-password" />
+        <button type="submit">Save</button>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      newPasswordFieldCount: 2,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts a localized semantic submit for an owned identity step', () => {
+    document.body.innerHTML = `
+      <form id="identity-form">
+        <input type="email" autocomplete="email" />
+        <button type="button">Siguiente</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts a localized password-only submit with a login action', () => {
+    document.body.innerHTML = `
+      <form action="/session/login">
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Anmelden</button>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      currentPasswordFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts and activates an image submit control', () => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input type="email" autocomplete="username" />
+        <input id="image-submit" type="image" alt="Sign in" />
+      </form>
+    `
+    let activated = false
+    document.querySelector('#image-submit')?.addEventListener('click', () => {
+      activated = true
+      document
+        .querySelector('form')
+        ?.dispatchEvent(new Event('submit', { cancelable: true }))
+    })
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      authenticationAdvanceControlPresent: true,
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe(true)
+  })
+
+  test('activates the accepted username advance control instead of a rejected submit', () => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input type="email" autocomplete="username" />
+        <button id="save" type="submit">Save</button>
+        <button id="next" type="button">Next</button>
+      </form>
+    `
+    let saveActivated = false
+    let nextActivated = false
+    document.querySelector('#save')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      saveActivated = true
+    })
+    document.querySelector('#next')?.addEventListener('click', () => {
+      nextActivated = true
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(saveActivated).toBe(false)
+    expect(nextActivated).toBe(true)
+  })
+
+  test('prefers the credential submit over an earlier social sign-in control', () => {
+    document.body.innerHTML = `
+      <form>
+        <input autocomplete="username" />
+        <input autocomplete="current-password" type="password" />
+        <button id="social" type="submit">Sign in with Google</button>
+        <button id="credentials" type="submit">Sign in</button>
+      </form>
+    `
+    let socialActivated = false
+    let credentialsActivated = false
+    document.querySelector('#social')?.addEventListener('click', () => {
+      socialActivated = true
+    })
+    document.querySelector('#credentials')?.addEventListener('click', () => {
+      credentialsActivated = true
+    })
+    document.querySelector('form')?.addEventListener('submit', (event) => {
+      event.preventDefault()
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(socialActivated).toBe(false)
+    expect(credentialsActivated).toBe(true)
+  })
+
+  test('rejects destructive password-confirmation submits', () => {
+    document.body.innerHTML = `
+      <form id="account-settings">
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Delete account</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      currentPasswordFieldCount: 1,
+      authenticationAdvanceControlPresent: false,
+    })
+  })
+
+  test('rejects localized destructive password-confirmation submits', () => {
+    document.body.innerHTML = `
+      <form id="account-settings" action="/auth/account/delete">
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Eliminar cuenta</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      currentPasswordFieldCount: 1,
+      authenticationAdvanceControlPresent: false,
+    })
+  })
+
+  test('accepts an enabled submit in the first legend of a disabled fieldset', () => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input type="password" autocomplete="current-password" />
+        <fieldset disabled>
+          <legend><button type="submit">Sign in</button></legend>
+        </fieldset>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts and activates a nested form-less role button', () => {
+    document.body.innerHTML = `
+      <section>
+        <div><input type="email" autocomplete="username" /></div>
+        <div><div id="next" role="button" tabindex="0">Continue</div></div>
+      </section>
+    `
+    let activated = false
+    document.querySelector('#next')?.addEventListener('click', () => {
+      activated = true
+    })
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe(true)
+  })
+
+  test('activates a labeled control on a form-less password step', () => {
+    document.body.innerHTML = `
+      <section>
+        <input type="password" autocomplete="current-password" />
+        <button id="sign-in" type="button">Sign in</button>
+      </section>
+    `
+    let activated = false
+    document.querySelector('#sign-in')?.addEventListener('click', () => {
+      activated = true
+    })
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      currentPasswordFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(activated).toBe(true)
+  })
+
+  test('rejects authentication controls inside an inert subtree', () => {
+    document.body.innerHTML = `
+      <form id="login-form" inert>
+        <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
   })
 
   test('detects Microsoft-like email-first login without autocomplete=username', () => {
@@ -312,6 +659,28 @@ describe('website one-time-code fields', () => {
     }
   })
 
+  test('activates an input button used for a username-only advance step', () => {
+    document.body.innerHTML = `
+      <form id="login-form">
+        <input autocomplete="username" name="email" type="email" />
+        <input id="next" type="button" value="Next" />
+      </form>
+    `
+    let advanced = false
+    document.querySelector('#next')?.addEventListener('click', () => {
+      advanced = true
+    })
+
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: { username: 'pilot@nook.test', password: '' },
+      kind: PasswordFormQueryKind.Root,
+      root: document,
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
   test('groups externally associated controls with their form owner', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
@@ -324,6 +693,42 @@ describe('website one-time-code fields', () => {
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
       currentPasswordFieldCount: 1,
+    })
+  })
+
+  test('activates an externally associated advance control', () => {
+    document.body.innerHTML = `
+      <form id="login"><input autocomplete="username" /></form>
+      <button id="continue" form="login" type="button">Continue</button>
+    `
+    let advanced = false
+    document.querySelector('#continue')?.addEventListener('click', () => {
+      advanced = true
+    })
+
+    const observation = summarizeAuthenticationWorkflowForms()[0]
+    expect(observation?.summary.authenticationAdvanceControlPresent).toBe(true)
+    if (!observation) throw new Error('expected login observation')
+    const submission: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: observation.root,
+      formScope: observation.formScope,
+    }
+    expect(submitLoginForm(submission)).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
+  test('resolves aria-labelledby text for an advance control', () => {
+    document.body.innerHTML = `
+      <form>
+        <input autocomplete="username" />
+        <span id="continue-label">Continue</span>
+        <button type="button" aria-labelledby="continue-label"></button>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      authenticationAdvanceControlPresent: true,
     })
   })
 
@@ -384,7 +789,7 @@ describe('website one-time-code fields', () => {
     expect(summarizeAuthenticationWorkflowForms()).toEqual([])
   })
 
-  test('keeps unowned login controls isolated from owned signup fields', () => {
+  test('suppresses actionless unowned fields beside an owned signup form', () => {
     document.body.innerHTML = `
       <form id="signup">
         <input autocomplete="username" />
@@ -397,19 +802,118 @@ describe('website one-time-code fields', () => {
     `
 
     const observations = summarizeAuthenticationWorkflowForms()
-    expect(observations).toHaveLength(2)
-    expect(observations.map(({ summary }) => summary)).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          currentPasswordFieldCount: 0,
-          newPasswordFieldCount: 1,
-        }),
-        expect.objectContaining({
-          currentPasswordFieldCount: 1,
-          newPasswordFieldCount: 0,
-        }),
-      ]),
-    )
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      currentPasswordFieldCount: 0,
+      newPasswordFieldCount: 1,
+    })
+  })
+
+  test('keeps a form-less identity step grouped with its sibling advance control', () => {
+    document.body.innerHTML = `
+      <section>
+        <input autocomplete="username" />
+        <button type="button">Continue</button>
+      </section>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.formScope.kind).toBe('unowned')
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('accepts a localized control inside an explicit form-less login scope', () => {
+    document.body.innerHTML = `
+      <div id="login">
+        <input autocomplete="username" />
+        <button type="button">Siguiente</button>
+      </div>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.formScope.kind).toBe('locally-scoped')
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('climbs past an inert inner submit to an actionable outer login control', () => {
+    document.body.innerHTML = `
+      <div id="login">
+        <div>
+          <input autocomplete="username" />
+          <button type="submit" disabled>Wait</button>
+        </div>
+        <button id="next" type="button">Siguiente</button>
+      </div>
+    `
+    let advanced = false
+    document.querySelector('#next')?.addEventListener('click', () => {
+      advanced = true
+    })
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.formScope.kind).toBe('locally-scoped')
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+    if (!observations[0]) throw new Error('expected login observation')
+    const submission: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: observations[0].root,
+      formScope: observations[0].formScope,
+    }
+    expect(submitLoginForm(submission)).toBe(true)
+    expect(advanced).toBe(true)
+  })
+
+  test('rejects a localized control in a generic form-less profile scope', () => {
+    document.body.innerHTML = `
+      <div class="profile-editor">
+        <input autocomplete="username" />
+        <button type="button">Siguiente</button>
+      </div>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+  })
+
+  test('keeps nested form-less identity and advance wrappers in one workflow', () => {
+    document.body.innerHTML = `
+      <section>
+        <div><input autocomplete="username" /></div>
+        <div><button type="button">Continue</button></div>
+      </section>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.formScope.kind).toBe('unowned')
+    expect(observations[0]?.summary).toMatchObject({
+      usernameFieldCount: 1,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('does not join an unowned field to an unrelated page-level control', () => {
+    document.body.innerHTML = `
+      <div class="profile-editor">
+        <input autocomplete="username" />
+      </div>
+      <aside>
+        <button type="button">Sign in</button>
+      </aside>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
   })
 
   test('keeps separate unowned auth containers isolated', () => {
@@ -465,133 +969,5 @@ describe('website one-time-code fields', () => {
     expect(firstScope?.kind === 'owned' ? firstScope.owner.id : '').toBe(
       'login',
     )
-  })
-
-  test('fills a visible username instead of a hidden autocomplete token', () => {
-    document.body.innerHTML = `
-      <form>
-        <input type="hidden" autocomplete="username" value="token" />
-        <input id="visible-email" type="email" />
-        <input id="password" type="password" autocomplete="current-password" />
-      </form>
-    `
-
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'pilot', password: 'secret' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
-    expect(
-      document.querySelector<HTMLInputElement>('[type="hidden"]')?.value,
-    ).toBe('token')
-    expect(
-      document.querySelector<HTMLInputElement>('#visible-email')?.value,
-    ).toBe('pilot')
-  })
-
-  test('does not claim a div-based login was submitted', () => {
-    document.body.innerHTML = `
-      <section>
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-        <button type="button">Sign in</button>
-      </section>
-    `
-
-    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: document,
-      formScope: { kind: PasswordFormScopeKind.Unowned },
-    }
-    expect(submitLoginForm(submissionArgs)).toBe(false)
-  })
-
-  test('does not claim a disabled submit control was activated', () => {
-    document.body.innerHTML = `
-      <form>
-        <input type="password" autocomplete="current-password" />
-        <button type="submit" disabled>Sign in</button>
-      </form>
-    `
-
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
-  })
-
-  test('reports submission only when the form emits a submit event', () => {
-    document.body.innerHTML = `
-      <form>
-        <input type="password" autocomplete="current-password" />
-        <button type="submit">Sign in</button>
-      </form>
-    `
-    document.querySelector('form')?.addEventListener('submit', (event) => {
-      event.preventDefault()
-    })
-
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
-  })
-
-  test('fills the first enabled OTP field through the native value setter', () => {
-    document.body.innerHTML = `
-      <input autocomplete="one-time-code" disabled />
-      <input id="otp-code" type="tel" />
-    `
-    const field = document.querySelector<HTMLInputElement>('#otp-code')
-    let inputEvents = 0
-    field?.addEventListener('input', () => inputEvents++)
-
-    const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
-      code: '123456',
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
-    expect(field?.value).toBe('123456')
-    expect(inputEvents).toBe(1)
-    expect(document.activeElement).toBe(field)
-  })
-})
-
-describe('passkey control detection', () => {
-  test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {
-    document.body.innerHTML = `
-      <form>
-        <input autocomplete="section-login username" name="email" type="email" />
-        <input
-          autocomplete="section-login current-password webauthn"
-          name="password"
-          type="password"
-        />
-        <button type="submit">Sign in</button>
-      </form>
-    `
-
-    expect(pageHasPasskeyControl()).toBe(false)
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
-      passkeyControlPresent: false,
-      currentPasswordFieldCount: 1,
-    })
-  })
-
-  test('detects marked and labeled passkey controls', () => {
-    document.body.innerHTML = `
-      <button type="button" data-nook-passkey-control>Continue</button>
-    `
-    const marked = findPasskeyControl()
-    expect(marked.kind).toBe(PasskeyControlLookupKind.Found)
-    if (marked.kind === PasskeyControlLookupKind.Found) {
-      expect(marked.control.getAttribute('data-nook-passkey-control')).toBe('')
-    }
-
-    document.body.innerHTML = `
-      <button type="button">Sign in with a passkey</button>
-    `
-    const labeled = findPasskeyControl()
-    expect(labeled.kind).toBe(PasskeyControlLookupKind.Found)
-    if (labeled.kind === PasskeyControlLookupKind.Found) {
-      expect(labeled.control.textContent).toContain('passkey')
-    }
-    expect(pageHasPasskeyControl()).toBe(true)
   })
 })

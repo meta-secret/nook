@@ -2,11 +2,6 @@ import {
   AuthenticationOutcomeVerdict,
   NookWebsiteLoginSaveDecision,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import {
-  AuthenticationWorkflowAction,
-  AuthenticationWorkflowKind,
-  AuthenticationWorkflowStage,
-} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
@@ -38,15 +33,15 @@ export const demoDomainEnumArgs = {
   sufficientAuthenticationOutcome: demoSufficientAuthenticationOutcome,
   insufficientAuthenticationOutcome: demoInsufficientAuthenticationOutcome,
   authenticationWorkflow: {
-    loginKind: AuthenticationWorkflowKind.Login,
-    signupKind: AuthenticationWorkflowKind.Signup,
-    totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge,
-    credentialsStage: AuthenticationWorkflowStage.Credentials,
-    secondFactorStage: AuthenticationWorkflowStage.SecondFactor,
-    continueAction: AuthenticationWorkflowAction.ContinueWithNook,
-    generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword,
-    fillTotpAction: AuthenticationWorkflowAction.FillTotp,
-    createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey,
+    loginKind: 'login',
+    signupKind: 'signup',
+    totpChallengeKind: 'totp-challenge',
+    credentialsStage: 'credentials',
+    secondFactorStage: 'second-factor',
+    continueAction: 'continue-with-nook',
+    generatePasswordAction: 'generate-password',
+    fillTotpAction: 'fill-totp',
+    createPasskeyAction: 'create-passkey',
   },
   authenticatorProtocol: {
     optionsMessageType:
@@ -61,6 +56,9 @@ export const demoDomainEnumArgs = {
     pendingUnavailable: 'unavailable',
     completed: 'completed',
   } satisfies DemoLoginSaveResponses,
+  loginMatchAvailability: {
+    ready: 'ready',
+  },
 }
 
 export type ChromeMessage = { message: string }
@@ -72,15 +70,15 @@ export type DemoChromeStubArgs = {
   insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   generatePasswordMessageType: GeneratePasswordRequestType
   authenticationWorkflow: {
-    loginKind: AuthenticationWorkflowKind.Login
-    signupKind: AuthenticationWorkflowKind.Signup
-    totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge
-    credentialsStage: AuthenticationWorkflowStage.Credentials
-    secondFactorStage: AuthenticationWorkflowStage.SecondFactor
-    continueAction: AuthenticationWorkflowAction.ContinueWithNook
-    generatePasswordAction: AuthenticationWorkflowAction.GeneratePassword
-    fillTotpAction: AuthenticationWorkflowAction.FillTotp
-    createPasskeyAction: AuthenticationWorkflowAction.CreatePasskey
+    loginKind: 'login'
+    signupKind: 'signup'
+    totpChallengeKind: 'totp-challenge'
+    credentialsStage: 'credentials'
+    secondFactorStage: 'second-factor'
+    continueAction: 'continue-with-nook'
+    generatePasswordAction: 'generate-password'
+    fillTotpAction: 'fill-totp'
+    createPasskeyAction: 'create-passkey'
   }
   authenticatorProtocol: {
     optionsMessageType: WebsiteAuthenticatorOptionsMessageType
@@ -88,6 +86,10 @@ export type DemoChromeStubArgs = {
     readyStatus: WebsiteAuthenticatorResponseStatus
   }
   loginSaveResponses: DemoLoginSaveResponses
+  loginMatchAvailability: {
+    ready: 'ready'
+  }
+  loginMatchCount?: number
   /** Static replies keyed by runtime message type. */
   responsesByType?: Record<string, unknown>
   /** Stateful login-pilot replies for Continue → unlock → chooser. */
@@ -130,6 +132,8 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     authenticationWorkflow,
     authenticatorProtocol,
     loginSaveResponses,
+    loginMatchAvailability,
+    loginMatchCount = 1,
     responsesByType = {},
     loginPilotFlow = false,
     savePilotFlow = false,
@@ -171,9 +175,20 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     ) => boolean
   > = []
 
+  const workflowRuntimeResponse = (workflow: unknown) => ({
+    workflow,
+    loginMatches: {
+      kind: loginMatchAvailability.ready,
+      count: loginMatchCount,
+    },
+  })
+
   const responseFor = (message: RuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
-      return responsesByType[message.type]
+      const response = responsesByType[message.type]
+      return message.type === 'nook:authentication-workflow-snapshot'
+        ? workflowRuntimeResponse(response)
+        : response
     }
     if (message.type === 'nook:extension-pairing-state-query') {
       return { ok: true, setup: demoExtensionSetup }
@@ -211,7 +226,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     if (passkeyPilotFlow) {
       switch (message.type) {
         case 'nook:authentication-workflow-snapshot':
-          return {
+          return workflowRuntimeResponse({
             ok: true,
             snapshot: {
               kind: authenticationWorkflow.loginKind,
@@ -219,10 +234,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
               observationIndex: 0,
             },
-          }
+          })
         default:
           return { ok: true }
       }
@@ -330,7 +344,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     if (generatePilotFlow) {
       switch (message.type) {
         case 'nook:authentication-workflow-snapshot':
-          return {
+          return workflowRuntimeResponse({
             ok: true,
             snapshot: {
               kind: authenticationWorkflow.signupKind,
@@ -338,10 +352,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
-              requiresHumanApproval: false,
               observationIndex: 0,
             },
-          }
+          })
         case generatePasswordMessageType:
           return {
             ok: true,
@@ -354,7 +367,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     if (savePilotFlow) {
       switch (message.type) {
         case 'nook:authentication-workflow-snapshot':
-          return {
+          return workflowRuntimeResponse({
             ok: true,
             snapshot: {
               kind: authenticationWorkflow.loginKind,
@@ -362,10 +375,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
               observationIndex: 0,
             },
-          }
+          })
         case 'nook:authentication-outcome-classify': {
           const observation = (
             message as {
@@ -442,7 +454,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
 
     switch (message.type) {
       case 'nook:authentication-workflow-snapshot':
-        return {
+        return workflowRuntimeResponse({
           ok: true,
           snapshot: {
             kind: authenticationWorkflow.loginKind,
@@ -450,10 +462,9 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
-            requiresHumanApproval: false,
             observationIndex: 0,
           },
-        }
+        })
       case 'nook:website-login-options':
         loginOptionsCalls += 1
         if (loginOptionsCalls === 1) {
