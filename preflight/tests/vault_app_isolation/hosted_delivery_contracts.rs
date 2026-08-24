@@ -711,7 +711,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  ui-demos:\n",
         "\n  deploy:\n",
         "needs: [wasm]",
-        "needs: [web, web-e2e]",
+        "needs: [web, web-e2e, wasm-cache-proof]",
         "task ci:main:e2e:web:artifacts",
         "task ci:main:e2e:extension:artifacts",
         "task ci:main:ui-demo:artifacts",
