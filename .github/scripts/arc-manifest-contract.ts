@@ -259,7 +259,9 @@ mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
+  "Install Bun for registry cache audit",
   "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
+  "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
   "bash .github/scripts/verify-wasm-gha-cache.sh",
   "web-e2e:",
   "extension-e2e:",

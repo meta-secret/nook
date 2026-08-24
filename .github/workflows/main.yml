@@ -265,10 +265,17 @@ jobs:
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
 
+      - name: Install Bun for registry cache audit
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
       - name: Publish and prove portable WASM dependency cache
         run: bash .github/scripts/verify-wasm-gha-cache.sh
         env:
           NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"
+          NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          NOOK_REGISTRY_PASSWORD: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
   web:
     name: Verify web build

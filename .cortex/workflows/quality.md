@@ -280,8 +280,9 @@ Use this workflow for quality, CI, and deployment changes.
     - A trusted hosted builder is the sole writer of the portable WASM
       dependency ref. A second fresh hosted builder validates cache hits.
     - Publishers keep configured `cache-from` on every Bake.
-    - Main verifies the hosted-published WASM fingerprint from a second fresh
-      builder without hydrating its complete filesystem.
+    - Main audits every published Zot descriptor for declared size and readable
+      bytes. It then verifies the hosted-published WASM fingerprint from a
+      second fresh builder without hydrating its complete filesystem.
     - One CI job writes each shared ecosystem registry ref.
     - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
       inputs only.

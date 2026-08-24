@@ -447,6 +447,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
             && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
             && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && cache_verifier.contains("verify-registry-cache-blobs.ts")
             && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
             && cache_verifier.contains("refs/heads/main")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")

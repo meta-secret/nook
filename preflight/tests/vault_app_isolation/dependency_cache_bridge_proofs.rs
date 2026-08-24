@@ -310,6 +310,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let root = repository_root();
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
+    let blob_verifier = read(&root, ".github/scripts/verify-registry-cache-blobs.ts");
     let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
 
     let native = docker_tasks
@@ -370,12 +371,20 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
             && verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
             && verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
             && verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && verifier.contains("verify-registry-cache-blobs.ts")
             && verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
             && verifier.contains("refs/heads/main")
             && verifier.contains("nook-sccache-report chef-wasm-release")
             && verifier.contains("nook-sccache-report chef-wasm-clippy")
             && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
         "runtime WASM proof must publish on trusted Main with one fresh hosted builder and require CACHED markers from another"
+    );
+    assert!(
+        blob_verifier.contains("method: 'HEAD'")
+            && blob_verifier.contains("content-length")
+            && blob_verifier.contains("range: 'bytes=0-0'")
+            && blob_verifier.contains("descriptor.size"),
+        "portable cache proof must validate every declared Zot blob without hydrating its filesystem"
     );
     Ok(())
 }
