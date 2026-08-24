@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Prevent avoidable PR Verify failures from sealed-image formatting lag and missing
-UI demo contract updates.
+Prevent avoidable PR Verify failures from formatting lag and missing UI demo
+contract updates without turning local pre-push into a product build.
 
 This is the **only required local product work**.
 
@@ -54,11 +54,13 @@ Then commit → push → focused `task remote` → explicit validate.
 See [remote-execution.md](../workflows/remote-execution.md)
 and [loom-tools.md](../references/loom-tools.md).
 
-### Sealed-image rule
+### Host-format rule
 
 - Loom invokes host-applied `task format` internally.
 - The agent entrypoint is `task loom:pre-push`.
-- `task format:diff` prints the diff without applying.
+- `task format` may install missing pinned formatter dependencies once.
+- `task format` must not invoke Docker, BuildKit, compilation, tests, or remote
+  cache reads or writes.
 - Never use `task extension:format` as the only format step before push.
 
 ### UI demo contract paths
@@ -78,7 +80,8 @@ Does not apply to read-only sessions with no commits.
 
 ## Examples
 
-- Before: sealed-only format → Verify fails Prettier → extra head cycle.
+- Before: format runs a product build → local CPU and cache bandwidth are wasted.
+- After: host-only format writes the same source changes in seconds.
 - After: `task loom:pre-push` → commit → push; Verify sees a formatted head.
 - Before: change shared UI → push → demo contract fails.
 - After: Loom fails closed until a demo spec is updated.

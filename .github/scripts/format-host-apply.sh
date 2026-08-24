@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# Format Rust + web/extension in sealed Docker images and apply the printed
-# unified diffs to the host working tree. Sealed images never write the host.
+# Apply repository formatters directly to the host working tree.
+#
+# Formatting is the only mandatory local code operation. Keep it independent
+# from Docker, BuildKit, compilation, tests, and remote cache publication; those
+# checks belong to GitHub Actions.
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$scripts_dir/../.." && pwd)"
-extract_awk="$scripts_dir/format-host-apply-extract.awk"
 cd "$repo_root"
 
 if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
@@ -14,35 +16,47 @@ if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
   exit 0
 fi
 
-tmp="$(mktemp)"
-patch="$(mktemp)"
-trap 'rm -f "$tmp" "$patch"' EXIT
-
-set -o pipefail
-status=0
-# Use `task format:diff` so sealed format runs through Taskfile deps. Calling
-# internal tasks like `docker:task` from the CLI exits 202 on go-task v3.42+.
-{
-  task format:diff
-} 2>&1 | tee "$tmp" || status=$?
-
-if [[ "$status" -ne 0 ]]; then
-  echo "==> task format failed (see output above)." >&2
-  exit "$status"
+rust_toolchain=1.97.0
+bun_version=1.3.14
+if [[ "$(bun --version)" != "$bun_version" ]]; then
+  echo "task format requires Bun $bun_version" >&2
+  exit 1
+fi
+if ! rustup toolchain list | grep -q "^${rust_toolchain}-"; then
+  rustup toolchain install "$rust_toolchain" --profile minimal --component rustfmt
 fi
 
-awk -f "$extract_awk" "$tmp" >"$patch"
+ensure_bun_dependencies() {
+  local directory="$1"
+  if [[ ! -x "$directory/node_modules/.bin/prettier" ]]; then
+    bun install --cwd "$directory" --frozen-lockfile --ignore-scripts
+  fi
+}
 
-if [[ ! -s "$patch" ]]; then
-  echo '==> Already formatted; host working tree unchanged.'
-else
-  git apply "$patch"
-  echo '==> Applied sealed-image format changes to the host working tree.'
+rustup run "$rust_toolchain" cargo fmt \
+  --manifest-path "$repo_root/nook-app/nook-platform/Cargo.toml" --all
+rustup run "$rust_toolchain" cargo fmt \
+  --manifest-path "$repo_root/preflight/Cargo.toml"
+rustup run "$rust_toolchain" cargo fmt \
+  --manifest-path "$repo_root/agentic-ai/minds/Cargo.toml" --all
+
+web_app="$repo_root/nook-app/nook-web/nook-web-app"
+web_extension="$repo_root/nook-app/nook-web/nook-web-extension"
+web_research="$repo_root/nook-app/nook-web/nook-web-research"
+hive_console="$repo_root/agentic-ai/minds/hive-console"
+loom="$repo_root/agentic-ai/loom"
+
+ensure_bun_dependencies "$web_app"
+ensure_bun_dependencies "$web_research"
+ensure_bun_dependencies "$hive_console"
+ensure_bun_dependencies "$loom"
+if [[ ! -e "$web_extension/node_modules" ]]; then
+  ln -s ../nook-web-app/node_modules "$web_extension/node_modules"
 fi
 
-# The standalone preflight crate is outside nook-platform's Cargo workspace, so
-# the sealed platform formatter cannot discover it.
-cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"
-task hive:format
+bun run --cwd "$web_app" format
+bun run --cwd "$web_extension" format
+bun run --cwd "$web_research" format
+bun run --cwd "$hive_console" format
 task loom:format
 git status --short --untracked-files=no

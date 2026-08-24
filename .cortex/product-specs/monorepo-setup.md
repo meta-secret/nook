@@ -108,11 +108,14 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - PR CI deploys native `pr-<number>` aliases for all three isolated projects.
   - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
   - Release extracts production artifacts via `task docker:extract:dist`.
-- **Write tasks emit diffs; `task format` host-applies them.**
-  - Sealed-image format mutates in-container source and prints a `git diff`.
-  - The `task format` entrypoint applies that diff to the host working tree.
-  - Run it unconditionally before every push.
-  - Use `task format:diff` only when you need the raw patch.
+- **`task format` is a host-only write task.**
+  - It runs repository-pinned Rustfmt and Prettier versions directly against the
+    working tree.
+  - It may install a missing pinned formatter toolchain or frozen Bun dependency
+    tree once.
+  - It never builds images, compiles products, runs tests, or reads or publishes
+    registry caches.
+  - Run it unconditionally before every push. Product validation remains remote.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every explicit Main job use the configured ARC scale set.

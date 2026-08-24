@@ -62,6 +62,8 @@ for (const fragment of [
   '"htpasswd"',
   "nook-zot-htpasswd",
   "kind: Service",
+  'requests:\n              cpu: "2"\n              memory: 4Gi',
+  'limits:\n              cpu: "8"\n              memory: 12Gi',
 ]) {
   const assertion = {
     source: zot,

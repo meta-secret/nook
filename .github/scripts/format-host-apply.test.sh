@@ -1,65 +1,33 @@
 #!/usr/bin/env bash
-# Unit test for sealed-image format patch extraction (no Docker).
+# Contract test for fast host-side formatting (does not run formatters).
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
-extract_awk="$scripts_dir/format-host-apply-extract.awk"
-
-sample="$(
-  printf '%s\n' \
-    'task: [docker:rust:task]' \
-    '==> Rust formatting changes (host apply via task format):' \
-    'diff --git a/nook-app/nook-platform/nook-core/src/foo.rs b/nook-app/nook-platform/nook-core/src/foo.rs' \
-    'index 1111111..2222222 100644' \
-    '--- a/nook-app/nook-platform/nook-core/src/foo.rs' \
-    '+++ b/nook-app/nook-platform/nook-core/src/foo.rs' \
-    '@@ -1,3 +1,3 @@' \
-    ' fn main() {' \
-    '-    let x=1;' \
-    '+    let x = 1;' \
-    ' }' \
-    'task: [setup]' \
-    'building image...' \
-    '==> Web/extension formatting changes (host apply via task format):' \
-    'diff --git a/nook-app/nook-web/nook-web-app/src/x.ts b/nook-app/nook-web/nook-web-app/src/x.ts' \
-    'index aaa..bbb 100644' \
-    '--- a/nook-app/nook-web/nook-web-app/src/x.ts' \
-    '+++ b/nook-app/nook-web/nook-web-app/src/x.ts' \
-    '@@ -1 +1 @@' \
-    '-const a=1' \
-    '+const a = 1'
-)"
-
-patch="$(printf '%s\n' "$sample" | awk -f "$extract_awk")"
-
-printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-platform/nook-core/src/foo.rs' \
-  || { echo 'format-host-apply test: missing rust diff' >&2; exit 1; }
-printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-web/nook-web-app/src/x.ts' \
-  || { echo 'format-host-apply test: missing web diff' >&2; exit 1; }
-printf '%s\n' "$patch" | grep -q 'building image' \
-  && { echo 'format-host-apply test: docker chatter leaked into patch' >&2; exit 1; }
-printf '%s\n' "$patch" | grep -q '^task: ' \
-  && { echo 'format-host-apply test: task chatter leaked into patch' >&2; exit 1; }
-
-empty="$(printf '%s\n' '==> Already formatted; no changes.' | awk -f "$extract_awk")"
-[[ -z "$empty" ]] || {
-  echo 'format-host-apply test: expected empty patch when already formatted' >&2
-  exit 1
-}
-
-# Guard the known failure mode: CLI invocation of internal docker:task exits 202.
 script="$(cat "$scripts_dir/format-host-apply.sh")"
-printf '%s\n' "$script" | grep -q 'task format:diff' \
-  || { echo 'format-host-apply test: expected task format:diff entrypoint' >&2; exit 1; }
-printf '%s\n' "$script" | grep -q 'task hive:format' \
-  || { echo 'format-host-apply test: expected sealed Hive formatter' >&2; exit 1; }
-printf '%s\n' "$script" | grep -q 'cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"' \
-  || { echo 'format-host-apply test: expected standalone preflight formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'rust_toolchain=1.97.0' \
+  || { echo 'format-host-apply test: expected pinned Rust formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'bun_version=1.3.14' \
+  || { echo 'format-host-apply test: expected pinned Bun formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'nook-app/nook-platform/Cargo.toml' \
+  || { echo 'format-host-apply test: expected platform formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'preflight/Cargo.toml' \
+  || { echo 'format-host-apply test: expected preflight formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'agentic-ai/minds/Cargo.toml' \
+  || { echo 'format-host-apply test: expected Hive formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'bun run --cwd "$web_app" format' \
+  || { echo 'format-host-apply test: expected web formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'ln -s ../nook-web-app/node_modules' \
+  || { echo 'format-host-apply test: expected extension dependency link' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'bun run --cwd "$hive_console" format' \
+  || { echo 'format-host-apply test: expected Hive console formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'task loom:format' \
+  || { echo 'format-host-apply test: expected Loom formatter' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q 'task hive:guest:format' \
   || { echo 'format-host-apply test: expected native Hive guest formatter' >&2; exit 1; }
-printf '%s\n' "$script" | grep -Eq 'task docker:task( |$)' \
-  && { echo 'format-host-apply test: must not CLI-invoke internal docker:task' >&2; exit 1; }
-printf '%s\n' "$script" | grep -Eq 'task docker:rust:task( |$)' \
-  && { echo 'format-host-apply test: must not CLI-invoke internal docker:rust:task' >&2; exit 1; }
+
+for forbidden in docker buildx registry-cache format:diff setup:rust; do
+  printf '%s\n' "$script" | grep -Fq "$forbidden" \
+    && { echo "format-host-apply test: forbidden heavy path: $forbidden" >&2; exit 1; }
+done
 
 echo 'format-host-apply test: ok'

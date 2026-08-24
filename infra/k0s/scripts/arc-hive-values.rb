@@ -34,7 +34,7 @@ end
 buildkit = named(pod.fetch("initContainers"), "buildkit")
 buildkit.fetch("resources").fetch("requests")["cpu"] = "1"
 buildkit.fetch("resources").fetch("requests")["memory"] = "4Gi"
-buildkit.fetch("resources").fetch("limits")["cpu"] = "1"
+buildkit.fetch("resources").fetch("limits")["cpu"] = "4"
 buildkit.fetch("resources").fetch("limits")["memory"] = "4Gi"
 
 pod.fetch("initContainers").concat(
@@ -87,7 +87,7 @@ end
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
 runner.fetch("resources").fetch("requests")["cpu"] = "500m"
 runner.fetch("resources").fetch("requests")["memory"] = "1Gi"
-runner.fetch("resources").fetch("limits")["cpu"] = "500m"
+runner.fetch("resources").fetch("limits")["cpu"] = "1"
 runner.fetch("resources").fetch("limits")["memory"] = "1Gi"
 runner.fetch("volumeMounts") << {
   "name" => "hive-test-exchange",
@@ -131,7 +131,7 @@ pod.fetch("initContainers").concat(
       "volumeMounts" => [{ "name" => "neo4j-data", "mountPath" => "/data" }],
       "resources" => {
         "requests" => { "cpu" => "250m", "memory" => "1Gi" },
-        "limits" => { "cpu" => "400m", "memory" => "1536Mi" }
+        "limits" => { "cpu" => "1", "memory" => "2Gi" }
       }
     },
     {
@@ -163,8 +163,8 @@ pod.fetch("initContainers").concat(
         }
       ],
       "resources" => {
-        "requests" => { "cpu" => "10m", "memory" => "64Mi" },
-        "limits" => { "cpu" => "100m", "memory" => "256Mi" }
+        "requests" => { "cpu" => "500m", "memory" => "512Mi" },
+        "limits" => { "cpu" => "4", "memory" => "4Gi" }
       }
     }
   ]

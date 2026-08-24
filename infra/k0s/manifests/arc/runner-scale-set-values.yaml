@@ -30,11 +30,11 @@ listenerTemplate:
             type: RuntimeDefault
         resources:
           requests:
-            cpu: 50m
-            memory: 64Mi
+            cpu: 100m
+            memory: 128Mi
           limits:
-            cpu: 250m
-            memory: 256Mi
+            cpu: "1"
+            memory: 512Mi
 
 template:
   metadata:
@@ -107,8 +107,8 @@ template:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 256Mi
       - name: prepare-buildkit-state
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
@@ -135,8 +135,8 @@ template:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 256Mi
       - name: buildkit
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
@@ -176,12 +176,12 @@ template:
             mountPath: /tmp
         resources:
           requests:
-            cpu: 500m
-            memory: 2560Mi
+            cpu: "1"
+            memory: 4Gi
             ephemeral-storage: 4Gi
           limits:
-            cpu: "1.25"
-            memory: 2560Mi
+            cpu: "4"
+            memory: 4Gi
             ephemeral-storage: 32Gi
       - name: request-buildkit-promotion
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
@@ -299,8 +299,8 @@ template:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 256Mi
       - name: container-runtime
         image: quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750
         restartPolicy: Always
@@ -347,8 +347,8 @@ template:
             memory: 512Mi
             ephemeral-storage: 1Gi
           limits:
-            cpu: 250m
-            memory: 512Mi
+            cpu: "4"
+            memory: 2Gi
             ephemeral-storage: 24Gi
     containers:
       - name: runner
@@ -398,7 +398,7 @@ template:
             memory: 1Gi
             ephemeral-storage: 25Gi
           limits:
-            cpu: 500m
+            cpu: "1"
             memory: 1Gi
             ephemeral-storage: 100Gi
     volumes:

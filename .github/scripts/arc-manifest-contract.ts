@@ -174,10 +174,10 @@ runners.requireAll([
   "runnerScaleSetName: nook-k0s",
   "minRunners: 0",
   "maxRunners: 25",
-  "requests:\n            cpu: 500m\n            memory: 2560Mi",
+  'requests:\n            cpu: "1"\n            memory: 4Gi',
   "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 250m\n            memory: 1Gi",
-  "limits:\n            cpu: 500m\n            memory: 1Gi",
+  'limits:\n            cpu: "1"\n            memory: 1Gi',
   "runAsNonRoot: true",
   "listenerTemplate:\n  spec:\n    nodeSelector:\n      nook.nokey.sh/node-role: control-storage\n    tolerations:",
   "runtimeClassName: kata-qemu-runtime-rs",
@@ -200,8 +200,8 @@ runners.requireAll([
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
-  'limits:\n            cpu: "1.25"\n            memory: 2560Mi',
-  "limits:\n            cpu: 250m\n            memory: 512Mi",
+  'limits:\n            cpu: "4"\n            memory: 4Gi',
+  'limits:\n            cpu: "4"\n            memory: 2Gi',
   '- "24000"',
   'value: "34359738368"',
   "path: /var/lib/nook-arc-buildkit/pool/requests",
@@ -233,6 +233,76 @@ runners.requireAll([
   "githubConfigSecret",
   "actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda",
 ]);
+interface ResourceEnvelope {
+  limits?: { cpu?: string; memory?: string };
+}
+
+interface ArcContainer {
+  name: string;
+  resources?: ResourceEnvelope;
+}
+
+interface ArcValues {
+  listenerTemplate: { spec: { containers: ArcContainer[] } };
+  template: {
+    spec: { initContainers: ArcContainer[]; containers: ArcContainer[] };
+  };
+}
+
+const generalValues = Bun.YAML.parse(
+  await read("infra/k0s/manifests/arc/runner-scale-set-values.yaml"),
+) as ArcValues;
+const generalSidecars = new Map(
+  generalValues.template.spec.initContainers.map((item) => [item.name, item]),
+);
+const generalContainers = new Map(
+  generalValues.template.spec.containers.map((item) => [item.name, item]),
+);
+const requiredLimit = (input: {
+  containers: Map<string, ArcContainer>;
+  name: string;
+  cpu: string;
+  memory: string;
+}): void => {
+  const resources = input.containers.get(input.name)?.resources;
+  if (
+    resources?.limits?.cpu !== input.cpu ||
+    resources.limits.memory !== input.memory
+  ) {
+    throw new Error(
+      `ARC ${input.name} must retain ${input.cpu} CPU and ${input.memory}`,
+    );
+  }
+};
+requiredLimit({
+  containers: generalSidecars,
+  name: "buildkit",
+  cpu: "4",
+  memory: "4Gi",
+});
+requiredLimit({
+  containers: generalSidecars,
+  name: "container-runtime",
+  cpu: "4",
+  memory: "2Gi",
+});
+requiredLimit({
+  containers: generalContainers,
+  name: "runner",
+  cpu: "1",
+  memory: "1Gi",
+});
+requiredLimit({
+  containers: new Map(
+    generalValues.listenerTemplate.spec.containers.map((item) => [
+      item.name,
+      item,
+    ]),
+  ),
+  name: "listener",
+  cpu: "1",
+  memory: "512Mi",
+});
 const hostPathCount = runners.count.bind(runners);
 hostPathCount({ fragment: "hostPath:", expected: 2 });
 for (const prohibited of [
@@ -259,6 +329,7 @@ controller.requireAll([
   "tolerations:\n  - key: nook.nokey.sh/arc-build",
   "value: preparing",
   "effect: NoSchedule",
+  'limits:\n    cpu: "2"\n    memory: 1Gi',
 ]);
 network.require("policyTypes:\n    - Ingress");
 workerTasks.requireAll([
@@ -310,13 +381,17 @@ try {
           image: string;
           restartPolicy?: string;
           resources?: {
-            requests?: { memory?: string };
-            limits?: { memory?: string };
+            requests?: { cpu?: string; memory?: string };
+            limits?: { cpu?: string; memory?: string };
           };
         }>;
         containers: Array<{
           name: string;
           env?: Array<{ name: string; value?: string }>;
+          resources?: {
+            requests?: { cpu?: string; memory?: string };
+            limits?: { cpu?: string; memory?: string };
+          };
         }>;
         volumes: Array<{ hostPath?: { path: string } }>;
       };
@@ -344,12 +419,16 @@ try {
   }
   const hiveBuildkit = sidecars.get("buildkit");
   if (
+    hiveBuildkit?.resources?.limits?.cpu !== "4" ||
     hiveBuildkit?.resources?.requests?.memory !== "4Gi" ||
     hiveBuildkit.resources.limits?.memory !== "4Gi"
   ) {
-    throw new Error("Hive ARC BuildKit must retain its Rust linker memory");
+    throw new Error("Hive ARC BuildKit must retain its 4 CPU and 4 GiB budget");
   }
   const hiveRunner = hivePod.containers.find((item) => item.name === "runner");
+  if (hiveRunner?.resources?.limits?.cpu !== "1") {
+    throw new Error("Hive ARC runner coordinator must retain one CPU");
+  }
   if (
     hiveRunner?.env?.some((item) =>
       ["DOCKER_HOST", "NOOK_CONTAINER_RUNTIME"].includes(item.name),
@@ -361,6 +440,16 @@ try {
     const sidecar = sidecars.get(name);
     if (sidecar?.restartPolicy !== "Always")
       throw new Error(`Hive ARC ${name} must be a native sidecar`);
+  }
+  const hiveTestRuntime = sidecars.get("hive-test-runtime");
+  if (
+    hiveTestRuntime?.resources?.limits?.cpu !== "4" ||
+    hiveTestRuntime.resources.limits?.memory !== "4Gi"
+  ) {
+    throw new Error("Hive ARC test runtime must retain its 4 CPU and 4 GiB budget");
+  }
+  if (sidecars.get("neo4j")?.resources?.limits?.cpu !== "1") {
+    throw new Error("Hive ARC Neo4j must retain one CPU for integration tests");
   }
   if (
     !sidecars.get("neo4j")?.image.includes("neo4j:2026.06.0-community@sha256:")

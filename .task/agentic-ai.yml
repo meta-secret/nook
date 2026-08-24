@@ -135,8 +135,8 @@ tasks:
       - bun run --cwd agentic-ai/loom loom -- --default "{{.FAMILY}}"
 
   loom:pre-push:
-    desc: Format Loom, then run the default pre-push request.
-    deps: [loom:format]
+    desc: Run the default pre-push request; its host formatter includes Loom.
+    deps: [loom:install]
     vars:
       CONFIG: '{{default "" .CONFIG}}'
     cmds:

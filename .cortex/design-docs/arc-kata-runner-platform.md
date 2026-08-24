@@ -61,14 +61,28 @@ nodes provide parallel general and Hive capacity without receiving the
 cache-primary label. Moving the primary requires draining producers,
 transferring or deliberately resetting the seed, and then changing the label.
 
-The ordinary Pod requests about 1 CPU and 4 GiB. Its containers are capped at
-about 4.1 GiB in aggregate. The Hive Pod requests about 2 CPUs and 4 GiB. Its
-containers are capped at about 6.8 GiB. The QEMU RuntimeClass adds 1792 MiB of
-Pod overhead.
+The ordinary Pod requests about 1.5 CPUs and 5.6 GiB. BuildKit has a hard
+four-CPU and 4 GiB execution budget, while the runner coordinator may use one
+CPU. This prevents Kubernetes CFS throttling from turning a native Rust build
+into a single-core workload. Its containers are capped at about 7.5 GiB in
+aggregate. The Hive Pod requests about 2.3 CPUs and 6.7 GiB. Its containers are
+capped at about 11.5 GiB. The QEMU RuntimeClass adds 1792 MiB of Pod overhead.
 
-One 64 GiB compute node can sustain ten ordinary microVMs or seven
-memory-saturated Hive microVMs. A second compute node is required before ten
-Hive jobs can run at their full memory limits without overcommit.
+Performance-critical data-plane containers must never inherit fractional CPU
+limits from control-plane defaults. The general runner's private Podman service
+may use the full four CPUs and 2 GiB for image import and export. Hive's pinned
+test runtime receives the same four-CPU and 4 GiB execution budget as BuildKit.
+Fractional limits are reserved for bounded probes, signal watchers, and other
+coordination loops that do not compile, link, extract, import, or export build
+artifacts. The TypeScript ARC manifest contract enforces these envelopes.
+
+Zot is shared data-plane infrastructure for every runner. It requests two CPUs
+and 4 GiB, and may burst to eight CPUs and 12 GiB. This keeps concurrent cache
+pulls and pushes from inheriting a single-job execution ceiling.
+
+One 64 GiB compute node can sustain about eight ordinary or seven
+memory-saturated Hive microVMs. The home and KS-6 workers absorb burst capacity
+beyond the Rise-S memory envelope.
 
 The home worker owns no durable service or cache authority. It establishes
 WireGuard outbound from behind NAT, so neither a public address nor an inbound

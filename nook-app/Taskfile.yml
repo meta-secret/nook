@@ -171,24 +171,10 @@ tasks:
 
   format:
     desc: >-
-      Format all projects in sealed Docker images and apply the diff to the host
-      working tree. Always run before every commit/push — formatting is cheap and
-      unconditional.
+      Format all projects directly on the host with pinned tools. This task never
+      builds images, compiles products, runs tests, or publishes caches.
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
-
-  format:diff:
-    desc: >-
-      Format in sealed Docker images and print the unified diff without applying
-      it to the host (debug only). Agents should use `task format` instead.
-    cmds:
-      - task: setup:rust
-      - task: docker:rust:task
-        vars: { TASK: _rust:format }
-      - task: setup
-        vars: { PREPARE_GROUP: prepare-with-unformatted-rust }
-      - task: docker:task
-        vars: { TASK: _format }
 
   format:check:
     desc: Check formatting for all projects in Docker.

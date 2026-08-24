@@ -100,11 +100,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
               cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
           startupProbe:
             exec:
               command:
