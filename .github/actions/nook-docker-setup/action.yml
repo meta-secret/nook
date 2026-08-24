@@ -317,6 +317,14 @@ runs:
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
           hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v2:buildcache"
+          hive_export_mode=max
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            # The disposable VM already retains the full graph in its local
+            # BuildKit state for the job. Export only the minimal exact-SHA
+            # handoff; exporting the full graph added minutes after a green
+            # Hive build while sccache already preserves compiler artifacts.
+            hive_export_mode=min
+          fi
           hive_probe_status=0
           cache_ref_status "$hive_ref" || hive_probe_status=$?
           case "$hive_probe_status" in
@@ -331,7 +339,7 @@ runs:
           esac
           echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
           echo "HIVE_CACHE_SEED_FROM=$hive_seed" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m" >> "$GITHUB_ENV"
         fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then

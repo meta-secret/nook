@@ -638,7 +638,8 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
     assert!(
         setup.contains("HIVE_CACHE_FROM=$hive_remote_ref")
             && setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed")
-            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m")
+            && setup.contains("hive_export_mode=min")
+            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m")
             && setup.contains("Exact Hive cache available; Main seed suppressed")
             && !setup.contains("if [ \"$event_name\" != \"pull_request\" ]; then"),
         "isolated PR setup must use exact Hive alone when present, otherwise Main, and publish only the exact SHA"
