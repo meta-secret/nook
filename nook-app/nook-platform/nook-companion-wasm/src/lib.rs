@@ -91,6 +91,22 @@ pub fn decode_authentication_workflow_snapshot_response(
 }
 
 #[wasm_bindgen]
+pub fn decode_authentication_workflow_runtime_response(
+    response: nook_companion_core::AuthenticationWorkflowRuntimeResponseWire,
+) -> Result<nook_companion_core::AuthenticationWorkflowRuntimeResponse, wasm_bindgen::JsError> {
+    nook_companion_core::decode_authentication_workflow_runtime_response(response)
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn authentication_workflow_saved_login_capability(
+    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
+) -> nook_companion_core::AuthenticationSavedLoginCapability {
+    snapshot.saved_login_capability()
+}
+
+#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -206,9 +222,9 @@ pub fn matching_extension_persistence_stores(
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_companion_authentication_workflow(
-    input: nook_companion_core::AuthenticationPageObservations,
+    input: nook_companion_core::AuthenticationPageObservationFactsBatch,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
-    nook_companion_core::classify_authentication_workflow_candidates(&input.observations)
+    input.classify()
 }
 
 #[wasm_bindgen]
@@ -626,10 +642,13 @@ mod tests {
 
     #[test]
     fn workflow_wasm_export_rejects_unbounded_observations() {
-        let input = nook_companion_core::AuthenticationPageObservations {
-            observations: vec![nook_companion_core::AuthenticationPageObservation {
-                one_time_code_field_count:
-                    nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+        let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
+            observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
+                fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                    one_time_code_field_count:
+                        nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+                    ..Default::default()
+                },
                 ..Default::default()
             }],
         };
@@ -638,6 +657,22 @@ mod tests {
                 classify_companion_authentication_workflow(input)
             ),
             CompanionAuthenticationWorkflowMatchKind::Rejected
+        );
+    }
+
+    #[test]
+    fn workflow_wasm_export_preserves_saved_login_capability() {
+        let snapshot = nook_companion_core::AuthenticationWorkflowSnapshot {
+            kind: nook_companion_core::AuthenticationWorkflowKind::Login,
+            stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
+            action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            observation_index: 0,
+        };
+        assert_eq!(
+            authentication_workflow_saved_login_capability(snapshot),
+            nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
         );
     }
 }

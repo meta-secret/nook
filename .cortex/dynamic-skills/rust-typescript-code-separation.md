@@ -27,6 +27,18 @@ Put app/domain types in Rust first:
 
 - Prefer `nook-core` for simple domain structs, enums, payload schemas,
   serialization, and validation.
+- Model semantic observation state with named enums and variant-owned structs.
+  Do not encode workflow evidence as a positional constructor full of numbers
+  and booleans. Raw browser facts may begin as booleans in a narrow DOM adapter,
+  but the Rust/WASM boundary must immediately classify them into named states.
+- Put decisions derived entirely from one observation on that Rust observation
+  type. Prefer an exhaustive enum result over repeating sibling-field condition
+  chains in classifiers or TypeScript.
+- Never serialize a Rust/WASM domain enum as an integer discriminant. Numeric
+  ordinals are unstable, obscure intent in browser traces, and can silently map
+  to the wrong state after variant changes. Use semantic tagged enums or
+  string-named variants generated from Rust. Keep numeric fields only for real
+  quantities such as bounded counts, indices, and durations.
 - Follow [rust-coding.md](rust-coding.md) for Rust model shape: closed sets are
   enums, cross-workflow optional fields are usually missing enum variants, and
   loose persisted JSON must be classified before domain logic.
@@ -34,7 +46,8 @@ Put app/domain types in Rust first:
   annotations needed for boundary exposure, as long as `nook-core` does not
   gain browser APIs, I/O, session state, or wasm-specific behavior. Do not copy
   a core enum into a string field in `nook-wasm` merely because the enum lives in
-  `nook-core`; export the core enum with `#[wasm_bindgen]` and use it directly.
+  `nook-core`; expose the same core enum through `#[wasm_bindgen]` or a
+  semantic `Tsify` boundary and use the generated type directly.
 - Use `nook-wasm` for bridge concerns: wasm exports, session manager methods,
   durable browser storage/provider I/O, and conversions between JS calls and core
   types. Prefer established Rust browser abstraction crates (`gloo-storage`,
@@ -448,6 +461,12 @@ When `Option<T>` is still acceptable (do not force an enum):
       stringly-typed struct) as a design smell. Model the state as a `nook-core`
       enum-of-structs and expose a thin `#[wasm_bindgen]` newtype wrapper with
       `is_*` / `as_*` accessors instead.
+- [ ] Reject positional WASM constructors that mix several counts and boolean
+      flags. Accept one named Rust DTO whose enum variants document every
+      semantic state.
+- [ ] Search custom enum serializers for `serialize_u*` / `serialize_i*`.
+      Replace domain ordinals with semantic tagged serialization and typed
+      round-trip tests.
 - [ ] Treat every `Option<String>` / `Option<T>` in an owned domain type as a
       missing enum. Ask what each state means and replace it with a named enum
       (e.g. `Empty` / `Text(String)`) unless it is a genuine two-state boundary

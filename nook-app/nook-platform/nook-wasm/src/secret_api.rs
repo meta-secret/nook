@@ -398,7 +398,12 @@ mod wasm_tests {
     fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsError>
     {
         let observation =
-            NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
+            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+                username_field_count: 1,
+                current_password_field_count: 1,
+                advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
+                ..Default::default()
+            });
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let snapshot = authentication_workflow_snapshot(&observations).snapshot()?;
@@ -408,25 +413,19 @@ mod wasm_tests {
         assert_eq!(snapshot.action_name(), "continue-with-nook");
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
-        assert!(snapshot.requires_human_approval());
         assert_eq!(snapshot.observation_index(), 0);
         Ok(())
     }
 
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_out_of_bounds_observations() {
-        let excessive_field_count = NookAuthenticationPageObservation::new(
-            nook_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
-            1,
-            0,
-            0,
-            0,
-            false,
-            false,
-            false,
-            false,
-            0,
-        );
+        let excessive_field_count =
+            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+                username_field_count: nook_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+                current_password_field_count: 1,
+                advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
+                ..Default::default()
+            });
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&excessive_field_count);
         assert_eq!(
@@ -435,7 +434,12 @@ mod wasm_tests {
         );
 
         let valid_login =
-            NookAuthenticationPageObservation::new(1, 1, 0, 0, 0, false, false, false, false, 0);
+            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+                username_field_count: 1,
+                current_password_field_count: 1,
+                advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
+                ..Default::default()
+            });
         let mut observations = NookAuthenticationPageObservations::new();
         for _ in 0..=nook_core::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
             observations.add(&valid_login);

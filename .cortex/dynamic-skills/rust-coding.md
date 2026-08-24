@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Keep Rust domain models precise. Use this when a struct has optional fields,
-string tags, sentinel values, or a shared DTO that seems to serve multiple
-workflows.
+Keep Rust domain models precise. Use this when code exposes boolean domain
+state, raw primitive results, optional fields, string tags, sentinel values, or
+namespace-prefixed free functions.
 
 ## Problem Pattern
 
@@ -15,6 +15,17 @@ value is in one named state or another named state."
 Required persisted values are another failure mode. `Option<T>` permits an
 invalid record to enter the model. Rejection is postponed until unrelated domain
 logic runs.
+
+Boolean domain fields hide the state vocabulary behind a field name. They also
+make a new state an invalid combination instead of an explicit compiler error.
+
+Raw primitive results discard domain meaning at the function boundary. A caller
+cannot distinguish a priority, size, count, duration, or ordinal from another
+value with the same primitive representation.
+
+Families of free functions with repeated prefixes encode a missing owner. The
+prefix acts as a namespace that a cohesive struct and its associated API should
+provide directly.
 
 When you see `Option<T>`, ask:
 
@@ -27,6 +38,16 @@ When you see `Option<T>`, ask:
 ## Preferred Pattern
 
 - Model closed sets as Rust enums, not `String`.
+- Model domain state as named enums, including two-state domains. Do not use a
+  boolean field or parameter when `Present`/`Absent`, `Enabled`/`Disabled`, or
+  another domain vocabulary states the contract.
+- Use a semantic newtype or enum for a domain result. Do not return a raw integer,
+  string, or other primitive when the value represents a priority, size, count,
+  duration, ordinal, identifier, or policy decision.
+- Put coherent behavior on the struct or enum that owns it. Replace families of
+  namespace-prefixed free functions with short associated functions or methods.
+- Keep free functions for narrow framework entrypoints, trait-required callbacks,
+  and operations with no truthful domain owner.
 - Model different workflow states as enum variants, not optional fields inside a
   reused struct.
 - Put fields only on the variant/sub-struct that actually owns them.
@@ -249,6 +270,39 @@ const idleTimeout = rawIdleTimeout
   : vault.runtimeConfig.default_vault_idle_timeout_ms();
 ```
 
+Avoid a boolean evidence bag and a raw priority result:
+
+```rust
+struct AuthenticationFacts {
+    checkpoint_present: bool,
+}
+
+fn authentication_form_priority(facts: AuthenticationFacts) -> u8 {
+    4
+}
+```
+
+Prefer domain state, a semantic result, and behavior on the owner:
+
+```rust
+enum AuthenticationCheckpoint {
+    Absent,
+    Present,
+}
+
+struct AuthenticationFacts {
+    checkpoint: AuthenticationCheckpoint,
+}
+
+struct AuthenticationFormPriority(u8);
+
+impl AuthenticationFacts {
+    fn form_priority(self) -> AuthenticationFormPriority {
+        AuthenticationFormPriority(4)
+    }
+}
+```
+
 ## Scope
 
 Applies to authored Rust domain and bridge code across Nook, especially
@@ -260,6 +314,10 @@ Raw external API or user-controlled partial-input DTOs may remain permissive.
 Convert them immediately into domain enums, required validated newtypes, or
 typed errors. Persisted Nook schemas do not receive a legacy fallback unless a
 task explicitly requires a migration.
+
+Raw primitives remain valid when they are the truthful external representation.
+Examples include DOM booleans at a browser-observation boundary and the integer
+required by an `Array.sort` comparator. Convert them at the narrowest boundary.
 
 It also does not replace idiomatic `Option<T>` return values from maps,
 iterators, parsers, searches, or caches when the caller is genuinely asking
@@ -291,6 +349,13 @@ whether a value exists.
   dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
+- Search changed Rust domain structs for boolean fields and parameters. Replace
+  each domain state with a named enum unless it is a documented boundary fact.
+- Search changed Rust function signatures for primitive domain results. Replace
+  priorities, sizes, counts, durations, ordinals, identifiers, and decisions
+  with semantic newtypes or enums.
+- Search for repeated free-function prefixes. Move coherent operations to the
+  owning struct or enum and keep only necessary framework entrypoints free.
 - Run targeted portable Rust tests plus `cd nook-app/nook-platform && cargo clippy -p
 nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --all-targets -- -D warnings`.
 - When exposed to web, regenerate wasm bindings and run the web type check.

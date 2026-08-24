@@ -80,8 +80,31 @@ pub fn looks_like_username_field(field: &NookPageInputFieldObservation) -> bool 
 
 #[wasm_bindgen]
 #[must_use]
+pub fn authentication_username_evidence(
+    field: &NookPageInputFieldObservation,
+) -> nook_companion_core::AuthenticationUsernameEvidence {
+    nook_companion_core::authentication_username_evidence(&field.inner)
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn strongest_authentication_username_evidence(
+    input: nook_companion_core::AuthenticationUsernameEvidenceBatch,
+) -> nook_companion_core::AuthenticationUsernameEvidence {
+    nook_companion_core::strongest_authentication_username_evidence(&input.evidence)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn looks_like_one_time_code_field(field: &NookPageInputFieldObservation) -> bool {
     nook_companion_core::looks_like_one_time_code_field(&field.inner)
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
+    nook_companion_core::looks_like_one_time_code_auto_submit_signal(signal)
 }
 
 #[wasm_bindgen]
@@ -104,16 +127,19 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
-pub fn looks_like_login_advance_control_label(label: &str) -> bool {
-    nook_companion_core::looks_like_login_advance_control_label(label)
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_authentication_advance_control(
+    observation: nook_companion_core::AuthenticationAdvanceControlObservation,
+) -> nook_companion_core::AuthenticationAdvanceControlDecision {
+    nook_companion_core::classify_authentication_advance_control(&observation)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn authentication_form_observation_priority(
-    observation: nook_companion_core::AuthenticationPageObservation,
-) -> u8 {
-    nook_companion_core::authentication_form_observation_priority(observation)
+    observation: nook_companion_core::AuthenticationPageObservationFacts,
+) -> nook_companion_core::AuthenticationFormObservationPriority {
+    observation.form_priority()
 }
 
 #[wasm_bindgen]
@@ -137,6 +163,12 @@ mod tests {
             false,
         );
         assert!(looks_like_one_time_code_field(&otp));
+        assert!(looks_like_one_time_code_auto_submit_signal(
+            "oninput=this.form.requestSubmit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "oninput=validateCode()"
+        ));
 
         let username = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
@@ -147,12 +179,32 @@ mod tests {
             false,
         );
         assert!(looks_like_username_field(&username));
-        assert!(looks_like_login_advance_control_label("Continue"));
 
-        let login = nook_companion_core::AuthenticationPageObservation {
-            current_password_field_count: 1,
+        let advance = nook_companion_core::AuthenticationAdvanceControlObservation {
+            actionability: nook_companion_core::PageControlActionability::Actionable,
+            ownership: nook_companion_core::PageControlOwnership::Unowned,
+            semantics: nook_companion_core::PageControlSemantics::Activation,
+            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+            password_field_count: 0,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 0,
+            form_identity: String::new(),
+            destination_identity: String::new(),
+            label: "Continue".to_owned(),
+        };
+        assert_eq!(
+            classify_authentication_advance_control(advance),
+            nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication
+        );
+
+        let login = nook_companion_core::AuthenticationPageObservationFacts {
+            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                current_password_field_count: 1,
+                ..Default::default()
+            },
             ..Default::default()
         };
-        assert_eq!(authentication_form_observation_priority(login), 4);
+        assert_eq!(authentication_form_observation_priority(login).value(), 4);
     }
 }

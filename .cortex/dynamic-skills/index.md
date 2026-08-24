@@ -74,7 +74,7 @@ source of truth.
   - Purpose: Reconcile verified code and Cortex evidence without repository access or write authority
   - Executable skill: [`.agents/skills/system-coherence-synthesizer/SKILL.md`](../../.agents/skills/system-coherence-synthesizer/SKILL.md)
 - **[rust-coding.md](rust-coding.md)**
-  - Purpose: Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs
+  - Purpose: Keep Rust domain models precise with named state enums, semantic primitive newtypes, associated APIs, and per-variant structs
   - Executable skill: [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md)
 - **[rust-macro-minimization.md](rust-macro-minimization.md)**
   - Purpose: Prohibit repository-defined Rust macros; prefer explicit structs, implementations, functions, and control flow over hidden code generation

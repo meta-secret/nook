@@ -7,6 +7,16 @@ core rule aggressively: if a Rust struct contains `Option<T>`, ask what named
 state the absence represents. Prefer enums with per-variant structs over shared
 DTOs with optional fields, string tags, or sentinel values.
 
+Avoid boolean domain state. Use a named enum even when the current domain has
+only two states. Avoid primitive domain results such as raw priorities, sizes,
+counts, durations, ordinals, identifiers, and policy decisions. Use semantic
+newtypes or enums. Put coherent operations on the struct or enum that owns them
+instead of repeating a namespace prefix across free functions.
+
+Keep raw primitives only at narrow external boundaries or when the value is
+truthfully primitive. Keep free functions only for framework entrypoints,
+trait-required callbacks, or behavior with no truthful domain owner.
+
 Do not apply this as a textual ban on `Option<T>`. Keep it for truthful
 structural absence such as iterator and lookup results, optional external
 inputs, caches, and raw compatibility DTOs. Required persisted values use

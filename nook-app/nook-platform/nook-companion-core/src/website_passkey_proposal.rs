@@ -4,7 +4,9 @@
 //! observations plus an unlocked vault match count. Proposals never perform
 //! `WebAuthn` create/assert; the existing page ceremony owns consent and crypto.
 
-use crate::authentication_workflow::AuthenticationWorkflowKind;
+use crate::authentication_workflow::{
+    AuthenticationManualCheckpoint, AuthenticationPasskeyEvidence, AuthenticationWorkflowKind,
+};
 
 /// Eligibility outcome for a Pilot passkey CTA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,11 +37,10 @@ impl WebsitePasskeyProposal {
 #[must_use]
 pub const fn propose_website_passkey(
     workflow_kind: AuthenticationWorkflowKind,
-    manual_checkpoint_present: bool,
-    passkey_control_present: bool,
-    matching_passkey_account_count: u32,
+    manual_checkpoint: AuthenticationManualCheckpoint,
+    passkey: AuthenticationPasskeyEvidence,
 ) -> WebsitePasskeyProposal {
-    if manual_checkpoint_present {
+    if matches!(manual_checkpoint, AuthenticationManualCheckpoint::Present) {
         return WebsitePasskeyProposal::None;
     }
     match workflow_kind {
@@ -51,15 +52,14 @@ pub const fn propose_website_passkey(
             return WebsitePasskeyProposal::None;
         }
     }
-    if matching_passkey_account_count > 0 {
-        return WebsitePasskeyProposal::UsePasskey {
-            account_count: matching_passkey_account_count,
-        };
+    match passkey {
+        AuthenticationPasskeyEvidence::VaultAccounts { account_count }
+        | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count } => {
+            WebsitePasskeyProposal::UsePasskey { account_count }
+        }
+        AuthenticationPasskeyEvidence::Control => WebsitePasskeyProposal::CreatePasskey,
+        AuthenticationPasskeyEvidence::Absent => WebsitePasskeyProposal::None,
     }
-    if passkey_control_present {
-        return WebsitePasskeyProposal::CreatePasskey;
-    }
-    WebsitePasskeyProposal::None
 }
 
 #[cfg(test)]
@@ -69,11 +69,19 @@ mod tests {
     #[test]
     fn proposes_use_when_vault_has_confident_matches() {
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::Login, false, false, 2),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::VaultAccounts { account_count: 2 },
+            ),
             WebsitePasskeyProposal::UsePasskey { account_count: 2 }
         );
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::Signup, false, true, 1),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Signup,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 1 },
+            ),
             WebsitePasskeyProposal::UsePasskey { account_count: 1 }
         );
     }
@@ -81,11 +89,19 @@ mod tests {
     #[test]
     fn proposes_create_when_control_present_without_matches() {
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::Login, false, true, 0),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::Control,
+            ),
             WebsitePasskeyProposal::CreatePasskey
         );
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::Signup, false, true, 0),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Signup,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::Control,
+            ),
             WebsitePasskeyProposal::CreatePasskey
         );
     }
@@ -93,19 +109,35 @@ mod tests {
     #[test]
     fn refuses_manual_checkpoint_and_non_credential_workflows() {
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::Login, true, true, 3),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationManualCheckpoint::Present,
+                AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 3 },
+            ),
             WebsitePasskeyProposal::None
         );
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::TotpChallenge, false, true, 2),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::TotpChallenge,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 2 },
+            ),
             WebsitePasskeyProposal::None
         );
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::PasswordChange, false, true, 0),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::PasswordChange,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::Control,
+            ),
             WebsitePasskeyProposal::None
         );
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::TotpEnrollment, false, true, 1),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::TotpEnrollment,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 1 },
+            ),
             WebsitePasskeyProposal::None
         );
     }
@@ -113,7 +145,11 @@ mod tests {
     #[test]
     fn refuses_when_no_control_and_no_matches() {
         assert_eq!(
-            propose_website_passkey(AuthenticationWorkflowKind::Login, false, false, 0),
+            propose_website_passkey(
+                AuthenticationWorkflowKind::Login,
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationPasskeyEvidence::Absent,
+            ),
             WebsitePasskeyProposal::None
         );
     }

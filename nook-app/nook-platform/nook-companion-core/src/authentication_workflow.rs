@@ -4,15 +4,25 @@
 //! module owns the product decision about which workflow is present, where the
 //! user is in it, and which action Nook may offer next.
 
+mod candidate_selection;
+mod observation_facts;
 mod observation_validation;
 mod vocabulary;
 
+pub use candidate_selection::AuthenticationFormObservationPriority;
+pub use observation_facts::{
+    AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
+    AuthenticationBackupCodesObservation, AuthenticationCeremonyObservationFacts,
+    AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
+    AuthenticationPageObservationFactsBatch, AuthenticationPasskeyControlObservation,
+};
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     authentication_page_observations_are_valid,
 };
 pub use vocabulary::{
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowStage,
 };
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
@@ -20,25 +30,89 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationManualCheckpoint {
+    #[default]
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationEnrollmentEvidence {
+    #[default]
+    Absent,
+    AuthenticatorSetup,
+    BackupCodes,
+    AuthenticatorSetupAndBackupCodes,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationAdvanceControlEvidence {
+    #[default]
+    Absent,
+    Present,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationOneTimeCodeProgressionEvidence {
+    #[default]
+    AdvanceControlRequired,
+    AutoSubmitObserved,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(
+    tag = "kind",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase"
+)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPasskeyEvidence {
+    #[default]
+    Absent,
+    Control,
+    VaultAccounts {
+        account_count: u32,
+    },
+    ControlAndVaultAccounts {
+        account_count: u32,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationPageProgression {
+    Blocked,
+    AdvanceControl,
+    PasskeyControl,
+    AutoSubmitOneTimeCode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-#[allow(clippy::struct_excessive_bools)]
 pub struct AuthenticationPageObservation {
     pub username_field_count: u32,
     pub current_password_field_count: u32,
     pub new_password_field_count: u32,
     pub generic_password_field_count: u32,
     pub one_time_code_field_count: u32,
+    /// Whether the browser has direct evidence that entering a code submits it.
+    pub one_time_code_progression: AuthenticationOneTimeCodeProgressionEvidence,
     /// CAPTCHA, legal acceptance, email verification, or similar human gate.
-    pub manual_checkpoint_present: bool,
-    /// Visible authenticator QR / otpauth setup material on the page.
-    pub authenticator_setup_hint: bool,
-    /// Visible recovery / backup-code material on the page.
-    pub backup_codes_hint: bool,
-    /// Page exposes a passkey / `WebAuthn` control the user can activate.
-    pub passkey_control_present: bool,
-    /// Unlocked vault match count for the requesting RP (0 when locked).
-    pub matching_passkey_account_count: u32,
+    pub manual_checkpoint: AuthenticationManualCheckpoint,
+    /// Visible authenticator setup or recovery material.
+    pub enrollment_evidence: AuthenticationEnrollmentEvidence,
+    /// Visible, enabled ordinary control that can advance authentication.
+    pub advance_control: AuthenticationAdvanceControlEvidence,
+    /// Actionable passkey control and unlocked matching-account evidence.
+    pub passkey: AuthenticationPasskeyEvidence,
 }
 
 impl AuthenticationPageObservation {
@@ -54,10 +128,104 @@ impl AuthenticationPageObservation {
         self.username_field_count > 0
             || self.password_field_count() > 0
             || self.one_time_code_field_count > 0
-            || self.authenticator_setup_hint
-            || self.backup_codes_hint
-            || self.passkey_control_present
-            || self.matching_passkey_account_count > 0
+            || !matches!(
+                self.enrollment_evidence,
+                AuthenticationEnrollmentEvidence::Absent
+            )
+            || !matches!(self.passkey, AuthenticationPasskeyEvidence::Absent)
+    }
+
+    #[must_use]
+    pub const fn manual_checkpoint_present(self) -> bool {
+        matches!(
+            self.manual_checkpoint,
+            AuthenticationManualCheckpoint::Present
+        )
+    }
+
+    #[must_use]
+    pub const fn authenticator_setup_hint(self) -> bool {
+        matches!(
+            self.enrollment_evidence,
+            AuthenticationEnrollmentEvidence::AuthenticatorSetup
+                | AuthenticationEnrollmentEvidence::AuthenticatorSetupAndBackupCodes
+        )
+    }
+
+    #[must_use]
+    pub const fn backup_codes_hint(self) -> bool {
+        matches!(
+            self.enrollment_evidence,
+            AuthenticationEnrollmentEvidence::BackupCodes
+                | AuthenticationEnrollmentEvidence::AuthenticatorSetupAndBackupCodes
+        )
+    }
+
+    #[must_use]
+    pub const fn passkey_control_present(self) -> bool {
+        matches!(
+            self.passkey,
+            AuthenticationPasskeyEvidence::Control
+                | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. }
+        )
+    }
+
+    #[must_use]
+    pub const fn matching_passkey_account_count(self) -> u32 {
+        match self.passkey {
+            AuthenticationPasskeyEvidence::VaultAccounts { account_count }
+            | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count } => {
+                account_count
+            }
+            AuthenticationPasskeyEvidence::Absent | AuthenticationPasskeyEvidence::Control => 0,
+        }
+    }
+
+    const fn credential_workflow_kind(self) -> AuthenticationWorkflowKind {
+        if self.current_password_field_count > 0 && self.new_password_field_count > 0 {
+            AuthenticationWorkflowKind::PasswordChange
+        } else if self.new_password_field_count > 0 {
+            AuthenticationWorkflowKind::Signup
+        } else if self.one_time_code_field_count > 0 {
+            AuthenticationWorkflowKind::TotpChallenge
+        } else if (self.current_password_field_count > 0 && self.generic_password_field_count > 0)
+            || self.generic_password_field_count > 1
+        {
+            AuthenticationWorkflowKind::Manual
+        } else if self.password_field_count() > 0
+            || self.username_field_count > 0
+            || !matches!(self.passkey, AuthenticationPasskeyEvidence::Absent)
+        {
+            AuthenticationWorkflowKind::Login
+        } else {
+            AuthenticationWorkflowKind::Manual
+        }
+    }
+
+    #[must_use]
+    pub const fn progression(self) -> AuthenticationPageProgression {
+        if self.one_time_code_field_count > 0
+            && matches!(
+                self.one_time_code_progression,
+                AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
+            )
+        {
+            AuthenticationPageProgression::AutoSubmitOneTimeCode
+        } else if matches!(
+            self.advance_control,
+            AuthenticationAdvanceControlEvidence::Present
+        ) {
+            AuthenticationPageProgression::AdvanceControl
+        } else if self.passkey_control_present()
+            && matches!(
+                self.credential_workflow_kind(),
+                AuthenticationWorkflowKind::Login | AuthenticationWorkflowKind::Signup
+            )
+        {
+            AuthenticationPageProgression::PasskeyControl
+        } else {
+            AuthenticationPageProgression::Blocked
+        }
     }
 }
 
@@ -70,7 +238,6 @@ pub struct AuthenticationWorkflowSnapshot {
     pub action: AuthenticationWorkflowAction,
     pub current_step: u8,
     pub total_steps: u8,
-    pub requires_human_approval: bool,
     pub observation_index: u32,
 }
 
@@ -124,83 +291,45 @@ impl AuthenticationWorkflowSnapshot {
             action,
             current_step,
             total_steps,
-            requires_human_approval: true,
             observation_index: 0,
         }
     }
-}
 
-const fn workflow_candidate_priority(snapshot: AuthenticationWorkflowSnapshot) -> u8 {
-    match (snapshot.kind, snapshot.action) {
-        (AuthenticationWorkflowKind::TotpEnrollment, _) => 8,
-        (AuthenticationWorkflowKind::TotpChallenge, _)
-        | (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::UsePasskey) => 7,
-        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::ContinueWithNook) => 6,
-        (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::CreatePasskey)
-        | (AuthenticationWorkflowKind::PasswordChange, _)
-        | (AuthenticationWorkflowKind::Signup, AuthenticationWorkflowAction::UsePasskey) => 5,
-        (AuthenticationWorkflowKind::Signup, _) => 4,
-        (AuthenticationWorkflowKind::Login, _) => 2,
-        (AuthenticationWorkflowKind::Manual, _) => 1,
-    }
-}
-
-/// Rank browser form observations before the host applies its bounded scan.
-///
-/// This preserves the structural priority independently of DOM ownership:
-/// active OTP, current-password login, single generic password, other
-/// password forms, then username/passkey-only surfaces.
-#[must_use]
-pub const fn authentication_form_observation_priority(
-    observation: AuthenticationPageObservation,
-) -> u8 {
-    if observation.one_time_code_field_count > 0 {
-        5
-    } else if observation.current_password_field_count > 0 {
-        4
-    } else if observation.generic_password_field_count == 1 {
-        3
-    } else if observation.password_field_count() > 0 {
-        2
-    } else {
-        1
-    }
-}
-
-#[must_use]
-pub fn classify_authentication_workflow_candidates(
-    observations: &[AuthenticationPageObservation],
-) -> AuthenticationWorkflowMatch {
-    if !authentication_page_observations_are_valid(observations) {
-        return AuthenticationWorkflowMatch::Rejected;
-    }
-
-    let mut selected = AuthenticationWorkflowMatch::NoMatch;
-    for (index, observation) in observations.iter().copied().enumerate() {
-        let AuthenticationWorkflowMatch::Matched(mut candidate) =
-            classify_authentication_workflow(observation)
-        else {
-            continue;
-        };
-        candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
-        let replace = match selected {
-            AuthenticationWorkflowMatch::NoMatch => true,
-            AuthenticationWorkflowMatch::Rejected => false,
-            AuthenticationWorkflowMatch::Matched(current) => {
-                workflow_candidate_priority(candidate) > workflow_candidate_priority(current)
-            }
-        };
-        if replace {
-            selected = AuthenticationWorkflowMatch::Matched(candidate);
+    #[must_use]
+    pub const fn saved_login_capability(self) -> AuthenticationSavedLoginCapability {
+        if matches!(self.kind, AuthenticationWorkflowKind::Login)
+            && matches!(self.action, AuthenticationWorkflowAction::ContinueWithNook)
+        {
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        } else {
+            AuthenticationSavedLoginCapability::Unavailable
         }
     }
-    selected
 }
 
 const fn classify_enrollment_workflow(
     observation: AuthenticationPageObservation,
 ) -> AuthenticationWorkflowMatch {
-    if observation.authenticator_setup_hint {
+    if observation.manual_checkpoint_present()
+        && (observation.authenticator_setup_hint() || observation.backup_codes_hint())
+    {
+        let current_step =
+            if observation.backup_codes_hint() && observation.one_time_code_field_count == 0 {
+                4
+            } else if observation.one_time_code_field_count > 0 {
+                3
+            } else {
+                2
+            };
+        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowStage::Manual,
+            AuthenticationWorkflowAction::TakeOver,
+            current_step,
+            5,
+        ));
+    }
+    if observation.authenticator_setup_hint() {
         if observation.one_time_code_field_count > 0 {
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::TotpEnrollment,
@@ -218,7 +347,7 @@ const fn classify_enrollment_workflow(
             5,
         ));
     }
-    if observation.backup_codes_hint && observation.one_time_code_field_count == 0 {
+    if observation.backup_codes_hint() && observation.one_time_code_field_count == 0 {
         return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
             AuthenticationWorkflowStage::Recovery,
@@ -230,16 +359,20 @@ const fn classify_enrollment_workflow(
     AuthenticationWorkflowMatch::NoMatch
 }
 
-const fn generate_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
-    if manual_checkpoint_present {
+const fn generate_or_takeover(
+    manual_checkpoint: AuthenticationManualCheckpoint,
+) -> AuthenticationWorkflowAction {
+    if matches!(manual_checkpoint, AuthenticationManualCheckpoint::Present) {
         AuthenticationWorkflowAction::TakeOver
     } else {
         AuthenticationWorkflowAction::GeneratePassword
     }
 }
 
-const fn credentials_or_manual(manual_checkpoint_present: bool) -> AuthenticationWorkflowStage {
-    if manual_checkpoint_present {
+const fn credentials_or_manual(
+    manual_checkpoint: AuthenticationManualCheckpoint,
+) -> AuthenticationWorkflowStage {
+    if matches!(manual_checkpoint, AuthenticationManualCheckpoint::Present) {
         AuthenticationWorkflowStage::Manual
     } else {
         AuthenticationWorkflowStage::Credentials
@@ -252,9 +385,8 @@ const fn apply_passkey_proposal(
 ) -> AuthenticationWorkflowSnapshot {
     match propose_website_passkey(
         snapshot.kind,
-        observation.manual_checkpoint_present,
-        observation.passkey_control_present,
-        observation.matching_passkey_account_count,
+        observation.manual_checkpoint,
+        observation.passkey,
     ) {
         WebsitePasskeyProposal::None => snapshot,
         WebsitePasskeyProposal::UsePasskey { .. } => {
@@ -281,107 +413,86 @@ pub const fn classify_authentication_workflow(
     {
         return AuthenticationWorkflowMatch::Matched(enrollment);
     }
-
-    if observation.current_password_field_count > 0 && observation.new_password_field_count > 0 {
-        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
-            observation,
-            AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::PasswordChange,
-                credentials_or_manual(observation.manual_checkpoint_present),
-                generate_or_takeover(observation.manual_checkpoint_present),
-                2,
-                4,
-            ),
-        ));
-    }
-
-    if observation.new_password_field_count > 0 {
-        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
-            observation,
-            AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::Signup,
-                credentials_or_manual(observation.manual_checkpoint_present),
-                generate_or_takeover(observation.manual_checkpoint_present),
-                2,
-                5,
-            ),
-        ));
-    }
-
-    if observation.one_time_code_field_count > 0 {
-        let action = if observation.password_field_count() == 0 {
-            AuthenticationWorkflowAction::FillTotp
-        } else {
-            AuthenticationWorkflowAction::TakeOver
-        };
-        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::TotpChallenge,
-            AuthenticationWorkflowStage::SecondFactor,
-            action,
-            2,
-            3,
-        ));
-    }
-
-    if (observation.current_password_field_count > 0
-        && observation.generic_password_field_count > 0)
-        || observation.generic_password_field_count > 1
+    if matches!(
+        observation.progression(),
+        AuthenticationPageProgression::Blocked
+    ) && !observation.manual_checkpoint_present()
     {
-        return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Manual,
-            AuthenticationWorkflowStage::Manual,
-            AuthenticationWorkflowAction::TakeOver,
-            1,
-            1,
-        ));
+        return AuthenticationWorkflowMatch::NoMatch;
     }
 
-    if observation.password_field_count() > 0 {
-        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
-            observation,
-            AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook,
-                1,
+    match observation.credential_workflow_kind() {
+        AuthenticationWorkflowKind::PasswordChange => {
+            AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
+                observation,
+                AuthenticationWorkflowSnapshot::new(
+                    AuthenticationWorkflowKind::PasswordChange,
+                    credentials_or_manual(observation.manual_checkpoint),
+                    generate_or_takeover(observation.manual_checkpoint),
+                    2,
+                    4,
+                ),
+            ))
+        }
+        AuthenticationWorkflowKind::Signup => {
+            AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
+                observation,
+                AuthenticationWorkflowSnapshot::new(
+                    AuthenticationWorkflowKind::Signup,
+                    credentials_or_manual(observation.manual_checkpoint),
+                    generate_or_takeover(observation.manual_checkpoint),
+                    2,
+                    5,
+                ),
+            ))
+        }
+        AuthenticationWorkflowKind::TotpChallenge => {
+            let action = if observation.manual_checkpoint_present()
+                || observation.password_field_count() > 0
+            {
+                AuthenticationWorkflowAction::TakeOver
+            } else {
+                AuthenticationWorkflowAction::FillTotp
+            };
+            AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::TotpChallenge,
+                if observation.manual_checkpoint_present() {
+                    AuthenticationWorkflowStage::Manual
+                } else {
+                    AuthenticationWorkflowStage::SecondFactor
+                },
+                action,
+                2,
                 3,
-            ),
-        ));
-    }
-
-    if observation.username_field_count > 0 {
-        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
-            observation,
-            AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
-                AuthenticationWorkflowAction::ContinueWithNook,
-                1,
-                3,
-            ),
-        ));
-    }
-
-    if observation.passkey_control_present || observation.matching_passkey_account_count > 0 {
-        return AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
-            observation,
-            AuthenticationWorkflowSnapshot::new(
-                AuthenticationWorkflowKind::Login,
-                AuthenticationWorkflowStage::Credentials,
+            ))
+        }
+        AuthenticationWorkflowKind::Manual => {
+            AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
+                AuthenticationWorkflowKind::Manual,
+                AuthenticationWorkflowStage::Manual,
                 AuthenticationWorkflowAction::TakeOver,
                 1,
-                3,
-            ),
-        ));
+                1,
+            ))
+        }
+        AuthenticationWorkflowKind::Login => {
+            AuthenticationWorkflowMatch::Matched(apply_passkey_proposal(
+                observation,
+                AuthenticationWorkflowSnapshot::new(
+                    AuthenticationWorkflowKind::Login,
+                    credentials_or_manual(observation.manual_checkpoint),
+                    if observation.manual_checkpoint_present() {
+                        AuthenticationWorkflowAction::TakeOver
+                    } else {
+                        AuthenticationWorkflowAction::ContinueWithNook
+                    },
+                    1,
+                    3,
+                ),
+            ))
+        }
+        AuthenticationWorkflowKind::TotpEnrollment => AuthenticationWorkflowMatch::NoMatch,
     }
-
-    AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-        AuthenticationWorkflowKind::Manual,
-        AuthenticationWorkflowStage::Manual,
-        AuthenticationWorkflowAction::TakeOver,
-        1,
-        1,
-    ))
 }
 
 #[cfg(test)]
@@ -389,11 +500,14 @@ mod tests {
     use super::*;
 
     fn observation() -> AuthenticationPageObservation {
-        AuthenticationPageObservation::default()
+        AuthenticationPageObservation {
+            advance_control: AuthenticationAdvanceControlEvidence::Present,
+            ..Default::default()
+        }
     }
 
     #[test]
-    fn workflow_roundtrips_generated_numeric_enums() -> anyhow::Result<()> {
+    fn workflow_roundtrips_semantic_enums() -> anyhow::Result<()> {
         let workflow = AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::Login,
             AuthenticationWorkflowStage::Credentials,
@@ -416,6 +530,46 @@ mod tests {
     }
 
     #[test]
+    fn ignores_credential_shaped_fields_without_an_authentication_control() {
+        let inert = AuthenticationPageObservation {
+            username_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            ..observation()
+        };
+        assert_eq!(
+            classify_authentication_workflow(inert),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+    }
+
+    #[test]
+    fn passkey_control_only_advances_eligible_credential_workflows() -> anyhow::Result<()> {
+        let blocked_password_change = AuthenticationPageObservation {
+            current_password_field_count: 1,
+            new_password_field_count: 2,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            passkey: AuthenticationPasskeyEvidence::Control,
+            ..observation()
+        };
+        assert_eq!(
+            classify_authentication_workflow(blocked_password_change),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        let signup = AuthenticationPageObservation {
+            new_password_field_count: 2,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            passkey: AuthenticationPasskeyEvidence::Control,
+            ..observation()
+        };
+        assert_eq!(
+            classify_authentication_workflow(signup).snapshot()?.action,
+            AuthenticationWorkflowAction::CreatePasskey
+        );
+        Ok(())
+    }
+
+    #[test]
     fn classifies_single_and_multi_page_logins() -> anyhow::Result<()> {
         let username_only = AuthenticationPageObservation {
             username_field_count: 1,
@@ -424,8 +578,11 @@ mod tests {
         let login = classify_authentication_workflow(username_only).snapshot()?;
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
+        assert_eq!(
+            login.saved_login_capability(),
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
         assert_eq!((login.current_step, login.total_steps), (1, 3));
-        assert!(login.requires_human_approval);
 
         let password_login = AuthenticationPageObservation {
             current_password_field_count: 1,
@@ -485,20 +642,44 @@ mod tests {
         let signup = AuthenticationPageObservation {
             username_field_count: 1,
             new_password_field_count: 1,
-            manual_checkpoint_present: true,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            manual_checkpoint: AuthenticationManualCheckpoint::Present,
             ..observation()
         };
         let snapshot = classify_authentication_workflow(signup).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Signup);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.saved_login_capability(),
+            AuthenticationSavedLoginCapability::Unavailable
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn blocked_login_with_manual_checkpoint_yields_to_takeover() -> anyhow::Result<()> {
+        let login = AuthenticationPageObservation {
+            username_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            manual_checkpoint: AuthenticationManualCheckpoint::Present,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(login).snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.saved_login_capability(),
+            AuthenticationSavedLoginCapability::Unavailable
+        );
         Ok(())
     }
 
     #[test]
     fn classifies_authenticator_setup_and_verify_enrollment() -> anyhow::Result<()> {
         let setup = AuthenticationPageObservation {
-            authenticator_setup_hint: true,
+            enrollment_evidence: AuthenticationEnrollmentEvidence::AuthenticatorSetup,
             ..observation()
         };
         let setup = classify_authentication_workflow(setup).snapshot()?;
@@ -510,7 +691,7 @@ mod tests {
         );
 
         let verify = AuthenticationPageObservation {
-            authenticator_setup_hint: true,
+            enrollment_evidence: AuthenticationEnrollmentEvidence::AuthenticatorSetup,
             one_time_code_field_count: 1,
             ..observation()
         };
@@ -522,9 +703,12 @@ mod tests {
     }
 
     #[test]
-    fn classifies_standalone_one_time_code_as_second_factor() -> anyhow::Result<()> {
+    fn classifies_auto_submit_one_time_code_as_second_factor() -> anyhow::Result<()> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
+            one_time_code_progression:
+                AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
             ..observation()
         };
         let code = classify_authentication_workflow(code).snapshot()?;
@@ -536,10 +720,23 @@ mod tests {
     }
 
     #[test]
+    fn rejects_one_time_code_without_progression_evidence() {
+        let code = AuthenticationPageObservation {
+            one_time_code_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            ..observation()
+        };
+        assert_eq!(
+            classify_authentication_workflow(code),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+    }
+
+    #[test]
     fn backup_code_link_does_not_hide_an_active_totp_challenge() -> anyhow::Result<()> {
         let code = AuthenticationPageObservation {
             one_time_code_field_count: 1,
-            backup_codes_hint: true,
+            enrollment_evidence: AuthenticationEnrollmentEvidence::BackupCodes,
             ..observation()
         };
         let code = classify_authentication_workflow(code).snapshot()?;
@@ -602,7 +799,11 @@ mod tests {
             ..observation()
         };
 
-        let snapshot = classify_authentication_workflow_candidates(&[signup, login]).snapshot()?;
+        let snapshot = AuthenticationPageObservations {
+            observations: vec![signup, login],
+        }
+        .classify()
+        .snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(
             snapshot.action,
@@ -635,11 +836,11 @@ mod tests {
             ..observation()
         };
 
-        assert_eq!(authentication_form_observation_priority(username), 1);
-        assert_eq!(authentication_form_observation_priority(signup), 2);
-        assert_eq!(authentication_form_observation_priority(generic_login), 3);
-        assert_eq!(authentication_form_observation_priority(current_login), 4);
-        assert_eq!(authentication_form_observation_priority(code), 5);
+        assert_eq!(username.form_priority().value(), 1);
+        assert_eq!(signup.form_priority().value(), 2);
+        assert_eq!(generic_login.form_priority().value(), 3);
+        assert_eq!(current_login.form_priority().value(), 4);
+        assert_eq!(code.form_priority().value(), 5);
     }
 
     #[test]
@@ -654,7 +855,11 @@ mod tests {
             ..observation()
         };
 
-        let snapshot = classify_authentication_workflow_candidates(&[signup, code]).snapshot()?;
+        let snapshot = AuthenticationPageObservations {
+            observations: vec![signup, code],
+        }
+        .classify()
+        .snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpChallenge);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
         assert_eq!(snapshot.observation_index, 1);
@@ -665,13 +870,12 @@ mod tests {
     fn login_with_matching_passkeys_proposes_use() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             current_password_field_count: 1,
-            matching_passkey_account_count: 2,
+            passkey: AuthenticationPasskeyEvidence::VaultAccounts { account_count: 2 },
             ..observation()
         };
         let snapshot = classify_authentication_workflow(login).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
-        assert!(snapshot.requires_human_approval);
         Ok(())
     }
 
@@ -679,7 +883,7 @@ mod tests {
     fn passkey_control_without_matches_proposes_create() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             username_field_count: 1,
-            passkey_control_present: true,
+            passkey: AuthenticationPasskeyEvidence::Control,
             ..observation()
         };
         let snapshot = classify_authentication_workflow(login).snapshot()?;
@@ -691,7 +895,7 @@ mod tests {
     #[test]
     fn passkey_only_control_classifies_as_login_create() -> anyhow::Result<()> {
         let passkey_only = AuthenticationPageObservation {
-            passkey_control_present: true,
+            passkey: AuthenticationPasskeyEvidence::Control,
             ..observation()
         };
         let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
@@ -707,13 +911,14 @@ mod tests {
             ..observation()
         };
         let passkey_login = AuthenticationPageObservation {
-            passkey_control_present: true,
-            matching_passkey_account_count: 1,
+            passkey: AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 1 },
             ..observation()
         };
-        let snapshot =
-            classify_authentication_workflow_candidates(&[password_login, passkey_login])
-                .snapshot()?;
+        let snapshot = AuthenticationPageObservations {
+            observations: vec![password_login, passkey_login],
+        }
+        .classify()
+        .snapshot()?;
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
         assert_eq!(snapshot.observation_index, 1);
         Ok(())

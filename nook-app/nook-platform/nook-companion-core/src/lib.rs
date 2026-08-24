@@ -38,16 +38,28 @@ pub use authentication_outcome_response::{
     decode_authentication_outcome_response,
 };
 pub use authentication_workflow::{
-    AuthenticationPageObservation, AuthenticationPageObservations, AuthenticationWorkflowAction,
-    AuthenticationWorkflowKind, AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
-    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
-    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
-    authentication_form_observation_priority, authentication_page_observations_are_valid,
-    classify_authentication_workflow, classify_authentication_workflow_candidates,
+    AuthenticationAdvanceControlEvidence, AuthenticationAuthenticatorObservationFacts,
+    AuthenticationAuthenticatorSetupObservation, AuthenticationBackupCodesObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationEnrollmentEvidence,
+    AuthenticationFieldObservationFacts, AuthenticationFormObservationPriority,
+    AuthenticationManualCheckpoint, AuthenticationOneTimeCodeProgressionEvidence,
+    AuthenticationPageObservation, AuthenticationPageObservationFacts,
+    AuthenticationPageObservationFactsBatch, AuthenticationPageObservations,
+    AuthenticationPageProgression, AuthenticationPasskeyControlObservation,
+    AuthenticationPasskeyEvidence, AuthenticationSavedLoginCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
+    AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_page_observations_are_valid,
+    classify_authentication_workflow,
 };
 pub use authentication_workflow_response::{
-    AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError,
-    AuthenticationWorkflowSnapshotResponseKind, AuthenticationWorkflowSnapshotResponseWire,
+    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
+    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshotResponse,
+    AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseWire,
+    WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
+    WebsiteLoginMatchAvailabilityWire, WebsiteLoginMatchAvailabilityWithCountWire,
+    WebsiteLoginMatchAvailabilityWithoutCountWire, decode_authentication_workflow_runtime_response,
     decode_authentication_workflow_snapshot_response,
 };
 pub use authenticator_backup_attach_response::{
@@ -117,10 +129,16 @@ pub use outcome_evidence::{
     DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, classify_authentication_outcome,
 };
 pub use page_field_classification::{
-    LoginContextObservation, PageInputFieldObservation, PageInputType, expand_identity_text,
-    has_login_context, looks_like_email_verification_body, looks_like_login_advance_control_label,
-    looks_like_manual_checkpoint_label, looks_like_one_time_code_field,
-    looks_like_passkey_control_label, looks_like_username_field,
+    AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+    AuthenticationUsernameEvidence, AuthenticationUsernameEvidenceBatch, LoginContextObservation,
+    PageControlActionability, PageControlOwnership, PageControlSemantics,
+    PageInputFieldObservation, PageInputType, authentication_username_evidence,
+    classify_authentication_advance_control, expand_identity_text, has_login_context,
+    looks_like_email_verification_body, looks_like_login_advance_control_label,
+    looks_like_manual_checkpoint_label, looks_like_non_authentication_submit_control_label,
+    looks_like_one_time_code_auto_submit_signal, looks_like_one_time_code_field,
+    looks_like_passkey_control_label, looks_like_password_update_submit_control_label,
+    looks_like_username_field, strongest_authentication_username_evidence,
 };
 pub use vault_host_policy::{
     DEFAULT_SIMPLE_VAULT_URL, VaultHostPolicyError, belongs_to_sentinel_vault,

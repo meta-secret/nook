@@ -15,31 +15,9 @@ pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObserv
 #[wasm_bindgen]
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
-    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
-    pub fn new(
-        username_field_count: u32,
-        current_password_field_count: u32,
-        new_password_field_count: u32,
-        generic_password_field_count: u32,
-        one_time_code_field_count: u32,
-        manual_checkpoint_present: bool,
-        authenticator_setup_hint: bool,
-        backup_codes_hint: bool,
-        passkey_control_present: bool,
-        matching_passkey_account_count: u32,
-    ) -> Self {
-        Self(nook_core::AuthenticationPageObservation {
-            username_field_count,
-            current_password_field_count,
-            new_password_field_count,
-            generic_password_field_count,
-            one_time_code_field_count,
-            manual_checkpoint_present,
-            authenticator_setup_hint,
-            backup_codes_hint,
-            passkey_control_present,
-            matching_passkey_account_count,
-        })
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(observation: nook_core::AuthenticationPageObservation) -> Self {
+        Self(observation)
     }
 }
 
@@ -219,11 +197,6 @@ impl NookAuthenticationWorkflowSnapshot {
     #[wasm_bindgen(getter, js_name = totalSteps)]
     pub fn total_steps(&self) -> u8 {
         self.0.total_steps
-    }
-
-    #[wasm_bindgen(getter, js_name = requiresHumanApproval)]
-    pub fn requires_human_approval(&self) -> bool {
-        self.0.requires_human_approval
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]
