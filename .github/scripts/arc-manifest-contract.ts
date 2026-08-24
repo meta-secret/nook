@@ -746,9 +746,9 @@ runners.forbid("docker-in-docker");
 registryTasks.require('"readTimeout": "15m",\n        "writeTimeout": "15m"');
 tasks.require('if test "$expanded_seed" != true; then');
 tasks.require('seed_lock="$pool_mount/.seed.lock"');
+tasks.require('sudo -n chown "$(id -u):$(id -g)" "$seed_lock"');
 tasks.require('e2fsck -f -p "$loop_device"');
 tasks.require("- task: arc:buildkit:image:sync\n      - task: arc:cache:pool:sync");
-
 enum RunnerPlacement {
   ArcCacheMain = "arc-cache-main",
   ArcGeneralMain = "arc-general-main",
