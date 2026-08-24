@@ -1,0 +1,8 @@
+version: '3'
+
+tasks:
+  k0s:worker-mesh:reconcile:
+    desc: Reconcile direct authenticated WireGuard routes between every k0s worker.
+    silent: true
+    cmds:
+      - bash infra/k0s/scripts/k0s-worker-mesh-reconcile '{{.INFRA_SSH_TARGET}}'

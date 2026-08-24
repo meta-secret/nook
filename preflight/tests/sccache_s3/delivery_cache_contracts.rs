@@ -87,7 +87,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("HIVE_CACHE_FROM=$hive_remote_ref"));
     assert!(setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed"));
     assert!(setup.contains("docker buildx imagetools inspect"));
-    assert!(setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m"));
+    assert!(setup.contains("hive_export_mode=min"));
+    assert!(setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m"));
     assert!(!setup.contains("cache_total_count()"));
 
     assert_release_cache_fingerprint_contract()?;

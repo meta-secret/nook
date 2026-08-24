@@ -69,8 +69,9 @@ Batch behavior:
 - On GitHub-hosted runners, timeout recovery also removes task-created Docker
   containers and restarts the job-scoped BuildKit container.
 - On ARC, the private BuildKit sidecar is probed but never treated as a Docker
-  container. Its local state is discarded with the microVM; Zot holds durable
-  caches.
+  container. Focused Remote state is discarded with the microVM and cannot
+  promote the trusted seed. Only authenticated successful Main jobs may request
+  local promotion. Zot retains the hosted cross-node bootstrap cache.
 - After every task, reselect the job-scoped Buildx builder.
   - This prevents temporary builders from affecting later selections.
 - Report every task result in the GitHub job summary.
@@ -104,11 +105,29 @@ Security and cache rules:
 - Back Podman with a sparse 24 GiB ext4 image inside the guest. Native overlay
   must not fall back to `fuse-overlayfs` on the Kata shared volume.
 - Permit only the Task-managed ARC BuildKit request and job hostPaths.
-  - A trusted init container sees only the request directory.
-  - It submits its Kubernetes Pod UID.
+  - Before untrusted job containers start, a trusted init container briefly
+    sees only the request root. It creates a root-owned, mode-`0700` lane for
+    its Kubernetes Pod UID and submits that UID for a private clone.
+  - A credential-free sidecar mounts only its Pod lane through `subPathExpr`
+    and forwards its candidate there. It cannot traverse another Pod's lane.
+    The runner sees neither host path.
+  - A root-owned authenticated host verifier binds that candidate to the exact
+    in-progress runner job before writing an intent in a mode-`0700`,
+    host-private runtime directory. Pods receive only an acceptance marker in
+    their untrusted request lane.
+  - The intent blocks the next cache producer until the host observes the final
+    conclusion. Only a successful Main job promotes the seed.
+  - Retry a failed promotion while its verified intent is live. Abandon an
+    intent or request that blocks clones for more than two minutes. Retain
+    unsafe job state until complete Kata teardown is proven.
+  - Pin the dedicated Main producer scale set to the one cache-primary compute
+    node. Keep general and Hive scale sets eligible for every qualified worker.
   - The host helper creates a reflink clone from the trusted seed.
   - The BuildKit sidecar mounts only its `jobs/<Pod UID>` subpath.
   - The runner container never mounts the pool.
+- Serialize Main cache-producing jobs so each producer starts from the seed
+  generation published by its predecessor. Non-producing validation remains
+  parallel.
 - BuildKit and the general Podman sidecar may be privileged only inside the
   isolated Kata guest.
 - Import an exact BuildKit lineage alone when it exists.

@@ -17,8 +17,9 @@
 # provider tests remain available through the manually dispatched e2e-pr.yml.
 #
 # Playwright browsers are pre-installed in the web e2e base image.
-# Main's trusted Rust/WASM producers receive fixed-ID SeaweedFS sccache secret mounts and publish
-# verified BuildKit layers to private Zot. PR, release, and browser-only jobs remain secret-free.
+# Main's trusted Rust/WASM producers receive fixed-ID SeaweedFS sccache secret mounts. On the
+# cache-primary ARC route they promote verified node-local BuildKit state; hosted fallback publishes
+# verified layers to private Zot. PR, release, and browser-only jobs remain secret-free.
 
 name: Main
 
@@ -111,7 +112,7 @@ jobs:
     needs: [product-paths]
     if: needs.product-paths.outputs.changed == 'true'
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -156,23 +157,24 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
       - name: Publish verified native BuildKit cache
+        if: success()
         run: task ci:main:publish-native-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
   wasm:
     name: WASM verification and artifact
     # Serialize cache uploads after native verification while retaining the producer's
     # job-scoped builder for a no-rebuild export.
     needs: [rust]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -216,11 +218,9 @@ jobs:
           overwrite: true
 
       - name: WASM Node tests
-        run: task ci:wasm:node-test
+        run: task ci:main:wasm-node-test
         env:
           CI: true
-          # The exporter commits only after the Node-test Docker stage succeeds.
-          GHA_CACHE_WRITE_ENABLED: "1"
           GIT_COMMIT_ID: ${{ github.sha }}
           NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
           NOOK_EXTENSION_CHANNEL: development
@@ -228,21 +228,22 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
       - name: Publish verified WASM BuildKit cache
+        if: success()
         run: task ci:main:publish-wasm-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
   web:
     name: Verify web build
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -282,16 +283,17 @@ jobs:
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
       - name: Publish verified web BuildKit cache
+        if: success()
         run: task ci:main:publish-web-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
 
   web-e2e:
     name: Web e2e
@@ -390,8 +392,10 @@ jobs:
 
   ui-demos:
     name: UI demos
-    needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    # This is the final local cache producer. Serialize it behind web so it
+    # clones the promoted web generation instead of racing a sibling lineage.
+    needs: [web]
+    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -435,25 +439,6 @@ jobs:
           VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
           VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
           WASM_BUILD_MODE=dev
-
-      - name: Publish verified browser web BuildKit cache
-        run: >-
-          task ci:main:publish-web-e2e-cache
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
       - name: Upload complete Main UI demo artifact
         if: always()
@@ -526,6 +511,26 @@ jobs:
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
+
+      - name: Publish verified browser web BuildKit cache
+        if: success()
+        run: >-
+          task ci:main:publish-web-e2e-cache
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
+          WASM_BUILD_MODE=dev
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          GIT_COMMIT_ID: ${{ github.sha }}
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
   deploy:
     name: Deploy development

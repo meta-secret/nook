@@ -3,7 +3,7 @@ githubConfigSecret: nook-arc-github
 
 runnerScaleSetName: nook-k0s
 minRunners: 0
-maxRunners: 10
+maxRunners: 25
 
 controllerServiceAccount:
   namespace: arc-systems
@@ -13,6 +13,11 @@ listenerTemplate:
   spec:
     nodeSelector:
       nook.nokey.sh/node-role: control-storage
+    tolerations:
+      - key: nook.nokey.sh/arc-build
+        operator: Equal
+        value: preparing
+        effect: NoSchedule
     containers:
       - name: listener
         securityContext:
@@ -25,26 +30,60 @@ listenerTemplate:
             type: RuntimeDefault
         resources:
           requests:
-            cpu: 50m
-            memory: 64Mi
+            cpu: 100m
+            memory: 128Mi
           limits:
-            cpu: 250m
-            memory: 256Mi
+            cpu: "1"
+            memory: 512Mi
 
 template:
   metadata:
     labels:
       nook.nokey.sh/role: arc-runner
+      nook.nokey.sh/arc-spread-group: general
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
+    affinity:
+      nodeAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            preference:
+              matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [primary]
+          - weight: 50
+            preference:
+              matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [secondary]
+          - weight: 1
+            preference:
+              matchExpressions:
+                - key: nook.nokey.sh/arc-tier
+                  operator: In
+                  values: [overflow]
+    topologySpreadConstraints:
+      - maxSkew: 3
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        nodeAffinityPolicy: Honor
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            nook.nokey.sh/arc-spread-group: general
     runtimeClassName: kata-qemu-runtime-rs
+    securityContext:
+      fsGroup: 1001
+      fsGroupChangePolicy: OnRootMismatch
     automountServiceAccountToken: false
     enableServiceLinks: false
     terminationGracePeriodSeconds: 60
     initContainers:
       - name: install-docker-client
-        image: docker:29.1.3-cli@sha256:4fa0ee1f3a7e4354c4ea34558b6d4ee32859baf4973d4c8ccc8e7fe3dd730c04
+        image: registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:4fa0ee1f3a7e4354c4ea34558b6d4ee32859baf4973d4c8ccc8e7fe3dd730c04
         command:
           - /bin/sh
           - -ceu
@@ -68,8 +107,8 @@ template:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 256Mi
       - name: prepare-buildkit-state
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
@@ -96,8 +135,8 @@ template:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 256Mi
       - name: buildkit
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
@@ -137,13 +176,103 @@ template:
             mountPath: /tmp
         resources:
           requests:
-            cpu: 500m
-            memory: 2560Mi
+            cpu: "1"
+            memory: 4Gi
             ephemeral-storage: 4Gi
           limits:
-            cpu: "1.25"
-            memory: 2560Mi
+            cpu: "4"
+            memory: 4Gi
             ephemeral-storage: 32Gi
+      - name: request-buildkit-promotion
+        image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
+        imagePullPolicy: Never
+        restartPolicy: Always
+        command: ["/bin/sh", "-ceu"]
+        args:
+          - |
+            signal_dir=/var/run/nook-cache-promotion
+            signal_file="$signal_dir/request"
+            accepted_file="$signal_dir/accepted"
+            request_dir=/var/lib/nook-buildkit-requests
+            host_accepted_file="$request_dir/accepted"
+            candidate_file="$request_dir/candidate"
+            candidate_next="$candidate_file.next"
+
+            while ! test -f "$signal_file"; do sleep 0.2; done
+            test ! -L "$signal_file"
+            test "$(stat -c '%F:%u:%g:%a:%h' "$signal_file")" = \
+              "regular file:1001:1001:640:1"
+            signal_value="$(tr -d '\r\n' < "$signal_file")"
+            IFS=: read -r run_id run_attempt head_sha trailing <<EOF
+            $signal_value
+            EOF
+            test -z "$trailing"
+            case "$run_id:$run_attempt" in
+              *[!0-9:]*|:*|*::*|*:)
+                echo "ARC cache promotion rejected malformed run identity" >&2
+                exit 1
+                ;;
+            esac
+            case "$head_sha" in
+              *[!0-9a-fA-F]*|'')
+                echo "ARC cache promotion rejected malformed head SHA" >&2
+                exit 1
+                ;;
+            esac
+            test "${#head_sha}" -eq 40
+            umask 077
+            rm -f "$host_accepted_file"
+            printf '%s:%s:%s:%s:%s\n' \
+              "$POD_UID" "$POD_NAME" "$run_id" "$run_attempt" "$head_sha" \
+              > "$candidate_next"
+            mv "$candidate_next" "$candidate_file"
+            deadline=$(($(date +%s) + 60))
+            while ! test -f "$host_accepted_file"; do
+              if test "$(date +%s)" -ge "$deadline"; then
+                echo "ARC cache promotion host verifier rejected the request" >&2
+                rm -f "$candidate_file"
+                exit 1
+              fi
+              sleep 0.2
+            done
+            test ! -L "$host_accepted_file"
+            test "$(stat -c '%F:%u:%g:%a:%h' "$host_accepted_file")" = \
+              "regular file:0:0:600:1"
+            printf '%s\n' "$POD_UID" > "$accepted_file.next"
+            mv "$accepted_file.next" "$accepted_file"
+            while true; do sleep 1; done
+        env:
+          - name: POD_UID
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.uid
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop: ["ALL"]
+          readOnlyRootFilesystem: true
+          runAsUser: 0
+          seccompProfile:
+            type: RuntimeDefault
+        volumeMounts:
+          - name: buildkit-requests
+            mountPath: /var/lib/nook-buildkit-requests
+            subPathExpr: $(POD_UID)
+          - name: cache-promotion-signal
+            mountPath: /var/run/nook-cache-promotion
+          - name: temporary
+            mountPath: /tmp
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
       - name: prepare-container-runtime-state
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never
@@ -170,8 +299,8 @@ template:
             cpu: 10m
             memory: 32Mi
           limits:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 500m
+            memory: 256Mi
       - name: container-runtime
         image: quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750
         restartPolicy: Always
@@ -218,8 +347,8 @@ template:
             memory: 512Mi
             ephemeral-storage: 1Gi
           limits:
-            cpu: 250m
-            memory: 512Mi
+            cpu: "4"
+            memory: 2Gi
             ephemeral-storage: 24Gi
     containers:
       - name: runner
@@ -236,6 +365,8 @@ template:
             value: tcp://127.0.0.1:2375
           - name: NOOK_CONTAINER_RUNTIME
             value: podman
+          - name: NOOK_ARC_CACHE_PROMOTION_DIR
+            value: /var/run/nook-cache-promotion
         securityContext:
           allowPrivilegeEscalation: false
           capabilities:
@@ -259,13 +390,15 @@ template:
             mountPath: /tmp
           - name: tool-cache
             mountPath: /opt/hostedtoolcache
+          - name: cache-promotion-signal
+            mountPath: /var/run/nook-cache-promotion
         resources:
           requests:
             cpu: 250m
             memory: 1Gi
             ephemeral-storage: 25Gi
           limits:
-            cpu: 500m
+            cpu: "1"
             memory: 1Gi
             ephemeral-storage: 100Gi
     volumes:
@@ -289,6 +422,9 @@ template:
       - name: container-runtime-state
         emptyDir:
           sizeLimit: 24Gi
+      - name: cache-promotion-signal
+        emptyDir:
+          sizeLimit: 1Mi
       - name: temporary
         emptyDir:
           sizeLimit: 50Gi

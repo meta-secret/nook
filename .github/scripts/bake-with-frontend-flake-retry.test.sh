@@ -27,7 +27,7 @@ printf '%s\n' \
   'count=$((count + 1))' \
   'printf "%s" "$count" >"$count_file"' \
   'if [ "$count" -eq 1 ]; then' \
-  '  printf "%s\\n" "Dockerfile:1" ">>> # syntax=docker/dockerfile:1.4" "ERROR: target nook-web-e2e: failed to solve: exit code: 2"' \
+  '  printf "%s\\n" "Dockerfile:1" ">>> # syntax=registry.dev.nokey.sh/docker/dockerfile:1.4" "ERROR: target nook-web-e2e: failed to solve: exit code: 2"' \
   '  exit 2' \
   'fi' >"$frontend_command"
 chmod +x "$frontend_command"

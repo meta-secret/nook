@@ -1,0 +1,21 @@
+runnerScaleSetName: nook-k0s-cache
+minRunners: 0
+maxRunners: 2
+
+template:
+  metadata:
+    labels:
+      nook.nokey.sh/role: arc-cache-runner
+      nook.nokey.sh/arc-spread-group: cache
+  spec:
+    nodeSelector:
+      nook.nokey.sh/arc-cache-primary: "true"
+    topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: kubernetes.io/hostname
+        whenUnsatisfiable: ScheduleAnyway
+        nodeAffinityPolicy: Honor
+        nodeTaintsPolicy: Honor
+        labelSelector:
+          matchLabels:
+            nook.nokey.sh/arc-spread-group: cache

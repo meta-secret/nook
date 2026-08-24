@@ -12,9 +12,9 @@ inputs:
     default: "false"
   isolated-cache-write:
     description: >-
-      Publish only an isolated remote-buildcache ref keyed by git commit SHA
-      (-git-<sha>) while using Main when that exact ref is absent. Never writes Main's
-      nook/buildcache refs.
+      Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
+      git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
+      keeps the graph job-local. Never writes Main's nook/buildcache refs.
     required: false
     default: "false"
   require-e2e-cache:
@@ -213,7 +213,7 @@ runs:
             exit 1
           fi
           scope_suffix="-git-$scope_sha"
-          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
+          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
           echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
@@ -316,7 +316,15 @@ runs:
 
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
-          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v1:buildcache"
+          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v2:buildcache"
+          hive_export_mode=max
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            # The disposable VM already retains the full graph in its local
+            # BuildKit state for the job. Export only the minimal exact-SHA
+            # handoff; exporting the full graph added minutes after a green
+            # Hive build while sccache already preserves compiler artifacts.
+            hive_export_mode=min
+          fi
           hive_probe_status=0
           cache_ref_status "$hive_ref" || hive_probe_status=$?
           case "$hive_probe_status" in
@@ -331,15 +339,19 @@ runs:
           esac
           echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
           echo "HIVE_CACHE_SEED_FROM=$hive_seed" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m" >> "$GITHUB_ENV"
         fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "GHA_CACHE_EXPORT_MODE=min" >> "$GITHUB_ENV"
-            echo "ARC publishes a minimal exact-SHA handoff; full graph remains in private BuildKit state"
+            # Even mode=min includes the final result layer. Rust dependency
+            # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
+            # HDD and turn a successful verification into a cache failure.
+            # ARC keeps this job-local and reads Main plus sccache instead.
+            echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
+          else
+            cache_write_enabled=1
           fi
-          cache_write_enabled=1
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
         fi

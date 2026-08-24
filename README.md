@@ -369,7 +369,7 @@ macOS has no inotify; Docker workloads use the inotify implementation in Docker
 Desktop's Linux VM. Reapply after Docker Desktop restarts:
 
 ```sh
-docker run --rm --privileged --pid=host busybox:1.37.0 \
+docker run --rm --privileged --pid=host registry.dev.nokey.sh/library/busybox:1.37.0 \
   sysctl -w \
   fs.inotify.max_user_instances=2500 \
   fs.inotify.max_user_watches=10485760
@@ -600,9 +600,19 @@ WASM, and deployment jobs run on fresh GitHub-hosted VMs. Each ARC runner
 starts from a private 32 GiB reflinked BuildKit seed and restores distinct
 cache refs from the authenticated OCI registry at
 `registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
-copy its full logical capacity. Main refreshes the shared refs after lane
-verification. Same-repository PR jobs may publish only exact-SHA generations
-under `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
+copy its full logical capacity. A credential-free sidecar forwards a candidate
+to an authenticated host verifier, which promotes local state only after the
+exact Main runner job succeeds. Hosted fallback
+jobs refresh shared Zot refs, which bootstrap new or cold compute nodes. Main
+cache producers are serialized. An authenticated promotion intent blocks the
+next producer clone until the preceding successful state becomes the next seed
+generation. A dedicated `nook-k0s-cache` producer scale set is pinned to one
+cache-primary node, so adding general compute workers cannot split that lineage
+across local seeds.
+Hive keeps an independent Zot cache lineage because its separate workflow may
+overlap Main and must not race the serialized Main seed.
+Same-repository PR jobs may publish only exact-SHA generations under
+`nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
 producer restores Main's dedicated, complete WASM dependency boundary so it
 does not compete with the larger native dependency lineage. Main explicitly
 publishes the native source target as well as both dependency targets; merely

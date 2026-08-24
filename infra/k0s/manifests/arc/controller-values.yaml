@@ -12,6 +12,12 @@ podLabels:
 nodeSelector:
   nook.nokey.sh/node-role: control-storage
 
+tolerations:
+  - key: nook.nokey.sh/arc-build
+    operator: Equal
+    value: preparing
+    effect: NoSchedule
+
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 1000
@@ -27,8 +33,8 @@ securityContext:
 
 resources:
   requests:
-    cpu: 100m
-    memory: 128Mi
+    cpu: 250m
+    memory: 256Mi
   limits:
-    cpu: 500m
-    memory: 512Mi
+    cpu: "2"
+    memory: 1Gi

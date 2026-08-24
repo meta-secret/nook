@@ -36,7 +36,10 @@ fn assert_workflow_runtime_contract(root: &Path) {
     assert!(
         pr.contains("runs-on: ubuntu-latest")
             && release.contains("runs-on: ubuntu-latest")
-            && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && pr
+                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .count()
+                >= 3
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
@@ -48,7 +51,11 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && main
                 .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
                 .count()
-                == 8,
+                == 4
+            && main
+                .matches("runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}")
+                .count()
+                == 4,
         "every explicit trusted Main job must select configured ARC with a hosted fallback"
     );
 }
@@ -70,8 +77,7 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}",
         "cache_write_enabled=1",
-        "GHA_CACHE_EXPORT_MODE=min",
-        "ARC publishes a minimal exact-SHA handoff",
+        "ARC skips general exact-SHA registry export; Main and sccache remain reusable",
         "${NOOK_ARC_RUNNER:-}",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
         "event_name=\"${{ github.event_name }}\"",
@@ -91,11 +97,30 @@ fn assert_docker_setup_contract(root: &Path) {
     assert!(
         pr.contains("name: Publish git-scoped native BuildKit cache")
             && pr.contains("task ci:main:publish-native-cache")
-            && pr.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust")
-            && pr
-                .contains("ARC verified solves already published their minimal exact-SHA handoffs"),
-        "trusted ARC PR native verification must publish during verified solves without a redundant reconstruction pass"
+            && pr.contains("GHA_CACHE_WRITE_ENABLED=\"\"")
+            && pr.contains(
+                "ARC keeps the verified native graph local; Main and sccache remain reusable"
+            ),
+        "trusted ARC PR native verification must remain read-only while hosted fallback can publish its exact cache"
     );
+    assert_eq!(
+        pr.matches("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
+            .count(),
+        6,
+        "every general PR cache publisher must explicitly keep ARC verification graphs local"
+    );
+    for local_graph_message in [
+        "ARC keeps the verified native graph local; Main and sccache remain reusable",
+        "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
+        "ARC keeps the verified web graph local; Main remains reusable",
+        "ARC keeps the verified browser graph local; Main remains reusable",
+        "ARC keeps the verified full-e2e graph local; Main remains reusable",
+    ] {
+        assert!(
+            pr.contains(local_graph_message),
+            "PR CI is missing the ARC-local cache contract: {local_graph_message}"
+        );
+    }
     assert!(
         !setup.contains("crazy-max/ghaction-github-runtime")
             && !setup.contains("systemctl restart docker")
@@ -241,9 +266,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         wasm_node_job.contains("needs: wasm")
             && wasm_node_job.contains("task ci:wasm:node-test")
             && wasm_node_job.contains("needs.wasm.outputs.run-node-tests == 'true'")
-            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:wasm:node-test")
+            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test")
             && wasm_node_job.contains("Trusted handoff already covered Node tests"),
-        "PR CI must finish WASM Node tests and publish its isolated exact cache in a dependent job after the build handoff"
+        "PR CI must finish WASM Node tests without exporting ARC graphs while preserving hosted exact-cache publication"
     );
     assert!(
         native_job.contains("cache-write: \"false\"")

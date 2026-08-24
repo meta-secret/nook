@@ -18,7 +18,11 @@ hive_values["minRunners"] = 0
 hive_values["maxRunners"] = 10
 pod_template = hive_values.fetch("template")
 pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/role"] = "arc-hive-runner"
+pod_template.fetch("metadata").fetch("labels")["nook.nokey.sh/arc-spread-group"] = "hive"
 pod = pod_template.fetch("spec")
+pod.fetch("topologySpreadConstraints").fetch(0).fetch("labelSelector").fetch("matchLabels")[
+  "nook.nokey.sh/arc-spread-group"
+] = "hive"
 pod["runtimeClassName"] = "kata-qemu-runtime-rs"
 pod.fetch("initContainers").reject! do |container|
   %w[prepare-container-runtime-state container-runtime].include?(container["name"])
@@ -30,14 +34,14 @@ end
 buildkit = named(pod.fetch("initContainers"), "buildkit")
 buildkit.fetch("resources").fetch("requests")["cpu"] = "1"
 buildkit.fetch("resources").fetch("requests")["memory"] = "4Gi"
-buildkit.fetch("resources").fetch("limits")["cpu"] = "1"
-buildkit.fetch("resources").fetch("limits")["memory"] = "4Gi"
+buildkit.fetch("resources").fetch("limits")["cpu"] = "4"
+buildkit.fetch("resources").fetch("limits")["memory"] = "6Gi"
 
 pod.fetch("initContainers").concat(
   [
     {
       "name" => "prepare-hive-neo4j",
-      "image" => "neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
+      "image" => "registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
       "command" => ["/bin/sh", "-ceu", "chown 7474:7474 /data"],
       "securityContext" => {
         "allowPrivilegeEscalation" => false,
@@ -53,7 +57,7 @@ pod.fetch("initContainers").concat(
     },
     {
       "name" => "prepare-hive-test-runtime",
-      "image" => "rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
+      "image" => "registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
       "command" => [
         "/bin/sh",
         "-ceu",
@@ -83,7 +87,7 @@ end
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
 runner.fetch("resources").fetch("requests")["cpu"] = "500m"
 runner.fetch("resources").fetch("requests")["memory"] = "1Gi"
-runner.fetch("resources").fetch("limits")["cpu"] = "500m"
+runner.fetch("resources").fetch("limits")["cpu"] = "1"
 runner.fetch("resources").fetch("limits")["memory"] = "1Gi"
 runner.fetch("volumeMounts") << {
   "name" => "hive-test-exchange",
@@ -94,7 +98,7 @@ pod.fetch("initContainers").concat(
   [
     {
       "name" => "neo4j",
-      "image" => "neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
+      "image" => "registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72",
       "restartPolicy" => "Always",
       "env" => [
         { "name" => "NEO4J_AUTH", "value" => "neo4j/hive-integration-password" },
@@ -127,12 +131,12 @@ pod.fetch("initContainers").concat(
       "volumeMounts" => [{ "name" => "neo4j-data", "mountPath" => "/data" }],
       "resources" => {
         "requests" => { "cpu" => "250m", "memory" => "1Gi" },
-        "limits" => { "cpu" => "400m", "memory" => "1536Mi" }
+        "limits" => { "cpu" => "1", "memory" => "2Gi" }
       }
     },
     {
       "name" => "hive-test-runtime",
-      "image" => "rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
+      "image" => "registry.dev.nokey.sh/library/rust:1.97-trixie@sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769",
       "restartPolicy" => "Always",
       "command" => ["/bin/bash", "/opt/nook/run-hive-test-runtime"],
       "env" => [
@@ -159,8 +163,8 @@ pod.fetch("initContainers").concat(
         }
       ],
       "resources" => {
-        "requests" => { "cpu" => "10m", "memory" => "64Mi" },
-        "limits" => { "cpu" => "100m", "memory" => "256Mi" }
+        "requests" => { "cpu" => "500m", "memory" => "512Mi" },
+        "limits" => { "cpu" => "4", "memory" => "4Gi" }
       }
     }
   ]

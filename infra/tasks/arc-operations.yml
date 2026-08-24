@@ -19,7 +19,17 @@ tasks:
         kubectl get pods --namespace arc-runners -o wide
         REMOTE
       - |
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        if ! task infra:arc:build-host:resolve; then
+          echo "ARC build-host discovery failed; skipping host storage status" >&2
+          exit 0
+        fi
+        while IFS=$'\t' read -r build_target build_remote_dir; do
+          test -n "$build_target"
+          test -n "$build_remote_dir"
+          echo "ARC build host: $build_target"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "{{.INFRA_SSH_TARGET}}" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl is-active nook-arc-buildkit-cloner.service
         sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
@@ -27,6 +37,7 @@ tasks:
         sudo -n btrfs filesystem du -s \
           /var/lib/nook-arc-buildkit/pool/seed/buildkit.ext4
         REMOTE
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
 
   arc:diagnose:
     desc: Show bounded ARC events and recent controller/listener logs.
@@ -50,10 +61,21 @@ tasks:
         fi
         REMOTE
       - |
-        ssh -o BatchMode=yes "{{.ARC_BUILD_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        if ! task infra:arc:build-host:resolve; then
+          echo "ARC build-host discovery failed; skipping host diagnostics" >&2
+          exit 0
+        fi
+        while IFS=$'\t' read -r build_target build_remote_dir; do
+          test -n "$build_target"
+          test -n "$build_remote_dir"
+          echo "ARC build host: $build_target"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "{{.INFRA_SSH_TARGET}}" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl status nook-arc-buildkit-cloner.service \
           --no-pager --lines=40 || true
         sudo -n journalctl --unit nook-arc-buildkit-cloner.service \
           --no-pager --lines=80 || true
         REMOTE
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"

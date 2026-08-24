@@ -20,22 +20,31 @@ This directory owns Nook's stateful server infrastructure:
   Task-managed Btrfs pool. There is no full-size copy at runner startup. There
   is no Docker daemon, DinD, Sysbox, shared builder, or host runtime socket.
   The runner container cannot mount the pool or another job's writable state.
-  No runners stay warm: ARC creates one fresh microVM per job. Both `nook-k0s`
-  and the dedicated `nook-k0s-hive` set permit ten concurrent jobs. Hive adds
+  No runners stay warm: ARC creates one fresh microVM per job. The general
+  `nook-k0s` set permits 25 concurrent jobs; the dedicated `nook-k0s-hive` set
+  permits ten. Hive adds
   pinned Neo4j and non-root Trixie test-runtime native sidecars. Kubernetes
-  stops both helpers when the runner exits. The runtime executes exported tests
+  prefers Rise-S, then the home 7950X3D node, then KS-6 for both pools. Soft
+  hostname spreading preserves burst capacity and failover. It stops both
+  Hive helpers when the runner exits. The runtime executes exported tests
   through a private exchange volume. It does not introduce a Docker daemon.
 
-Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
-expose anonymous S3 or registry access; every client authenticates with the
-generated credentials.
+Both public edge services live under the `*.dev.nokey.sh` namespace. SeaweedFS
+and private `nook/**` Zot repositories require generated credentials. Zot's
+pull-through `library/**` mirror is intentionally anonymous for read-only
+upstream image pulls by kubelet, BuildKit, and Actions service containers.
+Anonymous mirror writes and every private-repository read or write remain
+denied.
 
 Deploy and inspect the stack from the repository root:
 
 ```sh
-# First deployment only: create a repository-scoped fine-grained token file
-# with Administration read/write, then bootstrap the controller Secret.
-ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token task infra:deploy
+# First deployment only: create separate repository-scoped fine-grained token
+# files. The controller needs Administration read/write. The host verifier
+# needs Actions read only. Both are persisted automatically under ~/.nook.
+ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token \
+  ARC_CACHE_VERIFIER_TOKEN_FILE=/secure/path/nook-arc-verifier-token \
+  task infra:deploy
 
 # Routine deployments retain the installed Secret.
 task infra:deploy
@@ -87,8 +96,8 @@ succeed. Host-network Traefik requires an nftables INPUT accept for TCP `443`
 after k0s firewall updates. Public Redis `:6380` is retired.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
-`registry.dev.nokey.sh`. Main publishes shared cache manifests; pull requests
-restore them read-only after `docker login`. Explicit Remote tasks use
+`registry.dev.nokey.sh`. Hosted fallback jobs publish shared cache manifests;
+hosted pull requests restore them read-only after `docker login`. Explicit Remote tasks use
 branch-and-task Zot refs with Main fallback and write only those Remote refs in
 the separately authorized `nook/remote-buildcache/**` repository path. Zot
 deduplicates identical layer blobs shared with Main. Remote Rust compiler vertices
@@ -97,23 +106,32 @@ stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
 `preflight`, `rust:ci`, and `arc:runtime` Remote selections use `nook-k0s`
-through the repository variable `NOOK_RUNS_ON`. Trusted Main jobs also select
-that scale set. Each general Kata guest has private loopback BuildKit and
-Podman services plus a shared runner work volume, so `type=docker`, `docker
-run`, and bind-mounted artifacts stay job-scoped without DinD or a host runtime
-socket. The Podman image is sparse, grows only with runtime data, and is
-discarded with the job. Trusted Hive Rust verification uses `nook-k0s-hive` through
-`NOOK_HIVE_RUNS_ON`; its browser job stays hosted. Unsupported focused tasks,
-forks, and Dependabot retain hosted routing.
-`task infra:arc:activate` sets the ARC route;
-`task infra:arc:fallback` immediately restores both routes to `ubuntu-latest`.
+through the repository variable `NOOK_RUNS_ON`. Non-producing trusted Main
+jobs use that general route. Main's native, WASM, web, and UI-demo cache
+producers use the cache-primary `nook-k0s-cache` scale set through
+`NOOK_CACHE_RUNS_ON`. Each general or cache-primary Kata guest has private
+loopback BuildKit and Podman services plus a shared runner work volume, so
+`type=docker`, `docker run`, and bind-mounted artifacts stay job-scoped without
+DinD or a host runtime socket. The Podman image is sparse, grows only with
+runtime data, and is discarded with the job. Trusted Hive Rust verification
+uses `nook-k0s-hive` through `NOOK_HIVE_RUNS_ON`; its browser job stays hosted.
+Unsupported focused tasks, forks, and Dependabot retain hosted routing.
+`task infra:arc:activate` sets all three ARC routes; `task infra:arc:fallback`
+immediately restores all three routes to `ubuntu-latest`.
 ARC Buildx uses
 the remote driver against the private BuildKit sidecar. Each job starts from
-the reusable local seed but writes only to its own Pod UID clone. Zot remains
-the authoritative cache shared with hosted builders. Its
-authenticated Zot traffic resolves through the same node's TLS ingress,
-avoiding an external registry data path while preserving the public certificate
-and registry host.
+the reusable local seed but writes only to its own Pod UID clone. The
+cache-primary node-local seed is authoritative for ARC Main producers. Zot is
+the authenticated fallback shared with hosted builders. Its traffic resolves
+through cluster TLS ingress while preserving the public certificate and
+registry host.
+
+Every qualified ARC build node owns a local pool, cloner, and pinned BuildKit
+image. The cache-primary Rise-S node has placement tier `primary`; the home
+7950X3D node is `secondary`; KS-6 is `overflow`. These tiers are preferences,
+so node failure or resource pressure immediately exposes the next eligible
+node. Exactly one node carries the cache-primary label, receives the
+Actions-read host verifier credential, and runs Main cache producer jobs.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

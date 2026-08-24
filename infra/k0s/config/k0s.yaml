@@ -11,6 +11,9 @@ spec:
       - 10.201.0.1
     extraArgs:
       encryption-provider-config: /var/lib/k0s/pki/hive-encryption-provider.yaml
+  controllerManager:
+    extraArgs:
+      terminated-pod-gc-threshold: "200"
   network:
     provider: kuberouter
     podCIDR: 10.244.0.0/16

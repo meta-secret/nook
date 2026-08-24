@@ -57,9 +57,9 @@ permissions:
   contents: read
 
 env:
-  # Pull requests restore the trusted Main lineage read-only. Only Main
-  # publishes the shared dependency graph, so parallel PRs cannot evict it.
-  HIVE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache
+  # Pull requests restore trusted Main and publish only quarantined exact-head
+  # graphs. Only Main publishes the shared graph, so parallel PRs cannot evict it.
+  HIVE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache
 
 concurrency:
   group: hive-${{ github.ref }}
@@ -120,7 +120,7 @@ jobs:
         with:
           cache-write: ${{ github.event_name == 'push' && 'true' || 'false' }}
           main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-          isolated-cache-write: "false"
+          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
@@ -145,9 +145,9 @@ jobs:
         run: task hive:verify
 
       - name: Publish verified Hive cache
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max,timeout=15m
+          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache,mode=max,timeout=15m
         run: task hive:cache:publish
 
   verify-hosted:
@@ -160,7 +160,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       neo4j:
-        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        image: registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
         env:
           NEO4J_AUTH: neo4j/hive-integration-password
         ports:
@@ -189,7 +189,7 @@ jobs:
         with:
           cache-write: ${{ github.event_name == 'push' && 'true' || 'false' }}
           main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
-          isolated-cache-write: "false"
+          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
           sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
@@ -210,7 +210,7 @@ jobs:
       - name: Publish verified Hive cache
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:
-          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache,mode=max,timeout=15m
+          HIVE_CACHE_TO: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache,mode=max,timeout=15m
         run: task hive:cache:publish
 
   verify-fork:
@@ -222,7 +222,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       neo4j:
-        image: neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+        image: registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
         env:
           NEO4J_AUTH: neo4j/hive-integration-password
         ports:

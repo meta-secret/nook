@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: hive-workbench-dispatcher
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 2
   strategy:
     type: Recreate
@@ -22,8 +22,8 @@ spec:
         app.kubernetes.io/name: hive-workbench-dispatcher
     spec:
       nodeSelector:
-        nook.nokey.sh/node-role: control-storage
-      runtimeClassName: kata-dragonball
+        nook.nokey.sh/node-role: compute
+      runtimeClassName: kata-qemu-runtime-rs
       automountServiceAccountToken: false
       imagePullSecrets:
         - name: nook-registry
@@ -100,11 +100,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
-            limits:
               cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
           startupProbe:
             exec:
               command:
@@ -137,7 +137,7 @@ spec:
             sizeLimit: 2Mi
         - name: temporary
           emptyDir:
-            sizeLimit: 16Mi
+            sizeLimit: 1Gi
         - name: neo4j-ca
           secret:
             secretName: hive-neo4j-ca

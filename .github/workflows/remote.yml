@@ -34,6 +34,10 @@ on:
         description: Caller correlation nonce for an exact workflow dispatch
         required: false
         type: string
+      runner_label:
+        description: Optional exact ARC runner route for operator smoke validation
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -54,14 +58,15 @@ jobs:
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the private BuildKit worker. The explicit
     # runtime smoke also proves the job-scoped Podman Docker API in Kata.
-    runs-on: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest') }}
+    runs-on: ${{ inputs.runner_label == 'nook-k0s-cache' && (vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || ((inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest')) }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
       REQUESTED_REMOTE_TASK: ${{ inputs.task }}
       REQUESTED_REMOTE_TASKS: ${{ inputs.tasks || inputs.task }}
+      REQUESTED_RUNNER_LABEL: ${{ inputs.runner_label }}
       REQUEST_INCLUDES_HIVE: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'true' || 'false' }}
-      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v1:buildcache' || '' }}
+      HIVE_CACHE_FROM: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache' || '' }}
       HIVE_NEO4J_TEST_URI: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && '127.0.0.1:7687' || '' }}
       HIVE_NEO4J_TEST_USERNAME: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'neo4j' || '' }}
       HIVE_NEO4J_TEST_PASSWORD: ${{ contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,') && 'hive-integration-password' || '' }}
@@ -75,6 +80,20 @@ jobs:
             echo "Set either tasks or task, not both." >&2
             exit 2
           fi
+          case "$REQUESTED_RUNNER_LABEL" in
+            ""|nook-k0s|nook-k0s-cache|nook-k0s-hive) ;;
+            *) echo "Unsupported remote runner label: $REQUESTED_RUNNER_LABEL" >&2; exit 2 ;;
+          esac
+          case "$REQUESTED_RUNNER_LABEL:$REQUESTED_REMOTE_TASKS" in
+            :*) ;;
+            nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:arc:runtime) ;;
+            nook-k0s-cache:arc:runtime) ;;
+            nook-k0s-hive:hive:verify) ;;
+            *)
+              echo "Remote runner label is incompatible with the requested task" >&2
+              exit 2
+              ;;
+          esac
           .github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS"
       - uses: ./.github/actions/nook-docker-setup
         with:
@@ -98,7 +117,7 @@ jobs:
           --env NEO4J_AUTH=neo4j/hive-integration-password
           --publish 127.0.0.1:7474:7474
           --publish 7687:7687
-          neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
+          registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh

@@ -380,14 +380,17 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
         "the internal cache promoter must stay on GitHub-hosted capacity"
     );
     assert!(
-        workflow.contains(
-            "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
-        )
+        workflow.contains("inputs.runner_label == 'nook-k0s-cache' && (vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest')")
+            && workflow.contains("inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')")
+            && workflow.contains("inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest')")
             && workflow.contains(
-            "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime')"
-        ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
-            && workflow.contains("|| 'ubuntu-latest') }}"),
-        "Hive must use its dedicated ARC scale set, while focused preflight, rust:ci, and arc:runtime selections may use the general ARC pool"
+                "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
+            )
+            && workflow.contains(
+                "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime')"
+            ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
+            && workflow.contains("|| 'ubuntu-latest')) }}"),
+        "explicit ARC labels must select their matching scale sets; default Hive and focused general tasks must retain their routed fallbacks"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")

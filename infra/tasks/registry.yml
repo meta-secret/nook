@@ -239,18 +239,18 @@ tasks:
         for _ in $(seq 1 60); do
           code="$(curl -sS -o /dev/null -w '%{http_code}' \
             http://{{.NOOK_REGISTRY_CLUSTER_IP}}:5000/v2/ || true)"
-          if test "$code" = 401; then
+          if test "$code" = 200; then
             break
           fi
           sleep 2
         done
         code="$(curl -sS -o /dev/null -w '%{http_code}' \
           http://{{.NOOK_REGISTRY_CLUSTER_IP}}:5000/v2/ || true)"
-        test "$code" = 401
+        test "$code" = 200
         REMOTE
 
   registry:check:
-    desc: Verify authenticated Zot, ClusterIP Service, and public HTTPS edge.
+    desc: Verify Zot mirror reads, cache authorization, and public HTTPS edge.
     silent: true
     cmds:
       - |
@@ -297,7 +297,7 @@ tasks:
 
         cluster_code="$(curl -sS -o /dev/null -w '%{http_code}' \
           http://{{.NOOK_REGISTRY_CLUSTER_IP}}:5000/v2/)"
-        test "$cluster_code" = 401
+        test "$cluster_code" = 200
         auth_code="$(curl -sS -o /dev/null -w '%{http_code}' \
           -u "$username:$password" \
           http://{{.NOOK_REGISTRY_CLUSTER_IP}}:5000/v2/)"
@@ -305,7 +305,17 @@ tasks:
 
         public_code="$(curl -sS -o /dev/null -w '%{http_code}' \
           "https://$host/v2/")"
-        test "$public_code" = 401
+        test "$public_code" = 200
+        anonymous_private_read="$(curl -sS -o /dev/null -w '%{http_code}' \
+          "https://$host/v2/nook/buildcache/nook-authz-probe/manifests/missing")"
+        test "$anonymous_private_read" = 401
+        anonymous_hive_read="$(curl -sS -o /dev/null -w '%{http_code}' \
+          "https://$host/v2/nook-hive/manifests/missing")"
+        test "$anonymous_hive_read" = 401
+        anonymous_mirror_write="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -X POST \
+          "https://$host/v2/library/nook-authz-probe/blobs/uploads/")"
+        test "$anonymous_mirror_write" = 401
         public_auth="$(curl -sS -o /dev/null -w '%{http_code}' \
           -u "$username:$password" \
           "https://$host/v2/")"

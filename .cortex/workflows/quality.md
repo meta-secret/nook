@@ -170,10 +170,13 @@ Use this workflow for quality, CI, and deployment changes.
     - Delivery does not depend on the daemon's default image store and never restarts Docker.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
-    #### BuildKit cache (Zot)
-    - Private Zot is the authoritative BuildKit cache.
-    - The k0s Zot Pod reserves one CPU and 2 GiB of memory.
-    - It may burst to four CPUs and 8 GiB during parallel cache transfers.
+    #### BuildKit cache
+    - The cache-primary node-local seed is authoritative for ARC Main producers.
+    - Every ARC build node receives the same pool, cloner, verifier, and pinned
+      BuildKit image contract before it becomes schedulable.
+    - Private Zot is the authenticated fallback for hosted jobs and recovery.
+    - The k0s Zot Pod reserves two CPUs and 4 GiB of memory.
+    - It may burst to eight CPUs and 12 GiB during parallel cache transfers.
     - Raise that ceiling only after production telemetry proves Zot is the
       bottleneck.
     - Host-network Traefik reserves 2 GiB for the public registry edge.
@@ -260,16 +263,16 @@ Use this workflow for quality, CI, and deployment changes.
       validated BuildKit seed.
     - Hive PRs may import the trusted Main registry seed when the local clone
       does not already contain the needed graph.
-    - Hive PRs do not export an isolated exact-SHA registry cache. The guarded
-      ARC smoke workflow promotes a validated local seed instead.
+    - Hive PRs export one minimal isolated exact-SHA registry handoff because
+      that handoff is small and has proven fast enough for retries.
     - Main remains the only workflow writer of the shared Hive registry seed.
     - Ecosystem jobs verify with cache-to off, then publish with leaf cache-from
       kept so remote hits re-export without cold apt/toolchain rebuilds.
     - Hosted and Main Native publishers stage
       `docker:ci:cache:publish:rust-base` before deps/source scopes so one Bake
       cannot rewrite apt while cooking chef.
-    - ARC Native publishes each minimal exact-SHA handoff from its verified
-      solve. It must not reconstruct the four graphs in a second publish pass.
+    - ARC Native and ecosystem jobs do not export per-PR Rust target trees.
+      Even `mode=min` can contain a result layer larger than 15 GiB.
     - WASM publishers stage deps-publish and source export before rust-base.
     - Staging rust-base first on WASM imports the shorter parent index and
       orphans local chef cook layers for the next bake.
@@ -333,6 +336,13 @@ Use this workflow for quality, CI, and deployment changes.
     Main seeds crate-a and crate-b in one Dockerfile leaf.
     A PR that edits only crate-b restores crate-a as CACHED.
     It compiles crate-b and the leaf, then replays the exact graph.
+    Scenario Y mirrors Hive's Cargo dependency graph.
+    Main publishes the manifest, vendor, fetch, test-dependency, and
+    Clippy-dependency lineage to Zot.
+    Two concurrent PR sources restore those source-free stages on independent
+    ARC-shaped builders and publish separate exact-head v2 graphs.
+    Fresh builders replay each PR graph without executing the cargo-fetch
+    analogue, and neither PR can consume or overwrite the other's source graph.
 
     #### SeaweedFS sccache
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.
@@ -345,16 +355,20 @@ Use this workflow for quality, CI, and deployment changes.
     - Hosted PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
       into private job-local BuildKit state.
-    - They publish minimal exact-SHA retry handoffs before the disposable state
-      is removed.
+    - They do not publish general exact-SHA handoffs. Concurrent multi-gigabyte
+      result layers would serialize the cluster behind Zot's HDD.
+    - Hive alone keeps a small minimal exact-SHA retry handoff.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow
     - Main serializes native → WASM → web publisher lanes.
-    - Each lane verifies read-only first, then exports its already-solved graph from the same job-scoped builder.
-    - WASM dependencies export alone with no hosted reimport and forced zstd compression.
+    - Cache-primary ARC lanes verify read-only first, then promote the same
+      job-scoped graph into the node-local seed.
+    - Hosted fallback lanes export their verified graph to Zot for cold-node recovery.
+    - Hosted WASM dependency export uses no reimport and forces zstd compression.
     - Browser/UI validation remains read-only and receives no compiler-cache identity.
-    - After UI-demo assertions pass, its lane exports the warm browser graph through a dedicated cache-only publisher.
+    - After UI-demo assertions pass, cache-primary ARC promotes the warm browser
+      graph; hosted fallback uses the dedicated cache-only Zot publisher.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
@@ -421,8 +435,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
-    - Main publishes shared verified Zot BuildKit layers.
-    - Pull requests restore them read-only.
+    - Main ARC producers promote the shared cache-primary node-local seed.
+    - Hosted jobs restore the verified Zot fallback read-only.
 
 11. **GitHub Actions agent execution:**
     - When an iteration is coherent, agents run `task loom:pre-push`, commit,

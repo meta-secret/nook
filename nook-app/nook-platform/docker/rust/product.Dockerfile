@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 # Product Rust/WASM lineage. Dependencies and source leaves stay in this
 # Dockerfile so cache keys use stable internal stages across fresh builders.
@@ -16,7 +16,7 @@ ARG DEBIAN_RELEASE=trixie
 # rust-base digest, which orphans every downstream cargo-chef cook layer in the hosted GHA cache
 # and forces PRs to redownload crates on an otherwise unchanged Cargo.lock.
 ARG RUST_DIGEST=sha256:3382bd20aa942806c533e9a73cd000474fb3ef173f71e684cc9b942675781769
-ARG RUST_IMAGE=rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}
+ARG RUST_IMAGE=registry.dev.nokey.sh/library/rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}
 
 FROM ${RUST_IMAGE} AS rust-base
 

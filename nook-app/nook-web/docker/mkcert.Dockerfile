@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1.7
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.7
 
 ARG DEBIAN_RELEASE=trixie
-FROM debian:${DEBIAN_RELEASE}-slim
+FROM registry.dev.nokey.sh/library/debian:${DEBIAN_RELEASE}-slim
 
 ARG MKCERT_VERSION=1.4.4
 ARG TARGETARCH

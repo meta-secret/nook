@@ -12,22 +12,41 @@ case "$pod_uid" in
     ;;
 esac
 
-request_file="$request_dir/$pod_uid.request"
+request_lane="$request_dir/$pod_uid"
+create_file="$request_dir/.create-$pod_uid"
+create_temp="$request_dir/.creating-$pod_uid.tmp"
+request_file="$request_lane/request"
 request_temp="$request_file.tmp"
-ready_file="$request_dir/$pod_uid.ready"
+ready_file="$request_lane/ready"
 
 test -d "$request_dir"
+umask 077
+trap 'rm -f -- "$create_temp"' EXIT
+printf '%s\n' "$pod_uid" > "$create_temp"
+mv "$create_temp" "$create_file"
+trap - EXIT
+deadline=$(($(date +%s) + 240))
+while ! test -d "$request_lane"; do
+  if test "$(date +%s)" -ge "$deadline"; then
+    echo "Timed out waiting for bounded BuildKit request lane" >&2
+    rm -f "$create_file"
+    exit 1
+  fi
+  sleep 0.2
+done
+test ! -L "$request_lane"
+test "$(stat -c '%F:%u:%g:%a' "$request_lane")" = "directory:0:0:700"
 rm -f "$ready_file"
 printf '%s\n' "$pod_uid" > "$request_temp"
 mv "$request_temp" "$request_file"
 
-for _ in $(seq 1 600); do
+while test "$(date +%s)" -lt "$deadline"; do
   if test -f "$ready_file"; then
     rm -f "$ready_file"
     echo "Prepared private reflinked BuildKit state for Pod $pod_uid"
     exit 0
   fi
-  sleep 0.1
+  sleep 1
 done
 
 echo "Timed out waiting for private BuildKit state for Pod $pod_uid" >&2

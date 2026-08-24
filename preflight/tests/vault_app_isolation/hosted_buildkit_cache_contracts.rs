@@ -269,26 +269,36 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .context("PR full-e2e job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
-            && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust")
-            && pr[rust_verify..rust_publish]
-                .contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:pr:rust")
+            && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED=\"\"")
+            && pr[..rust_publish].contains(
+                "ARC keeps the verified native graph local; Main and sccache remain reusable"
+            )
             && pr[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm_verify < wasm_publish
             && pr[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && pr[..wasm_publish].contains(
+                "ARC keeps the verified WASM graph local; Main and sccache remain reusable"
+            )
             && pr[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && web_verify < web_publish
             && pr[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && pr[..web_publish]
+                .contains("ARC keeps the verified web graph local; Main remains reusable")
             && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo_verify < ui_demo_publish
             && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo[..ui_demo_publish]
+                .contains("ARC keeps the verified browser graph local; Main remains reusable")
             && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo[..ui_demo_publish]
                 .contains("!contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
             && full_e2e_verify < full_e2e_publish
             && full_e2e[full_e2e_verify..full_e2e_publish]
                 .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && full_e2e[..full_e2e_publish]
+                .contains("ARC keeps the verified full-e2e graph local; Main remains reusable")
             && full_e2e[full_e2e_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
-        "hosted PR producers must verify read-only before publishing, while ARC Native must publish minimal handoffs inline without a second solve"
+        "PR producers must verify read-only, keep ARC graphs local, and retain isolated hosted publication"
     );
     Ok(())
 }
@@ -323,7 +333,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task ci:pr:wasm")
         .context("Main WASM job must verify")?;
     let wasm_node = wasm
-        .find("task ci:wasm:node-test")
+        .find("task ci:main:wasm-node-test")
         .context("Main WASM job must run Node tests")?;
     let wasm_publish = wasm
         .find("task ci:main:publish-wasm-cache")
@@ -455,7 +465,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && base_dockerfile.contains("ARG DEBIAN_RELEASE=")
             && base_dockerfile.contains("ARG RUST_DIGEST=sha256:")
             && base_dockerfile
-                .contains("RUST_IMAGE=rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}")
+                .contains("RUST_IMAGE=registry.dev.nokey.sh/library/rust:${RUST_VERSION}-${DEBIAN_RELEASE}@${RUST_DIGEST}")
             && base_dockerfile.contains("FROM ${RUST_IMAGE} AS rust-base")
             && base_dockerfile.contains("FROM rust-base AS chef-deps")
             && base_dockerfile.contains("cargo chef prepare --recipe-path recipe.json")

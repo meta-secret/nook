@@ -87,7 +87,7 @@ esac
     executable(sudoMock);
     const curlMock = {
       path: join(mockBin, "curl"),
-      source: "#!/bin/sh\nprintf '401\\n'\n",
+      source: "#!/bin/sh\nprintf '200\\n'\n",
     };
     executable(curlMock);
     const harness = {

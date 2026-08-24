@@ -122,11 +122,13 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "kubernetes-tools",
         "k0s",
         "k0s-workers",
+        "k0s-worker-mesh",
         "kata",
         "neo4j",
         "registry",
         "arc",
         "arc-operations",
+        "arc-smoke",
         "sccache",
         "hive",
         "hive-queue",
@@ -364,7 +366,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
     );
     assert!(
         manifest.contains(
-            "resources:\n            requests:\n              cpu: \"1\"\n              memory: 2Gi\n            limits:\n              cpu: \"4\"\n              memory: 8Gi"
+            "resources:\n            requests:\n              cpu: \"2\"\n              memory: 4Gi\n            limits:\n              cpu: \"8\"\n              memory: 12Gi"
         ),
         "Zot must reserve capacity and allow enough burst headroom for concurrent BuildKit cache traffic"
     );
@@ -431,7 +433,9 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "jsonpath='{.status.phase}'",
         "Host must not listen on :5000",
         "https://$host/v2/",
-        "test \"$public_code\" = 401",
+        "test \"$public_code\" = 200",
+        "test \"$anonymous_private_read\" = 401",
+        "test \"$anonymous_mirror_write\" = 401",
         "test \"$public_auth\" = 200",
         "test \"$remote_main_write\" = 403",
         "test \"$remote_branch_write\" = 202",

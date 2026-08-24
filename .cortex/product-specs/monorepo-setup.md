@@ -14,7 +14,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
 
 ## 3. Toolchain & Runtime Specs
 
-- **Rust Version**: `1.97` (using digest-pinned `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/product.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
+- **Rust Version**: `1.97` (using the digest-pinned Zot mirror of `rust:1.97-trixie` in `nook-app/nook-platform/docker/rust/product.Dockerfile`; web uses `DEBIAN_RELEASE` in `nook-app/nook-web/docker/web.Dockerfile`).
 - **Bun Version**: `1.3.14`.
 - **Task**: `3.52.0` ([official install script](https://taskfile.dev/docs/installation) → `/usr/local/bin`).
   GitHub Actions `go-task/setup-task` steps must pin this exact version.
@@ -53,8 +53,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     the Kata guest, without Docker run. Both helpers stop with the runner.
   - The general ARC set exposes a job-scoped Podman Docker-compatible API only
     inside each disposable Kata guest for Main runtime and browser jobs.
-  - Fork PRs, Dependabot PRs, release jobs, and non-Main runtime-dependent,
-    browser, WASM, and deployment jobs use ephemeral GitHub-hosted VMs.
+  - Trusted same-repository PR Rust, WASM-build, and WASM-node-test jobs use
+    fresh ARC Kata microVMs. Fork PRs, Dependabot PRs, release jobs, and
+    non-Main browser, deployment, and other runtime-dependent jobs use
+    ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
   - Each fresh ARC guest starts from a private reflink clone of a trusted
     32 GiB BuildKit seed.
@@ -81,7 +83,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     fingerprint when cache recipes are clean.
   - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - **Main owns the shared trusted BuildKit lineage.**
-  - Main exports the Rust, WASM, web, and e2e caches.
+  - Cache-primary ARC Main lanes promote their already-solved private BuildKit
+    state into the node-local copy-on-write seed after verification succeeds.
+  - ARC promotion does not export the full Rust, WASM, web, or e2e builder
+    graphs to Zot.
+  - GitHub-hosted fallback Main lanes export those builder graphs to Zot.
   - Every PR job restores its exact SHA alone when that scope exists.
   - A new native or WASM source scope restores Main source alone when that ref exists.
   - Other new exact scopes restore source-free dependencies and trusted Main.
@@ -104,11 +110,16 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - PR CI deploys native `pr-<number>` aliases for all three isolated projects.
   - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
   - Release extracts production artifacts via `task docker:extract:dist`.
-- **Write tasks emit diffs; `task format` host-applies them.**
-  - Sealed-image format mutates in-container source and prints a `git diff`.
-  - The `task format` entrypoint applies that diff to the host working tree.
-  - Run it unconditionally before every push.
-  - Use `task format:diff` only when you need the raw patch.
+- **`task format` uses one shared tool-only image.**
+  - The content-addressed image contains repository-pinned Rustfmt, Prettier, and
+    Svelte formatting support. Every worktree reuses the same local image.
+  - Rustfmt covers the three Rust workspaces. Prettier touches only files changed
+    from the branch merge base or the current working tree.
+  - The image build context contains only formatter files, never project source.
+  - A warm format never builds an image or installs per-worktree dependencies.
+  - Formatting never compiles products, runs tests, or reads or publishes
+    registry caches.
+  - Run it unconditionally before every push. Product validation remains remote.
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every explicit Main job use the configured ARC scale set.
@@ -154,12 +165,18 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Main-fix web and extension e2e run as independent artifact consumers on separate hosted runners.
   - Each Main-fix consumer builds only the browser image.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
-  - **`main.yml`** serializes the cache-writing native → WASM → web lanes.
-  - Every explicit Main job selects `NOOK_RUNS_ON`, with `ubuntu-latest` only
-    as the configuration fallback.
-  - Each lane verifies, then exports only its already-solved local builder graph.
-  - Export happens only after every lane-specific check succeeds.
-  - The WASM dependency scope keeps its no-import, forced-zstd export.
+  - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
+  - Those trusted Main producers select the cache-primary scale set through
+    `NOOK_CACHE_RUNS_ON`.
+  - Other explicit Main jobs select the general scale set through
+    `NOOK_RUNS_ON`.
+  - Both routes use `ubuntu-latest` only as their configuration fallback.
+  - Each cache-primary ARC lane verifies, then promotes its already-solved
+    local BuildKit state into the node-local seed.
+  - Hosted fallback lanes export only their already-solved builder graphs.
+  - Promotion or hosted export happens only after every lane-specific check succeeds.
+  - The hosted fallback WASM dependency export keeps its no-import,
+    forced-zstd behavior.
   - Later browser/UI consumers remain read-only.
   - Development deploy waits on web verify + web e2e.
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.

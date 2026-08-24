@@ -4,7 +4,7 @@ version: '3'
 # Fixtures live under infra/sim/bake-cache/.
 
 vars:
-  BAKE_CACHE_ZOT_IMAGE: 'ghcr.io/project-zot/zot-linux-amd64@sha256:34f18f783037f967dba10df02f9d4086c4d626f5643ef9f5e51e4a4547280a0b'
+  BAKE_CACHE_ZOT_IMAGE: 'ghcr.io/project-zot/zot-linux-amd64@sha256:95a837a0afacf5b7edc0c92493f04beee6891989b8d2fd50a00cf65a1e6d4fd5'
 
 tasks:
   bake-cache:prove:
@@ -126,6 +126,7 @@ tasks:
             LEAF_EXACT_AVAILABLE="${BAKE_SIM_LEAF_EXACT_AVAILABLE:-}" \
             NESTED_LEAF_EXACT_AVAILABLE="${BAKE_SIM_NESTED_LEAF_EXACT_AVAILABLE:-}" \
             CONSUMER_EXACT_AVAILABLE="${BAKE_SIM_CONSUMER_EXACT_AVAILABLE:-}" \
+            HIVE_EXACT_AVAILABLE="${BAKE_SIM_HIVE_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
             "$docker_bin" buildx bake \
             --progress=plain \
@@ -187,6 +188,9 @@ tasks:
 
         buildkit_cfg="$(mktemp)"
         printf '%s\n' \
+          "[registry.\"docker.io\"]" \
+          "  mirrors = [\"${registry_ref}\"]" \
+          "" \
           "[registry.\"${registry_ref}\"]" \
           "  http = true" \
           "  insecure = true" \
@@ -226,6 +230,9 @@ tasks:
         create_builder "nook-bake-sim-a-${suffix}"
         bake_plain "$proof_log" base-publish
         require_uncached_step "$proof_log" "bake-sim-base-layer"
+        test "$(registry_ref_code \
+          "library/alpine" \
+          "sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b")" = 200
         bake_plain "$proof_log" parent-publish
         require_uncached_step "$proof_log" "bake-sim-parent-expensive"
         # Fat nested parent with bare base (no base cache-from) for Scenario L.
@@ -734,5 +741,83 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-crate-b-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         echo "scenario X ok"
+
+        echo "== Scenario Y: concurrent Hive ARC jobs replay isolated Zot graphs =="
+        # Main publishes the source-free Cargo lineage plus both dependency
+        # branches. A changed PR source must restore cargo fetch and both
+        # branches, publish only its exact-head graph, and replay every stage on
+        # a distinct fresh builder.
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf '%s\n' "$loom_input_orig" >"$loom_input"
+        printf '%s\n' "$crate_a_input_orig" >"$crate_a_input"
+        printf '%s\n' "$crate_b_input_orig" >"$crate_b_input"
+        printf '%s\n' "$leaf_input_orig" >"$leaf_input"
+        BAKE_SIM_CACHE_ENABLED=1
+        BAKE_SIM_CACHE_WRITE_ENABLED=1
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_HIVE_EXACT_AVAILABLE=
+        create_builder "nook-bake-sim-y-main-${suffix}"
+        bake_plain "$proof_log" hive
+        require_uncached_step "$proof_log" "bake-sim-hive-cargo-fetch"
+        require_uncached_step "$proof_log" "bake-sim-hive-test-dependencies"
+        require_uncached_step "$proof_log" "bake-sim-hive-clippy-dependencies"
+        require_registry_ref "nook/buildcache/nook-bake-sim-hive-v2"
+
+        hive_pr_a_source="hive-pr-a-source-edit"
+        hive_pr_a_suffix="-git-6666666666666666666666666666666666666666"
+        hive_pr_b_source="hive-pr-b-source-edit"
+        hive_pr_b_suffix="-git-5555555555555555555555555555555555555555"
+
+        printf '%s\n' "$hive_pr_a_source" >"$leaf_input"
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=1
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$hive_pr_a_suffix"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-hive-v2${hive_pr_a_suffix}"
+        create_builder "nook-bake-sim-y-pr-a-producer-${suffix}"
+        bake_plain "$proof_log" hive
+        require_cached_step "$proof_log" "bake-sim-hive-cargo-fetch"
+        require_cached_step "$proof_log" "bake-sim-hive-test-dependencies"
+        require_cached_step "$proof_log" "bake-sim-hive-clippy-dependencies"
+        require_uncached_step "$proof_log" "bake-sim-hive-test-source"
+        require_uncached_step "$proof_log" "bake-sim-hive-clippy-source"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-hive-v2${hive_pr_a_suffix}"
+
+        # A concurrent PR gets only its own absent exact ref plus trusted Main.
+        # PR A's source graph remains present but cannot satisfy PR B.
+        printf '%s\n' "$hive_pr_b_source" >"$leaf_input"
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$hive_pr_b_suffix"
+        require_no_registry_ref "nook/remote-buildcache/nook-bake-sim-hive-v2${hive_pr_b_suffix}"
+        create_builder "nook-bake-sim-y-pr-b-producer-${suffix}"
+        bake_plain "$proof_log" hive
+        require_cached_step "$proof_log" "bake-sim-hive-cargo-fetch"
+        require_cached_step "$proof_log" "bake-sim-hive-test-dependencies"
+        require_cached_step "$proof_log" "bake-sim-hive-clippy-dependencies"
+        require_uncached_step "$proof_log" "bake-sim-hive-test-source"
+        require_uncached_step "$proof_log" "bake-sim-hive-clippy-source"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-hive-v2${hive_pr_a_suffix}"
+        require_registry_ref "nook/remote-buildcache/nook-bake-sim-hive-v2${hive_pr_b_suffix}"
+
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_HIVE_EXACT_AVAILABLE=1
+        printf '%s\n' "$hive_pr_a_source" >"$leaf_input"
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$hive_pr_a_suffix"
+        create_builder "nook-bake-sim-y-pr-a-retry-${suffix}"
+        bake_plain "$proof_log" hive
+        require_cached_step "$proof_log" "bake-sim-hive-cargo-fetch"
+        require_cached_step "$proof_log" "bake-sim-hive-test-dependencies"
+        require_cached_step "$proof_log" "bake-sim-hive-clippy-dependencies"
+        require_cached_step "$proof_log" "bake-sim-hive-test-source"
+        require_cached_step "$proof_log" "bake-sim-hive-clippy-source"
+
+        printf '%s\n' "$hive_pr_b_source" >"$leaf_input"
+        BAKE_SIM_CACHE_SCOPE_SUFFIX="$hive_pr_b_suffix"
+        create_builder "nook-bake-sim-y-pr-b-retry-${suffix}"
+        bake_plain "$proof_log" hive
+        require_cached_step "$proof_log" "bake-sim-hive-cargo-fetch"
+        require_cached_step "$proof_log" "bake-sim-hive-test-dependencies"
+        require_cached_step "$proof_log" "bake-sim-hive-clippy-dependencies"
+        require_cached_step "$proof_log" "bake-sim-hive-test-source"
+        require_cached_step "$proof_log" "bake-sim-hive-clippy-source"
+        echo "scenario Y ok"
 
         echo "bake-cache runtime proof passed"

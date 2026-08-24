@@ -20,8 +20,14 @@ dispatcher_deployment = load_yaml.call("infra/k0s/manifests/hive/dispatcher.yaml
 observer_deployment = load_yaml.call("infra/k0s/manifests/hive/observer.yaml")
 reaper_deployment = load_yaml.call("infra/k0s/manifests/hive/reaper-controller.yaml")
 pod = deployment.fetch("spec").fetch("template").fetch("spec")
-raise "Hive must keep four warm workers" unless deployment.dig("spec", "replicas") == 4
-raise "Hive must use Kata Dragonball" unless pod["runtimeClassName"] == "kata-dragonball"
+unless [deployment, dispatcher_deployment, observer_deployment, reaper_deployment]
+       .all? { |manifest| manifest.dig("spec", "replicas").zero? }
+  raise "Hive must remain paused until duplicate repair orchestration is corrected"
+end
+unless pod["runtimeClassName"] == "kata-dragonball" &&
+       pod.dig("nodeSelector", "nook.nokey.sh/node-role") == "compute"
+  raise "Hive must use Kata Dragonball on the qualified compute tier"
+end
 raise "Hive must disable automatic service-account tokens" unless pod["automountServiceAccountToken"] == false
 unless pod["serviceAccountName"] == "hive-auth-persistence"
   raise "Hive Pod identity must only persist rotated authentication"
@@ -147,18 +153,21 @@ unless worker.dig("readinessProbe", "exec", "command") ==
        ["test", "-f", "/workspace/.hive-worker-ready"]
   raise "Hive readiness does not prove broker and Neo4j registration"
 end
-unless dispatcher_deployment.dig("spec", "replicas") == 1 &&
-       dispatcher_deployment.dig("spec", "template", "spec", "runtimeClassName") ==
-       "kata-dragonball" &&
+unless dispatcher_deployment.dig("spec", "template", "spec", "runtimeClassName") ==
+       "kata-qemu-runtime-rs" &&
+       dispatcher_deployment.dig("spec", "template", "spec", "nodeSelector",
+                                 "nook.nokey.sh/node-role") == "compute" &&
+       dispatcher_deployment.dig("spec", "template", "spec", "volumes")
+         .find { |volume| volume["name"] == "temporary" }
+         .dig("emptyDir", "sizeLimit") == "1Gi" &&
        dispatcher_deployment.dig("spec", "template", "spec", "automountServiceAccountToken") ==
        false
-  raise "Hive Workbench dispatcher must remain one token-free Kata replica"
+  raise "Hive Workbench dispatcher must remain token-free on Kata QEMU compute"
 end
 observer_pod = observer_deployment.dig("spec", "template", "spec")
-unless observer_deployment.dig("spec", "replicas") == 1 &&
-       observer_pod["automountServiceAccountToken"] == false &&
+unless observer_pod["automountServiceAccountToken"] == false &&
        observer_pod["runtimeClassName"].nil?
-  raise "Hive observer must remain one token-free infrastructure replica"
+  raise "Hive observer must remain token-free infrastructure"
 end
 observer = observer_pod.fetch("containers")
   .find { |container| container["name"] == "observer" }
@@ -366,6 +375,28 @@ end
 unless zot_config.dig("http", "compat") == ["docker2s2"]
   raise "Zot must preserve Docker Schema 2 manifests and digests"
 end
+zot_mirror = zot_config.dig("extensions", "sync", "registries")&.find do |registry|
+  registry["urls"] == ["https://index.docker.io"]
+end
+unless zot_config.dig("extensions", "sync", "enable") == true &&
+       zot_mirror&.fetch("onDemand") == true &&
+       zot_mirror&.fetch("tlsVerify") == true &&
+       zot_mirror&.fetch("preserveDigest") == true
+  raise "Zot must be the digest-preserving on-demand Docker Hub mirror"
+end
+unless zot_config.dig(
+  "http", "accessControl", "repositories", "**", "anonymousPolicy"
+) == ["read"]
+  raise "Public upstream images must be readable through Zot without runner credentials"
+end
+unless zot_config.dig(
+  "http", "accessControl", "repositories", "nook-hive", "policies"
+)&.any? do |policy|
+  policy["users"] == ["__NOOK_REGISTRY_USERNAME__"] &&
+    policy["actions"]&.sort == %w[create delete read update]
+end
+  raise "Private Hive images must not inherit anonymous mirror access"
+end
 zot_pv = zot_resource.call("PersistentVolume", "nook-zot-data")
 unless zot_pv.dig("spec", "persistentVolumeReclaimPolicy") == "Retain" &&
        zot_pv.dig("spec", "local", "path") == "/var/lib/hive/zot"
@@ -451,10 +482,22 @@ unless seccomp_profile["defaultAction"] == "SCMP_ACT_ERRNO" &&
        !allowed_syscalls.include?("bpf") &&
        !allowed_syscalls.include?("perf_event_open") &&
        kata_guest_seccomp_task&.include?("disable_guest_seccomp = false") &&
+       kata_guest_seccomp_task&.include?("katacontainers.io/kata-runtime=true") &&
+       kata_guest_seccomp_task&.include?("control-storage") &&
+       kata_guest_seccomp_task&.include?("Deferred guest seccomp on offline Kata node") &&
+       kata_guest_seccomp_task&.include?('-J "$controller_target"') &&
        hive_deploy_task&.include?("task: kata:guest-seccomp:enable") &&
        hive_deploy_task&.include?("task: hive:seccomp:install") &&
-       hive_seccomp_task&.include?("/var/lib/k0s/kubelet/seccomp/nook")
+       hive_seccomp_task&.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
+       hive_seccomp_task&.include?("nook.nokey.sh/node-role=compute") &&
+       hive_seccomp_task&.include?("No compute nodes require the Hive seccomp profile yet") &&
+       hive_seccomp_task&.include?("Deferred Hive seccomp on offline compute node") &&
+       hive_seccomp_task&.include?('-J "$controller_target"')
   raise "Hive deploy must install its deny-by-default Bubblewrap seccomp profile"
+end
+unless hive_deploy_task&.include?('if test "$desired_hive_replicas" = 0; then') &&
+       hive_deploy_task&.include?("Hive workloads are intentionally paused at zero replicas")
+  raise "Paused Hive deployment must not wait for or inspect live workers"
 end
 kubernetes_tools_task = infra_taskfile.match(
   /^  kubernetes:tools:install:\n(?<body>.*?)(?=^  kubernetes:tools:status:)/m
@@ -816,6 +859,9 @@ unless hive_taskfile.include?("--target cache-publish") &&
        hive_dockerfile.include?("hive-clippy-dependencies") &&
        hive_taskfile.include?('HIVE_CACHE_TO')
   raise "Hive cache publication must export release and parallel verification dependency graphs"
+end
+unless hive_dockerfile.include?("ENV CARGO_BUILD_JOBS=2")
+  raise "Hive parallel Cargo branches must fit the ARC CPU and memory envelope"
 end
 unless hive_taskfile.scan('command+=(--cache-from "$HIVE_CACHE_SEED_FROM")').length == 4
   raise "Hive verification must restore its git-scoped Remote cache before trusted Main fallback"

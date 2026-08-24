@@ -20,7 +20,7 @@ trap cleanup EXIT
 mkdir -p "$shared_dir"
 
 printf '%s\n' \
-  'FROM docker.io/library/alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1' \
+  'FROM registry.dev.nokey.sh/library/alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1' \
   'RUN printf "%s\n" "arc-runtime-ok" > /nook-arc-runtime' |
   docker buildx build --load --tag "$image" -
 

@@ -156,8 +156,11 @@ maintenance-only.
 - Every PR job restores Main's complete lineage plus any existing PR remote-buildcache scope.
 - Hosted PR jobs and local Task Bake export only isolated remote-buildcache refs.
 - Trusted ARC PR jobs reuse their full private node-local BuildKit state.
-- They publish a minimal exact-SHA registry handoff so retries remain reusable
-  after the disposable VM state is removed.
+- They do not export general Rust target trees to Zot. Even minimal result
+  layers can exceed 15 GiB and concurrent uploads overload the registry HDD.
+- They restore Main's registry lineage and reuse compiler objects through
+  SeaweedFS sccache.
+- Hive retains a small minimal exact-SHA handoff for fast retries.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -265,11 +268,20 @@ maintenance-only.
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
-- ARC keeps Zot as the authoritative cache and also starts each fresh Kata guest
-  from a private reflink clone of a trusted 32 GiB BuildKit seed.
+- ARC starts each fresh Kata guest from a private reflink clone of a trusted
+  32 GiB BuildKit seed.
+- A credential-free sidecar forwards a Pod-scoped candidate. The authenticated
+  host verifier promotes local state only after the exact Main runner job
+  reaches a final `success` conclusion.
+- Main cache-producing jobs are serialized. Their authenticated promotion
+  intents live in a host-private runtime directory. They block the next producer
+  clone until the preceding generation is promoted. A cache-primary node
+  selector keeps that lineage on one local seed.
+- Hosted fallback publication keeps Zot as the cross-node bootstrap source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
-  so ARC remains daemon-free and the helpers stop with the runner.
+  so ARC remains daemon-free and the helpers stop with the runner. Hive keeps
+  its independent Zot cache publication because its workflow may overlap Main.
 - Registry transfer time and local snapshot materialization time are separate
   performance dimensions.
 - A manifest lookup proves index availability. It does not prove that a fresh
@@ -291,7 +303,9 @@ maintenance-only.
 - Main alone refreshes shared refs under `nook/buildcache/**`.
 - Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
 - Trusted ARC PR jobs read Main and exact-SHA refs.
-- They may write only minimal exact-SHA refs under `nook/remote-buildcache/**`.
+- General trusted ARC PR jobs do not write registry cache refs.
+- Trusted Hive ARC jobs may write only their minimal exact-SHA ref under
+  `nook/remote-buildcache/**`.
 - Their fresh Kata guests start from the private node-local COW seed.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
@@ -319,10 +333,13 @@ maintenance-only.
 
 ---
 
-## 10. Sealed-Image Consequences
+## 10. Execution Consequences
 
 - **Diff emission:** Source-sealed images emit `git diff` outputs instead of directly mutating host files.
-- **`task format` host application:** The agent/developer entrypoint runs sealed format and unconditionally applies the unified diff to the working tree before commit/push.
+- **`task format` host application:** The agent/developer entrypoint runs one
+  content-addressed, tool-only Docker image shared by all worktrees. The image
+  formats the mounted working tree but must never contain project source,
+  compile products, run tests, or use registry-cache paths.
 - **`dist` hand-off:** CI deploys isolated `dist/site`, Simple, and Sentinel artifacts to respective Cloudflare Pages branch aliases.
 
 ---

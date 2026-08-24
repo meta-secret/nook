@@ -22,36 +22,445 @@ fn read_fallible(path: &str) -> anyhow::Result<String> {
         .with_context(|| format!("failed to read {path}"))
 }
 
+fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
+    let mut dockerfiles = Vec::new();
+    let mut pending = vec![directory];
+
+    while let Some(path) = pending.pop() {
+        for entry in fs::read_dir(&path)
+            .unwrap_or_else(|error| panic!("failed to inventory {}: {error}", path.display()))
+        {
+            let entry = entry.expect("repository entry must be readable");
+            let path = entry.path();
+            if path.is_dir() {
+                let relative = path
+                    .strip_prefix(repository_root())
+                    .expect("repository entries must stay beneath the root");
+                let directory_name = path.file_name().expect("directory must have a name");
+                if matches!(
+                    directory_name.to_str(),
+                    Some(".git" | "target" | "node_modules")
+                ) || relative == std::path::Path::new("infra/sim/bake-cache")
+                {
+                    continue;
+                }
+                pending.push(path);
+            } else if path
+                .file_name()
+                .is_some_and(|name| name.to_string_lossy().contains("Dockerfile"))
+            {
+                dockerfiles.push(path);
+            }
+        }
+    }
+
+    dockerfiles
+}
+
 #[test]
-fn arc_smoke_refreshes_the_current_sandbox_before_persisting_teardown_state() -> anyhow::Result<()>
-{
-    let tasks = read("infra/tasks/arc.yml");
+fn arc_buildkit_resolves_docker_hub_only_through_zot() {
+    let dockerfile = read("infra/k0s/images/arc-buildkit/Dockerfile");
+    let config = read("infra/k0s/images/arc-buildkit/buildkitd.toml");
+
+    assert!(dockerfile.contains("COPY buildkitd.toml /etc/buildkit/buildkitd.toml"));
+    assert_eq!(
+        config,
+        "[registry.\"docker.io\"]\n  mirrors = [\"registry.dev.nokey.sh\"]\n"
+    );
+    assert!(!config.contains("registry-1.docker.io"));
+
+    let proof = read("infra/tasks/bake-cache.yml");
+    let zot = read("infra/sim/bake-cache/zot-config.json");
+    let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
+    assert!(proof.contains("mirrors = [\\\"${registry_ref}\\\"]"));
+    assert!(proof.contains("library/alpine"));
+    assert!(zot.contains("\"onDemand\": true"));
+    assert!(zot.contains("\"preserveDigest\": true"));
+    assert!(hive_values.contains("registry.dev.nokey.sh/library/neo4j:"));
+}
+
+#[test]
+fn production_dockerfiles_never_resolve_docker_hub_directly() {
+    for path in production_dockerfiles(repository_root()) {
+        let relative = path
+            .strip_prefix(repository_root())
+            .expect("Dockerfile must stay beneath the repository root");
+        let path = relative.to_string_lossy();
+        let dockerfile = read(&path);
+        let mut image_arguments = std::collections::HashMap::new();
+        let mut stages = std::collections::HashSet::new();
+
+        for line in dockerfile.lines().map(str::trim) {
+            if let Some(frontend) = line.strip_prefix("# syntax=") {
+                assert!(
+                    frontend.starts_with("registry.dev.nokey.sh/"),
+                    "{path} resolves its Dockerfile frontend outside Zot: {frontend}"
+                );
+            }
+            if let Some(argument) = line.strip_prefix("ARG ")
+                && let Some((name, value)) = argument.split_once('=')
+            {
+                image_arguments.insert(name, value);
+            }
+            let Some(from) = line.strip_prefix("FROM ") else {
+                continue;
+            };
+            let mut tokens = from.split_whitespace();
+            let reference = tokens
+                .find(|token| !token.starts_with("--"))
+                .expect("FROM must contain an image or prior stage");
+            let resolved = reference
+                .strip_prefix("${")
+                .and_then(|name| name.strip_suffix('}'))
+                .map_or(reference, |name| {
+                    image_arguments
+                        .get(name)
+                        .copied()
+                        .unwrap_or_else(|| panic!("{path} has no default for FROM ${{{name}}}"))
+                });
+            assert!(
+                resolved == "scratch"
+                    || stages.contains(reference)
+                    || matches!(reference, "rust-base" | "web-base")
+                    || resolved.starts_with("registry.dev.nokey.sh/"),
+                "{path} resolves a production base outside Zot: {resolved}"
+            );
+            let remainder: Vec<_> = tokens.collect();
+            if remainder.len() >= 2 && remainder[remainder.len() - 2].eq_ignore_ascii_case("AS") {
+                stages.insert(remainder[remainder.len() - 1]);
+            }
+        }
+    }
+}
+
+#[test]
+fn arc_smoke_retains_the_observed_sandbox_before_persisting_teardown_state() -> anyhow::Result<()> {
+    let tasks = read("infra/tasks/arc-smoke.yml");
     let completion = tasks
         .split("if test \"$status\" = completed; then")
         .nth(1)
         .and_then(|tail| tail.split("discovered_runner=\"$(").next())
         .context("ARC smoke must define its completed-run branch")?;
-    let refresh = completion
-        .find("completion_sandbox_id=\"$(")
-        .context("ARC smoke completion must refresh the current sandbox")?;
-    let identity_check = completion
-        .find("test \"$completion_sandbox_id\" != \"$runner_sandbox_id\"")
-        .context("ARC smoke completion must reject a changed sandbox")?;
+    let retention_check = completion
+        .find("test -z \"$runner_state_retained\"")
+        .context("ARC smoke completion must require retained BuildKit state")?;
     let persist = completion
-        .find("\"$run_id\" \"$runner_uid\" \"$runner_sandbox_id\" > \"$state_file\"")
+        .find("\"$run_id\" \"$runner_uid\" \"$runner_sandbox_id\" \"$build_target\" > \"$state_file\"")
         .context("ARC smoke completion must persist teardown state")?;
+    let completion_recheck = completion
+        .find("completed_sandbox=\"$(find_sandbox \"$runner_uid\")\"")
+        .context("ARC smoke completion must recheck the current Kata sandbox")?;
 
     assert!(
-        completion.contains("lost its current Kata sandbox before teardown tracking")
-            && completion.contains("invalid or ambiguous current Kata sandbox")
-            && completion.contains("changed Kata sandboxes before teardown tracking"),
-        "ARC smoke completion must fail closed on missing, ambiguous, or changed sandboxes"
+        tasks.contains("$pool_dir/runtime/$pod_uid.retain")
+            && tasks.contains("runner_state_retained=1"),
+        "ARC smoke must retain the observed BuildKit state while the runner is active"
     );
     assert!(
-        refresh < identity_check && identity_check < persist,
-        "ARC smoke must refresh and verify the current sandbox before persisting teardown state"
+        retention_check < completion_recheck && completion_recheck < persist,
+        "ARC smoke must require retained state and recheck its current sandbox before persisting teardown authority"
     );
     Ok(())
+}
+
+#[test]
+fn arc_smoke_discards_the_job_and_bounded_request_lane() -> anyhow::Result<()> {
+    let tasks = read("infra/tasks/arc-smoke.yml");
+    let validate_request = tasks
+        .find("btrfs subvolume show \"$request_lane\"")
+        .context("ARC smoke teardown must validate its bounded request lane")?;
+    let delete_job = tasks
+        .find("btrfs subvolume delete \"$job_dir\"")
+        .context("ARC smoke teardown must delete retained job state")?;
+    let delete_request = tasks
+        .find("btrfs subvolume delete \"$request_lane\"")
+        .context("ARC smoke teardown must delete the request lane and its qgroup")?;
+    let delete_intent = tasks
+        .find("\"$intent_dir/$pod_uid.intent\"")
+        .context("ARC smoke teardown must delete promotion intent state")?;
+
+    assert!(
+        validate_request < delete_request
+            && delete_request < delete_job
+            && delete_job < delete_intent,
+        "ARC smoke must preserve the job recovery index until the request lane is deleted"
+    );
+    Ok(())
+}
+
+#[test]
+fn arc_cloner_reaps_only_inactive_aged_orphan_request_lanes() {
+    let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
+    let reaper = cloner
+        .split("prune_orphan_request_lanes() {")
+        .nth(1)
+        .and_then(|tail| tail.split("\n}\n").next())
+        .expect("ARC cloner must define orphan request-lane cleanup");
+
+    for guard in [
+        "request_lane_valid",
+        "test ! -e \"$request_lane/request\"",
+        "test ! -e \"$jobs_dir/$pod_uid\"",
+        "find \"$request_lane\" -mmin +5",
+        "test ! -e \"$pod_root/$pod_uid\"",
+        "io.kubernetes.pod.uid",
+        "sandbox_marker=\"$runtime_dir/$pod_uid.sandbox\"",
+        "k0s ctr --namespace k8s.io tasks list -q",
+        "containerd-shim-kata-v2*\" -id $sandbox_id \"",
+    ] {
+        assert!(
+            reaper.contains(guard),
+            "orphan-lane reaper is missing: {guard}"
+        );
+    }
+    assert!(cloner.contains("record_sandbox_id \"$pod_uid\""));
+    assert!(reaper.contains("delete_request_lane \"$request_lane\""));
+    assert!(!reaper.contains("*containerd-shim-kata-v2*) continue 2"));
+}
+
+#[test]
+fn arc_promotion_and_mesh_reconciliation_fail_closed() {
+    let cloner = read("infra/k0s/scripts/arc-buildkit-cloner");
+    let services = read("infra/tasks/host-services.yml");
+    let workers = read("infra/tasks/k0s-workers.yml");
+    let worker_mesh = read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
+    let claim = cloner
+        .find("claim_untrusted_marker \"$candidate\" \"$candidate_claim\" 256")
+        .expect("promotion candidates must be copied into host-private storage safely");
+    let read_claim = cloner
+        .find("candidate_value=\"$(tr -d '\\r\\n' < \"$candidate_claim\")\"")
+        .expect("promotion verification must read the host-private claim");
+
+    assert!(
+        claim < read_claim,
+        "candidate content must be claimed before reading"
+    );
+    for marker in ["$create", "$candidate", "$request"] {
+        assert!(
+            cloner.contains(&format!("remove_untrusted_path \"{marker}\"")),
+            "guest-controlled marker cleanup must accept arbitrary path types: {marker}"
+        );
+        assert!(
+            !cloner.contains(&format!("rm -f -- \"{marker}\"")),
+            "guest-controlled markers must not use file-only cleanup: {marker}"
+        );
+    }
+    assert!(
+        cloner.contains("pod_is_cache_primary_runner") && cloner.contains("arc-cache-runner"),
+        "only cache-primary runner Pods may request seed promotion"
+    );
+    assert!(
+        cloner.contains("publish_ready_marker \"$pod_uid\" \"$ready_file\"")
+            && !cloner.contains("touch \"$ready_file\""),
+        "host ready publication must replace rather than follow guest-controlled paths"
+    );
+    for contract in [
+        "iflag=nofollow,nonblock,count_bytes",
+        "timeout 1 dd",
+        "create-claim",
+        "request_dir\"/*.request",
+        "request-claim",
+    ] {
+        assert!(
+            cloner.contains(contract),
+            "untrusted and legacy marker handling is missing: {contract}"
+        );
+    }
+    assert!(
+        workers.contains("worker_pod_cidr=\"$(sudo -n k0s kubectl get node")
+            && workers.contains("AllowedIPs = $allowed_ips"),
+        "peer reconciliation must preserve the registered worker Pod CIDR"
+    );
+    assert!(
+        worker_mesh.contains("AllowedIPs = $address/32,$pod_cidr")
+            && worker_mesh.contains("migrate_legacy_controller_peers")
+            && worker_mesh.contains("/etc/wireguard/nook-peers/$address.conf")
+            && worker_mesh.contains("sudo -n wg syncconf wg-nook")
+            && worker_mesh.contains("ip route replace \"$controller_pod_cidr\" dev wg-nook")
+            && worker_mesh.contains("ip route replace \"$pod_cidr\" dev wg-nook")
+            && worker_mesh.contains("Deferred offline worker")
+            && worker_mesh.contains("Deferred offline roaming worker")
+            && worker_mesh.contains("ssh_host=\"${ssh_target#*@}\"")
+            && worker_mesh.contains("comment \"nook k0s worker wireguard\"")
+            && worker_mesh.contains("nook.nokey.sh/mesh=pending:NoSchedule")
+            && worker_mesh.contains("nook.nokey.sh/mesh:NoSchedule-")
+            && worker_mesh.contains("nft --json list chain ip filter INPUT")
+            && worker_mesh.contains("Authenticated direct worker mesh is healthy"),
+        "compute nodes must receive direct authenticated routes to every worker Pod CIDR"
+    );
+    assert!(
+        !worker_mesh.contains("$0 ~ \"ip saddr \" controller_ip"),
+        "mesh reconciliation must delete only comment-owned firewall rules"
+    );
+    assert!(
+        workers.contains("WireGuard key already belongs to a legacy peer")
+            && workers.contains("belongs to a legacy WireGuard peer")
+            && workers.contains("persisted_matches")
+            && workers.contains("refusing colliding partial legacy inventory"),
+        "worker admission must reject collisions and resume partial legacy migration"
+    );
+    let empty_worker_check = worker_mesh
+        .find("if test \"$(printf '%s' \"$compute_nodes\" | jq '.items | length')\" = 0")
+        .expect("mesh reconciliation must detect an empty compute tier");
+    let controller_key = worker_mesh
+        .find("controller_public_key=\"$(sudo -n cat /etc/wireguard/nook-public.key)\"")
+        .expect("mesh reconciliation must read the controller WireGuard key");
+    let peer_verification = worker_mesh
+        .find("ping -c 1 -W 3 '$target_address'")
+        .expect("reachable workers must verify direct peer connectivity");
+    let taint_all = worker_mesh
+        .find("set_mesh_pending \"$node_name\"\ndone <<<\"$workers\"")
+        .expect("all workers must become unschedulable before reconciliation");
+    let connection_preflight = worker_mesh
+        .find("-o ConnectTimeout=5")
+        .expect("workers must be checked before configuration");
+    let clear_pending = worker_mesh
+        .rfind("clear_mesh_pending \"$node_name\"")
+        .expect("verified workers must become schedulable");
+    assert!(empty_worker_check < controller_key);
+    assert!(taint_all < connection_preflight);
+    assert!(peer_verification < clear_pending);
+    let install = services
+        .find("- task: k0s:install")
+        .expect("standard deployment must install k0s");
+    let standard_reconcile = services
+        .find("- task: k0s:worker-mesh:reconcile")
+        .expect("standard deployment must reconcile the direct worker mesh");
+    let standard_arc = services
+        .find("- task: arc:deploy")
+        .expect("standard deployment must install ARC");
+    assert!(install < standard_reconcile && standard_reconcile < standard_arc);
+    let reconcile = workers
+        .find("task: k0s:worker-mesh:reconcile")
+        .expect("worker deployment must reconcile the direct worker mesh");
+    let qualify = workers
+        .find("task: kata:install")
+        .expect("worker deployment must qualify Kata");
+    assert!(
+        reconcile < qualify,
+        "the direct worker mesh must converge before Kata and ARC qualification"
+    );
+}
+
+#[test]
+fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
+    let values = read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
+    let controller_values = read("infra/k0s/manifests/arc/controller-values.yaml");
+    let tasks = read("infra/tasks/arc.yml");
+
+    for contract in [
+        "topologySpreadConstraints:",
+        "maxSkew: 3",
+        "topologyKey: kubernetes.io/hostname",
+        "whenUnsatisfiable: ScheduleAnyway",
+        "nodeAffinityPolicy: Honor",
+        "nodeTaintsPolicy: Honor",
+        "nook.nokey.sh/arc-spread-group: general",
+        "preferredDuringSchedulingIgnoredDuringExecution:",
+        "values: [primary]",
+        "values: [secondary]",
+        "values: [overflow]",
+    ] {
+        assert!(
+            values.contains(contract),
+            "ARC spreading is missing: {contract}"
+        );
+    }
+    assert!(
+        hive_values.contains("nook.nokey.sh/arc-spread-group\"] = \"hive\"")
+            && hive_values.contains("topologySpreadConstraints"),
+        "Hive ARC must own an independent hostname-spread group"
+    );
+    for contract in [
+        "arc:controller-build:prepare:",
+        "nook.nokey.sh/arc-build=preparing:NoSchedule",
+        "nook.nokey.sh/arc-tier=overflow",
+        "nook.nokey.sh/ssh-target=$controller_ssh_user@$internal_ip",
+        "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}",
+        "arc:cache-primary:preserve:",
+        "Preserved legacy ARC cache primary $legacy_primary",
+        "arc:build-hosts:activate:",
+        "nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true",
+        "ARC cache-primary node $node is unreachable",
+        "Deferred offline non-primary ARC node",
+        "select(.type == \"InternalIP\")",
+        "test \"$host\" != \"$internal_ip\"",
+        "SSH host does not match its Kubernetes InternalIP",
+    ] {
+        assert!(
+            tasks.contains(contract),
+            "KS-6 ARC qualification is missing: {contract}"
+        );
+    }
+    let preserve = tasks
+        .find("- task: arc:cache-primary:preserve")
+        .expect("ARC deployment must preserve a sole legacy primary");
+    let prepare = tasks
+        .find("- task: arc:controller-build:prepare")
+        .expect("ARC deployment must prepare the controller build node");
+    let cache_primary = tasks
+        .find("- task: arc:cache-primary:ensure")
+        .expect("ARC deployment must select its cache primary");
+    let pool = tasks
+        .find("- task: arc:cache:pool:sync")
+        .expect("ARC deployment must converge every build-node pool");
+    let scale_sets_ready = tasks
+        .find("ARC scale sets are dispatch-ready")
+        .expect("ARC deployment must wait for every scale set");
+    let activate = tasks
+        .rfind("- task: arc:build-hosts:activate")
+        .expect("ARC deployment must activate every converged build node");
+    assert!(
+        preserve < prepare
+            && prepare < cache_primary
+            && cache_primary < pool
+            && pool < scale_sets_ready
+            && scale_sets_ready < activate,
+        "legacy selection and recovered-node activation must bracket ARC convergence"
+    );
+    for contract in [
+        "tolerations:",
+        "key: nook.nokey.sh/arc-build",
+        "value: preparing",
+        "effect: NoSchedule",
+    ] {
+        assert!(
+            controller_values.contains(contract) && values.contains(contract),
+            "ARC control pods must tolerate build preparation: {contract}"
+        );
+    }
+}
+
+#[test]
+fn hive_dispatcher_avoids_dragonball_network_churn_and_bounds_terminal_pods() {
+    let workers = read("infra/k0s/manifests/hive/deployment.yaml");
+    let dispatcher = read("infra/k0s/manifests/hive/dispatcher.yaml");
+    let observer = read("infra/k0s/manifests/hive/observer.yaml");
+    let reaper = read("infra/k0s/manifests/hive/reaper-controller.yaml");
+    let k0s = read("infra/k0s/config/k0s.yaml");
+
+    for manifest in [&workers, &dispatcher, &observer, &reaper] {
+        assert!(
+            manifest.contains("replicas: 0"),
+            "Hive must remain paused until duplicate repair orchestration is corrected"
+        );
+    }
+    assert!(
+        workers.contains("runtimeClassName: kata-dragonball")
+            && workers.contains("nook.nokey.sh/node-role: compute"),
+        "Hive workers must keep their private sidecar channel inside Dragonball compute VMs"
+    );
+    assert!(
+        dispatcher.contains("runtimeClassName: kata-qemu-runtime-rs")
+            && dispatcher.contains("nook.nokey.sh/node-role: compute")
+            && dispatcher.contains("sizeLimit: 1Gi"),
+        "the persistent Hive dispatcher must use QEMU Kata on the compute tier with enough bounded checkout space"
+    );
+    assert!(
+        k0s.contains("terminated-pod-gc-threshold: \"200\""),
+        "k0s must bound retained terminal Pods for operational diagnosis"
+    );
 }
 
 #[test]

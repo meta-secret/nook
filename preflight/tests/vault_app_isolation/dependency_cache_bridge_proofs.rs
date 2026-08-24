@@ -221,11 +221,17 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
         "      - name: Publish verified WASM BuildKit cache\n",
     );
     let pr_node = section(&pr, "  wasm-node-test:\n", "  verify:\n");
+    let ci_tasks = read(&root, "nook-app/ci/Taskfile.yml");
     assert!(
-        main_node.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+        main_node.contains("task ci:main:wasm-node-test")
+            && !main_node.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ci_tasks.contains("ci:main:wasm-node-test:")
+            && ci_tasks.contains("GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test")
+            && ci_tasks.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test")
             && pr_node.contains("isolated-cache-write: \"true\"")
-            && pr_node.contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
-        "trusted Main must seed the Node scope and PR Node jobs must publish only their exact head"
+            && pr_node.contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:wasm:node-test")
+            && pr_node.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test"),
+        "trusted Main and hosted PR fallback must retain publication without exporting WASM Node graphs from ARC"
     );
     Ok(())
 }

@@ -370,7 +370,9 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
     assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
     assert!(hive.contains("runs-on: nook-k0s-hive"));
-    assert!(hive.contains("isolated-cache-write: \"false\""));
+    assert!(hive.contains(
+        "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+    ));
     assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
     Ok(())
 }
