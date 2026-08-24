@@ -165,7 +165,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Each browser solve is read-only.
 - The successful UI-demo lane publishes the warm browser-image graph.
 - 90-day artifact + 10 largest recordings on the merged PR's Linear issue.
-- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e.
+- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
+  the fresh Zot hydration proof.
 
 **`main-build-stats.yml`**
 
