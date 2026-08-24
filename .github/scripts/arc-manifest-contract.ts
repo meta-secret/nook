@@ -190,7 +190,6 @@ runners.requireAll([
   "weight: 1",
   "values: [overflow]",
   "maxSkew: 5",
-  "topologyKey: kubernetes.io/hostname",
   "whenUnsatisfiable: DoNotSchedule",
   "nodeAffinityPolicy: Honor",
   "nodeTaintsPolicy: Honor",
@@ -745,8 +744,9 @@ hiveWorkflow.count(bunSetupCount);
 hiveNeo4jWait.require("http://127.0.0.1:7474/db/neo4j/tx/commit");
 hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");
-registryTasks.require('"readTimeout": "15m"');
+registryTasks.require('"readTimeout": "15m",\n        "writeTimeout": "15m"');
 tasks.require('if test "$expanded_seed" != true; then');
+tasks.require('seed_lock="$pool_mount/.seed.lock"');
 tasks.require("- task: arc:buildkit:image:sync\n      - task: arc:cache:pool:sync");
 
 enum RunnerPlacement {

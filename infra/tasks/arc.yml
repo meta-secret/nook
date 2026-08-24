@@ -698,6 +698,9 @@ tasks:
         sudo -n install -d -m 0755 "$pool_mount/seed" "$pool_mount/jobs"
         sudo -n install -d -m 0700 "$pool_mount/requests"
         sudo -n chmod 0700 "$pool_mount/requests"
+        seed_lock="$pool_mount/.seed.lock"
+        exec 9> "$seed_lock"
+        flock -x 9
         seed_file="$pool_mount/seed/buildkit.ext4"
         if ! sudo -n test -f "$seed_file"; then
           seed_temp="$pool_mount/seed/buildkit.ext4.tmp"
@@ -754,6 +757,8 @@ tasks:
         reflink_probe="$pool_mount/seed/.reflink-probe"
         sudo -n cp --reflink=always --sparse=auto "$seed_file" "$reflink_probe"
         sudo -n rm -f "$reflink_probe"
+        flock -u 9
+        exec 9>&-
 
         sudo -n install -m 0755 \
           "$remote_dir/infra/k0s/scripts/arc-buildkit-cloner" \

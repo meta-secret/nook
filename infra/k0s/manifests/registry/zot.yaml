@@ -39,7 +39,7 @@ data:
         "port": "5000",
         "compat": ["docker2s2"],
         "readTimeout": "15m",
-        "writeTimeout": "5m",
+        "writeTimeout": "15m",
         "auth": {
           "htpasswd": {
             "path": "/etc/zot/htpasswd"
