@@ -193,6 +193,7 @@ buildkit.requireAll([
   "nook.nokey.sh/arc-build: \"true\"",
   "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
   "--oci-worker-gc-keepstorage",
+  "--oci-worker-no-process-sandbox",
   'cpu: "4"',
   "memory: 8Gi",
   "memory: 48Gi",
@@ -208,7 +209,6 @@ buildkit.count({
 buildkit.forbidAll([
   "runtimeClassName:",
   "privileged: true",
-  "--oci-worker-no-process-sandbox",
   "docker.sock",
   "containerd.sock",
 ]);

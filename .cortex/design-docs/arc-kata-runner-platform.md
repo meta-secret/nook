@@ -90,9 +90,16 @@ Each replica uses:
 - a 4 CPU request without a CPU limit; and
 - an 8 GiB memory request with a 48 GiB limit.
 
-Rootless BuildKit keeps its normal OCI process sandbox. The deployment must not
-use `--oci-worker-no-process-sandbox`, because concurrent jobs share a daemon
-and must not gain ptrace or signal access to another solve's processes.
+Rootless BuildKit uses `--oci-worker-no-process-sandbox`. An unprivileged
+Kubernetes Pod cannot mount the nested `/proc` required by BuildKit's normal
+OCI process sandbox. A production build probe must execute a `RUN` vertex;
+daemon startup alone does not prove this mode works.
+
+This means concurrent solves on one shard do not have a process-isolation
+boundary. Only trusted same-repository jobs may use these scale sets. Fork,
+Dependabot, and other untrusted jobs remain on GitHub-hosted runners. Build
+publication refs and credentials remain job scoped, but they are not a sandbox
+for hostile build instructions.
 
 The manifest and deployment currently own exactly three qualified build nodes:
 Rise-S, Home, and KS-6. Adding a fourth node requires adding its retained PV and

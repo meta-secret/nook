@@ -15,6 +15,10 @@ This directory owns Nook's stateful server infrastructure:
   shard. The node-local Service keeps a runner on its selected shard. There is
   no Docker daemon, Podman, DinD, Sysbox, host runtime socket, runner host path,
   privileged runner, or Kata runtime.
+- Rootless BuildKit uses its required no-process-sandbox mode because ordinary
+  unprivileged Pods cannot mount the nested `/proc` used by the OCI sandbox.
+  Therefore only trusted same-repository jobs use ARC. Fork and Dependabot jobs
+  remain hosted.
 - The general `nook-k0s` set permits 25 concurrent jobs. The dedicated
   `nook-k0s-hive` set permits ten. Hive adds pinned Neo4j and non-root Trixie
   test-runtime sidecars.

@@ -161,6 +161,10 @@ spec:
             - tcp://0.0.0.0:1234
             - --config
             - /etc/buildkit/buildkitd.toml
+            # Rootless OCI execution inside an unprivileged Kubernetes Pod
+            # cannot mount a second /proc. This mode is limited to trusted
+            # same-repository jobs; forks and Dependabot stay hosted.
+            - --oci-worker-no-process-sandbox
             - --oci-worker-gc
             - --oci-worker-gc-keepstorage
             - "56000"
