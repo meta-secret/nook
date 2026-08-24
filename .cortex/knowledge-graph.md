@@ -850,6 +850,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
     - [Log fields](workflows/ci-operations.md#log-fields)
   - [Agent implement (Workbench issue / manual prompt)](workflows/ci-operations.md#agent-implement-workbench-issue--manual-prompt)
     - [Agent implement triggers](workflows/ci-operations.md#agent-implement-triggers)
+  - [Agent execution policy](workflows/ci-operations.md#agent-execution-policy)
   - [Agent checklist when touching CI or e2e](workflows/ci-operations.md#agent-checklist-when-touching-ci-or-e2e)
 - [Review Request Workflow](workflows/code-review.md)
   - [Overview](workflows/code-review.md#overview)

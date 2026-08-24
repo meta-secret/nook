@@ -263,6 +263,8 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
     );
     assert!(
         worker_mesh.contains("AllowedIPs = $address/32,$pod_cidr")
+            && worker_mesh.contains("migrate_legacy_controller_peers")
+            && worker_mesh.contains("/etc/wireguard/nook-peers/$address.conf")
             && worker_mesh.contains("sudo -n wg syncconf wg-nook")
             && worker_mesh.contains("ip route replace \"$controller_pod_cidr\" dev wg-nook")
             && worker_mesh.contains("ip route replace \"$pod_cidr\" dev wg-nook")
@@ -276,6 +278,11 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
             && worker_mesh.contains("nft --json list chain ip filter INPUT")
             && worker_mesh.contains("Authenticated direct worker mesh is healthy"),
         "compute nodes must receive direct authenticated routes to every worker Pod CIDR"
+    );
+    assert!(
+        workers.contains("WireGuard key already belongs to a legacy peer")
+            && workers.contains("belongs to a legacy WireGuard peer"),
+        "worker admission must reject legacy WireGuard key and address collisions"
     );
     let empty_worker_check = worker_mesh
         .find("if test \"$(printf '%s' \"$compute_nodes\" | jq '.items | length')\" = 0")

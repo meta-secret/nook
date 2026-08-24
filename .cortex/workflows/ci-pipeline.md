@@ -991,23 +991,6 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Extension metadata, ZIP, and checksum verification adds an attempt-specific exact-commit query to every mutable artifact URL and retries convergence on PR, main, and release.
 - This prevents a fresh metadata response from being paired with an older edge-cached archive that reused the same channel filename.
 
-**Agent execution rules:**
-
-- GitHub Actions is both the agent build/test environment and the sole merge validation pipeline.
-- A coherent experiment must be formatted, committed, and pushed before `task remote` dispatches it.
-- Complete `pr.yml` validation starts only when `task pr:validate` toggles a validation label.
-- Local Docker product execution is not the agent path.
-- Agents do not run Task mirrors (`task check`, `task ci:pr`, builds, tests, or e2e) locally.
-- Interactive development servers and browser sessions remain local when their persistent state is intrinsic to the investigation.
-
-**Agent efficiency rules:**
-
-1. **Before product validation:** run `task loom:pre-push`, commit, and push the exact head.
-2. **Focused hosted iteration:** batch compatible tasks or dispatch parallel runners.
-3. **After remote failure:** read test output and application logs, fix, rerun
-   pre-push, and push. Repeat the complete gate only for the final replacement.
-4. **Complete gate only when ready:** run `task pr:validate`; pushes do not
-   refresh that gate automatically.
-
 ## CI operator and agent operations
-[CI Operator and Agent Operations](ci-operations.md) owns cleanup, logs, secrets, providers, and automation agents.
+[CI Operator and Agent Operations](ci-operations.md) owns cleanup, logs,
+secrets, providers, automation agents, and the remote-only execution rules.

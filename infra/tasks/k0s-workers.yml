@@ -98,6 +98,31 @@ tasks:
         worker_node_name="$3"
         peer_file="/etc/wireguard/nook-peers/$worker_mesh_address.conf"
         sudo -n install -d -m 0700 /etc/wireguard/nook-peers
+        if sudo -n test -s /etc/wireguard/wg-nook.conf; then
+          while IFS=$'\t' read -r legacy_public_key legacy_allowed_ips; do
+            test -n "$legacy_public_key" || continue
+            owns_address=false
+            while IFS= read -r legacy_allowed_ip; do
+              if test "$legacy_allowed_ip" = "$worker_mesh_address/32"; then
+                owns_address=true
+              fi
+            done < <(printf '%s' "$legacy_allowed_ips" | tr -d ' ' | tr ',' '\n')
+            if test "$legacy_public_key" = "$worker_public_key" &&
+               test "$owns_address" != true; then
+              echo "k0s mesh: WireGuard key already belongs to a legacy peer" >&2
+              exit 2
+            fi
+            if test "$legacy_public_key" != "$worker_public_key" &&
+               test "$owns_address" = true; then
+              echo "k0s mesh: $worker_mesh_address belongs to a legacy WireGuard peer" >&2
+              exit 2
+            fi
+          done < <(sudo -n awk '
+            /^\[Peer\]$/ { key = ""; allowed = "" }
+            /^PublicKey = / { key = substr($0, 13) }
+            /^AllowedIPs = / { allowed = substr($0, 14); if (key != "") print key "\t" allowed }
+          ' /etc/wireguard/wg-nook.conf)
+        fi
         while IFS= read -r persisted_peer; do
           test "$persisted_peer" != "$peer_file" || continue
           persisted_public_key="$(sudo -n sed -n 's/^PublicKey = //p' "$persisted_peer")"

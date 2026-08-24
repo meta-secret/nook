@@ -213,6 +213,19 @@ final Workbench completion update. Agent secrets:
 `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
 [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 
+## Agent execution policy
+
+- GitHub Actions is the agent build/test environment and sole merge-validation
+  pipeline.
+- Format, commit, and push a coherent change before dispatching `task remote`.
+- `task pr:validate` explicitly starts complete PR validation; an ordinary push
+  does not refresh that gate.
+- Agents do not run local Task mirrors of builds, tests, checks, or e2e. They
+  inspect remote failures, fix them, and rerun focused remote jobs before the
+  final complete gate.
+- Interactive development servers and browser sessions may remain local when
+  their persistent state is intrinsic to the investigation.
+
 ## Agent checklist when touching CI or e2e
 
 1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.

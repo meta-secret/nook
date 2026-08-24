@@ -20,8 +20,9 @@ This directory owns Nook's stateful server infrastructure:
   Task-managed Btrfs pool. There is no full-size copy at runner startup. There
   is no Docker daemon, DinD, Sysbox, shared builder, or host runtime socket.
   The runner container cannot mount the pool or another job's writable state.
-  No runners stay warm: ARC creates one fresh microVM per job. Both `nook-k0s`
-  and the dedicated `nook-k0s-hive` set permit ten concurrent jobs. Hive adds
+  No runners stay warm: ARC creates one fresh microVM per job. The general
+  `nook-k0s` set permits 25 concurrent jobs; the dedicated `nook-k0s-hive` set
+  permits ten. Hive adds
   pinned Neo4j and non-root Trixie test-runtime native sidecars. Kubernetes
   prefers Rise-S, then the home 7950X3D node, then KS-6 for both pools. Soft
   hostname spreading preserves burst capacity and failover. It stops both
