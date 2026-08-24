@@ -701,6 +701,7 @@ tasks:
         seed_lock="$pool_mount/.seed.lock"
         # Keep one inode shared with the root cloner while allowing the
         # authorized deployment account to hold the same advisory lock.
+        sudo -n setfacl -m "u:$(id -u):--x" "$pool_root"
         sudo -n touch "$seed_lock"
         sudo -n chown "$(id -u):$(id -g)" "$seed_lock"
         sudo -n chmod 0600 "$seed_lock"

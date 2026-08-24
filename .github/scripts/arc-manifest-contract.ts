@@ -745,7 +745,7 @@ hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");
 registryTasks.require('"readTimeout": "15m",\n        "writeTimeout": "15m"');
 tasks.require('if test "$expanded_seed" != true; then');
-tasks.require('seed_lock="$pool_mount/.seed.lock"');
+tasks.require('setfacl -m "u:$(id -u):--x" "$pool_root"');
 tasks.require('sudo -n chown "$(id -u):$(id -g)" "$seed_lock"');
 tasks.require('e2fsck -f -p "$loop_device"');
 tasks.require("- task: arc:buildkit:image:sync\n      - task: arc:cache:pool:sync");
