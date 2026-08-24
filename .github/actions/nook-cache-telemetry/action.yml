@@ -9,12 +9,20 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        node_bin="$(command -v node || true)"
+        if [ -z "$node_bin" ] && [ -x /home/runner/externals/node24/bin/node ]; then
+          node_bin=/home/runner/externals/node24/bin/node
+        fi
+        if [ -z "$node_bin" ]; then
+          echo "Actions Node.js runtime is unavailable; skipping cache telemetry."
+          exit 0
+        fi
         baseline="${NOOK_CACHE_TELEMETRY_BASELINE:-$RUNNER_TEMP/nook-cache-telemetry-baseline.json}"
         if [ ! -f "$baseline" ]; then
-          node .github/scripts/cache-telemetry.cjs start --output "$baseline"
+          "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
         fi
         output="$RUNNER_TEMP/nook-cache-telemetry/$GITHUB_JOB.json"
-        node .github/scripts/cache-telemetry.cjs collect \
+        "$node_bin" .github/scripts/cache-telemetry.cjs collect \
           --baseline "$baseline" \
           --output "$output"
 

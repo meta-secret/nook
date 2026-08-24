@@ -359,10 +359,14 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if ! command -v node >/dev/null 2>&1; then
-          echo "Host Node.js is unavailable; skipping cache telemetry on this runner."
+        node_bin="$(command -v node || true)"
+        if [ -z "$node_bin" ] && [ -x /home/runner/externals/node24/bin/node ]; then
+          node_bin=/home/runner/externals/node24/bin/node
+        fi
+        if [ -z "$node_bin" ]; then
+          echo "Actions Node.js runtime is unavailable; skipping cache telemetry on this runner."
           exit 0
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
-        node .github/scripts/cache-telemetry.cjs start --output "$baseline"
+        "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"
