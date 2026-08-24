@@ -919,7 +919,7 @@ tasks:
         for scale_set in nook-k0s nook-k0s-cache nook-k0s-hive; do
           arc_ready=false
           ready_samples=0
-          for _ in $(seq 1 120); do
+          for _ in $(seq 1 360); do
             phase="$(
               kubectl get autoscalingrunnerset "$scale_set" \
                 --namespace arc-runners \
@@ -956,7 +956,7 @@ tasks:
             sleep 5
           done
           if test "$arc_ready" != true; then
-            echo "ARC scale set $scale_set did not become dispatch-ready within 10 minutes" >&2
+            echo "ARC scale set $scale_set did not become dispatch-ready within 30 minutes" >&2
             kubectl get autoscalingrunnerset,ephemeralrunnerset \
               --namespace arc-runners -o wide >&2 || true
             kubectl get autoscalinglistener,pods \
