@@ -179,9 +179,12 @@ template:
             cpu: "1"
             memory: 4Gi
             ephemeral-storage: 4Gi
+          # Kata/QEMU and virtiofs can account the same guest-backed pages in
+          # the Pod cgroup more than once. Keep enough host-cgroup headroom
+          # for a real 4 GiB Rust build without killing the whole microVM.
           limits:
             cpu: "4"
-            memory: 6Gi
+            memory: 10Gi
             ephemeral-storage: 48Gi
       - name: request-buildkit-promotion
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
@@ -399,7 +402,7 @@ template:
             ephemeral-storage: 25Gi
           limits:
             cpu: "2"
-            memory: 1Gi
+            memory: 2Gi
             ephemeral-storage: 100Gi
     volumes:
       - name: work

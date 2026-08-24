@@ -11,7 +11,7 @@ This directory owns Nook's stateful server infrastructure:
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - Pinned Actions Runner Controller scale sets run focused and opted-in trusted
-  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 4 GiB microVM
+  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each microVM
   carries Docker client tooling and its own privileged BuildKit sidecar on Pod
   loopback. Its overlayfs builder state uses a private 48 GiB ext4 image.
   General runners also give Podman a sparse, private 24 GiB ext4 image so its
@@ -135,6 +135,13 @@ Actions-read host verifier credential, and runs Main cache producer jobs.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.
+
+The BuildKit container requests 4 GiB and may use 10 GiB; the runner requests
+1 GiB and may use 2 GiB. The larger limit is deliberate: QEMU and virtiofs can
+charge guest-backed pages more than once to the Pod cgroup. The scheduler still
+uses requests, so Rise-S admits at most eight ARC microVMs from its 16 logical
+CPUs while a memory-heavy Rust solve has enough cgroup headroom to avoid killing
+the whole VM.
 
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 

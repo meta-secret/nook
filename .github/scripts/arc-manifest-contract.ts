@@ -177,7 +177,7 @@ runners.requireAll([
   'requests:\n            cpu: "1"\n            memory: 4Gi',
   "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
   "requests:\n            cpu: 500m\n            memory: 1Gi",
-  'limits:\n            cpu: "2"\n            memory: 1Gi',
+  'limits:\n            cpu: "2"\n            memory: 2Gi',
   "runAsNonRoot: true",
   "listenerTemplate:\n  spec:\n    nodeSelector:\n      nook.nokey.sh/node-role: control-storage\n    tolerations:",
   "runtimeClassName: kata-qemu-runtime-rs",
@@ -198,7 +198,7 @@ runners.requireAll([
   "- overlayfs",
   "localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1",
   "imagePullPolicy: Never",
-  'limits:\n            cpu: "4"\n            memory: 6Gi',
+  'limits:\n            cpu: "4"\n            memory: 10Gi',
   'limits:\n            cpu: "4"\n            memory: 2Gi',
   '- "36000"',
   'value: "51539607552"',
@@ -276,7 +276,7 @@ requiredLimit({
   containers: generalSidecars,
   name: "buildkit",
   cpu: "4",
-  memory: "6Gi",
+  memory: "10Gi",
 });
 requiredLimit({
   containers: generalSidecars,
@@ -288,7 +288,7 @@ requiredLimit({
   containers: generalContainers,
   name: "runner",
   cpu: "2",
-  memory: "1Gi",
+  memory: "2Gi",
 });
 requiredLimit({
   containers: new Map(
@@ -426,7 +426,6 @@ runtimeSmoke.forbid(
 );
 tasks.forbidAll([
   "import yaml",
-  "e2fsck",
   "gh auth token",
   "task remote TASK_NAME=preflight",
   "docker-in-docker",
@@ -747,6 +746,7 @@ runners.forbid("docker-in-docker");
 registryTasks.require('"readTimeout": "15m",\n        "writeTimeout": "15m"');
 tasks.require('if test "$expanded_seed" != true; then');
 tasks.require('seed_lock="$pool_mount/.seed.lock"');
+tasks.require('e2fsck -f -p "$loop_device"');
 tasks.require("- task: arc:buildkit:image:sync\n      - task: arc:cache:pool:sync");
 
 enum RunnerPlacement {

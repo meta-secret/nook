@@ -177,7 +177,15 @@ tainted or unavailable node leaves the eligible topology, so work can continue
 on the remaining nodes. Hive keeps an independent Zot publication path because
 its workflow may overlap Main.
 
-The one-time 32-to-48 GiB seed migration retains an unresizable prior seed as
+Each runner requests two logical CPUs in aggregate, including Kata overhead,
+so the 16-thread Rise-S schedules at most eight runner microVMs. BuildKit may
+use 10 GiB and the runner may use 2 GiB. Those limits intentionally exceed the
+4 GiB compiler execution budget because QEMU and virtiofs can double-account
+guest-backed pages in the host Pod cgroup; smaller limits can kill QEMU while
+the node itself still has free memory.
+
+The one-time 32-to-48 GiB seed migration preens the offline ext4 filesystem
+before resizing it. It retains an unresizable prior seed as
 `buildkit.ext4.pre-48g` and starts with an empty 48 GiB seed. Keep that backup
 until a successful cache-primary promotion establishes a healthy new lineage.
 An operator may then remove only that named backup after confirming no loop

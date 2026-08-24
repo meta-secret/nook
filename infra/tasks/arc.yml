@@ -727,6 +727,15 @@ tasks:
         loop_device="$(sudo -n losetup --find --show "$seed_file")"
         cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
         trap cleanup_loop EXIT
+        # A cloned BuildKit filesystem can be clean while still requiring a
+        # preen pass before resize2fs. Accept only clean or safely corrected
+        # states; anything requiring interactive repair still fails closed.
+        fsck_status=0
+        sudo -n e2fsck -f -p "$loop_device" >/dev/null || fsck_status=$?
+        if test "$fsck_status" -gt 1; then
+          echo "ARC BuildKit seed requires unsafe filesystem repair" >&2
+          exit 1
+        fi
         if sudo -n resize2fs "$loop_device"; then
           cleanup_loop
           trap - EXIT
