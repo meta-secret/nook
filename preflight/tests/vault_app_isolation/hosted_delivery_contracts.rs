@@ -81,9 +81,9 @@ fn assert_docker_setup_contract(root: &Path) {
         "[ \"$event_name\" != \"push\" ] || [ \"$git_ref\" != \"refs/heads/main\" ]",
         "main-cache-only",
         "main-cache-only requires cache-write=false",
-        "Verify ARC container runtime",
-        "tcp://127.0.0.1:2375",
-        "docker info >/dev/null",
+        "Connect ARC Buildx to the node-local BuildKit shard",
+        "--driver remote",
+        "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ] {
         assert!(
             setup.contains(required),
@@ -124,13 +124,13 @@ fn assert_docker_setup_contract(root: &Path) {
         "delivery setup must login to registry.dev.nokey.sh and must not reconfigure or restart Docker"
     );
     for required in [
-        "name: container-runtime",
-        "quay.io/podman/stable:v5.8.4@sha256:",
-        "- /usr/bin/podman\n              - --url\n              - tcp://127.0.0.1:2375\n              - info",
-        "name: NOOK_CONTAINER_RUNTIME",
-        "value: podman",
-        "value: tcp://127.0.0.1:2375",
-        "sizeLimit: 24Gi",
+        "automountServiceAccountToken: false",
+        "name: install-docker-client",
+        "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
+        "name: NOOK_BUILDKIT_REMOTE",
+        "name: NOOK_BUILDKIT_ADDR",
+        "value: tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        "sizeLimit: 32Gi",
     ] {
         assert!(
             arc_values.contains(required),
@@ -143,6 +143,10 @@ fn assert_docker_setup_contract(root: &Path) {
         "docker.sock",
         "containerd.sock",
         "sysbox",
+        "podman",
+        "runtimeClassName:",
+        "privileged: true",
+        "hostPath:",
     ] {
         assert!(
             !arc_values.contains(prohibited),
