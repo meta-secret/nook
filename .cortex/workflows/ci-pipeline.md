@@ -844,7 +844,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   persistent rootless BuildKit shard on the selected node.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
 - Main's clean-room cache proof uses that hosted builder after ARC publication.
-  It forces snapshot hydration and exports only a small marker.
+  It enters a marker stage in the same Rust Dockerfile and context lineage as
+  the publisher, requires the dependency compiler vertices to be `CACHED`,
+  forces snapshot hydration, and exports only a small marker. A proof built by
+  wrapping the dependency target as a named context is invalid because that
+  changes BuildKit cache-key identity.
 - Hosted placements restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.

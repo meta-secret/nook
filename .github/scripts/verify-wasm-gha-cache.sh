@@ -22,7 +22,7 @@ bake_args=(
   --set "*.args.SCCACHE_S3_MODE=$sccache_mode"
   --set "*.args.SCCACHE_ENDPOINT=$sccache_endpoint"
   --set "*.args.SCCACHE_BUCKET=$sccache_bucket"
-  --set "builder-wasm-deps-restore.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
+  --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
 )
 
 require_cached_step() {

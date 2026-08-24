@@ -255,7 +255,7 @@ tasks.requireAll([
   '"$legacy_image_next"',
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
-mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 4 });
+mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
   "name: Fresh WASM cache restore proof",
@@ -264,6 +264,8 @@ mainWorkflow.requireAll([
   "web-e2e:",
   "extension-e2e:",
   "ui-demos:",
+  "deploy:",
+  "This lane still invokes the sealed image through Docker",
   "This lane runs a browser container and therefore needs a general runtime.",
 ]);
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);

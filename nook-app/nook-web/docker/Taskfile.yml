@@ -222,7 +222,11 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
+        web_output="";
+        if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+          web_output="--set nook-web-ci.output=type=cacheonly";
+        fi;
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} $web_output --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
       - task: registry-cache:publish:web
 
   docker:ci:web:e2e:build:
