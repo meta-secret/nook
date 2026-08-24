@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-repo_root="$(git rev-parse --show-toplevel)"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 script="$repo_root/.github/scripts/verify-wasm-gha-cache.sh"
 fixture="$(mktemp -d)"
 trap 'rm -rf "$fixture"' EXIT
