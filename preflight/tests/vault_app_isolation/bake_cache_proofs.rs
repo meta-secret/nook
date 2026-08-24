@@ -664,7 +664,7 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
     );
     assert!(
         workflow.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
-            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v1")
+            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
             && workflow.matches("Publish verified Hive cache").count() == 2
             && workflow.contains("verify-hosted:")
             && workflow.contains("Connect hosted BuildKit cache")
