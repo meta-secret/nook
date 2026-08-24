@@ -645,9 +645,10 @@ run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
 The authenticated Zot registry in [`infra/`](infra/) publishes the exact Hive
-worker image and BuildKit cache manifests. ARC jobs and their private microVM
-builders run on the same k0s node, so cache traffic avoids an external data path
-while retaining the public TLS registry identity. Details:
+worker image and BuildKit cache manifests. ARC jobs connect to the persistent
+rootless BuildKit shard on the same k0s node, so warm solves avoid an external
+data path while retaining the public TLS registry identity for portable cache
+fallback. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

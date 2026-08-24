@@ -805,8 +805,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Main serializes native, WASM, and web producer lanes so they advance one
   verified default-branch lineage.
-- Cache-primary ARC jobs verify read-only first and promote the same warm
-  builder into the node-local seed.
+- ARC jobs reuse the persistent BuildKit content store on their selected node.
+- Verified Main jobs publish portable shared cache refs after successful solves.
 - Hosted fallback jobs export their verified graph to Zot for cold-node recovery.
 - `task docker:extract:coverage` remains a copy-only path that invokes neither BuildKit nor Rust tests.
 - It also serves workflows that already have a sealed `nook-web:local` image, including main's commit-keyed coverage artifact.

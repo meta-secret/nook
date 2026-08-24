@@ -276,10 +276,28 @@ tasks:
             -J "$controller_target" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
         pool_root=/var/lib/nook-arc-buildkit
+        state_dir="$pool_root/state"
         legacy_pool="$pool_root/pool"
         legacy_image="$pool_root/pool.btrfs"
         legacy_image_next="$pool_root/pool.btrfs.next"
         legacy_mount_unit="$(systemd-escape --path --suffix=mount "$legacy_pool")"
+        sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
+        filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
+        available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
+        state_bytes="$(sudo -n du -s -B1 "$state_dir" | awk '{ print $1 }')"
+        legacy_bytes=0
+        for legacy_path in "$legacy_image" "$legacy_image_next"; do
+          if sudo -n test -e "$legacy_path"; then
+            path_bytes="$(sudo -n du -s -B1 "$legacy_path" | awk '{ print $1 }')"
+            legacy_bytes=$((legacy_bytes + path_bytes))
+          fi
+        done
+        usable_bytes=$((available_bytes + state_bytes + legacy_bytes))
+        test "$filesystem_bytes" -ge 68719476736
+        if test "$usable_bytes" -lt 68719476736; then
+          echo "ARC BuildKit storage needs 64 GiB of free, retained-state, or reclaimable legacy bytes" >&2
+          exit 1
+        fi
         sudo -n systemctl disable --now nook-arc-buildkit-cloner.service \
           >/dev/null 2>&1 || true
         sudo -n systemctl disable --now "$legacy_mount_unit" \
@@ -299,14 +317,11 @@ tasks:
           "$legacy_image_next"
         sudo -n rmdir "$legacy_pool" 2>/dev/null || true
         sudo -n systemctl daemon-reload
-        state_dir=/var/lib/nook-arc-buildkit/state
-        sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         test "$(sudo -n stat -c %u "$state_dir")" = 1000
         test "$(sudo -n stat -c %g "$state_dir")" = 1000
-        filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
-        test "$filesystem_bytes" -ge 68719476736
-        test "$available_bytes" -ge 68719476736
+        state_bytes="$(sudo -n du -s -B1 "$state_dir" | awk '{ print $1 }')"
+        test "$((available_bytes + state_bytes))" -ge 68719476736
         REMOTE
         done < "$targets_file"
         BASH
@@ -365,6 +380,7 @@ tasks:
     desc: Install ARC runners and one persistent rootless BuildKit shard per build node.
     silent: true
     cmds:
+      - task: arc:auth:sync
       - task: arc:controller-build:prepare
       - task: arc:build-host:resolve
       - task: arc:buildkit:storage:prepare
@@ -416,6 +432,11 @@ tasks:
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/network-policy.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
+        config_hash="$(kubectl get configmap nook-buildkit \
+          --namespace arc-runners -o json | jq -cS '.data' | sha256sum | awk '{ print $1 }')"
+        kubectl patch statefulset/nook-buildkit --namespace arc-runners \
+          --type merge \
+          -p "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"nook.nokey.sh/buildkit-config-sha256\":\"$config_hash\"}}}}}"
         kubectl rollout status statefulset/nook-buildkit \
           --namespace arc-runners --timeout=10m
         ready_nodes="$(kubectl get pods --namespace arc-runners \

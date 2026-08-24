@@ -284,7 +284,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(
         pull_request_workflow.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
     );
-    assert!(tasks.contains("test \"$available_bytes\" -ge 68719476736"));
+    assert!(tasks.contains("usable_bytes=$((available_bytes + state_bytes + legacy_bytes))"));
+    assert!(tasks.contains("test \"$((available_bytes + state_bytes))\" -ge 68719476736"));
+    assert!(tasks.contains("- task: arc:auth:sync"));
+    assert!(tasks.contains("nook.nokey.sh/buildkit-config-sha256"));
     assert!(tasks.contains("ARC requires exactly three build hosts"));
     assert!(tasks.contains("expected_build_nodes"));
     assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));

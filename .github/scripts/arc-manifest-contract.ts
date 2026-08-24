@@ -247,7 +247,10 @@ tasks.requireAll([
   "helm uninstall nook-k0s-cache",
   "ARC requires exactly three build hosts",
   "expected_build_nodes",
-  'test "$available_bytes" -ge 68719476736',
+  "usable_bytes=$((available_bytes + state_bytes + legacy_bytes))",
+  'test "$((available_bytes + state_bytes))" -ge 68719476736',
+  "- task: arc:auth:sync",
+  "nook.nokey.sh/buildkit-config-sha256",
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
 ]);

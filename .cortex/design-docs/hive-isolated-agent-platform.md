@@ -74,8 +74,8 @@ flowchart TB
     end
 
     subgraph compute["Preferred NVMe compute nodes"]
-      arc["Ephemeral ARC runner Pods (Kata QEMU)"]
-      buildkit["Per-job BuildKit + reflink cache"]
+      arc["Ephemeral ordinary ARC runner Pods"]
+      buildkit["Persistent node-local rootless BuildKit"]
     end
   end
 
@@ -101,9 +101,10 @@ and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
 qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
 select those nodes. They enforce a maximum hostname skew of five, then use the
 primary, secondary, and overflow tiers to assign the extra slots. Container
-CPU requests provide the aggregate capacity boundary across scale sets. The
-Each ARC build node owns one persistent BuildKit shard. Node and Pod traffic crosses an authenticated
-WireGuard mesh on `10.202.0.0/24`. Each worker address has one owner. Before
+CPU requests provide the aggregate capacity boundary across scale sets. Each
+ARC build node owns one persistent BuildKit shard. Node and Pod traffic crosses
+an authenticated WireGuard mesh on `10.202.0.0/24`. Each worker address has one
+owner. Before
 mutating a controller peer, deployment verifies that any persisted peer key
 and Kubernetes `InternalIP` assignment identify that same worker. Address collisions fail
 closed. The Kubernetes API retains its stable `10.201.0.1` address.
