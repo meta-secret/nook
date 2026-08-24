@@ -148,14 +148,14 @@ template:
           - overlayfs
           - --oci-worker-gc
           - --oci-worker-gc-keepstorage
-          - "24000"
+          - "36000"
         env:
           - name: POD_UID
             valueFrom:
               fieldRef:
                 fieldPath: metadata.uid
           - name: NOOK_BUILDKIT_STATE_IMAGE_BYTES
-            value: "34359738368"
+            value: "51539607552"
         securityContext:
           privileged: true
         startupProbe:
@@ -182,7 +182,7 @@ template:
           limits:
             cpu: "4"
             memory: 6Gi
-            ephemeral-storage: 32Gi
+            ephemeral-storage: 48Gi
       - name: request-buildkit-promotion
         image: localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1
         imagePullPolicy: Never

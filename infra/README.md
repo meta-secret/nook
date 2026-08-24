@@ -13,7 +13,7 @@ This directory owns Nook's stateful server infrastructure:
 - Pinned Actions Runner Controller scale sets run focused and opted-in trusted
   Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 4 GiB microVM
   carries Docker client tooling and its own privileged BuildKit sidecar on Pod
-  loopback. Its overlayfs builder state uses a private 32 GiB ext4 image.
+  loopback. Its overlayfs builder state uses a private 48 GiB ext4 image.
   General runners also give Podman a sparse, private 24 GiB ext4 image so its
   native overlay driver does not depend on FUSE over the Kata shared volume.
   The image is a metadata-only reflink clone of a trusted seed in the

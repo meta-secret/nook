@@ -18,7 +18,7 @@ if [ ! -f "$backing_file" ]; then
 fi
 
 actual_size="$(stat -c %s "$backing_file")"
-expected_bytes="${NOOK_BUILDKIT_STATE_IMAGE_BYTES:-34359738368}"
+expected_bytes="${NOOK_BUILDKIT_STATE_IMAGE_BYTES:-51539607552}"
 if [ "$actual_size" != "$expected_bytes" ]; then
   echo "Private ARC BuildKit state must be $expected_bytes bytes (got $actual_size)" >&2
   exit 1

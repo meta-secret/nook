@@ -439,7 +439,7 @@ tasks:
         sudo -n test -f "$job_dir/.ready"
         if sudo -n test -L "$job_file" ||
            test "$(sudo -n stat -c '%F:%u:%g:%h:%s' -- "$job_file")" != \
-             "regular file:0:0:1:34359738368"; then
+             "regular file:0:0:1:51539607552"; then
           echo "ARC smoke BuildKit state is not the root-owned regular clone" >&2
           exit 1
         fi

@@ -205,8 +205,8 @@ runners.requireAll([
   "imagePullPolicy: Never",
   'limits:\n            cpu: "4"\n            memory: 6Gi',
   'limits:\n            cpu: "4"\n            memory: 2Gi',
-  '- "24000"',
-  'value: "34359738368"',
+  '- "36000"',
+  'value: "51539607552"',
   "path: /var/lib/nook-arc-buildkit/pool/requests",
   "path: /var/lib/nook-arc-buildkit/pool/jobs",
   "subPathExpr: $(POD_UID)",
@@ -508,7 +508,7 @@ buildkitPrepare.requireAll([
 ]);
 buildkitPrepare.forbid('create_temp="$create_file.tmp"');
 buildkitPrepare.forbid('mkdir -p "$request_lane"');
-buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-34359738368");
+buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-51539607552");
 buildkitDockerfile.require("jq=1.8.1-r0");
 buildkitCloner.requireAll([
   'btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"',

@@ -59,11 +59,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
     ephemeral GitHub-hosted VMs.
   - They use authenticated private Zot `type=registry` cache refs.
   - Each fresh ARC guest starts from a private reflink clone of a trusted
-    32 GiB BuildKit seed.
-  - A 768 GiB sparse Btrfs pool covers twenty fully allocated 32 GiB job
-    images, the reusable seed, and metadata. The 24 GB BuildKit
+    48 GiB BuildKit seed.
+  - A 768 GiB sparse Btrfs pool covers fourteen fully allocated 48 GiB job
+    images, the reusable seed, and metadata. The 36 GB BuildKit
     garbage-collection target normally keeps physical use lower.
-  - Each job clone is a Btrfs subvolume with a 32 GiB exclusive quota.
+  - Each job clone is a Btrfs subvolume with a 48 GiB exclusive quota.
   - The reflink shares unchanged blocks without sharing a writable daemon or
     writable filesystem.
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate versioned refs.

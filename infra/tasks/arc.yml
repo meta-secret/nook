@@ -492,8 +492,8 @@ tasks:
         grep -q -- '- overlayfs' "$runner_render"
         grep -q 'restartPolicy: Always' "$runner_render"
         grep -q 'privileged: true' "$runner_render"
-        grep -q -- '- "24000"' "$runner_render"
-        grep -q 'value: "34359738368"' "$runner_render"
+        grep -q -- '- "36000"' "$runner_render"
+        grep -q 'value: "51539607552"' "$runner_render"
         grep -q 'path: /var/lib/nook-arc-buildkit/pool/requests' "$runner_render"
         grep -q 'path: /var/lib/nook-arc-buildkit/pool/jobs' "$runner_render"
         grep -q 'subPathExpr: $(POD_UID)' "$runner_render"
@@ -626,8 +626,9 @@ tasks:
         pool_mount="$pool_root/pool"
         pool_size=768G
         pool_size_bytes=824633720832
-        state_size=32G
-        state_bytes=34359738368
+        prior_state_bytes=34359738368
+        state_size=48G
+        state_bytes=51539607552
         mount_unit="$(systemd-escape --path --suffix=mount "$pool_mount")"
         mount_unit_path="/etc/systemd/system/$mount_unit"
         cloner_unit_path=/etc/systemd/system/nook-arc-buildkit-cloner.service
@@ -709,10 +710,21 @@ tasks:
           trap - EXIT
           sudo -n mv "$seed_temp" "$seed_file"
         fi
-        if test "$(sudo -n stat -c %s "$seed_file")" != "$state_bytes"; then
+        current_state_bytes="$(sudo -n stat -c %s "$seed_file")"
+        if test "$current_state_bytes" = "$prior_state_bytes"; then
+          sudo -n truncate -s "$state_size" "$seed_file"
+        elif test "$current_state_bytes" != "$state_bytes"; then
           echo "ARC BuildKit seed has the wrong logical capacity" >&2
           exit 1
         fi
+        # Always reconcile the ext4 filesystem after the logical file size so
+        # an interrupted prior expansion converges on the next deployment.
+        loop_device="$(sudo -n losetup --find --show "$seed_file")"
+        cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
+        trap cleanup_loop EXIT
+        sudo -n resize2fs "$loop_device"
+        cleanup_loop
+        trap - EXIT
         reflink_probe="$pool_mount/seed/.reflink-probe"
         sudo -n cp --reflink=always --sparse=auto "$seed_file" "$reflink_probe"
         sudo -n rm -f "$reflink_probe"
@@ -749,7 +761,7 @@ tasks:
         sudo -n systemctl enable --now nook-arc-buildkit-cloner.service >/dev/null
         sudo -n systemctl restart nook-arc-buildkit-cloner.service
         sudo -n systemctl is-active --quiet nook-arc-buildkit-cloner.service
-        echo "ARC BuildKit copy-on-write pool is ready at 768 GiB with 32 GiB per job"
+        echo "ARC BuildKit copy-on-write pool is ready at 768 GiB with 48 GiB per job"
         REMOTE
         done < "$HOME/.nook/infra/arc-build-ssh-targets"
 

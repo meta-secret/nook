@@ -100,7 +100,7 @@ worker-to-worker Pod data-plane hop.
 
 The cache-primary node maintains a loop-backed Btrfs pool on local NVMe-backed
 ext4 storage. Its sparse logical capacity is 768 GiB. Each job receives one
-private 32 GiB ext4 state image. BuildKit garbage collection targets 24 GB.
+private 48 GiB ext4 state image. BuildKit garbage collection targets 36 GB.
 
 Runner startup follows this order:
 
@@ -113,7 +113,7 @@ Runner startup follows this order:
 
 The runner never mounts the pool. Concurrent jobs use distinct state images
 and BuildKit daemons. A Btrfs exclusive quota limits each job subvolume to
-32 GiB of changed data.
+48 GiB of changed data.
 
 ## Authenticated promotion
 

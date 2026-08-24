@@ -21,7 +21,7 @@ Pinned platform:
 - Neo4j Helm chart and image `2026.6.0`
 - Kata runtime-rs classes `kata-dragonball` for persistent Hive workers and
   `kata-qemu-runtime-rs` for ARC builds, including the dedicated Hive scale set
-- A loop-backed Btrfs ARC pool with private 32 GiB reflinked BuildKit images
+- A loop-backed Btrfs ARC pool with private 48 GiB reflinked BuildKit images
 
 Cluster roles:
 
@@ -147,8 +147,8 @@ before publishing acceptance. A repeated candidate can neither refresh an
 existing intent nor extend its two-minute barrier.
 The private BuildKit native sidecar sees only the pool entry selected for its
 Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
-covers twenty fully allocated 32 GiB
-job images, the reusable 32 GiB seed, and filesystem metadata. The 24 GB
+covers fourteen fully allocated 48 GiB
+job images, the reusable 48 GiB seed, and filesystem metadata. The 36 GB
 BuildKit garbage-collection target normally keeps physical use below that hard
 capacity envelope.
 
