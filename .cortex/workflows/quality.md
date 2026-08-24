@@ -274,7 +274,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Staging rust-base first on WASM imports the shorter parent index and
       orphans local chef cook layers for the next bake.
     - Publishers keep configured `cache-from` on every Bake.
-    - Main verifies published WASM fingerprints from a fresh builder.
+    - Main verifies published WASM fingerprints from an empty builder.
+    - ARC prunes and reuses only its exact job-owned remote sidecar because the
+      guest has no nested container runtime.
+    - Hosted runners use a disposable fresh `docker-container` builder.
     - One CI job writes each shared ecosystem registry ref.
     - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
       inputs only.
@@ -303,7 +306,9 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_wasm_and_native_publish_staging`
 
     Runtime CACHED proof for published WASM deps remains Main
-    `verify-wasm-gha-cache.sh` on a fresh builder.
+    `verify-wasm-gha-cache.sh` on an empty verification builder. ARC empties
+    its exact job-owned remote sidecar. Hosted runners create a disposable
+    fresh builder.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
     It reproduces the rejected three-linked-target nightly miss.

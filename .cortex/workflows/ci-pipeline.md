@@ -875,7 +875,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   other PR jobs, and release jobs use GitHub-hosted runners.
 - Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
 - WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
-- Main then verifies the fingerprint from a fresh builder.
+- Main then verifies the fingerprint from an empty builder. ARC prunes and
+  reuses only its exact job-owned remote sidecar. Hosted runners use a
+  disposable fresh `docker-container` builder.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
 - Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
