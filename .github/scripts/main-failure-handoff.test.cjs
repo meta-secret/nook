@@ -325,6 +325,22 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
 })
 
+test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () => {
+  const root = path.join(__dirname, '..', '..')
+  const telemetry = fs.readFileSync(
+    path.join(root, '.github/actions/nook-cache-telemetry/action.yml'),
+    'utf8',
+  )
+  const dockerSetup = fs.readFileSync(
+    path.join(root, '.github/actions/nook-docker-setup/action.yml'),
+    'utf8',
+  )
+
+  assert.match(telemetry, /timeout 15s .*cache-telemetry\.cjs start/)
+  assert.match(telemetry, /timeout 30s .*cache-telemetry\.cjs collect/)
+  assert.match(dockerSetup, /timeout 15s .*cache-telemetry\.cjs start/)
+})
+
 test('handoff workflow trusts default-branch code and writes only Workbench', () => {
   const root = path.join(__dirname, '..', '..')
   const workflow = fs.readFileSync(

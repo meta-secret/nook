@@ -19,10 +19,10 @@ runs:
         fi
         baseline="${NOOK_CACHE_TELEMETRY_BASELINE:-$RUNNER_TEMP/nook-cache-telemetry-baseline.json}"
         if [ ! -f "$baseline" ]; then
-          "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
+          timeout 15s "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
         fi
         output="$RUNNER_TEMP/nook-cache-telemetry/$GITHUB_JOB.json"
-        "$node_bin" .github/scripts/cache-telemetry.cjs collect \
+        timeout 30s "$node_bin" .github/scripts/cache-telemetry.cjs collect \
           --baseline "$baseline" \
           --output "$output"
 

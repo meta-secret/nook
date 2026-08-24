@@ -368,5 +368,5 @@ runs:
           exit 0
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
-        "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
+        timeout 15s "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"
