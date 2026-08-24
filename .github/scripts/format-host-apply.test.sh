@@ -10,6 +10,8 @@ formatter="$(cat "$formatter_dir/format.sh")"
 
 printf '%s\n' "$script" | grep -q 'formatter_image="nook-source-formatter:' \
   || { echo 'format-host-apply test: expected shared content-addressed image' >&2; exit 1; }
+printf '%s\n' "$script" | grep -Fq '(cd "$formatter_dir" && shasum -a 256 Dockerfile package.json bun.lock format.sh)' \
+  || { echo 'format-host-apply test: formatter hash must be worktree-independent' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q 'docker image inspect "$formatter_image"' \
   || { echo 'format-host-apply test: expected warm image reuse' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q '"$formatter_dir"' \

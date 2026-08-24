@@ -461,11 +461,14 @@ unless seccomp_profile["defaultAction"] == "SCMP_ACT_ERRNO" &&
        !allowed_syscalls.include?("perf_event_open") &&
        kata_guest_seccomp_task&.include?("disable_guest_seccomp = false") &&
        kata_guest_seccomp_task&.include?("katacontainers.io/kata-runtime=true") &&
+       kata_guest_seccomp_task&.include?("control-storage") &&
+       kata_guest_seccomp_task&.include?("Deferred guest seccomp on offline Kata node") &&
        kata_guest_seccomp_task&.include?('-J "$controller_target"') &&
        hive_deploy_task&.include?("task: kata:guest-seccomp:enable") &&
        hive_deploy_task&.include?("task: hive:seccomp:install") &&
        hive_seccomp_task&.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
        hive_seccomp_task&.include?("nook.nokey.sh/node-role=compute") &&
+       hive_seccomp_task&.include?("Deferred Hive seccomp on offline compute node") &&
        hive_seccomp_task&.include?('-J "$controller_target"')
   raise "Hive deploy must install its deny-by-default Bubblewrap seccomp profile"
 end

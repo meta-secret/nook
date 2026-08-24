@@ -692,6 +692,13 @@ tasks:
             echo "Hive compute node $node has an unsafe SSH target" >&2
             exit 1
           fi
+          if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
+            -o StrictHostKeyChecking=accept-new -J "$controller_target" "$target" true; then
+            ssh -n -o BatchMode=yes "$controller_target" \
+              "sudo -n k0s kubectl taint node '$node' 'nook.nokey.sh/arc-build=preparing:NoSchedule' --overwrite >/dev/null"
+            echo "Deferred Hive seccomp on offline compute node $node ($target)" >&2
+            continue
+          fi
           echo "Installing Hive seccomp profile on $node"
           profile_temp="$(ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
             -J "$controller_target" "$target" mktemp)"

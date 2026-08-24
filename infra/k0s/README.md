@@ -3,9 +3,11 @@
 This directory is deployed only through `infra/Taskfile.yml`. From the
 repository root, `task infra:deploy` validates the target, installs k0s and
 Kata, deploys persistent Neo4j and Zot, publishes the Hive image to Zot through
-the target's loopback endpoint, and rolls out four Kata-backed workers. A
-compute nodes join through WireGuard and receive only ephemeral ARC runner
-Pods.
+the target's loopback endpoint, and reconciles the ARC runner platform. The
+persistent Hive dispatcher, observer, reaper, and worker Deployments remain at
+zero replicas while their duplicate-repair orchestration is being corrected;
+operators must not infer that `infra:deploy` re-enables them. Compute nodes join
+through WireGuard and receive only ephemeral ARC runner Pods.
 
 Pinned platform:
 
@@ -45,8 +47,9 @@ Cluster roles:
   CIDR. Worker-to-worker Pod traffic never depends on the controller as a
   forwarding hop.
 - ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
-  warm. The general and Hive scale sets can each create up to ten concurrent
-  runners. A third cache-primary scale set owns serialized Main producers.
+  warm. The general scale set can create up to 25 concurrent runners, the Hive
+  scale set up to ten, and the cache-primary scale set up to two serialized
+  Main producers.
 
 Join or reconcile the compute node only through the Taskfile:
 

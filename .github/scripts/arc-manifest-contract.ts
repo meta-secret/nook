@@ -660,6 +660,8 @@ tasks.requireAll([
   "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
   "arc-cache-primary-ssh-target",
   "arc-build-ssh-targets",
+  "ARC cache-primary node $node is unreachable",
+  "Deferred offline non-primary ARC node",
   'mktemp "$target_file.next.XXXXXX"',
   'mktemp "$inventory_file.next.XXXXXX"',
   "synchronized only to the cache-primary node",

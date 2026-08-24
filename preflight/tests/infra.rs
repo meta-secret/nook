@@ -153,6 +153,8 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
     assert!(
         worker_mesh.contains("AllowedIPs = $address/32,$pod_cidr")
             && worker_mesh.contains("sudo -n wg syncconf wg-nook")
+            && worker_mesh.contains("ip route replace \"$controller_pod_cidr\" dev wg-nook")
+            && worker_mesh.contains("ip route replace \"$pod_cidr\" dev wg-nook")
             && worker_mesh.contains("Deferred offline worker")
             && worker_mesh.contains("Deferred offline roaming worker")
             && worker_mesh.contains("ssh_host=\"${ssh_target#*@}\"")
@@ -245,6 +247,8 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "nook.nokey.sh/infra-remote-dir={{.INFRA_REMOTE_DIR}}",
         "arc:controller-build:activate:",
         "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
+        "ARC cache-primary node $node is unreachable",
+        "Deferred offline non-primary ARC node",
     ] {
         assert!(
             tasks.contains(contract),

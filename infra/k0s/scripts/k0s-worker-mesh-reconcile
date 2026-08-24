@@ -177,6 +177,12 @@ sudo -n wg-quick strip wg-nook > "$stripped"
 sudo -n install -m 0600 "$stripped" /etc/wireguard/.nook-syncconf
 sudo -n wg syncconf wg-nook /etc/wireguard/.nook-syncconf
 sudo -n rm -f /etc/wireguard/.nook-syncconf
+sudo -n ip route replace "$controller_pod_cidr" dev wg-nook
+while IFS=$'\t' read -r kind node_name address pod_cidr public_key endpoint ssh_target; do
+  test "$kind" = worker
+  test "$address" != "$local_address" || continue
+  sudo -n ip route replace "$pod_cidr" dev wg-nook
+done < <(printf '%s' "$inventory_payload" | base64 -d)
 escaped_controller_ip="${controller_public_ip//./\\.}"
 if sudo -n nft list table inet bynull_filter >/dev/null 2>&1; then
   sudo -n sed -E -i \

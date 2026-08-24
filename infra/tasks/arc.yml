@@ -162,6 +162,17 @@ tasks:
               exit 1
               ;;
           esac
+          if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
+            -o StrictHostKeyChecking=accept-new -J "$controller_target" "$target" true; then
+            if test "$is_primary" = true; then
+              echo "ARC cache-primary node $node is unreachable" >&2
+              exit 1
+            fi
+            ssh -n -o BatchMode=yes "$controller_target" \
+              "sudo -n k0s kubectl taint node '$node' 'nook.nokey.sh/arc-build=preparing:NoSchedule' --overwrite >/dev/null"
+            echo "Deferred offline non-primary ARC node $node ($target)" >&2
+            continue
+          fi
           if test -z "$remote_dir"; then
             remote_dir="$(ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
               -J "$controller_target" "$target" \
