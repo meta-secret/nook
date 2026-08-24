@@ -394,11 +394,11 @@ template:
             mountPath: /var/run/nook-cache-promotion
         resources:
           requests:
-            cpu: 250m
+            cpu: "1"
             memory: 1Gi
             ephemeral-storage: 25Gi
           limits:
-            cpu: "1"
+            cpu: "2"
             memory: 1Gi
             ephemeral-storage: 100Gi
     volumes:

@@ -179,8 +179,8 @@ runners.requireAll([
   "maxRunners: 25",
   'requests:\n            cpu: "1"\n            memory: 4Gi',
   "requests:\n            cpu: 250m\n            memory: 512Mi\n            ephemeral-storage: 1Gi",
-  "requests:\n            cpu: 250m\n            memory: 1Gi",
-  'limits:\n            cpu: "1"\n            memory: 1Gi',
+  'requests:\n            cpu: "1"\n            memory: 1Gi',
+  'limits:\n            cpu: "2"\n            memory: 1Gi',
   "runAsNonRoot: true",
   "listenerTemplate:\n  spec:\n    nodeSelector:\n      nook.nokey.sh/node-role: control-storage\n    tolerations:",
   "runtimeClassName: kata-qemu-runtime-rs",
@@ -292,7 +292,7 @@ requiredLimit({
 requiredLimit({
   containers: generalContainers,
   name: "runner",
-  cpu: "1",
+  cpu: "2",
   memory: "1Gi",
 });
 requiredLimit({

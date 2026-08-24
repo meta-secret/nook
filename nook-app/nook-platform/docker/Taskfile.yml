@@ -377,6 +377,8 @@ tasks:
       - task: docker:rust-base
       - >-
         GHA_CACHE_WRITE_ENABLED=
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ecosystem:deterministic"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         rust-ecosystem-deterministic
