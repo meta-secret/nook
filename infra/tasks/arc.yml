@@ -133,7 +133,7 @@ tasks:
           exit 1
         fi
         jq -r '.items | sort_by(.metadata.name)[] |
-          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), .metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
+          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), .metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], ([.status.addresses[]? | select(.type == "InternalIP") | .address] | if length == 1 then .[0] else "" end), .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
           <<<"$build_nodes"
         REMOTE
         )"
@@ -149,7 +149,7 @@ tasks:
         trap cleanup EXIT
         : > "$inventory_next"
         primary_target=""
-        while IFS=$'\t' read -r is_primary node target remote_dir; do
+        while IFS=$'\t' read -r is_primary node target internal_ip remote_dir; do
           user="${target%%@*}"
           host="${target#*@}"
           if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
@@ -162,6 +162,10 @@ tasks:
               exit 1
               ;;
           esac
+          if test -z "$internal_ip" || test "$host" != "$internal_ip"; then
+            echo "ARC build node $node SSH host does not match its Kubernetes InternalIP" >&2
+            exit 1
+          fi
           if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
             -o StrictHostKeyChecking=accept-new -J "$controller_target" "$target" true; then
             if test "$is_primary" = true; then

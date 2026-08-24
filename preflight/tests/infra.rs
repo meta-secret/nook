@@ -235,6 +235,16 @@ fn arc_promotion_and_mesh_reconciliation_fail_closed() {
         claim < read_claim,
         "candidate content must be claimed before reading"
     );
+    for marker in ["$create", "$candidate"] {
+        assert!(
+            cloner.contains(&format!("remove_untrusted_path \"{marker}\"")),
+            "guest-controlled marker cleanup must accept arbitrary path types: {marker}"
+        );
+        assert!(
+            !cloner.contains(&format!("rm -f -- \"{marker}\"")),
+            "guest-controlled markers must not use file-only cleanup: {marker}"
+        );
+    }
     assert!(
         cloner.contains("pod_is_cache_primary_runner") && cloner.contains("arc-cache-runner"),
         "only cache-primary runner Pods may request seed promotion"
@@ -333,6 +343,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
     let controller_values = read("infra/k0s/manifests/arc/controller-values.yaml");
     let tasks = read("infra/tasks/arc.yml");
+    let kata_tasks = read("infra/tasks/kata.yml");
 
     for contract in [
         "topologySpreadConstraints:",
@@ -367,12 +378,29 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "nook.nokey.sh/arc-build=preparing:NoSchedule- 2>/dev/null || true",
         "ARC cache-primary node $node is unreachable",
         "Deferred offline non-primary ARC node",
+        "select(.type == \"InternalIP\")",
+        "test \"$host\" != \"$internal_ip\"",
+        "SSH host does not match its Kubernetes InternalIP",
     ] {
         assert!(
             tasks.contains(contract),
             "KS-6 ARC qualification is missing: {contract}"
         );
     }
+    let guest_seccomp_verified = kata_tasks
+        .find(")\" = false\n        REMOTE")
+        .expect("Kata qualification must verify the guest seccomp setting");
+    let recovery_taint_removed = kata_tasks
+        .find("nook.nokey.sh/arc-build=preparing:NoSchedule-")
+        .expect("Kata qualification must clear the recovery taint");
+    let recovery_taint_verified = kata_tasks
+        .find("test \"$remaining\" = 0")
+        .expect("Kata qualification must verify the recovery taint was cleared");
+    assert!(
+        guest_seccomp_verified < recovery_taint_removed
+            && recovery_taint_removed < recovery_taint_verified,
+        "recovered nodes must be activated only after guest seccomp converges"
+    );
     let prepare = tasks
         .find("- task: arc:controller-build:prepare")
         .expect("ARC deployment must prepare the controller build node");

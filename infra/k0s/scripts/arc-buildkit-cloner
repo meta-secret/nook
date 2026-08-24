@@ -24,6 +24,10 @@ valid_uid() {
   [[ "$1" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
 }
 
+remove_untrusted_path() {
+  rm -rf -- "$1"
+}
+
 claim_untrusted_marker() {
   local source="$1" destination="$2" maximum_bytes="$3" temporary
   temporary="$destination.next"
@@ -32,10 +36,11 @@ claim_untrusted_marker() {
   if ! timeout 1 dd if="$source" of="$temporary" \
     iflag=nofollow,nonblock,count_bytes count="$maximum_bytes" \
     conv=notrunc status=none; then
-    rm -f -- "$source" "$temporary"
+    remove_untrusted_path "$source"
+    rm -f -- "$temporary"
     return 1
   fi
-  rm -f -- "$source"
+  remove_untrusted_path "$source"
   if test "$(stat -c '%F:%u:%g:%a:%h' -- "$temporary")" != \
     "regular file:0:0:600:1"; then
     rm -f -- "$temporary"
@@ -80,7 +85,7 @@ prepare_request_lanes() {
   for create in "$request_dir"/.create-*; do
     pod_uid="${create##*/.create-}"
     if ! valid_uid "$pod_uid"; then
-      rm -f -- "$create"
+      remove_untrusted_path "$create"
       continue
     fi
     create_claim="$runtime_dir/$pod_uid.create-claim"
@@ -95,7 +100,7 @@ prepare_request_lanes() {
     fi
     request_lane="$request_dir/$pod_uid"
     if test -L "$request_lane"; then
-      rm -f -- "$create"
+      remove_untrusted_path "$create"
       continue
     fi
     if ! btrfs subvolume show "$request_lane" >/dev/null 2>&1; then
@@ -106,7 +111,7 @@ prepare_request_lanes() {
     fi
     chmod 0700 "$request_lane"
     btrfs qgroup limit -e "$request_exclusive_limit" "$request_lane"
-    rm -f -- "$create"
+    remove_untrusted_path "$create"
   done
 }
 
@@ -200,7 +205,7 @@ claim_promotion_candidates() {
     fi
     candidate_claim="$intent_dir/$pod_uid.candidate"
     if test -e "$candidate_claim"; then
-      rm -f -- "$candidate"
+      remove_untrusted_path "$candidate"
       continue
     fi
     claim_untrusted_marker "$candidate" "$candidate_claim" 256 || true
