@@ -389,6 +389,14 @@ unless zot_config.dig(
 ) == ["read"]
   raise "Public upstream images must be readable through Zot without runner credentials"
 end
+unless zot_config.dig(
+  "http", "accessControl", "repositories", "nook-hive", "policies"
+)&.any? do |policy|
+  policy["users"] == ["__NOOK_REGISTRY_USERNAME__"] &&
+    policy["actions"]&.sort == %w[create delete read update]
+end
+  raise "Private Hive images must not inherit anonymous mirror access"
+end
 zot_pv = zot_resource.call("PersistentVolume", "nook-zot-data")
 unless zot_pv.dig("spec", "persistentVolumeReclaimPolicy") == "Retain" &&
        zot_pv.dig("spec", "local", "path") == "/var/lib/hive/zot"
@@ -482,9 +490,14 @@ unless seccomp_profile["defaultAction"] == "SCMP_ACT_ERRNO" &&
        hive_deploy_task&.include?("task: hive:seccomp:install") &&
        hive_seccomp_task&.include?("/var/lib/k0s/kubelet/seccomp/nook") &&
        hive_seccomp_task&.include?("nook.nokey.sh/node-role=compute") &&
+       hive_seccomp_task&.include?("No compute nodes require the Hive seccomp profile yet") &&
        hive_seccomp_task&.include?("Deferred Hive seccomp on offline compute node") &&
        hive_seccomp_task&.include?('-J "$controller_target"')
   raise "Hive deploy must install its deny-by-default Bubblewrap seccomp profile"
+end
+unless hive_deploy_task&.include?('if test "$desired_hive_replicas" = 0; then') &&
+       hive_deploy_task&.include?("Hive workloads are intentionally paused at zero replicas")
+  raise "Paused Hive deployment must not wait for or inspect live workers"
 end
 kubernetes_tools_task = infra_taskfile.match(
   /^  kubernetes:tools:install:\n(?<body>.*?)(?=^  kubernetes:tools:status:)/m

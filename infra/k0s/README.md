@@ -119,8 +119,11 @@ Dockerfiles name the public Zot endpoint directly; BuildKit's mirror setting is
 defense in depth for unqualified test fixtures. ARC uses only the read-only
 registry identity when it publishes Nook cache data; it does not receive Zot
 administration. Public upstream mirror content is anonymously readable and has
-no client-side write path. Zot preserves upstream digests and stores a missing
-image once for reuse by every runner and node.
+no client-side write path. Private Nook repositories remain behind explicit
+authenticated policies. Zot preserves upstream digests and stores a missing
+image once for reuse by every runner and node. The initial SeaweedFS bucket
+bootstrap pulls its pinned AWS CLI image directly because Zot does not exist
+yet on a clean controller.
 ARC storage uses a separate Task-managed Btrfs image under
 `/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
 filesystem remains ext4. The trusted preparation init container briefly sees

@@ -32,6 +32,11 @@ const traefik = await read("infra/traefik-dynamic.yaml");
 const compose = await read("infra/compose.yaml");
 const hosts = await read("infra/k0s/config/registry-hosts.toml");
 const hive = await read("infra/tasks/hive.yml");
+const sccache = await read("infra/tasks/sccache.yml");
+const sccacheBucketEnsure = sccache.slice(
+  sccache.indexOf("  sccache:bucket:ensure:"),
+  sccache.indexOf("  sccache:check:"),
+);
 
 for (const fragment of [
   "registry.dev.nokey.sh",
@@ -65,6 +70,8 @@ for (const fragment of [
   '"onDemand": true',
   '"preserveDigest": true',
   '"anonymousPolicy": ["read"]',
+  '"nook-hive": {',
+  '"users": ["__NOOK_REGISTRY_USERNAME__"]',
   "kind: Service",
   'requests:\n              cpu: "2"\n              memory: 4Gi',
   'limits:\n              cpu: "8"\n              memory: 12Gi',
@@ -141,5 +148,15 @@ const hiveAssertion = {
   message: "Hive must publish through the public Zot endpoint",
 };
 requireFragment(hiveAssertion);
+requireFragment({
+  source: sccacheBucketEnsure,
+  fragment: "docker.io/amazon/aws-cli:2.27.50@sha256:",
+  message: "clean-host sccache bootstrap must not depend on Zot",
+});
+forbidFragment({
+  source: sccacheBucketEnsure,
+  fragment: "registry.dev.nokey.sh/amazon/aws-cli",
+  message: "sccache bootstrap cannot use Zot before k0s deploys it",
+});
 
 console.log("Public Zot registry contract: ok");

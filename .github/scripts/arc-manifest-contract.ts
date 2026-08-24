@@ -104,6 +104,10 @@ const workerTasks = contract({
   label: "k0s worker tasks",
   source: await read("infra/tasks/k0s-workers.yml"),
 });
+const workerMesh = contract({
+  label: "k0s worker mesh reconciler",
+  source: await read("infra/k0s/scripts/k0s-worker-mesh-reconcile"),
+});
 const remoteWorkflow = contract({
   label: "remote workflow",
   source: await read(".github/workflows/remote.yml"),
@@ -707,6 +711,11 @@ workerTasks.forbid("systemctl restart wg-quick@wg-nook.service");
 workerTasks.forbid(
   '--labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-cache-primary=true,nook.nokey.sh/node-role=compute"',
 );
+workerMesh.requireAll([
+  'if ! sudo -n test -s "$peer_inventory"; then',
+  'if ! sudo -n test -s "$endpoint_inventory"; then',
+]);
+workerMesh.forbid('test "$inventory_count" != 0');
 mainWorkflow.requireAll(["needs: [web]", "task ci:main:wasm-node-test"]);
 mainWorkflow.forbid(
   '# The exporter commits only after the Node-test Docker stage succeeds.\n          GHA_CACHE_WRITE_ENABLED: "1"',

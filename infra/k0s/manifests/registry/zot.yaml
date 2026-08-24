@@ -63,6 +63,14 @@ data:
                 }
               ]
             },
+            "nook-hive": {
+              "policies": [
+                {
+                  "users": ["__NOOK_REGISTRY_USERNAME__"],
+                  "actions": ["read", "create", "update", "delete"]
+                }
+              ]
+            },
             "**": {
               "anonymousPolicy": ["read"]
             }

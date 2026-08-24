@@ -176,7 +176,10 @@ is an unrestricted on-demand Docker Hub mirror and preserves upstream digests.
 Public upstream mirror content is anonymously readable, so kubelet, BuildKit,
 and Actions service-container pulls need no registry secret. Runner credentials
 retain their narrow Nook cache-publication permissions but cannot administer
-Zot. A missing digest is fetched centrally once; later jobs and nodes reuse the
+Zot. Private Nook repositories have explicit authenticated policies and cannot
+inherit the mirror fallback. The clean-host SeaweedFS bucket bootstrap is the
+only direct Docker Hub pull because it runs before k0s can deploy Zot. A missing
+digest is otherwise fetched centrally once; later jobs and nodes reuse the
 retained Zot copy.
 
 Main cache producers are serialized in workflow dependencies. Hive publication
