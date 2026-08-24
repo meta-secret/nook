@@ -16,28 +16,145 @@ tasks:
           --namespace arc-runners -o wide
         kubectl get autoscalinglistener --namespace arc-systems -o wide
         kubectl get pods --namespace arc-systems -o wide
-        kubectl get pods --namespace arc-runners -o wide
+        kubectl get statefulset,pods,pvc --namespace arc-runners -o wide
+        kubectl get pv -l app.kubernetes.io/name=nook-buildkit -o wide
+        kubectl get endpointslice --namespace arc-runners \
+          -l kubernetes.io/service-name=nook-buildkit -o wide
+        for pod in $(kubectl get pods --namespace arc-runners \
+          -l app.kubernetes.io/name=nook-buildkit -o name); do
+          echo "BuildKit cache: $pod"
+          kubectl exec --namespace arc-runners "$pod" -- \
+            buildctl du 2>/dev/null | tail -n 1 || true
+          kubectl exec --namespace arc-runners "$pod" -- \
+            df -h /home/user/.local/share/buildkit
+        done
         REMOTE
+
+  arc:buildkit:benchmark:
+    desc: Measure cold/warm node-local BuildKit reuse on every ARC node.
+    silent: true
+    cmds:
       - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        if ! task infra:arc:build-host:resolve; then
-          echo "ARC build-host discovery failed; skipping host storage status" >&2
-          exit 0
-        fi
-        while IFS=$'\t' read -r build_target build_remote_dir; do
-          test -n "$build_target"
-          test -n "$build_remote_dir"
-          echo "ARC build host: $build_target"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            -J "{{.INFRA_SSH_TARGET}}" "$build_target" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        sudo -n systemctl is-active nook-arc-buildkit-cloner.service
-        sudo -n mountpoint /var/lib/nook-arc-buildkit/pool
-        sudo -n btrfs filesystem usage -b /var/lib/nook-arc-buildkit/pool
-        sudo -n btrfs filesystem du -s \
-          /var/lib/nook-arc-buildkit/pool/seed/buildkit.ext4
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        namespace=arc-runners
+        image='registry.dev.nokey.sh/moby/buildkit:v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9'
+        service=tcp://nook-buildkit.arc-runners.svc.cluster.local:1234
+        cleanup() {
+          kubectl delete pod --namespace "$namespace" \
+            -l nook.nokey.sh/role=arc-buildkit-benchmark \
+            --ignore-not-found --wait=false >/dev/null 2>&1 || true
+        }
+        trap cleanup EXIT
+        cleanup
+
+        nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        test "$(printf '%s\n' "$nodes" | sed '/^$/d' | wc -l | tr -d ' ')" = 3
+        for node in $nodes; do
+          probe="nook-buildkit-benchmark-$(printf '%s' "$node" | tr -c 'a-z0-9-' '-')"
+          kubectl apply -f - <<YAML
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: $probe
+          namespace: $namespace
+          labels:
+            nook.nokey.sh/role: arc-buildkit-benchmark
+        spec:
+          nodeName: $node
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          containers:
+            - name: client
+              image: $image
+              command: ["/bin/sh", "-ceu"]
+              args: ["sleep 900"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                runAsNonRoot: true
+                runAsUser: 1000
+                runAsGroup: 1000
+                seccompProfile:
+                  type: RuntimeDefault
+        YAML
+          kubectl wait pod/$probe --namespace "$namespace" \
+            --for=condition=Ready --timeout=3m >/dev/null
+        done
+
+        for node in $nodes; do
+          probe="nook-buildkit-benchmark-$(printf '%s' "$node" | tr -c 'a-z0-9-' '-')"
+          echo "node=$node"
+          kubectl exec --namespace "$namespace" "$probe" -- /bin/sh -ceu '
+            rm -rf /tmp/context /tmp/result
+            mkdir -p /tmp/context
+            cat > /tmp/context/Dockerfile <<"DOCKERFILE"
+        FROM registry.dev.nokey.sh/library/alpine:3.22.1@sha256:4bcff63911fcb4448bd4fdacec207030997caf25e9bea4045fa6c8c44de311d1
+        ARG PROBE
+        RUN dd if=/dev/zero bs=1M count=256 2>/dev/null | sha256sum | sed "s/$/ $PROBE/" > /proof
+        FROM scratch
+        COPY --from=0 /proof /proof
+        DOCKERFILE
+          '
+          nonce="$(date +%s)-$node"
+          for pass in cold warm; do
+            started="$(date +%s%N)"
+            kubectl exec --namespace "$namespace" "$probe" -- /bin/sh -ceu '
+              rm -rf /tmp/result
+              buildctl --addr "'$service'" build \
+                --frontend dockerfile.v0 \
+                --local context=/tmp/context \
+                --local dockerfile=/tmp/context \
+                --opt build-arg:PROBE="'$nonce'" \
+                --output type=local,dest=/tmp/result \
+                --progress plain >/tmp/build.log 2>&1
+              test -s /tmp/result/proof
+              tail -n 8 /tmp/build.log
+            '
+            elapsed_ms=$((($(date +%s%N) - started) / 1000000))
+            printf '%s_ms=%s\n' "$pass" "$elapsed_ms"
+          done
+          builder="$(kubectl get pods --namespace "$namespace" \
+            -l app.kubernetes.io/name=nook-buildkit -o json |
+            jq -r --arg node "$node" \
+              '.items[] | select(.spec.nodeName == $node) | .metadata.name')"
+          test -n "$builder"
+          old_uid="$(kubectl get pod "$builder" --namespace "$namespace" \
+            -o jsonpath='{.metadata.uid}')"
+          echo "cache_before_restart=$(kubectl exec --namespace "$namespace" "$builder" -- \
+            buildctl du 2>/dev/null | tail -n 1)"
+          kubectl delete pod "$builder" --namespace "$namespace" --wait=true >/dev/null
+          kubectl wait pod/"$builder" --namespace "$namespace" \
+            --for=condition=Ready --timeout=5m >/dev/null
+          new_uid="$(kubectl get pod "$builder" --namespace "$namespace" \
+            -o jsonpath='{.metadata.uid}')"
+          test "$new_uid" != "$old_uid"
+          test "$(kubectl get pod "$builder" --namespace "$namespace" \
+            -o jsonpath='{.spec.nodeName}')" = "$node"
+          started="$(date +%s%N)"
+          kubectl exec --namespace "$namespace" "$probe" -- /bin/sh -ceu '
+            rm -rf /tmp/result
+            buildctl --addr "'$service'" build \
+              --frontend dockerfile.v0 \
+              --local context=/tmp/context \
+              --local dockerfile=/tmp/context \
+              --opt build-arg:PROBE="'$nonce'" \
+              --output type=local,dest=/tmp/result \
+              --progress plain >/tmp/build.log 2>&1
+            test -s /tmp/result/proof
+            grep -q "CACHED" /tmp/build.log
+            tail -n 8 /tmp/build.log
+          '
+          elapsed_ms=$((($(date +%s%N) - started) / 1000000))
+          printf 'restart_warm_ms=%s old_uid=%s new_uid=%s\n' \
+            "$elapsed_ms" "$old_uid" "$new_uid"
+          echo "cache_after_restart=$(kubectl exec --namespace "$namespace" "$builder" -- \
+            buildctl du 2>/dev/null | tail -n 1)"
+        done
         REMOTE
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"
 
   arc:diagnose:
     desc: Show bounded ARC events and recent controller/listener logs.
@@ -60,22 +177,3 @@ tasks:
           kubectl logs "$listener" --namespace arc-systems --tail=120 || true
         fi
         REMOTE
-      - |
-        set -euo pipefail
-        if ! task infra:arc:build-host:resolve; then
-          echo "ARC build-host discovery failed; skipping host diagnostics" >&2
-          exit 0
-        fi
-        while IFS=$'\t' read -r build_target build_remote_dir; do
-          test -n "$build_target"
-          test -n "$build_remote_dir"
-          echo "ARC build host: $build_target"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            -J "{{.INFRA_SSH_TARGET}}" "$build_target" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        sudo -n systemctl status nook-arc-buildkit-cloner.service \
-          --no-pager --lines=40 || true
-        sudo -n journalctl --unit nook-arc-buildkit-cloner.service \
-          --no-pager --lines=80 || true
-        REMOTE
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"

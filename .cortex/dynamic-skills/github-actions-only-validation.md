@@ -30,7 +30,7 @@ Validation has three layers:
   - Trusted same-repository native Rust and Rust ecosystem PR jobs and every
     explicit Main job select ARC.
   - General ARC provides Main's job-scoped image runtime inside the disposable
-    Kata guest.
+    ARC runner Pod.
   - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
     browser, WASM, and deployment jobs stay on GitHub-hosted workers.
 

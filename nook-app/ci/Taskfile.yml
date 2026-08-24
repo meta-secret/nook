@@ -167,25 +167,25 @@ tasks:
         vars: { BUILD_TASK: _ci:main:prepare-images:host }
 
   ci:main:publish-native-cache:
-    desc: Promote verified native ARC state locally or publish fallback cache scopes.
+    desc: Publish verified native cache scopes to the portable Zot fallback.
     cmds:
       - task: _ci:main:publish-cache
         vars: { HOST_TASK: _ci:main:publish-native-cache:host }
 
   ci:main:publish-wasm-cache:
-    desc: Promote verified WASM ARC state locally or publish fallback cache scopes.
+    desc: Publish verified WASM cache scopes to the portable Zot fallback.
     cmds:
       - task: _ci:main:publish-cache
         vars: { HOST_TASK: _ci:main:publish-wasm-cache:host }
 
   ci:main:publish-web-cache:
-    desc: Promote verified web ARC state locally or publish fallback cache scopes.
+    desc: Publish verified web cache scopes to the portable Zot fallback.
     cmds:
       - task: _ci:main:publish-cache
         vars: { HOST_TASK: _ci:main:publish-web-cache:host }
 
   ci:main:publish-web-e2e-cache:
-    desc: Promote verified browser ARC state locally or publish fallback cache scopes.
+    desc: Publish verified browser cache scopes to the portable Zot fallback.
     cmds:
       - task: _ci:main:publish-cache
         vars: { HOST_TASK: _ci:main:publish-web-e2e-cache:host }
@@ -194,48 +194,9 @@ tasks:
     internal: true
     requires:
       vars: [HOST_TASK]
-    vars:
-      CACHE_PUBLISH_TASK:
-        sh: |
-          if test "${NOOK_ARC_RUNNER:-}" = "1" &&
-             test "${GITHUB_REF:-}" = "refs/heads/main" &&
-             test -d "${NOOK_ARC_CACHE_PROMOTION_DIR:-}"; then
-            printf '%s\n' ci:arc:promote-buildkit-cache
-          else
-            printf '%s\n' _buildx:healthy
-          fi
     cmds:
-      - task: '{{.CACHE_PUBLISH_TASK}}'
+      - task: _buildx:healthy
         vars: { BUILD_TASK: '{{.HOST_TASK}}' }
-
-  ci:arc:promote-buildkit-cache:
-    desc: Ask the trusted ARC sidecar to promote this successful job's private BuildKit state.
-    cmds:
-      - |
-        bash <<'BASH'
-        set -euo pipefail
-        test "${GITHUB_ACTIONS:-}" = "true"
-        test "${GITHUB_EVENT_NAME:-}" = "push"
-        test "${GITHUB_REF:-}" = "refs/heads/main"
-        signal_dir="${NOOK_ARC_CACHE_PROMOTION_DIR:?missing ARC cache promotion directory}"
-        test -d "$signal_dir"
-        test ! -L "$signal_dir"
-        # The runner owns the signal, while the capability-free verifier reads
-        # it through the Pod fsGroup. Keep it inaccessible outside that group.
-        umask 027
-        printf '%s:%s:%s\n' \
-          "${GITHUB_RUN_ID:?missing GitHub run ID}" \
-          "${GITHUB_RUN_ATTEMPT:?missing GitHub run attempt}" \
-          "${GITHUB_SHA:?missing GitHub head SHA}" > "$signal_dir/request.next"
-        mv "$signal_dir/request.next" "$signal_dir/request"
-        deadline=$(($(date +%s) + 70))
-        while test "$(date +%s)" -lt "$deadline"; do
-          test -f "$signal_dir/accepted" && exit 0
-          sleep 1
-        done
-        echo "ARC cache promotion sidecar did not accept the request" >&2
-        exit 1
-        BASH
 
   ci:main:web-e2e:
     desc: Main web gate without extension e2e — prepare images then run web e2e alone (manual/debug).

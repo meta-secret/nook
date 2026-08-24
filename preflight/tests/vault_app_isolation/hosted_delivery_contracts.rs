@@ -51,11 +51,7 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && main
                 .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
                 .count()
-                == 4
-            && main
-                .matches("runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}")
-                .count()
-                == 4,
+                == 8,
         "every explicit trusted Main job must select configured ARC with a hosted fallback"
     );
 }

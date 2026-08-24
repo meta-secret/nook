@@ -5,7 +5,6 @@ vars:
   ARC_CONTROLLER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set-controller
   ARC_RUNNER_CHART: oci://ghcr.io/actions/actions-runner-controller-charts/gha-runner-scale-set
   ARC_RUNNER_LABEL: nook-k0s
-  ARC_CACHE_RUNNER_LABEL: nook-k0s-cache
   ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
   ARC_SMOKE_JOB_NAME: '{{default "Remote / preflight" .ARC_SMOKE_JOB_NAME}}'
@@ -37,9 +36,6 @@ tasks:
         fi
         node="$(printf '%s\n' "$node" | sed '/^$/d')"
         test "$(kubectl get node "$node" -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}')" = True
-        test "$(kubectl get node "$node" -o jsonpath='{.metadata.labels.katacontainers\.io/kata-runtime}')" = true
-        test -c /dev/kvm
-        kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
         internal_ip="$(kubectl get node "$node" \
           -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
         test -n "$internal_ip"
@@ -89,80 +85,6 @@ tasks:
         done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
-  arc:cache-primary:preserve:
-    internal: true
-    silent: true
-    cmds:
-      - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        kubectl() { sudo -n k0s kubectl "$@"; }
-        cache_primary_count="$(kubectl get nodes \
-          -l nook.nokey.sh/arc-cache-primary=true \
-          -o jsonpath='{.items[*].metadata.name}' 2>/dev/null | wc -w | tr -d ' ')"
-        if test "$cache_primary_count" -gt 1; then
-          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
-          exit 1
-        fi
-        if test "$cache_primary_count" = 0; then
-          legacy_build_nodes="$(kubectl get nodes \
-            -l nook.nokey.sh/arc-build=true \
-            -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
-          legacy_build_count="$(printf '%s\n' "$legacy_build_nodes" | sed '/^$/d' | wc -l | tr -d ' ')"
-          if test "$legacy_build_count" = 1; then
-            legacy_primary="$(printf '%s\n' "$legacy_build_nodes" | sed '/^$/d')"
-            kubectl label node "$legacy_primary" \
-              nook.nokey.sh/arc-cache-primary=true --overwrite
-            echo "Preserved legacy ARC cache primary $legacy_primary"
-          elif test "$legacy_build_count" -gt 1; then
-            echo "Label exactly one legacy ARC node nook.nokey.sh/arc-cache-primary=true" >&2
-            exit 1
-          fi
-        fi
-        cache_primary="$(kubectl get nodes \
-          -l nook.nokey.sh/arc-cache-primary=true \
-          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
-        if test -n "$cache_primary"; then
-          # Record conservative credential ownership before any later primary
-          # move. Credential sync clears it only after remote deletion succeeds.
-          kubectl annotate node "$cache_primary" \
-            nook.nokey.sh/arc-cache-verifier-owner=true --overwrite
-        fi
-        REMOTE
-
-  arc:cache-primary:ensure:
-    internal: true
-    silent: true
-    cmds:
-      - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
-        set -euo pipefail
-        kubectl() { sudo -n k0s kubectl "$@"; }
-        cache_primaries="$(kubectl get nodes \
-          -l nook.nokey.sh/arc-cache-primary=true \
-          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' 2>/dev/null || true)"
-        cache_primary_count="$(printf '%s\n' "$cache_primaries" | sed '/^$/d' | wc -l | tr -d ' ')"
-        if test "$cache_primary_count" = 0; then
-          cache_candidates="$(kubectl get nodes \
-            -l nook.nokey.sh/arc-build=true \
-            -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}')"
-          if test "$(printf '%s\n' "$cache_candidates" | sed '/^$/d' | wc -l | tr -d ' ')" != 1; then
-            echo "Label exactly one ARC node nook.nokey.sh/arc-cache-primary=true" >&2
-            exit 1
-          fi
-          cache_primary="$(printf '%s\n' "$cache_candidates" | sed '/^$/d')"
-          kubectl label node "$cache_primary" \
-            nook.nokey.sh/arc-cache-primary=true --overwrite
-        elif test "$cache_primary_count" = 1; then
-          cache_primary="$(printf '%s\n' "$cache_primaries" | sed '/^$/d')"
-        else
-          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
-          exit 1
-        fi
-        kubectl label node "$cache_primary" \
-          nook.nokey.sh/arc-tier=primary --overwrite
-        echo "ARC cache producer lineage is pinned to $cache_primary"
-        REMOTE
 
   arc:build-host:resolve:
     desc: Resolve and persist every Kubernetes ARC build SSH target.
@@ -181,31 +103,23 @@ tasks:
           echo "ARC has no qualified build node" >&2
           exit 1
         fi
-        primary_count="$(jq '[.items[] | select(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true")] | length' <<<"$build_nodes")"
-        if test "$primary_count" != 1; then
-          echo "Exactly one ARC node may own nook.nokey.sh/arc-cache-primary=true" >&2
-          exit 1
-        fi
         jq -r '.items | sort_by(.metadata.name)[] |
-          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), (.metadata.annotations["nook.nokey.sh/arc-cache-verifier-owner"] == "true"), .metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], ([.status.addresses[]? | select(.type == "InternalIP") | .address] | if length == 1 then .[0] else "" end), .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
+          [.metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], ([.status.addresses[]? | select(.type == "InternalIP") | .address] | if length == 1 then .[0] else "" end), .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
           <<<"$build_nodes"
         REMOTE
         )"
         test -n "$inventory"
         target_dir="$HOME/.nook/infra"
-        target_file="$target_dir/arc-cache-primary-ssh-target"
         inventory_file="$target_dir/arc-build-ssh-targets"
         install -d -m 0700 "$HOME/.nook" "$target_dir"
         umask 077
-        target_next="$(mktemp "$target_file.next.XXXXXX")"
         inventory_next="$(mktemp "$inventory_file.next.XXXXXX")"
-        cleanup() { rm -f "$target_next" "$inventory_next"; }
+        cleanup() { rm -f "$inventory_next"; }
         trap cleanup EXIT
         : > "$inventory_next"
-        primary_target=""
-        while IFS=$'\t' read -r is_primary verifier_owner node target internal_ip remote_dir; do
-          user="${target%%@*}"
-          host="${target#*@}"
+        while IFS=$'\t' read -r node target internal_ip remote_dir; do
+          user="$(printf '%s' "$target" | cut -d@ -f1)"
+          host="$(printf '%s' "$target" | cut -d@ -f2-)"
           if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
             echo "ARC build node $node lacks a usable SSH target" >&2
             exit 1
@@ -222,17 +136,9 @@ tasks:
           fi
           if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
             -o StrictHostKeyChecking=accept-new -J "$controller_target" "$target" true; then
-            if test "$is_primary" = true; then
-              echo "ARC cache-primary node $node is unreachable" >&2
-              exit 1
-            fi
-            if test "$verifier_owner" = true; then
-              echo "Offline non-primary ARC node $node may still hold the cache verifier credential; restore it and revoke the credential before moving the primary" >&2
-              exit 1
-            fi
             ssh -n -o BatchMode=yes "$controller_target" \
               "sudo -n k0s kubectl taint node '$node' 'nook.nokey.sh/arc-build=preparing:NoSchedule' --overwrite >/dev/null"
-            echo "Deferred offline non-primary ARC node $node ($target)" >&2
+            echo "Deferred offline ARC node $node ($target)" >&2
             continue
           fi
           if test -z "$remote_dir"; then
@@ -245,22 +151,16 @@ tasks:
             exit 1
           fi
           printf '%s\t%s\n' "$target" "$remote_dir" >> "$inventory_next"
-          if test "$is_primary" = true; then
-            primary_target="$target"
-          fi
           ssh -n -o BatchMode=yes "$controller_target" \
             "sudo -n k0s kubectl annotate node '$node' 'nook.nokey.sh/ssh-target=$target' 'nook.nokey.sh/infra-remote-dir=$remote_dir' --overwrite >/dev/null"
         done <<< "$inventory"
-        test -n "$primary_target"
+        test -s "$inventory_next"
         test "$(sort -u "$inventory_next" | wc -l | tr -d ' ')" = "$(wc -l < "$inventory_next" | tr -d ' ')"
-        printf '%s\n' "$primary_target" > "$target_next"
-        mv "$target_next" "$target_file"
         mv "$inventory_next" "$inventory_file"
         trap - EXIT
-        chmod 0600 "$target_file" "$inventory_file"
-        echo "ARC build SSH inventory persisted under $target_dir"
+        chmod 0600 "$inventory_file"
+        echo "ARC build SSH inventory persisted at $inventory_file"
         BASH
-
   arc:build-host:sync:
     internal: true
     deps: [k0s:sync, arc:build-host:resolve]
@@ -347,89 +247,36 @@ tasks:
         echo "ARC credential persisted under ~/.nook and synchronized to the encrypted k0s Secret"
         BASH
 
-  arc:cache:auth:sync:
+
+  arc:buildkit:storage:prepare:
     internal: true
-    deps: [arc:auth:sync, arc:build-host:resolve]
+    deps: [arc:build-host:sync]
     silent: true
     cmds:
       - |
         bash <<'BASH'
         set -euo pipefail
-        credential_dir="$HOME/.nook/github"
-        credential_store="$credential_dir/arc-cache-verifier-token"
-        credential_file="${ARC_CACHE_VERIFIER_TOKEN_FILE:-$credential_store}"
         controller_target="{{.INFRA_SSH_TARGET}}"
-        primary_target_file="$HOME/.nook/infra/arc-cache-primary-ssh-target"
-        inventory_file="$HOME/.nook/infra/arc-build-ssh-targets"
-        install -d -m 0700 "$HOME/.nook" "$credential_dir"
-        if test -n "${ARC_CACHE_VERIFIER_TOKEN_FILE:-}"; then
-          test -s "$ARC_CACHE_VERIFIER_TOKEN_FILE"
-          install -m 0600 "$ARC_CACHE_VERIFIER_TOKEN_FILE" "$credential_store"
-          credential_file="$credential_store"
-        elif ! test -s "$credential_store"; then
-          echo "ARC cache verifier credential is not installed; set ARC_CACHE_VERIFIER_TOKEN_FILE to a meta-secret/nook Actions-read token" >&2
-          exit 2
-        fi
-        test -s "$credential_file"
-        test -s "$primary_target_file"
-        test -s "$inventory_file"
-        primary_target="$(tr -d '\r\n' < "$primary_target_file")"
-        test -n "$primary_target"
-        token="$(tr -d '\r\n' < "$credential_file")"
-        [[ "$token" =~ ^[A-Za-z0-9_]+$ ]]
-        {
-          printf 'header = "Authorization: Bearer %s"\n' "$token"
-          printf 'header = "Accept: application/vnd.github+json"\n'
-          printf 'header = "X-GitHub-Api-Version: 2022-11-28"\n'
-        } | curl --config - --fail --silent --show-error \
-          --connect-timeout 5 --max-time 15 \
-          'https://api.github.com/repos/meta-secret/nook/actions/runs?per_page=1' \
-          >/dev/null
-        token=
-        remote_program='set -euo pipefail
-        credential_raw="$(mktemp)"
-        credential_temp="$(mktemp)"
-        cleanup() { rm -f "$credential_raw" "$credential_temp"; }
-        trap cleanup EXIT
-        cat > "$credential_raw"
-        tr -d "\r\n" < "$credential_raw" > "$credential_temp"
-        test -s "$credential_temp"
-        sudo -n install -d -m 0700 /etc/nook
-        sudo -n install -m 0600 "$credential_temp" /etc/nook/arc-cache-verifier-token'
-        encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
         while IFS=$'\t' read -r build_target build_remote_dir; do
           test -n "$build_target"
           test -n "$build_remote_dir"
-          if test "$build_target" = "$primary_target"; then
-            ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-              -J "$controller_target" "$build_target" \
-              "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
-              < "$credential_file"
-            verifier_annotation='nook.nokey.sh/arc-cache-verifier-owner=true'
-          else
-            ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-              -J "$controller_target" "$build_target" \
-              'sudo -n rm -f /etc/nook/arc-cache-verifier-token'
-            verifier_annotation='nook.nokey.sh/arc-cache-verifier-owner-'
-          fi
-          node="$(ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$build_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        build_target="$1"
-        sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json |
-          jq -r --arg target "$build_target" \
-            '.items[] | select(.metadata.annotations["nook.nokey.sh/ssh-target"] == $target) | .metadata.name'
+        state_dir=/var/lib/nook-arc-buildkit/state
+        sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
+        test "$(sudo -n stat -c %u "$state_dir")" = 1000
+        test "$(sudo -n stat -c %g "$state_dir")" = 1000
+        filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
+        available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
+        test "$filesystem_bytes" -ge 68719476736
+        test "$available_bytes" -ge 8589934592
         REMOTE
-          )"
-          test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
-          node="$(printf '%s\n' "$node" | sed '/^$/d')"
-          ssh -n -o BatchMode=yes "$controller_target" \
-            "sudo -n k0s kubectl annotate node '$node' '$verifier_annotation' --overwrite >/dev/null"
-        done < "$inventory_file"
-        echo "ARC Actions-read verifier credential persisted under ~/.nook and synchronized only to the cache-primary node"
+        done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
   arc:render:check:
-    desc: Render pinned ARC and verify the private microVM-builder contract.
+    desc: Render ARC and verify the regular-runner persistent-BuildKit contract.
     deps: [k0s:sync]
     silent: true
     cmds:
@@ -440,19 +287,13 @@ tasks:
         chart_version="{{.ARC_CHART_VERSION}}"
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
-        cache_render="$(mktemp)"
         hive_values="$(mktemp)"
         hive_render="$(mktemp)"
-        cleanup() {
-          rm -f "$controller_render" "$runner_render" "$cache_render" \
-            "$hive_values" "$hive_render"
-        }
-        trap cleanup EXIT
+        trap 'rm -f "$controller_render" "$runner_render" "$hive_values" "$hive_render"' EXIT
 
         ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
           "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           "$hive_values"
-
         helm template nook-arc \
           "{{.ARC_CONTROLLER_CHART}}" \
           --version "$chart_version" \
@@ -471,387 +312,26 @@ tasks:
           --namespace arc-runners \
           --values "$hive_values" \
           > "$hive_render"
-        helm template nook-k0s-cache \
-          "{{.ARC_RUNNER_CHART}}" \
-          --version "$chart_version" \
-          --namespace arc-runners \
-          --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
-          --values "$remote_dir/infra/k0s/manifests/arc/runner-cache-primary-values.yaml" \
-          > "$cache_render"
-
-        grep -A1 'runtimeClassName:' "$runner_render" | grep -q 'kata-qemu-runtime-rs'
-        grep -A1 'automountServiceAccountToken:' "$runner_render" | grep -q 'false'
-        grep -q 'tcp://127.0.0.1:1234' "$runner_render"
-        test "$(grep -c 'tcp://127.0.0.1:2375' "$runner_render")" -ge 3
-        grep -A5 'startupProbe:' "$runner_render" | grep -q -- '- /usr/bin/podman'
-        grep -q -- '--storage-driver overlay' "$runner_render"
-        grep -q 'quay.io/podman/stable:v5.8.4@sha256:8923deffca4caa8338b5dd4f553a86736f2aab424a4743827fccce632fecd750' "$runner_render"
-        grep -q 'localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1' "$runner_render"
-        grep -q 'imagePullPolicy: Never' "$runner_render"
-        grep -q -- '--oci-worker-snapshotter' "$runner_render"
-        grep -q -- '- overlayfs' "$runner_render"
-        grep -q 'restartPolicy: Always' "$runner_render"
-        grep -q 'privileged: true' "$runner_render"
-        grep -q -- '- "36000"' "$runner_render"
-        grep -q 'value: "51539607552"' "$runner_render"
-        grep -q 'path: /var/lib/nook-arc-buildkit/pool/requests' "$runner_render"
-        grep -q 'path: /var/lib/nook-arc-buildkit/pool/jobs' "$runner_render"
-        grep -q 'subPathExpr: $(POD_UID)' "$runner_render"
-        ruby - "$runner_render" "$hive_render" <<'RUBY'
-        require "yaml"
-
-        def rendered_pod(render_path, expected_name)
-          documents = YAML.load_stream(File.read(render_path))
-          runner_set = documents.compact.find do |document|
-            document["kind"] == "AutoscalingRunnerSet"
-          end
-          raise "missing ARC scale set: #{expected_name}" unless runner_set
-          if runner_set.dig("metadata", "name") != expected_name
-            raise "unexpected ARC scale set: #{runner_set.dig('metadata', 'name')}"
-          end
-
-          pod = runner_set.dig("spec", "template", "spec")
-          host_paths = pod.fetch("volumes").filter_map do |volume|
-            [volume["name"], volume.dig("hostPath", "path")] if volume["hostPath"]
-          end.to_h
-          expected_paths = {
-            "buildkit-requests" => "/var/lib/nook-arc-buildkit/pool/requests",
-            "buildkit-jobs" => "/var/lib/nook-arc-buildkit/pool/jobs",
-          }
-          unless host_paths == expected_paths
-            raise "unexpected ARC hostPath volumes: #{host_paths.inspect}"
-          end
-
-          mounts = {}
-          pod.fetch("initContainers", []).concat(pod.fetch("containers", [])).each do |container|
-            mounts[container["name"]] = container.fetch("volumeMounts", []).map do |mount|
-              mount["name"]
-            end
-          end
-          expected_owners = {
-            "buildkit-requests" => ["prepare-buildkit-state", "request-buildkit-promotion"],
-            "buildkit-jobs" => ["buildkit"],
-          }
-          expected_owners.each do |volume_name, expected|
-            actual = mounts.filter_map do |container_name, volume_mounts|
-              container_name if volume_mounts.include?(volume_name)
-            end.sort
-            unless actual == expected
-              raise "unexpected mounts for #{volume_name}: #{actual.inspect}"
-            end
-          end
-          pod
-        end
-
-        general_pod = rendered_pod(ARGV[0], "nook-k0s")
-        general_init_containers = general_pod.fetch("initContainers").to_h do |container|
-          [container["name"], container]
-        end
-        unless general_init_containers.fetch("container-runtime", {})["restartPolicy"] == "Always"
-          raise "general ARC Podman API is not a native sidecar"
-        end
-        general_runner = general_pod.fetch("containers").find do |container|
-          container["name"] == "runner"
-        end
-        general_env = general_runner.fetch("env", []).to_h do |item|
-          [item["name"], item["value"]]
-        end
-        unless general_env["DOCKER_HOST"] == "tcp://127.0.0.1:2375" &&
-            general_env["NOOK_CONTAINER_RUNTIME"] == "podman"
-          raise "general ARC runner lacks its private Podman API"
-        end
-        hive_pod = rendered_pod(ARGV[1], "nook-k0s-hive")
-        unless hive_pod["runtimeClassName"] == "kata-qemu-runtime-rs"
-          raise "Hive ARC scale set must use Kata QEMU runtime-rs"
-        end
-        hive_containers = hive_pod.fetch("containers").to_h do |container|
-          [container["name"], container]
-        end
-        hive_init_containers = hive_pod.fetch("initContainers").to_h do |container|
-          [container["name"], container]
-        end
-        if hive_init_containers.key?("container-runtime")
-          raise "Hive ARC must not carry the general Podman runtime"
-        end
-        neo4j_image = hive_init_containers.fetch("neo4j", {}).fetch("image", "")
-        unless neo4j_image.split("@", 2).first == \
-               "registry.dev.nokey.sh/library/neo4j:2026.06.0-community"
-          raise "Hive ARC scale set lacks its pinned Neo4j sidecar"
-        end
-        ["neo4j", "hive-test-runtime"].each do |sidecar_name|
-          unless hive_init_containers.fetch(sidecar_name, {})["restartPolicy"] == "Always"
-            raise "Hive ARC #{sidecar_name} is not a native sidecar"
-          end
-        end
-        runner_env = hive_containers.fetch("runner").fetch("env", []).to_h do |item|
-          [item["name"], item["value"]]
-        end
-        unless runner_env["NOOK_ARC_HIVE"] == "1"
-          raise "Hive ARC runner lacks its direct-test marker"
-        end
-        if runner_env.key?("DOCKER_HOST") || runner_env.key?("NOOK_CONTAINER_RUNTIME")
-          raise "Hive ARC runner must not target the general Podman API"
-        end
-        RUBY
-        if grep -Eq 'docker:dind|dockerd|docker\.sock|sysbox|containerMode:' "$runner_render"; then
-          echo "Rendered ARC runner violates the no-DinD or host-engine contract" >&2
-          exit 1
-        fi
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
-        grep -q 'kind: AutoscalingRunnerSet' "$cache_render"
-        grep -q 'nook.nokey.sh/arc-cache-primary: "true"' "$cache_render"
         grep -q 'kind: AutoscalingRunnerSet' "$hive_render"
-        echo "Pinned ARC renders satisfy the private microVM-builder contract"
+        grep -q 'tcp://nook-buildkit.arc-runners.svc.cluster.local:1234' "$runner_render"
+        if grep -Eq 'runtimeClassName:|docker:dind|dockerd|docker\.sock|podman|privileged: true|hostPath:' "$runner_render" "$hive_render"; then
+          echo "Rendered ARC runner violates the regular-pod rootless-BuildKit contract" >&2
+          exit 1
+        fi
+        sudo -n k0s kubectl apply --dry-run=client \
+          -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" >/dev/null
+        echo "Pinned ARC renders satisfy the regular-pod persistent-BuildKit contract"
         REMOTE
-
-  arc:cache:pool:sync:
-    internal: true
-    deps: [arc:build-host:sync, arc:cache:auth:sync]
-    silent: true
-    cmds:
-      - |
-        set -euo pipefail
-        controller_target="{{.INFRA_SSH_TARGET}}"
-        while IFS=$'\t' read -r build_target build_remote_dir; do
-        test -n "$build_target"
-        test -n "$build_remote_dir"
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-          -J "$controller_target" "$build_target" bash -s -- "$build_remote_dir" <<'REMOTE'
-        set -euo pipefail
-        remote_dir="$1"
-        pool_root=/var/lib/nook-arc-buildkit
-        pool_image="$pool_root/pool.btrfs"
-        pool_image_next="$pool_root/pool.btrfs.next"
-        pool_mount="$pool_root/pool"
-        pool_size=768G
-        pool_size_bytes=824633720832
-        prior_state_bytes=34359738368
-        state_size=48G
-        state_bytes=51539607552
-        mount_unit="$(systemd-escape --path --suffix=mount "$pool_mount")"
-        mount_unit_path="/etc/systemd/system/$mount_unit"
-        cloner_unit_path=/etc/systemd/system/nook-arc-buildkit-cloner.service
-
-        sudo -n apt-get update -qq
-        sudo -n apt-get install -y -qq --no-install-recommends \
-          btrfs-progs curl e2fsprogs jq ruby util-linux
-        sudo -n install -d -m 0700 "$pool_root"
-        sudo -n install -d -m 0755 "$pool_mount"
-        if ! sudo -n test -f "$pool_image"; then
-          sudo -n rm -f -- "$pool_image_next"
-          sudo -n install -m 0600 /dev/null "$pool_image_next"
-          sudo -n truncate -s "$pool_size" "$pool_image_next"
-          sudo -n mkfs.btrfs -q -f -L nook-arc-buildkit "$pool_image_next"
-          sudo -n mv "$pool_image_next" "$pool_image"
-        fi
-        sudo -n chmod 0600 "$pool_image"
-        if test "$(sudo -n blkid -o value -s TYPE "$pool_image")" != btrfs; then
-          echo "ARC BuildKit pool image is not Btrfs: $pool_image" >&2
-          exit 1
-        fi
-        current_pool_size="$(sudo -n stat -c %s "$pool_image")"
-        if test "$current_pool_size" -lt "$pool_size_bytes"; then
-          sudo -n truncate -s "$pool_size" "$pool_image"
-        fi
-
-        mount_unit_temp="$(mktemp)"
-        cat > "$mount_unit_temp" <<UNIT
-        [Unit]
-        Description=Nook ARC BuildKit copy-on-write pool
-        After=local-fs.target
-        Before=k0scontroller.service k0sworker.service
-
-        [Mount]
-        What=$pool_image
-        Where=$pool_mount
-        Type=btrfs
-        Options=loop,noatime,space_cache=v2
-
-        [Install]
-        WantedBy=multi-user.target
-        UNIT
-        sudo -n install -m 0644 "$mount_unit_temp" "$mount_unit_path"
-        rm -f "$mount_unit_temp"
-        sudo -n systemctl daemon-reload
-        sudo -n systemctl enable --now "$mount_unit" >/dev/null
-        sudo -n mountpoint -q "$pool_mount"
-        pool_loop="$(sudo -n findmnt -n -o SOURCE --target "$pool_mount")"
-        case "$pool_loop" in
-          /dev/loop[0-9]*) ;;
-          *) echo "ARC BuildKit pool is not mounted through a loop device" >&2; exit 1 ;;
-        esac
-        # Refresh both layers on every invocation so an interrupted earlier
-        # expansion converges when this task is retried.
-        sudo -n losetup -c "$pool_loop"
-        sudo -n btrfs filesystem resize max "$pool_mount" >/dev/null
-        if test "$(sudo -n btrfs filesystem usage -b "$pool_mount" | awk '/Device size:/ {print $3; exit}')" -lt "$pool_size_bytes"; then
-          echo "ARC BuildKit pool did not reach its required capacity" >&2
-          exit 1
-        fi
-        sudo -n btrfs quota enable "$pool_mount" >/dev/null 2>&1 || true
-        if ! sudo -n btrfs qgroup show "$pool_mount" >/dev/null; then
-          echo "ARC BuildKit pool quotas are unavailable" >&2
-          exit 1
-        fi
-
-        sudo -n install -d -m 0755 "$pool_mount/seed" "$pool_mount/jobs"
-        sudo -n install -d -m 0700 "$pool_mount/requests"
-        sudo -n chmod 0700 "$pool_mount/requests"
-        seed_lock="$pool_mount/.seed.lock"
-        # Keep one inode shared with the root cloner while allowing the
-        # authorized deployment account to hold the same advisory lock.
-        sudo -n setfacl -m "u:$(id -u):--x" "$pool_root"
-        sudo -n touch "$seed_lock"
-        sudo -n chown "$(id -u):$(id -g)" "$seed_lock"
-        sudo -n chmod 0600 "$seed_lock"
-        exec 9> "$seed_lock"
-        flock -x 9
-        seed_file="$pool_mount/seed/buildkit.ext4"
-        if ! sudo -n test -f "$seed_file"; then
-          seed_temp="$pool_mount/seed/buildkit.ext4.tmp"
-          sudo -n truncate -s "$state_size" "$seed_temp"
-          loop_device="$(sudo -n losetup --find --show "$seed_temp")"
-          cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
-          trap cleanup_loop EXIT
-          sudo -n mkfs.ext4 -q -F -m 0 "$loop_device"
-          cleanup_loop
-          trap - EXIT
-          sudo -n mv "$seed_temp" "$seed_file"
-        fi
-        current_state_bytes="$(sudo -n stat -c %s "$seed_file")"
-        expanded_seed=false
-        if test "$current_state_bytes" = "$prior_state_bytes"; then
-          sudo -n truncate -s "$state_size" "$seed_file"
-          expanded_seed=true
-        elif test "$current_state_bytes" != "$state_bytes"; then
-          echo "ARC BuildKit seed has the wrong logical capacity" >&2
-          exit 1
-        fi
-        # Always reconcile the ext4 filesystem after the logical file size so
-        # an interrupted prior expansion converges on the next deployment.
-        loop_device="$(sudo -n losetup --find --show "$seed_file")"
-        cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
-        trap cleanup_loop EXIT
-        # A cloned BuildKit filesystem can be clean while still requiring a
-        # preen pass before resize2fs. Accept only clean or safely corrected
-        # states; anything requiring interactive repair still fails closed.
-        fsck_status=0
-        sudo -n e2fsck -f -p "$loop_device" >/dev/null || fsck_status=$?
-        if test "$fsck_status" -gt 1; then
-          echo "ARC BuildKit seed requires unsafe filesystem repair" >&2
-          exit 1
-        fi
-        if sudo -n resize2fs "$loop_device"; then
-          cleanup_loop
-          trap - EXIT
-        else
-          cleanup_loop
-          trap - EXIT
-          if test "$expanded_seed" != true; then
-            echo "ARC BuildKit seed reconciliation failed outside the 32-to-48 GiB migration" >&2
-            exit 1
-          fi
-          seed_backup="$pool_mount/seed/buildkit.ext4.pre-48g"
-          if sudo -n test -e "$seed_backup"; then
-            echo "ARC BuildKit seed migration backup already exists" >&2
-            exit 1
-          fi
-          seed_temp="$pool_mount/seed/buildkit.ext4.tmp"
-          sudo -n mv "$seed_file" "$seed_backup"
-          sudo -n truncate -s "$state_size" "$seed_temp"
-          loop_device="$(sudo -n losetup --find --show "$seed_temp")"
-          cleanup_loop() { sudo -n losetup -d "$loop_device" 2>/dev/null || true; }
-          trap cleanup_loop EXIT
-          sudo -n mkfs.ext4 -q -F -m 0 "$loop_device"
-          cleanup_loop
-          trap - EXIT
-          sudo -n mv "$seed_temp" "$seed_file"
-          echo "Retained the unresizable ARC seed at $seed_backup"
-        fi
-        reflink_probe="$pool_mount/seed/.reflink-probe"
-        sudo -n cp --reflink=always --sparse=auto "$seed_file" "$reflink_probe"
-        sudo -n rm -f "$reflink_probe"
-        flock -u 9
-        exec 9>&-
-
-        sudo -n install -m 0755 \
-          "$remote_dir/infra/k0s/scripts/arc-buildkit-cloner" \
-          /usr/local/sbin/nook-arc-buildkit-cloner
-        cloner_unit_temp="$(mktemp)"
-        cat > "$cloner_unit_temp" <<UNIT
-        [Unit]
-        Description=Nook ARC BuildKit reflink cloner
-        Requires=$mount_unit
-        After=$mount_unit
-        Before=k0scontroller.service k0sworker.service
-
-        [Service]
-        Type=simple
-        ExecStart=/usr/local/sbin/nook-arc-buildkit-cloner
-        Restart=always
-        RestartSec=1
-        NoNewPrivileges=true
-        PrivateTmp=true
-        ProtectHome=true
-        ProtectSystem=strict
-        ReadWritePaths=$pool_mount
-        ReadOnlyPaths=-/etc/nook/arc-cache-verifier-token
-
-        [Install]
-        WantedBy=multi-user.target
-        UNIT
-        sudo -n install -m 0644 "$cloner_unit_temp" "$cloner_unit_path"
-        rm -f "$cloner_unit_temp"
-        sudo -n systemctl daemon-reload
-        sudo -n systemctl enable --now nook-arc-buildkit-cloner.service >/dev/null
-        sudo -n systemctl restart nook-arc-buildkit-cloner.service
-        sudo -n systemctl is-active --quiet nook-arc-buildkit-cloner.service
-        echo "ARC BuildKit copy-on-write pool is ready at 768 GiB with 48 GiB per job"
-        REMOTE
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"
-
-  arc:buildkit:image:sync:
-    internal: true
-    deps: [arc:build-host:resolve]
-    silent: true
-    cmds:
-      - |
-        bash <<'BASH'
-        set -euo pipefail
-        controller_target="{{.INFRA_SSH_TARGET}}"
-        temp_dir="$(mktemp -d)"
-        artifact="$temp_dir/nook-arc-buildkit.tar"
-        cleanup() { rm -rf "$temp_dir"; }
-        trap cleanup EXIT
-
-        docker buildx build \
-          --platform linux/amd64 \
-          --provenance=false \
-          --tag localhost/nook-arc-buildkit:0.32.2-ext4-reflink-v1 \
-          --output "type=oci,dest=$artifact" \
-          infra/k0s/images/arc-buildkit
-        while IFS=$'\t' read -r build_target build_remote_dir; do
-          test -n "$build_target"
-          test -n "$build_remote_dir"
-          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-            -J "$controller_target" "$build_target" \
-            'sudo -n k0s ctr --namespace k8s.io images import -' \
-            < "$artifact"
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"
-        echo "Imported the pinned ARC BuildKit wrapper into every build node"
-        BASH
 
   arc:deploy:
-    desc: Install pinned ARC and the bounded Kata-backed Nook runner scale set.
+    desc: Install ARC runners and one persistent rootless BuildKit shard per build node.
     silent: true
     cmds:
-      - task: arc:cache-primary:preserve
       - task: arc:controller-build:prepare
-      - task: arc:cache-primary:ensure
       - task: arc:build-host:resolve
-      - task: arc:buildkit:image:sync
-      - task: arc:cache:pool:sync
+      - task: arc:buildkit:storage:prepare
       - task: arc:render:check
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
@@ -871,18 +351,8 @@ tasks:
         ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
           "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
           "$hive_values"
-
         kubectl apply -f "$remote_dir/infra/k0s/manifests/namespaces.yaml"
-        kubectl get runtimeclass kata-qemu-runtime-rs >/dev/null
-        test "$(kubectl get runtimeclass kata-qemu-runtime-rs \
-          -o jsonpath='{.overhead.podFixed.memory}')" = 1792Mi
-        kubectl get runtimeclass kata-dragonball >/dev/null
         kubectl get secret nook-arc-github --namespace arc-runners >/dev/null
-        cache_primary="$(kubectl get nodes \
-          -l nook.nokey.sh/arc-cache-primary=true \
-          -o jsonpath='{.items[0].metadata.name}')"
-        test -n "$cache_primary"
-        echo "ARC cache producer lineage is pinned to $cache_primary"
         kubectl create configmap nook-arc-hive-test-runtime \
           --namespace arc-runners \
           --from-file=run-hive-test-runtime="$remote_dir/infra/k0s/scripts/run-hive-test-runtime" \
@@ -893,107 +363,45 @@ tasks:
           --version "$chart_version" \
           --namespace arc-systems \
           --values "$remote_dir/infra/k0s/manifests/arc/controller-values.yaml" \
-          --wait \
-          --timeout 10m
-
-        # The controller caches its GitHub client. Restart after credential sync
-        # so rotation cannot leave an old Authorization value in memory.
+          --wait --timeout 10m
         kubectl rollout restart deployment/nook-arc-gha-rs-controller \
           --namespace arc-systems
         kubectl rollout status deployment/nook-arc-gha-rs-controller \
           --namespace arc-systems --timeout=10m
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/network-policy.yaml"
-        # Remove the superseded shared builder before installing the private
-        # per-microVM sidecar topology.
-        kubectl delete deployment nook-arc-buildkit \
-          --namespace arc-runners --ignore-not-found
-        kubectl delete service nook-arc-buildkit \
-          --namespace arc-runners --ignore-not-found
-        kubectl delete networkpolicy arc-runner-to-buildkit \
-          --namespace arc-runners --ignore-not-found
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
+        kubectl rollout status statefulset/nook-buildkit \
+          --namespace arc-runners --timeout=10m
+        ready_nodes="$(kubectl get pods --namespace arc-runners \
+          -l app.kubernetes.io/name=nook-buildkit \
+          -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.spec.nodeName}{"\n"}{end}' | sort -u)"
+        test "$(printf '%s\n' "$ready_nodes" | sed '/^$/d' | wc -l | tr -d ' ')" = 3
 
         helm upgrade --install nook-k0s \
           "$runner_chart" \
           --version "$chart_version" \
           --namespace arc-runners \
           --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
-          --wait \
-          --timeout 10m
+          --wait --timeout 10m
         helm upgrade --install nook-k0s-hive \
           "$runner_chart" \
           --version "$chart_version" \
           --namespace arc-runners \
           --values "$hive_values" \
-          --wait \
-          --timeout 10m
-        helm upgrade --install nook-k0s-cache \
-          "$runner_chart" \
-          --version "$chart_version" \
-          --namespace arc-runners \
-          --values "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
-          --values "$remote_dir/infra/k0s/manifests/arc/runner-cache-primary-values.yaml" \
-          --wait \
-          --timeout 10m
+          --wait --timeout 10m
+        helm uninstall nook-k0s-cache --namespace arc-runners >/dev/null 2>&1 || true
 
-        # Helm --wait covers the chart-owned AutoscalingRunnerSet, but not the
-        # listener and EphemeralRunnerSet that ARC creates asynchronously. An
-        # eventual update deliberately drains the old scale set first, so do
-        # not return while GitHub jobs could still target that transition.
-        # Require six consecutive samples so a transient Running phase cannot
-        # pass the gate while reconciliation is still converging.
-        for scale_set in nook-k0s nook-k0s-cache nook-k0s-hive; do
-          arc_ready=false
-          ready_samples=0
-          for _ in $(seq 1 360); do
-            phase="$(
-              kubectl get autoscalingrunnerset "$scale_set" \
-                --namespace arc-runners \
-                -o jsonpath='{.status.phase}' 2>/dev/null || true
-            )"
-            listener="$(
-              kubectl get autoscalinglistener \
-                --namespace arc-systems \
-                -l "actions.github.com/scale-set-name=$scale_set" \
-                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
-            )"
-            ephemeral_runner_set="$(
-              kubectl get ephemeralrunnerset \
-                --namespace arc-runners \
-                -l "actions.github.com/scale-set-name=$scale_set" \
-                -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true
-            )"
-            if test "$phase" = Running &&
-               test -n "$listener" &&
-               test -n "$ephemeral_runner_set" &&
-               kubectl wait pod \
-                 --namespace arc-systems \
-                 -l "actions.github.com/scale-set-name=$scale_set,app.kubernetes.io/component=runner-scale-set-listener" \
-                 --for=condition=Ready \
-                 --timeout=1s >/dev/null 2>&1; then
-              ready_samples=$((ready_samples + 1))
-              if test "$ready_samples" -ge 6; then
-                arc_ready=true
-                break
-              fi
-            else
-              ready_samples=0
-            fi
-            sleep 5
-          done
-          if test "$arc_ready" != true; then
-            echo "ARC scale set $scale_set did not become dispatch-ready within 30 minutes" >&2
-            kubectl get autoscalingrunnerset,ephemeralrunnerset \
-              --namespace arc-runners -o wide >&2 || true
-            kubectl get autoscalinglistener,pods \
-              --namespace arc-systems -o wide >&2 || true
-            exit 1
-          fi
-
-          kubectl get autoscalingrunnerset "$scale_set" \
-            --namespace arc-runners \
-            -o jsonpath='{.metadata.name}{" max="}{.spec.maxRunners}{"\n"}'
+        test "$(kubectl get autoscalingrunnerset/nook-k0s \
+          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 25
+        test "$(kubectl get autoscalingrunnerset/nook-k0s-hive \
+          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 10
+        for scale_set in nook-k0s nook-k0s-hive; do
+          kubectl wait pod --namespace arc-systems \
+            -l "actions.github.com/scale-set-name=$scale_set" \
+            --for=condition=Ready --timeout=10m
         done
         echo "ARC scale sets are dispatch-ready"
         REMOTE
       - task: arc:build-hosts:activate
+      - task: arc:status

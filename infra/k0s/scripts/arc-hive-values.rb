@@ -23,20 +23,6 @@ pod = pod_template.fetch("spec")
 pod.fetch("topologySpreadConstraints").fetch(0).fetch("labelSelector").fetch("matchLabels")[
   "nook.nokey.sh/arc-spread-group"
 ] = "hive"
-pod["runtimeClassName"] = "kata-qemu-runtime-rs"
-pod.fetch("initContainers").reject! do |container|
-  %w[prepare-container-runtime-state container-runtime].include?(container["name"])
-end
-pod.fetch("volumes").reject! do |volume|
-  volume["name"] == "container-runtime-state"
-end
-
-buildkit = named(pod.fetch("initContainers"), "buildkit")
-buildkit.fetch("resources").fetch("requests")["cpu"] = "1"
-buildkit.fetch("resources").fetch("requests")["memory"] = "4Gi"
-buildkit.fetch("resources").fetch("limits")["cpu"] = "4"
-buildkit.fetch("resources").fetch("limits")["memory"] = "10Gi"
-
 pod.fetch("initContainers").concat(
   [
     {
@@ -81,9 +67,6 @@ pod.fetch("initContainers").concat(
 )
 
 runner = named(pod.fetch("containers"), "runner")
-runner.fetch("env").reject! do |item|
-  %w[DOCKER_HOST NOOK_CONTAINER_RUNTIME].include?(item["name"])
-end
 runner.fetch("env") << { "name" => "NOOK_ARC_HIVE", "value" => "1" }
 runner.fetch("resources").fetch("requests")["cpu"] = "500m"
 runner.fetch("resources").fetch("requests")["memory"] = "1Gi"

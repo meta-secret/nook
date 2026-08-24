@@ -102,7 +102,7 @@ qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
 select those nodes. They enforce a maximum hostname skew of five, then use the
 primary, secondary, and overflow tiers to assign the extra slots. Container
 CPU requests provide the aggregate capacity boundary across scale sets. The
-cache-primary scale set remains pinned to one node. Node and Pod traffic crosses an authenticated
+Each ARC build node owns one persistent BuildKit shard. Node and Pod traffic crosses an authenticated
 WireGuard mesh on `10.202.0.0/24`. Each worker address has one owner. Before
 mutating a controller peer, deployment verifies that any persisted peer key
 and Kubernetes `InternalIP` assignment identify that same worker. Address collisions fail
@@ -576,9 +576,9 @@ Deployment verification:
 
 ### ARC trusted-build boundary
 
-The dedicated [ARC Kata Runner Platform](arc-kata-runner-platform.md) owns
-ephemeral runner isolation, compute placement, job-scoped BuildKit state, local
-cache promotion, and ARC credential boundaries.
+The dedicated [ARC Persistent BuildKit Runner Platform](arc-kata-runner-platform.md)
+owns disposable runner Pods, compute placement, persistent node-local BuildKit
+state, cache distribution, and ARC credential boundaries.
 
 ### Credential ownership
 
@@ -590,7 +590,7 @@ cache promotion, and ARC credential boundaries.
 - **Repository-scoped GitHub token:** Mount into the Main-repair worker.
   - Expose it as `GH_TOKEN` for standard `git` and `gh` operations.
 - **ARC GitHub token:** Follow the credential ownership and rotation contract
-  in [ARC Kata Runner Platform](arc-kata-runner-platform.md#credential-ownership).
+  in [ARC Persistent BuildKit Runner Platform](arc-kata-runner-platform.md#credential-ownership).
   - Never mount it into an ephemeral runner Pod.
 - **Reaper controller credential:** Mount into the Pod reaper, Workbench
   dispatcher, and dedicated controller only.
@@ -753,16 +753,11 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
   changes and rely on repository-owned GitHub verification, where the same
   SeaweedFS cache is attached by the workflow.
 
-ARC runners reach `registry.dev.nokey.sh` on the k0s node's local TLS ingress
-path. Buildx may import authenticated Zot registry-cache refs to bootstrap a
-new or cold compute node. Successful cache-primary Main producers promote the
-private local seed and skip registry cache export. Hive and hosted fallback
-runners continue to publish Zot cache, so a replacement compute node retains a
-cross-host recovery source. Each job's writable clone is private and is removed
-after promotion or inactivity.
-Main cache producers run in dependency order. An authenticated promotion intent
-blocks the next producer clone until the prior final-success generation is
-promoted; non-producing Main validation remains parallel.
+ARC runners reach `registry.dev.nokey.sh` on the k0s TLS ingress path. Buildx
+imports authenticated Zot refs when the selected node-local shard is cold.
+Later jobs on that node reuse the persistent BuildKit state. Hive keeps its
+independent exact-head registry lineage. Main producers retain dependency order
+and publish shared refs only after verification.
 
 ## 10. Taskfile operations
 
@@ -818,7 +813,8 @@ task infra:deploy
   platform rollout.
   - It syncs repository-owned k0s configuration.
   - It installs and verifies k0s and Kata.
-  - It deploys ARC and the bounded Kata runner scale set.
+  - It deploys ARC, disposable regular runner Pods, and three persistent
+    rootless BuildKit shards.
   - It deploys Neo4j and preserves cluster-rotated credentials.
   - It publishes the exact Hive image, deploys the warm pool, and verifies Pod
     replacement.

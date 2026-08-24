@@ -406,7 +406,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
 with **`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`,
-and `arc:runtime` selections use ephemeral Kata-isolated ARC runners in k0s;
+and `arc:runtime` selections use disposable ARC runner Pods in k0s;
 other selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
 **`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
 not start the complete pipeline. Local Task mirrors below remain available for
@@ -508,7 +508,7 @@ task pr:ready PR=410       # read-only exact-head readiness assertion; never mer
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
-task infra:arc:deploy       # targeted redeploy of the Kata-isolated ARC scale sets
+task infra:arc:deploy       # deploy ARC plus one persistent BuildKit shard per build node
 task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
 task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
@@ -591,26 +591,21 @@ change, update this README in the same change (see
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
 Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-explicit Main job run in fresh ARC Kata microVMs. The general set provides a
-job-scoped Podman API on guest loopback for runtime jobs, without Docker-in-
-Docker or a host socket. Hive Rust uses a dedicated ARC set with private Neo4j
-and pinned Trixie test-runtime native sidecars; its browser lane stays hosted.
-Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
-WASM, and deployment jobs run on fresh GitHub-hosted VMs. Each ARC runner
-starts from a private 48 GiB reflinked BuildKit seed and restores distinct
-cache refs from the authenticated OCI registry at
-`registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
-copy its full logical capacity. A credential-free sidecar forwards a candidate
-to an authenticated host verifier, which promotes local state only after the
-exact Main runner job succeeds. Hosted fallback
-jobs refresh shared Zot refs, which bootstrap new or cold compute nodes. Main
-cache producers are serialized. An authenticated promotion intent blocks the
-next producer clone until the preceding successful state becomes the next seed
-generation. A dedicated `nook-k0s-cache` producer scale set is pinned to one
-cache-primary node, so adding general compute workers cannot split that lineage
-across local seeds.
-Hive keeps an independent Zot cache lineage because its separate workflow may
-overlap Main and must not race the serialized Main seed.
+explicit Main job run in disposable ordinary ARC Pods. The Docker CLI connects
+to the persistent rootless BuildKit shard on the selected node. ARC runners
+receive no Docker daemon, Podman API, DinD process, host runtime socket, host
+path, or Kata runtime.
+
+The `nook-buildkit` StatefulSet keeps one 64 GiB local shard on each qualified
+node. A node-local Service prevents cross-node BuildKit traffic. Concurrent jobs
+share BuildKit's content-addressed store. Zot carries portable cache refs between
+nodes and hosted runners. A cold node imports referenced blobs once. Later jobs
+reuse the hydrated local state.
+
+Hive Rust uses the dedicated `nook-k0s-hive` ARC set with pinned Neo4j and
+Trixie test-runtime sidecars. Fork PRs, Dependabot PRs, releases, and unsupported
+runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
+Pull requests use exact-SHA refs under `nook/remote-buildcache`.
 Same-repository PR jobs may publish only exact-SHA generations under
 `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
 producer restores Main's dedicated, complete WASM dependency boundary so it

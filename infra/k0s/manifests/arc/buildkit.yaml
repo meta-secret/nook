@@ -1,0 +1,220 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: nook-buildkit-local-retain
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nook-buildkit-rise-s
+spec:
+  capacity:
+    storage: 64Gi
+  volumeMode: Filesystem
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nook-buildkit-local-retain
+  local:
+    path: /var/lib/nook-arc-buildkit/state
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["nook-rise-s-1"]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nook-buildkit-home
+spec:
+  capacity:
+    storage: 64Gi
+  volumeMode: Filesystem
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nook-buildkit-local-retain
+  local:
+    path: /var/lib/nook-arc-buildkit/state
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["bynull-servo"]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nook-buildkit-ks6
+spec:
+  capacity:
+    storage: 64Gi
+  volumeMode: Filesystem
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nook-buildkit-local-retain
+  local:
+    path: /var/lib/nook-arc-buildkit/state
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["ovh-us"]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nook-buildkit
+  namespace: arc-runners
+data:
+  buildkitd.toml: |
+    [registry."docker.io"]
+      mirrors = ["registry.dev.nokey.sh"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nook-buildkit-headless
+  namespace: arc-runners
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: nook-buildkit
+  ports:
+    - name: buildkit
+      port: 1234
+      targetPort: buildkit
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nook-buildkit
+  namespace: arc-runners
+spec:
+  internalTrafficPolicy: Local
+  selector:
+    app.kubernetes.io/name: nook-buildkit
+  ports:
+    - name: buildkit
+      port: 1234
+      targetPort: buildkit
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nook-buildkit
+  namespace: arc-runners
+spec:
+  serviceName: nook-buildkit-headless
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: nook-buildkit
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nook-buildkit
+        nook.nokey.sh/role: arc-buildkit
+    spec:
+      nodeSelector:
+        nook.nokey.sh/arc-build: "true"
+      tolerations:
+        - key: nook.nokey.sh/arc-build
+          operator: Equal
+          value: preparing
+          effect: NoSchedule
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - topologyKey: kubernetes.io/hostname
+              labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: nook-buildkit
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 120
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      containers:
+        - name: buildkitd
+          image: registry.dev.nokey.sh/moby/buildkit:v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9
+          args:
+            - --addr
+            - unix:///run/user/1000/buildkit/buildkitd.sock
+            - --addr
+            - tcp://0.0.0.0:1234
+            - --config
+            - /etc/buildkit/buildkitd.toml
+            - --oci-worker-no-process-sandbox
+            - --oci-worker-gc
+            - --oci-worker-gc-keepstorage
+            - "56000"
+          ports:
+            - name: buildkit
+              containerPort: 1234
+          readinessProbe:
+            exec:
+              command: ["buildctl", "debug", "workers"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command: ["buildctl", "debug", "workers"]
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            failureThreshold: 3
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
+            runAsNonRoot: true
+            seccompProfile:
+              type: Unconfined
+            appArmorProfile:
+              type: Unconfined
+          resources:
+            requests:
+              cpu: "4"
+              memory: 8Gi
+            limits:
+              memory: 48Gi
+          volumeMounts:
+            - name: buildkit-state
+              mountPath: /home/user/.local/share/buildkit
+            - name: buildkit-config
+              mountPath: /etc/buildkit/buildkitd.toml
+              subPath: buildkitd.toml
+              readOnly: true
+            - name: runtime
+              mountPath: /run/user/1000
+            - name: temporary
+              mountPath: /tmp
+      volumes:
+        - name: buildkit-config
+          configMap:
+            name: nook-buildkit
+        - name: runtime
+          emptyDir:
+            sizeLimit: 64Mi
+        - name: temporary
+          emptyDir:
+            sizeLimit: 4Gi
+  volumeClaimTemplates:
+    - metadata:
+        name: buildkit-state
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: nook-buildkit-local-retain
+        resources:
+          requests:
+            storage: 64Gi

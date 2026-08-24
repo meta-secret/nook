@@ -196,8 +196,8 @@ If Actions fails:
 - Every result is bound to the explicitly validated PR head.
 - A push after validation makes the earlier result stale and does not start a replacement; the agent must run `task pr:validate` again.
 - Delivery restores private Zot BuildKit cache scopes for Rust/WASM, web dependencies, and the final web image.
-- Main ARC producers refresh the cache-primary node-local seed. Hosted fallback
-  publication maintains Zot lineage for GitHub-hosted consumers.
+- Main ARC producers publish shared Zot refs after verification. Persistent
+  node-local BuildKit shards accelerate repeated work without replacing Zot.
 - GitHub Actions cache storage is forbidden for BuildKit layers.
 - A failing fmt, clippy, unit test, or e2e spec still burns a remote validation cycle, so unconditional `task format` before push exists specifically to stop the most common avoidable Verify failures.
 

@@ -820,4 +820,28 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-hive-clippy-source"
         echo "scenario Y ok"
 
+        echo "== Scenario Z: persistent ARC-shaped shard survives daemon restart =="
+        printf '%s\n' "$parent_input_orig" >"$parent_input"
+        printf '%s\n' "$loom_input_orig" >"$loom_input"
+        printf '%s\n' "$crate_a_input_orig" >"$crate_a_input"
+        printf '%s\n' "$crate_b_input_orig" >"$crate_b_input"
+        printf '%s\n' "$leaf_input_orig" >"$leaf_input"
+        BAKE_SIM_CACHE_ENABLED=
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        create_builder "nook-bake-sim-z-persistent-${suffix}"
+        bake_plain "$proof_log" combined-leaf
+        require_uncached_step "$proof_log" "bake-sim-leaf-expensive"
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        builder_container="buildx_buildkit_${builder}0"
+        "$docker_bin" restart "$builder_container" >/dev/null
+        "$docker_bin" buildx inspect "$builder" --bootstrap >/dev/null
+        bake_plain "$proof_log" combined-leaf
+        require_cached_step "$proof_log" "bake-sim-parent-expensive"
+        require_cached_step "$proof_log" "bake-sim-leaf-expensive"
+        echo "scenario Z ok"
+
         echo "bake-cache runtime proof passed"

@@ -2,118 +2,67 @@ version: '3'
 
 vars:
   ARC_RUNNER_LABEL: nook-k0s
-  ARC_CACHE_RUNNER_LABEL: nook-k0s-cache
   ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
   ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
-  ARC_SMOKE_JOB_NAME: '{{default "Remote / preflight" .ARC_SMOKE_JOB_NAME}}'
   ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
 
 # ARC GitHub routing and exact-run operational smoke controls.
 tasks:
   arc:activate:
-    desc: Route opted-in workflows to the Nook ARC scale set.
+    desc: Route trusted workflows to the Nook ARC scale sets.
     preconditions:
       - sh: gh auth status >/dev/null 2>&1
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
-      - gh variable set NOOK_CACHE_RUNS_ON --repo meta-secret/nook --body "{{.ARC_CACHE_RUNNER_LABEL}}"
-      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body nook-k0s-hive
-      - echo "Opted-in workflows now target {{.ARC_RUNNER_LABEL}}, {{.ARC_CACHE_RUNNER_LABEL}}, and nook-k0s-hive"
+      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body "{{.ARC_HIVE_RUNNER_LABEL}}"
+      - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
+      - echo "Trusted workflows now target {{.ARC_RUNNER_LABEL}} and {{.ARC_HIVE_RUNNER_LABEL}}"
 
   arc:fallback:
-    desc: Route opted-in workflows back to GitHub-hosted capacity.
+    desc: Route trusted workflows back to GitHub-hosted capacity.
     preconditions:
       - sh: gh auth status >/dev/null 2>&1
         msg: GitHub CLI must be authenticated.
     cmds:
       - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
-      - gh variable set NOOK_CACHE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
       - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
-      - echo "Opted-in workflows now target ubuntu-latest"
+      - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
+      - echo "Trusted workflows now target ubuntu-latest"
 
   arc:smoke:
-    desc: Run a trusted exact-branch task and validate its stopped ARC state.
-    deps: [arc:build-host:resolve]
-    vars:
-      ARC_SMOKE_STATE_FILE:
-        sh: 'mktemp "${TMPDIR:-/tmp}/nook-arc-smoke-{{.ARC_SMOKE_RUNNER_LABEL}}.XXXXXX"'
+    desc: Run a trusted exact-branch task and verify its ARC runner assignment.
+    preconditions:
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
     cmds:
-      - |
-        case "{{.ARC_SMOKE_RUNNER_LABEL}}" in
-          "{{.ARC_RUNNER_LABEL}}")
-            route_variable=NOOK_RUNS_ON
-            ;;
-          "{{.ARC_CACHE_RUNNER_LABEL}}")
-            route_variable=NOOK_CACHE_RUNS_ON
-            ;;
-          "{{.ARC_HIVE_RUNNER_LABEL}}")
-            route_variable=NOOK_HIVE_RUNS_ON
-            ;;
-          *)
-            echo "ARC smoke received an unsupported runner label: {{.ARC_SMOKE_RUNNER_LABEL}}" >&2
-            exit 2
-            ;;
-        esac
-        selected_runner="$(
-          gh variable get "$route_variable" \
-            --repo meta-secret/nook
-        )"
-        if test "$selected_runner" != "{{.ARC_SMOKE_RUNNER_LABEL}}"; then
-          echo "ARC smoke requires $route_variable={{.ARC_SMOKE_RUNNER_LABEL}}; got $selected_runner" >&2
-          exit 2
-        fi
       - |
         bash <<'BASH'
         set -euo pipefail
-        controller_target="{{.INFRA_SSH_TARGET}}"
-        build_target=""
-        find_sandbox() {
-          local pod_uid="$1"
-          local found_target=""
-          local found_sandbox=""
-          local candidate_target candidate_sandbox
-          while IFS=$'\t' read -r candidate_target candidate_remote_dir; do
-            test -n "$candidate_target"
-            test -n "$candidate_remote_dir"
-            candidate_sandbox="$(
-              ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                -J "$controller_target" "$candidate_target" \
-                "sudo -n k0s ctr --namespace k8s.io containers list -q 'labels.\"io.kubernetes.pod.uid\"==$pod_uid,labels.\"io.cri-containerd.kind\"==sandbox' 2>/dev/null" || true
-            )"
-            test -z "$candidate_sandbox" && continue
-            if test -n "$found_target"; then
-              echo "ARC smoke found its Kata sandbox on multiple build nodes" >&2
-              return 1
-            fi
-            found_target="$candidate_target"
-            found_sandbox="$candidate_sandbox"
-          done < "$HOME/.nook/infra/arc-build-ssh-targets"
-          test -z "$found_target" || printf '%s\t%s\n' "$found_target" "$found_sandbox"
-        }
         smoke_task='{{.ARC_SMOKE_TASK}}'
-        smoke_job_name='{{.ARC_SMOKE_JOB_NAME}}'
         smoke_runner_label='{{.ARC_SMOKE_RUNNER_LABEL}}'
+        case "$smoke_runner_label" in
+          "{{.ARC_RUNNER_LABEL}}") route_variable=NOOK_RUNS_ON ;;
+          "{{.ARC_HIVE_RUNNER_LABEL}}") route_variable=NOOK_HIVE_RUNS_ON ;;
+          *)
+            echo "Unsupported ARC runner label: $smoke_runner_label" >&2
+            exit 2
+            ;;
+        esac
+        selected_runner="$(gh variable get "$route_variable" --repo meta-secret/nook)"
+        test "$selected_runner" = "$smoke_runner_label"
+
         smoke_ref="$(git branch --show-current)"
-        if test -z "$smoke_ref"; then
-          echo "ARC smoke requires a named, pushed branch." >&2
-          exit 2
-        fi
+        test -n "$smoke_ref"
         head_sha="$(git rev-parse HEAD)"
-        state_file="{{.ARC_SMOKE_STATE_FILE}}"
-        rm -f "$state_file"
-        remote_sha="$(
-          git ls-remote --refs origin "refs/heads/$smoke_ref" |
-            awk 'NR == 1 { print $1 }'
-        )"
+        remote_sha="$(git ls-remote --refs origin "refs/heads/$smoke_ref" | awk 'NR == 1 { print $1 }')"
         if test "$remote_sha" != "$head_sha"; then
-          echo "ARC smoke requires $smoke_ref to be pushed at the local HEAD." >&2
-          echo "local:  $head_sha" >&2
-          echo "remote: ${remote_sha:-missing}" >&2
+          echo "ARC smoke requires the current branch to be pushed at $head_sha" >&2
           exit 2
         fi
+
         dispatch_nonce="$(openssl rand -hex 16)"
-        expected_run_name="Remote / $smoke_task / $dispatch_nonce"
+        title="Remote / $smoke_task / $dispatch_nonce"
         gh workflow run remote.yml \
           --repo meta-secret/nook \
           --ref "$smoke_ref" \
@@ -122,358 +71,39 @@ tasks:
           --raw-field "runner_label=$smoke_runner_label"
         run_id=""
         for _ in $(seq 1 30); do
-          run_id="$(
-            gh run list \
-              --repo meta-secret/nook \
-              --workflow remote.yml \
-              --branch "$smoke_ref" \
-              --event workflow_dispatch \
-              --limit 100 \
-              --json databaseId,displayTitle,headSha |
-              jq -r \
-                --arg title "$expected_run_name" \
-                --arg sha "$head_sha" \
-                '.[] | select(.displayTitle == $title and .headSha == $sha) | .databaseId' |
-              head -n 1
-          )"
+          run_id="$(gh run list \
+            --repo meta-secret/nook \
+            --workflow remote.yml \
+            --branch "$smoke_ref" \
+            --event workflow_dispatch \
+            --limit 100 \
+            --json databaseId,displayTitle,headSha \
+            --jq ".[] | select(.displayTitle == \"$title\" and .headSha == \"$head_sha\") | .databaseId" |
+            head -n 1)"
           test -n "$run_id" && break
           sleep 2
         done
-        if test -z "$run_id"; then
-          echo "ARC smoke could not find dispatch nonce $dispatch_nonce" >&2
-          exit 1
-        fi
-        runner_name=""
-        runner_uid=""
-        runner_sandbox_id=""
-        runner_state_retained=""
-        build_target=""
-        cancel_run() {
-          gh api --method POST \
-            "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
-            >/dev/null 2>&1 ||
-            gh run cancel "$run_id" --repo meta-secret/nook || true
-        }
-        cleanup_smoke() {
-          exit_status=$?
-          trap - EXIT INT TERM
-          if test ! -f "$state_file"; then
-            cancel_run
-            if test -n "$runner_uid" && test -n "$build_target"; then
-              ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                -J "$controller_target" "$build_target" \
-                "sudo -n rm -f -- '/var/lib/nook-arc-buildkit/pool/runtime/$runner_uid.retain'" \
-                >/dev/null 2>&1 || true
-            fi
-          fi
-          exit "$exit_status"
-        }
-        trap cleanup_smoke EXIT
-        trap 'exit 130' INT
-        trap 'exit 143' TERM
-        dispatched_sha="$(
-          gh run view "$run_id" \
-            --repo meta-secret/nook \
-            --json headSha \
-            --jq .headSha
-        )"
-        if test "$dispatched_sha" != "$head_sha"; then
-          echo "ARC smoke branch moved before dispatch: expected $head_sha, got $dispatched_sha" >&2
-          gh api --method POST \
-            "repos/meta-secret/nook/actions/runs/$run_id/force-cancel" \
-            >/dev/null 2>&1 || true
-          exit 1
-        fi
-        missing_runner_samples=0
-        for _ in $(seq 1 500); do
-          run_state="$(
-            gh run view "$run_id" \
-              --repo meta-secret/nook \
-              --json status,conclusion \
-              --jq '[.status, (.conclusion // "")] | @tsv'
-          )"
-          status="${run_state%%$'\t'*}"
-          conclusion="${run_state#*$'\t'}"
-          if test "$status" = completed; then
-            if test "$conclusion" != success; then
-              echo "ARC smoke run $run_id completed with $conclusion" >&2
-              exit 1
-            fi
-            if test -z "$runner_uid"; then
-              echo "Successful ARC smoke did not capture its runner Pod UID" >&2
-              exit 1
-            fi
-            if [[ ! "$runner_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
-              echo "Successful ARC smoke did not capture one Kata sandbox ID" >&2
-              exit 1
-            fi
-            if test -z "$runner_state_retained"; then
-              echo "Successful ARC smoke did not retain its BuildKit state" >&2
-              exit 1
-            fi
-            completed_sandbox="$(find_sandbox "$runner_uid")"
-            completed_build_target="${completed_sandbox%%$'\t'*}"
-            completed_sandbox_id="${completed_sandbox#*$'\t'}"
-            if test "$completed_build_target" != "$build_target" ||
-               test "$completed_sandbox_id" != "$runner_sandbox_id"; then
-              echo "ARC smoke sandbox identity changed before completion" >&2
-              exit 1
-            fi
-            printf '%s\n%s\n%s\n%s\n' \
-              "$run_id" "$runner_uid" "$runner_sandbox_id" "$build_target" > "$state_file"
-            break
-          fi
-
-          discovered_runner="$(
-            gh api "repos/meta-secret/nook/actions/runs/$run_id/jobs" \
-              --jq ".jobs[] | select(.name == \"$smoke_job_name\") | .runner_name // empty"
-          )"
-          if test -n "$discovered_runner"; then
-            runner_name="$discovered_runner"
-            case "$runner_name" in
-              "$smoke_runner_label"-*) ;;
-              *)
-                echo "ARC smoke received an unexpected runner name: $runner_name" >&2
-                cancel_run
-                exit 1
-                ;;
-            esac
-            pod_identity="$(
-              ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                "sudo -n k0s kubectl get pod --namespace arc-runners '$runner_name' -o jsonpath='{.metadata.uid}:{.status.phase}' 2>/dev/null" || true
-            )"
-            current_uid="${pod_identity%%:*}"
-            pod_state="${pod_identity#*:}"
-            if test -z "$pod_identity"; then
-              missing_runner_samples=$((missing_runner_samples + 1))
-            else
-              missing_runner_samples=0
-              if test -z "$runner_uid"; then
-                runner_uid="$current_uid"
-              elif test "$current_uid" != "$runner_uid"; then
-                echo "ARC replaced assigned runner $runner_name during smoke run $run_id" >&2
-                cancel_run
-                ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                  "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
-                exit 1
-              fi
-              current_sandbox="$(find_sandbox "$runner_uid")"
-              current_build_target="${current_sandbox%%$'\t'*}"
-              current_sandbox_id="${current_sandbox#*$'\t'}"
-              if test -z "$current_sandbox_id"; then
-                runner_sandbox_id=""
-              elif [[ "$current_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
-                build_target="$current_build_target"
-                runner_sandbox_id="$current_sandbox_id"
-              else
-                echo "ARC smoke captured an invalid current Kata sandbox ID" >&2
-                cancel_run
-                exit 1
-              fi
-              if [[ ! "$runner_uid" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]; then
-                echo "ARC smoke captured an invalid runner Pod UID" >&2
-                cancel_run
-                exit 1
-              fi
-              if test -z "$runner_state_retained" &&
-                 test -n "$build_target" &&
-                 ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-                   -J "$controller_target" "$build_target" \
-                   "sudo -n sh -ceu 'job_dir=\"/var/lib/nook-arc-buildkit/pool/jobs/\$1\"; runtime_dir=/var/lib/nook-arc-buildkit/pool/runtime; test -f \"\$job_dir/buildkit.ext4\"; umask 077; printf \"%s\\n\" \"\$((\$(date +%s) + 1800))\" > \"\$runtime_dir/\$1.retain.tmp\"; mv \"\$runtime_dir/\$1.retain.tmp\" \"\$runtime_dir/\$1.retain\"' sh '$runner_uid'"; then
-                runner_state_retained=1
-              fi
-            fi
-            case "$pod_state" in
-              Failed*)
-                echo "ARC runner $runner_name failed after accepting smoke run $run_id" >&2
-                cancel_run
-                ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                  "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
-                exit 1
-                ;;
-            esac
-            if ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                 "sudo -n k0s kubectl logs --namespace arc-runners '$runner_name' --container runner --tail=80 2>/dev/null" |
-               grep -Fq 'A session for this runner already exists.'; then
-              echo "ARC runner $runner_name hit a stale JIT session during smoke run $run_id" >&2
-              cancel_run
-              ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
-              exit 1
-            fi
-            if test "$missing_runner_samples" -ge 3; then
-              echo "ARC runner $runner_name disappeared after accepting smoke run $run_id" >&2
-              cancel_run
-              ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-                "sudo -n k0s kubectl delete ephemeralrunner --namespace arc-runners '$runner_name' --ignore-not-found" || true
-              exit 1
-            fi
-          fi
-          sleep 3
-        done
-        if test ! -f "$state_file"; then
-          echo "ARC smoke run $run_id did not complete within 25 minutes" >&2
-          cancel_run
-          exit 1
-        fi
-        trap - EXIT INT TERM
-        BASH
-      - |
-        bash <<'BASH'
-        set -euo pipefail
-        state_file="{{.ARC_SMOKE_STATE_FILE}}"
-        if test ! -f "$state_file"; then
-          echo "ARC smoke did not persist teardown state" >&2
-          exit 1
-        fi
-        state_lines="$(wc -l < "$state_file" | tr -d ' ')"
-        run_id="$(sed -n '1p' "$state_file")"
-        runner_uid="$(sed -n '2p' "$state_file")"
-        runner_sandbox_id="$(sed -n '3p' "$state_file")"
-        build_target="$(sed -n '4p' "$state_file")"
-        rm -f "$state_file"
-        if test "$state_lines" -ne 4; then
-          echo "ARC smoke did not persist complete teardown state" >&2
-          exit 1
-        fi
-        final_status="$(
-          gh run view "$run_id" --repo meta-secret/nook --json status --jq .status
-        )"
-        if test "$final_status" != completed; then
-          echo "ARC smoke run $run_id did not complete within 25 minutes" >&2
-          exit 1
-        fi
-        if ! gh api \
-          "repos/meta-secret/nook/actions/runs/$run_id/jobs" \
-          --jq ".jobs[] | select(.name == \"{{.ARC_SMOKE_JOB_NAME}}\") | .labels[]" |
-          grep -Fxq "{{.ARC_SMOKE_RUNNER_LABEL}}"; then
-          echo "Successful smoke run did not report the ARC scale-set label" >&2
-          exit 1
-        fi
-        if test -z "$runner_uid"; then
-          echo "Successful ARC smoke did not capture its runner Pod UID" >&2
-          exit 1
-        fi
-        if [[ ! "$runner_sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "Successful ARC smoke did not capture one Kata sandbox ID" >&2
-          exit 1
-        fi
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
-          bash -s -- "$runner_uid" <<'REMOTE'
-        set -euo pipefail
-        pod_uid="$1"
-        for _ in $(seq 1 180); do
-          if ! sudo -n k0s kubectl get pods --namespace arc-runners \
-            -o jsonpath='{range .items[*]}{.metadata.uid}{"\n"}{end}' |
-            grep -Fxq "$pod_uid"; then
-            exit 0
-          fi
-          sleep 1
-        done
-        echo "ARC smoke Pod $pod_uid remained in the API after completion" >&2
-        exit 1
-        REMOTE
-        ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
-          -J "{{.INFRA_SSH_TARGET}}" "$build_target" \
-          bash -s -- "$runner_uid" "$runner_sandbox_id" <<'REMOTE'
-        set -euo pipefail
-        pod_uid="$1"
-        sandbox_id="$2"
-        case "$pod_uid" in
-          ????????-????-????-????-????????????) ;;
-          *) echo "Invalid ARC smoke Pod UID" >&2; exit 2 ;;
-        esac
-        if [[ ! "$sandbox_id" =~ ^[0-9a-f]{64}$ ]]; then
-          echo "Invalid ARC smoke sandbox ID" >&2
-          exit 2
-        fi
-        runtime_stopped=false
-        for _ in $(seq 1 180); do
-          kubelet_present=false
-          container_present=false
-          task_present=false
-          shim_present=false
-          test ! -e "/var/lib/k0s/kubelet/pods/$pod_uid" || kubelet_present=true
-          if sudo -n k0s ctr --namespace k8s.io containers info \
-            "$sandbox_id" >/dev/null 2>&1; then
-            container_present=true
-          fi
-          if sudo -n k0s ctr --namespace k8s.io tasks list -q 2>/dev/null |
-            grep -Fxq "$sandbox_id"; then
-            task_present=true
-          fi
-          for command_line_file in /proc/[0-9]*/cmdline; do
-            test -r "$command_line_file" || continue
-            command_line="$(tr '\0' ' ' 2>/dev/null < "$command_line_file" || true)"
-            case "$command_line" in
-              *containerd-shim-kata-v2*)
-                case "$command_line" in
-                  *" -id $sandbox_id "*)
-                    shim_present=true
-                    break
-                    ;;
-                esac
-                ;;
-            esac
-          done
-          if test "$kubelet_present" = false &&
-             test "$container_present" = false &&
-             test "$task_present" = false &&
-             test "$shim_present" = false; then
-            runtime_stopped=true
-            break
-          fi
-          sleep 1
-        done
-        if test "$runtime_stopped" != true; then
-          echo "ARC smoke sandbox $sandbox_id did not stop before state disposal" >&2
-          exit 1
-        fi
-
-        pool_dir=/var/lib/nook-arc-buildkit/pool
-        job_dir="$pool_dir/jobs/$pod_uid"
-        job_file="$job_dir/buildkit.ext4"
-        request_lane="$pool_dir/requests/$pod_uid"
-        intent_dir="$pool_dir/runtime/intents"
-        sudo -n mountpoint -q "$pool_dir"
-        sudo -n test -f "$job_dir/.ready"
-        if sudo -n test -L "$job_file" ||
-           test "$(sudo -n stat -c '%F:%u:%g:%h:%s' -- "$job_file")" != \
-             "regular file:0:0:1:51539607552"; then
-          echo "ARC smoke BuildKit state is not the root-owned regular clone" >&2
-          exit 1
-        fi
-        if sudo -n test -L "$request_lane" ||
-           ! sudo -n btrfs subvolume show "$request_lane" >/dev/null 2>&1; then
-          echo "ARC smoke request lane is not the bounded Btrfs subvolume" >&2
-          exit 1
-        fi
-        sudo -n btrfs subvolume delete "$request_lane" >/dev/null
-        sudo -n btrfs subvolume delete "$job_dir" >/dev/null
-        sudo -n rm -f -- "$pool_dir/runtime/$pod_uid.sandbox" \
-          "$pool_dir/runtime/$pod_uid.retain" \
-          "$intent_dir/$pod_uid.intent" "$intent_dir/$pod_uid.intent.next" \
-          "$intent_dir/$pod_uid.accepted.next"
-        sudo -n btrfs filesystem sync "$pool_dir"
-        echo "Validated and discarded successful ARC smoke state"
-        REMOTE
-        echo "ARC smoke run $run_id completed on {{.ARC_SMOKE_RUNNER_LABEL}}"
+        test -n "$run_id"
+        gh run watch "$run_id" --repo meta-secret/nook --exit-status
+        runner_names="$(gh run view "$run_id" --repo meta-secret/nook --json jobs \
+          --jq '[.jobs[] | select(.conclusion == "success") | .runnerName] | unique | .[]')"
+        test -n "$runner_names"
+        printf 'ARC smoke passed: run=%s label=%s runners=%s\n' \
+          "$run_id" "$smoke_runner_label" "$(tr '\n' ',' <<<"$runner_names" | sed 's/,$//')"
         BASH
 
-  arc:hive:smoke:
-    desc: Validate trusted Hive verification through ARC.
-    cmds:
-      - task: arc:smoke
-        vars:
-          ARC_SMOKE_TASK: hive:verify
-          ARC_SMOKE_JOB_NAME: Remote / hive:verify
-          ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive
-
-  arc:cache:smoke:
-    desc: Validate the cache-primary ARC route and Kata runtime.
+  arc:smoke:general:
+    desc: Validate the general ARC route.
     cmds:
       - task: arc:smoke
         vars:
           ARC_SMOKE_TASK: arc:runtime
-          ARC_SMOKE_JOB_NAME: Remote / arc:runtime
-          ARC_SMOKE_RUNNER_LABEL: nook-k0s-cache
+          ARC_SMOKE_RUNNER_LABEL: nook-k0s
+
+  arc:smoke:hive:
+    desc: Validate the Hive ARC route.
+    cmds:
+      - task: arc:smoke
+        vars:
+          ARC_SMOKE_TASK: hive:verify
+          ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive

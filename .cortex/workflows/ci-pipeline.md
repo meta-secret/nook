@@ -85,7 +85,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`remote.yml`**
 
 - One or more selected Taskfile commands on one configured GitHub Actions
-  runner. Single `preflight` and `rust:ci` selections use the ephemeral ARC Kata
+  runner. Single `preflight` and `rust:ci` selections use the disposable ARC
   scale set. The repository variable can fall back to `ubuntu-latest`.
 - Checkout, Docker setup, and cache connection happen once per batch.
 - Selected tasks run sequentially and report individual results.
@@ -382,7 +382,7 @@ provider, those handlers read and write real event files under a temp directory.
 ## Runner placement
 
 Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-explicit Main job use the configured ARC Kata scale set. Focused `preflight`,
+explicit Main job use the configured ARC scale set. Focused `preflight`,
 `rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
 `hive:verify` uses the dedicated
 `nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
@@ -395,14 +395,12 @@ host.
 **Zot cache policy:**
 
 - Hosted delivery builds restore distinct private Zot BuildKit cache refs.
-- Main ARC producers refresh the cache-primary node-local seed. Hosted fallback
-  publication refreshes the default-branch Zot scopes.
+- Main ARC producers publish shared Zot refs after verification. Persistent
+  node-local BuildKit shards accelerate repeated solves.
 - Hosted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
-- Trusted ARC PR verification reuses a private node-local COW seed for the full
-  writable graph.
-- It exports only a `mode=min` exact-SHA handoff for retries after the disposable
-  guest is removed.
+- Trusted ARC PR verification reuses the persistent BuildKit shard on its node.
+- Exact-SHA handoffs retain commit-scoped registry identity.
 - Native ARC exports that handoff during the verified solves. A second
   post-verification solve is prohibited because it reconstructs the same Rust
   graphs before exporting them.
@@ -418,19 +416,18 @@ host.
   explicitly isolated git-commit publisher.
 - Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
   their exact scope is absent, and cannot replace shared Main manifests.
-- Hive ARC PR jobs use the local COW seed and may import Main when needed. Main
+- Hive ARC PR jobs use the local shard and may import Main when needed. Main
   remains the only workflow writer of the shared Hive registry seed.
 - The self-hosted `nook` label is reserved for runner cleanup while that machine remains registered.
 
 **Focused remote jobs:**
 
-- `preflight`, `rust:ci`, and `arc:runtime` may use fresh Kata QEMU microVMs in
+- `preflight`, `rust:ci`, and `arc:runtime` may use disposable ordinary Pods in
   the configured general ARC scale set. Trusted `hive:verify` may use the
-  dedicated Hive ARC scale set. Each job owns a private BuildKit sidecar and
-  writable COW clone.
-- The general scale set's Podman API is reachable only inside the disposable
-  Kata guest. `arc:runtime` proves a remote BuildKit image can be loaded and
-  executed through that API without Docker-in-Docker or a host socket.
+  dedicated Hive ARC scale set. Each job reaches the persistent BuildKit shard
+  on its selected node.
+- `arc:runtime` proves a remote BuildKit result can be exported without a
+  Docker daemon, Podman, DinD, or host socket.
 - Every other `remote.yml` selection retains GitHub-hosted placement.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
@@ -837,17 +834,15 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 **Delivery CI uses isolated ARC or GitHub-hosted runners with remote BuildKit layers.**
 
 - Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-  explicit Main job run in fresh ARC Kata microVMs.
+  explicit Main job run in disposable ARC Pods.
 - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
   WASM, and deployment jobs run on fresh `ubuntu-latest` VMs.
-- On ARC, the shared setup creates a `remote` Buildx builder connected to that
-  microVM's private BuildKit sidecar over Pod loopback.
-- General ARC jobs execute loaded images through a job-scoped Podman API on Pod
-  loopback inside the same Kata guest. Hive ARC omits this runtime.
+- On ARC, the shared setup creates a `remote` Buildx builder connected to the
+  persistent rootless BuildKit shard on the selected node.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
 - Hosted placements restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
-  start from their node-local copy-on-write BuildKit seed.
+  reuse their node-local persistent BuildKit shard.
 - Neither placement uses GitHub Actions cache storage for BuildKit layers.
 - PR CI assigns native Rust to one runner and WASM to another.
 - The small generated WASM package feeds parallel browser-free preview validation as soon as clippy/build finishes.
@@ -888,14 +883,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Trusted same-repository PR jobs and every explicit Main job use ARC. Fork PRs,
   other PR jobs, and release jobs use GitHub-hosted runners.
-- Main verifies each native/WASM/web lane, then serially promotes its already
-  solved graph into the cache-primary node's copy-on-write seed.
-- Hosted fallback jobs continue publishing scoped Zot `mode=max` refs.
-- Node-local promotion is authenticated by the host after the exact job and
-  full Kata teardown succeed.
+- Main verifies each native/WASM/web lane, then publishes its shared Zot refs.
+- Hosted fallback jobs use the same portable Zot contract.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
-- Hosted fallback publication maintains protected default-branch Zot refs for
-  GitHub-hosted jobs. ARC jobs reuse the local seed without registry transfer.
+- Protected default-branch Zot refs remain available to every node and hosted
+  job. ARC jobs reuse a warm local shard before registry transfer.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
 - PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
 - Docker setup probes each full-graph exact ref separately.
@@ -968,8 +960,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   unchanged and PR jobs fall back to Main.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
-- Main ARC producers promote the cache-primary seed after lane verification.
-- Hosted fallback jobs publish the shared Zot cache manifests.
+- Main ARC producers publish shared Zot cache manifests after lane verification.
 - Explicit Remote tasks import a present git-commit ref alone.
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.

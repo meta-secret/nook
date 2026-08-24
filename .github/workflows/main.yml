@@ -17,9 +17,9 @@
 # provider tests remain available through the manually dispatched e2e-pr.yml.
 #
 # Playwright browsers are pre-installed in the web e2e base image.
-# Main's trusted Rust/WASM producers receive fixed-ID SeaweedFS sccache secret mounts. On the
-# cache-primary ARC route they promote verified node-local BuildKit state; hosted fallback publishes
-# verified layers to private Zot. PR, release, and browser-only jobs remain secret-free.
+# Main's trusted Rust/WASM producers receive fixed-ID SeaweedFS sccache secret mounts. ARC reuses
+# the persistent BuildKit shard on the selected node and publishes verified portable layers to Zot.
+# PR, release, and browser-only jobs remain secret-free.
 
 name: Main
 
@@ -112,7 +112,7 @@ jobs:
     needs: [product-paths]
     if: needs.product-paths.outputs.changed == 'true'
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
-    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -174,7 +174,7 @@ jobs:
     # Serialize cache uploads after native verification while retaining the producer's
     # job-scoped builder for a no-rebuild export.
     needs: [rust]
-    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -243,7 +243,7 @@ jobs:
   web:
     name: Verify web build
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read
@@ -395,7 +395,7 @@ jobs:
     # This is the final local cache producer. Serialize it behind web so it
     # clones the promoted web generation instead of racing a sibling lineage.
     needs: [web]
-    runs-on: ${{ vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     permissions:
       contents: read
       pull-requests: read

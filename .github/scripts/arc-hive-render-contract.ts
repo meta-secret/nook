@@ -26,7 +26,7 @@ interface HiveValues {
   maxRunners: number;
   template: {
     spec: {
-      runtimeClassName: string;
+      runtimeClassName?: string;
       nodeSelector: Record<string, string>;
       initContainers: HiveInitContainer[];
       containers: HiveContainer[];
@@ -72,8 +72,8 @@ export async function assertHiveRenderContract(
       throw new Error("Hive ARC must scale from zero through ten fresh runners");
     }
     const hivePod = hiveValues.template.spec;
-    if (hivePod.runtimeClassName !== "kata-qemu-runtime-rs") {
-      throw new Error("Hive ARC must use Kata QEMU");
+    if (hivePod.runtimeClassName !== undefined) {
+      throw new Error("Hive ARC must use the default Kubernetes runtime");
     }
     if (hivePod.nodeSelector["nook.nokey.sh/arc-build"] !== "true") {
       throw new Error("Hive ARC must run only on qualified build nodes");
@@ -81,18 +81,8 @@ export async function assertHiveRenderContract(
     const sidecars = new Map(
       hivePod.initContainers.map((item) => [item.name, item]),
     );
-    if (sidecars.has("container-runtime")) {
-      throw new Error("Hive ARC must not carry the general Podman runtime");
-    }
-    const hiveBuildkit = sidecars.get("buildkit");
-    if (
-      hiveBuildkit?.resources?.limits?.cpu !== "4" ||
-      hiveBuildkit?.resources?.requests?.memory !== "4Gi" ||
-      hiveBuildkit.resources.limits?.memory !== "10Gi"
-    ) {
-      throw new Error(
-        "Hive ARC BuildKit must retain its 4 CPU, 4 GiB request, and 10 GiB cgroup ceiling",
-      );
+    if (sidecars.has("container-runtime") || sidecars.has("buildkit")) {
+      throw new Error("Hive ARC must use the persistent BuildKit service only");
     }
     const hiveRunner = hivePod.containers.find((item) => item.name === "runner");
     if (hiveRunner?.resources?.limits?.cpu !== "1") {
@@ -129,8 +119,8 @@ export async function assertHiveRenderContract(
     ) {
       throw new Error("Hive ARC Neo4j must be versioned and digest-pinned");
     }
-    if (hivePod.volumes.filter((volume) => "hostPath" in volume).length !== 2) {
-      throw new Error("Hive ARC must inherit only the two approved hostPaths");
+    if (hivePod.volumes.some((volume) => "hostPath" in volume)) {
+      throw new Error("Hive ARC must not mount host paths");
     }
   } finally {
     rmSync(renderedDirectory, { recursive: true, force: true });

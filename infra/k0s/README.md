@@ -19,21 +19,19 @@ Pinned platform:
 - k9s `v0.51.0`
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
-- Kata runtime-rs classes `kata-dragonball` for persistent Hive workers and
-  `kata-qemu-runtime-rs` for ARC builds, including the dedicated Hive scale set
-- A loop-backed Btrfs ARC pool with private 48 GiB reflinked BuildKit images
+- Kata runtime-rs class `kata-dragonball` for persistent Hive workers
+- Three retained 64 GiB rootless BuildKit shards for ARC
 
 Cluster roles:
 
 - The KS-6 node owns the control plane, Neo4j, Zot, Hive, ARC controllers, and
   ARC listeners. It is labeled `nook.nokey.sh/node-role=control-storage` and
   also qualifies as a slower `nook.nokey.sh/arc-build=true` runner node.
-- The Rise-S NVMe node owns ARC runner microVMs and their disposable caches. It
-  is labeled `nook.nokey.sh/arc-build=true`, uses ARC tier `primary`, and
-  remains the cache-primary node.
+- The Rise-S NVMe node owns one persistent ARC BuildKit shard. It is labeled
+  `nook.nokey.sh/arc-build=true` and uses ARC tier `primary`.
 - The home 7950X3D NVMe node is worker-only, uses ARC tier `secondary`, and
-  connects from behind NAT through an outbound WireGuard session. It owns no
-  durable cluster, registry, or cache-authority state.
+  connects from behind NAT through an outbound WireGuard session. It owns one
+  persistent local BuildKit shard but no shared registry authority.
 - KS-6 uses ARC tier `overflow`. Its large HDD volume retains Zot and other
   durable services without placing registry data on runner NVMe.
 - WireGuard address `10.202.0.1` belongs to the controller. Every worker receives
@@ -47,10 +45,9 @@ Cluster roles:
   between every worker. Each peer owns only that worker's node address and Pod
   CIDR. Worker-to-worker Pod traffic never depends on the controller as a
   forwarding hop.
-- ARC creates a fresh Pod and Kata QEMU microVM for every job. No runner is kept
-  warm. The general scale set can create up to 25 concurrent runners, the Hive
-  scale set up to ten, and the cache-primary scale set up to two serialized
-  Main producers.
+- ARC creates a fresh ordinary Pod for every job. No runner is kept warm. The
+  general scale set can create up to 25 concurrent runners. The Hive scale set
+  can create up to ten.
 
 Join or reconcile the compute node only through the Taskfile:
 
@@ -68,8 +65,8 @@ task --taskfile infra/Taskfile.yml k0s:worker:deploy \
   INFRA_WORKER_ARC_TIER=secondary
 ```
 
-The worker stays tainted until Kata, the local cache pool, the BuildKit image,
-and ARC converge. The task removes that taint only after qualification.
+The worker stays tainted until k0s, its retained BuildKit storage, and ARC
+converge. The task removes that taint only after qualification.
 
 Install the pinned operator console and its credential-free kubeconfig through
 the root Taskfile, then use it directly after SSH login:
@@ -125,72 +122,32 @@ authenticated policies. Zot preserves upstream digests and stores a missing
 image once for reuse by every runner and node. The initial SeaweedFS bucket
 bootstrap pulls its pinned AWS CLI image directly because Zot does not exist
 yet on a clean controller.
-ARC storage uses a separate Task-managed Btrfs image under
-`/var/lib/nook-arc-buildkit` on the selected NVMe compute node. The host
-filesystem remains ext4. The trusted preparation init container briefly sees
-only the shared clone-request root before untrusted job containers start. It
-asks the host service to create a root-owned, mode-`0700` Btrfs subvolume for
-that Pod UID. The host applies a 1 MiB exclusive quota before the init container
-can publish its clone request. A
-credential-free sidecar mounts only its own lane through `subPathExpr` and
-forwards its Pod-scoped candidate there.
-The authenticated root-owned host verifier establishes the intent under the
-host-private runtime directory and checks the final job conclusion. Pods cannot
-traverse another Pod's request files. Each Pod sees only its own untrusted
-candidate lane and a host-created acceptance marker. The verifier creates that
-marker in its private runtime directory and atomically renames it into the lane,
-so an untrusted lane cannot redirect host writes through a symlink. Before
-accepting a candidate, the verifier also resolves the lane's Pod UID through
-host CRI metadata and requires its observed Pod name to match the claimed
-GitHub runner. The host installs a promotion intent with an exclusive link
-before publishing acceptance. A repeated candidate can neither refresh an
-existing intent nor extend its two-minute barrier.
-The private BuildKit native sidecar sees only the pool entry selected for its
-Kubernetes Pod UID. The runner mounts neither host path. The 768 GiB sparse pool
-covers fourteen fully allocated 48 GiB
-job images, the reusable 48 GiB seed, and filesystem metadata. The 36 GB
-BuildKit garbage-collection target normally keeps physical use below that hard
-capacity envelope.
+ARC uses one retained 64 GiB local persistent volume per qualified build
+node. The `nook-buildkit` StatefulSet has three rootless replicas with required
+hostname anti-affinity. Each replica binds to its node's
+`/var/lib/nook-arc-buildkit/state` directory.
 
-Verified Main jobs signal through an in-guest `emptyDir`. The sidecar forwards
-the request without receiving a repository credential. The authenticated host
-verifier confirms that the exact Pod is currently running the selected Main
-job before creating a host-private intent. It checks the same job's final `success`
-conclusion after teardown and only then promotes the seed. The runner never sees
-the host-private intent directory or any ARC credential. Intents stop blocking new
-clones after two minutes. A failed promotion keeps its verified intent and job
-state for retry until that deadline. An expired promotion retains unsafe job
-state until Kata teardown can be proven complete.
-The host waits for complete Kata teardown, rejects a stale seed generation, and
-promotes the private state through an atomic Btrfs reflink. New clone requests
-wait behind accepted promotion. ARC jobs therefore skip registry export, while
-hosted fallback jobs retain Zot publication for cold-node recovery.
-Only `nook-k0s-cache` requires the one `arc-cache-primary` node label, so a
-larger cluster cannot divide Main's serialized lineage among node-local seeds.
-General and Hive jobs prefer Rise-S, then the home 7950X3D worker, then KS-6.
-Hostname spreading permits at most five more Pods on one eligible node than
-another. This admits the intended 10 primary, 10 secondary, and 5 overflow
-burst envelope while preventing the primary node from absorbing the cluster.
-CPU requests enforce the shared
-capacity boundary across the general, Hive, and cache-primary scale sets. A
-tainted or unavailable node leaves the eligible topology, so work can continue
-on the remaining nodes. Hive keeps an independent Zot publication path because
-its workflow may overlap Main.
+The `nook-buildkit` Service uses `internalTrafficPolicy: Local`. A runner can
+therefore reach only the BuildKit Pod on the same node. Runner Pods mount no
+host path and receive no Kubernetes token, daemon socket, Podman service, DinD
+process, privileged context, or Kata runtime.
 
-Each runner requests two logical CPUs in aggregate, including Kata overhead,
-so the 16-thread Rise-S schedules at most eight runner microVMs. BuildKit may
-use 10 GiB and the runner may use 2 GiB. Those limits intentionally exceed the
-4 GiB compiler execution budget because QEMU and virtiofs can double-account
-guest-backed pages in the host Pod cgroup; smaller limits can kill QEMU while
-the node itself still has free memory.
+BuildKit garbage collection targets 56 GB. Its Pod requests 4 CPU and 8 GiB,
+has no CPU limit, and may use up to 48 GiB. Multiple jobs safely share the
+content-addressed store on that node.
 
-The one-time 32-to-48 GiB seed migration preens the offline ext4 filesystem
-before resizing it. It retains an unresizable prior seed as
-`buildkit.ext4.pre-48g` and starts with an empty 48 GiB seed. Keep that backup
-until a successful cache-primary promotion establishes a healthy new lineage.
-An operator may then remove only that named backup after confirming no loop
-device references it. A resize failure outside that one-time migration fails
-closed and never replaces the active seed.
+Zot carries cache state between nodes. A job on a cold shard imports only the
+referenced blobs. Later jobs on that node reuse the hydrated local snapshots.
+Main and pull requests retain separate publication refs, so concurrent PRs do
+not overwrite shared Main identity.
+
+General and Hive runners prefer Rise-S, then the home 7950X3D worker, then
+KS-6. Hostname spreading permits at most five more runner Pods on one eligible
+node than another. This preserves the intended 10/10/5 burst envelope.
+
+`task infra:arc:buildkit:benchmark` proves cold and warm timings on all three
+nodes. It also recreates every BuildKit Pod and requires the same node-local
+cache to remain `CACHED`.
 
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
