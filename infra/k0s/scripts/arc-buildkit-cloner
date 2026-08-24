@@ -684,8 +684,8 @@ prune_stale_jobs() {
             *) continue ;;
           esac
         fi
-        rm -f -- "$intent_dir/$pod_uid.intent" \
-          "$request_dir/$pod_uid/accepted"
+        rm -f -- "$intent_dir/$pod_uid.intent"
+        remove_untrusted_path "$request_dir/$pod_uid/accepted"
       elif retention_active "$pod_uid"; then
         continue
       fi
@@ -719,8 +719,8 @@ prune_stale_jobs() {
           *) continue ;;
         esac
       fi
-      rm -f -- "$intent_dir/$pod_uid.intent" \
-        "$request_dir/$pod_uid/accepted"
+      rm -f -- "$intent_dir/$pod_uid.intent"
+      remove_untrusted_path "$request_dir/$pod_uid/accepted"
     elif retention_active "$pod_uid"; then
       continue
     fi

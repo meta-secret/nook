@@ -119,6 +119,15 @@ tasks:
             exit 1
           fi
         fi
+        cache_primary="$(kubectl get nodes \
+          -l nook.nokey.sh/arc-cache-primary=true \
+          -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
+        if test -n "$cache_primary"; then
+          # Record conservative credential ownership before any later primary
+          # move. Credential sync clears it only after remote deletion succeeds.
+          kubectl annotate node "$cache_primary" \
+            nook.nokey.sh/arc-cache-verifier-owner=true --overwrite
+        fi
         REMOTE
 
   arc:cache-primary:ensure:
@@ -178,7 +187,7 @@ tasks:
           exit 1
         fi
         jq -r '.items | sort_by(.metadata.name)[] |
-          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), .metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], ([.status.addresses[]? | select(.type == "InternalIP") | .address] | if length == 1 then .[0] else "" end), .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
+          [(.metadata.labels["nook.nokey.sh/arc-cache-primary"] == "true"), (.metadata.annotations["nook.nokey.sh/arc-cache-verifier-owner"] == "true"), .metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"], ([.status.addresses[]? | select(.type == "InternalIP") | .address] | if length == 1 then .[0] else "" end), .metadata.annotations["nook.nokey.sh/infra-remote-dir"]] | @tsv' \
           <<<"$build_nodes"
         REMOTE
         )"
@@ -194,7 +203,7 @@ tasks:
         trap cleanup EXIT
         : > "$inventory_next"
         primary_target=""
-        while IFS=$'\t' read -r is_primary node target internal_ip remote_dir; do
+        while IFS=$'\t' read -r is_primary verifier_owner node target internal_ip remote_dir; do
           user="${target%%@*}"
           host="${target#*@}"
           if test "$user" = "$target" || test -z "$user" || test -z "$host"; then
@@ -215,6 +224,10 @@ tasks:
             -o StrictHostKeyChecking=accept-new -J "$controller_target" "$target" true; then
             if test "$is_primary" = true; then
               echo "ARC cache-primary node $node is unreachable" >&2
+              exit 1
+            fi
+            if test "$verifier_owner" = true; then
+              echo "Offline non-primary ARC node $node may still hold the cache verifier credential; restore it and revoke the credential before moving the primary" >&2
               exit 1
             fi
             ssh -n -o BatchMode=yes "$controller_target" \
@@ -392,11 +405,25 @@ tasks:
               -J "$controller_target" "$build_target" \
               "bash -c \"\$(printf %s '$encoded_program' | base64 -d)\"" \
               < "$credential_file"
+            verifier_annotation='nook.nokey.sh/arc-cache-verifier-owner=true'
           else
             ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
               -J "$controller_target" "$build_target" \
               'sudo -n rm -f /etc/nook/arc-cache-verifier-token'
+            verifier_annotation='nook.nokey.sh/arc-cache-verifier-owner-'
           fi
+          node="$(ssh -n -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
+        set -euo pipefail
+        build_target="$1"
+        sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json |
+          jq -r --arg target "$build_target" \
+            '.items[] | select(.metadata.annotations["nook.nokey.sh/ssh-target"] == $target) | .metadata.name'
+        REMOTE
+          )"
+          test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+          node="$(printf '%s\n' "$node" | sed '/^$/d')"
+          ssh -n -o BatchMode=yes "$controller_target" \
+            "sudo -n k0s kubectl annotate node '$node' '$verifier_annotation' --overwrite >/dev/null"
         done < "$inventory_file"
         echo "ARC Actions-read verifier credential persisted under ~/.nook and synchronized only to the cache-primary node"
         BASH

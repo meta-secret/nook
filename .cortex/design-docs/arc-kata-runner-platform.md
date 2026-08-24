@@ -177,10 +177,11 @@ Public upstream mirror content is anonymously readable, so kubelet, BuildKit,
 and Actions service-container pulls need no registry secret. Runner credentials
 retain their narrow Nook cache-publication permissions but cannot administer
 Zot. Private Nook repositories have explicit authenticated policies and cannot
-inherit the mirror fallback. The clean-host SeaweedFS bucket bootstrap is the
-only direct Docker Hub pull because it runs before k0s can deploy Zot. A missing
-digest is otherwise fetched centrally once; later jobs and nodes reuse the
-retained Zot copy.
+inherit the mirror fallback. Clean-host bootstrap has two pinned direct Docker
+Hub pulls before Zot is available: the SeaweedFS bucket initializer and the
+`httpd` image used to generate Zot bcrypt credentials. A missing digest is
+otherwise fetched centrally once; later jobs and nodes reuse the retained Zot
+copy.
 
 Main cache producers are serialized in workflow dependencies. Hive publication
 does not enter or overwrite that lineage. The cache-primary node selector
@@ -207,5 +208,8 @@ mounted into an ephemeral runner Pod.
   Limit it to `meta-secret/nook` and grant only repository Actions read.
 - Grant no organization permissions.
 - Persist rotations automatically under `~/.nook`.
+- Record verifier ownership on the Kubernetes node. A primary move fails closed
+  while an offline former owner may retain the credential. Restore that node
+  and revoke its host copy before completing the move.
 - Run `task infra:arc:fallback` before emergency revocation.
 - Verify all three scale sets after rotation, then revoke the replaced token.

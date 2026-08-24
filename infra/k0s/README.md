@@ -2,8 +2,9 @@
 
 This directory is deployed only through `infra/Taskfile.yml`. From the
 repository root, `task infra:deploy` validates the target, installs k0s and
-Kata, deploys persistent Neo4j and Zot, publishes the Hive image to Zot through
-the target's loopback endpoint, and reconciles the ARC runner platform. The
+Kata, deploys persistent Neo4j and Zot, publishes the Hive image through the
+authenticated `https://registry.dev.nokey.sh` endpoint, and reconciles the ARC
+runner platform. The
 persistent Hive dispatcher, observer, reaper, and worker Deployments remain at
 zero replicas while their duplicate-repair orchestration is being corrected;
 operators must not infer that `infra:deploy` re-enables them. Compute nodes join

@@ -29,9 +29,12 @@ This directory owns Nook's stateful server infrastructure:
   Hive helpers when the runner exits. The runtime executes exported tests
   through a private exchange volume. It does not introduce a Docker daemon.
 
-Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
-expose anonymous S3 or registry access; every client authenticates with the
-generated credentials.
+Both public edge services live under the `*.dev.nokey.sh` namespace. SeaweedFS
+and private `nook/**` Zot repositories require generated credentials. Zot's
+pull-through `library/**` mirror is intentionally anonymous for read-only
+upstream image pulls by kubelet, BuildKit, and Actions service containers.
+Anonymous mirror writes and every private-repository read or write remain
+denied.
 
 Deploy and inspect the stack from the repository root:
 
