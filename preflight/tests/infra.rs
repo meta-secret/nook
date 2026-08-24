@@ -61,8 +61,8 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
 fn arc_buildkit_resolves_docker_hub_only_through_zot() {
     let manifest = read("infra/k0s/manifests/arc/buildkit.yaml");
 
-    assert!(manifest.contains("[registry.\\\"docker.io\\\"]"));
-    assert!(manifest.contains("mirrors = [\\\"registry.dev.nokey.sh\\\"]"));
+    assert!(manifest.contains(r#"[registry."docker.io"]"#));
+    assert!(manifest.contains(r#"mirrors = ["registry.dev.nokey.sh"]"#));
     assert!(!manifest.contains("registry-1.docker.io"));
     assert!(manifest.contains("internalTrafficPolicy: Local"));
     assert!(manifest.contains("kind: StatefulSet"));
