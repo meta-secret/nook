@@ -451,7 +451,7 @@ remoteWorkflow.requireAll([
   "HIVE_NEO4J_TEST_URI:",
   "--publish 127.0.0.1:7474:7474",
   "nook-hive-linux-amd64-v2:buildcache",
-  'isolated-cache-write: "true"',
+  "isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}",
 ]);
 mainWorkflow.forbid("runs-on: ubuntu-latest");
 const mainCount = {
