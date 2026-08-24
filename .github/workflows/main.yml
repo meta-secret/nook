@@ -239,13 +239,12 @@ jobs:
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes from its persistent shard. A separate clean hosted
-          # builder proves that Zot received every required dependency layer.
-          NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"
+          # ARC publishes source state from its persistent shard. The portable
+          # dependency ref is owned by the separate hosted writer/proof job.
           WASM_BUILD_MODE: dev
 
   wasm-cache-proof:
-    name: Fresh WASM cache restore proof
+    name: Portable WASM cache publication proof
     needs: [wasm]
     runs-on: ubuntu-latest
     permissions:
@@ -261,11 +260,15 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          cache-write: "false"
-          main-cache-only: "true"
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
 
-      - name: Prove fresh hosted restore from Zot
+      - name: Publish and prove portable WASM dependency cache
         run: bash .github/scripts/verify-wasm-gha-cache.sh
+        env:
+          NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"
 
   web:
     name: Verify web build

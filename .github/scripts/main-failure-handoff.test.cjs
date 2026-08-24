@@ -307,21 +307,21 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     main,
     /Publish verified WASM BuildKit cache[\s\S]*task ci:main:publish-wasm-cache/,
   )
-  assert.match(
+  assert.doesNotMatch(
     main,
     /Publish verified WASM BuildKit cache[\s\S]*NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"/,
   )
   assert.match(
     main,
-    /wasm-cache-proof:\n\s+name: Fresh WASM cache restore proof\n\s+needs: \[wasm\]\n\s+runs-on: ubuntu-latest[\s\S]*main-cache-only: "true"[\s\S]*verify-wasm-gha-cache\.sh/,
+    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm\]\n\s+runs-on: ubuntu-latest[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
   )
   assert.match(
     main,
     /deploy:\n\s+name: Deploy development\n\s+needs: \[web, web-e2e, wasm-cache-proof\]/,
   )
-  assert.match(
+  assert.doesNotMatch(
     dockerTasks,
-    /GHA_CACHE_SCOPE_SUFFIX:-[\s\S]*NOOK_DEFER_FRESH_WASM_CACHE_PROOF:-[\s\S]*verify-wasm-gha-cache\.sh/,
+    /NOOK_DEFER_FRESH_WASM_CACHE_PROOF|verify-wasm-gha-cache\.sh/,
   )
 })
 

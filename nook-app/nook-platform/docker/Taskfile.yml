@@ -288,32 +288,19 @@ tasks:
         preflight-test
 
   docker:ci:cache:publish:wasm:
-    desc: Export verified WASM scopes from local layers without reimporting a thin hosted index.
+    desc: Export verified ARC-local WASM source state; hosted CI owns the portable dependency ref.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
-      # Publish wasm-deps/source before rust-base. Staging rust-base first imports
-      # the shorter parent index and orphans local chef cook layers, so the next
-      # bake cold-cooks even when verify just hit CACHED from source-v2.
-      # Each publisher owns one scoped Zot ref (Main fingerprint or git-commit
-      # remote-buildcache).
-      - >-
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}}
-        --set "*.output=type=cacheonly"
-        builder-wasm-deps-publish
+      # ARC's persistent BuildKit keeps dependency layers node-local. Do not let
+      # its worker-specific metadata overwrite the portable Main dependency ref;
+      # the fresh hosted proof job is its sole writer and consumer verifier.
       - >-
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         wasm-export
       - task: docker:ci:cache:publish:rust-base
-      - |
-        set -euo pipefail
-        if [ -z "${GHA_CACHE_SCOPE_SUFFIX:-}" ] \
-          && [ "${NOOK_DEFER_FRESH_WASM_CACHE_PROOF:-}" != "1" ]; then
-          bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
-        fi
 
   docker:rust-base:
     desc: Bake only rust-base (apt/mold/sccache). Read-only for Zot; never publishes.

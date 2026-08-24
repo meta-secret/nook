@@ -110,9 +110,11 @@ build producers execute in disposable ordinary Pods through ARC. Focused
 Docker CLI connects only to the persistent rootless BuildKit shard on its node.
 It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
 and non-Main runtime-dependent, browser, WASM, and deployment validation execute
-on ephemeral GitHub-hosted runners. Main's post-publication cache proof is the
-narrow hosted exception. Its fresh builder hydrates Zot snapshots and exports
-only a marker before deployment. The self-hosted `nook` pool remains
+on ephemeral GitHub-hosted runners. Main's portable WASM dependency-cache writer
+and proof is the narrow hosted exception. One fresh hosted builder publishes the
+portable Zot metadata, then another cache-only builder requires every expensive
+dependency vertex to hit before deployment. The proof does not hydrate the
+complete dependency filesystem. The self-hosted `nook` pool remains
 maintenance-only.
 
 ---

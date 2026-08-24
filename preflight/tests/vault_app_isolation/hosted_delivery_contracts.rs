@@ -52,7 +52,7 @@ fn assert_workflow_runtime_contract(root: &Path) {
                 .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
                 .count()
                 == 4
-            && main.contains("name: Fresh WASM cache restore proof")
+            && main.contains("name: Portable WASM cache publication proof")
             && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
         "daemon-free Main jobs must use ARC while browser, deploy, and clean Zot cache-proof jobs stay hosted"
     );

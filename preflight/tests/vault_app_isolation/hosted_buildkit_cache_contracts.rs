@@ -404,13 +404,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("rust-base-publish")
             && docker_tasks.contains("builder-core-deps-publish")
-            && docker_tasks.contains("builder-wasm-deps-publish")
             && docker_tasks.contains("web-deps-publish")
             && docker_tasks.contains("nook-web-e2e-publish")
             && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must bake scoped *-publish targets and verify Main WASM from a fresh builder"
+        "producer-owned ARC publishers must bake scoped targets without owning the portable WASM dependency ref"
     );
     assert_no_empty_cache_overrides(&docker_tasks);
     let native_publish = docker_tasks
@@ -431,9 +429,6 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .nth(1)
         .and_then(|tail| tail.split("docker:rust-base:").next())
         .unwrap_or("");
-    let wasm_deps_idx = wasm_publish
-        .find("builder-wasm-deps-publish")
-        .expect("wasm publish must bake builder-wasm-deps-publish");
     let wasm_source_idx = wasm_publish
         .find("wasm-export")
         .expect("wasm publish must bake wasm-export");
@@ -441,8 +436,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task: docker:ci:cache:publish:rust-base")
         .expect("wasm publish must still seed rust-base after deps/source");
     assert!(
-        wasm_deps_idx < wasm_source_idx && wasm_source_idx < wasm_rust_base_idx,
-        "wasm cache publish must stage deps-publish, then source export, then rust-base (never rust-base first)"
+        wasm_source_idx < wasm_rust_base_idx && !wasm_publish.contains("builder-wasm-deps-publish"),
+        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to hosted BuildKit"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
@@ -450,13 +445,14 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=local")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof 2>&1")
-            && cache_verifier.contains("hydrated-wasm-dependency-cache")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
+            && cache_verifier.contains("refs/heads/main")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder hydrates every dependency layer without --builder"
+        "trusted Main must publish from one fresh hosted builder and reject the result until another fresh builder hits every dependency vertex"
     );
     let base_dockerfile = read(
         root,
@@ -549,7 +545,7 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task ci:main:e2e:web:artifacts")
             && main.contains("\n  wasm-cache-proof:\n")
-            && main.contains("NOOK_DEFER_FRESH_WASM_CACHE_PROOF: \"1\"")
+            && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
             && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
         "Main must split native Rust, WASM, fresh registry cache proof, web verify, and browser suites without a duplicate cache publisher"
     );

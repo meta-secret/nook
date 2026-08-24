@@ -463,7 +463,7 @@ post-publication job must not reuse an ARC node-local cache.
 - Loadable `nook-rust*` tags live in the platform core/wasm bake files.
 - `nook-app/docker-bake.hcl` stays thin: shared GHA/registry/sccache
   variables, `_sccache`, and cross-lineage prepare groups.
-- Main verifies the published WASM dependency fingerprint from a fresh BuildKit builder.
+- Main publishes the portable WASM dependency fingerprint from one fresh hosted builder, then verifies it from a second fresh cache-only builder.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
 **Exact-input handoffs:**
@@ -809,7 +809,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Main serializes native, WASM, and web producer lanes so they advance one
   verified default-branch lineage.
 - ARC jobs reuse the persistent BuildKit content store on their selected node.
-- Verified Main jobs publish portable shared cache refs after successful solves.
+- Verified Main ARC jobs publish portable source and tool cache refs. One fresh hosted
+  builder alone publishes the WASM dependency ref so ARC-local metadata cannot replace the consumer lineage.
 - Hosted fallback jobs export their verified graph to Zot for cold-node recovery.
 - `task docker:extract:coverage` remains a copy-only path that invokes neither BuildKit nor Rust tests.
 - It also serves workflows that already have a sealed `nook-web:local` image, including main's commit-keyed coverage artifact.

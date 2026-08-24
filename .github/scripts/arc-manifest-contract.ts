@@ -258,8 +258,8 @@ mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
 mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
-  "name: Fresh WASM cache restore proof",
-  "NOOK_DEFER_FRESH_WASM_CACHE_PROOF: \"1\"",
+  "name: Portable WASM cache publication proof",
+  "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
   "bash .github/scripts/verify-wasm-gha-cache.sh",
   "web-e2e:",
   "extension-e2e:",

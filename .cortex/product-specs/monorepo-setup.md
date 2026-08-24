@@ -104,8 +104,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - Trusted same-repository PR Rust jobs and Main build producers use ARC.
-  - Main's clean-room Zot hydration proof uses a fresh GitHub-hosted builder.
-    Deployment waits for its exported hydration marker.
+  - Main's portable WASM dependency writer/proof uses two fresh GitHub-hosted
+    builders. Deployment waits until the second cache-only solve reports every
+    expensive dependency vertex cached.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
   - Every ARC job receives a fresh ordinary Pod.
