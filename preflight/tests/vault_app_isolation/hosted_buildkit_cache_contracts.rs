@@ -450,11 +450,13 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
-            && cache_verifier.contains("builder-wasm-deps-restore 2>&1")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=local")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof 2>&1")
+            && cache_verifier.contains("hydrated-wasm-dependency-cache")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
+        "Main must reject a published WASM cache until a fresh builder hydrates every dependency layer without --builder"
     );
     let base_dockerfile = read(
         root,
