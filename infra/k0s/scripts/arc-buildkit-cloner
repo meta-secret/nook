@@ -561,12 +561,14 @@ clone_request() {
   local request_claim request_value job_dir temporary
   job_dir="$jobs_dir/$pod_uid"
   if test -L "$job_dir"; then
-    rm -f -- "$request"
+    remove_untrusted_path "$request"
     return
   fi
   if ! record_sandbox_id "$pod_uid"; then
     if request_expired "$pod_uid" "$request"; then
-      rm -f -- "$request" "$ready_file" "$runtime_dir/$pod_uid.sandbox"
+      remove_untrusted_path "$request"
+      remove_untrusted_path "$ready_file"
+      rm -f -- "$runtime_dir/$pod_uid.sandbox"
       if test -n "$request_lane"; then
         delete_request_lane "$request_lane"
       fi
