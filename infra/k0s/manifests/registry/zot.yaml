@@ -38,7 +38,7 @@ data:
         "address": "0.0.0.0",
         "port": "5000",
         "compat": ["docker2s2"],
-        "readTimeout": "5m",
+        "readTimeout": "15m",
         "writeTimeout": "5m",
         "auth": {
           "htpasswd": {

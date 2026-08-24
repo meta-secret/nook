@@ -66,7 +66,7 @@ template:
                   operator: In
                   values: [overflow]
     topologySpreadConstraints:
-      - maxSkew: 2
+      - maxSkew: 5
         topologyKey: kubernetes.io/hostname
         whenUnsatisfiable: DoNotSchedule
         nodeAffinityPolicy: Honor

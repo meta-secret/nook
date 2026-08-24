@@ -711,8 +711,10 @@ tasks:
           sudo -n mv "$seed_temp" "$seed_file"
         fi
         current_state_bytes="$(sudo -n stat -c %s "$seed_file")"
+        expanded_seed=false
         if test "$current_state_bytes" = "$prior_state_bytes"; then
           sudo -n truncate -s "$state_size" "$seed_file"
+          expanded_seed=true
         elif test "$current_state_bytes" != "$state_bytes"; then
           echo "ARC BuildKit seed has the wrong logical capacity" >&2
           exit 1
@@ -728,6 +730,10 @@ tasks:
         else
           cleanup_loop
           trap - EXIT
+          if test "$expanded_seed" != true; then
+            echo "ARC BuildKit seed reconciliation failed outside the 32-to-48 GiB migration" >&2
+            exit 1
+          fi
           seed_backup="$pool_mount/seed/buildkit.ext4.pre-48g"
           if sudo -n test -e "$seed_backup"; then
             echo "ARC BuildKit seed migration backup already exists" >&2
@@ -824,8 +830,8 @@ tasks:
       - task: arc:controller-build:prepare
       - task: arc:cache-primary:ensure
       - task: arc:build-host:resolve
-      - task: arc:cache:pool:sync
       - task: arc:buildkit:image:sync
+      - task: arc:cache:pool:sync
       - task: arc:render:check
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'

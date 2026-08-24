@@ -51,8 +51,8 @@ not keep warm runners.
 - A preparation taint blocks an unqualified compute node.
 - Preferred node affinity orders general and Hive placement: Rise-S is
   `primary`, the home 7950X3D worker is `secondary`, and KS-6 is `overflow`.
-- Wide, soft hostname spreading remains a safety valve. It does not block a job
-  when only one node has capacity.
+- Hard hostname spreading permits a maximum skew of five. This preserves the
+  25-runner burst envelope as 10 primary, 10 secondary, and 5 overflow Pods.
 - Only the cache-primary scale set requires
   `nook.nokey.sh/arc-cache-primary=true`.
 
@@ -61,11 +61,12 @@ nodes provide parallel general and Hive capacity without receiving the
 cache-primary label. Moving the primary requires draining producers,
 transferring or deliberately resetting the seed, and then changing the label.
 
-The ordinary Pod requests about 1.5 CPUs and 5.6 GiB. BuildKit has a hard
-four-CPU and 4 GiB execution budget, while the runner coordinator may use one
-CPU. This prevents Kubernetes CFS throttling from turning a native Rust build
-into a single-core workload. Its containers are capped at about 7.5 GiB in
-aggregate. The Hive Pod requests about 2.3 CPUs and 6.7 GiB. Its containers are
+The ordinary Pod requests about 2 CPUs and 7.3 GiB including RuntimeClass
+overhead. BuildKit requests one CPU and 4 GiB, and may burst to four CPUs and
+6 GiB. The runner coordinator requests 500m and may use two CPUs. This prevents
+Kubernetes CFS throttling from turning a native Rust build into a single-core
+workload. Its containers are capped at about 9.1 GiB in aggregate. The Hive Pod
+requests about 2.3 CPUs and 6.7 GiB. Its containers are
 capped at about 11.5 GiB. The QEMU RuntimeClass adds 1792 MiB of Pod overhead.
 
 Performance-critical data-plane containers must never inherit fractional CPU

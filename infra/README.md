@@ -24,8 +24,8 @@ This directory owns Nook's stateful server infrastructure:
   `nook-k0s` set permits 25 concurrent jobs; the dedicated `nook-k0s-hive` set
   permits ten. Hive adds
   pinned Neo4j and non-root Trixie test-runtime native sidecars. Kubernetes
-  prefers Rise-S, then the home 7950X3D node, then KS-6 for both pools. Soft
-  hostname spreading preserves burst capacity and failover. It stops both
+  prefers Rise-S, then the home 7950X3D node, then KS-6 for both pools. Hard
+  hostname spreading with skew five preserves the 10/10/5 burst envelope. It stops both
   Hive helpers when the runner exits. The runtime executes exported tests
   through a private exchange volume. It does not introduce a Docker daemon.
 

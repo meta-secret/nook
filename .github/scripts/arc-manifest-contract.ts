@@ -8,10 +8,7 @@ async function read(relative: string): Promise<string> {
   return Bun.file(resolve(root, relative)).text();
 }
 
-interface ContractSource {
-  label: string;
-  source: string;
-}
+type ContractSource = { label: string; source: string };
 
 class TextContract {
   constructor(private readonly input: ContractSource) {}
@@ -128,8 +125,8 @@ const runtimeSmoke = contract({
   source: await read(".github/scripts/arc-runtime-smoke.sh"),
 });
 const registryTasks = contract({
-  label: "registry tasks",
-  source: await read("infra/tasks/registry.yml"),
+  label: "registry tasks and manifests",
+  source: `${await read("infra/tasks/registry.yml")}\n${await read("infra/k0s/manifests/registry/zot.yaml")}`,
 });
 const platformTasks = contract({
   label: "platform tasks",
@@ -192,8 +189,7 @@ runners.requireAll([
   "values: [secondary]",
   "weight: 1",
   "values: [overflow]",
-  "topologySpreadConstraints:",
-  "maxSkew: 2",
+  "maxSkew: 5",
   "topologyKey: kubernetes.io/hostname",
   "whenUnsatisfiable: DoNotSchedule",
   "nodeAffinityPolicy: Honor",
@@ -509,6 +505,7 @@ buildkitPrepare.requireAll([
 buildkitPrepare.forbid('create_temp="$create_file.tmp"');
 buildkitPrepare.forbid('mkdir -p "$request_lane"');
 buildkitEntrypoint.require("NOOK_BUILDKIT_STATE_IMAGE_BYTES:-51539607552");
+buildkitEntrypoint.require('"$actual_size" -lt "$expected_bytes"');
 buildkitDockerfile.require("jq=1.8.1-r0");
 buildkitCloner.requireAll([
   'btrfs qgroup limit -e "$job_exclusive_limit" "$job_dir"',
@@ -748,6 +745,9 @@ hiveWorkflow.count(bunSetupCount);
 hiveNeo4jWait.require("http://127.0.0.1:7474/db/neo4j/tx/commit");
 hiveTasks.require('"$HIVE_TASK_DIR/run-arc-tests.sh"');
 runners.forbid("docker-in-docker");
+registryTasks.require('"readTimeout": "15m"');
+tasks.require('if test "$expanded_seed" != true; then');
+tasks.require("- task: arc:buildkit:image:sync\n      - task: arc:cache:pool:sync");
 
 enum RunnerPlacement {
   ArcCacheMain = "arc-cache-main",

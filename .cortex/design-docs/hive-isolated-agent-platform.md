@@ -99,7 +99,7 @@ compute. The control node is labeled
 `nook.nokey.sh/node-role=control-storage`. Neo4j, Zot, Hive, ARC controllers,
 and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
 qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
-select those nodes. They enforce a maximum hostname skew of two, then use the
+select those nodes. They enforce a maximum hostname skew of five, then use the
 primary, secondary, and overflow tiers to assign the extra slots. Container
 CPU requests provide the aggregate capacity boundary across scale sets. The
 cache-primary scale set remains pinned to one node. Node and Pod traffic crosses an authenticated

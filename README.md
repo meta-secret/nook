@@ -597,7 +597,7 @@ Docker or a host socket. Hive Rust uses a dedicated ARC set with private Neo4j
 and pinned Trixie test-runtime native sidecars; its browser lane stays hosted.
 Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
 WASM, and deployment jobs run on fresh GitHub-hosted VMs. Each ARC runner
-starts from a private 32 GiB reflinked BuildKit seed and restores distinct
+starts from a private 48 GiB reflinked BuildKit seed and restores distinct
 cache refs from the authenticated OCI registry at
 `registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
 copy its full logical capacity. A credential-free sidecar forwards a candidate

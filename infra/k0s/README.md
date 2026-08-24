@@ -168,13 +168,21 @@ hosted fallback jobs retain Zot publication for cold-node recovery.
 Only `nook-k0s-cache` requires the one `arc-cache-primary` node label, so a
 larger cluster cannot divide Main's serialized lineage among node-local seeds.
 General and Hive jobs prefer Rise-S, then the home 7950X3D worker, then KS-6.
-Hostname spreading permits at most two more Pods on one eligible node than
-another. This keeps the tier order for the extra slots while preventing the
-primary node from absorbing an unsafe burst. CPU requests enforce the shared
+Hostname spreading permits at most five more Pods on one eligible node than
+another. This admits the intended 10 primary, 10 secondary, and 5 overflow
+burst envelope while preventing the primary node from absorbing the cluster.
+CPU requests enforce the shared
 capacity boundary across the general, Hive, and cache-primary scale sets. A
 tainted or unavailable node leaves the eligible topology, so work can continue
 on the remaining nodes. Hive keeps an independent Zot publication path because
 its workflow may overlap Main.
+
+The one-time 32-to-48 GiB seed migration retains an unresizable prior seed as
+`buildkit.ext4.pre-48g` and starts with an empty 48 GiB seed. Keep that backup
+until a successful cache-primary promotion establishes a healthy new lineage.
+An operator may then remove only that named backup after confirming no loop
+device references it. A resize failure outside that one-time migration fails
+closed and never replaces the active seed.
 
 Guarded uninstall removes the owned live k0s rules, persisted fragment, and
 nftables include without reloading the global ruleset.
