@@ -290,6 +290,13 @@ tasks:
       - |
         bash <<'FORMAT_CHANGED_BASH'
         set -euo pipefail
+        rust_files=()
+        web_app_files=()
+        web_shared_typescript_files=()
+        extension_files=()
+        research_files=()
+        hive_console_files=()
+        loom_files=()
         skill_files=()
         tooling_files=()
         while IFS= read -r -d '' file_name; do
@@ -297,6 +304,30 @@ tasks:
             continue
           fi
           case "$file_name" in
+            nook-app/nook-platform/*.rs | nook-app/nook-platform/**/*.rs | preflight/*.rs | preflight/**/*.rs | agentic-ai/minds/*.rs | agentic-ai/minds/**/*.rs)
+              rust_files+=("$file_name")
+              ;;
+            nook-app/nook-web/nook-web-shared/src/vault-app/*.ts)
+              web_shared_typescript_files+=("../${file_name#nook-app/nook-web/}")
+              ;;
+            nook-app/nook-web/nook-web-app/*)
+              web_app_files+=("${file_name#nook-app/nook-web/nook-web-app/}")
+              ;;
+            nook-app/nook-web/nook-web-shared/src/vault-app/* | nook-app/nook-web/nook-vault-simple/* | nook-app/nook-web/nook-vault-sentinel/*)
+              web_app_files+=("../${file_name#nook-app/nook-web/}")
+              ;;
+            nook-app/nook-web/nook-web-extension/*)
+              extension_files+=("${file_name#nook-app/nook-web/nook-web-extension/}")
+              ;;
+            nook-app/nook-web/nook-web-research/*)
+              research_files+=("${file_name#nook-app/nook-web/nook-web-research/}")
+              ;;
+            agentic-ai/minds/hive-console/*)
+              hive_console_files+=("${file_name#agentic-ai/minds/hive-console/}")
+              ;;
+            agentic-ai/loom/*)
+              loom_files+=("${file_name#agentic-ai/loom/}")
+              ;;
             .agents/skills/*)
               skill_files+=("${file_name#.agents/skills/}")
               ;;
@@ -305,23 +336,56 @@ tasks:
               ;;
           esac
         done <"$FORMAT_CHANGED_FILES"
+        if [ "${#rust_files[@]}" -gt 0 ]; then
+          rustfmt --edition 2024 --config skip_children=true -- "${rust_files[@]}"
+        fi
+        repo_root="$PWD"
         prettier="$PWD/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier"
-        if [ "${#skill_files[@]}" -gt 0 ]; then
+        svelte_plugin="$PWD/nook-app/nook-web/nook-web-app/node_modules/prettier-plugin-svelte/plugin.js"
+        format_changed_files() {
+          local config="$1"
+          local directory="$2"
+          shift 2
+          if [ "$#" -eq 0 ]; then
+            return
+          fi
           (
-            cd .agents/skills
+            cd "$directory"
             "$prettier" \
-              --config .prettierrc \
+              --config "$config" \
+              --plugin "$svelte_plugin" \
               --write \
               --ignore-unknown \
-              -- "${skill_files[@]}"
+              -- "$@"
           )
+        }
+        web_app="$repo_root/nook-app/nook-web/nook-web-app"
+        web_config="$repo_root/.github/formatting/prettier-web.json"
+        default_config="$repo_root/.github/formatting/prettier-default.json"
+        shared_typescript_config="$repo_root/.github/formatting/prettier-shared-typescript.json"
+        if [ "${#web_app_files[@]}" -gt 0 ]; then
+          format_changed_files "$web_config" "$web_app" "${web_app_files[@]}"
+        fi
+        if [ "${#web_shared_typescript_files[@]}" -gt 0 ]; then
+          format_changed_files "$shared_typescript_config" "$web_app" "${web_shared_typescript_files[@]}"
+        fi
+        if [ "${#extension_files[@]}" -gt 0 ]; then
+          format_changed_files "$web_config" "$repo_root/nook-app/nook-web/nook-web-extension" "${extension_files[@]}"
+        fi
+        if [ "${#research_files[@]}" -gt 0 ]; then
+          format_changed_files "$web_config" "$repo_root/nook-app/nook-web/nook-web-research" "${research_files[@]}"
+        fi
+        if [ "${#hive_console_files[@]}" -gt 0 ]; then
+          format_changed_files "$default_config" "$repo_root/agentic-ai/minds/hive-console" "${hive_console_files[@]}"
+        fi
+        if [ "${#loom_files[@]}" -gt 0 ]; then
+          format_changed_files "$default_config" "$repo_root/agentic-ai/loom" "${loom_files[@]}"
+        fi
+        if [ "${#skill_files[@]}" -gt 0 ]; then
+          format_changed_files "$default_config" "$repo_root/.agents/skills" "${skill_files[@]}"
         fi
         if [ "${#tooling_files[@]}" -gt 0 ]; then
-          "$prettier" \
-            --config agentic-ai/loom/.prettierrc \
-            --write \
-            --ignore-unknown \
-            -- "${tooling_files[@]}"
+          format_changed_files "$default_config" "$repo_root" "${tooling_files[@]}"
         fi
         FORMAT_CHANGED_BASH
 
