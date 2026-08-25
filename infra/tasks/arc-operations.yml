@@ -51,7 +51,9 @@ tasks:
 
         nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
           -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
-        test "$(printf '%s\n' "$nodes" | sed '/^$/d' | wc -l | tr -d ' ')" = 3
+        expected_count="$(sed '/^$/d' \
+          "{{.INFRA_REMOTE_DIR}}/infra/k0s/config/arc-build-nodes" | wc -l | tr -d ' ')"
+        test "$(printf '%s\n' "$nodes" | sed '/^$/d' | wc -l | tr -d ' ')" = "$expected_count"
         for node in $nodes; do
           probe="nook-buildkit-benchmark-$(printf '%s' "$node" | tr -c 'a-z0-9-' '-')"
           kubectl apply -f - <<YAML

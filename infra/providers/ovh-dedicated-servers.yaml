@@ -1,0 +1,23 @@
+servers:
+  nook-rise-s-1:
+    serviceName: ns515743.ip-167-114-209.net
+    publicAddress: 167.114.209.184
+    expectedCommercialRange: RISE-S | AMD Ryzen 7 9700X
+    expectedDatacenter: bhs4
+    operatingSystem: debian13_64
+    sshUser: debian
+    sshPublicKeyFile: ~/.ssh/id_ed25519.pub
+    meshAddress: 10.202.0.2
+    endpointMode: direct
+    arcTier: primary
+  nook-rise-s-2:
+    serviceName: ns513432.ip-167-114-158.net
+    publicAddress: 167.114.158.40
+    expectedCommercialRange: RISE-S | AMD Ryzen 7 9700X
+    expectedDatacenter: bhs3
+    operatingSystem: debian13_64
+    sshUser: debian
+    sshPublicKeyFile: ~/.ssh/id_ed25519.pub
+    meshAddress: 10.202.0.4
+    endpointMode: direct
+    arcTier: primary

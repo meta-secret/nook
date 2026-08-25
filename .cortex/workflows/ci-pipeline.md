@@ -75,11 +75,6 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
   - Trigger: Manual
   - Purpose: Debug e2e on a PR branch
   - GitHub PAT: Only for `sync-live`
-- **[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml)**
-  - Trigger: Cron 13:00 UTC + manual
-  - Purpose: Docker prune on self-hosted `nook` runner
-  - GitHub PAT: No
-
 ### Workflow details
 
 **`remote.yml`**
@@ -216,10 +211,6 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 - Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`).
 
-**`runner-cleanup.yml`**
-
-- Prunes unused Docker data and anonymous volumes on self-hosted Nook runners (`runs-on: nook` only).
-
 ```mermaid
 flowchart LR
   branch[Exact pushed branch head] --> remote_yml[remote.yml focused task batch]
@@ -245,8 +236,6 @@ flowchart LR
 
   manual_e2e[Manual PR e2e] --> e2e_live[sync-live e2e]
 
-  cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
-  cleanup --> docker_prune["docker system prune --volumes"]
 ```
 
 ## Workflow concurrency policy
@@ -296,11 +285,6 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: Global production release group
   - Cancel active run: No
   - Reason: Serialize stateful publication without interrupting a deployment.
-- **Runner cleanup (`runner-cleanup.yml`)**
-  - Scope: Global cleanup group
-  - Cancel active run: No
-  - Reason: Let an active Docker prune finish safely.
-
 ## Production release strategy
 
 Production releases use immutable semantic-version tags. The tag records the
@@ -421,7 +405,7 @@ job must not reuse an ARC node-local cache.
   their exact scope is absent, and cannot replace shared Main manifests.
 - Hive ARC PR jobs use the local shard and may import Main when needed. Main
   remains the only workflow writer of the shared Hive registry seed.
-- The self-hosted `nook` label is reserved for runner cleanup while that machine remains registered.
+- The legacy registered `nook` runner is not used.
 
 **Focused remote jobs:**
 
@@ -563,14 +547,6 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: `ubuntu-latest`
   - Purpose: Manual and research work scales independently
-- **`runner-cleanup.yml`**
-  - Runner: `nook`
-  - Purpose: Maintain the registered self-hosted Docker host and disk
-
-The runner-cleanup workflow runs its age-filtered system prune separately from
-its unused-volume prune: Docker does not support its `until` filter together
-with `docker system prune --volumes`.
-
 ## Why local-provider e2e vs sync-live
 
 Real provider API calls are slow and brittle at CI scale. Nook therefore:

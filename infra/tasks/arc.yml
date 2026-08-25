@@ -61,9 +61,11 @@ tasks:
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
         targets_file="$HOME/.nook/infra/arc-build-ssh-targets"
+        expected_file="infra/k0s/config/arc-build-nodes"
+        expected_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$expected_file")"
         target_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$targets_file")"
-        if test "$target_count" != 3; then
-          echo "ARC requires exactly three build hosts; found $target_count" >&2
+        if test "$target_count" != "$expected_count"; then
+          echo "ARC requires exactly $expected_count build hosts; found $target_count" >&2
           exit 1
         fi
         while IFS=$'\t' read -r build_target build_remote_dir; do
@@ -264,9 +266,11 @@ tasks:
         set -euo pipefail
         controller_target="{{.INFRA_SSH_TARGET}}"
         targets_file="$HOME/.nook/infra/arc-build-ssh-targets"
+        expected_file="infra/k0s/config/arc-build-nodes"
+        expected_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$expected_file")"
         target_count="$(awk 'NF { count += 1 } END { print count + 0 }' "$targets_file")"
-        if test "$target_count" != 3; then
-          echo "ARC requires exactly three build hosts; found $target_count" >&2
+        if test "$target_count" != "$expected_count"; then
+          echo "ARC requires exactly $expected_count build hosts; found $target_count" >&2
           exit 1
         fi
         while IFS=$'\t' read -r build_target build_remote_dir; do
@@ -400,11 +404,12 @@ tasks:
         export KUBECONFIG="$kubeconfig"
         kubectl() { sudo -n k0s kubectl "$@"; }
 
-        expected_build_nodes="$(printf '%s\n' bynull-servo nook-rise-s-1 ovh-us | sort)"
+        expected_build_nodes="$(sed '/^$/d' \
+          "$remote_dir/infra/k0s/config/arc-build-nodes" | sort)"
         actual_build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
           -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
         if test "$actual_build_nodes" != "$expected_build_nodes"; then
-          echo "ARC BuildKit manifest requires exactly bynull-servo, nook-rise-s-1, and ovh-us" >&2
+          echo "ARC BuildKit manifest does not match the declared build-node inventory" >&2
           printf 'Actual qualified nodes:\n%s\n' "$actual_build_nodes" >&2
           exit 1
         fi
@@ -442,7 +447,8 @@ tasks:
         ready_nodes="$(kubectl get pods --namespace arc-runners \
           -l app.kubernetes.io/name=nook-buildkit \
           -o jsonpath='{range .items[?(@.status.phase=="Running")]}{.spec.nodeName}{"\n"}{end}' | sort -u)"
-        test "$(printf '%s\n' "$ready_nodes" | sed '/^$/d' | wc -l | tr -d ' ')" = 3
+        expected_build_count="$(printf '%s\n' "$expected_build_nodes" | sed '/^$/d' | wc -l | tr -d ' ')"
+        test "$(printf '%s\n' "$ready_nodes" | sed '/^$/d' | wc -l | tr -d ' ')" = "$expected_build_count"
 
         helm upgrade --install nook-k0s \
           "$runner_chart" \
@@ -459,7 +465,7 @@ tasks:
         helm uninstall nook-k0s-cache --namespace arc-runners >/dev/null 2>&1 || true
 
         test "$(kubectl get autoscalingrunnerset/nook-k0s \
-          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 25
+          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 35
         test "$(kubectl get autoscalingrunnerset/nook-k0s-hive \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 10
         for scale_set in nook-k0s nook-k0s-hive; do

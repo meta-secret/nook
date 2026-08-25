@@ -115,7 +115,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Fork PRs, Dependabot PRs, releases, and unsupported runtime lanes use
     GitHub-hosted `ubuntu-latest`.
   - Delivery jobs restore portable cache layers through private Zot.
-  - The self-hosted `nook` label remains maintenance-only.
+  - The legacy registered `nook` runner is not used.
   - Do not use Blacksmith or other third-party runner labels.
 - **PR workflow cancellation:**
   - `concurrency` with `cancel-in-progress: true` on `pr-<number>` lets a newly requested validation or PR close cancel an older labeled run.
