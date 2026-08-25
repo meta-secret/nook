@@ -5,6 +5,10 @@ import {
   type DynamicEvaluatorInspection,
   isAmbientDynamicEvaluator,
 } from './skill-provider-dynamic-evaluator.ts';
+import {
+  createSkillProviderTypeContext,
+  type SkillProviderSourceInspection,
+} from './skill-provider-type-context.ts';
 
 type LoomSourceScanOptions = {
   readonly cwd: string;
@@ -12,10 +16,7 @@ type LoomSourceScanOptions = {
 };
 
 const LOOM_ROOT = join(import.meta.dir, '..');
-type SkillProviderImportInspection = {
-  readonly filePath: string;
-  readonly source: string;
-};
+type SkillProviderImportInspection = SkillProviderSourceInspection;
 
 enum RuntimeModuleReferenceKind {
   Literal = 'literal',
@@ -75,11 +76,6 @@ type RuntimeModuleReference =
 
 type RuntimeModuleArguments = ts.NodeArray<ts.Expression>;
 
-type BoundarySourceContext = {
-  readonly checker: ts.TypeChecker;
-  readonly sourceFile: ts.SourceFile;
-};
-
 type BoundaryNodeInspection = {
   readonly checker: ts.TypeChecker;
   readonly node: ts.Node;
@@ -105,7 +101,7 @@ const UNBOUNDED_RUNTIME_MODULE_REFERENCE: RuntimeModuleReference = {
 export function violatesSkillProviderBoundary(
   inspection: SkillProviderImportInspection,
 ): boolean {
-  const context = createBoundarySourceContext(inspection);
+  const context = createSkillProviderTypeContext(inspection);
   let boundaryViolation = false;
   const visit = (node: ts.Node): void => {
     const nodeInspection: BoundaryNodeInspection = {
@@ -644,39 +640,6 @@ function referencesSkillProvider(specifier: string): boolean {
   );
 }
 
-function createBoundarySourceContext(
-  inspection: SkillProviderImportInspection,
-): BoundarySourceContext {
-  const compilerOptions: ts.CompilerOptions = {
-    module: ts.ModuleKind.ESNext,
-    noLib: true,
-    strict: true,
-    target: ts.ScriptTarget.ES2022,
-  };
-  const sourceFile = ts.createSourceFile(
-    inspection.filePath,
-    inspection.source,
-    ts.ScriptTarget.ES2022,
-    true,
-    ts.ScriptKind.TS,
-  );
-  const missingSources = new Map<string, ts.SourceFile>();
-  const missingText = new Map<string, string>();
-  const compilerHost = ts.createCompilerHost(compilerOptions);
-  compilerHost.fileExists = (fileName) => fileName === inspection.filePath;
-  compilerHost.getSourceFile = (fileName) =>
-    fileName === inspection.filePath
-      ? sourceFile
-      : missingSources.get(fileName);
-  compilerHost.readFile = (fileName) =>
-    fileName === inspection.filePath
-      ? inspection.source
-      : missingText.get(fileName);
-  const rootNames = [inspection.filePath];
-  const program = ts.createProgram(rootNames, compilerOptions, compilerHost);
-  return { checker: program.getTypeChecker(), sourceFile };
-}
-
 function isErasedRequireDeclarationName(node: ts.Identifier): boolean {
   const parent = node.parent;
   if (
@@ -948,7 +911,7 @@ test('production Loom does not runtime-import dormant skill providers', async ()
     if (!LOOM_EXECUTABLE_SOURCE.test(relativePath)) continue;
     const source = await Bun.file(join(LOOM_ROOT, relativePath)).text();
     const inspection: SkillProviderImportInspection = {
-      filePath: relativePath,
+      filePath: `agentic-ai/loom/${relativePath}`,
       source,
     };
     if (violatesSkillProviderBoundary(inspection)) {

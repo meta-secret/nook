@@ -229,93 +229,23 @@ function isComputedCallableElementAccess(
   const receiverType = inspection.checker.getTypeAtLocation(
     inspection.node.expression,
   );
-  const valueFlowInspection: ComputedValueFlowInspection = {
-    checker: inspection.checker,
-    seed: inspection.node,
-  };
-  return (
-    isComputedValueInvoked(valueFlowInspection) ||
-    receiverType.getCallSignatures().length > 0 ||
-    receiverType.getConstructSignatures().length > 0
-  );
+  return typeCanExposeEvaluator(receiverType);
 }
 
-type ComputedValueFlowInspection = {
-  readonly checker: ts.TypeChecker;
-  readonly seed: ts.ElementAccessExpression;
-};
-
-function isComputedValueInvoked(
-  inspection: ComputedValueFlowInspection,
-): boolean {
-  const taintedSymbols = new Set<ts.Symbol>();
-  const carries = (candidate: ts.Expression): boolean => {
-    const expression = unwrapExpression(candidate);
-    if (expression === inspection.seed) return true;
-    if (ts.isIdentifier(expression)) {
-      const symbol = inspection.checker.getSymbolAtLocation(expression);
-      return Boolean(symbol && taintedSymbols.has(symbol));
-    }
-    if (ts.isConditionalExpression(expression)) {
-      return carries(expression.whenTrue) || carries(expression.whenFalse);
-    }
-    if (ts.isCommaListExpression(expression)) {
-      const result = expression.elements.at(-1);
-      return result ? carries(result) : false;
-    }
-    if (
-      ts.isBinaryExpression(expression) &&
-      (expression.operatorToken.kind === ts.SyntaxKind.CommaToken ||
-        expression.operatorToken.kind === ts.SyntaxKind.EqualsToken)
-    ) {
-      return carries(expression.right);
-    }
-    return false;
-  };
-  let changed = true;
-  while (changed) {
-    changed = false;
-    const visit = (node: ts.Node): void => {
-      let target: ts.Identifier | false = false;
-      let value: ts.Expression | false = false;
-      if (
-        ts.isVariableDeclaration(node) &&
-        ts.isIdentifier(node.name) &&
-        node.initializer
-      ) {
-        target = node.name;
-        value = node.initializer;
-      } else if (
-        ts.isBinaryExpression(node) &&
-        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
-        ts.isIdentifier(node.left)
-      ) {
-        target = node.left;
-        value = node.right;
-      }
-      if (target !== false && value !== false) {
-        const symbol = inspection.checker.getSymbolAtLocation(target);
-        if (symbol && !taintedSymbols.has(symbol) && carries(value)) {
-          taintedSymbols.add(symbol);
-          changed = true;
-        }
-      }
-      ts.forEachChild(node, visit);
-    };
-    visit(inspection.seed.getSourceFile());
+function typeCanExposeEvaluator(type: ts.Type): boolean {
+  if (
+    type.flags &
+    (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)
+  ) {
+    return true;
   }
-  let invoked = false;
-  const visit = (node: ts.Node): void => {
-    if (
-      (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
-      carries(node.expression)
-    ) {
-      invoked = true;
-    }
-    if (!invoked) ts.forEachChild(node, visit);
-  };
-  visit(inspection.seed.getSourceFile());
-  return invoked;
+  if (type.isUnionOrIntersection()) {
+    return type.types.some(typeCanExposeEvaluator);
+  }
+  return (
+    type.getCallSignatures().length > 0 ||
+    type.getConstructSignatures().length > 0
+  );
 }
 
 type ConstructorBindingInspection = {

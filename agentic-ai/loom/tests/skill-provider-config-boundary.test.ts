@@ -31,6 +31,16 @@ type GitHubActionDocument = {
   readonly runs?: GitHubActionRuns;
 };
 
+type ActionDependencyResolution = {
+  readonly importer: string;
+  readonly sources: ReadonlyMap<string, string>;
+  readonly specifier: string;
+};
+
+type ActionTranspilerOptions = {
+  readonly loader: 'tsx';
+};
+
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const PROVIDER_ROOT = '.agents/skills/cortex-article-structure';
 const PROVIDER_RUNNER = `${PROVIDER_ROOT}/src/runner.ts`;
@@ -64,6 +74,12 @@ const PRODUCTION_LOOM_PATHS = [
 ] as const;
 const PRODUCTION_LOOM_ROOT_PATHS = ['agentic-ai/loom/src'] as const;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
+const ACTION_SOURCE_SUFFIXES = [
+  '',
+  ...'ts tsx mts cts js jsx mjs cjs'.split(' ').map((value) => `.${value}`),
+] as const;
+const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
+const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 
 function trackedPaths(request: TrackedPathsRequest): readonly string[] {
   const command = ['git', 'ls-files', '--', ...request.pathspecs];
@@ -102,6 +118,7 @@ function isActionManifest(path: string): boolean {
 
 function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
   const pending = [...graph.roots];
+  const pendingSources: string[] = [];
   const visited = new Set<string>();
   const runtimePaths = new Set<string>();
   while (pending.length > 0) {
@@ -160,9 +177,56 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
         throw new Error(`Action entrypoint is untracked: ${runtimePath}`);
       }
       runtimePaths.add(runtimePath);
+      pendingSources.push(runtimePath);
+    }
+  }
+  const visitedSources = new Set<string>();
+  while (pendingSources.length > 0) {
+    const importer = pendingSources.pop();
+    if (!importer || visitedSources.has(importer)) continue;
+    visitedSources.add(importer);
+    const source = graph.sources.get(importer);
+    if (typeof source !== 'string') {
+      throw new Error(`Action source is unreadable: ${importer}`);
+    }
+    for (const imported of ACTION_IMPORT_SCANNER.scanImports(source)) {
+      if (!imported.path.startsWith('.')) continue;
+      const resolution: ActionDependencyResolution = {
+        importer,
+        sources: graph.sources,
+        specifier: imported.path,
+      };
+      const dependency = resolveActionDependency(resolution);
+      if (
+        dependency === false ||
+        !EXECUTABLE_SOURCE_EXTENSION.test(dependency)
+      ) {
+        throw new Error(
+          `Action relative import is unresolved: ${importer} -> ${imported.path}`,
+        );
+      }
+      if (!runtimePaths.has(dependency)) {
+        runtimePaths.add(dependency);
+        pendingSources.push(dependency);
+      }
     }
   }
   return [...runtimePaths].sort();
+}
+
+function resolveActionDependency(
+  resolution: ActionDependencyResolution,
+): string | false {
+  const base = posix.normalize(
+    posix.join(posix.dirname(resolution.importer), resolution.specifier),
+  );
+  for (const suffix of ACTION_SOURCE_SUFFIXES) {
+    const direct = `${base}${suffix}`;
+    if (resolution.sources.has(direct)) return direct;
+    const indexed = posix.join(base, `index${suffix}`);
+    if (resolution.sources.has(indexed)) return indexed;
+  }
+  return false;
 }
 
 test('dormant provider exposes no runnable adapter or side-effect entrypoint', async () => {
@@ -228,9 +292,10 @@ test('production Loom and runnable configuration do not consume the provider', a
   const actionPaths = trackedPaths(actionPathsRequest);
   const actionSources = new Map<string, string>();
   for (const path of actionPaths) {
-    const source = isActionManifest(path)
-      ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
-      : '';
+    const source =
+      isActionManifest(path) || EXECUTABLE_SOURCE_EXTENSION.test(path)
+        ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
+        : '';
     actionSources.set(path, source);
   }
   const actionGraph: ActionRuntimeGraph = {
@@ -287,16 +352,26 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       '.github/actions/nested/action.yaml',
       'runs:\n  using: node24\n  main: main.js\n  pre: pre.js\n  post: post.js',
     ],
-    ['.github/actions/nested/main.js', 'main();'],
+    ['.github/actions/nested/main.js', "import './facade.js'; main();"],
+    [
+      '.github/actions/nested/facade.js',
+      "export { audit } from '../../../.agents/skills/cortex-article-structure/src/audit.ts';",
+    ],
     ['.github/actions/nested/pre.js', 'prepare();'],
     ['.github/actions/nested/post.js', 'cleanup();'],
+    [
+      '.agents/skills/cortex-article-structure/src/audit.ts',
+      'export const audit = true;',
+    ],
   ]);
   const graph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
     sources,
   };
   expect(actionRuntimePaths(graph)).toEqual([
+    '.agents/skills/cortex-article-structure/src/audit.ts',
     '.github/actions/nested/action.yaml',
+    '.github/actions/nested/facade.js',
     '.github/actions/nested/main.js',
     '.github/actions/nested/post.js',
     '.github/actions/nested/pre.js',
@@ -311,5 +386,18 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   };
   expect(() => actionRuntimePaths(unresolvedGraph)).toThrow(
     'Action entrypoint is untracked',
+  );
+
+  const unresolvedImportSources = new Map(sources);
+  unresolvedImportSources.set(
+    '.github/actions/nested/facade.js',
+    "export { audit } from './missing.js';",
+  );
+  const unresolvedImportGraph: ActionRuntimeGraph = {
+    roots: ['.github/actions/root/action.yml'],
+    sources: unresolvedImportSources,
+  };
+  expect(() => actionRuntimePaths(unresolvedImportGraph)).toThrow(
+    'Action relative import is unresolved',
   );
 });
