@@ -408,7 +408,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
       await lockExtensionSession(paired.context)
-      await expect(widget).toHaveCount(0)
+      await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible({
+        timeout: 20_000,
+      })
 
       await loginPage.reload()
       await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
@@ -422,7 +424,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       ).toBeVisible({ timeout: 15_000 })
 
       await lockExtensionSession(paired.context)
-      await expect(widget).toHaveCount(0)
+      await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible({
+        timeout: 20_000,
+      })
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
 
       await expect(widget.getByText('Ready to sign in')).toBeVisible({

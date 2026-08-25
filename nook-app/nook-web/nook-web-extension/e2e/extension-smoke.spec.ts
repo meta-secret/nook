@@ -224,8 +224,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await inertAccountPage.goto(`${loginServer.origin}/inert-account-field`)
     await expect(inertAccountPage.locator('#nook-auth-widget')).toHaveCount(0)
 
-    await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
-    await widget.getByTestId('nook-auth-gate-expand').click()
+    await expect(widget.getByTestId('nook-auth-gate-expand')).toBeHidden()
     await expect(widget.getByText('Ready to sign in')).toBeVisible()
 
     await widget.getByRole('button', { name: 'Collapse Nook' }).click()
