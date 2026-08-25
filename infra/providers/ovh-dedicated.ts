@@ -371,7 +371,9 @@ async function parseCredentials(path: string): Promise<OvhCredentials> {
   return parsed;
 }
 
-async function loadCredentials(): Promise<OvhCredentials> {
+async function loadCredentials(input: {
+  definition: DedicatedServerDefinition;
+}): Promise<OvhCredentials> {
   const source = expandHome(
     process.env.OVH_CREDENTIAL_FILE ?? defaultCredentialFile,
   );
@@ -388,6 +390,7 @@ async function loadCredentials(): Promise<OvhCredentials> {
     path: "/auth/currentCredential",
   };
   await ovhApi<boolean>({ credentials: candidate, request: validationRequest });
+  await getServer({ credentials: candidate, definition: input.definition });
   const next = `${target}.next`;
   await writeFile(next, await readFile(source), { mode: 0o600 });
   await chmod(next, 0o600);
@@ -613,7 +616,7 @@ async function main(): Promise<void> {
     process.stdout.write(`${hostIdentity.fingerprint}\n`);
     return;
   }
-  const credentials = await loadCredentials();
+  const credentials = await loadCredentials({ definition });
   if (args.action === CliAction.Inspect) {
     const server = await getServer({ credentials, definition });
     process.stdout.write(

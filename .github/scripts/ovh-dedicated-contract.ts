@@ -54,6 +54,7 @@ for (const fragment of [
   "await chmod(target, 0o600)",
   "requiredCredentials",
   "/auth/currentCredential",
+  "getServer({ credentials: candidate",
   "await rename(next, target)",
   ".nook/infra/ovh-host-identities",
   "postInstallationScript",
