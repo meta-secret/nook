@@ -61,7 +61,6 @@ permissions:
   contents: read
 
 env:
-  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
   # Pull requests restore trusted Main and publish only quarantined exact-head
   # graphs. Only Main publishes the shared graph, so parallel PRs cannot evict it.
   HIVE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache
@@ -134,6 +133,8 @@ jobs:
     defaults:
       run:
         working-directory: /meta-secret/nook
+    env:
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
     steps:
       - name: Install Hive Control Center dependencies
         run: task hive:console:install

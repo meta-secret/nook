@@ -79,6 +79,12 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Run repository invariant preflight
+        run: >-
+          REPO_ROOT="$GITHUB_WORKSPACE"
+          task --taskfile "$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml"
+          preflight
+
       - name: Publish exact-source production browser image
         run: >-
           REPO_ROOT="$GITHUB_WORKSPACE"

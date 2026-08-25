@@ -157,6 +157,12 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: "true"
+      - name: Run repository invariant preflight
+        if: >-
+          (inputs.tasks || inputs.task) == 'check' ||
+          (inputs.tasks || inputs.task) == 'ci:pr' ||
+          (inputs.tasks || inputs.task) == 'ci:pr:e2e'
+        run: task preflight
       - name: Build exact-source Kubernetes job image
         run: task web:e2e:kubernetes-image
 

@@ -473,6 +473,8 @@ remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([
   "Remote / browser image",
   "runs-on: nook-k0s-container",
+  "Run repository invariant preflight",
+  "run: task preflight",
   "task web:e2e:kubernetes-image",
   "Run selected task without a nested container runtime",
   "web:build) task _web:build",

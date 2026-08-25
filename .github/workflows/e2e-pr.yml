@@ -92,6 +92,7 @@ jobs:
         env:
           DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
           DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          WASM_BUILD_MODE: prod
 
   e2e:
     name: Playwright (${{ inputs.suite }})

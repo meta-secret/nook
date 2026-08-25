@@ -670,6 +670,15 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "release must perform one optimized WASM artifact batch"
     );
     assert!(
+        release.contains("task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\"\n          preflight"),
+        "release must run current repository preflight tooling against the immutable source before publishing its job image"
+    );
+    let manual_e2e = read(&root, ".github/workflows/e2e-pr.yml");
+    assert!(
+        manual_e2e.contains("WASM_BUILD_MODE: prod"),
+        "manual PR e2e images must preserve the production WASM build mode"
+    );
+    assert!(
         !release.contains("Build stable Pages artifact") && !release.contains("run: task setup"),
         "release must extract the already-tested sealed image instead of running setup twice"
     );
@@ -784,6 +793,26 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             "{workflow} must explicitly pass system Chromium through the ARC container hook"
         );
     }
+    let hive_workflow = read(&root, ".github/workflows/hive.yml");
+    let hive_global = section(&hive_workflow, "env:\n", "\njobs:\n");
+    let hive_console = section(&hive_workflow, "  console:\n", "\n  console-untrusted:\n");
+    assert!(
+        !hive_global.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+            && hive_console.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
+        "Hive must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
+    );
+    let research_workflow = read(&root, ".github/workflows/web-research.yml");
+    let research_global = section(&research_workflow, "env:\n", "\njobs:\n");
+    let research_deploy = section(
+        &research_workflow,
+        "  deploy:\n",
+        "\n      - name: Install dependencies",
+    );
+    assert!(
+        !research_global.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+            && research_deploy.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
+        "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
+    );
     let pr_workflow = read(&root, ".github/workflows/pr.yml");
     let pr_ui_demo = section(&pr_workflow, "  ui-demo:\n", "\n  preview:\n");
     assert!(
