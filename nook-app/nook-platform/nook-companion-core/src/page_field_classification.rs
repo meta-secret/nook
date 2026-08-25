@@ -12,7 +12,6 @@ mod one_time_code_progression;
 pub use authentication_advance_control::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
-    classify_authentication_advance_control,
 };
 pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
 

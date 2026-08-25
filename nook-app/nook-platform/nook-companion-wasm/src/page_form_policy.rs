@@ -131,7 +131,7 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 pub fn classify_authentication_advance_control(
     observation: nook_companion_core::AuthenticationAdvanceControlObservation,
 ) -> nook_companion_core::AuthenticationAdvanceControlDecision {
-    nook_companion_core::classify_authentication_advance_control(&observation)
+    observation.classify()
 }
 
 #[wasm_bindgen]
@@ -182,7 +182,7 @@ mod tests {
 
         let advance = nook_companion_core::AuthenticationAdvanceControlObservation {
             actionability: nook_companion_core::PageControlActionability::Actionable,
-            ownership: nook_companion_core::PageControlOwnership::Unowned,
+            ownership: nook_companion_core::PageControlOwnership::LocallyScoped,
             semantics: nook_companion_core::PageControlSemantics::Activation,
             authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
             password_field_count: 0,

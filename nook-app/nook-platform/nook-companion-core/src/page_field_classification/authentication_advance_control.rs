@@ -91,110 +91,103 @@ fn form_has_authentication_identity(form_identity: &str) -> bool {
     )
 }
 
-/// Decide whether one DOM-extracted control can advance the observed ceremony.
-#[must_use]
-pub fn classify_authentication_advance_control(
-    observation: &AuthenticationAdvanceControlObservation,
-) -> AuthenticationAdvanceControlDecision {
-    if matches!(observation.actionability, PageControlActionability::Inert) {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    let positively_scoped_authentication_control =
-        matches!(
-            observation.ownership,
+impl AuthenticationAdvanceControlObservation {
+    /// Decide whether this DOM-extracted control can advance the observed ceremony.
+    #[must_use]
+    pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
+        if matches!(self.actionability, PageControlActionability::Inert) {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        let authentication_scope_owns_control = matches!(
+            self.ownership,
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-        ) && form_has_authentication_identity(&observation.form_identity);
-    let semantic_submit_ceremony_present = observation.password_field_count > 0
-        || observation.new_password_field_count > 0
-        || observation.one_time_code_field_count > 0
-        || matches!(
-            observation.authentication_username,
-            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-        )
-        || positively_scoped_authentication_control;
-    let non_authentication_label =
-        looks_like_non_authentication_submit_control_label(&observation.label);
-    let contextual_password_update = observation.new_password_field_count > 0
-        && looks_like_password_update_submit_control_label(&observation.label);
-    if form_identity_indicates_destructive_action(&observation.form_identity) {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if observation.new_password_field_count == 0
-        && observation.one_time_code_field_count == 0
-        && form_identity_indicates_non_authentication_account_management(&observation.form_identity)
-    {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if non_authentication_label && !contextual_password_update {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    let primary_sso_submit =
-        matches!(
-            observation.ownership,
-            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-        ) && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(
-                observation.authentication_username,
+        );
+        let positively_scoped_authentication_control = authentication_scope_owns_control
+            && form_has_authentication_identity(&self.form_identity);
+        let semantic_submit_ceremony_present = self.password_field_count > 0
+            || self.new_password_field_count > 0
+            || self.one_time_code_field_count > 0
+            || matches!(
+                self.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
             )
-            && contains_any_word(&expand_identity_text(&observation.label), &["sso"]);
-    if looks_like_alternate_authentication_route_control_label(&observation.label)
-        && !primary_sso_submit
-    {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if observation.new_password_field_count == 0
-        && looks_like_registration_route_control_label(&observation.label)
-    {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if looks_like_auxiliary_authentication_control_label(&observation.label) {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if observation.one_time_code_field_count > 0
-        && looks_like_one_time_code_resend_control_label(&observation.label)
-    {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if observation.new_password_field_count == 0
-        && looks_like_password_recovery_route_control_label(&observation.label)
-    {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if control_destination_indicates_non_authentication_route(&observation.destination_identity) {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    if observation.new_password_field_count == 0
-        && control_destination_indicates_non_authentication_route(&observation.form_identity)
-    {
-        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-    }
-    let accepted_semantic_submit =
-        matches!(
-            observation.ownership,
-            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-        ) && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
+            || positively_scoped_authentication_control;
+        let non_authentication_label =
+            looks_like_non_authentication_submit_control_label(&self.label);
+        let contextual_password_update = self.new_password_field_count > 0
+            && looks_like_password_update_submit_control_label(&self.label);
+        if form_identity_indicates_destructive_action(&self.form_identity) {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if self.new_password_field_count == 0
+            && self.one_time_code_field_count == 0
+            && form_identity_indicates_non_authentication_account_management(&self.form_identity)
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if non_authentication_label && !contextual_password_update {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        let primary_sso_submit = authentication_scope_owns_control
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+            && contains_any_word(&expand_identity_text(&self.label), &["sso"]);
+        if looks_like_alternate_authentication_route_control_label(&self.label)
+            && !primary_sso_submit
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if self.new_password_field_count == 0
+            && looks_like_registration_route_control_label(&self.label)
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if looks_like_auxiliary_authentication_control_label(&self.label) {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if self.one_time_code_field_count > 0
+            && looks_like_one_time_code_resend_control_label(&self.label)
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if self.new_password_field_count == 0
+            && looks_like_password_recovery_route_control_label(&self.label)
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if control_destination_indicates_non_authentication_route(&self.destination_identity) {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if self.new_password_field_count == 0
+            && control_destination_indicates_non_authentication_route(&self.form_identity)
+        {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        let accepted_semantic_submit = authentication_scope_owns_control
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
             && semantic_submit_ceremony_present;
-    let accepted_scoped_activation =
-        matches!(
-            observation.ownership,
-            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-        ) && matches!(observation.semantics, PageControlSemantics::Activation)
+        let accepted_scoped_activation = authentication_scope_owns_control
+            && matches!(self.semantics, PageControlSemantics::Activation)
             && semantic_submit_ceremony_present
-            && (observation.semantic_submit_control_count == 0
-                || looks_like_explicit_authentication_advance_control_label(&observation.label));
-    let activation_can_replace_semantic_submit =
-        !matches!(observation.semantics, PageControlSemantics::Activation)
-            || observation.semantic_submit_control_count == 0
-            || looks_like_explicit_authentication_advance_control_label(&observation.label);
-    let accepted_login_label = activation_can_replace_semantic_submit
-        && looks_like_login_advance_control_label(&observation.label)
-        && (semantic_submit_ceremony_present
-            || looks_like_explicit_authentication_advance_control_label(&observation.label));
-    if accepted_semantic_submit || accepted_scoped_activation || accepted_login_label {
-        AuthenticationAdvanceControlDecision::AdvancesAuthentication
-    } else {
-        AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+            && (self.semantic_submit_control_count == 0
+                || looks_like_explicit_authentication_advance_control_label(&self.label));
+        let activation_can_replace_semantic_submit =
+            !matches!(self.semantics, PageControlSemantics::Activation)
+                || self.semantic_submit_control_count == 0
+                || looks_like_explicit_authentication_advance_control_label(&self.label);
+        let accepted_login_label = authentication_scope_owns_control
+            && activation_can_replace_semantic_submit
+            && looks_like_login_advance_control_label(&self.label)
+            && (semantic_submit_ceremony_present
+                || looks_like_explicit_authentication_advance_control_label(&self.label));
+        if accepted_semantic_submit || accepted_scoped_activation || accepted_login_label {
+            AuthenticationAdvanceControlDecision::AdvancesAuthentication
+        } else {
+            AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+        }
     }
 }
 
@@ -204,7 +197,7 @@ mod tests {
 
     fn advances_authentication(observation: &AuthenticationAdvanceControlObservation) -> bool {
         matches!(
-            classify_authentication_advance_control(observation),
+            observation.classify(),
             AuthenticationAdvanceControlDecision::AdvancesAuthentication
         )
     }
@@ -316,6 +309,18 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&unrelated_formless_activation));
+
+        let unowned_login_labeled_activation = AuthenticationAdvanceControlObservation {
+            ownership: PageControlOwnership::Unowned,
+            semantics: PageControlSemantics::Activation,
+            authentication_username: AuthenticationUsernameEvidence::Explicit,
+            password_field_count: 1,
+            semantic_submit_control_count: 0,
+            form_identity: "login".to_owned(),
+            label: "Next".to_owned(),
+            ..localized_identity_submit.clone()
+        };
+        assert!(!advances_authentication(&unowned_login_labeled_activation));
 
         let account_email_submit = AuthenticationAdvanceControlObservation {
             form_identity: "account-settings".to_owned(),
