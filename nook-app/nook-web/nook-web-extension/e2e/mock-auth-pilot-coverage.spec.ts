@@ -67,6 +67,53 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('replaces a collapsed login action when QR enrollment appears', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock auth enrollment transition vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const loginPage = await paired.context.newPage()
+      await loginPage.goto(`${mockAuth.origin}/plain/login`)
+      const widget = loginPage.locator('html > aside#nook-auth-widget')
+      await expect(
+        widget.getByRole('button', { name: 'Fill saved login' }),
+      ).toBeVisible({ timeout: 20_000 })
+      await widget.getByRole('button', { name: 'Collapse Nook' }).click()
+      await expect(widget).toHaveAttribute('aria-expanded', 'false')
+
+      await loginPage.evaluate(() => {
+        const qr = document.createElement('canvas')
+        qr.width = 120
+        qr.height = 120
+        qr.setAttribute('aria-label', 'Authenticator QR')
+        document.querySelector('main')?.append(qr)
+      })
+
+      await expect(
+        widget.getByRole('button', { name: 'Fill saved login' }),
+      ).toHaveCount(0)
+      await expect(
+        widget.getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toBeVisible({ timeout: 20_000 })
+      await expect(widget).toHaveAttribute('aria-expanded', 'true')
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('cancels open login pickers when the authentication context changes', async ({
     browserName,
   }, testInfo) => {

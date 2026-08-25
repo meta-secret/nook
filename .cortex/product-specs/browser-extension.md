@@ -280,6 +280,8 @@ It fills the verification code via Rust/WASM.
 It encrypts the authenticator only after Sufficient outcome evidence.
 Consented backup-code capture follows. When recovery codes appear while the
 setup QR remains visible, the recovery action takes precedence.
+New QR or recovery-code evidence immediately invalidates the prior DOM action
+before the debounced Rust reclassification completes.
 Secrets never appear in the HUD.
 
 The toolbar menu may report the connected vault. It does not report login
@@ -336,6 +338,8 @@ The gate must:
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
 - support collapsing to a compact Nook mark and expanding again;
+- scope an explicit collapse choice to the current Rust-classified workflow so
+  a newly approved non-login workflow still starts expanded;
 - start as the compact Nook mark until the extension confirms that a detected
   login flow has at least one saved login match for the origin;
 - start expanded when a saved login matches or when a non-login workflow has a

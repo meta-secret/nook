@@ -187,8 +187,15 @@ export class WidgetState {
   applyAutomaticCollapse(value: boolean): void {
     if (!this.collapseWasSelectedByUser) this.collapsedState = value
   }
-  beginEnrollmentWorkflow(): void {
-    this.applyAutomaticCollapse(false)
+  beginEnrollmentWorkflow(presentationScope: string): void {
+    const continuesSamePresentation =
+      this.presentationScopeState.kind === WidgetWorkflowKeyKind.Assigned &&
+      this.presentationScopeState.key === presentationScope
+    if (!continuesSamePresentation) {
+      this.collapsedState = false
+      this.collapseWasSelectedByUser = false
+    }
+    this.assignPresentationScope(presentationScope)
   }
   collapseByUser(): void {
     this.collapseWasSelectedByUser = true

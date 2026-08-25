@@ -664,8 +664,16 @@ test.describe('Browser 2FA enrollment', () => {
           <button type="submit">Sign in</button>
         `
         document.body.append(form)
+        const completedSetupQr = document.createElement('canvas')
+        completedSetupQr.width = 120
+        completedSetupQr.height = 120
+        completedSetupQr.setAttribute('aria-label', 'Authenticator QR')
+        document.body.append(completedSetupQr)
       })
       const widget = backupPage.locator('#nook-auth-widget')
+      await expect(
+        widget.getByRole('heading', { name: 'Save backup codes' }),
+      ).toBeVisible({ timeout: 15_000 })
       await expect(
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toBeVisible({ timeout: 15_000 })

@@ -120,16 +120,24 @@ describe('Nook Pilot presentation state', () => {
     })
   })
 
-  test('clears only automatic collapse when enrollment begins', () => {
+  test('expands a new enrollment presentation and preserves the same one', () => {
     const automatic = new WidgetState()
     automatic.applyAutomaticCollapse(true)
-    automatic.beginEnrollmentWorkflow()
+    automatic.beginEnrollmentWorkflow('enrollment:setup')
     expect(automatic.collapsed).toBe(false)
 
     const explicit = new WidgetState()
     explicit.collapseByUser()
-    explicit.beginEnrollmentWorkflow()
+    explicit.beginEnrollmentWorkflow('enrollment:setup')
+    expect(explicit.collapsed).toBe(false)
+
+    explicit.collapseByUser()
+    explicit.detachRenderedWidget()
+    explicit.beginEnrollmentWorkflow('enrollment:setup')
     expect(explicit.collapsed).toBe(true)
+
+    explicit.beginEnrollmentWorkflow('enrollment:recovery')
+    expect(explicit.collapsed).toBe(false)
   })
 
   test('scopes explicit presentation choices to the rendered workflow', () => {

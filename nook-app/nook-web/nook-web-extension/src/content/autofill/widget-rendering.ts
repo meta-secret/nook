@@ -79,7 +79,6 @@ export function renderEnrollmentWidget({
     removeWidget()
     return
   }
-  widgetState.beginEnrollmentWorkflow()
   const workflowKey = [
     'enrollment',
     hints.qr ? 'qr' : '',
@@ -98,9 +97,14 @@ export function renderEnrollmentWidget({
     if (renderedWidget && hasEnrollmentSection(renderedWidget)) return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
+  widgetState.beginEnrollmentWorkflow(workflowKey)
 
+  const approvedHints: EnrollmentPageHints = {
+    qr: snapshot.action === 'enroll-authenticator' && hints.qr,
+    backupCodes: snapshot.action === 'save-backup-codes' && hints.backupCodes,
+  }
   const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
-    copy: enrollmentCopy(hints),
+    copy: enrollmentCopy(approvedHints),
     currentStep: snapshot.currentStep,
     totalSteps: snapshot.totalSteps,
   }
@@ -129,10 +133,7 @@ export function renderEnrollmentWidget({
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
-    hints: {
-      qr: snapshot.action === 'enroll-authenticator' && hints.qr,
-      backupCodes: snapshot.action === 'save-backup-codes' && hints.backupCodes,
-    },
+    hints: approvedHints,
   }
   renderEnrollmentActions(nookTypedArgs1_0)
 }

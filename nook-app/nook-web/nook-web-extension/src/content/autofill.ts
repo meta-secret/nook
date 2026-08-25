@@ -12,6 +12,7 @@ import {
   type PasswordFormObservation,
 } from '../../../nook-web-shared/src/extension/password-forms'
 import { isRuntimeNookVaultAppUrl } from '../lib/simple-vault-runtime'
+import { textHasBackupCodeHint } from '../lib/backup-code-candidates'
 import {
   AuthenticationWorkflowSnapshotMessageType,
   MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
@@ -410,6 +411,26 @@ function mutationCanIntroduceCompetingWorkflow(
   )
 }
 
+function mutationCanExposeEnrollmentEvidence(record: MutationRecord): boolean {
+  const elementContainsQrMedia = (node: Node): boolean =>
+    node instanceof Element &&
+    (node.matches('canvas, img, svg') ||
+      Boolean(node.querySelector('canvas, img, svg')))
+  if (record.type === 'childList') {
+    if ([...record.addedNodes].some(elementContainsQrMedia)) return true
+  } else if (
+    record.type === 'attributes' &&
+    elementContainsQrMedia(record.target)
+  ) {
+    return true
+  }
+  const evidenceContainer =
+    record.target instanceof Element
+      ? record.target
+      : record.target.parentElement
+  return textHasBackupCodeHint(evidenceContainer?.textContent ?? '')
+}
+
 function handleAuthenticationMutations(
   records: AuthenticationMutationRecords,
 ): void {
@@ -446,6 +467,21 @@ function handleAuthenticationMutations(
     removeScannedWidget()
     void enrollmentCancellation.finally(() => scheduleScan())
     return
+  }
+  if (
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned &&
+    pageMutations.some(mutationCanExposeEnrollmentEvidence)
+  ) {
+    const enrollmentHints = detectEnrollmentHints()
+    if (enrollmentHints.qr || enrollmentHints.backupCodes) {
+      authenticationActionState.invalidate()
+      widgetState.busy = false
+      cancelPendingAuthenticatorPickerRequest()
+      cancelPendingLoginPickerRequest()
+      remountWidget()
+      scheduleScan()
+      return
+    }
   }
   if (
     !enrollmentCeremonyActive() &&

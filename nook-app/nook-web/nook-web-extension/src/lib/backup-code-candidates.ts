@@ -8,7 +8,11 @@ import {
 
 export function pageHasDocumentBackupCodeHint(): boolean {
   const bodyText = document.body?.innerText ?? ''
-  return page_has_backup_code_hint(bodyText)
+  return textHasBackupCodeHint(bodyText)
+}
+
+export function textHasBackupCodeHint(sourceText: string): boolean {
+  return page_has_backup_code_hint(sourceText)
 }
 
 export function extractDocumentBackupCodeCandidates(
