@@ -90,6 +90,21 @@ Each replica uses:
 - a 4 CPU request without a CPU limit; and
 - an 8 GiB memory request with a 48 GiB limit.
 
+Each build host must persist these kernel key limits in
+`/etc/sysctl.d/91-nook-buildkit-keyring.conf`:
+
+- `kernel.keys.maxkeys=20000`; and
+- `kernel.keys.maxbytes=2000000`.
+
+Rootless shards concentrate their processes under host UID 1000. The Debian
+default allows only 200 keys per user. Concurrent solves can exhaust that quota
+and make runc report a misleading `disk quota exceeded` error.
+
+`task infra:arc:deploy` quarantines every declared build host before applying
+the persistent settings and starting BuildKit storage convergence. It verifies
+the effective runtime values on every host before reactivating any of them.
+Deployment fails closed when either value is below its declared floor.
+
 Rootless BuildKit uses `--oci-worker-no-process-sandbox`. An unprivileged
 Kubernetes Pod cannot mount the nested `/proc` required by BuildKit's normal
 OCI process sandbox. A production build probe must execute a `RUN` vertex;
