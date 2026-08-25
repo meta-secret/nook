@@ -355,18 +355,15 @@ fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
-    let release_tooling = release
-        .find("- name: Checkout release workflow tooling")
-        .context("release workflow must check out workflow tooling")?;
     let release_docker_setup = release
         .find("- name: Docker setup")
-        .context("release workflow must configure Docker")?;
+        .context("release workflow must configure BuildKit")?;
     assert!(
-        release_source < release_tooling && release_tooling < release_docker_setup,
+        release_source < release_docker_setup,
         "release Docker setup must fingerprint the requested source after checkout"
     );
-    assert!(release.contains("path: .nook/release-workflow"));
-    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
+    assert!(release.contains("uses: ./.github/actions/nook-docker-setup"));
+    assert!(!release.contains("path: .nook/release-workflow"));
     Ok(())
 }
 
