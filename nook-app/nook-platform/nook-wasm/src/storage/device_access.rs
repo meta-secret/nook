@@ -11,9 +11,11 @@ pub(crate) use nook_core::{
 
 use crate::NookError;
 
-use super::indexed_db::{StringUpdateGuard, StringUpdateResult, idb_get_string};
+use super::indexed_db::{StringUpdateGuard, StringUpdateResult};
 #[cfg(test)]
-use super::indexed_db::{idb_delete_key, idb_put_string, save_wrapped_device_identity};
+use super::indexed_db::{
+    idb_delete_key, idb_get_string, idb_put_string, save_wrapped_device_identity,
+};
 
 mod migration;
 mod profile_store;

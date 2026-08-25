@@ -122,6 +122,7 @@ async fn read_raw_snapshot() -> Result<serde_json::Value, NookError> {
 /// The semantic Rust enums remain the in-memory contract. The stored projection
 /// deliberately retains the original string-or-absent shape so a previous app
 /// build can read provider rows after rollback.
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 async fn write_snapshot_at(
     state_key: &str,
     schema_key: &str,
