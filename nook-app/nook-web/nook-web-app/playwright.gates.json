@@ -4,6 +4,7 @@
     "connect.spec.ts",
     "device-key-protection.spec.ts",
     "device-identity-recovery.spec.ts",
+    "devices-access-passkey-inventory.spec.ts",
     "devices-access.spec.ts",
     "local-vault-apple-safari-imports.spec.ts",
     "local-vault-dashlane-import.spec.ts",
