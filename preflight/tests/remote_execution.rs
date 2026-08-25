@@ -746,6 +746,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     assert!(ui_demo.contains("runs-on: nook-k0s-container"));
     for required in [
         "E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts",
+        "name: Collect Playwright diagnostics",
         "name: Preserve Playwright diagnostics",
         "if: always()",
         "uses: actions/upload-artifact@v7",

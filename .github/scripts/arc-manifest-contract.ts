@@ -492,7 +492,10 @@ workerTasks.requireAll([
 
 await assertHiveRenderContract({ root });
 
-const hostedTrustBoundary = new Set(["hive.yml#verify-fork"]);
+const hostedTrustBoundary = new Set([
+  "hive.yml#verify-fork",
+  "web-research.yml#validate-untrusted",
+]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
   .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))

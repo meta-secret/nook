@@ -166,20 +166,20 @@ jobs:
       - name: Run Playwright without a nested container runtime
         if: (inputs.tasks || inputs.task) == 'web:e2e'
         working-directory: /meta-secret/nook
+        run: task _web:test:e2e
+      - name: Run extension Playwright without a nested container runtime
+        if: (inputs.tasks || inputs.task) == 'extension:e2e'
+        working-directory: /meta-secret/nook
+        run: task _extension:test:e2e
+
+      - name: Collect Playwright diagnostics
+        if: always()
+        working-directory: /meta-secret/nook
         run: |
-          task _web:test:e2e
           artifact_dir="$GITHUB_WORKSPACE/e2e-artifacts"
           mkdir -p "$artifact_dir/web" "$artifact_dir/extension"
           cp -R nook-app/nook-web/nook-web-app/test-results/. "$artifact_dir/web/" 2>/dev/null || true
           cp -R nook-app/nook-web/nook-web-extension/test-results/. "$artifact_dir/extension/" 2>/dev/null || true
-      - name: Run extension Playwright without a nested container runtime
-        if: (inputs.tasks || inputs.task) == 'extension:e2e'
-        working-directory: /meta-secret/nook
-        run: |
-          task _extension:test:e2e
-          artifact_dir="$GITHUB_WORKSPACE/e2e-artifacts/extension"
-          mkdir -p "$artifact_dir"
-          cp -R nook-app/nook-web/nook-web-extension/test-results/. "$artifact_dir/" 2>/dev/null || true
       - name: Preserve Playwright diagnostics
         if: always()
         uses: actions/upload-artifact@v7

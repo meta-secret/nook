@@ -96,6 +96,14 @@ fn assert_workflow_runtime_contract(root: &Path) {
             "{workflow} must preserve the Dependabot trust boundary"
         );
     }
+    assert!(
+        research.contains("validate-untrusted:")
+            && research.contains("runs-on: ubuntu-latest")
+            && research.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
+            && research.contains("task web:research:verify")
+            && research.contains("without deployment credentials"),
+        "untrusted research PRs must retain secret-free hosted validation"
+    );
 }
 
 fn assert_docker_setup_contract(root: &Path) {
