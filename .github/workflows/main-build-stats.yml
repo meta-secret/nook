@@ -42,6 +42,9 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
+      - name: Expose Actions Node.js runtime
+        uses: ./.github/actions/nook-node-setup
+
       - name: Download completed Main cache telemetry
         continue-on-error: true
         uses: actions/download-artifact@v8

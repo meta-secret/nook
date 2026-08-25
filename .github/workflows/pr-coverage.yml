@@ -21,6 +21,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Expose Actions Node.js runtime
+        uses: ./.github/actions/nook-node-setup
+
       - name: Test base coverage artifact resolver
         run: node --test .github/scripts/base-coverage-artifact.test.cjs
 

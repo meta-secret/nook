@@ -137,6 +137,22 @@ const prWorkflow = new TextContract({
   label: "PR workflow",
   source: await read(".github/workflows/pr.yml"),
 });
+const hiveWorkflow = new TextContract({
+  label: "Hive workflow",
+  source: await read(".github/workflows/hive.yml"),
+});
+const repositoryPolicyWorkflow = new TextContract({
+  label: "repository policy workflow",
+  source: await read(".github/workflows/repository-policy.yml"),
+});
+const webResearchWorkflow = new TextContract({
+  label: "web research workflow",
+  source: await read(".github/workflows/web-research.yml"),
+});
+const nodeSetup = new TextContract({
+  label: "ARC shell Node setup",
+  source: await read(".github/actions/nook-node-setup/action.yml"),
+});
 const webTasks = new TextContract({
   label: "web browser tasks",
   source: await read("nook-app/nook-web/Taskfile.yml"),
@@ -386,6 +402,29 @@ prWorkflow.requireAll([
   "task _web:test:ui-demo",
 ]);
 prWorkflow.forbid("    runs-on: ubuntu-latest");
+nodeSetup.requireAll([
+  "/home/runner/externals/node24/bin/node",
+  'echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"',
+]);
+prWorkflow.require("uses: ./.github/actions/nook-node-setup");
+repositoryPolicyWorkflow.requireAll([
+  "if: env.NOOK_ARC_RUNNER == '1'",
+  "uses: ./.github/actions/nook-docker-setup",
+  "run: task preflight:test",
+]);
+hiveWorkflow.requireAll([
+  "Build Hive Control Center browser image",
+  "nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "needs: console-image",
+  "runs-on: nook-k0s-container",
+]);
+hiveWorkflow.forbid("task hive:console:e2e:prepare");
+webResearchWorkflow.requireAll([
+  "Build research browser image",
+  "nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "needs: image",
+  "runs-on: nook-k0s-container",
+]);
 webTasks.requireAll([
   "_web:test:e2e:run-groups:",
   'set -- "--shard=$NOOK_E2E_SHARD"',

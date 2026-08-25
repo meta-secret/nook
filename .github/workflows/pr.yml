@@ -409,6 +409,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Expose Actions Node.js runtime
+        uses: ./.github/actions/nook-node-setup
+
       - name: Test Linear UI demo publishing helper
         run: node --test .github/scripts/linear-ui-demo.test.cjs
 
