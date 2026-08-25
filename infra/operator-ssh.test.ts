@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -39,6 +39,19 @@ describe("operator SSH configuration", () => {
     expect(ensureInclude(once)).toBe(once);
   });
 
+  test("moves an existing global include ahead of unsafe global options", () => {
+    const original = [
+      "StrictHostKeyChecking no",
+      "UserKnownHostsFile /dev/null",
+      "Include ~/.ssh/config.d/*.conf",
+      "",
+    ].join("\n");
+    const configured = ensureInclude(original);
+    expect(configured.startsWith("Include ~/.ssh/config.d/*.conf\n\n"))
+      .toBe(true);
+    expect(configured.match(/Include ~\/\.ssh\/config\.d\/\*\.conf/g)).toHaveLength(1);
+  });
+
   test("does not treat a host-scoped include as global", () => {
     const original = [
       "Host existing",
@@ -57,7 +70,20 @@ describe("operator SSH configuration", () => {
       const link = join(fixture, "config");
       await writeFile(target, "Host existing\n", "utf8");
       await symlink(target, link);
-      expect(await writableConfigPath(link)).toBe(target);
+      expect(await writableConfigPath(link)).toBe(await realpath(target));
+    } finally {
+      await rm(fixture, { force: true, recursive: true });
+    }
+  });
+
+  test("rejects a dangling symlink-managed SSH config", async () => {
+    const fixture = await mkdtemp(join(tmpdir(), "nook-operator-ssh-"));
+    try {
+      const link = join(fixture, "config");
+      await symlink(join(fixture, "missing-config"), link);
+      expect(writableConfigPath(link)).rejects.toThrow(
+        "dangling symbolic link",
+      );
     } finally {
       await rm(fixture, { force: true, recursive: true });
     }

@@ -39,7 +39,8 @@ for (const fragment of [
   ".nook/infra/home-known-hosts",
   "BatchMode=yes",
   "metadata.isSymbolicLink()",
-  "return realpath(path)",
+  "return await realpath(path)",
+  "SSH config path is a dangling symbolic link",
 ]) {
   requireFragment({
     fragment,

@@ -66,13 +66,15 @@ export function renderManagedConfig(home: HomeSshDefinition): string {
 }
 
 export function ensureInclude(config: string): string {
-  const lines = config.split("\n");
-  const firstScopedBlock = lines.findIndex((line) =>
-    /^(?:Host|Match)(?:\s|$)/i.test(line.trim()),
-  );
-  const globalLines = firstScopedBlock === -1 ? lines : lines.slice(0, firstScopedBlock);
-  if (globalLines.some((line) => line.trim() === includeDirective)) return config;
-  const body = config.length === 0 ? "" : `${config.replace(/^\n+/, "")}\n`;
+  const bodyWithoutManagedIncludes = config
+    .split("\n")
+    .filter((line) => line.trim() !== includeDirective)
+    .join("\n")
+    .replace(/^\n+/, "");
+  const body =
+    bodyWithoutManagedIncludes.length === 0
+      ? ""
+      : `${bodyWithoutManagedIncludes.replace(/\n*$/, "")}\n`;
   return `${includeDirective}\n\n${body}`;
 }
 
@@ -178,11 +180,9 @@ async function writePrivateFile(input: {
 }
 
 export async function writableConfigPath(path: string): Promise<string> {
+  let metadata;
   try {
-    const metadata = await lstat(path);
-    if (metadata.isSymbolicLink()) return realpath(path);
-    if (!metadata.isFile()) throw new Error("SSH config path is not a regular file");
-    return path;
+    metadata = await lstat(path);
   } catch (error) {
     if (
       error instanceof Error &&
@@ -193,6 +193,18 @@ export async function writableConfigPath(path: string): Promise<string> {
     }
     throw error;
   }
+  if (metadata.isSymbolicLink()) {
+    try {
+      return await realpath(path);
+    } catch (error) {
+      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
+        throw new Error("SSH config path is a dangling symbolic link");
+      }
+      throw error;
+    }
+  }
+  if (!metadata.isFile()) throw new Error("SSH config path is not a regular file");
+  return path;
 }
 
 async function install(): Promise<void> {
