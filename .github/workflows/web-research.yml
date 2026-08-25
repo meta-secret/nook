@@ -29,6 +29,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
   CF_PAGES_PROJECT_NAME: nook-web-research
   RESEARCH_URL: https://web-research.nkey.app
   RESEARCH_DIR: nook-app/nook-web/nook-web-research

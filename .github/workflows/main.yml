@@ -47,6 +47,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
   DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
   DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
   CI_MAIN_DEV_DOMAIN: dev.nokey.sh

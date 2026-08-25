@@ -37,6 +37,9 @@ concurrency:
   group: e2e-pr-${{ inputs.pr_number }}-${{ inputs.suite }}
   cancel-in-progress: true
 
+env:
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
+
 jobs:
   image:
     name: Build PR browser image

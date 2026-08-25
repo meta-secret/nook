@@ -758,5 +758,20 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             "{config} must use the e2e image's system Chromium"
         );
     }
+    for workflow in [
+        ".github/workflows/e2e-pr.yml",
+        ".github/workflows/hive.yml",
+        ".github/workflows/main.yml",
+        ".github/workflows/pr.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/remote.yml",
+        ".github/workflows/web-research.yml",
+    ] {
+        assert!(
+            read(&root, workflow)
+                .contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
+            "{workflow} must explicitly pass system Chromium through the ARC container hook"
+        );
+    }
     Ok(())
 }
