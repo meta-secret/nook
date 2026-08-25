@@ -71,6 +71,8 @@ jobs:
 
       - name: Install Rust for repository policy
         uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
 
       - name: Restore hosted preflight Rust dependencies
         if: >-
