@@ -209,6 +209,45 @@ describe('website one-time-code fields', () => {
     })
   })
 
+  test('accepts reset password for a new-password ceremony', () => {
+    document.body.innerHTML = `
+      <form id="reset-password">
+        <input type="password" autocomplete="new-password" />
+        <input type="password" autocomplete="new-password" />
+        <button type="submit">Reset password</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      newPasswordFieldCount: 2,
+      authenticationAdvanceControlPresent: true,
+    })
+  })
+
+  test('rejects resend code as OTP progression', () => {
+    document.body.innerHTML = `
+      <form id="otp-verification">
+        <input autocomplete="one-time-code" inputmode="numeric" />
+        <button type="submit">Resend code</button>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    expect(observations[0]?.summary).toMatchObject({
+      oneTimeCodeFieldCount: 1,
+      authenticationAdvanceControlPresent: false,
+    })
+    const actionabilityQuery: Parameters<
+      typeof authenticationWorkflowFormsHaveActionableControl
+    >[0] = { observations }
+    expect(
+      authenticationWorkflowFormsHaveActionableControl(actionabilityQuery),
+    ).toBe(false)
+  })
+
   test('accepts a contextual save label for a new-password ceremony', () => {
     document.body.innerHTML = `
       <form id="account-settings">
