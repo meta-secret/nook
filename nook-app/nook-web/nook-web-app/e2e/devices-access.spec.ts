@@ -115,7 +115,7 @@ test.describe('devices and access dashboard', () => {
 
     await page.goBack()
 
-    await expect(page).toHaveURL(/\/app\/$/)
+    await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
     await expect(page.getByTestId('login-devices-access')).toBeVisible()
 
