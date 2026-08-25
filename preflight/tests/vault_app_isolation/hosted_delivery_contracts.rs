@@ -419,30 +419,31 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let full_e2e_job = section(&pr, "  full-e2e-shard:\n", "  full-e2e:\n");
     assert!(
-        full_e2e_job.contains("needs: [wasm, wasm-node-test]")
-            && full_e2e_job.contains("Download verified WASM handoff")
-            && full_e2e_job.contains("cache-write: \"false\"")
-            && full_e2e_job.contains("main-cache-only: \"true\"")
-            && full_e2e_job.contains("task ci:pr:e2e:web:artifacts")
+        full_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && full_e2e_job.contains("runs-on: nook-k0s-container")
+            && full_e2e_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && full_e2e_job.contains("task _ci:main:web:e2e-only")
+            && !full_e2e_job.contains("nook-docker-setup")
             && !full_e2e_job.contains("task ci:pr:e2e\n")
             && !full_e2e_job.contains("task ci:pr:wasm"),
-        "Main-fix web e2e must consume verified WASM without rebuilding Rust"
+        "Main-fix web e2e must consume the exact browser image without rebuilding Rust"
     );
     let extension_e2e_job = pr
         .split_once("  full-extension-e2e:\n")
         .context("PR workflow must define full extension E2E")?
         .1;
     assert!(
-        extension_e2e_job.contains("needs: [wasm, wasm-node-test]")
-            && extension_e2e_job.contains("Download verified WASM handoff")
-            && extension_e2e_job.contains("cache-write: \"false\"")
-            && extension_e2e_job.contains("main-cache-only: \"true\"")
-            && extension_e2e_job.contains("task ci:pr:e2e:extension:artifacts")
+        extension_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && extension_e2e_job.contains("runs-on: nook-k0s-container")
+            && extension_e2e_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && extension_e2e_job.contains("task _extension:test:e2e")
+            && !extension_e2e_job.contains("nook-docker-setup")
             && !extension_e2e_job.contains("task ci:pr:e2e\n")
             && !extension_e2e_job.contains("task ci:pr:wasm")
-            && extension_e2e_job
-                .contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
-        "Main-fix extension e2e must consume verified WASM without rebuilding Rust"
+            && !extension_e2e_job.contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL"),
+        "Main-fix extension e2e must consume the exact browser image without rebuilding Rust"
     );
     assert!(
         pr.contains("name: pr-wasm-${{ github.run_id }}")
