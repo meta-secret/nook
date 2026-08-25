@@ -491,6 +491,16 @@ tasks:
         test "$(kubectl get autoscalingrunnerset/nook-k0s-container \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 20
         for scale_set in nook-k0s nook-k0s-hive nook-k0s-container; do
+          deadline="$(( $(date +%s) + 600 ))"
+          until kubectl get pod --namespace arc-systems \
+            -l "actions.github.com/scale-set-name=$scale_set" \
+            -o name | grep -q .; do
+            if test "$(date +%s)" -ge "$deadline"; then
+              echo "Timed out waiting for $scale_set listener creation" >&2
+              exit 1
+            fi
+            sleep 2
+          done
           kubectl wait pod --namespace arc-systems \
             -l "actions.github.com/scale-set-name=$scale_set" \
             --for=condition=Ready --timeout=10m
