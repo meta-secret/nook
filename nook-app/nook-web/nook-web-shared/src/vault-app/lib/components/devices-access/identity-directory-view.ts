@@ -1,16 +1,25 @@
 import {
+  type DeviceAccessProtectionKind,
+  type NookDeviceAccessSnapshot,
+  type NookDeviceAccessText,
+  type NookDeviceVaultAccess,
   NookIdentityDirectorySelectionKind,
   type NookIdentityLocalAccessKind,
   NookIdentityMemberLabelKind,
   type NookIdentityMemberSnapshot,
   type NookIdentitySnapshot,
+  type NookPasskeyTimestampEvidence,
+  NookPasskeyTimestampEvidenceKind,
   type NookVaultManager,
   NookDeviceAccessTextKind,
   NookDeviceVaultAccessState,
 } from "$app-wasm";
 import {
+  type DashboardTimestamp,
+  DashboardTimestampKind,
   type DashboardText,
   DashboardTextKind,
+  type DashboardView,
 } from "../devices-access-dashboard-state";
 import type { VaultAccessView } from "./access-chain";
 
@@ -29,6 +38,7 @@ export type IdentityMemberView = {
   readonly appId: string;
   readonly label: DashboardText;
   readonly currentBrowser: boolean;
+  readonly localProtection: DeviceAccessProtectionKind;
 };
 
 export type IdentityDirectoryEntry = {
@@ -58,6 +68,11 @@ export type IdentityDirectoryView = {
   readonly selection: IdentityDirectorySelection;
 };
 
+export type IdentityDirectoryAccessView = {
+  readonly directory: IdentityDirectoryView;
+  readonly access: DashboardView;
+};
+
 export type IdentityDirectoryLoadState =
   | { readonly kind: IdentityDirectoryLoadKind.Loading }
   | { readonly kind: IdentityDirectoryLoadKind.Failed }
@@ -71,6 +86,7 @@ function readMember(member: NookIdentityMemberSnapshot): IdentityMemberView {
     return {
       appId: member.appId,
       currentBrowser: member.currentBrowser,
+      localProtection: member.localProtection,
       label:
         member.labelKind === NookIdentityMemberLabelKind.Known
           ? { kind: DashboardTextKind.Known, value: member.label() }
@@ -81,6 +97,64 @@ function readMember(member: NookIdentityMemberSnapshot): IdentityMemberView {
   }
 }
 
+function readText(value: NookDeviceAccessText): DashboardText {
+  try {
+    return value.kind === NookDeviceAccessTextKind.Known
+      ? { kind: DashboardTextKind.Known, value: value.value() }
+      : { kind: DashboardTextKind.Unknown };
+  } finally {
+    value.free();
+  }
+}
+
+function readTimestamp(
+  value: NookPasskeyTimestampEvidence,
+): DashboardTimestamp {
+  try {
+    if (value.kind === NookPasskeyTimestampEvidenceKind.Known) {
+      return { kind: DashboardTimestampKind.Known, value: value.value() };
+    }
+    return value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
+      ? { kind: DashboardTimestampKind.NotYetObserved }
+      : { kind: DashboardTimestampKind.Unavailable };
+  } finally {
+    value.free();
+  }
+}
+
+function readVaultAccess(entry: NookDeviceVaultAccess): VaultAccessView {
+  try {
+    return {
+      storeId: entry.storeId,
+      label: entry.label,
+      verified: entry.accessState === NookDeviceVaultAccessState.Verified,
+      verifiedAt: readText(entry.verifiedAt),
+      lastLocalUpdateAt: readText(entry.lastLocalUpdateAt),
+    };
+  } finally {
+    entry.free();
+  }
+}
+
+function readAccess(snapshot: NookDeviceAccessSnapshot): DashboardView {
+  try {
+    return {
+      protection: snapshot.protection,
+      identityState: snapshot.identityState,
+      deviceId: readText(snapshot.deviceId),
+      credentialId: readText(snapshot.credentialId),
+      passkeyName: readText(snapshot.passkeyName),
+      providerLabel: readText(snapshot.providerLabel),
+      createdAt: readTimestamp(snapshot.createdAt),
+      lastUsedAt: readTimestamp(snapshot.lastUsedAt),
+      keeper: snapshot.keeper,
+      vaults: snapshot.vaults().map(readVaultAccess),
+    };
+  } finally {
+    snapshot.free();
+  }
+}
+
 function readIdentity(identity: NookIdentitySnapshot): IdentityDirectoryEntry {
   try {
     return {
@@ -88,45 +162,16 @@ function readIdentity(identity: NookIdentitySnapshot): IdentityDirectoryEntry {
       label: identity.label,
       localAccess: identity.localAccess,
       members: identity.members().map(readMember),
-      vaults: identity.vaults().map((entry) => {
-        try {
-          const verifiedAt = entry.verifiedAt;
-          const lastLocalUpdateAt = entry.lastLocalUpdateAt;
-          try {
-            return {
-              storeId: entry.storeId,
-              label: entry.label,
-              verified:
-                entry.accessState === NookDeviceVaultAccessState.Verified,
-              verifiedAt:
-                verifiedAt.kind === NookDeviceAccessTextKind.Known
-                  ? { kind: DashboardTextKind.Known, value: verifiedAt.value() }
-                  : { kind: DashboardTextKind.Unknown },
-              lastLocalUpdateAt:
-                lastLocalUpdateAt.kind === NookDeviceAccessTextKind.Known
-                  ? {
-                      kind: DashboardTextKind.Known,
-                      value: lastLocalUpdateAt.value(),
-                    }
-                  : { kind: DashboardTextKind.Unknown },
-            };
-          } finally {
-            verifiedAt.free();
-            lastLocalUpdateAt.free();
-          }
-        } finally {
-          entry.free();
-        }
-      }),
+      vaults: identity.vaults().map(readVaultAccess),
     };
   } finally {
     identity.free();
   }
 }
 
-export async function loadIdentityDirectoryView(
+export async function loadIdentityDirectoryAccessView(
   manager: NookVaultManager,
-): Promise<IdentityDirectoryView> {
+): Promise<IdentityDirectoryAccessView> {
   const request = manager.identity_directory_snapshot_request();
   const snapshot = await request.resolve().finally(() => request.free());
   try {
@@ -141,7 +186,10 @@ export async function loadIdentityDirectoryView(
             identityId: snapshot.selectedIdentityId,
           }
         : { kind: IdentityDirectorySelectionKind.Empty };
-    return { identities, selection };
+    return {
+      directory: { identities, selection },
+      access: readAccess(snapshot.device_access()),
+    };
   } finally {
     snapshot.free();
   }

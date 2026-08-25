@@ -17,11 +17,17 @@ import {
 
 type ImportManagerState = {
   protection: DeviceProtectionStatus
+  deviceId: string
+  rejectActivation: boolean
   rejectImport: boolean
+  operationOrder: string[]
   importedRecords: boolean
   statusFreed: boolean
   replaced: boolean
   saved: boolean
+  savedAppId: string
+  activatedAppId: string
+  activatedAppIds: string[]
   replacedSnapshot: AuthProvidersSnapshot
   savedSnapshot: AuthProvidersSnapshot
 }
@@ -69,7 +75,11 @@ function importDependencies(
 
 function importManager(state: ImportManagerState): NookVaultManager {
   return {
+    get device_id() {
+      return state.deviceId
+    },
     import_extension_event_log_records_js: async () => {
+      state.operationOrder.push('import')
       state.importedRecords = true
       if (state.rejectImport) throw new Error('import failed')
       return {
@@ -85,10 +95,24 @@ function importManager(state: ImportManagerState): NookVaultManager {
       state.replacedSnapshot = snapshot
     },
     save_presealed_auth_providers_snapshot: async (
-      snapshot: AuthProvidersSnapshot,
+      ...args: [string, AuthProvidersSnapshot]
     ) => {
+      const [appId, snapshot] = args
       state.saved = true
+      state.savedAppId = appId
       state.savedSnapshot = snapshot
+    },
+    activate_local_identity_for_app_id: async (appId: string) => {
+      state.operationOrder.push('activate')
+      if (state.rejectActivation) throw new Error('activation failed')
+      const previousAppId = state.deviceId
+      state.activatedAppId = appId
+      state.activatedAppIds.push(appId)
+      if (state.deviceId !== appId) {
+        state.protection = DeviceProtectionStatus.Passkey
+      }
+      state.deviceId = appId
+      return previousAppId
     },
   } as NookVaultManager
 }
@@ -100,11 +124,17 @@ function importState(protection: DeviceProtectionStatus): ImportManagerState {
   }
   return {
     protection,
+    deviceId: 'device',
+    rejectActivation: false,
     rejectImport: false,
+    operationOrder: [],
     importedRecords: false,
     statusFreed: false,
     replaced: false,
     saved: false,
+    savedAppId: '',
+    activatedAppId: '',
+    activatedAppIds: [],
     replacedSnapshot: structuredClone(emptySnapshot),
     savedSnapshot: structuredClone(emptySnapshot),
   }
@@ -125,6 +155,8 @@ describe('extension vault import operations', () => {
       status: { imported: true },
     })
     expect(state.importedRecords).toBe(true)
+    expect(state.operationOrder).toEqual(['activate', 'import'])
+    expect(state.activatedAppId).toBe('device')
     expect(state.statusFreed).toBe(true)
     expect(state.replaced).toBe(true)
     expect(state.replacedSnapshot.activeVaultStoreId).toEqual({
@@ -150,10 +182,36 @@ describe('extension vault import operations', () => {
     })
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(true)
+    expect(state.savedAppId).toBe('device')
     expect(state.savedSnapshot.activeVaultStoreId).toEqual({
       state: 'storeId',
       value: 'vault',
     })
+    expect(state.operationOrder).toEqual(['activate', 'import'])
+    expect(state.activatedAppId).toBe('device')
+    expect(provider).not.toHaveProperty('githubPat')
+  })
+
+  test('preserves another unlocked identity instead of rebinding it', async () => {
+    const provider = githubProvider()
+    const state = importState(DeviceProtectionStatus.Unlocked)
+    state.deviceId = 'other-device'
+    const args: ImportExtensionVaultWithDependenciesArgs = {
+      activeManager: importManager(state),
+      message: importRequest(provider),
+      dependencies: importDependencies(provider),
+    }
+
+    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
+      'Lock the active local identity',
+    )
+    expect(state.importedRecords).toBe(false)
+    expect(state.replaced).toBe(false)
+    expect(state.saved).toBe(false)
+    expect(state.activatedAppIds).toEqual([])
+    expect(state.operationOrder).toEqual([])
+    expect(state.deviceId).toBe('other-device')
+    expect(state.protection).toBe(DeviceProtectionStatus.Unlocked)
     expect(provider).not.toHaveProperty('githubPat')
   })
 
@@ -172,6 +230,49 @@ describe('extension vault import operations', () => {
     )
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
+    expect(state.operationOrder).toEqual(['activate', 'import'])
+    expect(provider).not.toHaveProperty('githubPat')
+  })
+
+  test('restores the prior locked identity selection when import rejects', async () => {
+    const provider = githubProvider()
+    const state = importState(DeviceProtectionStatus.Pin)
+    state.deviceId = 'other-device'
+    state.rejectImport = true
+    const args: ImportExtensionVaultWithDependenciesArgs = {
+      activeManager: importManager(state),
+      message: importRequest(provider),
+      dependencies: importDependencies(provider),
+    }
+
+    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
+      'import failed',
+    )
+    expect(state.activatedAppIds).toEqual(['device', 'other-device'])
+    expect(state.operationOrder).toEqual(['activate', 'import', 'activate'])
+    expect(state.deviceId).toBe('other-device')
+    expect(state.replaced).toBe(false)
+    expect(state.saved).toBe(false)
+    expect(provider).not.toHaveProperty('githubPat')
+  })
+
+  test('aborts before event and provider mutation when identity activation rejects', async () => {
+    const provider = githubProvider()
+    const state = importState(DeviceProtectionStatus.Unlocked)
+    state.rejectActivation = true
+    const args: ImportExtensionVaultWithDependenciesArgs = {
+      activeManager: importManager(state),
+      message: importRequest(provider),
+      dependencies: importDependencies(provider),
+    }
+
+    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
+      'activation failed',
+    )
+    expect(state.importedRecords).toBe(false)
+    expect(state.replaced).toBe(false)
+    expect(state.saved).toBe(false)
+    expect(state.operationOrder).toEqual(['activate'])
     expect(provider).not.toHaveProperty('githubPat')
   })
 })

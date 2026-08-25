@@ -15,6 +15,8 @@
 
   function handleProtectionReady(): void {}
 
+  function handleBeforeProtectionAction(): void {}
+
   function portal(node: HTMLElement) {
     const anchor = document.createComment('passkey-auth-overlay-home')
     node.before(anchor)
@@ -52,6 +54,10 @@
     <DeviceProtectionGate
       {vault}
       frame={DeviceProtectionGateFrame.SetupStep}
+      creationOnly={false}
+      initializeSession={true}
+      recoveryAppId={vault.deviceId}
+      onBeforeProtectionAction={handleBeforeProtectionAction}
       onProtectionReady={handleProtectionReady}
     />
   </div>

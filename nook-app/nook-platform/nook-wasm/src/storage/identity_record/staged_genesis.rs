@@ -26,6 +26,45 @@ pub(crate) struct StagedSimpleGenesisInput<'a> {
     pub(crate) label: &'a str,
 }
 
+fn bind_staged_genesis_identity(
+    directory: &mut nook_core::IdentityDirectory,
+    input: &StagedSimpleGenesisInput<'_>,
+) -> Result<nook_core::IdentityId, NookError> {
+    let live_owner = input.authorizer.unwrap_or(input.app_key);
+    let owner_identity_id = match directory
+        .identity_for_app_key(live_owner)
+        .map_err(super::map_domain_error)?
+    {
+        Some(identity_id) => {
+            directory
+                .select(&identity_id)
+                .map_err(super::map_domain_error)?;
+            identity_id
+        }
+        None => directory
+            .create_identity(input.label, live_owner, None)
+            .map_err(super::map_domain_error)?,
+    };
+    if directory
+        .identity_for_app_key(input.app_key)
+        .map_err(super::map_domain_error)?
+        .is_some_and(|identity_id| identity_id != owner_identity_id)
+    {
+        return Err(NookError::Database(
+            "Staged app key belongs to another local identity.".to_owned(),
+        ));
+    }
+    let identity_id = directory
+        .enroll_selected_app_key_for_vault_creation(input.app_key, input.label)
+        .map_err(super::map_domain_error)?;
+    if identity_id != owner_identity_id {
+        return Err(NookError::Database(
+            "Staged app key resolved to another local identity.".to_owned(),
+        ));
+    }
+    Ok(identity_id)
+}
+
 pub(crate) async fn begin_or_resume_staged_simple_genesis(
     input: StagedSimpleGenesisInput<'_>,
 ) -> Result<
@@ -36,16 +75,15 @@ pub(crate) async fn begin_or_resume_staged_simple_genesis(
     ),
     NookError,
 > {
+    if super::recovery::has_pending_identity_recovery_cleanup().await? {
+        return Err(NookError::Database(
+            "Pending identity recovery cleanup must finish before staged vault creation."
+                .to_owned(),
+        ));
+    }
     let base_directory = super::load_identity_directory().await?;
     let mut staged_directory = base_directory.clone();
-    if let Some(authorizer) = input.authorizer {
-        staged_directory
-            .enroll_selected_app_key_for_vault_creation(authorizer, input.label)
-            .map_err(super::map_domain_error)?;
-    }
-    let identity_id = staged_directory
-        .enroll_selected_app_key_for_vault_creation(input.app_key, input.label)
-        .map_err(super::map_domain_error)?;
+    let identity_id = bind_staged_genesis_identity(&mut staged_directory, &input)?;
     staged_directory
         .set_member_signing_public_key(
             &identity_id,
@@ -187,6 +225,42 @@ mod tests {
         );
         crate::storage::indexed_db::idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY)
             .await?;
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn pending_recovery_cleanup_blocks_staged_genesis() -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
+            "pending",
+        )
+        .await?;
+        let app_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let (signing, _) = nook_core::SigningIdentity::generate()?;
+
+        let result = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+            app_key: &app_key,
+            signing_public_key: &signing.public_key(),
+            authorizer: None,
+            authorizer_signing: None,
+            label: "Personal",
+        })
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(NookError::Database(message)) if message.contains("recovery cleanup")
+        ));
+        assert!(
+            crate::storage::indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+                .await?
+                .is_none()
+        );
+        crate::storage::indexed_db::idb_delete_key(
+            super::super::recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
+        )
+        .await?;
         super::super::clear_identity_directory_for_test().await
     }
 
@@ -519,32 +593,25 @@ mod tests {
         )
         .await?;
         let (signing, _) = nook_core::SigningIdentity::generate()?;
-        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let pending = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
             app_key: &overlapping_key,
             signing_public_key: &signing.public_key(),
-            authorizer: None,
+            authorizer: Some(&selected_key),
             authorizer_signing: None,
             label: "Selected",
         })
-        .await?;
-
-        let result = super::super::clear_pending_simple_genesis(
-            super::super::SimpleGenesisCompletion::Staged {
-                pending: &pending,
-                signing_seed: "invalid-candidate-seed",
-            },
-        )
         .await;
 
         assert!(matches!(
-            result,
-            Err(NookError::Database(message)) if message.contains("more than one local identity")
+            pending,
+            Err(NookError::Database(message))
+                if message.contains("belongs to another local identity")
         ));
         assert_eq!(super::super::load_identity_directory().await?, base);
         assert!(
-            super::super::pending_simple_genesis_for_store(pending.store_id.as_str())
+            crate::storage::indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
                 .await?
-                .is_some()
+                .is_none()
         );
         super::super::clear_identity_directory_for_test().await
     }

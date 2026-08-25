@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, test } from 'vitest'
 import { default as initNookWasm, NookVaultManager } from '$app-wasm'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -20,6 +20,31 @@ import {
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
+
+async function clearAuthProviderStore(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.open('nook_auth', 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains('auth')) {
+        db.createObjectStore('auth')
+      }
+    }
+    request.onerror = () =>
+      reject(request.error ?? new Error('Failed to clear nook_auth.'))
+    request.onsuccess = () => {
+      const db = request.result
+      const transaction = db.transaction('auth', 'readwrite')
+      transaction.objectStore('auth').clear()
+      transaction.oncomplete = () => {
+        db.close()
+        resolve()
+      }
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error('Failed to clear nook_auth.'))
+    }
+  })
+}
 
 function githubProvider(id: string, pat: string): StorageProvider {
   return {
@@ -117,6 +142,8 @@ describe.sequential(
         setup.free()
       }
     })
+
+    beforeEach(clearAuthProviderStore)
 
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'

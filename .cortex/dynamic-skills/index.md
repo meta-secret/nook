@@ -105,6 +105,8 @@ source of truth.
   - Executable skill: [`.agents/skills/prefer-popular-libraries/SKILL.md`](../../.agents/skills/prefer-popular-libraries/SKILL.md)
 - **[ui-design-skills.md](ui-design-skills.md)**
   - Purpose: Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it
+- **[user-facing-security-abstractions.md](user-facing-security-abstractions.md)**
+  - Purpose: Present product-level security objects and keep implementation keys subordinate or advanced
 - **[web-unused-code.md](web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
 - **[cortex-document-map.md](cortex-document-map.md)**

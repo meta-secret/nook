@@ -58,6 +58,45 @@ export type PasskeyEventProviderFlushRequest = {
   vaultStoreId: string
 }
 
+export type ActivatedExtensionIdentityOperation<Result> = {
+  activeManager: NookVaultManager
+  deviceId: string
+  operation: () => Promise<Result>
+}
+
+export async function withActivatedExtensionIdentity<Result>({
+  activeManager,
+  deviceId,
+  operation,
+}: ActivatedExtensionIdentityOperation<Result>): Promise<Result> {
+  const previousDeviceId = activeManager.device_id
+  const previousProtection = await activeManager.device_protection_status()
+  if (
+    previousProtection === DeviceProtectionStatus.Unlocked &&
+    previousDeviceId !== deviceId
+  ) {
+    throw new Error(
+      'Lock the active local identity before importing another identity.',
+    )
+  }
+  const persistedPreviousDeviceId =
+    await activeManager.activate_local_identity_for_app_id(deviceId)
+  const previousSelection =
+    previousProtection === DeviceProtectionStatus.Unlocked
+      ? previousDeviceId
+      : persistedPreviousDeviceId
+  const restorePreviousSelection =
+    previousSelection.length > 0 && previousSelection !== deviceId
+  try {
+    return await operation()
+  } catch (error) {
+    if (restorePreviousSelection) {
+      await activeManager.activate_local_identity_for_app_id(previousSelection)
+    }
+    throw error
+  }
+}
+
 export function importExtensionVault(
   args: ImportExtensionVaultArgs,
 ): ReturnType<typeof importExtensionVaultWithDependencies> {
@@ -87,49 +126,60 @@ export async function importExtensionVaultWithDependencies({
   const grantedProviders = dependencies.decodeProviders(providerSnapshot)
   try {
     const recordValues = dependencies.createRecords(records)
-    const statusValue =
-      await activeManager.import_extension_event_log_records_js(
-        grant.vaultStoreId,
-        grant.deviceId,
-        grant.devicePublicKey,
-        grant.deviceSigningPublicKey,
-        recordValues,
-      )
-    const status = statusValue.to_object()
-    statusValue.free()
-    const protection = await activeManager.device_protection_status()
-    if (protection === DeviceProtectionStatus.Unlocked) {
-      const replaceArgs: Parameters<
-        typeof activeManager.replace_auth_providers_for_vault
-      >[0] = {
-        providers: grantedProviders,
-        activeVaultStoreId: {
-          state: 'storeId',
-          value: grant.vaultStoreId,
-        },
+    const operation = async () => {
+      const statusValue =
+        await activeManager.import_extension_event_log_records_js(
+          grant.vaultStoreId,
+          grant.deviceId,
+          grant.devicePublicKey,
+          grant.deviceSigningPublicKey,
+          recordValues,
+        )
+      const status = statusValue.to_object()
+      statusValue.free()
+      const protection = await activeManager.device_protection_status()
+      const grantMatchesUnlockedIdentity =
+        protection === DeviceProtectionStatus.Unlocked &&
+        activeManager.device_id === grant.deviceId
+      if (grantMatchesUnlockedIdentity) {
+        const replaceArgs: Parameters<
+          typeof activeManager.replace_auth_providers_for_vault
+        >[0] = {
+          providers: grantedProviders,
+          activeVaultStoreId: {
+            state: 'storeId',
+            value: grant.vaultStoreId,
+          },
+        }
+        await activeManager.replace_auth_providers_for_vault(replaceArgs)
+      } else {
+        // Website grants are already sealed for the granted device public
+        // key, so replace this vault's complete provider set through its
+        // explicit app scope, including an empty set.
+        const saveArgs: Parameters<
+          typeof activeManager.save_presealed_auth_providers_snapshot
+        >[1] = {
+          providers: grantedProviders,
+          activeVaultStoreId: {
+            state: 'storeId',
+            value: grant.vaultStoreId,
+          },
+        }
+        await activeManager.save_presealed_auth_providers_snapshot(
+          grant.deviceId,
+          saveArgs,
+        )
       }
-      await activeManager.replace_auth_providers_for_vault(replaceArgs)
-    } else {
-      // Pairing may race a closed/locked offscreen session. Website grants are
-      // already sealed for this device public key, so replace this vault's
-      // complete provider set without unlock, including an empty set.
-      const lockedManager = activeManager as NookVaultManager & {
-        save_presealed_auth_providers_snapshot: (
-          snapshot: AuthProvidersSnapshot,
-        ) => Promise<void>
-      }
-      const saveArgs: Parameters<
-        typeof lockedManager.save_presealed_auth_providers_snapshot
-      >[0] = {
-        providers: grantedProviders,
-        activeVaultStoreId: {
-          state: 'storeId',
-          value: grant.vaultStoreId,
-        },
-      }
-      await lockedManager.save_presealed_auth_providers_snapshot(saveArgs)
+      return { ok: true, status }
     }
-    return { ok: true, status }
+    const activationArgs: ActivatedExtensionIdentityOperation<
+      Awaited<ReturnType<typeof operation>>
+    > = {
+      activeManager,
+      deviceId: grant.deviceId,
+      operation,
+    }
+    return await withActivatedExtensionIdentity(activationArgs)
   } finally {
     scrubProviderCredentials(grantedProviders)
   }

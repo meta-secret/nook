@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    AppWindow,
     Fingerprint,
     KeyRound,
     Laptop,
@@ -20,6 +21,7 @@
     IdentityBridgePortMode,
     type IdentityBridgeNode,
   } from './identity-bridge-model'
+  import { PasskeyCardSummaryKind } from './passkey-card'
 
   let { data }: NodeProps<IdentityBridgeNode> = $props()
 </script>
@@ -43,11 +45,7 @@
   {/if}
 {/if}
 
-{#if (data.kind === IdentityBridgeNodeKind.Device ||
-    data.kind === IdentityBridgeNodeKind.Identity) &&
-  data.lateralAccessPort &&
-  (data.portMode === IdentityBridgePortMode.Source ||
-    data.portMode === IdentityBridgePortMode.Both)}
+{#if (data.kind === IdentityBridgeNodeKind.Device || data.kind === IdentityBridgeNodeKind.Identity) && data.lateralAccessPort && (data.portMode === IdentityBridgePortMode.Source || data.portMode === IdentityBridgePortMode.Both)}
   <Handle
     class="bridge-handle"
     type={IdentityBridgeHandleType.Source}
@@ -59,18 +57,35 @@
 {#if data.kind === IdentityBridgeNodeKind.Protection}
   <article
     class="bridge-card protection-card"
-    aria-label={`${data.caption}: ${data.label}. ${data.description}`}
+    data-testid={data.summary.kind === PasskeyCardSummaryKind.Present
+      ? 'devices-access-passkey-card'
+      : 'devices-access-protection-card'}
+    aria-label={`${data.caption}: ${data.label}. ${data.description}${data.summary.kind === PasskeyCardSummaryKind.Present ? `. ${data.summary.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join('. ')}` : ''}`}
   >
     <header>
-      <span class="node-icon"
-        ><LockKeyhole class="size-5" aria-hidden="true" /></span
-      >
+      <span class="node-icon">
+        {#if data.summary.kind === PasskeyCardSummaryKind.Present}
+          <KeyRound class="size-5" aria-hidden="true" />
+        {:else}
+          <LockKeyhole class="size-5" aria-hidden="true" />
+        {/if}
+      </span>
       <span class="node-heading">
         <small>{data.caption}</small>
         <strong>{data.label}</strong>
       </span>
     </header>
     <p>{data.description}</p>
+    {#if data.summary.kind === PasskeyCardSummaryKind.Present}
+      <dl class="passkey-facts" data-testid="devices-access-passkey-facts">
+        {#each data.summary.summary.facts as fact (fact.kind)}
+          <div data-kind={fact.kind}>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+          </div>
+        {/each}
+      </dl>
+    {/if}
   </article>
 {:else if data.kind === IdentityBridgeNodeKind.Device}
   <article
@@ -97,13 +112,12 @@
       {#each data.installations as installation (installation.id)}
         <div class="row">
           <span class="key-icon"
-            ><KeyRound class="size-4" aria-hidden="true" /></span
+            ><AppWindow class="size-4" aria-hidden="true" /></span
           >
           <span class="row-copy">
             <strong>{installation.label}</strong>
             <small>{installation.detail}</small>
           </span>
-          <code title={installation.id}>{installation.id}</code>
         </div>
       {/each}
     </div>
@@ -272,6 +286,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .protection-card .node-heading strong {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
   .node-heading small,
   .state,
   header > code {
@@ -326,7 +346,6 @@
     color: var(--muted-foreground);
     font-size: 0.625rem;
   }
-  .row code,
   header > code {
     overflow: hidden;
     max-width: 8rem;
@@ -358,6 +377,10 @@
     padding-top: 0.7rem;
     border-top: 1px solid var(--border);
   }
+  .passkey-facts [data-kind='fingerprint'],
+  .passkey-facts [data-kind='keeper'] {
+    grid-column: 1 / -1;
+  }
   dl div {
     min-width: 0;
   }
@@ -375,6 +398,16 @@
     font-size: 0.625rem;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .passkey-facts dd {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .passkey-facts [data-kind='fingerprint'] dd {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
   .stage {
     display: grid;
