@@ -4,9 +4,34 @@ import type {
   WebsitePasskeyRegistrationResponse,
 } from '../../lib/webauthn-messages'
 
-export function passkeyAccountsFromSession(
+export enum PasskeyAccountListKind {
+  Ready = 'ready',
+  Invalid = 'invalid',
+}
+
+export type PasskeyAccountList =
+  | { kind: PasskeyAccountListKind.Ready; accounts: WebsitePasskeyAccount[] }
+  | { kind: PasskeyAccountListKind.Invalid }
+
+function isWebsitePasskeyAccount(
+  account: unknown,
+): account is WebsitePasskeyAccount {
+  return (
+    !!account &&
+    typeof account === 'object' &&
+    'credentialId' in account &&
+    typeof account.credentialId === 'string' &&
+    account.credentialId.length > 0 &&
+    'userName' in account &&
+    typeof account.userName === 'string' &&
+    'userDisplayName' in account &&
+    typeof account.userDisplayName === 'string'
+  )
+}
+
+export function passkeyAccountListFromSession(
   response: unknown,
-): WebsitePasskeyAccount[] {
+): PasskeyAccountList {
   if (
     !response ||
     typeof response !== 'object' ||
@@ -15,20 +40,12 @@ export function passkeyAccountsFromSession(
     !('accounts' in response) ||
     !Array.isArray(response.accounts)
   ) {
-    return []
+    return { kind: PasskeyAccountListKind.Invalid }
   }
-  return response.accounts.filter(
-    (account): account is WebsitePasskeyAccount =>
-      !!account &&
-      typeof account === 'object' &&
-      'credentialId' in account &&
-      typeof account.credentialId === 'string' &&
-      account.credentialId.length > 0 &&
-      'userName' in account &&
-      typeof account.userName === 'string' &&
-      'userDisplayName' in account &&
-      typeof account.userDisplayName === 'string',
-  )
+  if (!response.accounts.every(isWebsitePasskeyAccount)) {
+    return { kind: PasskeyAccountListKind.Invalid }
+  }
+  return { kind: PasskeyAccountListKind.Ready, accounts: response.accounts }
 }
 
 export function passkeyCeremonyResponseFromSession(

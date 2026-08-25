@@ -18,7 +18,8 @@ import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
 } from '../../offscreen/session-request-adapter'
 import {
-  passkeyAccountsFromSession,
+  PasskeyAccountListKind,
+  passkeyAccountListFromSession,
   passkeyCeremonyResponseFromSession,
 } from './passkey-session-adapter'
 import {
@@ -109,7 +110,9 @@ async function matchingPasskeyAvailabilityForOrigin({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_1)
-    count += passkeyAccountsFromSession(response).length
+    const accountList = passkeyAccountListFromSession(response)
+    if (accountList.kind === PasskeyAccountListKind.Invalid) return unavailable
+    count += accountList.accounts.length
   }
   return {
     kind: MatchingPasskeyAvailabilityKind.Ready,
@@ -222,7 +225,15 @@ export async function websitePasskeyOptions({
       },
     }
     const response = await sendSessionMessage(nookTypedArgs0_4)
-    const accounts = passkeyAccountsFromSession(response)
+    const accountList = passkeyAccountListFromSession(response)
+    if (accountList.kind === PasskeyAccountListKind.Invalid) {
+      return {
+        ok: true,
+        status: WebsitePasskeyOptionsStatus.Unavailable,
+        options: [],
+      }
+    }
+    const { accounts } = accountList
     if (accounts.length > 0) {
       for (const account of accounts) {
         const nookTypedArgs0_5: Parameters<typeof options.push>[0] = {
