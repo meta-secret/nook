@@ -27,6 +27,7 @@
     initializeSession,
     recoveryAppId,
     onBeforeProtectionAction,
+    onProtectionActionSettled,
     onProtectionReady,
   }: {
     vault: VaultState
@@ -35,6 +36,7 @@
     initializeSession: boolean
     recoveryAppId: string
     onBeforeProtectionAction: () => void
+    onProtectionActionSettled?: () => void
     onProtectionReady: () => void
   } = $props()
   let pin = $state('')
@@ -71,12 +73,16 @@
     action: () => Promise<void>,
   ): Promise<void> {
     onBeforeProtectionAction()
-    await action()
-    if (
-      !vault.errorMsg &&
-      vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked
-    ) {
-      onProtectionReady()
+    try {
+      await action()
+      if (
+        !vault.errorMsg &&
+        vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked
+      ) {
+        onProtectionReady()
+      }
+    } finally {
+      onProtectionActionSettled?.()
     }
   }
 </script>

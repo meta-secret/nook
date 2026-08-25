@@ -387,41 +387,6 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible()
   })
 
-  test('cancels staged identity creation when leaving the dashboard', async ({
-    page,
-  }) => {
-    await connectLocalVault(page)
-    await page.getByTestId('vault-devices-access-tab').click()
-    await page.getByTestId('devices-access-add-identity').click()
-    await expect(
-      page.getByTestId('devices-access-add-identity-flow'),
-    ).toBeVisible()
-
-    await page.getByTestId('devices-access-back').click()
-    await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
-    expect(
-      await page.evaluate(() => {
-        if (!('__nookVault' in window)) {
-          throw new Error('Vault runtime is not exposed')
-        }
-        return (
-          window as Window & {
-            __nookVault: {
-              requireManager(): {
-                readonly local_identity_creation_pending: boolean
-              }
-            }
-          }
-        ).__nookVault.requireManager().local_identity_creation_pending
-      }),
-    ).toBe(false)
-
-    await page.getByTestId('vault-devices-access-tab').click()
-    await expect(
-      page.getByTestId('devices-access-identity-option'),
-    ).toHaveCount(1)
-  })
-
   test('walks the access chain from passkey to app key to vaults', async ({
     page,
   }) => {

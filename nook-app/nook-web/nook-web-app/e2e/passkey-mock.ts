@@ -112,6 +112,13 @@ export function installMockPasskeyRuntime() {
             'NotAllowedError',
           )
         }
+        if (mode === 'delayed-cancel') {
+          await new Promise((resolve) => window.setTimeout(resolve, 100))
+          throw new DOMException(
+            'The operation was cancelled.',
+            'NotAllowedError',
+          )
+        }
         if (mode === 'not-supported-error') {
           throw new DOMException(
             'The requested public-key algorithm is not supported.',

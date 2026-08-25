@@ -74,6 +74,10 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     kind: IdentityBridgeVaultSelectionKind.Empty,
   })
   let identityCreationOpen = $state(false)
+  let identityCreationPending = false
+  let identityCreationActionInFlight = false
+  let identityCreationCleanupRequested = false
+  let dashboardMounted = true
   let snapshotLoadGeneration = 0
 
   function clearPriorIdentitySession(): void {
@@ -92,6 +96,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     committedIdentityCreation: boolean,
   ): Promise<void> {
     if (committedIdentityCreation) {
+      identityCreationPending = false
       // Rust has committed and adopted the new app key. Only now discard the
       // prior vault UI session. The immutable action intent matters here:
       // navigation may close the panel while the browser ceremony is running.
@@ -99,6 +104,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     identityCreationOpen = false
     vault.devicesAccessIdentityProtectionOpen = false
+    if (!dashboardMounted) return
     const providerLoadOptions: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     }
@@ -113,6 +119,17 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
     await reloadSnapshots()
+  }
+
+  function beginIdentityCreationProtectionAction(): void {
+    identityCreationActionInFlight = true
+  }
+
+  function finishIdentityCreationProtectionAction(): void {
+    identityCreationActionInFlight = false
+    if (identityCreationCleanupRequested) {
+      void finishPendingIdentityCreationCancellation()
+    }
   }
 
   function keepCurrentIdentitySession(): void {}
@@ -223,30 +240,47 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     vault.dismissError()
     identityCreationOpen = true
+    identityCreationPending = true
+    identityCreationCleanupRequested = false
     vault.devicesAccessIdentityProtectionOpen = false
   }
 
-  function abandonPendingIdentityCreation(): void {
-    if (!identityCreationOpen || vault.isVerifying) return
+  async function finishPendingIdentityCreationCancellation(): Promise<void> {
+    if (!identityCreationPending || identityCreationActionInFlight) return
     vault.requireManager().cancel_local_identity_creation()
+    identityCreationPending = false
+    identityCreationCleanupRequested = false
     identityCreationOpen = false
-  }
-
-  async function cancelAddIdentity(): Promise<void> {
-    abandonPendingIdentityCreation()
     vault.deviceProtectionStatus = await vault
       .requireManager()
       .device_protection_status()
     vault.dismissError()
   }
 
-  function leaveDashboard(): void {
-    abandonPendingIdentityCreation()
+  async function abandonPendingIdentityCreation(): Promise<void> {
+    if (!identityCreationPending) return
+    identityCreationCleanupRequested = true
+    identityCreationOpen = false
+    if (!identityCreationActionInFlight) {
+      await finishPendingIdentityCreationCancellation()
+    }
+  }
+
+  async function cancelAddIdentity(): Promise<void> {
+    await abandonPendingIdentityCreation()
+  }
+
+  async function leaveDashboard(): Promise<void> {
+    dashboardMounted = false
+    await abandonPendingIdentityCreation()
     vault.devicesAccessIdentityProtectionOpen = false
     onBack()
   }
 
-  onDestroy(abandonPendingIdentityCreation)
+  onDestroy(() => {
+    dashboardMounted = false
+    void abandonPendingIdentityCreation()
+  })
 
   async function useIdentity(identityId: string): Promise<void> {
     try {
@@ -383,7 +417,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
       class="mt-0.5 shrink-0"
       aria-label={vault.t(I18N_KEYS.CommonBack)}
       data-testid="devices-access-back"
-      onclick={leaveDashboard}
+      onclick={() => void leaveDashboard()}
     >
       <ArrowLeft class="size-4" />
     </Button>
@@ -495,7 +529,8 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
               creationOnly={true}
               initializeSession={false}
               recoveryAppId=""
-              onBeforeProtectionAction={keepCurrentIdentitySession}
+              onBeforeProtectionAction={beginIdentityCreationProtectionAction}
+              onProtectionActionSettled={finishIdentityCreationProtectionAction}
               onProtectionReady={() => void focusAfterProtectionReady(true)}
             />
           </div>

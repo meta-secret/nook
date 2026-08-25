@@ -295,6 +295,11 @@ Current dashboard requirements:
     blocks identity creation and activation until that transition finishes.
   - Cancelling or failing protection leaves the prior unlocked web and Rust
     session, directory, and keyring unchanged.
+  - Leaving after passkey fallback restores the selected identity's persisted
+    protection state instead of retaining the setup-only PIN state.
+  - If navigation closes the dashboard while a browser protection ceremony is
+    running, defer cancellation of the immutable creation intent until that
+    Rust/WASM action settles. Do not access the manager concurrently.
   - Clear the prior vault UI session only after new protection commits and Rust
     adopts the new app key.
   - Successful protection adds and selects the identity atomically.
