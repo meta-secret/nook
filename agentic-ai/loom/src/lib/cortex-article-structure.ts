@@ -330,9 +330,11 @@ function auditProcedure(args: AuditArticleArgs): void {
   if (!PROCEDURE_HEADING.test(nodeText(args.heading))) {
     return;
   }
-  const hasOrderedList = args.sectionNodes.some(
-    (node) => node.type === 'list' && node.ordered === true,
-  );
+  const hasOrderedList = args.sectionNodes.some((node) => {
+    if (node.type !== 'list' || node.ordered !== true) return false;
+    const inspection: VisibleSemanticContentInspection = { node };
+    return hasVisibleSemanticContent(inspection);
+  });
   if (hasOrderedList) {
     return;
   }

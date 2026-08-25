@@ -240,6 +240,16 @@ test('does not count paragraphs with only empty inline content', () => {
   expect(audit([makeDocument(resetArgs)])).toEqual([]);
 });
 
+test('does not satisfy a procedure with an empty ordered marker', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/empty-procedure-list.md',
+    content: '# Procedure\n\n## Recovery procedure\n\nExplanation.\n\n1.\n',
+  };
+  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
 test('treats thematic breaks as invisible density-resetting separators', () => {
   const emptyArgs: MakeDocumentArgs = {
     path: '.cortex/break-only.md',
