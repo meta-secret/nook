@@ -510,6 +510,17 @@ jobs:
         env:
           DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
           DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          CI: true
+          VITE_BASE: /
+          VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+          VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+          WASM_BUILD_MODE: dev
+          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
       - name: Upload preview dist handoff
         uses: actions/upload-artifact@v7

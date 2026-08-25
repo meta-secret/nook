@@ -483,6 +483,8 @@ remoteWorkflow.requireAll([
   "check) task _check",
   "ci:pr) task _ci:pr",
   "ci:pr:e2e) task _ci:main",
+  "inputs.tasks != '' && inputs.task != ''",
+  "(inputs.tasks == '' || inputs.task == '')",
 ]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

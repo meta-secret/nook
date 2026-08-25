@@ -3,6 +3,8 @@ version: '3'
 vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
+  PREFLIGHT_SOURCE_ROOT:
+    sh: 'if [ -n "${PREFLIGHT_SOURCE_ROOT:-}" ]; then printf "%s" "$PREFLIGHT_SOURCE_ROOT"; else printf "%s" "{{.REPO_ROOT}}"; fi'
   DOCKER: '{{default "docker" .DOCKER}}'
   SCCACHE_S3_MODE: '{{default "external" .SCCACHE_S3_MODE}}'
   SCCACHE_ENDPOINT: '{{default "https://sccache.dev.nokey.sh" .SCCACHE_ENDPOINT}}'
@@ -35,6 +37,7 @@ vars:
       printf '%s' "$secrets"
   PREFLIGHT_BAKE_FILES: >-
     --allow=fs.read={{.REPO_ROOT}}
+    --allow=fs.read={{.PREFLIGHT_SOURCE_ROOT}}
     {{.SCCACHE_S3_BUILD_SECRETS}}
     -f {{.REPO_ROOT}}/nook-app/docker-bake.hcl
     -f {{.REPO_ROOT}}/nook-app/nook-platform/docker/rust/docker-bake.hcl
@@ -58,6 +61,7 @@ tasks:
     cmds:
       # rust-base is restored via Bake contexts; never let this target write it.
       - >-
+        PREFLIGHT_SOURCE_CONTEXT="{{.PREFLIGHT_SOURCE_ROOT}}"
         bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
         "preflight:test"
         {{.DOCKER}} buildx bake
