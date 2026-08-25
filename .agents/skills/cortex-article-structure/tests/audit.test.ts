@@ -342,6 +342,7 @@ test('normalizes non-rendered raw HTML containers to separators', () => {
     '<script>noop</script>',
     '<style>.hidden { display: none; }</style>',
     '<template><p>Hidden template content.</p></template>',
+    '<template>\n\nHidden template content.\n\n</template>',
   ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/non-rendered-html.md',

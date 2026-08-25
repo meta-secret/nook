@@ -59,7 +59,13 @@ type AuditArticleArgs = AuditDocumentArgs & {
 
 type SemanticRootNode = {
   readonly insideHtmlContainer: boolean;
+  readonly insideNonRenderedHtmlContainer: boolean;
   readonly node: RootContent;
+};
+
+type HtmlContainerDepth = {
+  readonly all: number;
+  readonly nonRendered: number;
 };
 
 type HtmlContainerStart = {
@@ -300,6 +306,7 @@ function auditArticle(args: AuditArticleArgs): void {
 }
 
 function isVisibleArticleNode(semanticNode: SemanticRootNode): boolean {
+  if (semanticNode.insideNonRenderedHtmlContainer) return false;
   const node = semanticNode.node;
   if (node.type === 'heading' || isTransparentArticleNode(node)) return false;
   const inspection: VisibleSemanticContentInspection = { node };
@@ -413,8 +420,10 @@ function semanticRootNodes(
   const containerDepths = htmlContainerDepths(children);
   const nodes: SemanticRootNode[] = [];
   for (const [index, node] of children.entries()) {
+    const depth = containerDepths[index] ?? false;
     const semanticNode: SemanticRootNode = {
-      insideHtmlContainer: (containerDepths[index] ?? 0) > 0,
+      insideHtmlContainer: depth !== false && depth.all > 0,
+      insideNonRenderedHtmlContainer: depth !== false && depth.nonRendered > 0,
       node,
     };
     nodes.push(semanticNode);
@@ -422,8 +431,10 @@ function semanticRootNodes(
   return nodes;
 }
 
-function htmlContainerDepths(children: readonly RootContent[]): number[] {
-  const depths = children.map(() => 0);
+function htmlContainerDepths(
+  children: readonly RootContent[],
+): HtmlContainerDepth[] {
+  const depths = children.map(() => ({ all: 0, nonRendered: 0 }));
   const starts: HtmlContainerStart[] = [];
   for (let nodeIndex = 0; nodeIndex < children.length; nodeIndex += 1) {
     const node = children[nodeIndex];
@@ -452,7 +463,14 @@ function htmlContainerDepths(children: readonly RootContent[]): number[] {
       const start = starts[startIndex] ?? false;
       if (start === false) continue;
       for (let index = start.nodeIndex + 1; index < nodeIndex; index += 1) {
-        depths[index] = (depths[index] ?? 0) + 1;
+        const depth = depths[index] ?? false;
+        if (depth === false) continue;
+        depths[index] = {
+          all: depth.all + 1,
+          nonRendered:
+            depth.nonRendered +
+            (isNonRenderedHtmlContainer(start.name) ? 1 : 0),
+        };
       }
       starts.splice(startIndex);
     }

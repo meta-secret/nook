@@ -15,8 +15,10 @@ export function blocksFromMarkdown(
   const containerDepths = htmlContainerDepths(children);
   const blocks: CortexArticleBlock[] = [];
   for (const [index, node] of children.entries()) {
+    const depth = containerDepths[index] ?? false;
     const args: BlockFromNodeArgs = {
-      insideHtmlContainer: (containerDepths[index] ?? 0) > 0,
+      insideHtmlContainer: depth !== false && depth.all > 0,
+      insideNonRenderedHtmlContainer: depth !== false && depth.nonRendered > 0,
       node,
     };
     blocks.push(blockFromNode(args));
@@ -26,7 +28,13 @@ export function blocksFromMarkdown(
 
 type BlockFromNodeArgs = {
   readonly insideHtmlContainer: boolean;
+  readonly insideNonRenderedHtmlContainer: boolean;
   readonly node: RootContent;
+};
+
+type HtmlContainerDepth = {
+  readonly all: number;
+  readonly nonRendered: number;
 };
 
 type HtmlContainerStart = {
@@ -82,6 +90,9 @@ function blockFromNode(args: BlockFromNodeArgs): CortexArticleBlock {
   const line = node.position?.start.line;
   if (typeof line !== 'number') {
     throw new Error('Test Markdown block lacks a source line.');
+  }
+  if (args.insideNonRenderedHtmlContainer) {
+    return { line, type: CortexArticleBlockKind.Separator };
   }
   if (args.insideHtmlContainer) {
     const inspection: VisibleSemanticContentInspection = { node };
@@ -179,8 +190,10 @@ function hasVisibleSemanticContent(
   return node.type !== 'break';
 }
 
-function htmlContainerDepths(children: readonly RootContent[]): number[] {
-  const depths = children.map(() => 0);
+function htmlContainerDepths(
+  children: readonly RootContent[],
+): HtmlContainerDepth[] {
+  const depths = children.map(() => ({ all: 0, nonRendered: 0 }));
   const starts: HtmlContainerStart[] = [];
   for (let nodeIndex = 0; nodeIndex < children.length; nodeIndex += 1) {
     const node = children[nodeIndex];
@@ -209,7 +222,14 @@ function htmlContainerDepths(children: readonly RootContent[]): number[] {
       const start = starts[startIndex] ?? false;
       if (start === false) continue;
       for (let index = start.nodeIndex + 1; index < nodeIndex; index += 1) {
-        depths[index] = (depths[index] ?? 0) + 1;
+        const depth = depths[index] ?? false;
+        if (depth === false) continue;
+        depths[index] = {
+          all: depth.all + 1,
+          nonRendered:
+            depth.nonRendered +
+            (isNonRenderedHtmlContainer(start.name) ? 1 : 0),
+        };
       }
       starts.splice(startIndex);
     }
