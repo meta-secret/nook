@@ -50,8 +50,9 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     scanState.invalidateCurrentResult()
     authenticationActionState.invalidate()
     widgetState.busy = false
-    void cancelActiveEnrollmentCeremony().finally(() => {
-      removeScannedWidget()
+    const enrollmentCancellation = cancelActiveEnrollmentCeremony()
+    removeScannedWidget()
+    void enrollmentCancellation.finally(() => {
       const response: Parameters<typeof sendResponse>[0] = { ok: true }
       sendResponse(response)
     })
