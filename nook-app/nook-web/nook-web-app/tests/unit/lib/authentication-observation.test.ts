@@ -47,6 +47,7 @@ describe('authentication observation attributes', () => {
       summary,
       authenticatorSetupPresent: false,
       backupCodesPresent: false,
+      manualCheckpointPresent: false,
     }
 
     expect(authenticationPageObservation(request).ceremony).toEqual({
@@ -75,6 +76,7 @@ describe('authentication observation attributes', () => {
       summary,
       authenticatorSetupPresent: false,
       backupCodesPresent: false,
+      manualCheckpointPresent: false,
     }
 
     expect(
