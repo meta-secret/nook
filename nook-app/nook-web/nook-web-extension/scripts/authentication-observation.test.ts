@@ -3,6 +3,7 @@ import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
   authenticationEnrollmentObservation,
+  authenticationPageObservation,
 } from '../src/content/autofill/authentication-observation'
 
 describe('authentication workflow observation', () => {
@@ -42,6 +43,28 @@ describe('authentication workflow observation', () => {
     })
 
     expect(observation.authenticator.authenticatorSetup).toBe('present')
+    expect(observation.ceremony.manualCheckpoint).toBe('present')
+  })
+
+  test('reports page checkpoints alongside regular form observations', () => {
+    const observation = authenticationPageObservation({
+      summary: {
+        usernameFieldCount: 1,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 0,
+        oneTimeCodeAutoSubmitObserved: false,
+        manualCheckpointPresent: false,
+        authenticationAdvanceControlPresent: true,
+        passkeyControlPresent: false,
+      },
+      authenticatorSetupPresent: false,
+      backupCodesPresent: true,
+      manualCheckpointPresent: true,
+    })
+
+    expect(observation.authenticator.backupCodes).toBe('present')
     expect(observation.ceremony.manualCheckpoint).toBe('present')
   })
 

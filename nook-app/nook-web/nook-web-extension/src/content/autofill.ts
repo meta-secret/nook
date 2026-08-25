@@ -44,6 +44,7 @@ import {
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   authenticationActionState,
+  invalidateAuthenticationActionContext,
   saveOfferState,
   scanState,
   widgetState,
@@ -96,6 +97,13 @@ async function performScanAndRender(): Promise<void> {
     enrollmentHints.qr ||
     (enrollmentHints.backupCodes && workflowForms.length === 0)
   ) {
+    const actionContextArgs: Parameters<
+      typeof invalidateAuthenticationActionContext
+    >[0] = {
+      actionState: authenticationActionState,
+      widget: widgetState,
+    }
+    invalidateAuthenticationActionContext(actionContextArgs)
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
     const observationRequest: Parameters<
@@ -149,6 +157,7 @@ async function performScanAndRender(): Promise<void> {
         summary,
         authenticatorSetupPresent: enrollmentHints.qr,
         backupCodesPresent: enrollmentHints.backupCodes,
+        manualCheckpointPresent: pageHasManualCheckpoint(document),
       }
       return authenticationPageObservation(observationRequest)
     },

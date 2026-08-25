@@ -6,14 +6,22 @@ Object.assign(globalThis, {
 
 describe('account picker lock cleanup', () => {
   test('invalidates picker authorization captured before lock begins', async () => {
-    const { AccountPickerAuthorizationState } =
-      await import('../src/background/service-worker/account-pickers')
+    const {
+      AccountPickerAuthorizationState,
+      accountPickerAuthorizationGeneration,
+      accountPickerAuthorizationIsCurrent,
+    } = await import('../src/background/service-worker/account-pickers')
     const state = new AccountPickerAuthorizationState()
     const openingGeneration = state.snapshot()
 
     expect(state.isCurrent(openingGeneration)).toBe(true)
     state.invalidate()
     expect(state.isCurrent(openingGeneration)).toBe(false)
+    expect(
+      accountPickerAuthorizationIsCurrent(
+        accountPickerAuthorizationGeneration(),
+      ),
+    ).toBe(true)
   })
 
   test('plans removal and cancellation for both persisted picker kinds', async () => {

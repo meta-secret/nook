@@ -62,6 +62,7 @@ import {
 } from './service-worker/account-pickers'
 import {
   cancelAuthenticatorPicker,
+  clearStagedAuthenticatorEnrollments,
   openWebsiteAuthenticatorPicker,
   queryAuthenticatorPicker,
   selectAuthenticatorPicker,
@@ -137,6 +138,7 @@ import {
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
+  clearStagedAuthenticatorEnrollments,
   clearPendingAccountPickers,
   clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument,

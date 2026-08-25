@@ -26,9 +26,11 @@ const openCompanionLauncher = mock(() => Promise.resolve())
 const invalidateAllLoginMatchAvailability = mock(() => {})
 const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
 const clearPendingAccountPickers = mock(() => Promise.resolve())
+const clearStagedAuthenticatorEnrollments = mock(() => {})
 const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
+  clearStagedAuthenticatorEnrollments,
   clearPendingAccountPickers,
   clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument: unusedAsyncDependency,
@@ -116,6 +118,7 @@ describe('service worker routing', () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
     clearPendingAccountPickers.mockClear()
+    clearStagedAuthenticatorEnrollments.mockClear()
     const lifecycleEvents: string[] = []
     let pickerCleanupCount = 0
     const orderedPickerCleanup = mock(() => {
@@ -158,6 +161,7 @@ describe('service worker routing', () => {
     await flushResponses()
     await flushResponses()
     expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
+    expect(clearStagedAuthenticatorEnrollments).toHaveBeenCalledTimes(1)
     expect(orderedSurfaceCleanup).toHaveBeenCalledTimes(1)
     expect(orderedPickerCleanup).toHaveBeenCalledTimes(2)
     expect(lifecycleEvents).toEqual([
@@ -214,6 +218,7 @@ describe('service worker routing', () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
     clearPendingAccountPickers.mockClear()
+    clearStagedAuthenticatorEnrollments.mockClear()
     const closeExtensionSessionDocument = mock(() => Promise.resolve())
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
@@ -243,6 +248,7 @@ describe('service worker routing', () => {
     await responseDelivered
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
     expect(clearPendingAccountPickers).toHaveBeenCalledTimes(2)
+    expect(clearStagedAuthenticatorEnrollments).toHaveBeenCalledTimes(1)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
@@ -251,6 +257,7 @@ describe('service worker routing', () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
     clearPendingAccountPickers.mockClear()
+    clearStagedAuthenticatorEnrollments.mockClear()
     const importLocalEventLogUpdate = mock(() =>
       Promise.resolve({
         ok: false as const,
@@ -294,6 +301,7 @@ describe('service worker routing', () => {
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
     expect(clearPendingAccountPickers).toHaveBeenCalledTimes(1)
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(clearStagedAuthenticatorEnrollments).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'event-log-access-revoked',

@@ -20,6 +20,7 @@ import {
 import {
   LoginPickerLoadKind,
   accountPickerAuthorizationGeneration,
+  accountPickerAuthorizationIsCurrent,
   authorizedWebsiteGrant,
   isLoginPickerSender,
   loadLoginPicker,
@@ -123,6 +124,8 @@ export async function openWebsiteLoginPicker({
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'login-picker')
   pickerUrl.searchParams.set('request', requestId)
+  let createdWindowId: number | undefined
+  let createdTabId: number | undefined
   try {
     if (chrome.windows?.create) {
       const nookTypedArgs0_1: Parameters<typeof chrome.windows.create>[0] = {
@@ -132,16 +135,29 @@ export async function openWebsiteLoginPicker({
         height: 620,
         focused: true,
       }
-      await chrome.windows.create(nookTypedArgs0_1)
+      const createdWindow = await chrome.windows.create(nookTypedArgs0_1)
+      createdWindowId = createdWindow?.id
     } else {
       const nookTypedArgs0_2: Parameters<typeof chrome.tabs.create>[0] = {
         url: pickerUrl.toString(),
       }
-      await chrome.tabs.create(nookTypedArgs0_2)
+      const createdTab = await chrome.tabs.create(nookTypedArgs0_2)
+      createdTabId = createdTab.id
     }
   } catch {
     await removeLoginPicker(requestId)
     return { ok: false, reason: 'login-picker-open-failed' }
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    const cleanup: Promise<void>[] = [removeLoginPicker(requestId)]
+    if (typeof createdWindowId === 'number' && chrome.windows?.remove) {
+      cleanup.push(chrome.windows.remove(createdWindowId))
+    }
+    if (typeof createdTabId === 'number') {
+      cleanup.push(chrome.tabs.remove(createdTabId))
+    }
+    await Promise.allSettled(cleanup)
+    return { ok: true, status: LoginPickerOpenStatus.Locked }
   }
   return {
     ok: true,

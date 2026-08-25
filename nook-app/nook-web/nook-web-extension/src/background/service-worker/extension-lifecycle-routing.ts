@@ -15,6 +15,7 @@ import type * as PairingStateQuery from './pairing-state-query'
 import type * as AccountPickers from './account-pickers'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
+import type * as AuthenticatorOperations from './authenticator-operations'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -28,6 +29,7 @@ type ExtensionLifecycleRoutingArgs = {
 }
 
 export type ExtensionLifecycleRoutingDependencies = {
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
   clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
@@ -76,17 +78,20 @@ const pairingLaunchFailureResponse: MessageResponse = {
 }
 
 type ClearAuthorizationBoundSurfacesArgs = {
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
 }
 
 async function clearAuthorizationBoundSurfaces({
+  clearStagedAuthenticatorEnrollments,
   clearMountedAuthenticationSurfaces,
   clearPendingAccountPickers,
   closeExtensionSessionDocument,
 }: ClearAuthorizationBoundSurfacesArgs): Promise<void> {
   let failed = false
+  clearStagedAuthenticatorEnrollments()
   try {
     await clearPendingAccountPickers()
   } catch {
@@ -111,14 +116,17 @@ async function clearAuthorizationBoundSurfaces({
 }
 
 type ClearRevokedAuthenticationSurfacesArgs = {
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
   clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
 }
 
 async function clearRevokedAuthenticationSurfaces({
+  clearStagedAuthenticatorEnrollments,
   clearMountedAuthenticationSurfaces,
   clearPendingAccountPickers,
 }: ClearRevokedAuthenticationSurfacesArgs): Promise<void> {
+  clearStagedAuthenticatorEnrollments()
   await Promise.allSettled([
     clearPendingAccountPickers(),
     clearMountedAuthenticationSurfaces(),
@@ -136,6 +144,7 @@ export function routeExtensionLifecycleMessage({
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
   const {
+    clearStagedAuthenticatorEnrollments,
     clearPendingAccountPickers,
     clearMountedAuthenticationSurfaces,
     closeExtensionSessionDocument,
@@ -198,6 +207,7 @@ export function routeExtensionLifecycleMessage({
     }
     invalidateAllLoginMatchAvailability()
     const clearArgs: Parameters<typeof clearAuthorizationBoundSurfaces>[0] = {
+      clearStagedAuthenticatorEnrollments,
       clearMountedAuthenticationSurfaces,
       clearPendingAccountPickers,
       closeExtensionSessionDocument,
@@ -219,6 +229,7 @@ export function routeExtensionLifecycleMessage({
     }
     invalidateAllLoginMatchAvailability()
     const clearArgs: Parameters<typeof clearAuthorizationBoundSurfaces>[0] = {
+      clearStagedAuthenticatorEnrollments,
       clearMountedAuthenticationSurfaces,
       clearPendingAccountPickers,
       closeExtensionSessionDocument,
@@ -266,6 +277,7 @@ export function routeExtensionLifecycleMessage({
             const clearArgs: Parameters<
               typeof clearRevokedAuthenticationSurfaces
             >[0] = {
+              clearStagedAuthenticatorEnrollments,
               clearMountedAuthenticationSurfaces,
               clearPendingAccountPickers,
             }

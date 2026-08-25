@@ -90,6 +90,12 @@ export function accountPickerAuthorizationGeneration(): number {
   return accountPickerAuthorizationState.snapshot()
 }
 
+export function accountPickerAuthorizationIsCurrent(
+  authorizationGeneration: number,
+): boolean {
+  return accountPickerAuthorizationState.isCurrent(authorizationGeneration)
+}
+
 export type PersistedAccountPickerCleanupPlan = {
   storageKeys: string[]
   cancellations: Array<

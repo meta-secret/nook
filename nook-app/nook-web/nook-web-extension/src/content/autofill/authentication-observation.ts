@@ -5,6 +5,7 @@ type AuthenticationPageObservationRequest = {
   summary: PasswordFormSummary
   authenticatorSetupPresent: boolean
   backupCodesPresent: boolean
+  manualCheckpointPresent: boolean
 }
 
 type AuthenticationEnrollmentObservationRequest = {
@@ -45,6 +46,7 @@ export function authenticationPageObservation({
   summary,
   authenticatorSetupPresent,
   backupCodesPresent,
+  manualCheckpointPresent,
 }: AuthenticationPageObservationRequest): AuthenticationPageObservationView {
   return {
     fields: {
@@ -58,7 +60,10 @@ export function authenticationPageObservation({
       oneTimeCodeProgression: summary.oneTimeCodeAutoSubmitObserved
         ? 'auto-submit-observed'
         : 'advance-control-required',
-      manualCheckpoint: summary.manualCheckpointPresent ? 'present' : 'absent',
+      manualCheckpoint:
+        summary.manualCheckpointPresent || manualCheckpointPresent
+          ? 'present'
+          : 'absent',
       advanceControl: summary.authenticationAdvanceControlPresent
         ? 'present'
         : 'absent',

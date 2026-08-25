@@ -92,6 +92,8 @@ declare namespace chrome {
   }
 
   namespace windows {
+    type Window = { id?: number }
+
     type ChromeWindowCreationRequest = {
       url: string
       type?: 'normal' | 'popup' | 'panel' | 'detached_panel'
@@ -105,7 +107,8 @@ declare namespace chrome {
       createData: ChromeWindowCreationRequest,
       callback: () => void,
     ): void
-    function create(createData: ChromeWindowCreationRequest): Promise<unknown>
+    function create(createData: ChromeWindowCreationRequest): Promise<Window>
+    function remove(windowId: number): Promise<void>
   }
 
   namespace tabs {
@@ -130,6 +133,7 @@ declare namespace chrome {
     function create(
       createProperties: ChromeTabCreationPromiseRequest,
     ): Promise<Tab>
+    function remove(tabId: number): Promise<void>
 
     // eslint-disable-next-line max-params -- Chrome owns this callback overload.
     function sendMessage<TResponse = unknown>(
