@@ -20,6 +20,11 @@ export enum ScanScheduleKind {
   Scheduled = 'scheduled',
 }
 
+export enum ScanActivityKind {
+  Idle = 'idle',
+  Running = 'running',
+}
+
 export type ScanSchedule =
   | { kind: ScanScheduleKind.Idle }
   | { kind: ScanScheduleKind.Scheduled; timer: number }
@@ -101,6 +106,8 @@ export type PendingSaveWatch = {
 
 export class ScanState {
   private currentSchedule: ScanSchedule = { kind: ScanScheduleKind.Idle }
+  private currentActivity = ScanActivityKind.Idle
+  private followUpRequested = false
   sequence = 0
   schedule: () => void = () => {}
   get scheduleState(): ScanSchedule {
@@ -116,6 +123,25 @@ export class ScanState {
   }
   clearPendingTimer(): void {
     this.currentSchedule = { kind: ScanScheduleKind.Idle }
+  }
+  beginScan(): boolean {
+    if (this.currentActivity === ScanActivityKind.Running) {
+      this.followUpRequested = true
+      return false
+    }
+    this.currentActivity = ScanActivityKind.Running
+    return true
+  }
+  requestFollowUpIfRunning(): boolean {
+    if (this.currentActivity === ScanActivityKind.Idle) return false
+    this.followUpRequested = true
+    return true
+  }
+  finishScan(): boolean {
+    this.currentActivity = ScanActivityKind.Idle
+    const shouldRunFollowUp = this.followUpRequested
+    this.followUpRequested = false
+    return shouldRunFollowUp
   }
 }
 

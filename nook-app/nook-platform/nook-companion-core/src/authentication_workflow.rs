@@ -21,8 +21,8 @@ pub use observation_validation::{
     authentication_page_observations_are_valid,
 };
 pub use vocabulary::{
-    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowStage,
+    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowStage,
 };
 
 use crate::website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
@@ -319,6 +319,29 @@ impl AuthenticationWorkflowSnapshot {
             AuthenticationSavedLoginCapability::Unavailable
         }
     }
+
+    #[must_use]
+    pub const fn pilot_presentation_capability(self) -> AuthenticationPilotPresentationCapability {
+        if !matches!(
+            self.approval_requirement,
+            AuthenticationApprovalRequirement::ExplicitUserApproval
+        ) {
+            return AuthenticationPilotPresentationCapability::Hidden;
+        }
+        match self.action {
+            AuthenticationWorkflowAction::ContinueWithNook
+            | AuthenticationWorkflowAction::GeneratePassword
+            | AuthenticationWorkflowAction::FillTotp
+            | AuthenticationWorkflowAction::UsePasskey
+            | AuthenticationWorkflowAction::CreatePasskey => {
+                AuthenticationPilotPresentationCapability::ProposeAction
+            }
+            AuthenticationWorkflowAction::EnrollAuthenticator
+            | AuthenticationWorkflowAction::TakeOver => {
+                AuthenticationPilotPresentationCapability::Hidden
+            }
+        }
+    }
 }
 
 const fn classify_enrollment_workflow(
@@ -600,6 +623,10 @@ mod tests {
             login.saved_login_capability(),
             AuthenticationSavedLoginCapability::FillSavedLogin
         );
+        assert_eq!(
+            login.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::ProposeAction
+        );
         assert_eq!((login.current_step, login.total_steps), (1, 3));
 
         let password_login = AuthenticationPageObservation {
@@ -676,6 +703,10 @@ mod tests {
             snapshot.saved_login_capability(),
             AuthenticationSavedLoginCapability::Unavailable
         );
+        assert_eq!(
+            snapshot.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
+        );
         Ok(())
     }
 
@@ -714,6 +745,10 @@ mod tests {
         assert_eq!(
             setup.action,
             AuthenticationWorkflowAction::EnrollAuthenticator
+        );
+        assert_eq!(
+            setup.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::Hidden
         );
 
         let verify = AuthenticationPageObservation {

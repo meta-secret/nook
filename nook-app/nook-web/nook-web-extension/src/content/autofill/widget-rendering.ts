@@ -1,12 +1,12 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
-  authWidgetAllowsPilotAction,
   authWidgetStartsCollapsed,
   isTrustedAuthAction,
 } from '../../lib/auth-widget-policy'
 import { type WebsiteLoginMatchAvailability } from '../../lib/auth-workflow-messages'
 import {
+  authentication_workflow_pilot_presentation_capability,
   authentication_workflow_saved_login_capability,
   type AuthenticationWorkflowSnapshot,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -149,12 +149,10 @@ export function renderWidget({
 
   const savedLoginCapability =
     authentication_workflow_saved_login_capability(snapshot)
-  const pilotActionInput: Parameters<typeof authWidgetAllowsPilotAction>[0] = {
-    action: snapshot.action,
-    approvalRequirement: snapshot.approvalRequirement,
-  }
-  const canContinueWithNook = authWidgetAllowsPilotAction(pilotActionInput)
-  if (!canContinueWithNook) {
+  if (
+    authentication_workflow_pilot_presentation_capability(snapshot) !==
+    'propose-action'
+  ) {
     removeWidget()
     return
   }

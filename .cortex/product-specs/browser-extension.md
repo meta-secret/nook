@@ -222,7 +222,8 @@ The layers have intentionally different responsibilities:
 - content scripts are sensors and actuators: they report bounded, non-secret
   structural observations and perform only the selected DOM action;
 - `nook-core` is the flight computer: it classifies the workflow, stage,
-  progress, allowed next action, and approval requirement;
+  progress, allowed next action, approval requirement, and whether Pilot may
+  present that action;
 - the extension background/offscreen runtime is the control plane: it binds
   requests to the sender tab/origin and holds the unlocked encrypted session;
 - the widget is the cockpit HUD: it renders safe state and consent, never vault
@@ -232,7 +233,9 @@ The layers have intentionally different responsibilities:
 Pilot observations cross the Rust/WASM boundary as named evidence enums and
 bounded quantities. They do not use positional boolean bags or numeric enum
 discriminants. Decisions derived entirely from an observation live on the Rust
-observation model and return an exhaustive named state.
+observation model and return an exhaustive named state. The widget consumes
+the Rust-owned Pilot presentation capability; it does not maintain a second
+TypeScript action allowlist.
 
 The initial production slice classifies login (including email-first /
 username-only steps used by Microsoft, Slack, and similar SSO shells),

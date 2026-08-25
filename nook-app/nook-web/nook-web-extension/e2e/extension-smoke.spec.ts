@@ -535,8 +535,8 @@ test('keeps the extension vault independent and switches after valid re-pairing'
       verifiedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
     await expect(
-      verifiedPopupPage.getByTestId('companion-vault-status'),
-    ).toContainText('Replacement vault')
+      verifiedPopupPage.getByRole('heading', { name: /Replacement vault/ }),
+    ).toBeVisible()
     const replacementGrantEntry = repairedGrants.find(
       ([, grant]) =>
         (grant as { vaultName: string }).vaultName === 'Replacement vault',

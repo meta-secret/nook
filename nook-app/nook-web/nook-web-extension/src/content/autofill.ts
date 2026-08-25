@@ -48,7 +48,7 @@ import {
   enrollmentCeremonyActive,
 } from './enrollment-flow'
 
-async function scanAndRender(): Promise<void> {
+async function performScanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
@@ -153,7 +153,17 @@ async function scanAndRender(): Promise<void> {
   renderWidget(nookTypedArgs0_1)
 }
 
-function scheduleScan() {
+async function scanAndRender(): Promise<void> {
+  if (!scanState.beginScan()) return
+  try {
+    await performScanAndRender()
+  } finally {
+    if (scanState.finishScan()) scheduleScan()
+  }
+}
+
+function scheduleScan(): void {
+  if (scanState.requestFollowUpIfRunning()) return
   scanState.scheduleTimer(() =>
     window.setTimeout(() => {
       scanState.clearPendingTimer()

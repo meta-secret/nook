@@ -18,6 +18,18 @@ describe('authentication scan scheduling', () => {
     expect(state.scheduleTimer(createTimer)).toBe(true)
     expect(timerCreations).toBe(2)
   })
+
+  test('coalesces in-flight mutations into one follow-up scan', () => {
+    const state = new ScanState()
+
+    expect(state.beginScan()).toBe(true)
+    expect(state.requestFollowUpIfRunning()).toBe(true)
+    expect(state.requestFollowUpIfRunning()).toBe(true)
+    expect(state.finishScan()).toBe(true)
+
+    expect(state.beginScan()).toBe(true)
+    expect(state.finishScan()).toBe(false)
+  })
 })
 
 describe('Nook Pilot presentation state', () => {

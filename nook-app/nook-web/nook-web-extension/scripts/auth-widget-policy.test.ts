@@ -1,37 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  authWidgetAllowsPilotAction,
   authWidgetStartsCollapsed,
   compactProgressState,
   isTrustedAuthAction,
   safeSavedOptionNumber,
   type AuthWidgetPresentationInput,
-  type AuthWidgetPilotActionInput,
 } from '../src/lib/auth-widget-policy'
 describe('Nook Pilot in-page authorization policy', () => {
   test('rejects page-script clicks and accepts browser-trusted gestures', () => {
     expect(isTrustedAuthAction(false)).toBe(false)
     expect(isTrustedAuthAction(true)).toBe(true)
-  })
-
-  test('executes Pilot actions only with Rust-owned explicit approval', () => {
-    const approvedAction: AuthWidgetPilotActionInput = {
-      action: 'continue-with-nook',
-      approvalRequirement: 'explicit-user-approval',
-    }
-    expect(authWidgetAllowsPilotAction(approvedAction)).toBe(true)
-
-    const takeoverRequired: AuthWidgetPilotActionInput = {
-      action: 'continue-with-nook',
-      approvalRequirement: 'takeover-required',
-    }
-    expect(authWidgetAllowsPilotAction(takeoverRequired)).toBe(false)
-
-    const manualAction: AuthWidgetPilotActionInput = {
-      action: 'take-over',
-      approvalRequirement: 'explicit-user-approval',
-    }
-    expect(authWidgetAllowsPilotAction(manualAction)).toBe(false)
   })
 
   test('keeps compact progress and its accessible label synchronized', () => {

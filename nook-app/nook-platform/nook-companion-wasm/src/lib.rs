@@ -107,6 +107,14 @@ pub fn authentication_workflow_saved_login_capability(
 }
 
 #[wasm_bindgen]
+#[must_use]
+pub fn authentication_workflow_pilot_presentation_capability(
+    snapshot: nook_companion_core::AuthenticationWorkflowSnapshot,
+) -> nook_companion_core::AuthenticationPilotPresentationCapability {
+    snapshot.pilot_presentation_capability()
+}
+
+#[wasm_bindgen]
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
@@ -675,6 +683,10 @@ mod tests {
         assert_eq!(
             authentication_workflow_saved_login_capability(snapshot),
             nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+        assert_eq!(
+            authentication_workflow_pilot_presentation_capability(snapshot),
+            nook_companion_core::AuthenticationPilotPresentationCapability::ProposeAction
         );
     }
 }

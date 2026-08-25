@@ -76,6 +76,14 @@ pub enum AuthenticationSavedLoginCapability {
     FillSavedLogin,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPilotPresentationCapability {
+    Hidden,
+    ProposeAction,
+}
+
 impl AuthenticationWorkflowAction {
     #[must_use]
     pub const fn as_str(self) -> &'static str {
@@ -160,6 +168,13 @@ mod tests {
             (
                 AuthenticationSavedLoginCapability::FillSavedLogin,
                 "fill-saved-login",
+            ),
+        ])?;
+        assert_semantic_roundtrip(&[
+            (AuthenticationPilotPresentationCapability::Hidden, "hidden"),
+            (
+                AuthenticationPilotPresentationCapability::ProposeAction,
+                "propose-action",
             ),
         ])
     }
