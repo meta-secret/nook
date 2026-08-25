@@ -116,12 +116,26 @@ describe('service worker routing', () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
     clearPendingAccountPickers.mockClear()
+    const lifecycleEvents: string[] = []
+    let pickerCleanupCount = 0
+    const orderedPickerCleanup = mock(() => {
+      pickerCleanupCount += 1
+      lifecycleEvents.push(`picker-cleanup-${pickerCleanupCount}`)
+      return Promise.resolve()
+    })
+    const orderedSurfaceCleanup = mock(() => {
+      lifecycleEvents.push('authentication-surfaces-cleared')
+      return Promise.resolve()
+    })
     const closeExtensionSessionDocument = mock(() => {
       expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+      lifecycleEvents.push('session-closed')
       return Promise.resolve()
     })
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
+      clearMountedAuthenticationSurfaces: orderedSurfaceCleanup,
+      clearPendingAccountPickers: orderedPickerCleanup,
       closeExtensionSessionDocument,
       isExtensionSessionLockMessage: () => true,
       isExtensionSessionEnsureMessage: () => false,
@@ -144,8 +158,14 @@ describe('service worker routing', () => {
     await flushResponses()
     await flushResponses()
     expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
-    expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
-    expect(clearPendingAccountPickers).toHaveBeenCalledTimes(2)
+    expect(orderedSurfaceCleanup).toHaveBeenCalledTimes(1)
+    expect(orderedPickerCleanup).toHaveBeenCalledTimes(2)
+    expect(lifecycleEvents).toEqual([
+      'picker-cleanup-1',
+      'authentication-surfaces-cleared',
+      'session-closed',
+      'picker-cleanup-2',
+    ])
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
   })
 

@@ -28,6 +28,7 @@ import {
   widgetState,
 } from './state'
 import { removeWidget, translatedMessage } from './workflow-ui'
+import { cancelActiveEnrollmentCeremony } from '../enrollment-flow'
 
 export function removeScannedWidget(): void {
   cancelPendingAuthenticatorPickerRequest()
@@ -47,10 +48,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     scanState.invalidateCurrentResult()
     authenticationActionState.invalidate()
     widgetState.busy = false
-    removeScannedWidget()
-    const response: Parameters<typeof sendResponse>[0] = { ok: true }
-    sendResponse(response)
-    return false
+    void cancelActiveEnrollmentCeremony().finally(() => {
+      removeScannedWidget()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+    })
+    return true
   }
   if (
     sender.id === chrome.runtime.id &&
@@ -60,18 +63,21 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     scanState.invalidateCurrentResult()
     authenticationActionState.invalidate()
     widgetState.busy = false
-    cancelPendingAuthenticatorPickerRequest()
-    cancelPendingLoginPickerRequest()
-    if (
-      widgetState.host.kind === WidgetHostKind.Attached &&
-      widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
-    ) {
-      widgetState.host.element.inert = true
-    }
-    scanState.schedule()
-    const response: Parameters<typeof sendResponse>[0] = { ok: true }
-    sendResponse(response)
-    return false
+    void cancelActiveEnrollmentCeremony().finally(() => {
+      cancelPendingAuthenticatorPickerRequest()
+      cancelPendingLoginPickerRequest()
+      if (
+        widgetState.host.kind === WidgetHostKind.Attached &&
+        widgetState.renderedWorkflowRoot.kind ===
+          WidgetWorkflowRootKind.Assigned
+      ) {
+        widgetState.host.element.inert = true
+      }
+      scanState.schedule()
+      const response: Parameters<typeof sendResponse>[0] = { ok: true }
+      sendResponse(response)
+    })
+    return true
   }
   if (
     sender.id === chrome.runtime.id &&

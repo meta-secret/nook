@@ -53,6 +53,7 @@ export {
   sendAuthenticatorBackupAttachRuntimeMessage,
   sendAuthenticatorCodeRuntimeMessage,
   sendAuthenticatorEnrollmentConfirmRuntimeMessage,
+  sendAuthenticatorEnrollmentDismissRuntimeMessage,
   sendAuthenticatorEnrollmentStageRuntimeMessage,
   sendAuthenticatorOptionsRuntimeMessage,
   sendAuthenticatorPickerOpenRuntimeMessage,

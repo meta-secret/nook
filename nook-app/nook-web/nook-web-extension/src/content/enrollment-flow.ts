@@ -99,6 +99,11 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentConfirmRuntimeMessage
     >[0],
   ) => Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>>
+  sendAuthenticatorEnrollmentDismissRuntimeMessage: (
+    message: Parameters<
+      typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentDismissRuntimeMessage
+    >[0],
+  ) => Promise<boolean>
   sendAuthenticatorEnrollmentStageRuntimeMessage: (
     message: Parameters<
       typeof import('./autofill/login-passkey-actions').sendAuthenticatorEnrollmentStageRuntimeMessage
@@ -128,11 +133,112 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
 /** Keep the post-save enrollment widget from being rebuilt by scanAndRender. */
 let holdEnrollmentWidgetAfterSave = false
 
+enum ActiveEnrollmentCeremonyKind {
+  Idle = 'idle',
+  Pending = 'pending',
+  Staged = 'staged',
+}
+
+type ActiveEnrollmentCeremony =
+  | { kind: ActiveEnrollmentCeremonyKind.Idle }
+  | {
+      kind: ActiveEnrollmentCeremonyKind.Pending
+      authorizationGeneration: number
+      host: EnrollmentFlowHost
+    }
+  | {
+      kind: ActiveEnrollmentCeremonyKind.Staged
+      authorizationGeneration: number
+      host: EnrollmentFlowHost
+      stageId: string
+    }
+
+let enrollmentAuthorizationGeneration = 0
+let activeEnrollmentCeremony: ActiveEnrollmentCeremony = {
+  kind: ActiveEnrollmentCeremonyKind.Idle,
+}
+
+function beginActiveEnrollmentCeremony(host: EnrollmentFlowHost): number {
+  enrollmentAuthorizationGeneration += 1
+  activeEnrollmentCeremony = {
+    kind: ActiveEnrollmentCeremonyKind.Pending,
+    authorizationGeneration: enrollmentAuthorizationGeneration,
+    host,
+  }
+  return enrollmentAuthorizationGeneration
+}
+
+function enrollmentCeremonyIsCurrent(authorizationGeneration: number): boolean {
+  return (
+    activeEnrollmentCeremony.kind !== ActiveEnrollmentCeremonyKind.Idle &&
+    activeEnrollmentCeremony.authorizationGeneration === authorizationGeneration
+  )
+}
+
+type AssignStagedEnrollmentCeremonyArgs = {
+  authorizationGeneration: number
+  host: EnrollmentFlowHost
+  stageId: string
+}
+
+function assignStagedEnrollmentCeremony({
+  authorizationGeneration,
+  host,
+  stageId,
+}: AssignStagedEnrollmentCeremonyArgs): boolean {
+  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return false
+  activeEnrollmentCeremony = {
+    kind: ActiveEnrollmentCeremonyKind.Staged,
+    authorizationGeneration,
+    host,
+    stageId,
+  }
+  return true
+}
+
+function completeEnrollmentCeremony(authorizationGeneration: number): void {
+  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
+  activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
+}
+
+type DismissStagedEnrollmentArgs = {
+  host: EnrollmentFlowHost
+  stageId: string
+}
+
+async function dismissStagedEnrollment({
+  host,
+  stageId,
+}: DismissStagedEnrollmentArgs): Promise<void> {
+  const message: Parameters<
+    typeof host.sendAuthenticatorEnrollmentDismissRuntimeMessage
+  >[0] = {
+    type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
+    payload: { origin: location.origin, stageId },
+  }
+  await host.sendAuthenticatorEnrollmentDismissRuntimeMessage(message)
+}
+
+export async function cancelActiveEnrollmentCeremony(): Promise<void> {
+  enrollmentAuthorizationGeneration += 1
+  holdEnrollmentWidgetAfterSave = false
+  stopPendingEnrollmentWatch()
+  const ceremony = activeEnrollmentCeremony
+  activeEnrollmentCeremony = { kind: ActiveEnrollmentCeremonyKind.Idle }
+  if (ceremony.kind !== ActiveEnrollmentCeremonyKind.Staged) return
+  const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
+    host: ceremony.host,
+    stageId: ceremony.stageId,
+  }
+  await dismissStagedEnrollment(dismissArgs)
+}
+
 type CommitStagedEnrollmentArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
   stageId: string
   vaultStoreId: string
+  authorizationGeneration: number
 }
 
 async function commitStagedEnrollment({
@@ -140,7 +246,9 @@ async function commitStagedEnrollment({
   section,
   stageId,
   vaultStoreId,
+  authorizationGeneration,
 }: CommitStagedEnrollmentArgs): Promise<void> {
+  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
   // The evidence watch is stopped before this async commit begins. Hold the
   // current widget across that gap so a success-page rescan cannot remove it.
   holdEnrollmentWidgetAfterSave = true
@@ -161,11 +269,13 @@ async function commitStagedEnrollment({
   }
   const confirmDelivery =
     await host.sendAuthenticatorEnrollmentConfirmRuntimeMessage(confirmMessage)
+  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
   if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.kind ===
       AuthenticatorEnrollmentConfirmResponseKind.Completed
   ) {
+    completeEnrollmentCeremony(authorizationGeneration)
     const nookTypedArgs0_1: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollSaved),
@@ -185,6 +295,7 @@ async function commitStagedEnrollment({
     'reason' in confirmDelivery.response &&
     confirmDelivery.response.reason === 'authenticator-locked'
   ) {
+    completeEnrollmentCeremony(authorizationGeneration)
     holdEnrollmentWidgetAfterSave = false
     const nookTypedArgs0_3: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -192,6 +303,7 @@ async function commitStagedEnrollment({
     }
     setHostDescription(nookTypedArgs0_3)
   } else {
+    completeEnrollmentCeremony(authorizationGeneration)
     holdEnrollmentWidgetAfterSave = false
     const nookTypedArgs0_4: Parameters<typeof setHostDescription>[0] = {
       host,
@@ -208,6 +320,7 @@ type EnrollmentEvidenceCallbacksArgs = {
   section: HTMLElement
   stageId: string
   vaultStoreId: string
+  authorizationGeneration: number
 }
 
 function enrollmentEvidenceCallbacks({
@@ -215,6 +328,7 @@ function enrollmentEvidenceCallbacks({
   section,
   stageId,
   vaultStoreId,
+  authorizationGeneration,
 }: EnrollmentEvidenceCallbacksArgs) {
   return {
     commit: () => {
@@ -223,17 +337,12 @@ function enrollmentEvidenceCallbacks({
         section,
         stageId,
         vaultStoreId,
+        authorizationGeneration,
       }
       return commitStagedEnrollment(nookArrowArgs0)
     },
     reject: () => {
-      const message: Parameters<
-        typeof host.sendRuntimeMessageWithoutResponse
-      >[0] = {
-        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
-        payload: { origin: location.origin, stageId },
-      }
-      host.sendRuntimeMessageWithoutResponse(message)
+      void cancelActiveEnrollmentCeremony()
       const nookTypedArgs0_5: Parameters<typeof setHostDescription>[0] = {
         host,
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -274,6 +383,7 @@ async function beginEnrollmentCeremony({
   otpauthUri,
   candidate,
 }: BeginEnrollmentCeremonyArgs): Promise<void> {
+  const authorizationGeneration = beginActiveEnrollmentCeremony(host)
   holdEnrollmentWidgetAfterSave = false
   const nookTypedArgs0_8: Parameters<typeof setHostDescription>[0] = {
     host,
@@ -286,6 +396,7 @@ async function beginEnrollmentCeremony({
     section,
     stageId: 'pending',
     vaultStoreId,
+    authorizationGeneration,
   }
   const nookTypedArgs1_0: Parameters<typeof beginEnrollmentEvidenceWatch>[0] = {
     host,
@@ -307,8 +418,24 @@ async function beginEnrollmentCeremony({
     await host.sendAuthenticatorEnrollmentStageRuntimeMessage(message)
   clearOtpauthUri(otpauthUri)
   clearCandidate(candidate)
+  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) {
+    if (
+      stageDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
+      stageDelivery.response.kind ===
+        AuthenticatorEnrollmentStageResponseKind.Staged &&
+      'stageId' in stageDelivery.response
+    ) {
+      const dismissArgs: Parameters<typeof dismissStagedEnrollment>[0] = {
+        host,
+        stageId: stageDelivery.response.stageId,
+      }
+      await dismissStagedEnrollment(dismissArgs)
+    }
+    return
+  }
   if (stageDelivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     stopPendingEnrollmentWatch()
+    completeEnrollmentCeremony(authorizationGeneration)
     const nookTypedArgs0_10: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -328,6 +455,7 @@ async function beginEnrollmentCeremony({
     !('stageId' in stageResponse)
   ) {
     stopPendingEnrollmentWatch()
+    completeEnrollmentCeremony(authorizationGeneration)
     const nookTypedArgs0_12: Parameters<typeof setHostDescription>[0] = {
       host,
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
@@ -342,12 +470,19 @@ async function beginEnrollmentCeremony({
     return
   }
   const stageId = stageResponse.stageId
+  const stagedCeremony: Parameters<typeof assignStagedEnrollmentCeremony>[0] = {
+    authorizationGeneration,
+    host,
+    stageId,
+  }
+  if (!assignStagedEnrollmentCeremony(stagedCeremony)) return
   // Replace the temporary pending watch with the real stage id.
   const nookTypedArgs0_14: Parameters<typeof enrollmentEvidenceCallbacks>[0] = {
     host,
     section,
     stageId,
     vaultStoreId,
+    authorizationGeneration,
   }
   const nookTypedArgs1_1: Parameters<typeof beginEnrollmentEvidenceWatch>[0] = {
     host,
@@ -376,17 +511,7 @@ async function beginEnrollmentCeremony({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      stopPendingEnrollmentWatch()
-      const message: Parameters<
-        typeof host.sendRuntimeMessageWithoutResponse
-      >[0] = {
-        type: WebsiteAuthenticatorEnrollDismissMessageType.NookWebsiteAuthenticatorEnrollDismiss,
-        payload: {
-          origin: location.origin,
-          stageId: stageResponse.stageId,
-        },
-      }
-      host.sendRuntimeMessageWithoutResponse(message)
+      void cancelActiveEnrollmentCeremony()
       const nookTypedArgs0_17: Parameters<typeof resetEnrollmentHeadline>[0] = {
         host,
         hints: detectEnrollmentHints(),

@@ -75,6 +75,26 @@ const pairingLaunchFailureResponse: MessageResponse = {
   reason: 'pairing-launch-failed',
 }
 
+type ClearAuthorizationBoundSurfacesArgs = {
+  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
+  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
+  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+}
+
+async function clearAuthorizationBoundSurfaces({
+  clearMountedAuthenticationSurfaces,
+  clearPendingAccountPickers,
+  closeExtensionSessionDocument,
+}: ClearAuthorizationBoundSurfacesArgs): Promise<void> {
+  await clearPendingAccountPickers()
+  try {
+    await clearMountedAuthenticationSurfaces()
+    await closeExtensionSessionDocument()
+  } finally {
+    await clearPendingAccountPickers()
+  }
+}
+
 export enum ExtensionLifecycleRoutingResult {
   Unhandled = 'unhandled',
 }
@@ -147,11 +167,12 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     invalidateAllLoginMatchAvailability()
-    void Promise.all([
-      clearPendingAccountPickers(),
-      closeExtensionSessionDocument().finally(clearPendingAccountPickers),
-      clearMountedAuthenticationSurfaces(),
-    ])
+    const clearArgs: Parameters<typeof clearAuthorizationBoundSurfaces>[0] = {
+      clearMountedAuthenticationSurfaces,
+      clearPendingAccountPickers,
+      closeExtensionSessionDocument,
+    }
+    void clearAuthorizationBoundSurfaces(clearArgs)
       .finally(invalidateAllLoginMatchAvailability)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))
@@ -167,11 +188,12 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     invalidateAllLoginMatchAvailability()
-    void Promise.all([
-      clearPendingAccountPickers(),
-      closeExtensionSessionDocument().finally(clearPendingAccountPickers),
-      clearMountedAuthenticationSurfaces(),
-    ])
+    const clearArgs: Parameters<typeof clearAuthorizationBoundSurfaces>[0] = {
+      clearMountedAuthenticationSurfaces,
+      clearPendingAccountPickers,
+      closeExtensionSessionDocument,
+    }
+    void clearAuthorizationBoundSurfaces(clearArgs)
       .finally(invalidateAllLoginMatchAvailability)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))

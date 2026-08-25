@@ -471,6 +471,13 @@ export async function sendGeneratePasswordRuntimeMessage(
   }
 }
 
+export async function sendAuthenticatorEnrollmentDismissRuntimeMessage(
+  message: WebsiteAuthenticatorEnrollDismissMessage,
+): Promise<boolean> {
+  const delivery = await sendRuntimeMessage(message)
+  return delivery.kind === RuntimeMessageDeliveryKind.Delivered
+}
+
 export function sendRuntimeMessageWithoutResponse(
   message: ExtensionRuntimeRequest,
 ): void {
