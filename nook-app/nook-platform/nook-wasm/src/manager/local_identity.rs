@@ -74,8 +74,8 @@ impl NookVaultManager {
     pub async fn activate_local_identity(&mut self, identity_id: String) -> Result<(), JsError> {
         let identity_id = nook_core::IdentityId::parse(&identity_id)?;
         ensure_no_pending_vault_creation().await?;
-        let app_id = crate::storage::identity_record::select_local_identity(identity_id).await?;
-        self.finish_local_identity_activation(&app_id);
+        let selection = crate::storage::identity_record::select_local_identity(identity_id).await?;
+        self.finish_local_identity_activation(&selection.selected_app_id);
         Ok(())
     }
 
@@ -85,20 +85,23 @@ impl NookVaultManager {
     pub async fn activate_local_identity_for_app_id(
         &mut self,
         app_id: String,
-    ) -> Result<(), JsError> {
+    ) -> Result<String, JsError> {
         let app_id = nook_core::AppId::parse(&app_id)?;
         ensure_no_pending_vault_creation().await?;
         let changes_live_identity = self.device.public_app_id() != app_id.as_str();
         let entry = crate::storage::identity_record::load_entry_for_app_id(&app_id)
             .await?
             .ok_or_else(|| JsError::new("App key has no protected local identity."))?;
-        let selected_app_id =
+        let selection =
             crate::storage::identity_record::select_local_identity(entry.identity_id().clone())
                 .await?;
         if changes_live_identity {
-            self.finish_local_identity_activation(&selected_app_id);
+            self.finish_local_identity_activation(&selection.selected_app_id);
         }
-        Ok(())
+        Ok(selection
+            .previous_app_id
+            .map(|app_id| app_id.to_string())
+            .unwrap_or_default())
     }
 }
 
@@ -287,11 +290,12 @@ mod browser_tests {
 
         manager.device.id.clone_from(&personal_app_id);
         manager.device.identity_private_key.clear();
-        manager
+        let previous_app_id = manager
             .activate_local_identity_for_app_id(personal_app_id.clone())
             .await
             .map_err(|error| anyhow::anyhow!("activate personal identity: {error:?}"))?;
 
+        assert_ne!(previous_app_id, personal_app_id);
         let selected = crate::storage::identity_record::load_selected_entry()
             .await?
             .ok_or_else(|| anyhow::anyhow!("selected identity is missing"))?;

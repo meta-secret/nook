@@ -408,9 +408,14 @@ pub(crate) async fn save_new_protected_identity(
     .await
 }
 
+pub(crate) struct LocalIdentitySelection {
+    pub(crate) selected_app_id: nook_core::AppId,
+    pub(crate) previous_app_id: Option<nook_core::AppId>,
+}
+
 pub(crate) async fn select_local_identity(
     identity_id: nook_core::IdentityId,
-) -> Result<nook_core::AppId, NookError> {
+) -> Result<LocalIdentitySelection, NookError> {
     let rexie = crate::storage::open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -421,6 +426,11 @@ pub(crate) async fn select_local_identity(
     ensure_no_pending_identity_transition(&store).await?;
     let mut directory = load_directory_for_write(&store).await?;
     let keyring = load_keyring_for_store(&store, &directory).await?;
+    let previous_app_id = directory
+        .selected()
+        .ok()
+        .and_then(|identity| keyring.entry(&identity.identity_id))
+        .map(|entry| entry.app_id().clone());
     let app_id = keyring
         .entry(&identity_id)
         .ok_or_else(|| {
@@ -433,7 +443,10 @@ pub(crate) async fn select_local_identity(
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Identity switch completion error: {error:?}"))
     })?;
-    Ok(app_id)
+    Ok(LocalIdentitySelection {
+        selected_app_id: app_id,
+        previous_app_id,
+    })
 }
 
 #[cfg(test)]

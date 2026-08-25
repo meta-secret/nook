@@ -79,14 +79,19 @@ export async function withActivatedExtensionIdentity<Result>({
       'Lock the active local identity before importing another identity.',
     )
   }
+  const persistedPreviousDeviceId =
+    await activeManager.activate_local_identity_for_app_id(deviceId)
+  const previousSelection =
+    previousProtection === DeviceProtectionStatus.Unlocked
+      ? previousDeviceId
+      : persistedPreviousDeviceId
   const restorePreviousSelection =
-    previousDeviceId.length > 0 && previousDeviceId !== deviceId
-  await activeManager.activate_local_identity_for_app_id(deviceId)
+    previousSelection.length > 0 && previousSelection !== deviceId
   try {
     return await operation()
   } catch (error) {
     if (restorePreviousSelection) {
-      await activeManager.activate_local_identity_for_app_id(previousDeviceId)
+      await activeManager.activate_local_identity_for_app_id(previousSelection)
     }
     throw error
   }

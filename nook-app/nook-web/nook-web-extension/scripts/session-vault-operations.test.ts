@@ -105,12 +105,14 @@ function importManager(state: ImportManagerState): NookVaultManager {
     activate_local_identity_for_app_id: async (appId: string) => {
       state.operationOrder.push('activate')
       if (state.rejectActivation) throw new Error('activation failed')
+      const previousAppId = state.deviceId
       state.activatedAppId = appId
       state.activatedAppIds.push(appId)
       if (state.deviceId !== appId) {
         state.protection = DeviceProtectionStatus.Passkey
       }
       state.deviceId = appId
+      return previousAppId
     },
   } as NookVaultManager
 }
