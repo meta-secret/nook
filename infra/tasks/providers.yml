@@ -38,18 +38,44 @@ tasks:
         endpoint_mode="$(field endpointMode)"
         arc_tier="$(field arcTier)"
         ssh_target="$ssh_user@$public_address"
+        controller_target='{{.INFRA_SSH_TARGET}}'
 
         result="$(bun "$provider" provision --node "$node" \
           --allow-reinstall "$allow_reinstall")"
         case "$result" in
           reinstalled)
             ssh-keygen -R "$public_address" >/dev/null 2>&1 || true
+            ssh-keygen -R "$mesh_address" >/dev/null 2>&1 || true
+            ssh -o BatchMode=yes "$controller_target" bash -s -- \
+              "$node" "$mesh_address" <<'CONTROLLER_RECOVERY'
+        set -euo pipefail
+        node="$1"
+        mesh_address="$2"
+        pod_cidr="$(sudo -n k0s kubectl get node "$node" \
+          -o jsonpath='{.spec.podCIDR}' 2>/dev/null || true)"
+        peer_file="/etc/wireguard/nook-peers/$mesh_address.conf"
+        if sudo -n test -f "$peer_file"; then
+          peer_key="$(sudo -n awk '/^PublicKey = / { print $3 }' "$peer_file")"
+          if test -n "$peer_key"; then
+            sudo -n wg set wg-nook peer "$peer_key" remove 2>/dev/null || true
+          fi
+          sudo -n rm -f "$peer_file"
+        fi
+        if test -n "$pod_cidr"; then
+          sudo -n ip route del "$pod_cidr" dev wg-nook 2>/dev/null || true
+        fi
+        sudo -n k0s kubectl delete node "$node" \
+          --ignore-not-found --wait=true
+        ssh-keygen -R "$mesh_address" >/dev/null 2>&1 || true
+        ssh-keygen -R "$node" >/dev/null 2>&1 || true
+        CONTROLLER_RECOVERY
             ;;
           unchanged) ;;
           *) echo "Unexpected provider convergence result" >&2; exit 1 ;;
         esac
 
         known_hosts="$HOME/.ssh/known_hosts"
+        expected_fingerprint="$(bun "$provider" host-fingerprint --node "$node")"
         scanned_hosts="$(mktemp)"
         cleanup() {
           rm -f "$scanned_hosts" "$known_hosts.next" "$known_hosts.merged"
@@ -58,21 +84,23 @@ tasks:
         install -d -m 0700 "$HOME/.ssh"
         touch "$known_hosts"
         chmod 0600 "$known_hosts"
-        if ! ssh-keygen -F "$public_address" -f "$known_hosts" >/dev/null; then
-          scanned=false
-          for _ in $(seq 1 180); do
-            if ssh-keyscan -T 3 -H "$public_address" > "$scanned_hosts" 2>/dev/null &&
-               test -s "$scanned_hosts"; then
-              sort -u "$known_hosts" "$scanned_hosts" > "$known_hosts.merged"
-              mv "$known_hosts.merged" "$known_hosts"
-              chmod 0600 "$known_hosts"
-              scanned=true
-              break
-            fi
-            sleep 5
-          done
-          test "$scanned" = true
-        fi
+        scanned=false
+        for _ in $(seq 1 180); do
+          if ssh-keyscan -t ed25519 -T 3 -H "$public_address" \
+               > "$scanned_hosts" 2>/dev/null && test -s "$scanned_hosts"; then
+            scanned_fingerprint="$(ssh-keygen -l -f "$scanned_hosts" -E sha256 \
+              | awk 'NR == 1 { print $2 }')"
+            test "$scanned_fingerprint" = "$expected_fingerprint"
+            ssh-keygen -R "$public_address" -f "$known_hosts" >/dev/null 2>&1 || true
+            sort -u "$known_hosts" "$scanned_hosts" > "$known_hosts.merged"
+            mv "$known_hosts.merged" "$known_hosts"
+            chmod 0600 "$known_hosts"
+            scanned=true
+            break
+          fi
+          sleep 5
+        done
+        test "$scanned" = true
         connected=false
         for _ in $(seq 1 120); do
           if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$ssh_target" true 2>/dev/null; then
@@ -104,9 +132,14 @@ tasks:
         sudo -n install -m 0440 "$sudoers" /etc/sudoers.d/90-nook-infra
         sudo -n visudo -cf /etc/sudoers.d/90-nook-infra
         sudo -n install -d -m 0755 /etc/ssh/sshd_config.d
+        sudo -n rm -f /etc/ssh/sshd_config.d/90-nook-infra.conf
         sudo -n install -m 0644 "$sshd_config" \
-          /etc/ssh/sshd_config.d/90-nook-infra.conf
+          /etc/ssh/sshd_config.d/00-nook-infra.conf
         sudo -n sshd -t
+        sudo -n sshd -T | grep -Fx 'passwordauthentication no'
+        sudo -n sshd -T | grep -Fx 'permitrootlogin no'
+        sudo -n sshd -T | grep -Fx 'pubkeyauthentication yes'
+        sudo -n sshd -T | grep -Fx 'kbdinteractiveauthentication no'
         sudo -n systemctl enable --now ssh.service
         sudo -n systemctl reload ssh.service
         sudo -n install -d -m 0755 /var/lib/nook-bootstrap
@@ -118,6 +151,8 @@ tasks:
         test "$(findmnt -n -o SOURCE /)" = /dev/md3
         test "$(lsblk -d -n -o NAME | grep -Ec '^nvme[0-9]+n[0-9]+$')" = 2
         grep -Eq '^md3 : active raid1 ' /proc/mdstat
+        test "$(cat /sys/block/md3/md/raid_disks)" = 2
+        test "$(cat /sys/block/md3/md/degraded)" = 0
         sudo -n visudo -cf /etc/sudoers.d/90-nook-infra
         sudo -n test -f /var/lib/nook-bootstrap/taskfile-complete
         REMOTE

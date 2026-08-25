@@ -57,9 +57,11 @@ task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
 ```
 
 The task verifies the provider identity and installs standard Debian 13. It
+pins a generated Ed25519 host identity through the authenticated OVH install,
 then applies the idempotent SSH and sudo baseline, joins the private mesh,
 installs k0s, and qualifies ARC. It reads the OVH API credential from
-`~/.nook/ovh-api.json`. The credential file remains mode `0600`.
+`~/.nook/ovh-api.json`. Credentials and host identities remain beneath
+mode-`0700` `~/.nook` directories with private files mode `0600`.
 
 An already-installed declared OS is reconciled without reinstalling it. A
 different installed OS is preserved unless the operator passes

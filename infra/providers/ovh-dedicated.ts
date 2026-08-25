@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 interface OvhCredentials {
@@ -31,6 +31,7 @@ enum EndpointMode {
 
 enum CliAction {
   Field = "field",
+  HostFingerprint = "host-fingerprint",
   Inspect = "inspect",
   Provision = "provision",
 }
@@ -125,6 +126,7 @@ interface SignatureInput {
 interface ReinstallRequest {
   customizations: {
     hostname: string;
+    postInstallationScript: string;
     sshKey: string;
   };
   operatingSystem: string;
@@ -137,6 +139,12 @@ interface ProvisionContext {
   hostname: string;
 }
 
+interface HostIdentity {
+  fingerprint: string;
+  privateKey: string;
+  publicKey: string;
+}
+
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const homeDirectory = process.env.HOME;
 if (!homeDirectory) throw new Error("HOME must be set for the private credential store");
@@ -147,6 +155,10 @@ const defaultInventory = resolve(
 const defaultCredentialFile = resolve(
   homeDirectory,
   ".nook/ovh-api.json",
+);
+const hostIdentityRoot = resolve(
+  homeDirectory,
+  ".nook/infra/ovh-host-identities",
 );
 
 function requireString(input: { label: string; value: string }): string {
@@ -162,6 +174,88 @@ function expandHome(input: string): string {
     return resolve(homeDirectory, input.slice(2));
   }
   return resolve(input);
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  return stat(path)
+    .then(() => true)
+    .catch(() => false);
+}
+
+async function runCommand(command: string[]): Promise<string> {
+  const process = Bun.spawn(command, {
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  const [exitCode, stdout] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+  ]);
+  if (exitCode !== 0) throw new Error(`${command[0]} failed`);
+  return stdout.trim();
+}
+
+async function ensureHostIdentity(hostname: string): Promise<HostIdentity> {
+  const directory = resolve(hostIdentityRoot, hostname);
+  const privateKeyPath = resolve(directory, "ssh_host_ed25519_key");
+  const publicKeyPath = `${privateKeyPath}.pub`;
+  await mkdir(directory, { mode: 0o700, recursive: true });
+  await chmod(hostIdentityRoot, 0o700);
+  await chmod(directory, 0o700);
+  if (!(await pathExists(privateKeyPath))) {
+    await runCommand([
+      "ssh-keygen",
+      "-q",
+      "-t",
+      "ed25519",
+      "-N",
+      "",
+      "-C",
+      `nook-host:${hostname}`,
+      "-f",
+      privateKeyPath,
+    ]);
+  }
+  if (!(await pathExists(publicKeyPath))) {
+    const publicKey = await runCommand(["ssh-keygen", "-y", "-f", privateKeyPath]);
+    await writeFile(publicKeyPath, `${publicKey}\n`, { mode: 0o600 });
+  }
+  await chmod(privateKeyPath, 0o600);
+  await chmod(publicKeyPath, 0o600);
+  const fingerprintOutput = await runCommand([
+    "ssh-keygen",
+    "-l",
+    "-f",
+    publicKeyPath,
+    "-E",
+    "sha256",
+  ]);
+  const fingerprint = fingerprintOutput.split(/\s+/)[1] ?? "";
+  if (!fingerprint.startsWith("SHA256:")) {
+    throw new Error("generated SSH host identity has no SHA256 fingerprint");
+  }
+  return {
+    fingerprint,
+    privateKey: await readFile(privateKeyPath, "utf8"),
+    publicKey: await readFile(publicKeyPath, "utf8"),
+  };
+}
+
+function hostIdentityInstallScript(identity: HostIdentity): string {
+  const script = `#!/bin/sh
+set -eu
+install -d -m 0755 /etc/ssh
+cat > /etc/ssh/ssh_host_ed25519_key <<'NOOK_PRIVATE_KEY'
+${identity.privateKey.trim()}
+NOOK_PRIVATE_KEY
+cat > /etc/ssh/ssh_host_ed25519_key.pub <<'NOOK_PUBLIC_KEY'
+${identity.publicKey.trim()}
+NOOK_PUBLIC_KEY
+chmod 0600 /etc/ssh/ssh_host_ed25519_key
+chmod 0644 /etc/ssh/ssh_host_ed25519_key.pub
+systemctl restart ssh.service
+`;
+  return Buffer.from(script).toString("base64");
 }
 
 export function createOvhSignature(input: SignatureInput): string {
@@ -201,7 +295,7 @@ function parseArguments(argv: string[]): CliArguments {
   const [actionRaw = "", ...rest] = argv;
   const action = Object.values(CliAction).find((value) => value === actionRaw);
   if (!action) {
-    throw new Error("action must be field, inspect, or provision");
+    throw new Error("unsupported OVH dedicated action");
   }
   const values = new Map<string, string>();
   for (let index = 0; index < rest.length; index += 2) {
@@ -235,19 +329,8 @@ async function loadInventory(path: string): Promise<DedicatedServerInventory> {
   return parsed;
 }
 
-async function loadCredentials(): Promise<OvhCredentials> {
-  const source = expandHome(
-    process.env.OVH_CREDENTIAL_FILE ?? defaultCredentialFile,
-  );
-  const target = defaultCredentialFile;
-  await mkdir(dirname(target), { mode: 0o700, recursive: true });
-  await chmod(dirname(target), 0o700);
-  if (source !== target) {
-    const credential = await readFile(source);
-    await writeFile(target, credential, { mode: 0o600 });
-  }
-  await chmod(target, 0o600);
-  const parsed = JSON.parse(await readFile(target, "utf8")) as OvhCredentials;
+async function parseCredentials(path: string): Promise<OvhCredentials> {
+  const parsed = JSON.parse(await readFile(path, "utf8")) as OvhCredentials;
   const requiredCredentials: Array<[string, string]> = [
     ["applicationKey", parsed.applicationKey],
     ["applicationSecret", parsed.applicationSecret],
@@ -258,6 +341,31 @@ async function loadCredentials(): Promise<OvhCredentials> {
     requireString({ label: `OVH ${label}`, value });
   }
   return parsed;
+}
+
+async function loadCredentials(): Promise<OvhCredentials> {
+  const source = expandHome(
+    process.env.OVH_CREDENTIAL_FILE ?? defaultCredentialFile,
+  );
+  const target = defaultCredentialFile;
+  await mkdir(dirname(target), { mode: 0o700, recursive: true });
+  await chmod(dirname(target), 0o700);
+  if (source === target) {
+    await chmod(target, 0o600);
+    return parseCredentials(target);
+  }
+  const candidate = await parseCredentials(source);
+  const validationRequest: ApiRequest = {
+    method: HttpMethod.Get,
+    path: "/auth/currentCredential",
+  };
+  await ovhApi<boolean>({ credentials: candidate, request: validationRequest });
+  const next = `${target}.next`;
+  await writeFile(next, await readFile(source), { mode: 0o600 });
+  await chmod(next, 0o600);
+  await rename(next, target);
+  await chmod(target, 0o600);
+  return candidate;
 }
 
 function apiRoot(credentials: OvhCredentials): string {
@@ -405,9 +513,11 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
   if (!/^ssh-(?:ed25519|rsa) [A-Za-z0-9+/=]+(?: .*)?$/.test(publicKey.trim())) {
     throw new Error("SSH public key must be an OpenSSH ed25519 or RSA key");
   }
+  const hostIdentity = await ensureHostIdentity(input.hostname);
   const payload: ReinstallRequest = {
     customizations: {
       hostname: input.hostname,
+      postInstallationScript: hostIdentityInstallScript(hostIdentity),
       sshKey: publicKey.trim(),
     },
     operatingSystem: input.definition.operatingSystem,
@@ -417,6 +527,16 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
     method: HttpMethod.Post,
     path: `/dedicated/server/${encodeURIComponent(input.definition.serviceName)}/reinstall`,
   };
+  const preSubmission = await getServer({
+    credentials: input.credentials,
+    definition: input.definition,
+  });
+  const preSubmissionInput = {
+    allowReinstall: input.allowReinstall,
+    currentOperatingSystem: preSubmission.os,
+    desiredOperatingSystem: input.definition.operatingSystem,
+  };
+  if (!requiresReinstall(preSubmissionInput)) return ProvisionResult.Unchanged;
   const task = await ovhApi<OvhTask>({ credentials: input.credentials, request });
   await waitForTask({
     credentials: input.credentials,
@@ -442,6 +562,11 @@ async function main(): Promise<void> {
     process.stdout.write(
       `${args.field === DedicatedServerField.Hostname ? args.node : definition[args.field]}\n`,
     );
+    return;
+  }
+  if (args.action === CliAction.HostFingerprint) {
+    const hostIdentity = await ensureHostIdentity(args.node);
+    process.stdout.write(`${hostIdentity.fingerprint}\n`);
     return;
   }
   const credentials = await loadCredentials();

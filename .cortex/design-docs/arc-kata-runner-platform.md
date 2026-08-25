@@ -204,19 +204,30 @@ Provision a declared OVH worker from provider-ready state with:
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
 ```
 
-The provider adapter reads OVH credentials from `~/.nook/ovh-api.json`. OVH's
-standard installer owns Debian and software RAID. The Taskfile owns the generic
-SSH and sudo baseline plus all later convergence.
+The provider adapter reads OVH credentials from `~/.nook/ovh-api.json`. A
+candidate credential is authenticated before it atomically replaces that file.
+OVH's standard installer owns Debian and software RAID. The Taskfile owns the
+generic SSH and sudo baseline plus all later convergence.
+
+Each declared worker has a stable Ed25519 SSH host identity under
+`~/.nook/infra/ovh-host-identities`. The standard installer receives that key
+through its provider-authenticated post-install customization. Bootstrap accepts
+only the matching SHA-256 fingerprint. It never trusts an unauthenticated
+`ssh-keyscan` result.
 
 The workflow then performs these operations:
 
 1. Verify the exact service, address, hardware range, datacenter, and current OS.
-2. Install Debian only when the declared server is blank.
-3. Wait for SSH and apply the idempotent base host contract.
-4. Reconcile WireGuard, k0s, ARC storage, and runner placement.
+2. Recheck the target immediately before any destructive reinstall.
+3. Install Debian only when the declared server is blank.
+4. Verify the pinned SSH host identity and apply the idempotent base contract.
+5. Require effective SSH hardening and a non-degraded two-member RAID1 array.
+6. Reconcile WireGuard, k0s, ARC storage, and runner placement.
 
 Replacing an installed OS requires the explicit
 `INFRA_OVH_ALLOW_REINSTALL=true` disaster-recovery input.
+That path removes the old Kubernetes node, WireGuard peer, routes, and stale
+mesh SSH identities before onboarding the replacement.
 
 Cloud-init user-data is not used with the standard OVH image. OVH exposes that
 customization only for BYOI and BYOLinux. Owning a custom image pipeline would

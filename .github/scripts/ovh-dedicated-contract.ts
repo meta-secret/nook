@@ -53,6 +53,11 @@ for (const fragment of [
   "await chmod(dirname(target), 0o700)",
   "await chmod(target, 0o600)",
   "requiredCredentials",
+  "/auth/currentCredential",
+  "await rename(next, target)",
+  ".nook/infra/ovh-host-identities",
+  "postInstallationScript",
+  "preSubmission",
   "approved US API endpoint",
   'currentOperatingSystem === "none_64"',
   "allowReinstall",
@@ -66,7 +71,6 @@ for (const fragment of [
 
 for (const fragment of [
   "configDriveUserData",
-  "postInstallationScript",
   "applicationSecret}",
   "consumerKey}",
 ]) {
@@ -75,11 +79,15 @@ for (const fragment of [
 
 for (const fragment of [
   "ovh:server:deploy:",
-  "ssh-keyscan -T 3 -H",
+  "ssh-keyscan -t ed25519 -T 3 -H",
+  "expected_fingerprint",
+  "CONTROLLER_RECOVERY",
   "/etc/sudoers.d/90-nook-infra",
-  "/etc/ssh/sshd_config.d/90-nook-infra.conf",
+  "/etc/ssh/sshd_config.d/00-nook-infra.conf",
+  "sshd -T | grep -Fx 'passwordauthentication no'",
   "findmnt -n -o SOURCE /",
   "active raid1",
+  "/sys/block/md3/md/degraded",
   "k0s:worker:deploy",
   "INFRA_WORKER_MESH_ADDRESS",
   "INFRA_WORKER_ARC_TIER",
