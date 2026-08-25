@@ -14,6 +14,7 @@ import {
   renderEnrollmentActions,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
+import { hasEnrollmentSection } from '../enrollment-flow-view'
 import {
   cancelPendingAuthenticatorPickerRequest,
   continueWithAuthenticator,
@@ -93,7 +94,8 @@ export function renderEnrollmentWidget({
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
     widgetState.workflowKey.key === workflowKey
   ) {
-    return
+    const renderedWidget = widgetState.host.element.shadowRoot
+    if (renderedWidget && hasEnrollmentSection(renderedWidget)) return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
 

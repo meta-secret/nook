@@ -53,8 +53,8 @@ function installPopupDemoRuntime(): void {
     selectedVaultStoreId: 'popup-demo-store',
     selectedVaultName: 'Personal vault',
     syncProviderCount: 0,
-    eventCount: 0,
-    eventLogHeads: [],
+    eventCount: 1,
+    eventLogHeads: ['popup-demo-event-head'],
     lastLocalSyncAt: '2026-08-25T00:00:00.000Z',
   }
 

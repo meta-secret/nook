@@ -41,6 +41,10 @@ export function clearEnrollmentSection(panel: HTMLElement): void {
   panel.querySelector(`.${ENROLLMENT_SECTION_CLASS}`)?.remove()
 }
 
+export function hasEnrollmentSection(root: ParentNode): boolean {
+  return Boolean(root.querySelector(`.${ENROLLMENT_SECTION_CLASS}`))
+}
+
 export function createEnrollmentSection(panel: HTMLElement): HTMLElement {
   clearEnrollmentSection(panel)
   const section = document.createElement('div')
