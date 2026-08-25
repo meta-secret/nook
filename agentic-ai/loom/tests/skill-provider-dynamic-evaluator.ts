@@ -226,20 +226,88 @@ function isComputedCallableElementAccess(
   inspection: ComputedElementInspection,
 ): boolean {
   if (!ts.isElementAccessExpression(inspection.node)) return false;
-  const parent = inspection.node.parent;
+  const callable = ascendExpression(inspection.node);
+  const parent = callable.parent;
   if (
     (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
-    parent.expression === inspection.node
+    parent.expression === callable
   ) {
     return true;
   }
   const receiverType = inspection.checker.getTypeAtLocation(
     inspection.node.expression,
   );
+  const alias = computedResultAlias(inspection.node);
+  if (alias !== false) {
+    const aliasInspection: InvokedAliasInspection = {
+      alias,
+      checker: inspection.checker,
+    };
+    if (isInvokedAlias(aliasInspection)) return true;
+  }
   return (
     receiverType.getCallSignatures().length > 0 ||
     receiverType.getConstructSignatures().length > 0
   );
+}
+
+function computedResultAlias(
+  node: ts.ElementAccessExpression,
+): ts.Identifier | false {
+  const value = ascendExpression(node);
+  const parent = value.parent;
+  if (ts.isVariableDeclaration(parent) && parent.initializer === value) {
+    return ts.isIdentifier(parent.name) ? parent.name : false;
+  }
+  if (
+    ts.isBinaryExpression(parent) &&
+    parent.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+    parent.right === value
+  ) {
+    return ts.isIdentifier(parent.left) ? parent.left : false;
+  }
+  return false;
+}
+
+type InvokedAliasInspection = {
+  readonly alias: ts.Identifier;
+  readonly checker: ts.TypeChecker;
+};
+
+function isInvokedAlias(inspection: InvokedAliasInspection): boolean {
+  const symbol = inspection.checker.getSymbolAtLocation(inspection.alias);
+  if (!symbol) return false;
+  let invoked = false;
+  const visit = (node: ts.Node): void => {
+    const callable = ts.isIdentifier(node) ? ascendExpression(node) : false;
+    const parent = callable === false ? node.parent : callable.parent;
+    if (
+      ts.isIdentifier(node) &&
+      inspection.checker.getSymbolAtLocation(node) === symbol &&
+      (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+      parent.expression === callable
+    ) {
+      invoked = true;
+    }
+    if (!invoked) ts.forEachChild(node, visit);
+  };
+  visit(inspection.alias.getSourceFile());
+  return invoked;
+}
+
+function ascendExpression(expression: ts.Expression): ts.Expression {
+  const parent = expression.parent;
+  if (
+    (ts.isParenthesizedExpression(parent) ||
+      ts.isAsExpression(parent) ||
+      ts.isTypeAssertionExpression(parent) ||
+      ts.isNonNullExpression(parent) ||
+      ts.isSatisfiesExpression(parent)) &&
+    parent.expression === expression
+  ) {
+    return ascendExpression(parent);
+  }
+  return expression;
 }
 
 type ConstructorBindingInspection = {
