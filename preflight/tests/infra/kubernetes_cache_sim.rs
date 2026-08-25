@@ -86,7 +86,6 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
     let jobs = read("infra/sim/kubernetes-cache/jobs.ts");
     let proof = read("infra/sim/kubernetes-cache/prove.ts");
     let platform = read("infra/sim/kubernetes-cache/platform.ts");
-    let shard_services = read("infra/sim/kubernetes-cache/shard-services.yaml");
     for required in [
         "automountServiceAccountToken: false",
         "allowPrivilegeEscalation: false",
@@ -141,30 +140,10 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
             "cache restart identity proof is missing: {required}"
         );
     }
-    for required in [
-        "nook-buildkit-proof-0",
-        "nook-buildkit-proof-1",
-        "nook-buildkit-proof-2",
-    ] {
-        assert!(
-            contracts.contains(required),
-            "deterministic BuildKit shard address is missing: {required}"
-        );
-        assert!(
-            shard_services.contains(required),
-            "deterministic BuildKit shard Service is missing: {required}"
-        );
-    }
-    for required in [
-        "statefulset.kubernetes.io/pod-name: nook-buildkit-0",
-        "statefulset.kubernetes.io/pod-name: nook-buildkit-1",
-        "statefulset.kubernetes.io/pod-name: nook-buildkit-2",
-    ] {
-        assert!(
-            shard_services.contains(required),
-            "deterministic BuildKit shard selector is missing: {required}"
-        );
-    }
+    assert!(
+        contracts.contains("nook-buildkit.arc-runners.svc.cluster.local:1234"),
+        "the proof must use the production node-local BuildKit Service"
+    );
     let allowed = proof
         .find("name: \"cache-shard-allowed\"")
         .expect("authorized BuildKit shard proof is missing");
@@ -178,35 +157,15 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
 }
 
 #[test]
-fn kubernetes_cache_proof_has_one_pinned_hosted_entrypoint() {
+fn kubernetes_cache_proof_has_one_local_entrypoint() {
     let task = read("infra/tasks/kubernetes-cache.yml");
     let batch = read(".github/scripts/remote-task-batch.sh");
     let workflow = read(".github/workflows/remote.yml");
     let root_readme = read("README.md");
-    let remote_guidance = read(".cortex/workflows/remote-execution.md");
     assert!(task.contains("bun run infra/sim/kubernetes-cache/prove.ts"));
-    assert!(batch.contains("kubernetes-cache:prove) echo \"task infra:kubernetes-cache:prove\""));
-    assert!(batch.contains("kubernetes-cache:prove must be dispatched as a single hosted task"));
-    assert!(batch.contains("ci:pr:e2e|kubernetes-cache:prove) echo 45"));
     assert!(root_readme.contains("task infra:kubernetes-cache:prove"));
     assert!(
-        remote_guidance
-            .contains("The hosted VM's existing Docker daemon creates the k3d node containers.")
+        !batch.contains("kubernetes-cache:prove") && !workflow.contains("Kubernetes cache proof"),
+        "the local k3d runtime proof must not change hosted or ARC execution"
     );
-    for required in [
-        "(inputs.tasks || inputs.task) == 'kubernetes-cache:prove'",
-        "Install Bun for Kubernetes cache proof",
-        "uses: oven-sh/setup-bun@v2",
-        "bun-version: 1.3.14",
-        "K3D_VERSION: v5.9.0",
-        "06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0",
-        "k3d-linux-amd64",
-        "sha256sum --check --strict",
-        "NOOK_K3D_BIN=$k3d_path",
-    ] {
-        assert!(
-            workflow.contains(required),
-            "hosted k3d setup is missing: {required}"
-        );
-    }
 }

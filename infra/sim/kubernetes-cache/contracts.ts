@@ -9,11 +9,8 @@ export const K3S_IMAGE =
 export const BUILDKIT_IMAGE =
   "docker.io/moby/buildkit:v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9";
 export const REGISTRY_HOST = "nook-zot.hive-data.svc.cluster.local:5000";
-export const BUILDKIT_SHARD_ADDRESSES = [
-  "tcp://nook-buildkit-proof-0.arc-runners.svc.cluster.local:1234",
-  "tcp://nook-buildkit-proof-1.arc-runners.svc.cluster.local:1234",
-  "tcp://nook-buildkit-proof-2.arc-runners.svc.cluster.local:1234",
-] as const;
+export const BUILDKIT_ADDRESS =
+  "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234";
 export const ADMIN_USERNAME = "sim-admin";
 export const REMOTE_USERNAME = "sim-remote";
 export const ADMIN_SECRET = "nook-cache-proof-admin-dockerconfig";

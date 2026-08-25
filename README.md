@@ -618,17 +618,17 @@ compete with the larger native dependency lineage. ARC publishes verified
 native/WASM source state and the native dependency ref. Merely consuming those
 targets as BuildKit contexts does not run their cache exporters.
 
-`task infra:kubernetes-cache:prove` is the portable Kubernetes integration
-proof. It creates three k3d agents on a GitHub-hosted runner and patches the
-production Zot, rootless BuildKit, and NetworkPolicy resources. The hosted
-runner's Docker daemon creates only the k3d infrastructure containers.
+`task infra:kubernetes-cache:prove` is the local portable Kubernetes integration
+proof. It creates three k3d agents and patches the production Zot, rootless
+BuildKit, and NetworkPolicy resources. Docker creates only the k3d
+infrastructure containers.
 Kubernetes workloads receive no runtime socket, service-account token, host
 path, or privileged context. The proof covers cache persistence and
-cross-shard portability. It proves allowed and denied access against exact
-StatefulSet shards through proof-only ordinal-selecting Services. The production node-local
-Service remains unchanged but is not exercised by hosted k3d. The proof does
+cross-shard portability. Clients run on their selected shard's node through the
+production node-local Service. The proof does
 not replace production evidence for k0s, node-local Service routing, WireGuard,
-Kata, ARC lifecycle, capacity, or performance.
+Kata, ARC lifecycle, capacity, or performance. CI checks the static proof
+contracts but does not run k3d.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and

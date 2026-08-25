@@ -6,7 +6,6 @@ resources:
   - ../../k0s/manifests/registry/zot.yaml
   - ../../k0s/manifests/arc/buildkit.yaml
   - ../../k0s/manifests/arc/network-policy.yaml
-  - shard-services.yaml
 
 patches:
   - patch: |-

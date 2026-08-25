@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   BUILDKIT_IMAGE,
-  BUILDKIT_SHARD_ADDRESSES,
+  BUILDKIT_ADDRESS,
   REGISTRY_HOST,
   SIMULATION_DIRECTORY,
   applyYaml,
@@ -306,7 +306,7 @@ spec:
         - name: buildctl
           image: ${BUILDKIT_IMAGE}
           command: ["buildctl"]
-          args: ["--addr", "${BUILDKIT_SHARD_ADDRESSES[0]}", "debug", "workers"]
+          args: ["--addr", "${BUILDKIT_ADDRESS}", "debug", "workers"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -357,7 +357,7 @@ spec:
           args:
             - |-
               sleep 10
-              if timeout 8 buildctl --addr ${BUILDKIT_SHARD_ADDRESSES[0]} debug workers; then
+              if timeout 8 buildctl --addr ${BUILDKIT_ADDRESS} debug workers; then
                 echo "unexpected BuildKit access" >&2
                 exit 1
               fi

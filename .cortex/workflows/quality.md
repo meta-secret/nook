@@ -361,9 +361,10 @@ Use this workflow for quality, CI, and deployment changes.
     The proof requires these outcomes:
 
     - one rootless BuildKit shard runs on each distinct agent;
-    - a labeled client can reach an exact BuildKit shard before denial is tested;
+    - a labeled same-node client can reach its BuildKit shard before denial is
+      tested;
     - after the policy controller sync window, an unlabeled same-node client
-      cannot reach an exact BuildKit shard;
+      cannot reach the node-local BuildKit Service;
     - the Remote registry identity cannot write a stable Main ref;
     - node-local cache remains CACHED after BuildKit Pod recreation;
     - Zot retains a stable ref after its Pod is recreated;
@@ -371,14 +372,12 @@ Use this workflow for quality, CI, and deployment changes.
     - concurrent isolated refs remain separate; and
     - each isolated ref restores as CACHED on a different shard.
 
-    Exact-shard access and cache assertions use proof-only ordinal-selecting
-    Services.
-    The production node-local Service remains unchanged in the rendered
-    overlay. Its `internalTrafficPolicy` routing remains a k0s deployment proof.
-
-    The hosted Remote task installs checksum-pinned k3d and runs this proof
-    alone. The controller refuses to replace a pre-existing cluster with the
+    Clients run on their selected shard's node and use the production node-local
+    Service. The controller refuses to replace a pre-existing cluster with the
     proof name. Cleanup targets only the cluster that the invocation created.
+
+    This runtime proof is local-only. Hosted CI checks its static contracts but
+    does not create a k3d cluster.
 
     #### SeaweedFS sccache
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.

@@ -72,22 +72,16 @@ proof. It creates one isolated k3d server and three agents, then applies
 Kustomize patches to the production Zot, BuildKit, and NetworkPolicy manifests.
 The proof validates node-local cache retention, cross-node Zot restoration,
 stable-scope ACLs, isolated concurrent refs, and denied unlabeled clients. It
-first proves an authorized BuildKit shard client, then uses StatefulSet
-ordinal selectors and proof-only ClusterIP Services to bind every cache
-assertion to one exact shard. The denied client waits for the K3s
-policy-controller sync window and targets an exact shard from the shard's own
-node, matching production runner placement. The proof cleans up only its exact
-cluster and uses an isolated kubeconfig. The hosted Remote task installs
-checksum-pinned k3d automatically. A local caller needs k3d v5.9.0, Docker, Bun,
-and kubectl.
+first proves an authorized same-node BuildKit client. Every cache client runs on
+its selected shard's node and uses the production node-local Service. The denied
+client waits for the K3s policy-controller sync window. The proof cleans up only
+its exact cluster and uses an isolated kubeconfig. It requires k3d v5.9.0,
+Docker, Bun, and kubectl.
 
-This proof covers portable Kubernetes workload behavior. The production
-node-local Service remains in the rendered overlay, but hosted k3d clients do
-not exercise its `internalTrafficPolicy` path. The proof-only exact-shard
-Services are test instrumentation for k3d's kube-proxy data path. k0s lifecycle,
-node-local Service routing, WireGuard routing, Kata isolation, ARC controller
-lifecycle, node capacity, and production performance remain production-only
-evidence.
+This local proof covers portable Kubernetes workload behavior. CI checks its
+static contracts but does not create a k3d cluster. k0s lifecycle, multi-host
+WireGuard routing, Kata isolation, ARC controller lifecycle, node capacity, and
+production performance remain production-only evidence.
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
 remote deployment directory. The default target is
