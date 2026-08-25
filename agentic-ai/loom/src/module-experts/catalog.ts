@@ -161,6 +161,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-extension/src/lib/login-save-messages.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/nook-wasm.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/outcome-evidence-messages.ts',
+  'nook-app/nook-web/nook-web-extension/src/lib/passkey-entry-point.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/provider-credential-staging.ts',
   'nook-app/nook-web/nook-web-extension/src/lib/simple-vault-target.ts',
   'nook-app/nook-web/nook-web-extension/src/manifest.ts',
