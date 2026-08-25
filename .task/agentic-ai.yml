@@ -27,7 +27,6 @@ tasks:
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
-    deps: [skills:install]
     cmds:
       - bun install --frozen-lockfile
 
@@ -278,6 +277,53 @@ tasks:
     cmds:
       - task --taskfile agentic-ai/minds/hive/Taskfile.yml format
 
+  hive:guest:format:changed:
+    desc: Format only changed skill and shared-tooling files inside a sealed Hive guest.
+    dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
+        msg: hive:guest:format:changed is available only inside a sealed Hive guest
+      - sh: test -n "${FORMAT_CHANGED_FILES:-}" && test -r "$FORMAT_CHANGED_FILES"
+        msg: hive:guest:format:changed requires the canonical changed-file list
+    cmds:
+      - |
+        bash <<'FORMAT_CHANGED_BASH'
+        set -euo pipefail
+        skill_files=()
+        tooling_files=()
+        while IFS= read -r -d '' file_name; do
+          if [ ! -f "$file_name" ] || [ -L "$file_name" ]; then
+            continue
+          fi
+          case "$file_name" in
+            .agents/skills/*)
+              skill_files+=("${file_name#.agents/skills/}")
+              ;;
+            tooling/eslint-rules/no-raw-object-arguments.js)
+              tooling_files+=("$file_name")
+              ;;
+          esac
+        done <"$FORMAT_CHANGED_FILES"
+        prettier="$PWD/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier"
+        if [ "${#skill_files[@]}" -gt 0 ]; then
+          (
+            cd .agents/skills
+            "$prettier" \
+              --config .prettierrc \
+              --write \
+              --ignore-unknown \
+              -- "${skill_files[@]}"
+          )
+        fi
+        if [ "${#tooling_files[@]}" -gt 0 ]; then
+          "$prettier" \
+            --config agentic-ai/loom/.prettierrc \
+            --write \
+            --ignore-unknown \
+            -- "${tooling_files[@]}"
+        fi
+        FORMAT_CHANGED_BASH
+
   hive:guest:format:
     desc: Format the repository natively inside a sealed Hive Kata guest.
     preconditions:
@@ -289,18 +335,7 @@ tasks:
       - cd nook-app/nook-web/nook-web-app && bun run format
       - cd nook-app/nook-web/nook-web-extension && bun run format
       - cd agentic-ai/minds && cargo fmt --all
-      - >-
-        nook-app/nook-web/nook-web-app/node_modules/.bin/prettier
-        --config .agents/skills/.prettierrc
-        --write
-        --no-error-on-unmatched-pattern
-        ".agents/skills/*/src/**/*.ts"
-        ".agents/skills/*/tests/**/*.ts"
-        ".agents/skills/*/executable-skill.json"
-        ".agents/skills/*/SKILL.md"
-        ".agents/skills/*.{ts,json,md}"
-        .agents/skills/eslint.config.js
-        .agents/skills/.prettierrc
+      - task: hive:guest:format:changed
 
   hive:guest:pr:ready:
     desc: Run the existing PR readiness audit natively inside a sealed Hive guest (PR=<number>).

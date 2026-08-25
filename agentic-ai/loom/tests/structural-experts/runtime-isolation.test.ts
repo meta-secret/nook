@@ -102,6 +102,7 @@ test('materializes only exact shared formatter and lint tooling', async () => {
   const exactRefactoringFiles = [
     '.github/formatting/format.sh',
     'tooling/eslint-rules/no-raw-object-arguments.js',
+    'agentic-ai/loom/eslint.config.js',
     '.agents/skills/eslint.config.js',
     '.agents/skills/package.json',
     '.agents/skills/tsconfig.json',
@@ -152,6 +153,9 @@ test('materializes only exact shared formatter and lint tooling', async () => {
         await readdir(join(isolation.repositorySnapshot, '.github/formatting')),
       ).toEqual(['format.sh']);
       expect(
+        await readdir(join(isolation.repositorySnapshot, 'agentic-ai/loom')),
+      ).toEqual(['eslint.config.js']);
+      expect(
         (
           await readdir(join(isolation.repositorySnapshot, '.agents/skills'))
         ).sort(),
@@ -176,6 +180,11 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       await expect(
         access(
           join(isolation.repositorySnapshot, '.github/formatting/Dockerfile'),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        access(
+          join(isolation.repositorySnapshot, 'agentic-ai/loom/tsconfig.json'),
         ),
       ).rejects.toThrow();
       await expect(

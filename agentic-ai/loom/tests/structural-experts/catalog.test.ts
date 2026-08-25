@@ -57,6 +57,9 @@ test('grants shared formatter and skill lint tooling through exact files', () =>
     'tooling/eslint-rules/no-raw-object-arguments.js',
   );
   expect(profile.allowedEvidenceFiles).toContain(
+    'agentic-ai/loom/eslint.config.js',
+  );
+  expect(profile.allowedEvidenceFiles).toContain(
     '.github/formatting/format.sh',
   );
   expect(profile.allowedEvidenceDescendantRoots).not.toContain(

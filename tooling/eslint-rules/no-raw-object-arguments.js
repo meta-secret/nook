@@ -1,82 +1,82 @@
 const transparentTypeScriptWrappers = new Set([
-  "ChainExpression",
-  "TSAsExpression",
-  "TSTypeAssertion",
-  "TSSatisfiesExpression",
-  "TSNonNullExpression",
+  'ChainExpression',
+  'TSAsExpression',
+  'TSTypeAssertion',
+  'TSSatisfiesExpression',
+  'TSNonNullExpression',
 ]);
 const transparentParameterContractWrappers = new Set([
-  "Partial",
-  "Readonly",
-  "Required",
+  'Partial',
+  'Readonly',
+  'Required',
 ]);
-const inlineCollectionParameterTypes = new Set(["Array", "ReadonlyArray"]);
+const inlineCollectionParameterTypes = new Set(['Array', 'ReadonlyArray']);
 const inlineObjectParameterTypes = new Set([
-  "Map",
-  "ReadonlyMap",
-  "ReadonlySet",
-  "Record",
-  "Set",
-  "WeakMap",
-  "WeakSet",
+  'Map',
+  'ReadonlyMap',
+  'ReadonlySet',
+  'Record',
+  'Set',
+  'WeakMap',
+  'WeakSet',
 ]);
-const inlineMappedParameterTypes = new Set(["Omit", "Pick"]);
+const inlineMappedParameterTypes = new Set(['Omit', 'Pick']);
 const objectRuntimeDefaultNames = new Set([
-  "document",
-  "globalThis",
-  "navigator",
-  "window",
+  'document',
+  'globalThis',
+  'navigator',
+  'window',
 ]);
 const scalarTypeBoundaryTypes = new Set([
-  "TSIndexedAccessType",
-  "TSTypeOperator",
+  'TSIndexedAccessType',
+  'TSTypeOperator',
 ]);
 
 const ParameterBindingLookupKind = Object.freeze({
-  Found: "found",
-  NotFound: "not-found",
+  Found: 'found',
+  NotFound: 'not-found',
 });
 const TypeDeclarationLookupKind = Object.freeze({
-  Found: "found",
-  NotFound: "not-found",
+  Found: 'found',
+  NotFound: 'not-found',
 });
 
 const genericParameterContractNames = new Set([
-  "Args",
-  "Arguments",
-  "CallbackArgs",
-  "Candidate",
-  "CandidateArgs",
-  "Config",
-  "Configuration",
-  "Context",
-  "Data",
-  "FunctionArgs",
-  "Input",
-  "Inputs",
-  "Item",
-  "Items",
-  "MethodArgs",
-  "Object",
-  "Options",
-  "Parameters",
-  "Params",
-  "Payload",
-  "Query",
-  "QueryArgs",
-  "Record",
-  "Request",
-  "Response",
-  "RespondArgs",
-  "Result",
-  "SetStatusArgs",
-  "State",
-  "TArgs",
-  "Value",
-  "Values",
-  "CreateButtonArgs",
-  "LookupArgs",
-  "PadArgs",
+  'Args',
+  'Arguments',
+  'CallbackArgs',
+  'Candidate',
+  'CandidateArgs',
+  'Config',
+  'Configuration',
+  'Context',
+  'Data',
+  'FunctionArgs',
+  'Input',
+  'Inputs',
+  'Item',
+  'Items',
+  'MethodArgs',
+  'Object',
+  'Options',
+  'Parameters',
+  'Params',
+  'Payload',
+  'Query',
+  'QueryArgs',
+  'Record',
+  'Request',
+  'Response',
+  'RespondArgs',
+  'Result',
+  'SetStatusArgs',
+  'State',
+  'TArgs',
+  'Value',
+  'Values',
+  'CreateButtonArgs',
+  'LookupArgs',
+  'PadArgs',
 ]);
 
 const genericParameterOperationName =
@@ -97,23 +97,23 @@ function rawObjectExpressions(expression) {
   while (transparentTypeScriptWrappers.has(current.type)) {
     current = current.expression;
   }
-  if (current.type === "ObjectExpression") return [current];
-  if (current.type === "AssignmentExpression") {
+  if (current.type === 'ObjectExpression') return [current];
+  if (current.type === 'AssignmentExpression') {
     return rawObjectExpressions(current.right);
   }
-  if (current.type === "ConditionalExpression") {
+  if (current.type === 'ConditionalExpression') {
     return [
       ...rawObjectExpressions(current.consequent),
       ...rawObjectExpressions(current.alternate),
     ];
   }
-  if (current.type === "LogicalExpression") {
+  if (current.type === 'LogicalExpression') {
     return [
       ...rawObjectExpressions(current.left),
       ...rawObjectExpressions(current.right),
     ];
   }
-  if (current.type === "SequenceExpression") {
+  if (current.type === 'SequenceExpression') {
     return rawObjectExpressions(current.expressions.at(-1));
   }
   return [];
@@ -124,7 +124,7 @@ function parameterDefaultObjectExpressions(expression) {
   while (transparentTypeScriptWrappers.has(current.type)) {
     current = current.expression;
   }
-  if (current.type === "ArrayExpression" || current.type === "NewExpression") {
+  if (current.type === 'ArrayExpression' || current.type === 'NewExpression') {
     return [current];
   }
   return rawObjectExpressions(current);
@@ -132,17 +132,17 @@ function parameterDefaultObjectExpressions(expression) {
 
 export const noRawObjectArguments = {
   meta: {
-    type: "problem",
+    type: 'problem',
     schema: [],
     messages: {
       namedArgument:
-        "Loom forbids raw object-literal call and constructor arguments. Assign a named typed value first, then pass that name.",
+        'Loom forbids raw object-literal call and constructor arguments. Assign a named typed value first, then pass that name.',
       namedParameterType:
-        "Loom forbids inline object types in function and method parameters. Declare and reuse a named semantic type, interface, or Rust-generated type.",
+        'Loom forbids inline object types in function and method parameters. Declare and reuse a named semantic type, interface, or Rust-generated type.',
       namedParameterDefault:
-        "Loom forbids object-valued parameter defaults. Apply defaults at the call site or inside the function body.",
+        'Loom forbids object-valued parameter defaults. Apply defaults at the call site or inside the function body.',
       semanticParameterType:
-        "Loom forbids generic parameter contract names. Name the type or interface after its domain value or request.",
+        'Loom forbids generic parameter contract names. Name the type or interface after its domain value or request.',
     },
   },
   create(context) {
@@ -154,7 +154,7 @@ export const noRawObjectArguments = {
       while (transparentTypeScriptWrappers.has(current.type)) {
         current = current.expression;
       }
-      if (current.type === "Identifier") {
+      if (current.type === 'Identifier') {
         let scope = sourceCode.getScope(current);
         while (scope) {
           const variable = scope.set.get(current.name);
@@ -162,8 +162,8 @@ export const noRawObjectArguments = {
             if (seenVariables.has(variable)) return [];
             const definition = variable.defs.find(
               (candidate) =>
-                candidate.type === "Variable" &&
-                candidate.node.type === "VariableDeclarator" &&
+                candidate.type === 'Variable' &&
+                candidate.node.type === 'VariableDeclarator' &&
                 candidate.node.init,
             );
             if (!definition || definition.name.typeAnnotation) return [];
@@ -192,14 +192,14 @@ export const noRawObjectArguments = {
         }
         return [];
       }
-      if (current.type === "AssignmentExpression") {
+      if (current.type === 'AssignmentExpression') {
         return spreadObjectExpressions({
           activeCall,
           expression: current.right,
           seenVariables,
         });
       }
-      if (current.type === "ConditionalExpression") {
+      if (current.type === 'ConditionalExpression') {
         return [current.consequent, current.alternate].flatMap((branch) =>
           spreadObjectExpressions({
             activeCall,
@@ -208,7 +208,7 @@ export const noRawObjectArguments = {
           }),
         );
       }
-      if (current.type === "LogicalExpression") {
+      if (current.type === 'LogicalExpression') {
         return [current.left, current.right].flatMap((branch) =>
           spreadObjectExpressions({
             activeCall,
@@ -217,17 +217,17 @@ export const noRawObjectArguments = {
           }),
         );
       }
-      if (current.type === "SequenceExpression") {
+      if (current.type === 'SequenceExpression') {
         return spreadObjectExpressions({
           activeCall,
           expression: current.expressions.at(-1),
           seenVariables,
         });
       }
-      if (current.type !== "ArrayExpression") return [];
+      if (current.type !== 'ArrayExpression') return [];
       return current.elements.flatMap((element) => {
         if (!element) return [];
-        return element.type === "SpreadElement"
+        return element.type === 'SpreadElement'
           ? spreadObjectExpressions({
               activeCall,
               expression: element.argument,
@@ -239,7 +239,7 @@ export const noRawObjectArguments = {
 
     function inspectArguments(node) {
       for (const argument of node.arguments) {
-        if (argument.type === "SpreadElement") {
+        if (argument.type === 'SpreadElement') {
           const spreadArgs = {
             activeCall: node,
             expression: argument.argument,
@@ -248,7 +248,7 @@ export const noRawObjectArguments = {
           for (const objectExpression of spreadObjectExpressions(spreadArgs)) {
             context.report({
               node: objectExpression,
-              messageId: "namedArgument",
+              messageId: 'namedArgument',
             });
           }
           continue;
@@ -256,7 +256,7 @@ export const noRawObjectArguments = {
         for (const objectExpression of rawObjectExpressions(argument)) {
           context.report({
             node: objectExpression,
-            messageId: "namedArgument",
+            messageId: 'namedArgument',
           });
         }
       }
@@ -265,9 +265,9 @@ export const noRawObjectArguments = {
       let current = annotation.parent;
       while (
         current?.parent &&
-        (current.parent.type === "AssignmentPattern" ||
-          current.parent.type === "RestElement" ||
-          current.parent.type === "TSParameterProperty")
+        (current.parent.type === 'AssignmentPattern' ||
+          current.parent.type === 'RestElement' ||
+          current.parent.type === 'TSParameterProperty')
       ) {
         current = current.parent;
       }
@@ -279,12 +279,12 @@ export const noRawObjectArguments = {
     function referencedTypeIsParameterContract(node) {
       let current = node;
       while (current.parent) {
-        if (current.parent.type === "TSTypeAnnotation") {
+        if (current.parent.type === 'TSTypeAnnotation') {
           return parameterOwnsTypeAnnotation(current.parent);
         }
         if (
-          current.parent.type === "TSTypeParameterInstantiation" &&
-          current.parent.parent?.type === "TSTypeReference" &&
+          current.parent.type === 'TSTypeParameterInstantiation' &&
+          current.parent.parent?.type === 'TSTypeReference' &&
           current.parent.params.includes(current) &&
           transparentParameterContractWrappers.has(
             referencedTypeName(current.parent.parent.typeName),
@@ -294,8 +294,8 @@ export const noRawObjectArguments = {
           continue;
         }
         if (
-          (current.parent.type === "TSIntersectionType" ||
-            current.parent.type === "TSUnionType") &&
+          (current.parent.type === 'TSIntersectionType' ||
+            current.parent.type === 'TSUnionType') &&
           current.parent.types.includes(current)
         ) {
           current = current.parent;
@@ -307,13 +307,13 @@ export const noRawObjectArguments = {
     }
     function referencedTypeName(typeName) {
       let current = typeName;
-      while (current.type === "TSQualifiedName") {
+      while (current.type === 'TSQualifiedName') {
         current = current.right;
       }
-      return current.type === "Identifier" ? current.name : "";
+      return current.type === 'Identifier' ? current.name : '';
     }
     function referencedTypeNameParts(typeName) {
-      if (typeName.type === "Identifier") return [typeName.name];
+      if (typeName.type === 'Identifier') return [typeName.name];
       return [
         ...referencedTypeNameParts(typeName.left),
         ...referencedTypeNameParts(typeName.right),
@@ -323,17 +323,17 @@ export const noRawObjectArguments = {
       const [name, ...remaining] = nameParts;
       const declaration = statements
         .map((statement) =>
-          statement.type === "ExportNamedDeclaration" && statement.declaration
+          statement.type === 'ExportNamedDeclaration' && statement.declaration
             ? statement.declaration
             : statement,
         )
         .find(
           (statement) =>
-            (statement.type === "TSTypeAliasDeclaration" ||
-              statement.type === "TSInterfaceDeclaration" ||
-              statement.type === "TSEnumDeclaration" ||
-              statement.type === "TSModuleDeclaration") &&
-            statement.id.type === "Identifier" &&
+            (statement.type === 'TSTypeAliasDeclaration' ||
+              statement.type === 'TSInterfaceDeclaration' ||
+              statement.type === 'TSEnumDeclaration' ||
+              statement.type === 'TSModuleDeclaration') &&
+            statement.id.type === 'Identifier' &&
             statement.id.name === name,
         );
       if (!declaration) return { kind: TypeDeclarationLookupKind.NotFound };
@@ -341,8 +341,8 @@ export const noRawObjectArguments = {
         return { kind: TypeDeclarationLookupKind.Found, declaration };
       }
       if (
-        declaration.type !== "TSModuleDeclaration" ||
-        declaration.body?.type !== "TSModuleBlock"
+        declaration.type !== 'TSModuleDeclaration' ||
+        declaration.body?.type !== 'TSModuleBlock'
       ) {
         return { kind: TypeDeclarationLookupKind.NotFound };
       }
@@ -362,22 +362,22 @@ export const noRawObjectArguments = {
     }
     function typeAnnotationIsObjectShaped(node, seenNames = new Set()) {
       if (
-        node.type === "TSTypeLiteral" ||
-        node.type === "TSMappedType" ||
-        node.type === "TSArrayType" ||
-        node.type === "TSTupleType"
+        node.type === 'TSTypeLiteral' ||
+        node.type === 'TSMappedType' ||
+        node.type === 'TSArrayType' ||
+        node.type === 'TSTupleType'
       ) {
         return true;
       }
-      if (node.type === "TSParenthesizedType") {
+      if (node.type === 'TSParenthesizedType') {
         return typeAnnotationIsObjectShaped(node.typeAnnotation, seenNames);
       }
-      if (node.type === "TSUnionType" || node.type === "TSIntersectionType") {
+      if (node.type === 'TSUnionType' || node.type === 'TSIntersectionType') {
         return node.types.some((candidate) =>
           typeAnnotationIsObjectShaped(candidate, seenNames),
         );
       }
-      if (node.type !== "TSTypeReference") return false;
+      if (node.type !== 'TSTypeReference') return false;
       const name = referencedTypeName(node.typeName);
       if (
         inlineCollectionParameterTypes.has(name) ||
@@ -395,23 +395,23 @@ export const noRawObjectArguments = {
       );
     }
     function typeDeclarationIsObjectShaped(declaration, seenNames) {
-      if (declaration.type === "TSInterfaceDeclaration") return true;
-      if (declaration.type !== "TSTypeAliasDeclaration") return false;
+      if (declaration.type === 'TSInterfaceDeclaration') return true;
+      if (declaration.type !== 'TSTypeAliasDeclaration') return false;
       return typeAnnotationIsObjectShaped(
         declaration.typeAnnotation,
         seenNames,
       );
     }
     function typeQueryIsObjectShaped(node) {
-      if (node.exprName.type !== "Identifier") return false;
+      if (node.exprName.type !== 'Identifier') return false;
       let scope = sourceCode.getScope(node.exprName);
       while (scope) {
         const variable = scope.set.get(node.exprName.name);
         if (variable) {
           const definition = variable.defs.find(
             (candidate) =>
-              candidate.type === "Variable" &&
-              candidate.node.type === "VariableDeclarator",
+              candidate.type === 'Variable' &&
+              candidate.node.type === 'VariableDeclarator',
           );
           if (!definition) return false;
           if (
@@ -433,13 +433,13 @@ export const noRawObjectArguments = {
     }
     function inspectInlineParameterType(node) {
       let current = node.parent;
-      while (current && current.type !== "TSTypeAnnotation") {
-        if (current.type === "TSFunctionType") return;
+      while (current && current.type !== 'TSTypeAnnotation') {
+        if (current.type === 'TSFunctionType') return;
         if (scalarTypeBoundaryTypes.has(current.type)) return;
         current = current.parent;
       }
       if (current && parameterOwnsTypeAnnotation(current)) {
-        context.report({ node, messageId: "namedParameterType" });
+        context.report({ node, messageId: 'namedParameterType' });
       }
     }
     function inspectReferencedParameterType(node) {
@@ -450,7 +450,7 @@ export const noRawObjectArguments = {
           inlineMappedParameterTypes.has(name)) &&
         referencedTypeIsParameterContract(node)
       ) {
-        context.report({ node, messageId: "namedParameterType" });
+        context.report({ node, messageId: 'namedParameterType' });
         return;
       }
       if (!isGenericParameterContractName(name)) {
@@ -462,7 +462,7 @@ export const noRawObjectArguments = {
         lookup.kind === TypeDeclarationLookupKind.NotFound ||
         typeDeclarationIsObjectShaped(lookup.declaration, new Set())
       ) {
-        context.report({ node, messageId: "semanticParameterType" });
+        context.report({ node, messageId: 'semanticParameterType' });
       }
     }
     function inspectTypeQueryParameter(node) {
@@ -470,25 +470,25 @@ export const noRawObjectArguments = {
         referencedTypeIsParameterContract(node) &&
         typeQueryIsObjectShaped(node)
       ) {
-        context.report({ node, messageId: "namedParameterType" });
+        context.report({ node, messageId: 'namedParameterType' });
       }
     }
     function inspectImportTypeParameter(node) {
       if (!node.qualifier || !referencedTypeIsParameterContract(node)) return;
       const name = referencedTypeName(node.qualifier);
       if (isGenericParameterContractName(name)) {
-        context.report({ node, messageId: "semanticParameterType" });
+        context.report({ node, messageId: 'semanticParameterType' });
       }
     }
     function enclosingParameterBinding(node) {
       let current = node;
       const bindingContainers = new Set([
-        "ArrayPattern",
-        "AssignmentPattern",
-        "ObjectPattern",
-        "Property",
-        "RestElement",
-        "TSParameterProperty",
+        'ArrayPattern',
+        'AssignmentPattern',
+        'ObjectPattern',
+        'Property',
+        'RestElement',
+        'TSParameterProperty',
       ]);
       while (current.parent) {
         if (
@@ -517,7 +517,7 @@ export const noRawObjectArguments = {
         while (transparentTypeScriptWrappers.has(current.type)) {
           current = current.expression;
         }
-        if (current.type === "Identifier") {
+        if (current.type === 'Identifier') {
           let scope = sourceCode.getScope(current);
           while (scope) {
             const variable = scope.set.get(current.name);
@@ -525,8 +525,8 @@ export const noRawObjectArguments = {
               if (seenVariables.has(variable)) return [];
               const definition = variable.defs.find(
                 (candidate) =>
-                  candidate.type === "Variable" &&
-                  candidate.node.type === "VariableDeclarator",
+                  candidate.type === 'Variable' &&
+                  candidate.node.type === 'VariableDeclarator',
               );
               if (!definition) return [];
               if (
@@ -547,28 +547,28 @@ export const noRawObjectArguments = {
           return objectRuntimeDefaultNames.has(current.name) ? [current] : [];
         }
         if (
-          current.type === "CallExpression" &&
-          current.callee.type === "Identifier"
+          current.type === 'CallExpression' &&
+          current.callee.type === 'Identifier'
         ) {
           let scope = sourceCode.getScope(current.callee);
           while (scope) {
             const variable = scope.set.get(current.callee.name);
             const definition = variable?.defs.find(
               (candidate) =>
-                candidate.type === "FunctionName" ||
-                candidate.type === "Variable",
+                candidate.type === 'FunctionName' ||
+                candidate.type === 'Variable',
             );
             const functionDeclarationReturnsObject =
-              definition?.type === "FunctionName" &&
+              definition?.type === 'FunctionName' &&
               definition.node.returnType &&
               typeAnnotationIsObjectShaped(
                 definition.node.returnType.typeAnnotation,
               );
             const functionExpressionReturnsObject =
-              definition?.node.type === "VariableDeclarator" &&
+              definition?.node.type === 'VariableDeclarator' &&
               definition.node.init &&
-              (definition.node.init.type === "ArrowFunctionExpression" ||
-                definition.node.init.type === "FunctionExpression") &&
+              (definition.node.init.type === 'ArrowFunctionExpression' ||
+                definition.node.init.type === 'FunctionExpression') &&
               definition.node.init.returnType &&
               typeAnnotationIsObjectShaped(
                 definition.node.init.returnType.typeAnnotation,
@@ -585,10 +585,10 @@ export const noRawObjectArguments = {
           return [current];
         }
         if (
-          current.type === "MemberExpression" &&
+          current.type === 'MemberExpression' &&
           !current.computed &&
-          current.object.type === "Identifier" &&
-          current.property.type === "Identifier"
+          current.object.type === 'Identifier' &&
+          current.property.type === 'Identifier'
         ) {
           if (objectRuntimeDefaultNames.has(current.object.name)) {
             return [current];
@@ -599,18 +599,18 @@ export const noRawObjectArguments = {
             if (variable) {
               const definition = variable.defs.find(
                 (candidate) =>
-                  candidate.type === "Variable" &&
-                  candidate.node.type === "VariableDeclarator" &&
-                  candidate.node.init?.type === "ObjectExpression",
+                  candidate.type === 'Variable' &&
+                  candidate.node.type === 'VariableDeclarator' &&
+                  candidate.node.init?.type === 'ObjectExpression',
               );
               const property = definition?.node.init.properties.find(
                 (candidate) =>
-                  candidate.type === "Property" &&
+                  candidate.type === 'Property' &&
                   !candidate.computed &&
-                  candidate.key.type === "Identifier" &&
+                  candidate.key.type === 'Identifier' &&
                   candidate.key.name === current.property.name,
               );
-              return property?.type === "Property"
+              return property?.type === 'Property'
                 ? tracedDefaultObjects(property.value, seenVariables)
                 : [];
             }
@@ -627,7 +627,7 @@ export const noRawObjectArguments = {
       for (const objectExpression of objectExpressions) {
         context.report({
           node: objectExpression,
-          messageId: "namedParameterDefault",
+          messageId: 'namedParameterDefault',
         });
       }
     }

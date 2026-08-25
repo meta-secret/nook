@@ -9,15 +9,17 @@ cargo fmt --manifest-path "$repo_root/nook-app/nook-platform/Cargo.toml" --all
 cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"
 cargo fmt --manifest-path "$repo_root/agentic-ai/minds/Cargo.toml" --all
 
-mapfile -t changed_files </tmp/nook-format-files
-
 web_app_files=()
 extension_files=()
 research_files=()
 hive_console_files=()
 loom_files=()
 executable_skill_files=()
-for path in "${changed_files[@]}"; do
+shared_tooling_files=()
+while IFS= read -r -d '' path; do
+  if [[ ! -f "$repo_root/$path" || -L "$repo_root/$path" ]]; then
+    continue
+  fi
   case "$path" in
     nook-app/nook-web/nook-web-app/*)
       web_app_files+=("${path#nook-app/nook-web/nook-web-app/}")
@@ -40,8 +42,11 @@ for path in "${changed_files[@]}"; do
     .agents/skills/*)
       executable_skill_files+=("${path#.agents/skills/}")
       ;;
+    tooling/eslint-rules/no-raw-object-arguments.js)
+      shared_tooling_files+=("$path")
+      ;;
   esac
-done
+done </tmp/nook-format-files
 
 format_changed_files() {
   local config="$1"
@@ -57,6 +62,7 @@ format_changed_files() {
       --plugin "$svelte_plugin" \
       --write \
       --ignore-unknown \
+      -- \
       "$@"
   )
 }
@@ -85,3 +91,7 @@ format_changed_files \
   "$default_config" \
   "$repo_root/.agents/skills" \
   "${executable_skill_files[@]}"
+format_changed_files \
+  "$default_config" \
+  "$repo_root" \
+  "${shared_tooling_files[@]}"

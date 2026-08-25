@@ -120,12 +120,38 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && !skills_format.contains("bun install"),
         "skills:format must use the shared pinned formatter without a package install"
     );
+    let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
+    assert!(
+        skills_verify.contains("deps: [skills:install]"),
+        "skills:verify must retain the executable-skill dependency install"
+    );
+    let loom_install = task_body(&taskfile, "loom:install", "loom:format");
+    assert!(
+        loom_install.contains("bun install --frozen-lockfile")
+            && !loom_install.contains("skills:install"),
+        "loom:install must install only Loom dependencies so pre-push stays detached from the skills workspace"
+    );
+    let loom_verify = task_body(&taskfile, "loom:verify", "loom:run");
+    assert!(
+        loom_verify.contains("task: skills:verify"),
+        "loom:verify must continue to opt into the complete executable-skill verification"
+    );
     let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
         pre_push.contains("deps: [loom:install]")
             && pre_push.contains("task loom:default FAMILY=prePush")
             && !pre_push.contains("skills:format"),
         "loom:pre-push must retain Loom setup while its shared formatter avoids a separate skills install"
+    );
+
+    let preflight = read(&root, "preflight/Taskfile.yml");
+    let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
+    assert!(
+        format_contract.contains("bash .github/scripts/format-host-apply.test.sh")
+            && !format_contract.contains("deps:")
+            && !format_contract.contains("install")
+            && !format_contract.contains("loom:"),
+        "the formatter contract must be a detached, install-free preflight task"
     );
 
     let skills_manifest = read(&root, ".agents/skills/package.json");
@@ -161,5 +187,29 @@ fn loom_workflow_audits_every_cortex_change() {
     assert!(
         workflow.contains("run: task loom:cortex-audit"),
         "Loom must run the mechanical Cortex audit"
+    );
+    for trigger_path in [
+        ".github/formatting/**",
+        ".github/scripts/format-host-apply.sh",
+        ".github/scripts/format-host-apply.test.sh",
+    ] {
+        assert!(
+            workflow.contains(trigger_path),
+            "repository policy must trigger for formatter authority `{trigger_path}`"
+        );
+    }
+    let format_step_start = workflow
+        .find("      - name: Enforce shared source formatter contract\n")
+        .expect("repository policy must contain the named formatter contract step");
+    let format_step = &workflow[format_step_start..];
+    let format_step_end = format_step[1..]
+        .find("\n      - name:")
+        .map_or(format_step.len(), |offset| offset + 1);
+    let format_step = &format_step[..format_step_end];
+    assert!(
+        format_step.contains("run: task preflight:format-contract")
+            && !format_step.contains("if:")
+            && !format_step.contains("install"),
+        "repository policy must always run the detached formatter contract"
     );
 }

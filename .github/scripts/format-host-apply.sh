@@ -10,8 +10,16 @@ scripts_dir="$(cd "$(dirname "$0")" && pwd)"
 repo_root="$(cd "$scripts_dir/../.." && pwd)"
 cd "$repo_root"
 
+changed_files="$(mktemp)"
+trap 'rm -f "$changed_files"' EXIT
+base_ref="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
+{
+  git diff --name-only --diff-filter=ACMR -z "$base_ref"
+  git ls-files --others --exclude-standard -z
+} >"$changed_files"
+
 if [[ "${HIVE_SEALED_GUEST:-}" == "1" ]]; then
-  task hive:guest:format
+  FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format
   git status --short --untracked-files=no
   exit 0
 fi
@@ -44,13 +52,6 @@ case "$(uname -m)" in
     ;;
 esac
 formatter_image="nook-source-formatter:${formatter_hash}-${formatter_arch}"
-changed_files="$(mktemp)"
-trap 'rm -f "$changed_files"' EXIT
-base_ref="$(git merge-base HEAD origin/main 2>/dev/null || git rev-parse HEAD)"
-{
-  git diff --name-only --diff-filter=ACMR "$base_ref"
-  git ls-files --others --exclude-standard
-} | sort -u >"$changed_files"
 
 if ! docker image inspect "$formatter_image" >/dev/null 2>&1; then
   docker build \

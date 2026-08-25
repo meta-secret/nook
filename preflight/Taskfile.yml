@@ -68,6 +68,12 @@ tasks:
         {{.PREFLIGHT_BAKE_FILES}}
         preflight-test
 
+  preflight:format-contract:
+    desc: Verify the shared source formatter and sealed changed-path contract.
+    dir: '{{.REPO_ROOT}}'
+    cmds:
+      - bash .github/scripts/format-host-apply.test.sh
+
   preflight:export:
     desc: Export the static Rust preflight reporter for downstream CI jobs.
     dir: '{{.REPO_ROOT}}'

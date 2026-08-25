@@ -10,6 +10,10 @@ formatter="$(cat "$formatter_dir/format.sh")"
 agentic_taskfile="$(cat "$scripts_dir/../../.task/agentic-ai.yml")"
 web_package="$(cat "$scripts_dir/../../nook-app/nook-web/nook-web-app/package.json")"
 loom_package="$(cat "$scripts_dir/../../agentic-ai/loom/package.json")"
+guest_changed_formatter="$(
+  printf '%s\n' "$agentic_taskfile" \
+    | sed -n '/^  hive:guest:format:changed:/,/^  hive:guest:format:/p'
+)"
 guest_formatter="$(
   printf '%s\n' "$agentic_taskfile" \
     | sed -n '/^  hive:guest:format:/,/^  hive:guest:pr:ready:/p'
@@ -31,6 +35,13 @@ printf '%s\n' "$script" | grep -q 'docker run' \
   || { echo 'format-host-apply test: expected formatter container' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q '/tmp/nook-format-files:ro' \
   || { echo 'format-host-apply test: expected bounded changed-file input' >&2; exit 1; }
+for required in \
+  'git diff --name-only --diff-filter=ACMR -z "$base_ref"' \
+  'git ls-files --others --exclude-standard -z' \
+  'FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format'; do
+  printf '%s\n' "$script" | grep -Fq "$required" \
+    || { echo "format-host-apply test: canonical changed-file selection misses $required" >&2; exit 1; }
+done
 printf '%s\n' "$script" | grep -q 'task hive:guest:format' \
   || { echo 'format-host-apply test: expected native Hive guest formatter' >&2; exit 1; }
 
@@ -61,22 +72,22 @@ printf '%s\n' "$formatter" | grep -Fq 'prettier-plugin-svelte' \
 for required in \
   '.agents/skills/*' \
   'executable_skill_files+=' \
-  '"$repo_root/.agents/skills"'; do
+  '"$repo_root/.agents/skills"' \
+  'tooling/eslint-rules/no-raw-object-arguments.js' \
+  'shared_tooling_files+=' \
+  'done </tmp/nook-format-files'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
     || { echo "format-host-apply test: missing executable-skill formatter contract: $required" >&2; exit 1; }
 done
 
 for required in \
   'nook-app/nook-web/nook-web-app/node_modules/.bin/prettier' \
-  '--config .agents/skills/.prettierrc' \
-  '".agents/skills/*/src/**/*.ts"' \
-  '".agents/skills/*/tests/**/*.ts"' \
-  '".agents/skills/*/executable-skill.json"' \
-  '".agents/skills/*/SKILL.md"' \
-  '".agents/skills/*.{ts,json,md}"' \
-  '.agents/skills/eslint.config.js' \
-  '.agents/skills/.prettierrc'; do
-  printf '%s\n' "$guest_formatter" | grep -Fq -- "$required" \
+  'done <"$FORMAT_CHANGED_FILES"' \
+  'skill_files+=("${file_name#.agents/skills/}")' \
+  'tooling/eslint-rules/no-raw-object-arguments.js' \
+  '-- "${skill_files[@]}"' \
+  '-- "${tooling_files[@]}"'; do
+  printf '%s\n' "$guest_changed_formatter" | grep -Fq -- "$required" \
     || { echo "format-host-apply test: sealed guest misses skill formatter contract: $required" >&2; exit 1; }
 done
 install_line="$(
@@ -84,20 +95,112 @@ install_line="$(
     | grep -Fn 'cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile' \
     | cut -d: -f1
 )"
-skill_format_line="$(
+skill_task_line="$(
   printf '%s\n' "$guest_formatter" \
-    | grep -Fn 'nook-app/nook-web/nook-web-app/node_modules/.bin/prettier' \
+    | grep -Fn 'task: hive:guest:format:changed' \
     | cut -d: -f1
 )"
-test -n "$install_line" && test -n "$skill_format_line" && test "$install_line" -lt "$skill_format_line" \
+test -n "$install_line" && test -n "$skill_task_line" && test "$install_line" -lt "$skill_task_line" \
   || { echo 'format-host-apply test: sealed guest must frozen-install web Prettier before skill formatting' >&2; exit 1; }
 for package in "$web_package" "$loom_package"; do
   printf '%s\n' "$package" | grep -Fq '"prettier": "3.9.6"' \
     || { echo 'format-host-apply test: skill formatter Prettier version is not pinned consistently' >&2; exit 1; }
 done
-for forbidden in 'task skills:format' 'task skills:install' '.agents/skills && bun install'; do
-  printf '%s\n' "$guest_formatter" | grep -Fq -- "$forbidden" \
+for loom_format_contract in \
+  '"format": "prettier --config .prettierrc' \
+  '"format:check": "prettier --config .prettierrc'; do
+  printf '%s\n' "$loom_package" | grep -Fq "$loom_format_contract" \
+    || { echo 'format-host-apply test: Loom tooling formatter does not use its pinned config' >&2; exit 1; }
+done
+for forbidden in 'task skills:format' 'task skills:install' '.agents/skills && bun install' '.agents/skills/*/src/**/*.ts'; do
+  printf '%s\n%s\n' "$guest_formatter" "$guest_changed_formatter" | grep -Fq -- "$forbidden" \
     && { echo "format-host-apply test: sealed guest skill formatting recurses or installs: $forbidden" >&2; exit 1; }
 done
+
+fixture_root="$(mktemp -d)"
+trap 'rm -rf "$fixture_root"' EXIT
+mkdir -p \
+  "$fixture_root/.agents/skills/demo/src" \
+  "$fixture_root/.github/scripts" \
+  "$fixture_root/.task" \
+  "$fixture_root/bin" \
+  "$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin" \
+  "$fixture_root/tooling/eslint-rules"
+cp "$scripts_dir/format-host-apply.sh" "$fixture_root/.github/scripts/format-host-apply.sh"
+cp "$scripts_dir/../../.task/agentic-ai.yml" "$fixture_root/.task/agentic-ai.yml"
+cat >"$fixture_root/bin/task" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+exec "$FORMAT_TEST_REAL_TASK" \
+  --taskfile "$PWD/.task/agentic-ai.yml" \
+  hive:guest:format:changed
+EOF
+cat >"$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+record=false
+for argument in "$@"; do
+  if [[ "$record" == true ]]; then
+    printf '%s\n' "$argument" >>"$FORMAT_TEST_LOG"
+  elif [[ "$argument" == '--' ]]; then
+    record=true
+  fi
+done
+EOF
+chmod +x \
+  "$fixture_root/bin/task" \
+  "$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier"
+printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/changed.ts"
+printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/untouched.ts"
+printf '{}\n' >"$fixture_root/.agents/skills/.prettierrc"
+printf 'baseline\n' >"$fixture_root/README.md"
+printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments.js"
+(
+  cd "$fixture_root"
+  git init -q
+  git config user.email formatter-contract@example.invalid
+  git config user.name formatter-contract
+  git add -A
+  git commit -qm baseline
+  git update-ref refs/remotes/origin/main HEAD
+  printf 'dirty\n' >.agents/skills/demo/src/changed.ts
+  printf 'staged\n' >.agents/skills/demo/src/staged.ts
+  git add .agents/skills/demo/src/staged.ts
+  printf 'export default {};\n' >.agents/skills/eslint.config.js
+  printf 'unrelated\n' >README.md
+  printf 'const changed = true;\n' >tooling/eslint-rules/no-raw-object-arguments.js
+  FORMAT_TEST_LOG="$fixture_root/format.log" \
+  FORMAT_TEST_REAL_TASK="$(command -v task)" \
+  HIVE_SEALED_GUEST=1 \
+  PATH="$fixture_root/bin:$PATH" \
+    bash .github/scripts/format-host-apply.sh >/dev/null
+)
+printf '%s\n' \
+  'demo/src/changed.ts' \
+  'demo/src/staged.ts' \
+  'eslint.config.js' \
+  'tooling/eslint-rules/no-raw-object-arguments.js' \
+  | sort >"$fixture_root/expected.log"
+sort "$fixture_root/format.log" >"$fixture_root/actual.log"
+cmp -s "$fixture_root/expected.log" "$fixture_root/actual.log" \
+  || { echo 'format-host-apply test: sealed guest changed-path selection drifted' >&2; exit 1; }
+if grep -Fq 'untouched.ts' "$fixture_root/format.log"; then
+  echo 'format-host-apply test: sealed guest formatted an untouched skill file' >&2
+  exit 1
+fi
+(
+  cd "$fixture_root"
+  rm -f format.log expected.log actual.log
+  git add -A
+  git commit -qm formatted-state
+  git update-ref refs/remotes/origin/main HEAD
+  FORMAT_TEST_LOG="$fixture_root/format.log" \
+  FORMAT_TEST_REAL_TASK="$(command -v task)" \
+  HIVE_SEALED_GUEST=1 \
+  PATH="$fixture_root/bin:$PATH" \
+    bash .github/scripts/format-host-apply.sh >/dev/null
+)
+test ! -e "$fixture_root/format.log" \
+  || { echo 'format-host-apply test: sealed guest no-op invoked Prettier' >&2; exit 1; }
 
 echo 'format-host-apply test: ok'
