@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { readdir } from "node:fs/promises";
 
 import { assertHiveRenderContract } from "./arc-hive-render-contract";
 
@@ -81,12 +82,32 @@ interface ArcValues {
   };
 }
 
+interface WorkflowJob {
+  if?: string;
+  "runs-on"?: string;
+  uses?: string;
+}
+
+interface WorkflowManifest {
+  jobs?: Record<string, WorkflowJob>;
+}
+
 const runnersSource = await read(
   "infra/k0s/manifests/arc/runner-scale-set-values.yaml",
 );
 const runners = new TextContract({
   label: "ARC runner scale set",
   source: runnersSource,
+});
+const containerRunners = new TextContract({
+  label: "ARC Kubernetes container scale set",
+  source: await read(
+    "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
+  ),
+});
+const containerHook = new TextContract({
+  label: "ARC Kubernetes container hook",
+  source: await read("infra/k0s/manifests/arc/container-hook.yaml"),
 });
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
@@ -115,6 +136,22 @@ const mainWorkflow = new TextContract({
 const prWorkflow = new TextContract({
   label: "PR workflow",
   source: await read(".github/workflows/pr.yml"),
+});
+const hiveWorkflow = new TextContract({
+  label: "Hive workflow",
+  source: await read(".github/workflows/hive.yml"),
+});
+const repositoryPolicyWorkflow = new TextContract({
+  label: "repository policy workflow",
+  source: await read(".github/workflows/repository-policy.yml"),
+});
+const webResearchWorkflow = new TextContract({
+  label: "web research workflow",
+  source: await read(".github/workflows/web-research.yml"),
+});
+const nodeSetup = new TextContract({
+  label: "ARC shell Node setup",
+  source: await read(".github/actions/nook-node-setup/action.yml"),
 });
 const webTasks = new TextContract({
   label: "web browser tasks",
@@ -201,6 +238,55 @@ runners.forbidAll([
   "DOCKER_HOST",
   "hostPath:",
 ]);
+containerRunners.requireAll([
+  "runnerScaleSetName: nook-k0s-container",
+  "maxRunners: 20",
+  "type: kubernetes-novolume",
+  "automountServiceAccountToken: true",
+  "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
+  "ACTIONS_RUNNER_KUBERNETES_NAMESPACE",
+  "value: arc-runners",
+  "ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE",
+  "/etc/nook-arc-hook/content.yaml",
+  "ghcr.io/actions/actions-runner:2.336.0@sha256:",
+]);
+containerRunners.forbidAll([
+  "privileged: true",
+  "docker:dind",
+  "dockerd",
+  "docker.sock",
+  "podman",
+  "hostPath:",
+]);
+containerHook.requireAll([
+  "apiVersion: v1",
+  "kind: PodTemplate",
+  "name: nook-arc-container-hook",
+  "automountServiceAccountToken: false",
+  'name: "$job"',
+  "nook.nokey.sh/arc-build: \"true\"",
+  "values: [primary]",
+  "values: [secondary]",
+  "values: [overflow]",
+  'cpu: "4"',
+  "memory: 6Gi",
+  "ephemeral-storage: 32Gi",
+  'drop: ["ALL"]',
+  "fsGroup: 1000",
+  "fsGroupChangePolicy: OnRootMismatch",
+  "name: fs-init",
+  "ghcr.io/actions/actions-runner:2.336.0@sha256:",
+  "mountPath: /mnt/externals",
+  "mountPath: /mnt/work",
+  "mountPath: /mnt/github",
+  "chmod -R g+rwX /mnt/work/nook",
+]);
+containerHook.forbidAll([
+  "privileged: true",
+  "docker.sock",
+  "containerd.sock",
+  "hostPath:",
+]);
 
 buildkit.requireAll([
   "name: nook-buildkit-local-retain",
@@ -273,14 +359,18 @@ tasks.requireAll([
   "arc-build-nodes",
   "expected_build_nodes",
   "usable_bytes=$((available_bytes + state_bytes + legacy_bytes))",
+  'state_bytes="${state_bytes:-0}"',
   'test "$((available_bytes + state_bytes))" -ge 68719476736',
   "- task: arc:auth:sync",
   "nook.nokey.sh/buildkit-config-sha256",
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
+  "container-runner-scale-set-values.yaml",
+  "container-hook.yaml",
+  "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
-mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
+mainWorkflow.forbid("    runs-on: ubuntu-latest");
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
@@ -292,9 +382,16 @@ mainWorkflow.requireAll([
   "extension-e2e:",
   "ui-demos:",
   "deploy:",
-  "This lane still invokes the sealed image through Docker",
-  "This lane runs a browser container and therefore needs a general runtime.",
+  "Upload verified development deployment handoff",
+  "main-web-deploy-${{ github.run_id }}",
+  "runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}",
+  "runs-on: nook-k0s-container",
+  "Publish exact-source browser job image",
+  "task _ci:main:web:e2e-only",
+  "task _extension:test:e2e",
+  "task _web:test:ui-demo",
 ]);
+mainWorkflow.forbid("Build sealed web image for development deploy");
 prWorkflow.requireAll([
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
@@ -305,7 +402,40 @@ prWorkflow.requireAll([
   "name: Full browser e2e (main fix)",
   "needs: [full-e2e-shard, wasm]",
   "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
-  "artifact-suffix: shard-${{ matrix.shard }}",
+  "Publish exact-source PR browser job image",
+  "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "runs-on: nook-k0s-container",
+  "task _ci:main:web:e2e-only",
+  "task _extension:test:e2e",
+  "task _web:test:ui-demo",
+]);
+prWorkflow.forbid("    runs-on: ubuntu-latest");
+nodeSetup.requireAll([
+  "/home/runner/externals/node24/bin/node",
+  'echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"',
+]);
+prWorkflow.require("uses: ./.github/actions/nook-node-setup");
+repositoryPolicyWorkflow.requireAll([
+  "github.event.pull_request.head.repo.full_name == github.repository",
+  "uses: ./.github/actions/nook-docker-setup",
+  "run: task preflight:test",
+]);
+hiveWorkflow.requireAll([
+  "Build Hive Control Center browser image",
+  "nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "needs: console-image",
+  "runs-on: nook-k0s-container",
+  "console-untrusted:",
+  "Validate untrusted Hive Control Center source",
+  "task hive:console:verify",
+  "without private credentials",
+]);
+hiveWorkflow.forbid("task hive:console:e2e:prepare");
+webResearchWorkflow.requireAll([
+  "Build research browser image",
+  "nook-web-research:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "needs: image",
+  "runs-on: nook-k0s-container",
 ]);
 webTasks.requireAll([
   "_web:test:e2e:run-groups:",
@@ -319,34 +449,41 @@ webDockerTasks.requireAll([
   "-e NOOK_E2E_SHARD",
 ]);
 wasmCacheProof.requireAll([
-  '--driver-opt "image=${registry_host}/moby/buildkit:buildx-stable-1"',
-  'if [ "$purpose" = "promote" ]',
-  "A repair solve must never import the ref it is replacing",
+  "Publish from the already-selected node-local rootless BuildKit shard",
+  "repair solve never imports the ref it is replacing",
   'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',
   "nook-rust-wasm-source-v2:buildcache,ignore-error=true",
   "compression=zstd,force-compression=true",
-  'builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}',
+  'builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}',
+  "verify-registry-cache-blobs.ts",
 ]);
-const cacheRoutingStart = wasmCacheProofSource.indexOf(
-  'if [ "$purpose" = "promote" ]',
+wasmCacheProof.forbidAll([
+  "--driver docker-container",
+  "docker buildx create",
+  "docker buildx rm",
+]);
+const promotionSolve = wasmCacheProofSource.slice(
+  wasmCacheProofSource.indexOf('if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]'),
+  wasmCacheProofSource.indexOf('bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"'),
 );
-const cacheRoutingEnd = wasmCacheProofSource.indexOf(
-  "command+=(builder-wasm-deps-cache-proof)",
-  cacheRoutingStart,
-);
-const cacheRouting = wasmCacheProofSource.slice(
-  cacheRoutingStart,
-  cacheRoutingEnd,
-);
-const [promotionCacheRouting = "", verificationCacheRouting = ""] =
-  cacheRouting.split("  else\n");
-if (promotionCacheRouting.includes("ref=${cache_ref}")) {
+if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {
   throw new Error("portable WASM cache promotion must not import its destination");
 }
-if (!verificationCacheRouting.includes("ref=${cache_ref}")) {
-  throw new Error("portable WASM cache verification must import the destination");
-}
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
+remoteWorkflow.requireAll([
+  "Remote / browser image",
+  "runs-on: nook-k0s-container",
+  "Run repository invariant preflight",
+  "run: task preflight",
+  "task web:e2e:kubernetes-image",
+  "Run selected task without a nested container runtime",
+  "web:build) task _web:build",
+  "task _web:test:e2e",
+  "extension:e2e) task _extension:test:e2e",
+  "check) task _check",
+  "ci:pr) task _ci:pr",
+  "ci:pr:e2e) task _ci:main",
+]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",
   "remote dispatches must permit explicitly distinct concurrent cache proofs",
@@ -359,3 +496,54 @@ workerTasks.requireAll([
 ]);
 
 await assertHiveRenderContract({ root });
+
+const hostedTrustBoundary = new Set([
+  "hive.yml#verify-fork",
+  "hive.yml#console-untrusted",
+  "web-research.yml#validate-untrusted",
+]);
+const workflowsDir = resolve(root, ".github/workflows");
+const workflowFiles = (await readdir(workflowsDir))
+  .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
+  .sort();
+const observedHostedExceptions = new Set<string>();
+
+for (const workflowFile of workflowFiles) {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(resolve(workflowsDir, workflowFile)).text(),
+  ) as WorkflowManifest;
+  for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
+    if (job.uses) continue;
+    const placement = job["runs-on"];
+    if (!placement) {
+      throw new Error(`${workflowFile}#${jobName} has no runner placement`);
+    }
+    const identity = `${workflowFile}#${jobName}`;
+    if (placement === "ubuntu-latest") {
+      if (!hostedTrustBoundary.has(identity)) {
+        throw new Error(`${identity} routes trusted work to GitHub cloud`);
+      }
+      observedHostedExceptions.add(identity);
+      const condition = job.if ?? "";
+      if (!condition.includes("head.repo.full_name") || !condition.includes("dependabot[bot]")) {
+        throw new Error(`${identity} must be restricted to forks and Dependabot`);
+      }
+      continue;
+    }
+    if (placement.includes("ubuntu-latest")) {
+      if (!placement.includes("head.repo.full_name")) {
+        throw new Error(`${identity} has an unguarded GitHub-hosted fallback`);
+      }
+      continue;
+    }
+    if (!placement.includes("nook-k0s") && !placement.includes("NOOK_RUNS_ON")) {
+      throw new Error(`${identity} is not routed through an ARC scale set`);
+    }
+  }
+}
+
+for (const exception of hostedTrustBoundary) {
+  if (!observedHostedExceptions.has(exception)) {
+    throw new Error(`stale hosted runner exception: ${exception}`);
+  }
+}

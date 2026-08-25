@@ -33,9 +33,11 @@ fn assert_workflow_runtime_contract(root: &Path) {
     let main = read(root, ".github/workflows/main.yml");
     let release = read(root, ".github/workflows/release.yml");
     let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
+    let ecosystem_entry = read(root, ".github/workflows/rust-ecosystem.yml");
     assert!(
-        pr.contains("runs-on: ubuntu-latest")
-            && release.contains("runs-on: ubuntu-latest")
+        pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
+            && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
+            && release.contains("runs-on: nook-k0s-container")
             && pr
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
@@ -43,18 +45,74 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
-                == 5,
-        "trusted PR Rust jobs must select configured ARC and preserve hosted fork and release capacity"
+                == 5
+            && ecosystem.matches("github.event_name == 'schedule'").count() == 5
+            && ecosystem
+                .matches("github.event_name == 'workflow_dispatch'")
+                .count()
+                == 5
+            && ecosystem_entry.contains("github.event_name == 'schedule'")
+            && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
+            && ecosystem_entry
+                .contains("github.event.pull_request.user.login != 'dependabot[bot]'"),
+        "trusted PR and release jobs must select ARC while forks retain hosted isolation"
     );
     assert!(
-        main.matches("runs-on: ubuntu-latest").count() == 5
+        !main.contains("runs-on: ubuntu-latest")
             && main
-                .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+                .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                 .count()
-                == 4
+                >= 5
+            && main.matches("runs-on: nook-k0s-container").count() >= 3
             && main.contains("name: Portable WASM cache publication proof")
             && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
-        "daemon-free Main jobs must use ARC while browser, deploy, and clean Zot cache-proof jobs stay hosted"
+        "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
+    );
+
+    for workflow in [
+        ".github/workflows/repository-policy.yml",
+        ".github/workflows/hive.yml",
+        ".github/workflows/web-research.yml",
+    ] {
+        let source = read(root, workflow);
+        assert!(
+            source.contains(
+                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}",
+            ) && !source.contains("isolated-cache-write: \"true\""),
+            "{workflow} must not request PR-isolated cache writes for push or input-free manual events"
+        );
+    }
+    let hive = read(root, ".github/workflows/hive.yml");
+    let research = read(root, ".github/workflows/web-research.yml");
+    let repository_policy = read(root, ".github/workflows/repository-policy.yml");
+    for (workflow, source) in [
+        ("Hive", &hive),
+        ("web research", &research),
+        ("repository policy", &repository_policy),
+    ] {
+        assert!(
+            source.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+                || source.contains("github.event.pull_request.user.login == 'dependabot[bot]'"),
+            "{workflow} must preserve the Dependabot trust boundary"
+        );
+    }
+    assert!(
+        research.contains("validate-untrusted:")
+            && research.contains("runs-on: ubuntu-latest")
+            && research.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
+            && research.contains("task web:research:verify")
+            && research.contains("without deployment credentials"),
+        "untrusted research PRs must retain secret-free hosted validation"
+    );
+    assert!(
+        hive.contains("console-untrusted:")
+            && hive.contains("name: Validate untrusted Hive Control Center source")
+            && hive.contains("runs-on: ubuntu-latest")
+            && hive.contains("github.event.pull_request.head.repo.full_name != github.repository")
+            && hive.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
+            && hive.contains("run: task hive:console:verify")
+            && hive.contains("without private credentials"),
+        "untrusted Hive console PRs must retain complete secret-free hosted validation"
     );
 }
 
@@ -62,6 +120,11 @@ fn assert_docker_setup_contract(root: &Path) {
     let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
     let pr = read(root, ".github/workflows/pr.yml");
     let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let container_values = read(
+        root,
+        "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
+    );
+    let container_hook = read(root, "infra/k0s/manifests/arc/container-hook.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
         "Preload hosted BuildKit from Zot",
@@ -96,6 +159,12 @@ fn assert_docker_setup_contract(root: &Path) {
         );
     }
     assert!(
+        container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")
+            && container_values.contains("value: \"true\"")
+            && container_hook.contains("automountServiceAccountToken: false"),
+        "container ARC must require declared job containers and withhold Kubernetes credentials from job Pods"
+    );
+    assert!(
         pr.contains("name: Publish git-scoped native BuildKit cache")
             && pr.contains("task ci:main:publish-native-cache")
             && pr.contains("GHA_CACHE_WRITE_ENABLED=\"\"")
@@ -107,14 +176,13 @@ fn assert_docker_setup_contract(root: &Path) {
     assert_eq!(
         pr.matches("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
             .count(),
-        5,
+        4,
         "every general PR cache publisher must explicitly keep ARC verification graphs local"
     );
     for local_graph_message in [
         "ARC keeps the verified native graph local; Main and sccache remain reusable",
         "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
         "ARC keeps the verified web graph local; Main remains reusable",
-        "ARC keeps the verified browser graph local; Main remains reusable",
     ] {
         assert!(
             pr.contains(local_graph_message),
@@ -176,6 +244,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "WEB_RESULT: ${{ needs.verify.result }}",
         "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
         "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
+        "UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}",
+        "Headless UI demo is not required for this untrusted source",
+        "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
         "types: [labeled]",
@@ -185,14 +256,17 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: Full browser e2e (main fix)",
         "name: Full extension e2e (main fix)",
         "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')",
-        "NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/",
+        "runs-on: nook-k0s-container",
+        "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "name: pr-wasm-${{ github.run_id }}",
-        "task ci:pr:e2e:web:artifacts",
-        "task ci:pr:e2e:extension:artifacts",
+        "task _ci:main:web:e2e-only",
+        "task _extension:test:e2e",
         "task preflight",
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
+        "task web:e2e:kubernetes-image:artifacts",
+        "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
         "name: Locate trusted native handoff",
         "name: Locate trusted WASM handoff",
         "nook-trusted-native-validation-v2-",
@@ -285,14 +359,24 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "native PR validation must use sccache, isolate BuildKit writes, and run explicit preflight only for an exact handoff"
     );
     assert!(
-        !verify_job.contains("Record headless UI demo")
-            && ui_demo_job.contains("needs: [validation-request, wasm]")
-            && ui_demo_job.contains("Enforce the UI demo contract")
-            && ui_demo_job.contains("task ci:pr:ui-demo")
-            && ui_demo_job.contains("name: pr-wasm-${{ github.run_id }}")
-            && ui_demo_job.contains("isolated-cache-write: \"true\"")
-            && ui_demo_job.contains("steps.ui-demo-contract.outputs.required == 'true'"),
-        "changed PR demos must consume the WASM handoff in a sibling job without serializing web verification"
+        verify_job.contains("id: ui-demo-contract")
+            && verify_job
+                .contains("ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}")
+            && verify_job.contains("ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}")
+            && !verify_job.contains("Record headless UI demo")
+            && ui_demo_job
+                .contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && ui_demo_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && ui_demo_job.contains("needs: [validation-request, verify]")
+            && ui_demo_job.contains("runs-on: nook-k0s-container")
+            && ui_demo_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && !ui_demo_job.contains("Enforce the UI demo contract")
+            && ui_demo_job.contains("task _web:test:ui-demo")
+            && !ui_demo_job.contains("nook-docker-setup")
+            && ui_demo_job.contains("needs.verify.outputs.ui-demo-required == 'true'")
+            && ui_demo_job.contains("needs.verify.outputs.ui-demo-specs"),
+        "the real ARC checkout must classify UI changes before changed PR demos consume the exact browser image on container ARC"
     );
     assert!(
         !pr.contains("actions/cache/"),
@@ -395,6 +479,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
             && preview_job.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
+            && preview_job.contains(
+                "Credentialed preview deployment is intentionally skipped for untrusted source"
+            )
             && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
             && !preview_job.contains("attempt $attempt/900"),
         "PR preview must deploy only after Native Rust, WASM, web verification, WASM Node tests, and the UI demo succeed"
@@ -415,30 +502,37 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let full_e2e_job = section(&pr, "  full-e2e-shard:\n", "  full-e2e:\n");
     assert!(
-        full_e2e_job.contains("needs: [wasm, wasm-node-test]")
-            && full_e2e_job.contains("Download verified WASM handoff")
-            && full_e2e_job.contains("cache-write: \"false\"")
-            && full_e2e_job.contains("main-cache-only: \"true\"")
-            && full_e2e_job.contains("task ci:pr:e2e:web:artifacts")
+        full_e2e_job.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && full_e2e_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && full_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && full_e2e_job.contains("runs-on: nook-k0s-container")
+            && full_e2e_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && full_e2e_job.contains("task _ci:main:web:e2e-only")
+            && !full_e2e_job.contains("nook-docker-setup")
             && !full_e2e_job.contains("task ci:pr:e2e\n")
             && !full_e2e_job.contains("task ci:pr:wasm"),
-        "Main-fix web e2e must consume verified WASM without rebuilding Rust"
+        "Main-fix web e2e must consume the exact browser image without rebuilding Rust"
     );
     let extension_e2e_job = pr
         .split_once("  full-extension-e2e:\n")
         .context("PR workflow must define full extension E2E")?
         .1;
     assert!(
-        extension_e2e_job.contains("needs: [wasm, wasm-node-test]")
-            && extension_e2e_job.contains("Download verified WASM handoff")
-            && extension_e2e_job.contains("cache-write: \"false\"")
-            && extension_e2e_job.contains("main-cache-only: \"true\"")
-            && extension_e2e_job.contains("task ci:pr:e2e:extension:artifacts")
+        extension_e2e_job
+            .contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && extension_e2e_job
+                .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && extension_e2e_job.contains("needs: [verify, wasm-node-test]")
+            && extension_e2e_job.contains("runs-on: nook-k0s-container")
+            && extension_e2e_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && extension_e2e_job.contains("task _extension:test:e2e")
+            && !extension_e2e_job.contains("nook-docker-setup")
             && !extension_e2e_job.contains("task ci:pr:e2e\n")
             && !extension_e2e_job.contains("task ci:pr:wasm")
-            && extension_e2e_job
-                .contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/"),
-        "Main-fix extension e2e must consume verified WASM without rebuilding Rust"
+            && !extension_e2e_job.contains("NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL"),
+        "Main-fix extension e2e must consume the exact browser image without rebuilding Rust"
     );
     assert!(
         pr.contains("name: pr-wasm-${{ github.run_id }}")
@@ -637,8 +731,13 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(
-        e2e_pr.contains("cache-write: \"false\""),
-        "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
+        e2e_pr.contains("cache-write: \"false\"")
+            && e2e_pr.contains(
+                "pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`"
+            )
+            && e2e_pr.contains("pr.user.login === 'dependabot[bot]'")
+            && e2e_pr.contains("cannot run on private ARC"),
+        "manual PR-head e2e must reject untrusted sources and must not overwrite default-branch scopes"
     );
     Ok(())
 }
@@ -691,18 +790,33 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
-    let release_tooling = release
-        .find("- name: Checkout release workflow tooling")
-        .context("release workflow must check out workflow tooling")?;
     let release_setup = release
         .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
-        .context("release workflow must configure Docker through preserved tooling")?;
+        .context("release workflow must configure BuildKit from current side-checkout tooling")?;
     assert!(
-        release_source < release_tooling && release_tooling < release_setup,
-        "release must fingerprint its requested source with preserved workflow-ref Docker tooling"
+        release_source < release_setup,
+        "release must fingerprint its requested source before connecting BuildKit"
     );
-    assert!(release.contains("ref: ${{ github.sha }}"));
-    assert!(release.contains("path: .nook/release-workflow"));
+    assert!(release.contains(
+        "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"
+    ));
+    assert!(
+        release.contains("release-sha: ${{ steps.release.outputs.sha }}")
+            && release.contains("release-version: ${{ steps.release.outputs.version }}")
+            && release.contains("ref: ${{ needs.prepare.outputs.release-sha }}")
+            && release.contains("PREPARED_RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}")
+            && release.contains("if [[ \"$sha\" != \"$PREPARED_RELEASE_SHA\" ]]")
+            && release.matches("inputs.ref || github.ref }}").count() == 1,
+        "release deployment must consume the immutable SHA prepared with its browser image"
+    );
+    assert!(
+        release.contains("path: .nook/release-workflow")
+            && release.contains(
+                "task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\""
+            )
+            && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
+        "historical release refs must use current workflow tooling against the immutable source root"
+    );
     let main = read(root, ".github/workflows/main.yml");
     for required in [
         "\n  rust:\n",
@@ -714,10 +828,14 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  deploy:\n",
         "needs: [wasm]",
         "needs: [web, web-e2e, wasm-cache-proof]",
-        "task ci:main:e2e:web:artifacts",
-        "task ci:main:e2e:extension:artifacts",
-        "task ci:main:ui-demo:artifacts",
+        "task _ci:main:web:e2e-only",
+        "task _extension:test:e2e",
+        "task _web:test:ui-demo",
+        "runs-on: nook-k0s-container",
+        "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "main-wasm-${{ github.run_id }}",
+        "task web:e2e:kubernetes-image:artifacts",
+        "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
     ] {
         assert!(
             main.contains(required),

@@ -76,6 +76,27 @@ tasks:
       - task: docker:e2e:run
         vars: { TASK: _web:test:e2e }
 
+  web:e2e:kubernetes-image:
+    desc: Build and push the exact-source browser image for an ARC Kubernetes job container.
+    deps:
+      - task: setup
+        vars:
+          SETUP_TARGET: nook-web-e2e
+          SETUP_OUTPUT: type=registry
+
+  web:e2e:kubernetes-image:artifacts:
+    desc: Build and push the browser image from the verified split-CI WASM artifact.
+    cmds:
+      - task: _buildx:healthy
+        vars:
+          BUILD_TASK: _web:e2e:kubernetes-image:artifacts:host
+
+  _web:e2e:kubernetes-image:artifacts:host:
+    cmds:
+      - task: docker:ci:web:e2e:build
+        vars:
+          E2E_OUTPUT: type=registry
+
   web:test:e2e:parallel:
     desc: Full local-provider Playwright e2e when wasm/dist is built (stable 3 workers, unstable 2).
     deps:

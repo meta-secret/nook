@@ -25,7 +25,7 @@ concurrency:
 jobs:
   verify:
     name: Enforce repository policy
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || (github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]')) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - name: Checkout
@@ -66,24 +66,58 @@ jobs:
         with:
           version: 3.52.0
 
-      - name: Install Rust
+      - name: Install Rust for repository policy
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Restore preflight Rust dependencies
+      - name: Restore hosted preflight Rust dependencies
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.full_name != github.repository ||
+          github.event.pull_request.user.login == 'dependabot[bot]')
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: pr-preflight
           workspaces: preflight -> target
 
-      - name: Enforce source limits and Rust unit-test colocation
-        if: github.event_name == 'pull_request'
+      - name: Connect private ARC BuildKit
+        if: >-
+          github.event_name == 'push' ||
+          (github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
+
+      - name: Enforce source architecture on hosted runners
+        if: >-
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.full_name != github.repository ||
+          github.event.pull_request.user.login == 'dependabot[bot]')
         run: task preflight:source-architecture
+
+      - name: Enforce repository invariants through cached BuildKit
+        if: >-
+          github.event_name == 'push' ||
+          (github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
+        run: task preflight:test
 
       - name: Install Bun
         if: steps.policy-paths.outputs.loom == 'true' || steps.policy-paths.outputs.runner_placement == 'true'
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
+      - name: Install Ruby for the legacy Hive values renderer
+        if: steps.policy-paths.outputs.runner_placement == 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
 
       - name: Enforce Actions runner placement inventory
         if: steps.policy-paths.outputs.runner_placement == 'true'
@@ -98,9 +132,17 @@ jobs:
         run: task loom:cortex-audit
 
       - name: Enforce authored TypeScript state invariants
-        if: steps.policy-paths.outputs.loom == 'true'
+        if: >-
+          steps.policy-paths.outputs.loom == 'true' &&
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.full_name != github.repository ||
+          github.event.pull_request.user.login == 'dependabot[bot]')
         run: task preflight:typescript-state
 
       - name: Enforce Loom single-parameter contract
-        if: steps.policy-paths.outputs.loom == 'true'
+        if: >-
+          steps.policy-paths.outputs.loom == 'true' &&
+          github.event_name == 'pull_request' &&
+          (github.event.pull_request.head.repo.full_name != github.repository ||
+          github.event.pull_request.user.login == 'dependabot[bot]')
         run: task preflight:loom-contracts

@@ -1,0 +1,18 @@
+name: Expose Actions Node.js runtime
+description: Put the runner-owned Actions Node.js runtime on PATH for shell steps.
+
+runs:
+  using: composite
+  steps:
+    - name: Expose Node.js
+      shell: bash
+      run: |
+        set -euo pipefail
+        if command -v node >/dev/null 2>&1; then
+          node --version
+          exit 0
+        fi
+        node_bin=/home/runner/externals/node24/bin/node
+        test -x "$node_bin"
+        echo "$(dirname "$node_bin")" >> "$GITHUB_PATH"
+        "$node_bin" --version

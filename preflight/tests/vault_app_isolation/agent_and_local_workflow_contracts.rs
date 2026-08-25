@@ -38,20 +38,17 @@ fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
 }
 
 #[test]
-fn ci_agent_docker_builds_are_not_hidden_by_image_existence() -> anyhow::Result<()> {
+fn ci_agent_runs_directly_without_a_nested_runtime() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
-    let docker_build = section(
-        &tasks,
-        "  ci-agent:docker:build:\n",
-        "  ci-agent:docker:run:\n",
-    );
+    let host_run = section(&tasks, "  ci-agent:host:run:\n", "  ci-agent:run:\n");
 
-    assert!(docker_build.contains("agentic-ai/ci-agent/src/**/*"));
-    assert!(docker_build.contains("{{.DOCKER}} build"));
     assert!(
-        !docker_build.contains("status:"),
-        "an existing image must not suppress rebuilds after ci-agent source changes"
+        host_run.contains("ci-agent:prepare")
+            && host_run.contains("node '{{.CI_AGENT_DIR}}/dist/main/main.js'")
+            && !tasks.contains("ci-agent:docker:run")
+            && !tasks.contains("/var/run/docker.sock"),
+        "CI agents must run directly on the provisioned runner without Docker runtime or socket nesting"
     );
     Ok(())
 }
@@ -134,13 +131,17 @@ fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Resu
 fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
-    let token_fallback =
-        r#"export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";"#;
+    let token_fallback = r#"${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"#;
 
     assert_eq!(
         tasks.matches(token_fallback).count(),
+        1,
+        "the shared PR audit wrapper must accept NOOK_GITHUB_PAT before consulting gh auth"
+    );
+    assert_eq!(
+        tasks.matches("task: pr:ci-agent:audit").count(),
         3,
-        "preflight, readiness, and review wrappers must accept NOOK_GITHUB_PAT before consulting gh auth"
+        "preflight, readiness, and review must use the authenticated PR audit wrapper"
     );
     Ok(())
 }

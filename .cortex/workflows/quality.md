@@ -160,14 +160,12 @@ Use this workflow for quality, CI, and deployment changes.
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
       use ARC.
-    - Main's portable WASM dependency writer/proof uses two fresh
-      GitHub-hosted builders.
+    - Main's portable WASM dependency writer/proof uses the selected
+      node-local ARC BuildKit shard and verifies the exported Zot data.
     - General ARC exposes only a Buildx client connected to the persistent
       rootless BuildKit shard on its selected node.
-    - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
-      browser, WASM, and deployment jobs use GitHub-hosted `ubuntu-latest`.
-    - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
-      instance selected with `docker buildx use` before Task runs.
+    - Fork and Dependabot PRs retain secret-free hosted checks. Trusted release,
+      browser, WASM, deployment, and agent jobs use ARC.
     - Taskfiles and Bake callers must never pass `--builder`.
     - Delivery does not depend on the daemon's default image store and never restarts Docker.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
@@ -277,12 +275,11 @@ Use this workflow for quality, CI, and deployment changes.
       Even `mode=min` can contain a result layer larger than 15 GiB.
     - ARC WASM publishers keep source state portable but never overwrite the
       portable dependency ref with worker-specific metadata.
-    - A trusted hosted builder is the sole writer of the portable WASM
-      dependency ref. A second fresh hosted builder validates cache hits.
+    - The trusted Main ARC proof job is the sole writer of the portable WASM
+      dependency ref.
     - Publishers keep configured `cache-from` on every Bake.
     - Main audits child manifest digest/size and every published blob's declared
-      size and SHA-256 by streaming the blob completely. It then verifies the WASM fingerprint from a
-      second fresh builder without hydrating its complete filesystem.
+      size and SHA-256 by streaming the blob completely.
     - One CI job writes each shared ecosystem registry ref.
     - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
       inputs only.
@@ -310,11 +307,12 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_wasm_fingerprint_closed_allowlist`
     - `theorem_wasm_and_native_publish_staging`
 
-    Runtime CACHED proof for published WASM deps remains Main
-    `verify-wasm-gha-cache.sh`. One fresh hosted builder writes the portable
-    ref, and a second fresh builder verifies the three expensive vertices.
-    Both fresh builders bootstrap the authenticated Zot-qualified BuildKit
-    image and never resolve their runtime image from Docker Hub.
+    Runtime publication proof for WASM dependencies remains Main
+    `verify-wasm-gha-cache.sh`. It publishes through the selected persistent
+    ARC BuildKit shard, then reads every exported Zot manifest and blob to
+    verify its size and SHA-256. Static preflight contracts require all three
+    expensive dependency vertices in the published target. The separate
+    Bake+Zot simulation owns clean-builder import proof.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
     It reproduces the rejected three-linked-target nightly miss.
@@ -410,7 +408,8 @@ Use this workflow for quality, CI, and deployment changes.
 
     #### PR workflow
     - Trusted same-repository PRs run native Rust on a fresh ARC Pod.
-    - Fork PR native Rust and every verified WASM producer remain GitHub-hosted.
+    - Fork and Dependabot checks remain GitHub-hosted and secret-free.
+      Trusted verified WASM producers use ARC.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
     - Main-fix PRs carrying `ci:full-e2e` feed two deterministic local-provider web shards plus an independent extension browser job.
