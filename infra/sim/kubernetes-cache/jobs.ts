@@ -132,6 +132,7 @@ function buildJobYaml(request: BuildJobRequest): string {
                 exit 1
               fi
               cat /tmp/buildctl.log
+              grep -Fq "exporting cache to registry" /tmp/buildctl.log
               grep -Eiq "denied|unauthorized|insufficient_scope|authorization failed" /tmp/buildctl.log
               echo "registry-write-denied"`
     : `          command: ["buildctl"]

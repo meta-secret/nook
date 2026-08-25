@@ -35,7 +35,6 @@ export function clusterExists(): boolean {
   const outcome = runCommand({
     label: "list k3d clusters",
     command: [K3D_BINARY, "cluster", "list", "--no-headers"],
-    allowFailure: true,
   });
   return outcome.stdout
     .split("\n")

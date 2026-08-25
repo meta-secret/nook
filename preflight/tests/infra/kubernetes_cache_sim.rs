@@ -45,6 +45,7 @@ fn kubernetes_cache_cluster_is_pinned_isolated_and_bounded() {
         "k3d version ${K3D_VERSION}",
         "refusing to replace existing k3d cluster",
         "nook-cache-proof",
+        "createCluster();\n  activeClusterCreated = true;",
     ] {
         assert!(
             proof.contains(required) || contracts.contains(required),
@@ -93,6 +94,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         "capabilities:\n              drop: [\"ALL\"]",
         "network-policy-denied",
         "registry-write-denied",
+        "grep -Fq \"exporting cache to registry\"",
         "cache-proof-execution-marker",
         "cached RUN step executed",
         "proveBuildkitShardAccess",

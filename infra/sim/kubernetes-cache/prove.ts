@@ -221,8 +221,8 @@ function runProof(): void {
   );
   const kubeconfigPath = join(activeTemporaryDirectory, "kubeconfig.yaml");
 
-  activeClusterCreated = true;
   createCluster();
+  activeClusterCreated = true;
   writeKubeconfig(kubeconfigPath);
   prepareLocalStorage();
   const deployRequest: DeployPlatformRequest = {
