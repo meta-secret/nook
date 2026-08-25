@@ -111,11 +111,18 @@ export function requireInventory(home: HomeSshDefinition): void {
 }
 
 function run(input: CommandInput): string {
-  const result = Bun.spawnSync([input.command, ...input.args], {
-    stdin: "stdin" in input ? Buffer.from(input.stdin) : null,
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const command = [input.command, ...input.args];
+  const result =
+    "stdin" in input
+      ? Bun.spawnSync(command, {
+          stdin: Buffer.from(input.stdin),
+          stdout: "pipe",
+          stderr: "pipe",
+        })
+      : Bun.spawnSync(command, {
+          stdout: "pipe",
+          stderr: "pipe",
+        });
   if (result.exitCode !== 0) {
     const detail = result.stderr.toString().trim();
     throw new Error(`${input.command} failed${detail ? `: ${detail}` : ""}`);
