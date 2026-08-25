@@ -236,6 +236,16 @@ test('does not count an invisible comment as article content', () => {
   );
 });
 
+test('does not count an empty fenced block as article content', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/empty-code.md',
+    content: '# Empty code\n\n## Empty article\n\n```text\n```\n',
+  };
+  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.EmptyArticle,
+  ]);
+});
+
 test('treats thematic breaks as invisible density-resetting separators', () => {
   const emptyArgs: MakeDocumentArgs = {
     path: '.cortex/break-only.md',

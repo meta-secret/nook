@@ -236,6 +236,7 @@ function isVisibleArticleNode(node: RootContent): boolean {
   return (
     node.type !== 'heading' &&
     node.type !== 'thematicBreak' &&
+    (node.type !== 'code' || node.value.trim().length > 0) &&
     !isTransparentArticleNode(node)
   );
 }

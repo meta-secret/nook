@@ -64,6 +64,9 @@ function blockFromNode(node: RootContent): CortexArticleBlock {
   if (node.type === 'thematicBreak') {
     return { line, type: CortexArticleBlockKind.Separator };
   }
+  if (node.type === 'code' && node.value.trim().length === 0) {
+    return { line, type: CortexArticleBlockKind.Separator };
+  }
   return { line, type: CortexArticleBlockKind.Structure };
 }
 
