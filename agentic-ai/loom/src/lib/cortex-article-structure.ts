@@ -54,7 +54,38 @@ type AuditDocumentArgs = {
 
 type AuditArticleArgs = AuditDocumentArgs & {
   readonly heading: Heading;
-  readonly sectionNodes: readonly RootContent[];
+  readonly sectionNodes: readonly SemanticRootNode[];
+};
+
+type SemanticRootNode = {
+  readonly insideHtmlContainer: boolean;
+  readonly node: RootContent;
+};
+
+type HtmlContainerStart = {
+  readonly name: string;
+  readonly nodeIndex: number;
+};
+
+type HtmlTag = {
+  readonly closing: boolean;
+  readonly name: string;
+  readonly selfClosing: boolean;
+};
+
+type HtmlToken = {
+  readonly kind: 'comment' | 'tag' | 'text';
+  readonly value: string;
+};
+
+type FindHtmlTagEndArgs = {
+  readonly start: number;
+  readonly value: string;
+};
+
+type LastHtmlContainerStartIndexArgs = {
+  readonly name: string;
+  readonly starts: readonly HtmlContainerStart[];
 };
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
@@ -163,11 +194,14 @@ function invalidLedgerMessage(args: InvalidLedgerMessageArgs): string | false {
 }
 
 function auditDocument(args: AuditDocumentArgs): void {
-  const children = args.document.root.children;
+  const children = semanticRootNodes(args.document.root.children);
   for (let index = 0; index < children.length; index += 1) {
-    const node = children[index] ?? false;
+    const semanticNode = children[index] ?? false;
+    const node = semanticNode === false ? false : semanticNode.node;
     if (
       node === false ||
+      semanticNode === false ||
+      semanticNode.insideHtmlContainer ||
       node.type !== 'heading' ||
       (node.depth !== 2 && node.depth !== 3)
     ) {
@@ -189,15 +223,21 @@ function auditDocument(args: AuditDocumentArgs): void {
 }
 
 type OwnedSectionNodesArgs = {
-  readonly children: readonly RootContent[];
+  readonly children: readonly SemanticRootNode[];
   readonly headingIndex: number;
 };
 
 function ownedSectionNodes(
   args: OwnedSectionNodesArgs,
-): readonly RootContent[] {
-  const heading = args.children[args.headingIndex] ?? false;
-  if (heading === false || heading.type !== 'heading') {
+): readonly SemanticRootNode[] {
+  const headingNode = args.children[args.headingIndex] ?? false;
+  const heading = headingNode === false ? false : headingNode.node;
+  if (
+    headingNode === false ||
+    headingNode.insideHtmlContainer ||
+    heading === false ||
+    heading.type !== 'heading'
+  ) {
     return [];
   }
   let end = args.children.length;
@@ -206,8 +246,13 @@ function ownedSectionNodes(
     index < args.children.length;
     index += 1
   ) {
-    const node = args.children[index];
-    if (node?.type === 'heading' && node.depth <= heading.depth) {
+    const semanticNode = args.children[index];
+    const node = semanticNode?.node;
+    if (
+      semanticNode?.insideHtmlContainer === false &&
+      node?.type === 'heading' &&
+      node.depth <= heading.depth
+    ) {
       end = index;
       break;
     }
@@ -232,21 +277,11 @@ function auditArticle(args: AuditArticleArgs): void {
   auditProcedure(args);
 }
 
-function isVisibleArticleNode(node: RootContent): boolean {
-  if (
-    node.type === 'blockquote' ||
-    node.type === 'list' ||
-    node.type === 'paragraph'
-  ) {
-    const inspection: VisibleSemanticContentInspection = { node };
-    return hasVisibleSemanticContent(inspection);
-  }
-  return (
-    node.type !== 'heading' &&
-    node.type !== 'thematicBreak' &&
-    (node.type !== 'code' || node.value.trim().length > 0) &&
-    !isTransparentArticleNode(node)
-  );
+function isVisibleArticleNode(semanticNode: SemanticRootNode): boolean {
+  const node = semanticNode.node;
+  if (node.type === 'heading' || isTransparentArticleNode(node)) return false;
+  const inspection: VisibleSemanticContentInspection = { node };
+  return hasVisibleSemanticContent(inspection);
 }
 
 type VisibleSemanticContentInspection = {
@@ -277,14 +312,19 @@ function hasVisibleSemanticContent(
 
 function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
   let consecutive = 0;
-  for (const node of args.sectionNodes) {
+  for (const semanticNode of args.sectionNodes) {
+    const node = semanticNode.node;
+    if (semanticNode.insideHtmlContainer) {
+      consecutive = 0;
+      continue;
+    }
     if (node.type === 'heading') {
       break;
     }
     if (isTransparentDensityNode(node)) {
       continue;
     }
-    if (node.type !== 'paragraph' || !isVisibleArticleNode(node)) {
+    if (node.type !== 'paragraph' || !isVisibleArticleNode(semanticNode)) {
       consecutive = 0;
       continue;
     }
@@ -318,19 +358,16 @@ function isCommentOnlyHtml(node: RootContent): boolean {
 }
 
 function isInvisibleHtml(node: RootContent): boolean {
-  return (
-    node.type === 'html' &&
-    /^\s*(?:(?:<!--(?:(?!-->)[\s\S])*-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
-      node.value,
-    )
-  );
+  return node.type === 'html' && !hasVisibleHtmlContent(node.value);
 }
 
 function auditProcedure(args: AuditArticleArgs): void {
   if (!PROCEDURE_HEADING.test(nodeText(args.heading))) {
     return;
   }
-  const hasOrderedList = args.sectionNodes.some((node) => {
+  const hasOrderedList = args.sectionNodes.some((semanticNode) => {
+    if (semanticNode.insideHtmlContainer) return false;
+    const node = semanticNode.node;
     if (node.type !== 'list' || node.ordered !== true) return false;
     const inspection: VisibleSemanticContentInspection = { node };
     return hasVisibleSemanticContent(inspection);
@@ -346,6 +383,184 @@ function auditProcedure(args: AuditArticleArgs): void {
     message: `Procedure-like article #${nodeText(args.heading)} must expose its action sequence as an ordered list.`,
   };
   addFinding(findingArgs);
+}
+
+function semanticRootNodes(
+  children: readonly RootContent[],
+): readonly SemanticRootNode[] {
+  const containerDepths = htmlContainerDepths(children);
+  const nodes: SemanticRootNode[] = [];
+  for (const [index, node] of children.entries()) {
+    const semanticNode: SemanticRootNode = {
+      insideHtmlContainer: (containerDepths[index] ?? 0) > 0,
+      node,
+    };
+    nodes.push(semanticNode);
+  }
+  return nodes;
+}
+
+function htmlContainerDepths(children: readonly RootContent[]): number[] {
+  const depths = children.map(() => 0);
+  const starts: HtmlContainerStart[] = [];
+  for (let nodeIndex = 0; nodeIndex < children.length; nodeIndex += 1) {
+    const node = children[nodeIndex];
+    if (node?.type !== 'html') continue;
+    for (const tag of htmlTags(node.value)) {
+      if (!tag.closing && !tag.selfClosing && !isVoidHtmlTag(tag.name)) {
+        const start: HtmlContainerStart = { name: tag.name, nodeIndex };
+        starts.push(start);
+        continue;
+      }
+      if (!tag.closing) continue;
+      const startArgs: LastHtmlContainerStartIndexArgs = {
+        name: tag.name,
+        starts,
+      };
+      const startIndex = lastHtmlContainerStartIndex(startArgs);
+      if (startIndex < 0) continue;
+      const start = starts[startIndex];
+      if (start === undefined) continue;
+      for (let index = start.nodeIndex + 1; index < nodeIndex; index += 1) {
+        depths[index] = (depths[index] ?? 0) + 1;
+      }
+      starts.splice(startIndex, 1);
+    }
+  }
+  return depths;
+}
+
+function lastHtmlContainerStartIndex(
+  args: LastHtmlContainerStartIndexArgs,
+): number {
+  for (let index = args.starts.length - 1; index >= 0; index -= 1) {
+    if (args.starts[index]?.name === args.name) return index;
+  }
+  return -1;
+}
+
+function htmlTags(value: string): readonly HtmlTag[] {
+  const tags: HtmlTag[] = [];
+  for (const token of htmlTokens(value)) {
+    if (token.kind !== 'tag') continue;
+    const parts = /^<\s*(\/?)\s*([A-Za-z][A-Za-z0-9:-]*)/u.exec(token.value);
+    const name = parts?.[2];
+    if (typeof name !== 'string') continue;
+    const tag: HtmlTag = {
+      closing: parts?.[1] === '/',
+      name: name.toLowerCase(),
+      selfClosing: /\/\s*>$/u.test(token.value),
+    };
+    tags.push(tag);
+  }
+  return tags;
+}
+
+function hasVisibleHtmlContent(value: string): boolean {
+  for (const token of htmlTokens(value)) {
+    if (token.kind === 'text' && token.value.trim().length > 0) return true;
+    if (token.kind !== 'tag') continue;
+    const tag = htmlTags(token.value)[0];
+    if (tag === undefined) return true;
+    if (!tag.closing && isVisibleHtmlElement(tag.name)) return true;
+  }
+  return false;
+}
+
+function htmlTokens(value: string): readonly HtmlToken[] {
+  const tokens: HtmlToken[] = [];
+  let cursor = 0;
+  while (cursor < value.length) {
+    if (value.startsWith('<!--', cursor)) {
+      const commentEnd = value.indexOf('-->', cursor + 4);
+      if (commentEnd < 0) {
+        const token: HtmlToken = { kind: 'text', value: value.slice(cursor) };
+        tokens.push(token);
+        break;
+      }
+      const token: HtmlToken = {
+        kind: 'comment',
+        value: value.slice(cursor, commentEnd + 3),
+      };
+      tokens.push(token);
+      cursor = commentEnd + 3;
+      continue;
+    }
+    if (value[cursor] === '<') {
+      const endArgs: FindHtmlTagEndArgs = { start: cursor, value };
+      const tagEnd = findHtmlTagEnd(endArgs);
+      if (tagEnd >= 0) {
+        const token: HtmlToken = {
+          kind: 'tag',
+          value: value.slice(cursor, tagEnd + 1),
+        };
+        tokens.push(token);
+        cursor = tagEnd + 1;
+        continue;
+      }
+    }
+    const nextTag = value.indexOf('<', cursor + 1);
+    const textEnd = nextTag < 0 ? value.length : nextTag;
+    const token: HtmlToken = {
+      kind: 'text',
+      value: value.slice(cursor, textEnd),
+    };
+    tokens.push(token);
+    cursor = textEnd;
+  }
+  return tokens;
+}
+
+function findHtmlTagEnd(args: FindHtmlTagEndArgs): number {
+  let quote = '';
+  for (let index = args.start + 1; index < args.value.length; index += 1) {
+    const character = args.value[index] ?? '';
+    if (quote.length > 0) {
+      if (character === quote) quote = '';
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      continue;
+    }
+    if (character === '>') return index;
+  }
+  return -1;
+}
+
+function isVisibleHtmlElement(name: string): boolean {
+  return [
+    'audio',
+    'canvas',
+    'embed',
+    'iframe',
+    'img',
+    'input',
+    'meter',
+    'object',
+    'progress',
+    'svg',
+    'video',
+  ].includes(name);
+}
+
+function isVoidHtmlTag(name: string): boolean {
+  return [
+    'area',
+    'base',
+    'br',
+    'col',
+    'embed',
+    'hr',
+    'img',
+    'input',
+    'link',
+    'meta',
+    'param',
+    'source',
+    'track',
+    'wbr',
+  ].includes(name);
 }
 
 function nodeText(node: RootContent): string {

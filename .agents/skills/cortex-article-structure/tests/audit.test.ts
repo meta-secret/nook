@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { auditCortexArticleStructure } from '../src/audit.ts';
 import {
+  CortexArticleBlockKind,
   CortexArticleFindingCode,
   CortexArticleContractKind,
   type AuditCortexArticleStructureRequest,
@@ -304,6 +305,70 @@ test('treats raw HTML void separators as empty but preserves visible HTML', () =
       '# HTML reset\n\n## Explanation\n\nOne.\n\nTwo.\n\nThree.\n\n<!--a--><hr><!--b-->\n\nFour.\n',
   };
   expect(audit([makeDocument(resetArgs)])).toEqual([]);
+});
+
+test('normalizes blank tables and empty HTML containers to separators', () => {
+  for (const body of [
+    '| | |\n| --- | --- |\n| | |',
+    '<div></div>',
+    '<div><section><span></span></section></div>',
+    '<div><!-- hidden --><hr><br></div>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/semantic-empty.md',
+      content: `# Semantic empty\n\n## Empty article\n\n${body}\n`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(document.blocks.at(-1)?.type).toBe(CortexArticleBlockKind.Separator);
+    expect(audit([document]).map((finding) => finding.code)).toEqual([
+      CortexArticleFindingCode.EmptyArticle,
+    ]);
+  }
+  for (const body of [
+    '| Name |\n| --- |\n| Visible |',
+    '<div><span>Visible</span></div>',
+    '<div><img src="visible.png"></div>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/semantic-visible.md',
+      content: `# Semantic visible\n\n## Visible article\n\n${body}\n`,
+    };
+    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+  }
+});
+
+test('normalizes Markdown inside matched HTML containers as structure', () => {
+  for (const container of [
+    '<div>\n\n## Example procedure\n\n1. fake\n\n</div>',
+    '<div>\n\n<section>\n\n## Example procedure\n\n1. fake\n\n</section>\n\n</div>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/html-scope.md',
+      content: `# HTML scope
+
+## Recovery procedure
+
+Explanation.
+
+${container}
+`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(
+      document.blocks.filter(
+        (block) => block.type === CortexArticleBlockKind.Heading,
+      ),
+    ).toHaveLength(2);
+    expect(
+      document.blocks.filter(
+        (block) => block.type === CortexArticleBlockKind.List,
+      ),
+    ).toEqual([]);
+    const findings = audit([document]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+    expect(findings[0]?.line).toBe(3);
+  }
 });
 
 test('audits empty, dense, and procedure articles without a document map', () => {

@@ -361,6 +361,57 @@ test('treats raw HTML void separators as empty but preserves visible HTML', () =
   expect(audit([makeDocument(resetArgs)])).toEqual([]);
 });
 
+test('recursively classifies blank tables and empty HTML containers', () => {
+  for (const body of [
+    '| | |\n| --- | --- |\n| | |',
+    '<div></div>',
+    '<div><section><span></span></section></div>',
+    '<div><!-- hidden --><hr><br></div>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/semantic-empty.md',
+      content: `# Semantic empty\n\n## Empty article\n\n${body}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((finding) => finding.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+  }
+  for (const body of [
+    '| Name |\n| --- |\n| Visible |',
+    '<div><span>Visible</span></div>',
+    '<div><img src="visible.png"></div>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/semantic-visible.md',
+      content: `# Semantic visible\n\n## Visible article\n\n${body}\n`,
+    };
+    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+  }
+});
+
+test('keeps article scope outside blank-line-terminated HTML containers', () => {
+  for (const container of [
+    '<div>\n\n## Example procedure\n\n1. fake\n\n</div>',
+    '<div>\n\n<section>\n\n## Example procedure\n\n1. fake\n\n</section>\n\n</div>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/html-scope.md',
+      content: `# HTML scope
+
+## Recovery procedure
+
+Explanation.
+
+${container}
+`,
+    };
+    const findings = audit([makeDocument(documentArgs)]);
+    expect(findings).toHaveLength(1);
+    expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+    expect(findings[0]?.line).toBe(3);
+  }
+});
+
 test('does not treat an H1 title as a substantive article', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/title-only.md',
