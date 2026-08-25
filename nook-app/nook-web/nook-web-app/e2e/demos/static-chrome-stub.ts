@@ -234,6 +234,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
+              approvalRequirement: 'explicit-user-approval',
               observationIndex: 0,
             },
           })
@@ -352,6 +353,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
+              approvalRequirement: 'explicit-user-approval',
               observationIndex: 0,
             },
           })
@@ -375,6 +377,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
+              approvalRequirement: 'explicit-user-approval',
               observationIndex: 0,
             },
           })
@@ -462,6 +465,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
+            approvalRequirement: 'explicit-user-approval',
             observationIndex: 0,
           },
         })

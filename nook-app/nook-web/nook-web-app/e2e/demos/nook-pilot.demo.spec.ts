@@ -33,6 +33,7 @@ function totpPilotStubArgs(messages: Record<string, ChromeMessage>) {
           action: authenticationWorkflow.fillTotpAction,
           currentStep: 2,
           totalSteps: 3,
+          approvalRequirement: 'explicit-user-approval',
           observationIndex: 0,
         },
       },
