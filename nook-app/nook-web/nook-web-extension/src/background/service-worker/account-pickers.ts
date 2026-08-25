@@ -96,6 +96,33 @@ export function accountPickerAuthorizationIsCurrent(
   return accountPickerAuthorizationState.isCurrent(authorizationGeneration)
 }
 
+export enum AccountPickerSurfaceKind {
+  None = 'none',
+  Tab = 'tab',
+  Window = 'window',
+}
+
+export type AccountPickerSurface =
+  | { kind: AccountPickerSurfaceKind.None }
+  | { kind: AccountPickerSurfaceKind.Tab; id: number }
+  | { kind: AccountPickerSurfaceKind.Window; id: number }
+
+export function emptyAccountPickerSurface(): AccountPickerSurface {
+  return { kind: AccountPickerSurfaceKind.None }
+}
+
+export async function closeAccountPickerSurface(
+  surface: AccountPickerSurface,
+): Promise<void> {
+  if (surface.kind === AccountPickerSurfaceKind.Window) {
+    if (chrome.windows?.remove) await chrome.windows.remove(surface.id)
+    return
+  }
+  if (surface.kind === AccountPickerSurfaceKind.Tab) {
+    await chrome.tabs.remove(surface.id)
+  }
+}
+
 export type PersistedAccountPickerCleanupPlan = {
   storageKeys: string[]
   cancellations: Array<

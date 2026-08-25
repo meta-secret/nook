@@ -7,11 +7,15 @@ import {
   WebsiteAuthenticatorResponseStatus,
 } from '../../lib/login-fill-messages'
 import {
+  AccountPickerSurfaceKind,
   AuthenticatorPickerLoadKind,
+  type AccountPickerSurface,
   accountPickerAuthorizationGeneration,
   accountPickerAuthorizationIsCurrent,
   authenticatorAccounts,
   authorizedWebsiteGrant,
+  closeAccountPickerSurface,
+  emptyAccountPickerSurface,
   isAuthenticatorPickerSender,
   loadAuthenticatorPicker,
   removeAuthenticatorPicker,
@@ -159,8 +163,7 @@ export async function openWebsiteAuthenticatorPicker({
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'authenticator-picker')
   pickerUrl.searchParams.set('request', requestId)
-  let createdWindowId: number | undefined
-  let createdTabId: number | undefined
+  let createdSurface: AccountPickerSurface = emptyAccountPickerSurface()
   try {
     if (chrome.windows?.create) {
       const nookTypedArgs0_2: Parameters<typeof chrome.windows.create>[0] = {
@@ -171,26 +174,33 @@ export async function openWebsiteAuthenticatorPicker({
         focused: true,
       }
       const createdWindow = await chrome.windows.create(nookTypedArgs0_2)
-      createdWindowId = createdWindow?.id
+      if (typeof createdWindow?.id === 'number') {
+        createdSurface = {
+          kind: AccountPickerSurfaceKind.Window,
+          id: createdWindow.id,
+        }
+      }
     } else {
       const nookTypedArgs0_3: Parameters<typeof chrome.tabs.create>[0] = {
         url: pickerUrl.toString(),
       }
       const createdTab = await chrome.tabs.create(nookTypedArgs0_3)
-      createdTabId = createdTab.id
+      if (typeof createdTab.id === 'number') {
+        createdSurface = {
+          kind: AccountPickerSurfaceKind.Tab,
+          id: createdTab.id,
+        }
+      }
     }
   } catch {
     await removeAuthenticatorPicker(requestId)
     return { ok: false, reason: 'authenticator-picker-open-failed' }
   }
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
-    const cleanup: Promise<void>[] = [removeAuthenticatorPicker(requestId)]
-    if (typeof createdWindowId === 'number' && chrome.windows?.remove) {
-      cleanup.push(chrome.windows.remove(createdWindowId))
-    }
-    if (typeof createdTabId === 'number') {
-      cleanup.push(chrome.tabs.remove(createdTabId))
-    }
+    const cleanup: Promise<void>[] = [
+      removeAuthenticatorPicker(requestId),
+      closeAccountPickerSurface(createdSurface),
+    ]
     await Promise.allSettled(cleanup)
     return {
       ok: true,
