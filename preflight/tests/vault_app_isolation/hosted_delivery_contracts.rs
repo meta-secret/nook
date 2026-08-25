@@ -252,6 +252,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "task ci:pr:rust",
         "task ci:pr:wasm",
         "task ci:pr:web",
+        "task web:e2e:kubernetes-image:artifacts",
+        "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
         "name: Locate trusted native handoff",
         "name: Locate trusted WASM handoff",
         "nook-trusted-native-validation-v2-",
@@ -809,6 +811,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "runs-on: nook-k0s-container",
         "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "main-wasm-${{ github.run_id }}",
+        "task web:e2e:kubernetes-image:artifacts",
+        "CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined",
     ] {
         assert!(
             main.contains(required),

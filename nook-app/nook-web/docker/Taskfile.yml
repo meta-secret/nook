@@ -246,6 +246,7 @@ tasks:
     deps: [registry-cache:ensure]
     vars:
       CI_ARTIFACT_DIR: '{{default (printf "%s/ci-artifacts/joined" .REPO_ROOT) .CI_ARTIFACT_DIR}}'
+      E2E_OUTPUT: '{{default "" .E2E_OUTPUT}}'
     cmds:
       - bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.test.sh"
       - >-
@@ -256,7 +257,9 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} nook-web-e2e'
+        set --;
+        if [ -n "{{.E2E_OUTPUT}}" ]; then set -- --set "nook-web-e2e.output={{.E2E_OUTPUT}}"; fi;
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:e2e:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} "$@" nook-web-e2e'
       - task: registry-cache:publish:web
 
   # Precise Bake stages. Warm parents alone before leaves so a leaf miss cannot

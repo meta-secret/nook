@@ -84,6 +84,13 @@ tasks:
           SETUP_TARGET: nook-web-e2e
           SETUP_OUTPUT: type=registry
 
+  web:e2e:kubernetes-image:artifacts:
+    desc: Build and push the browser image from the verified split-CI WASM artifact.
+    cmds:
+      - task: docker:ci:web:e2e:build
+        vars:
+          E2E_OUTPUT: type=registry
+
   web:test:e2e:parallel:
     desc: Full local-provider Playwright e2e when wasm/dist is built (stable 3 workers, unstable 2).
     deps:
