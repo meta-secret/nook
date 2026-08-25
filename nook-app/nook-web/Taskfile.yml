@@ -92,7 +92,6 @@ tasks:
           BUILD_TASK: _web:e2e:kubernetes-image:artifacts:host
 
   _web:e2e:kubernetes-image:artifacts:host:
-    internal: true
     cmds:
       - task: docker:ci:web:e2e:build
         vars:
