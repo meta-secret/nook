@@ -288,7 +288,11 @@ tasks:
         sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
-        state_bytes="$(sudo -n du -s -B1 "$state_dir" | awk '{ print $1 }')"
+        # Active BuildKit GC can remove a snapshot between du's directory scan
+        # and stat. du still prints the aggregate; do not turn that harmless
+        # race into a failed cluster convergence.
+        state_bytes="$(sudo -n du -s -B1 "$state_dir" 2>/dev/null | awk '{ print $1 }' || true)"
+        state_bytes="${state_bytes:-0}"
         legacy_bytes=0
         for legacy_path in "$legacy_image" "$legacy_image_next"; do
           if sudo -n test -e "$legacy_path"; then
@@ -324,7 +328,8 @@ tasks:
         test "$(sudo -n stat -c %u "$state_dir")" = 1000
         test "$(sudo -n stat -c %g "$state_dir")" = 1000
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
-        state_bytes="$(sudo -n du -s -B1 "$state_dir" | awk '{ print $1 }')"
+        state_bytes="$(sudo -n du -s -B1 "$state_dir" 2>/dev/null | awk '{ print $1 }' || true)"
+        state_bytes="${state_bytes:-0}"
         test "$((available_bytes + state_bytes))" -ge 68719476736
         REMOTE
         done < "$targets_file"

@@ -273,6 +273,12 @@ containerHook.requireAll([
   'drop: ["ALL"]',
   "fsGroup: 1000",
   "fsGroupChangePolicy: OnRootMismatch",
+  "name: fs-init",
+  "ghcr.io/actions/actions-runner:2.336.0@sha256:",
+  "mountPath: /mnt/externals",
+  "mountPath: /mnt/work",
+  "mountPath: /mnt/github",
+  "chmod -R g+rwX /mnt/work",
 ]);
 containerHook.forbidAll([
   "privileged: true",
@@ -352,6 +358,7 @@ tasks.requireAll([
   "arc-build-nodes",
   "expected_build_nodes",
   "usable_bytes=$((available_bytes + state_bytes + legacy_bytes))",
+  'state_bytes="${state_bytes:-0}"',
   'test "$((available_bytes + state_bytes))" -ge 68719476736',
   "- task: arc:auth:sync",
   "nook.nokey.sh/buildkit-config-sha256",
@@ -408,7 +415,7 @@ nodeSetup.requireAll([
 ]);
 prWorkflow.require("uses: ./.github/actions/nook-node-setup");
 repositoryPolicyWorkflow.requireAll([
-  "if: env.NOOK_ARC_RUNNER == '1'",
+  "github.event.pull_request.head.repo.full_name == github.repository",
   "uses: ./.github/actions/nook-docker-setup",
   "run: task preflight:test",
 ]);

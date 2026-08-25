@@ -15,6 +15,31 @@ data:
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch
+      # kubernetes-novolume creates the repository workspace as uid 1001 with
+      # mode 2755. The sealed browser image runs as root with every capability
+      # dropped, so root intentionally cannot bypass that mode. Preserve the
+      # hook's mounts and make its generated work tree group-writable instead.
+      initContainers:
+        - name: fs-init
+          image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
+          command:
+            - sh
+            - -c
+            - >-
+              mkdir -p /mnt/externals /mnt/work /mnt/github
+              && mv /home/runner/externals/* /mnt/externals/
+              && mkdir -p /mnt/work/nook/nook
+              && chmod -R g+rwX /mnt/work
+          securityContext:
+            runAsGroup: 1001
+            runAsUser: 1001
+          volumeMounts:
+            - name: externals
+              mountPath: /mnt/externals
+            - name: work
+              mountPath: /mnt/work
+            - name: github
+              mountPath: /mnt/github
       nodeSelector:
         nook.nokey.sh/arc-build: "true"
       affinity:

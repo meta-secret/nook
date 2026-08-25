@@ -65,18 +65,24 @@ jobs:
           version: 3.52.0
 
       - name: Install Rust for untrusted hosted verification
-        if: env.NOOK_ARC_RUNNER != '1'
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
         uses: dtolnay/rust-toolchain@stable
 
       - name: Restore hosted preflight Rust dependencies
-        if: env.NOOK_ARC_RUNNER != '1'
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
         uses: Swatinem/rust-cache@v2
         with:
           shared-key: pr-preflight
           workspaces: preflight -> target
 
       - name: Connect private ARC BuildKit
-        if: env.NOOK_ARC_RUNNER == '1'
+        if: >-
+          github.event_name == 'push' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         uses: ./.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
@@ -87,11 +93,15 @@ jobs:
           isolated-cache-write: "true"
 
       - name: Enforce source architecture on hosted runners
-        if: github.event_name == 'pull_request' && env.NOOK_ARC_RUNNER != '1'
+        if: >-
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
         run: task preflight:source-architecture
 
       - name: Enforce repository invariants through cached BuildKit
-        if: env.NOOK_ARC_RUNNER == '1'
+        if: >-
+          github.event_name == 'push' ||
+          github.event.pull_request.head.repo.full_name == github.repository
         run: task preflight:test
 
       - name: Install Bun
@@ -113,9 +123,15 @@ jobs:
         run: task loom:cortex-audit
 
       - name: Enforce authored TypeScript state invariants
-        if: steps.policy-paths.outputs.loom == 'true' && env.NOOK_ARC_RUNNER != '1'
+        if: >-
+          steps.policy-paths.outputs.loom == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
         run: task preflight:typescript-state
 
       - name: Enforce Loom single-parameter contract
-        if: steps.policy-paths.outputs.loom == 'true' && env.NOOK_ARC_RUNNER != '1'
+        if: >-
+          steps.policy-paths.outputs.loom == 'true' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name != github.repository
         run: task preflight:loom-contracts

@@ -313,7 +313,7 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
   assert.match(
     main,
-    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm\]\n\s+runs-on: ubuntu-latest[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
+    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm\]\n\s+runs-on: \$\{\{ vars\.NOOK_RUNS_ON \|\| 'nook-k0s' \}\}[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
   )
   assert.match(
     main,

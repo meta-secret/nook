@@ -520,7 +520,7 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - A missing exact ref falls back to the browser-image seed owned by trusted Main.
   - Neither web shard nor its join writes a low-reuse exact-head browser cache.
   - Trusted Main remains the reusable browser-image seed.
-  - The UI-demo publisher is suppressed in this mode to avoid concurrent ref writes.
+  - The UI-demo publisher consumes the exact run image without writing cache refs.
 - **Readiness requirement:**
   - Adding or removing the label retriggers PR Actions for the current head.
   - A labeled PR cannot be ready while this job is queued, failing, or cancelled.
@@ -949,8 +949,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.
 - The Remote credential can update only `nook/remote-buildcache/**`. It has read-only access to Zot's public mirror repositories, including Main's `nook/buildcache/**` path and mirrored tool images used to bootstrap hosted BuildKit.
-- Hosted same-repository pull requests use that Remote registry identity for
-  git-commit exporters under `nook/remote-buildcache/**`.
+- Same-repository Remote tasks use that registry identity for git-commit
+  exporters under `nook/remote-buildcache/**`.
 - General ARC pull requests remain registry-read-only and reuse Main plus
   SeaweedFS sccache. Hive keeps its small minimal exact-SHA handoff.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.

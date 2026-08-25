@@ -17,9 +17,9 @@ ARC runners receive no:
 - privileged context; or
 - Kata runtime.
 
-Unsupported or untrusted lanes remain on GitHub-hosted runners. Agent machines
-remain available for editing, inspection, host-applied formatting, UI demos, and
-interactive servers.
+Untrusted fork and Dependabot lanes remain on GitHub-hosted runners. Agent
+machines remain available for editing, inspection, host-applied formatting, UI
+demos, and interactive servers.
 
 ## Two remote surfaces
 
@@ -56,7 +56,7 @@ Dispatch one ARC-native Rust task:
 task remote TASK_NAME=rust:ci
 ```
 
-Reuse one hosted job for a batch:
+Reuse one ARC job for a batch:
 
 ```bash
 task remote TASK_NAMES=rust:test,web:check,web:test
@@ -67,9 +67,10 @@ Routing rules:
 - Single `preflight`, `rust:ci`, and `arc:runtime` selections may use
   `NOOK_RUNS_ON=nook-k0s`.
 - Trusted `hive:verify` uses `NOOK_HIVE_RUNS_ON=nook-k0s-hive`.
-- Mixed batches and unsupported selections use `ubuntu-latest`.
+- Batches containing `hive:verify` use `nook-k0s-hive`.
+- Other mixed batches use the general `nook-k0s` scale set.
 - Fork and Dependabot jobs stay hosted and secret-free.
-- The Hive Control Center browser job stays hosted.
+- Browser jobs use ordinary Pods on `nook-k0s-container`.
 
 Batch rules:
 

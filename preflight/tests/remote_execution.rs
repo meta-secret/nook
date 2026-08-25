@@ -361,7 +361,7 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
 }
 
 #[test]
-fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
+fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
     let batch_script = read(".github/scripts/remote-task-batch.sh");
@@ -376,20 +376,20 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
 
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
-        1,
-        "the internal cache promoter must stay on GitHub-hosted capacity"
+        0,
+        "trusted remote execution must not consume GitHub-hosted capacity"
     );
     assert!(
-        workflow.contains("inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')")
-            && workflow.contains("inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest')")
-            && workflow.contains(
-                "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
-            )
-            && workflow.contains(
-                "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime')"
-            ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
-            && workflow.contains("|| 'ubuntu-latest')) }}"),
-        "explicit ARC labels must select their matching scale sets; default Hive and focused general tasks must retain their routed fallbacks"
+        workflow.contains("inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')")
+            && workflow.contains("vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive'")
+            && workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'")
+            && workflow.contains("runs-on: nook-k0s-container"),
+        "remote tasks must select the general, Hive, or container ARC scale set"
+    );
+    assert!(
+        !workflow.contains("Start hosted Hive Neo4j service")
+            && !workflow.contains("docker run --detach"),
+        "ARC remote tasks must use the Hive scale set sidecar instead of a nested daemon"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")
@@ -744,10 +744,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         full_e2e.contains(full_e2e_label) && full_extension_e2e.contains(full_e2e_label),
         "a persistent Main-fix label must keep both full e2e jobs active"
     );
-    assert!(
-        ui_demo.contains(&format!("!{full_e2e_label}")),
-        "the UI demo publisher must yield exact-head cache ownership to full e2e"
-    );
+    assert!(ui_demo.contains("runs-on: nook-k0s-container"));
     for required in [
         "E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts",
         "name: Preserve Playwright diagnostics",

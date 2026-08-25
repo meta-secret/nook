@@ -59,7 +59,7 @@ jobs:
       (inputs.tasks || inputs.task) != 'web:e2e'
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
-    runs-on: ${{ inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
+    runs-on: ${{ (inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')) && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
@@ -107,17 +107,6 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
-      - name: Start hosted Hive Neo4j service
-        if: >-
-          env.REQUEST_INCLUDES_HIVE == 'true' &&
-          ((inputs.tasks || inputs.task) != 'hive:verify' ||
-          (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') != 'nook-k0s-hive')
-        run: >-
-          docker run --detach --rm --name nook-hive-neo4j
-          --env NEO4J_AUTH=neo4j/hive-integration-password
-          --publish 127.0.0.1:7474:7474
-          --publish 7687:7687
-          registry.dev.nokey.sh/library/neo4j:2026.06.0-community@sha256:ba2b859bdbe7017a9baa1a7b5681ac9732198753719b0a502e3645feddfdec72
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh
@@ -134,13 +123,6 @@ jobs:
           path: ${{ runner.temp }}/nook-e2e-artifacts
           if-no-files-found: warn
           retention-days: 15
-      - name: Stop hosted Hive Neo4j service
-        if: >-
-          always() && env.REQUEST_INCLUDES_HIVE == 'true' &&
-          ((inputs.tasks || inputs.task) != 'hive:verify' ||
-          (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') != 'nook-k0s-hive')
-        run: docker rm --force nook-hive-neo4j
-
   web-e2e-image:
     if: (inputs.tasks || inputs.task) == 'web:e2e' || (inputs.tasks || inputs.task) == 'extension:e2e'
     name: Remote / browser image
