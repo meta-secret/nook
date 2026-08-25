@@ -15,7 +15,7 @@ RUN rustup component add rustfmt
 WORKDIR /opt/nook-formatter
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --ignore-scripts
-COPY prettier-default.json prettier-web.json ./
+COPY prettier-default.json prettier-shared-typescript.json prettier-web.json ./
 COPY format.sh /usr/local/bin/nook-format
 RUN chmod 0755 /usr/local/bin/nook-format
 

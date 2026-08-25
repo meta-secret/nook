@@ -237,6 +237,30 @@ where
     idb_update_string_with_fallback(key, None, guard, |_| true, update).await
 }
 
+async fn guarded_keyring_entry(
+    store: &rexie::Store,
+    guard: StringUpdateGuard<'_>,
+) -> Result<(Option<nook_core::LocalIdentityKeyringEntry>, bool), NookError> {
+    match guard {
+        StringUpdateGuard::WrappedCredentialFingerprint(_) => Ok((
+            crate::storage::identity_record::selected_local_keyring_entry_for_store(store).await?,
+            true,
+        )),
+        StringUpdateGuard::AppWrappedCredentialFingerprint { app_id, .. } => {
+            let app_id = nook_core::AppId::parse(app_id)
+                .map_err(|error| NookError::Database(error.to_string()))?;
+            Ok((
+                crate::storage::identity_record::local_keyring_entry_for_app_id_from_store(
+                    store, &app_id,
+                )
+                .await?,
+                false,
+            ))
+        }
+        StringUpdateGuard::Unconditional => Ok((None, false)),
+    }
+}
+
 pub(super) async fn idb_update_string_with_fallback<F, P>(
     key: &str,
     fallback_key: Option<&str>,
@@ -260,24 +284,7 @@ where
     let store = transaction.store("vault").map_err(|error| {
         NookError::IndexedDb(format!("Atomic string update store error: {error:?}"))
     })?;
-    let (guarded_entry, allow_legacy_guard) = match guard {
-        StringUpdateGuard::WrappedCredentialFingerprint(_) => (
-            crate::storage::identity_record::selected_local_keyring_entry_for_store(&store).await?,
-            true,
-        ),
-        StringUpdateGuard::AppWrappedCredentialFingerprint { app_id, .. } => {
-            let app_id = nook_core::AppId::parse(app_id)
-                .map_err(|error| NookError::Database(error.to_string()))?;
-            (
-                crate::storage::identity_record::local_keyring_entry_for_app_id_from_store(
-                    &store, &app_id,
-                )
-                .await?,
-                false,
-            )
-        }
-        StringUpdateGuard::Unconditional => (None, false),
-    };
+    let (guarded_entry, allow_legacy_guard) = guarded_keyring_entry(&store, guard).await?;
     let expected_fingerprint = match guard {
         StringUpdateGuard::WrappedCredentialFingerprint(expected)
         | StringUpdateGuard::AppWrappedCredentialFingerprint { expected, .. } => Some(expected),

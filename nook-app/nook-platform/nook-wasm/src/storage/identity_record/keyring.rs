@@ -16,18 +16,15 @@ pub(crate) struct ProtectedLocalIdentitySave {
     pub(crate) signing_seed: String,
 }
 
-fn key_value(key: &str, context: &str) -> Result<wasm_bindgen::JsValue, NookError> {
-    serde_wasm_bindgen::to_value(key)
-        .map_err(|error| NookError::IndexedDb(format!("{context} key error: {error:?}")))
-}
-
 async fn read_string(
     store: &rexie::Store,
     key: &str,
     context: &str,
 ) -> Result<Option<String>, NookError> {
+    let key = serde_wasm_bindgen::to_value(key)
+        .map_err(|error| NookError::IndexedDb(format!("{context} key error: {error:?}")))?;
     let value = store
-        .get(key_value(key, context)?)
+        .get(key)
         .await
         .map_err(|error| NookError::IndexedDb(format!("{context} read error: {error:?}")))?;
     value
@@ -38,8 +35,10 @@ async fn read_string(
 }
 
 async fn delete_key(store: &rexie::Store, key: &str, context: &str) -> Result<(), NookError> {
+    let key = serde_wasm_bindgen::to_value(key)
+        .map_err(|error| NookError::IndexedDb(format!("{context} key error: {error:?}")))?;
     store
-        .delete(key_value(key, context)?)
+        .delete(key)
         .await
         .map_err(|error| NookError::IndexedDb(format!("{context} delete error: {error:?}")))
 }
@@ -101,7 +100,9 @@ pub(super) async fn write_keyring(
     let value = serde_wasm_bindgen::to_value(&encoded).map_err(|error| {
         NookError::IndexedDb(format!("Local identity keyring value error: {error:?}"))
     })?;
-    let key = key_value(LOCAL_IDENTITY_KEYRING_KEY, "Local identity keyring")?;
+    let key = serde_wasm_bindgen::to_value(LOCAL_IDENTITY_KEYRING_KEY).map_err(|error| {
+        NookError::IndexedDb(format!("Local identity keyring key error: {error:?}"))
+    })?;
     store.put(&value, Some(&key)).await.map_err(|error| {
         NookError::IndexedDb(format!("Local identity keyring write error: {error:?}"))
     })?;

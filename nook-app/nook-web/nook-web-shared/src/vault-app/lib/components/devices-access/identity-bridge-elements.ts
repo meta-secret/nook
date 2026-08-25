@@ -1,213 +1,213 @@
 type IdentityBridgeGraphNode = {
-  readonly id: string
-  readonly data: IdentityBridgeNodeData
-  readonly x: number
-  readonly y: number
-  readonly width: number
-}
+  readonly id: string;
+  readonly data: IdentityBridgeNodeData;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+};
 
 type IdentityBridgeStageNode = {
-  readonly id: string
-  readonly label: string
-  readonly flow: IdentityBridgeFlow
-  readonly x: number
-  readonly y: number
-  readonly width: number
-}
+  readonly id: string;
+  readonly label: string;
+  readonly flow: IdentityBridgeFlow;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+};
 
 type IdentityBridgeGraphEdge = {
-  readonly id: string
-  readonly source: string
-  readonly target: string
-  readonly relation: IdentityBridgeRelationKind
-  readonly ariaLabel: string
-  readonly lateralAccessPort: boolean
-}
+  readonly id: string;
+  readonly source: string;
+  readonly target: string;
+  readonly relation: IdentityBridgeRelationKind;
+  readonly ariaLabel: string;
+  readonly lateralAccessPort: boolean;
+};
 
 type IdentityBridgeIdentityDataRequest = {
-  readonly input: IdentityBridgeInput
-  readonly flow: IdentityBridgeFlow
-  readonly portMode: IdentityBridgePortMode
-  readonly lateralAccessPort: boolean
-}
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+  readonly portMode: IdentityBridgePortMode;
+  readonly lateralAccessPort: boolean;
+};
 
 type IdentityBridgeProtectionDataRequest = {
-  readonly input: IdentityBridgeInput
-  readonly flow: IdentityBridgeFlow
-}
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+};
 
 type IdentityBridgeVaultDataRequest = {
-  readonly vault: VaultAccessView
-  readonly input: IdentityBridgeInput
-  readonly flow: IdentityBridgeFlow
-  readonly portMode: IdentityBridgePortMode
-  readonly lateralAccessPort: boolean
-}
+  readonly vault: VaultAccessView;
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+  readonly portMode: IdentityBridgePortMode;
+  readonly lateralAccessPort: boolean;
+};
 
 type IdentityBridgeDeviceDataRequest = {
-  readonly input: IdentityBridgeInput
-  readonly flow: IdentityBridgeFlow
-  readonly portMode: IdentityBridgePortMode
-  readonly incomingRelation: string
-}
+  readonly input: IdentityBridgeInput;
+  readonly flow: IdentityBridgeFlow;
+  readonly portMode: IdentityBridgePortMode;
+  readonly incomingRelation: string;
+};
 
-import { MarkerType, type Edge, type Node } from '@xyflow/svelte'
-import type { DeviceAccessIdentityState } from '$app-wasm'
-import type { VaultAccessView } from './access-chain'
+import { MarkerType, type Edge, type Node } from "@xyflow/svelte";
+import type { DeviceAccessIdentityState } from "$app-wasm";
+import type { VaultAccessView } from "./access-chain";
 import {
   PasskeyCardSummaryKind,
   type PasskeyCardSummaryState,
-} from './passkey-card'
-import { DashboardTextKind } from '../devices-access-dashboard-state'
+} from "./passkey-card";
+import { DashboardTextKind } from "../devices-access-dashboard-state";
 
 export enum IdentityBridgePerspective {
-  Identities = 'identities',
-  Vaults = 'vaults',
+  Identities = "identities",
+  Vaults = "vaults",
 }
 
 export enum IdentityBridgeNodeKind {
-  Protection = 'protection',
-  Device = 'device',
-  Identity = 'identity',
-  Stage = 'stage',
-  Vault = 'vault',
-  Empty = 'empty',
+  Protection = "protection",
+  Device = "device",
+  Identity = "identity",
+  Stage = "stage",
+  Vault = "vault",
+  Empty = "empty",
 }
 
 export enum IdentityBridgeFlow {
-  Horizontal = 'horizontal',
-  Vertical = 'vertical',
+  Horizontal = "horizontal",
+  Vertical = "vertical",
 }
 
 export enum IdentityBridgePortMode {
-  None = 'none',
-  Source = 'source',
-  Target = 'target',
-  Both = 'both',
+  None = "none",
+  Source = "source",
+  Target = "target",
+  Both = "both",
 }
 
 export enum IdentityBridgeNodeType {
-  Bridge = 'identity-bridge',
+  Bridge = "identity-bridge",
 }
 
 export enum IdentityBridgeEdgeType {
-  SmoothStep = 'smoothstep',
+  SmoothStep = "smoothstep",
 }
 
 export enum IdentityBridgeRelationKind {
-  ProtectionUnlocksDeviceKey = 'protection-unlocks-device-key',
-  AppKeyBelongsToIdentity = 'app-key-belongs-to-identity',
-  VerifiedDeviceAccess = 'verified-device-access',
+  ProtectionUnlocksDeviceKey = "protection-unlocks-device-key",
+  AppKeyBelongsToIdentity = "app-key-belongs-to-identity",
+  VerifiedDeviceAccess = "verified-device-access",
 }
 
 export enum IdentityBridgeDeviceIconKind {
-  Browser = 'browser',
-  PairedDevice = 'paired-device',
-  RecoverableKey = 'recoverable-key',
+  Browser = "browser",
+  PairedDevice = "paired-device",
+  RecoverableKey = "recoverable-key",
 }
 
 export enum IdentityBridgeHandleType {
-  Source = 'source',
-  Target = 'target',
+  Source = "source",
+  Target = "target",
 }
 
 export enum IdentityBridgeHandleId {
-  VaultAccess = 'vault-access',
+  VaultAccess = "vault-access",
 }
 
 export enum IdentityBridgeControlPosition {
-  TopRight = 'top-right',
+  TopRight = "top-right",
 }
 
 export enum IdentityBridgeVaultSelectionKind {
-  Empty = 'empty',
-  Selected = 'selected',
+  Empty = "empty",
+  Selected = "selected",
 }
 
 export type IdentityBridgeVaultSelection =
   | { kind: typeof IdentityBridgeVaultSelectionKind.Empty }
   | {
-      kind: typeof IdentityBridgeVaultSelectionKind.Selected
-      storeId: string
-    }
+      kind: typeof IdentityBridgeVaultSelectionKind.Selected;
+      storeId: string;
+    };
 
 export type IdentityBridgeInstallation = {
-  id: string
-  label: string
-  detail: string
-}
+  id: string;
+  label: string;
+  detail: string;
+};
 
 export type IdentityBridgeProtectionData = {
-  kind: typeof IdentityBridgeNodeKind.Protection
-  flow: IdentityBridgeFlow
-  portMode: IdentityBridgePortMode
-  label: string
-  caption: string
-  description: string
-  summary: PasskeyCardSummaryState
-  incomingRelation: string
-}
+  kind: typeof IdentityBridgeNodeKind.Protection;
+  flow: IdentityBridgeFlow;
+  portMode: IdentityBridgePortMode;
+  label: string;
+  caption: string;
+  description: string;
+  summary: PasskeyCardSummaryState;
+  incomingRelation: string;
+};
 
 export type IdentityBridgeDeviceData = {
-  kind: typeof IdentityBridgeNodeKind.Device
-  flow: IdentityBridgeFlow
-  portMode: IdentityBridgePortMode
-  label: string
-  caption: string
-  countLabel: string
-  installations: IdentityBridgeInstallation[]
-  iconKind: IdentityBridgeDeviceIconKind
-  lateralAccessPort: boolean
-  incomingRelation: string
-}
+  kind: typeof IdentityBridgeNodeKind.Device;
+  flow: IdentityBridgeFlow;
+  portMode: IdentityBridgePortMode;
+  label: string;
+  caption: string;
+  countLabel: string;
+  installations: IdentityBridgeInstallation[];
+  iconKind: IdentityBridgeDeviceIconKind;
+  lateralAccessPort: boolean;
+  incomingRelation: string;
+};
 
 export type IdentityBridgeIdentityData = {
-  kind: typeof IdentityBridgeNodeKind.Identity
-  flow: IdentityBridgeFlow
-  portMode: IdentityBridgePortMode
-  label: string
-  caption: string
-  description: string
-  stateLabel: string
-  identityStatus: DeviceAccessIdentityState
-  deviceMetricLabel: string
-  deviceMetricValue: string
-  vaultMetricLabel: string
-  vaultMetricValue: string
-  lateralAccessPort: boolean
-  incomingRelation: string
-}
+  kind: typeof IdentityBridgeNodeKind.Identity;
+  flow: IdentityBridgeFlow;
+  portMode: IdentityBridgePortMode;
+  label: string;
+  caption: string;
+  description: string;
+  stateLabel: string;
+  identityStatus: DeviceAccessIdentityState;
+  deviceMetricLabel: string;
+  deviceMetricValue: string;
+  vaultMetricLabel: string;
+  vaultMetricValue: string;
+  lateralAccessPort: boolean;
+  incomingRelation: string;
+};
 
 export type IdentityBridgeVaultData = {
-  kind: typeof IdentityBridgeNodeKind.Vault
-  flow: IdentityBridgeFlow
-  portMode: IdentityBridgePortMode
-  label: string
-  caption: string
-  description: string
-  statusLabel: string
-  evidenceLabel: string
-  statusMetricLabel: string
-  evidenceMetricLabel: string
-  verifiedDeviceAccess: boolean
-  lateralAccessPort: boolean
-  incomingRelation: string
-}
+  kind: typeof IdentityBridgeNodeKind.Vault;
+  flow: IdentityBridgeFlow;
+  portMode: IdentityBridgePortMode;
+  label: string;
+  caption: string;
+  description: string;
+  statusLabel: string;
+  evidenceLabel: string;
+  statusMetricLabel: string;
+  evidenceMetricLabel: string;
+  verifiedDeviceAccess: boolean;
+  lateralAccessPort: boolean;
+  incomingRelation: string;
+};
 
 export type IdentityBridgeStageData = {
-  kind: typeof IdentityBridgeNodeKind.Stage
-  flow: IdentityBridgeFlow
-  portMode: typeof IdentityBridgePortMode.None
-  label: string
-}
+  kind: typeof IdentityBridgeNodeKind.Stage;
+  flow: IdentityBridgeFlow;
+  portMode: typeof IdentityBridgePortMode.None;
+  label: string;
+};
 
 export type IdentityBridgeEmptyData = {
-  kind: typeof IdentityBridgeNodeKind.Empty
-  flow: IdentityBridgeFlow
-  portMode: typeof IdentityBridgePortMode.None
-  label: string
-  description: string
-}
+  kind: typeof IdentityBridgeNodeKind.Empty;
+  flow: IdentityBridgeFlow;
+  portMode: typeof IdentityBridgePortMode.None;
+  label: string;
+  description: string;
+};
 
 export type IdentityBridgeNodeData =
   | IdentityBridgeProtectionData
@@ -215,83 +215,83 @@ export type IdentityBridgeNodeData =
   | IdentityBridgeIdentityData
   | IdentityBridgeVaultData
   | IdentityBridgeStageData
-  | IdentityBridgeEmptyData
+  | IdentityBridgeEmptyData;
 
 export type IdentityBridgeNode = Node<
   IdentityBridgeNodeData,
   IdentityBridgeNodeType.Bridge
->
-export type IdentityBridgeEdge = Edge<Record<string, never>>
+>;
+export type IdentityBridgeEdge = Edge<Record<string, never>>;
 
 export type IdentityBridgeCopy = {
-  protectionStage: string
-  deviceStage: string
-  identityStage: string
-  vaultStage: string
-  selectedVaultStage: string
-  currentDevice: string
-  currentIdentity: string
-  selectedIdentity: string
-  vaultGrant: string
-  deviceKey: string
-  oneDeviceKey: string
-  identityDescription: string
-  identityState: string
-  deviceMetricLabel: string
-  vaultMetricLabel: string
-  verifiedVaultCount: string
-  statusMetricLabel: string
-  evidenceMetricLabel: string
-  verifiedStatus: string
-  unverifiedStatus: string
-  noAuthorizedIdentity: string
-  noAuthorizedIdentityDescription: string
-  noVerifiedVaults: string
-  noVerifiedVaultsDescription: string
-  noSelectedVault: string
-  noSelectedVaultDescription: string
-  protectionDeviceRelation: string
-  appKeyIdentityRelation: string
-  identityVaultRelation: (vaultLabel: string) => string
-  deviceVaultRelation: (vaultLabel: string) => string
-  vaultDeviceRelation: (vaultLabel: string) => string
-  formatEvidence: (value: string) => string
-  unknown: string
-}
+  protectionStage: string;
+  deviceStage: string;
+  identityStage: string;
+  vaultStage: string;
+  selectedVaultStage: string;
+  currentDevice: string;
+  currentIdentity: string;
+  selectedIdentity: string;
+  vaultGrant: string;
+  deviceKey: string;
+  oneDeviceKey: string;
+  identityDescription: string;
+  identityState: string;
+  deviceMetricLabel: string;
+  vaultMetricLabel: string;
+  verifiedVaultCount: string;
+  statusMetricLabel: string;
+  evidenceMetricLabel: string;
+  verifiedStatus: string;
+  unverifiedStatus: string;
+  noAuthorizedIdentity: string;
+  noAuthorizedIdentityDescription: string;
+  noVerifiedVaults: string;
+  noVerifiedVaultsDescription: string;
+  noSelectedVault: string;
+  noSelectedVaultDescription: string;
+  protectionDeviceRelation: string;
+  appKeyIdentityRelation: string;
+  identityVaultRelation: (vaultLabel: string) => string;
+  deviceVaultRelation: (vaultLabel: string) => string;
+  vaultDeviceRelation: (vaultLabel: string) => string;
+  formatEvidence: (value: string) => string;
+  unknown: string;
+};
 
 export type IdentityBridgeInput = {
-  perspective: IdentityBridgePerspective
-  selectedVault: IdentityBridgeVaultSelection
-  compact: boolean
-  deviceIdentifier: string
-  identityStatus: DeviceAccessIdentityState
-  protectionLabel: string
-  protectionSummary: PasskeyCardSummaryState
-  deviceIconKind: IdentityBridgeDeviceIconKind
-  vaults: readonly VaultAccessView[]
-  copy: IdentityBridgeCopy
-}
+  perspective: IdentityBridgePerspective;
+  selectedVault: IdentityBridgeVaultSelection;
+  compact: boolean;
+  deviceIdentifier: string;
+  identityStatus: DeviceAccessIdentityState;
+  protectionLabel: string;
+  protectionSummary: PasskeyCardSummaryState;
+  deviceIconKind: IdentityBridgeDeviceIconKind;
+  vaults: readonly VaultAccessView[];
+  copy: IdentityBridgeCopy;
+};
 
 export type IdentityBridgeDefinition = {
-  nodes: IdentityBridgeNode[]
-  edges: IdentityBridgeEdge[]
-  compactHeight: number
-}
+  nodes: IdentityBridgeNode[];
+  edges: IdentityBridgeEdge[];
+  compactHeight: number;
+};
 
 function nodeAriaLabel(data: IdentityBridgeNodeData): string {
   switch (data.kind) {
     case IdentityBridgeNodeKind.Protection:
-      return `${data.caption}: ${data.label}. ${data.description}${data.summary.kind === PasskeyCardSummaryKind.Present ? `. ${data.summary.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join('. ')}` : ''}`
+      return `${data.caption}: ${data.label}. ${data.description}${data.summary.kind === PasskeyCardSummaryKind.Present ? `. ${data.summary.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join(". ")}` : ""}`;
     case IdentityBridgeNodeKind.Device:
-      return `${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`
+      return `${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
     case IdentityBridgeNodeKind.Identity:
-      return `${data.caption}: ${data.label}. ${data.stateLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`
+      return `${data.caption}: ${data.label}. ${data.stateLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
     case IdentityBridgeNodeKind.Vault:
-      return `${data.caption}: ${data.label}. ${data.statusLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ''}`
+      return `${data.caption}: ${data.label}. ${data.statusLabel}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
     case IdentityBridgeNodeKind.Empty:
-      return `${data.label}. ${data.description}`
+      return `${data.label}. ${data.description}`;
     case IdentityBridgeNodeKind.Stage:
-      return data.label
+      return data.label;
   }
 }
 
@@ -312,7 +312,7 @@ export function graphNode({
     focusable: data.kind !== IdentityBridgeNodeKind.Stage,
     ariaLabel: nodeAriaLabel(data),
     style: `width: ${width}px`,
-  }
+  };
 }
 
 export function stageNode({
@@ -334,8 +334,8 @@ export function stageNode({
     x,
     y,
     width,
-  }
-  return graphNode(graphNodeArgs)
+  };
+  return graphNode(graphNodeArgs);
 }
 
 export function graphEdge({
@@ -346,10 +346,10 @@ export function graphEdge({
   ariaLabel,
   lateralAccessPort,
 }: IdentityBridgeGraphEdge): IdentityBridgeEdge {
-  const verified = relation === IdentityBridgeRelationKind.VerifiedDeviceAccess
+  const verified = relation === IdentityBridgeRelationKind.VerifiedDeviceAccess;
   const color = verified
-    ? 'var(--primary)'
-    : 'color-mix(in oklab, var(--foreground) 44%, transparent)'
+    ? "var(--primary)"
+    : "color-mix(in oklab, var(--foreground) 44%, transparent)";
   return {
     id,
     source,
@@ -366,7 +366,7 @@ export function graphEdge({
     ariaLabel,
     markerEnd: { type: MarkerType.ArrowClosed, color, width: 8, height: 8 },
     style: `stroke: ${color}; stroke-width: ${verified ? 1.6 : 1.2}px;`,
-  }
+  };
 }
 
 export function identityData({
@@ -389,8 +389,8 @@ export function identityData({
     vaultMetricLabel: input.copy.vaultMetricLabel,
     vaultMetricValue: input.copy.verifiedVaultCount,
     lateralAccessPort,
-    incomingRelation: '',
-  }
+    incomingRelation: "",
+  };
 }
 
 export function protectionData({
@@ -400,7 +400,7 @@ export function protectionData({
   const passkeySummary =
     input.protectionSummary.kind === PasskeyCardSummaryKind.Present
       ? input.protectionSummary.summary
-      : false
+      : false;
   return {
     kind: IdentityBridgeNodeKind.Protection,
     flow,
@@ -411,8 +411,8 @@ export function protectionData({
       ? passkeySummary.modeLabel
       : input.copy.protectionDeviceRelation,
     summary: input.protectionSummary,
-    incomingRelation: '',
-  }
+    incomingRelation: "",
+  };
 }
 
 export function vaultData({
@@ -444,8 +444,8 @@ export function vaultData({
     lateralAccessPort,
     incomingRelation: vault.verified
       ? input.copy.identityVaultRelation(vault.label)
-      : '',
-  }
+      : "",
+  };
 }
 
 export function deviceData({
@@ -471,5 +471,5 @@ export function deviceData({
         detail: input.protectionLabel,
       },
     ],
-  }
+  };
 }

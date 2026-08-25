@@ -134,7 +134,7 @@ async fn load_device_access_profile_with_key(
         Some(raw) => Some(raw),
         None if profile_key.legacy_owner.is_some() => idb_get_string(DEVICE_ACCESS_PROFILE_KEY)
             .await?
-            .filter(|raw| legacy_profile_belongs_to_owner(raw, &profile_key.legacy_owner)),
+            .filter(|raw| legacy_profile_belongs_to_owner(raw, profile_key.legacy_owner.as_ref())),
         None => None,
     };
     let Some(raw) = raw else {
@@ -172,7 +172,7 @@ pub(crate) async fn migrate_legacy_device_access_profile_for_selected_identity()
 
 fn legacy_profile_belongs_to_owner(
     raw: &str,
-    owner: &Option<nook_core::LocalIdentityKeyringEntry>,
+    owner: Option<&nook_core::LocalIdentityKeyringEntry>,
 ) -> bool {
     let Some(owner) = owner else {
         return false;
@@ -256,7 +256,7 @@ where
         &profile_key.value,
         fallback_key,
         guard,
-        move |raw| legacy_profile_belongs_to_owner(raw, &legacy_owner),
+        move |raw| legacy_profile_belongs_to_owner(raw, legacy_owner.as_ref()),
         move |raw| {
             let disposition = device_access_profile_for_update(raw.as_deref());
             let mut profile = match intent {

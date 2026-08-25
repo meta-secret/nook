@@ -1,182 +1,184 @@
-import { appPath } from '$lib/content/legal'
-import { runtimeError, suspendWasmLogging } from '$lib/runtime/log'
+import { appPath } from "$lib/content/legal";
+import { runtimeError, suspendWasmLogging } from "$lib/runtime/log";
 
-const LOCAL_DATA_RESET_CHANNEL = 'nook-local-data-reset'
-const LOCAL_DATA_STORAGE_LOCK = 'nook-local-data-storage'
-const LOCAL_DATA_STORAGE_GENERATION = 'nook-local-data-storage-generation'
-const TAB_ID = crypto.randomUUID()
+const LOCAL_DATA_RESET_CHANNEL = "nook-local-data-reset";
+const LOCAL_DATA_STORAGE_LOCK = "nook-local-data-storage";
+const LOCAL_DATA_STORAGE_GENERATION = "nook-local-data-storage-generation";
+const TAB_ID = crypto.randomUUID();
 
 enum LocalDataResetMessageType {
-  Request = 'request',
-  Seen = 'seen',
-  Ready = 'ready',
-  Reload = 'reload',
+  Request = "request",
+  Seen = "seen",
+  Ready = "ready",
+  Reload = "reload",
 }
 
 type LocalDataResetRequest = {
-  type: LocalDataResetMessageType.Request
-  requestId: string
-  senderId: string
-}
+  type: LocalDataResetMessageType.Request;
+  requestId: string;
+  senderId: string;
+};
 
 type LocalDataResetSeen = {
-  type: LocalDataResetMessageType.Seen
-  requestId: string
-  senderId: string
-  responderId: string
-}
+  type: LocalDataResetMessageType.Seen;
+  requestId: string;
+  senderId: string;
+  responderId: string;
+};
 
 enum LocalDataResetReadinessKind {
-  Ready = 'ready',
-  Failed = 'failed',
+  Ready = "ready",
+  Failed = "failed",
 }
 
 type LocalDataResetReadiness =
   | { kind: LocalDataResetReadinessKind.Ready }
-  | { kind: LocalDataResetReadinessKind.Failed; error: string }
+  | { kind: LocalDataResetReadinessKind.Failed; error: string };
 
 type LocalDataResetReady = {
-  type: LocalDataResetMessageType.Ready
-  requestId: string
-  senderId: string
-  responderId: string
-  readiness: LocalDataResetReadiness
-}
+  type: LocalDataResetMessageType.Ready;
+  requestId: string;
+  senderId: string;
+  responderId: string;
+  readiness: LocalDataResetReadiness;
+};
 
 type LocalDataResetReload = {
-  type: LocalDataResetMessageType.Reload
-  senderId: string
-}
+  type: LocalDataResetMessageType.Reload;
+  senderId: string;
+};
 
 type LocalDataResetMessage =
   | LocalDataResetRequest
   | LocalDataResetSeen
   | LocalDataResetReady
-  | LocalDataResetReload
+  | LocalDataResetReload;
 
-type BrowserDataDeletionErrors = Error[]
+type BrowserDataDeletionErrors = Error[];
 
 export type LocalDataStorageOperation<T> = {
-  readonly generation: string
-  readonly generationChangedMessage: string
-  readonly operation: () => T | Promise<T>
-}
+  readonly generation: string;
+  readonly generationChangedMessage: string;
+  readonly operation: () => T | Promise<T>;
+};
 
 export function captureLocalDataStorageGeneration(): string {
-  return localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? ''
+  return localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "";
 }
 
 export async function runWithLocalDataStorageLock<T>(
   input: LocalDataStorageOperation<T>,
 ): Promise<T> {
-  if (!('locks' in navigator)) return input.operation()
-  const options: LockOptions = { mode: 'shared' }
+  if (!("locks" in navigator)) return input.operation();
+  const options: LockOptions = { mode: "shared" };
   return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, () => {
     if (
-      (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? '') !==
+      (localStorage.getItem(LOCAL_DATA_STORAGE_GENERATION) ?? "") !==
       input.generation
     ) {
-      throw new Error(input.generationChangedMessage)
+      throw new Error(input.generationChangedMessage);
     }
-    return input.operation()
-  })
+    return input.operation();
+  });
 }
 
 export async function runWithExclusiveLocalDataStorageLock<T>(
   operation: () => T | Promise<T>,
 ): Promise<T> {
-  if (!('locks' in navigator)) {
-    throw new Error('Safe cross-tab local data recovery is unavailable')
+  if (!("locks" in navigator)) {
+    throw new Error("Safe cross-tab local data recovery is unavailable");
   }
-  const options: LockOptions = { mode: 'exclusive' }
+  const options: LockOptions = { mode: "exclusive" };
   return navigator.locks.request(LOCAL_DATA_STORAGE_LOCK, options, async () => {
     try {
-      return await operation()
+      return await operation();
     } finally {
-      localStorage.setItem(LOCAL_DATA_STORAGE_GENERATION, crypto.randomUUID())
+      localStorage.setItem(LOCAL_DATA_STORAGE_GENERATION, crypto.randomUUID());
     }
-  })
+  });
 }
 
 function combineErrors(errors: BrowserDataDeletionErrors): Error {
-  return new Error(errors.map((error) => error.message).join('; '))
+  return new Error(errors.map((error) => error.message).join("; "));
 }
 
 function visibleCookiePaths(): string[] {
-  const paths = new Set<string>(['/'])
+  const paths = new Set<string>(["/"]);
   const addPath = (path: string) => {
-    if (!path.startsWith('/')) return
-    paths.add(path)
-    paths.add(path.endsWith('/') ? path.slice(0, -1) || '/' : `${path}/`)
-  }
+    if (!path.startsWith("/")) return;
+    paths.add(path);
+    paths.add(path.endsWith("/") ? path.slice(0, -1) || "/" : `${path}/`);
+  };
 
-  addPath(appPath('/'))
-  const segments = window.location.pathname.split('/').filter(Boolean)
+  addPath(appPath("/"));
+  const segments = window.location.pathname.split("/").filter(Boolean);
   for (let length = 1; length <= segments.length; length += 1) {
-    addPath(`/${segments.slice(0, length).join('/')}`)
+    addPath(`/${segments.slice(0, length).join("/")}`);
   }
-  return [...paths]
+  return [...paths];
 }
 
 function clearAccessibleCookies(): void {
-  const paths = visibleCookiePaths()
-  const hostname = window.location.hostname.toLowerCase()
-  const labels = hostname.split('.').filter(Boolean)
-  const domains = new Set<string>()
+  const paths = visibleCookiePaths();
+  const hostname = window.location.hostname.toLowerCase();
+  const labels = hostname.split(".").filter(Boolean);
+  const domains = new Set<string>();
   if (labels.length === 1) {
-    domains.add(hostname)
+    domains.add(hostname);
   } else {
     for (let index = 0; index < labels.length - 1; index += 1) {
-      domains.add(labels.slice(index).join('.'))
+      domains.add(labels.slice(index).join("."));
     }
   }
-  for (const cookie of document.cookie.split(';')) {
-    const separator = cookie.indexOf('=')
-    const name = (separator === -1 ? cookie : cookie.slice(0, separator)).trim()
-    if (!name) continue
+  for (const cookie of document.cookie.split(";")) {
+    const separator = cookie.indexOf("=");
+    const name = (
+      separator === -1 ? cookie : cookie.slice(0, separator)
+    ).trim();
+    if (!name) continue;
     for (const path of paths) {
-      document.cookie = `${name}=; Max-Age=0; Path=${path}; SameSite=Lax`
+      document.cookie = `${name}=; Max-Age=0; Path=${path}; SameSite=Lax`;
       for (const domain of domains) {
-        document.cookie = `${name}=; Max-Age=0; Path=${path}; Domain=${domain}; SameSite=Lax`
+        document.cookie = `${name}=; Max-Age=0; Path=${path}; Domain=${domain}; SameSite=Lax`;
       }
     }
   }
 }
 
 export function clearTabScopedBrowserData(): void {
-  sessionStorage.clear()
+  sessionStorage.clear();
 }
 
 async function clearBrowserManagedStorage(): Promise<void> {
-  const errors: Error[] = []
+  const errors: Error[] = [];
   const operations: Array<() => void | Promise<void>> = [
     () => localStorage.clear(),
     () => sessionStorage.clear(),
     () => clearAccessibleCookies(),
     async () => {
-      if (!('caches' in globalThis)) return
-      const cacheNames = await caches.keys()
-      await Promise.all(cacheNames.map((name) => caches.delete(name)))
+      if (!("caches" in globalThis)) return;
+      const cacheNames = await caches.keys();
+      await Promise.all(cacheNames.map((name) => caches.delete(name)));
     },
-  ]
+  ];
   for (const operation of operations) {
     try {
-      await operation()
+      await operation();
     } catch (error) {
-      errors.push(runtimeError(error))
+      errors.push(runtimeError(error));
     }
   }
   if (errors.length > 0) {
-    throw combineErrors(errors)
+    throw combineErrors(errors);
   }
 }
 
 export function subscribeToLocalBrowserDataDeletion(
   handler: () => Promise<void>,
 ): () => void {
-  if (!('BroadcastChannel' in globalThis)) return () => {}
-  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL)
-  const handledRequests = new Set<string>()
+  if (!("BroadcastChannel" in globalThis)) return () => {};
+  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
+  const handledRequests = new Set<string>();
 
   const handleRequest = async (message: LocalDataResetMessage) => {
     if (
@@ -184,26 +186,26 @@ export function subscribeToLocalBrowserDataDeletion(
       message.senderId === TAB_ID ||
       handledRequests.has(message.requestId)
     ) {
-      return
+      return;
     }
-    handledRequests.add(message.requestId)
+    handledRequests.add(message.requestId);
     const postMessageArgs: Parameters<typeof channel.postMessage>[0] = {
       type: LocalDataResetMessageType.Seen,
       requestId: message.requestId,
       senderId: message.senderId,
       responderId: TAB_ID,
-    } satisfies LocalDataResetMessage
-    channel.postMessage(postMessageArgs)
+    } satisfies LocalDataResetMessage;
+    channel.postMessage(postMessageArgs);
     try {
-      await handler()
+      await handler();
       const postMessageArgs2: Parameters<typeof channel.postMessage>[0] = {
         type: LocalDataResetMessageType.Ready,
         requestId: message.requestId,
         senderId: message.senderId,
         responderId: TAB_ID,
         readiness: { kind: LocalDataResetReadinessKind.Ready },
-      } satisfies LocalDataResetMessage
-      channel.postMessage(postMessageArgs2)
+      } satisfies LocalDataResetMessage;
+      channel.postMessage(postMessageArgs2);
     } catch (error) {
       const postMessageArgs3: Parameters<typeof channel.postMessage>[0] = {
         type: LocalDataResetMessageType.Ready,
@@ -214,100 +216,100 @@ export function subscribeToLocalBrowserDataDeletion(
           kind: LocalDataResetReadinessKind.Failed,
           error: runtimeError(error).message,
         },
-      } satisfies LocalDataResetMessage
-      channel.postMessage(postMessageArgs3)
+      } satisfies LocalDataResetMessage;
+      channel.postMessage(postMessageArgs3);
     }
-  }
+  };
 
   channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
     if (event.data.type === LocalDataResetMessageType.Reload) {
-      if (event.data.senderId !== TAB_ID) window.location.reload()
-      return
+      if (event.data.senderId !== TAB_ID) window.location.reload();
+      return;
     }
-    void handleRequest(event.data)
-  }
+    void handleRequest(event.data);
+  };
   return () => {
-    channel.close()
-  }
+    channel.close();
+  };
 }
 
 export function requireLocalDataRecoverySupport(): void {
-  if (!('BroadcastChannel' in globalThis) || !('locks' in navigator)) {
-    throw new Error('Safe cross-tab local data deletion is unavailable')
+  if (!("BroadcastChannel" in globalThis) || !("locks" in navigator)) {
+    throw new Error("Safe cross-tab local data deletion is unavailable");
   }
 }
 
 export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
-  requireLocalDataRecoverySupport()
+  requireLocalDataRecoverySupport();
   const request: LocalDataResetRequest = {
     type: LocalDataResetMessageType.Request,
     requestId: crypto.randomUUID(),
     senderId: TAB_ID,
-  }
-  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL)
-  const seen = new Set<string>()
-  const ready = new Map<string, LocalDataResetReadiness>()
+  };
+  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
+  const seen = new Set<string>();
+  const ready = new Map<string, LocalDataResetReadiness>();
   channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
-    const message = event.data
+    const message = event.data;
     if (
       message.type === LocalDataResetMessageType.Reload ||
       message.requestId !== request.requestId ||
       message.senderId !== TAB_ID ||
       message.type === LocalDataResetMessageType.Request
     ) {
-      return
+      return;
     }
     if (message.type === LocalDataResetMessageType.Seen)
-      seen.add(message.responderId)
+      seen.add(message.responderId);
     if (message.type === LocalDataResetMessageType.Ready) {
-      ready.set(message.responderId, message.readiness)
+      ready.set(message.responderId, message.readiness);
     }
-  }
+  };
   try {
-    channel.postMessage(request)
+    channel.postMessage(request);
 
-    const waitUntil = Date.now() + 20_000
-    await new Promise((resolve) => setTimeout(resolve, 150))
+    const waitUntil = Date.now() + 20_000;
+    await new Promise((resolve) => setTimeout(resolve, 150));
     while ([...seen].some((tabId) => !ready.has(tabId))) {
       if (Date.now() >= waitUntil) {
-        throw new Error('Another Nook tab did not stop local storage work')
+        throw new Error("Another Nook tab did not stop local storage work");
       }
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
     const errors = [...ready.values()]
       .filter(
         (readiness) => readiness.kind === LocalDataResetReadinessKind.Failed,
       )
-      .map((readiness) => readiness.error)
+      .map((readiness) => readiness.error);
     if (errors.length > 0) {
-      throw new Error(errors.join('; '))
+      throw new Error(errors.join("; "));
     }
   } catch (error) {
     try {
-      await reloadQuiescedTabsAfterLocalRecovery()
+      await reloadQuiescedTabsAfterLocalRecovery();
     } catch {
       // A peer may already be suspended even when another peer reports a
       // failure. Reload is best-effort because the channel can disappear as a
       // tab or origin is torn down.
     }
-    throw error
+    throw error;
   } finally {
-    channel.close()
+    channel.close();
   }
 }
 
 export async function reloadQuiescedTabsAfterLocalRecovery(): Promise<void> {
-  if (!('BroadcastChannel' in globalThis)) return
-  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL)
+  if (!("BroadcastChannel" in globalThis)) return;
+  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
   try {
     const message: LocalDataResetReload = {
       type: LocalDataResetMessageType.Reload,
       senderId: TAB_ID,
-    }
-    channel.postMessage(message)
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    };
+    channel.postMessage(message);
+    await new Promise((resolve) => setTimeout(resolve, 50));
   } finally {
-    channel.close()
+    channel.close();
   }
 }
 
@@ -320,31 +322,31 @@ export async function reloadQuiescedTabsAfterLocalRecovery(): Promise<void> {
 export async function deleteLocalBrowserData(
   clearNookDatabases: () => Promise<void>,
 ): Promise<void> {
-  requireLocalDataRecoverySupport()
-  await quiesceOtherTabsForLocalRecovery()
+  requireLocalDataRecoverySupport();
+  await quiesceOtherTabsForLocalRecovery();
   try {
-    await suspendWasmLogging()
+    await suspendWasmLogging();
     await runWithExclusiveLocalDataStorageLock(async () => {
-      const errors: Error[] = []
+      const errors: Error[] = [];
       try {
-        await clearNookDatabases()
+        await clearNookDatabases();
       } catch (error) {
-        errors.push(runtimeError(error))
+        errors.push(runtimeError(error));
       }
       try {
-        await clearBrowserManagedStorage()
+        await clearBrowserManagedStorage();
       } catch (error) {
-        errors.push(runtimeError(error))
+        errors.push(runtimeError(error));
       }
-      if (errors.length > 0) throw combineErrors(errors)
-    })
+      if (errors.length > 0) throw combineErrors(errors);
+    });
   } finally {
     try {
-      await reloadQuiescedTabsAfterLocalRecovery()
+      await reloadQuiescedTabsAfterLocalRecovery();
     } catch {
       // Browser cleanup already completed. Peer reload is best-effort because
       // a browser may revoke BroadcastChannel while origin data is cleared.
     }
   }
-  window.location.replace(appPath('/'))
+  window.location.replace(appPath("/"));
 }

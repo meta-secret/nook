@@ -3,7 +3,7 @@ import {
   type NookLocalVaultEntry,
   type StoreId,
   type VaultRecoverySummary,
-} from '$app-wasm'
+} from "$app-wasm";
 import {
   DEFAULT_GITHUB_REPO,
   LOCAL_PROVIDER_TYPE,
@@ -12,295 +12,295 @@ import {
   type OAuthFilePreset,
   type StorageProvider,
   type StorageProviderType,
-} from '$lib/auth/providers'
+} from "$lib/auth/providers";
 import {
   default_vault_architecture,
   DeviceMode,
   ReplicationType,
   VaultType,
   type VaultArchitecture,
-} from '$lib/vault/architecture-model'
+} from "$lib/vault/architecture-model";
 export enum ActiveVaultKind {
-  Closed = 'closed',
-  Open = 'open',
+  Closed = "closed",
+  Open = "open",
 }
 
 export type ActiveVault =
   | { kind: ActiveVaultKind.Closed }
-  | { kind: ActiveVaultKind.Open; storeId: StoreId }
+  | { kind: ActiveVaultKind.Open; storeId: StoreId };
 export enum LoginVaultSelectionKind {
-  NotSelected = 'not-selected',
-  Selected = 'selected',
+  NotSelected = "not-selected",
+  Selected = "selected",
 }
 
 export type LoginVaultSelection =
   | { kind: LoginVaultSelectionKind.NotSelected }
-  | { kind: LoginVaultSelectionKind.Selected; storeId: StoreId }
+  | { kind: LoginVaultSelectionKind.Selected; storeId: StoreId };
 export enum LoginSetupKind {
-  Inactive = 'inactive',
-  Active = 'active',
+  Inactive = "inactive",
+  Active = "active",
 }
 
 export type LoginSetup =
   | { kind: LoginSetupKind.Inactive }
-  | { kind: LoginSetupKind.Active; providerType: StorageProviderType }
+  | { kind: LoginSetupKind.Active; providerType: StorageProviderType };
 
 export enum LocalLoginPreparationState {
-  Idle = 'idle',
-  Preparing = 'preparing',
-  Ready = 'ready',
+  Idle = "idle",
+  Preparing = "preparing",
+  Ready = "ready",
 }
 
 export enum StagedRemoteStorageKind {
-  Unavailable = 'unavailable',
-  Available = 'available',
+  Unavailable = "unavailable",
+  Available = "available",
 }
 
 export type StagedRemoteStorage =
   | { kind: StagedRemoteStorageKind.Unavailable }
   | {
-      kind: StagedRemoteStorageKind.Available
-      args: [string, string, string]
-    }
+      kind: StagedRemoteStorageKind.Available;
+      args: [string, string, string];
+    };
 
 export enum LocalProviderLookupKind {
-  Missing = 'missing',
-  Found = 'found',
+  Missing = "missing",
+  Found = "found",
 }
 
 export type LocalProviderLookup =
   | { kind: LocalProviderLookupKind.Missing }
-  | { kind: LocalProviderLookupKind.Found; provider: StorageProvider }
+  | { kind: LocalProviderLookupKind.Found; provider: StorageProvider };
 export enum LocalVaultCatalogKind {
-  Empty = 'empty',
-  Available = 'available',
+  Empty = "empty",
+  Available = "available",
 }
 
 export type LocalVaultCatalog =
   | { kind: LocalVaultCatalogKind.Empty }
-  | { kind: LocalVaultCatalogKind.Available; first: NookLocalVaultEntry }
+  | { kind: LocalVaultCatalogKind.Available; first: NookLocalVaultEntry };
 export enum RecoveryDiscoveryKind {
-  NotFound = 'not-found',
-  Found = 'found',
+  NotFound = "not-found",
+  Found = "found",
 }
 
 export type RecoveryDiscovery =
   | { kind: RecoveryDiscoveryKind.NotFound }
-  | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary }
+  | { kind: RecoveryDiscoveryKind.Found; summary: VaultRecoverySummary };
 export enum OAuthFileDraftKind {
-  NotConfigured = 'not-configured',
-  Configured = 'configured',
+  NotConfigured = "not-configured",
+  Configured = "configured",
 }
 
 export type OAuthFileDraft =
   | { kind: OAuthFileDraftKind.NotConfigured }
-  | { kind: OAuthFileDraftKind.Configured; config: OAuthFileConfig }
+  | { kind: OAuthFileDraftKind.Configured; config: OAuthFileConfig };
 export enum LocalFolderDraftKind {
-  NotConfigured = 'not-configured',
-  Configured = 'configured',
+  NotConfigured = "not-configured",
+  Configured = "configured",
 }
 
 export type LocalFolderDraft =
   | { kind: LocalFolderDraftKind.NotConfigured }
-  | { kind: LocalFolderDraftKind.Configured; config: LocalFolderConfig }
+  | { kind: LocalFolderDraftKind.Configured; config: LocalFolderConfig };
 export enum OAuthSetupPresetKind {
-  NotSelected = 'not-selected',
-  Selected = 'selected',
+  NotSelected = "not-selected",
+  Selected = "selected",
 }
 
 export type OAuthSetupPreset =
   | { kind: OAuthSetupPresetKind.NotSelected }
-  | { kind: OAuthSetupPresetKind.Selected; preset: OAuthFilePreset }
+  | { kind: OAuthSetupPresetKind.Selected; preset: OAuthFilePreset };
 export class VaultProviderState {
-  providers = $state.raw<StorageProvider[]>([])
-  providersLoaded = $state(false)
+  providers = $state.raw<StorageProvider[]>([]);
+  providersLoaded = $state(false);
   /** Locally cached vaults on this browser (metadata only). */
-  localVaults = $state<NookLocalVaultEntry[]>([])
+  localVaults = $state<NookLocalVaultEntry[]>([]);
   get localVaultCatalog(): LocalVaultCatalog {
     for (const first of this.localVaults) {
-      return { kind: LocalVaultCatalogKind.Available, first }
+      return { kind: LocalVaultCatalogKind.Available, first };
     }
-    return { kind: LocalVaultCatalogKind.Empty }
+    return { kind: LocalVaultCatalogKind.Empty };
   }
   /** Active vault store_id — sync providers and local blob are scoped to this. */
   private activeVaultStoreState = $state<ActiveVault>({
     kind: ActiveVaultKind.Closed,
-  })
+  });
   get activeVault(): ActiveVault {
-    return this.activeVaultStoreState
+    return this.activeVaultStoreState;
   }
   get hasActiveVaultStore(): boolean {
-    return this.activeVaultStoreState.kind === ActiveVaultKind.Open
+    return this.activeVaultStoreState.kind === ActiveVaultKind.Open;
   }
   requireActiveVaultStoreId(): StoreId {
     if (this.activeVaultStoreState.kind === ActiveVaultKind.Open)
-      return this.activeVaultStoreState.storeId
-    throw new Error('Active vault store is required')
+      return this.activeVaultStoreState.storeId;
+    throw new Error("Active vault store is required");
   }
   openActiveVault(value: StoreId): void {
-    this.activeVaultStoreState = { kind: ActiveVaultKind.Open, storeId: value }
+    this.activeVaultStoreState = { kind: ActiveVaultKind.Open, storeId: value };
   }
   clearActiveVaultStore(): void {
-    this.activeVaultStoreState = { kind: ActiveVaultKind.Closed }
+    this.activeVaultStoreState = { kind: ActiveVaultKind.Closed };
   }
   /** Login gate: user picked a vault but has not unlocked yet. */
   private selectedLoginVaultStoreState = $state<LoginVaultSelection>({
     kind: LoginVaultSelectionKind.NotSelected,
-  })
+  });
   get selectedLoginVault(): LoginVaultSelection {
-    return this.selectedLoginVaultStoreState
+    return this.selectedLoginVaultStoreState;
   }
   get hasSelectedLoginVaultStore(): boolean {
     return (
       this.selectedLoginVaultStoreState.kind ===
       LoginVaultSelectionKind.Selected
-    )
+    );
   }
   selectLoginVault(value: StoreId): void {
     this.selectedLoginVaultStoreState = {
       kind: LoginVaultSelectionKind.Selected,
       storeId: value,
-    }
+    };
   }
   clearSelectedLoginVaultStore(): void {
     this.selectedLoginVaultStoreState = {
       kind: LoginVaultSelectionKind.NotSelected,
-    }
+    };
   }
   /** True when the active vault blob exists in IndexedDB. */
-  localVaultPresent = $state(false)
+  localVaultPresent = $state(false);
   localLoginPreparation = $state<LocalLoginPreparationState>(
     LocalLoginPreparationState.Idle,
-  )
+  );
   private loginSetupState = $state<LoginSetup>({
     kind: LoginSetupKind.Inactive,
-  })
+  });
   get loginSetup(): LoginSetup {
-    return this.loginSetupState
+    return this.loginSetupState;
   }
   activateLoginSetup(value: StorageProviderType): void {
-    this.loginSetupState = { kind: LoginSetupKind.Active, providerType: value }
+    this.loginSetupState = { kind: LoginSetupKind.Active, providerType: value };
   }
   clearLoginSetup(): void {
-    this.loginSetupState = { kind: LoginSetupKind.Inactive }
+    this.loginSetupState = { kind: LoginSetupKind.Inactive };
   }
-  loginRequiresExistingVault = $state(false)
+  loginRequiresExistingVault = $state(false);
   private recoverySummaryState = $state<RecoveryDiscovery>({
     kind: RecoveryDiscoveryKind.NotFound,
-  })
+  });
   get recoveryDiscovery(): RecoveryDiscovery {
-    return this.recoverySummaryState
+    return this.recoverySummaryState;
   }
   requireExistingVaultRecovery(): VaultRecoverySummary {
     if (this.recoverySummaryState.kind === RecoveryDiscoveryKind.Found) {
-      return this.recoverySummaryState.summary
+      return this.recoverySummaryState.summary;
     }
-    throw new Error('Existing vault recovery summary is required')
+    throw new Error("Existing vault recovery summary is required");
   }
   recordExistingVaultRecovery(value: VaultRecoverySummary): void {
     this.recoverySummaryState = {
       kind: RecoveryDiscoveryKind.Found,
       summary: value,
-    }
+    };
   }
   clearExistingVaultRecoverySummary(): void {
-    this.recoverySummaryState = { kind: RecoveryDiscoveryKind.NotFound }
+    this.recoverySummaryState = { kind: RecoveryDiscoveryKind.NotFound };
   }
-  addProviderOpen = $state(false)
+  addProviderOpen = $state(false);
 
-  storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE)
-  githubPat = $state('')
-  githubRepo = $state(DEFAULT_GITHUB_REPO)
+  storageMode = $state<StorageProviderType>(LOCAL_PROVIDER_TYPE);
+  githubPat = $state("");
+  githubRepo = $state(DEFAULT_GITHUB_REPO);
   private oauthFileState = $state.raw<OAuthFileDraft>({
     kind: OAuthFileDraftKind.NotConfigured,
-  })
+  });
   get oauthFileDraft(): OAuthFileDraft {
-    return this.oauthFileState
+    return this.oauthFileState;
   }
   requireOauthFileConfig(): OAuthFileConfig {
     if (this.oauthFileState.kind === OAuthFileDraftKind.Configured) {
-      return this.oauthFileState.config
+      return this.oauthFileState.config;
     }
-    throw new Error('OAuth file configuration is required')
+    throw new Error("OAuth file configuration is required");
   }
   configureOauthFile(value: OAuthFileConfig): void {
     this.oauthFileState = {
       kind: OAuthFileDraftKind.Configured,
       config: value,
-    }
+    };
   }
   clearOauthFile(): void {
-    if (this.oauthFileState.kind === OAuthFileDraftKind.NotConfigured) return
-    this.oauthFileState = { kind: OAuthFileDraftKind.NotConfigured }
+    if (this.oauthFileState.kind === OAuthFileDraftKind.NotConfigured) return;
+    this.oauthFileState = { kind: OAuthFileDraftKind.NotConfigured };
   }
   private localFolderState = $state.raw<LocalFolderDraft>({
     kind: LocalFolderDraftKind.NotConfigured,
-  })
+  });
   get localFolderDraft(): LocalFolderDraft {
-    return this.localFolderState
+    return this.localFolderState;
   }
   requireLocalFolderConfig(): LocalFolderConfig {
     if (this.localFolderState.kind === LocalFolderDraftKind.Configured) {
-      return this.localFolderState.config
+      return this.localFolderState.config;
     }
-    throw new Error('Local folder configuration is required')
+    throw new Error("Local folder configuration is required");
   }
   configureLocalFolder(value: LocalFolderConfig): void {
     this.localFolderState = {
       kind: LocalFolderDraftKind.Configured,
       config: value,
-    }
+    };
   }
   clearLocalFolder(): void {
     if (this.localFolderState.kind === LocalFolderDraftKind.NotConfigured)
-      return
-    this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured }
+      return;
+    this.localFolderState = { kind: LocalFolderDraftKind.NotConfigured };
   }
   localFolderBackupSupported = $state(
-    'window' in globalThis && is_local_folder_backup_supported(),
-  )
-  vaultArchitecture = $state<VaultArchitecture>(default_vault_architecture())
-  draftDeviceMode = $state<DeviceMode>(DeviceMode.Standard)
-  draftVaultType = $state(VaultType.Simple)
-  draftReplicationType = $state<ReplicationType>(ReplicationType.Personal)
+    "window" in globalThis && is_local_folder_backup_supported(),
+  );
+  vaultArchitecture = $state<VaultArchitecture>(default_vault_architecture());
+  draftDeviceMode = $state<DeviceMode>(DeviceMode.Standard);
+  draftVaultType = $state(VaultType.Simple);
+  draftReplicationType = $state<ReplicationType>(ReplicationType.Personal);
   private oauthSetupPresetState = $state<OAuthSetupPreset>({
     kind: OAuthSetupPresetKind.NotSelected,
-  })
+  });
   get oauthSetupSelection(): OAuthSetupPreset {
-    return this.oauthSetupPresetState
+    return this.oauthSetupPresetState;
   }
   selectOauthSetupPreset(value: OAuthFilePreset): void {
     this.oauthSetupPresetState = {
       kind: OAuthSetupPresetKind.Selected,
       preset: value,
-    }
+    };
   }
   clearOauthSetupPreset(): void {
-    this.oauthSetupPresetState = { kind: OAuthSetupPresetKind.NotSelected }
+    this.oauthSetupPresetState = { kind: OAuthSetupPresetKind.NotSelected };
   }
   clearIdentityProviderSession(): void {
-    this.providers = []
-    this.providersLoaded = false
-    this.clearActiveVaultStore()
-    this.clearSelectedLoginVaultStore()
-    this.localLoginPreparation = LocalLoginPreparationState.Idle
-    this.clearLoginSetup()
-    this.loginRequiresExistingVault = false
-    this.clearExistingVaultRecoverySummary()
-    this.addProviderOpen = false
-    this.storageMode = LOCAL_PROVIDER_TYPE
-    this.githubPat = ''
-    this.githubRepo = DEFAULT_GITHUB_REPO
-    this.clearOauthFile()
-    this.clearLocalFolder()
-    this.clearOauthSetupPreset()
-    this.googleOAuthBusy = false
-    this.icloudOAuthPreparing = false
-    this.icloudOAuthReady = false
-    this.icloudOAuthBusy = false
+    this.providers = [];
+    this.providersLoaded = false;
+    this.clearActiveVaultStore();
+    this.clearSelectedLoginVaultStore();
+    this.localLoginPreparation = LocalLoginPreparationState.Idle;
+    this.clearLoginSetup();
+    this.loginRequiresExistingVault = false;
+    this.clearExistingVaultRecoverySummary();
+    this.addProviderOpen = false;
+    this.storageMode = LOCAL_PROVIDER_TYPE;
+    this.githubPat = "";
+    this.githubRepo = DEFAULT_GITHUB_REPO;
+    this.clearOauthFile();
+    this.clearLocalFolder();
+    this.clearOauthSetupPreset();
+    this.googleOAuthBusy = false;
+    this.icloudOAuthPreparing = false;
+    this.icloudOAuthReady = false;
+    this.icloudOAuthBusy = false;
   }
-  googleOAuthBusy = $state(false)
-  icloudOAuthPreparing = $state(false)
-  icloudOAuthReady = $state(false)
-  icloudOAuthBusy = $state(false)
+  googleOAuthBusy = $state(false);
+  icloudOAuthPreparing = $state(false);
+  icloudOAuthReady = $state(false);
+  icloudOAuthBusy = $state(false);
 }
