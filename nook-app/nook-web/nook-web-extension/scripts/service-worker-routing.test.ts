@@ -64,6 +64,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
+  refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,
 }
 
@@ -265,6 +266,72 @@ describe('service worker routing', () => {
     await flushResponses()
     await flushResponses()
     expect(clearMountedAuthenticationSurfaces).not.toHaveBeenCalled()
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('refreshes authentication surfaces after internal pairing approval', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    refreshAuthenticationSurfaces.mockClear()
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve({ ok: true as const }),
+    )
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      hasPairingApprovedType: () => true,
+      importPairingAfterCompanionReady,
+      isExtensionSessionEnsureMessage: () => false,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: { type: 'test-pairing-approved' },
+      sender: { id: 'nook-extension' },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+    await flushResponses()
+    await flushResponses()
+    expect(importPairingAfterCompanionReady).toHaveBeenCalledTimes(1)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('refreshes authentication surfaces after external pairing approval', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    refreshAuthenticationSurfaces.mockClear()
+    const importPairingAfterCompanionReady = mock(() =>
+      Promise.resolve({ ok: true as const }),
+    )
+    const dependencies: ExternalCompanionRoutingDependencies = {
+      ...externalDependencies,
+      hasPairingApprovedType: () => true,
+      importPairingAfterCompanionReady,
+    }
+    const { routeExternalCompanionMessage } =
+      await import('../src/background/service-worker/external-companion-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExternalCompanionMessage>[0] = {
+      dependencies,
+      message: { type: 'test-pairing-approved' },
+      sender: {
+        id: 'simple-vault',
+        url: 'https://simple.example.test/',
+      },
+      sendResponse,
+    }
+
+    expect(routeExternalCompanionMessage(routingArgs)).toBe(true)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+    await flushResponses()
+    await flushResponses()
+    expect(importPairingAfterCompanionReady).toHaveBeenCalledTimes(1)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
     expect(refreshAuthenticationSurfaces).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })

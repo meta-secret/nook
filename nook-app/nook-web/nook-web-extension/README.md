@@ -13,8 +13,8 @@ approved action, and manual takeover without becoming a second vault interface.
 On OTP challenges, the same widget detects standard one-time-code fields. It
 asks the unlocked Rust/WASM session for safe authenticator labels, requires the
 user to choose one, and fills the freshly derived code without persisting or
-logging it. If the vault has none, the widget says so and offers to open Simple
-Vault to add 2FA.
+logging it. If the vault has none, the Pilot reports that no matching 2FA item
+is available. Opening Simple Vault remains an explicit toolbar-menu action.
 
 On authenticator setup pages, the Pilot can offer **Add 2FA from this page** and
 **Save backup codes**. Those actions run only after a trusted click: QR decode

@@ -32,6 +32,7 @@ export type ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
   normalizeOpenCompanionLauncherMessage: typeof normalizeOpenCompanionLauncherMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
   requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
 }
 
@@ -71,6 +72,7 @@ export function routeExternalCompanionMessage({
     isExtensionPairedVaultUnlockRequestMessage,
     normalizeOpenCompanionLauncherMessage,
     openCompanionLauncher,
+    refreshAuthenticationSurfaces,
     requestPairedVaultUnlock,
   } = dependencies
   const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
@@ -133,6 +135,12 @@ export function routeExternalCompanionMessage({
     return false
   }
   invalidateAllLoginMatchAvailability()
-  void importPairingAfterCompanionReady(message).then(sendResponse)
+  void importPairingAfterCompanionReady(message)
+    .then(async (response) => {
+      invalidateAllLoginMatchAvailability()
+      if (response.ok) await refreshAuthenticationSurfaces()
+      return response
+    })
+    .then(sendResponse)
   return true
 }

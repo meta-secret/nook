@@ -171,6 +171,7 @@ const externalCompanionRoutingDependencies: Parameters<
   isExtensionPairedVaultUnlockRequestMessage,
   normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
+  refreshAuthenticationSurfaces,
   requestPairedVaultUnlock,
 }
 

@@ -142,7 +142,7 @@ export function renderWidget({
       ? loginMatches.count
       : '',
   ].join(':')
-  if (
+  const sameRenderedWorkflow =
     widgetState.host.kind === WidgetHostKind.Attached &&
     widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
     widgetState.workflowKey.key === workflowKey &&
@@ -154,8 +154,11 @@ export function renderWidget({
       (workflow.formScope.kind === 'owned' &&
         widgetState.renderedWorkflowRoot.observation.formScope.owner ===
           workflow.formScope.owner))
+  if (
+    sameRenderedWorkflow &&
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    !widgetState.host.element.inert
   ) {
-    widgetState.host.element.inert = false
     return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) {
@@ -164,7 +167,7 @@ export function renderWidget({
     const preservesPresentation =
       widgetState.presentationScope.kind === WidgetWorkflowKeyKind.Assigned &&
       widgetState.presentationScope.key === presentationScope
-    if (preservesPresentation) remountWidget()
+    if (sameRenderedWorkflow || preservesPresentation) remountWidget()
     else removeWidget()
   }
 

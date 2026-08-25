@@ -291,19 +291,20 @@ export async function cancelAuthenticatorPicker({
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
   await removeAuthenticatorPicker(request.requestId)
-  try {
-    const nookTypedArgs0_5: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: 'nook:website-authenticator-canceled',
-      payload: {
-        origin: request.origin,
-        requestId: request.requestId,
-      },
-    }
-    await chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_5)
-  } catch {
-    // The website may have navigated while its picker was open. The pending
-    // request is still canceled and must not remain reusable.
+  const nookTypedArgs0_5: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+    type: 'nook:website-authenticator-canceled',
+    payload: {
+      origin: request.origin,
+      requestId: request.requestId,
+    },
   }
+  const extensionCancellation: Parameters<
+    typeof chrome.runtime.sendMessage
+  >[0] = nookTypedArgs0_5
+  await Promise.allSettled([
+    chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_5),
+    chrome.runtime.sendMessage(extensionCancellation),
+  ])
   return { ok: true }
 }
 

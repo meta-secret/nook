@@ -180,7 +180,13 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     invalidateAllLoginMatchAvailability()
-    void importPairingAfterCompanionReady(message).then(sendResponse)
+    void importPairingAfterCompanionReady(message)
+      .then(async (response) => {
+        invalidateAllLoginMatchAvailability()
+        if (response.ok) await refreshAuthenticationSurfaces()
+        return response
+      })
+      .then(sendResponse)
     return true
   }
 

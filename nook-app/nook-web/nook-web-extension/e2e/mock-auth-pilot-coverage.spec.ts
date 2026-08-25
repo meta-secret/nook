@@ -105,13 +105,16 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.evaluate(() => {
         const form = document.querySelector('form')
         if (!form) throw new Error('mock login form missing')
-        form.replaceWith(form.cloneNode(true))
+        form.classList.add('validation-ready')
       })
 
       await expect.poll(() => loginPicker.isClosed()).toBe(true)
       await expect(widget.getByText('Ready to sign in')).toBeVisible({
         timeout: 20_000,
       })
+      await expect(
+        widget.getByRole('button', { name: 'Fill saved login' }),
+      ).toBeEnabled()
       const checkpointPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
       const checkpointPicker = await checkpointPickerPromise
@@ -417,13 +420,31 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(otpWidget.getByText('bob-2fa@nook.test')).toHaveCount(0)
       await expect(picker.getByText('Mock Auth Primary')).toBeVisible()
       await expect(picker.getByText('Mock Auth Secondary')).toBeVisible()
-      await picker.getByTestId('authenticator-search').fill('bob-2fa')
-      await expect(picker.getByText('Mock Auth Primary')).toHaveCount(0)
-      await picker.getByRole('button', { name: /Mock Auth Secondary/ }).click()
+
+      await otpPage.locator('form').evaluate((form) => {
+        form.classList.add('validation-ready')
+      })
+      await expect.poll(() => picker.isClosed()).toBe(true)
+      await expect(otpWidget.getByText('Fill your 2FA code')).toBeVisible({
+        timeout: 20_000,
+      })
+      await expect(
+        otpWidget.getByRole('button', { name: 'Fill 2FA code' }),
+      ).toBeEnabled()
+
+      const resumedPickerPromise = paired.context.waitForEvent('page')
+      await otpWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
+      const resumedPicker = await resumedPickerPromise
+      await resumedPicker.waitForURL(/intent=authenticator-picker/)
+      await resumedPicker.getByTestId('authenticator-search').fill('bob-2fa')
+      await expect(resumedPicker.getByText('Mock Auth Primary')).toHaveCount(0)
+      await resumedPicker
+        .getByRole('button', { name: /Mock Auth Secondary/ })
+        .click()
       await expect(
         otpPage.locator('[autocomplete="one-time-code"]'),
       ).toHaveValue(/^\d{6}$/)
-      await expect.poll(() => picker.isClosed()).toBe(true)
+      await expect.poll(() => resumedPicker.isClosed()).toBe(true)
     } finally {
       await paired.context.close()
       await mockAuth.close()
