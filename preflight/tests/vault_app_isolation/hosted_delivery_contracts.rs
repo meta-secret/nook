@@ -86,9 +86,9 @@ fn assert_workflow_runtime_contract(root: &Path) {
     let research = read(root, ".github/workflows/web-research.yml");
     let repository_policy = read(root, ".github/workflows/repository-policy.yml");
     for (workflow, source) in [
-        ("Hive", hive),
-        ("web research", research),
-        ("repository policy", repository_policy),
+        ("Hive", &hive),
+        ("web research", &research),
+        ("repository policy", &repository_policy),
     ] {
         assert!(
             source.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
