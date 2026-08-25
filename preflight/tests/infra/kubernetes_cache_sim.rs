@@ -154,6 +154,9 @@ fn kubernetes_cache_proof_has_one_pinned_hosted_entrypoint() {
     );
     for required in [
         "(inputs.tasks || inputs.task) == 'kubernetes-cache:prove'",
+        "Install Bun for Kubernetes cache proof",
+        "uses: oven-sh/setup-bun@v2",
+        "bun-version: 1.3.14",
         "K3D_VERSION: v5.9.0",
         "06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0",
         "k3d-linux-amd64",
