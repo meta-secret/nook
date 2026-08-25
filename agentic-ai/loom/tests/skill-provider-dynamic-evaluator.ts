@@ -229,7 +229,10 @@ function isComputedCallableElementAccess(
   const receiverType = inspection.checker.getTypeAtLocation(
     inspection.node.expression,
   );
-  return typeCanExposeEvaluator(receiverType);
+  const resultType = inspection.checker.getTypeAtLocation(inspection.node);
+  return (
+    typeCanExposeEvaluator(receiverType) || typeCanExposeEvaluator(resultType)
+  );
 }
 
 function typeCanExposeEvaluator(type: ts.Type): boolean {

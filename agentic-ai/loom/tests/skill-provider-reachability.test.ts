@@ -260,6 +260,7 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     "import * as mod from './fn.ts'; const key = computeKey(); const holder = [mod[key]]; holder.at(0)(source)();",
     "import { fn } from './fn.ts'; const key = computeKey(); const [evaluator] = [fn[key]]; evaluator(source)();",
     "import * as mod from './fn.ts'; const key = computeKey(); function evaluator() { return mod[key]; } evaluator()(source)();",
+    "import { fn } from './fn.ts'; const registry: Record<string, (source: string) => Function> = { evaluator: fn }; const key = computeKey(); registry[key](source)();",
     "const { getOwnPropertyDescriptor: get } = Object; get(() => {}, 'constructor')!.value(source)();",
     "const { get } = Reflect; get(() => {}, 'constructor')(source)();",
     "globalThis.Reflect.get(() => {}, 'constructor')(source)();",

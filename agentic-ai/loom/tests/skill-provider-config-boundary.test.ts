@@ -13,6 +13,7 @@ type SourceScanOptions = {
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
   readonly sources: ReadonlyMap<string, string>;
+  readonly symlinkPaths: ReadonlySet<string>;
 };
 
 type GitHubActionStep = {
@@ -99,6 +100,28 @@ function trackedPaths(request: TrackedPathsRequest): readonly string[] {
     .filter((path) => path.length > 0);
 }
 
+function trackedSymlinkPaths(): ReadonlySet<string> {
+  const spawnOptions = {
+    cmd: ['git', 'ls-files', '--stage', '-z'],
+    cwd: REPOSITORY_ROOT,
+    stderr: 'pipe' as const,
+    stdout: 'pipe' as const,
+  };
+  const result = Bun.spawnSync(spawnOptions);
+  if (result.exitCode !== 0) {
+    throw new Error(`Unable to enumerate tracked modes: ${result.stderr}`);
+  }
+  const symlinkPaths = new Set<string>();
+  for (const entry of result.stdout.toString().split('\0').filter(Boolean)) {
+    const separator = entry.indexOf('\t');
+    if (separator < 0) throw new Error('Tracked mode record has no path');
+    if (entry.startsWith('120000 ')) {
+      symlinkPaths.add(entry.slice(separator + 1));
+    }
+  }
+  return symlinkPaths;
+}
+
 async function pathsContainingProviderRoot(
   paths: readonly string[],
 ): Promise<readonly string[]> {
@@ -116,6 +139,14 @@ function isActionManifest(path: string): boolean {
   return /(^|\/)action\.ya?ml$/u.test(path);
 }
 
+function actionSourceRequiresContent(path: string): boolean {
+  return (
+    isActionManifest(path) ||
+    EXECUTABLE_SOURCE_EXTENSION.test(path) ||
+    posix.extname(path) === ''
+  );
+}
+
 function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
   const pending = [...graph.roots];
   const pendingSources: string[] = [];
@@ -124,6 +155,9 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
   while (pending.length > 0) {
     const manifestPath = pending.pop();
     if (!manifestPath || visited.has(manifestPath)) continue;
+    if (graph.symlinkPaths.has(manifestPath)) {
+      throw new Error(`Action path is a tracked symlink: ${manifestPath}`);
+    }
     visited.add(manifestPath);
     runtimePaths.add(manifestPath);
     const source = graph.sources.get(manifestPath);
@@ -173,6 +207,9 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
       const runtimePath = posix.normalize(
         posix.join(posix.dirname(manifestPath), entrypoint),
       );
+      if (graph.symlinkPaths.has(runtimePath)) {
+        throw new Error(`Action path is a tracked symlink: ${runtimePath}`);
+      }
       if (!graph.sources.has(runtimePath)) {
         throw new Error(`Action entrypoint is untracked: ${runtimePath}`);
       }
@@ -204,6 +241,9 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
         throw new Error(
           `Action relative import is unresolved: ${importer} -> ${imported.path}`,
         );
+      }
+      if (graph.symlinkPaths.has(dependency)) {
+        throw new Error(`Action path is a tracked symlink: ${dependency}`);
       }
       if (!runtimePaths.has(dependency)) {
         runtimePaths.add(dependency);
@@ -290,10 +330,11 @@ test('production Loom and runnable configuration do not consume the provider', a
   expect(productionPaths).toContain('agentic-ai/loom/src/loom-failure.ts');
   const configPaths = trackedPaths(configRequest);
   const actionPaths = trackedPaths(actionPathsRequest);
+  const symlinkPaths = trackedSymlinkPaths();
   const actionSources = new Map<string, string>();
   for (const path of actionPaths) {
     const source =
-      isActionManifest(path) || EXECUTABLE_SOURCE_EXTENSION.test(path)
+      !symlinkPaths.has(path) && actionSourceRequiresContent(path)
         ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
         : '';
     actionSources.set(path, source);
@@ -301,6 +342,7 @@ test('production Loom and runnable configuration do not consume the provider', a
   const actionGraph: ActionRuntimeGraph = {
     roots: configPaths.filter(isActionManifest),
     sources: actionSources,
+    symlinkPaths,
   };
   const reachableActionPaths = actionRuntimePaths(actionGraph);
   expect(
@@ -350,11 +392,11 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     ],
     [
       '.github/actions/nested/action.yaml',
-      'runs:\n  using: node24\n  main: main.js\n  pre: pre.js\n  post: post.js',
+      'runs:\n  using: node24\n  main: main\n  pre: pre.js\n  post: post.js',
     ],
-    ['.github/actions/nested/main.js', "import './facade.js'; main();"],
+    ['.github/actions/nested/main', "import './neutral.js'; main();"],
     [
-      '.github/actions/nested/facade.js',
+      '.github/actions/nested/neutral.js',
       "export { audit } from '../../../.agents/skills/cortex-article-structure/src/audit.ts';",
     ],
     ['.github/actions/nested/pre.js', 'prepare();'],
@@ -367,22 +409,25 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   const graph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
     sources,
+    symlinkPaths: new Set<string>(),
   };
+  expect(actionSourceRequiresContent('.github/actions/nested/main')).toBe(true);
   expect(actionRuntimePaths(graph)).toEqual([
     '.agents/skills/cortex-article-structure/src/audit.ts',
     '.github/actions/nested/action.yaml',
-    '.github/actions/nested/facade.js',
-    '.github/actions/nested/main.js',
+    '.github/actions/nested/main',
+    '.github/actions/nested/neutral.js',
     '.github/actions/nested/post.js',
     '.github/actions/nested/pre.js',
     '.github/actions/root/action.yml',
   ]);
 
   const unresolvedSources = new Map(sources);
-  unresolvedSources.delete('.github/actions/nested/main.js');
+  unresolvedSources.delete('.github/actions/nested/main');
   const unresolvedGraph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
     sources: unresolvedSources,
+    symlinkPaths: new Set<string>(),
   };
   expect(() => actionRuntimePaths(unresolvedGraph)).toThrow(
     'Action entrypoint is untracked',
@@ -390,14 +435,34 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
 
   const unresolvedImportSources = new Map(sources);
   unresolvedImportSources.set(
-    '.github/actions/nested/facade.js',
+    '.github/actions/nested/neutral.js',
     "export { audit } from './missing.js';",
   );
   const unresolvedImportGraph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
     sources: unresolvedImportSources,
+    symlinkPaths: new Set<string>(),
   };
   expect(() => actionRuntimePaths(unresolvedImportGraph)).toThrow(
     'Action relative import is unresolved',
   );
+
+  for (const path of [
+    '.github/actions/root/action.yml',
+    '.github/actions/nested/main',
+    '.github/actions/nested/pre.js',
+    '.github/actions/nested/post.js',
+    '.github/actions/nested/neutral.js',
+  ]) {
+    const symlinkPaths = new Set<string>();
+    symlinkPaths.add(path);
+    const symlinkGraph: ActionRuntimeGraph = {
+      roots: ['.github/actions/root/action.yml'],
+      sources,
+      symlinkPaths,
+    };
+    expect(() => actionRuntimePaths(symlinkGraph), path).toThrow(
+      'Action path is a tracked symlink',
+    );
+  }
 });
