@@ -224,11 +224,9 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         "Publish git-scoped native BuildKit cache",
         "Publish git-scoped WASM BuildKit cache",
         "Publish git-scoped web BuildKit cache",
-        "Publish verified browser BuildKit cache",
         "task ci:main:publish-native-cache",
         "task ci:main:publish-wasm-cache",
         "task ci:main:publish-web-cache",
-        "task ci:main:publish-web-e2e-cache",
     ] {
         assert!(
             pr.contains(marker),
@@ -255,14 +253,11 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .context("PR web job must publish its cache")?;
     let ui_demo = section(&pr, "  ui-demo:\n", "\n  preview:\n");
     let ui_demo_verify = ui_demo
-        .find("task ci:pr:ui-demo")
+        .find("task _web:test:ui-demo")
         .context("PR UI demo job must verify")?;
-    let ui_demo_publish = ui_demo
-        .find("task ci:main:publish-web-e2e-cache")
-        .context("PR UI demo job must publish its cache")?;
     let full_e2e = section(&pr, "  full-e2e-shard:\n", "\n  full-e2e:\n");
     let full_e2e_verify = full_e2e
-        .find("task ci:pr:e2e:web:artifacts")
+        .find("task _ci:main:web:e2e-only")
         .context("each PR full-e2e shard must verify its browser half")?;
     assert!(
         rust_verify < rust_publish
@@ -282,17 +277,17 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && pr[..web_publish]
                 .contains("ARC keeps the verified web graph local; Main remains reusable")
             && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && ui_demo[..ui_demo_publish]
-                .contains("ARC keeps the verified browser graph local; Main remains reusable")
-            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo[..ui_demo_publish]
-                .contains("!contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
-            && full_e2e[full_e2e_verify..].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo.contains("runs-on: nook-k0s-container")
+            && ui_demo.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && ui_demo[..ui_demo_verify]
+                .contains("steps.ui-demo-contract.outputs.required == 'true'")
+            && !ui_demo.contains("nook-docker-setup")
+            && !ui_demo.contains("publish-web-e2e-cache")
+            && full_e2e[..full_e2e_verify].contains("runs-on: nook-k0s-container")
+            && full_e2e.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && full_e2e.contains("NOOK_E2E_SHARD: ${{ matrix.shard }}/2")
             && !full_e2e.contains("task ci:main:publish-web-e2e-cache"),
-        "PR producers must verify read-only, keep ARC graphs local, and retain isolated hosted publication"
+        "PR producers must verify read-only, keep ARC graphs local, and hand exact browser images to container ARC consumers"
     );
     Ok(())
 }

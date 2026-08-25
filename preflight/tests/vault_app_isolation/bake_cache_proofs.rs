@@ -664,8 +664,9 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
         "Hive verification must retain optional exact/Main importer and exporter capabilities for hosted fallback and Main publication"
     );
     assert!(
-        workflow.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
-            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
+        workflow.contains(
+            "if: success() && github.event_name == 'push' && github.ref == 'refs/heads/main'"
+        ) && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
             && workflow.matches("Publish verified Hive cache").count() == 1
             && !workflow.contains("verify-hosted:")
             && workflow.contains("verify-fork:")

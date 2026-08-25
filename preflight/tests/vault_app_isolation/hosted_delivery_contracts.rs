@@ -116,7 +116,6 @@ fn assert_docker_setup_contract(root: &Path) {
         "ARC keeps the verified native graph local; Main and sccache remain reusable",
         "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
         "ARC keeps the verified web graph local; Main remains reusable",
-        "ARC keeps the verified browser graph local; Main remains reusable",
     ] {
         assert!(
             pr.contains(local_graph_message),
