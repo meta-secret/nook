@@ -47,7 +47,6 @@ import {
   createSecondaryButton,
   createTextButton,
   renderPreviewDetails,
-  resetEnrollmentHeadline,
   setHostDescription,
   type EnrollmentFlowViewHost,
   type EnrollmentPageHints,
@@ -234,6 +233,11 @@ export async function cancelActiveEnrollmentCeremony(): Promise<void> {
   await dismissStagedEnrollment(dismissArgs)
 }
 
+function requestFreshEnrollmentActions(host: EnrollmentFlowHost): void {
+  clearEnrollmentSection(host.panel)
+  host.requestWorkflowReclassification()
+}
+
 type CommitStagedEnrollmentArgs = {
   host: EnrollmentFlowHost
   section: HTMLElement
@@ -337,18 +341,16 @@ function enrollmentEvidenceCallbacks({
       return commitStagedEnrollment(nookArrowArgs0)
     },
     reject: () => {
-      void cancelActiveEnrollmentCeremony()
       const nookTypedArgs0_5: Parameters<typeof setHostDescription>[0] = {
         host,
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
       }
       setHostDescription(nookTypedArgs0_5)
-      host.setBusy(false)
-      const nookTypedArgs0_6: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_6)
+      host.setBusy(true)
+      void cancelActiveEnrollmentCeremony().finally(() => {
+        host.setBusy(false)
+        requestFreshEnrollmentActions(host)
+      })
     },
     timeout: () => {
       // Keep the staged secret; ask the user to finish verification or cancel.
@@ -437,11 +439,7 @@ async function beginEnrollmentCeremony({
     }
     setHostDescription(nookTypedArgs0_10)
     host.setBusy(false)
-    const nookTypedArgs0_11: Parameters<typeof renderEnrollmentActions>[0] = {
-      host,
-      hints: detectEnrollmentHints(),
-    }
-    renderEnrollmentActions(nookTypedArgs0_11)
+    requestFreshEnrollmentActions(host)
     return
   }
   const { response: stageResponse } = stageDelivery
@@ -457,11 +455,7 @@ async function beginEnrollmentCeremony({
     }
     setHostDescription(nookTypedArgs0_12)
     host.setBusy(false)
-    const nookTypedArgs0_13: Parameters<typeof renderEnrollmentActions>[0] = {
-      host,
-      hints: detectEnrollmentHints(),
-    }
-    renderEnrollmentActions(nookTypedArgs0_13)
+    requestFreshEnrollmentActions(host)
     return
   }
   const stageId = stageResponse.stageId
@@ -506,17 +500,11 @@ async function beginEnrollmentCeremony({
     labelKey: BROWSER_MESSAGE_KEYS.WidgetEnrollCancel,
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
-      void cancelActiveEnrollmentCeremony()
-      const nookTypedArgs0_17: Parameters<typeof resetEnrollmentHeadline>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      resetEnrollmentHeadline(nookTypedArgs0_17)
-      const nookTypedArgs0_18: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_18)
+      host.setBusy(true)
+      void cancelActiveEnrollmentCeremony().finally(() => {
+        host.setBusy(false)
+        requestFreshEnrollmentActions(host)
+      })
     },
   }
   const cancelButton = createTextButton(nookTypedArgs1_2)
@@ -587,11 +575,7 @@ async function showQrPreview({
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollFailed),
       }
       setHostDescription(nookTypedArgs0_20)
-      const nookTypedArgs0_21: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_21)
+      requestFreshEnrollmentActions(host)
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
       return
@@ -604,11 +588,7 @@ async function showQrPreview({
         text: unavailableMessage(host),
       }
       setHostDescription(nookTypedArgs0_22)
-      const nookTypedArgs0_23: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_23)
+      requestFreshEnrollmentActions(host)
       clearOtpauthUri(otpauthUri)
       clearCandidate(candidate)
       return
@@ -664,12 +644,7 @@ async function showQrPreview({
         if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
         clearOtpauthUri(otpauthUri)
         clearCandidate(candidate)
-        const nookTypedArgs0_29: Parameters<typeof resetEnrollmentHeadline>[0] =
-          { host, hints: detectEnrollmentHints() }
-        resetEnrollmentHeadline(nookTypedArgs0_29)
-        const nookTypedArgs0_30: Parameters<typeof renderEnrollmentActions>[0] =
-          { host, hints: detectEnrollmentHints() }
-        renderEnrollmentActions(nookTypedArgs0_30)
+        requestFreshEnrollmentActions(host)
       },
     }
     const cancelButton = createTextButton(nookTypedArgs1_4)
@@ -729,16 +704,7 @@ function showQrCandidatePicker({
     onClick: (event) => {
       if (!isTrustedAuthAction(event.isTrusted) || host.isBusy()) return
       candidates.forEach((candidate) => clearCandidate(candidate))
-      const nookTypedArgs0_34: Parameters<typeof resetEnrollmentHeadline>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      resetEnrollmentHeadline(nookTypedArgs0_34)
-      const nookTypedArgs0_35: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_35)
+      requestFreshEnrollmentActions(host)
     },
   }
   const cancelButton = createTextButton(nookTypedArgs1_5)
@@ -775,11 +741,7 @@ async function startQrEnrollment({
         ),
       }
       setHostDescription(nookTypedArgs0_37)
-      const nookTypedArgs0_38: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_38)
+      requestFreshEnrollmentActions(host)
       return
     }
     if (result.status === 'empty') {
@@ -788,11 +750,7 @@ async function startQrEnrollment({
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollNoQr),
       }
       setHostDescription(nookTypedArgs0_39)
-      const nookTypedArgs0_40: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_40)
+      requestFreshEnrollmentActions(host)
       return
     }
     if (result.status === 'ambiguous') {
@@ -811,11 +769,7 @@ async function startQrEnrollment({
         text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollNoQr),
       }
       setHostDescription(nookTypedArgs0_42)
-      const nookTypedArgs0_43: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_43)
+      requestFreshEnrollmentActions(host)
       return
     }
     const uri = { value: candidate.otpauthUri }
@@ -888,13 +842,7 @@ export function renderEnrollmentActions({
         const backupHost: BackupEnrollmentHost = {
           ...host,
           returnToActions: () => {
-            const actionsContext: Parameters<
-              typeof renderEnrollmentActions
-            >[0] = {
-              host,
-              hints: detectEnrollmentHints(),
-            }
-            renderEnrollmentActions(actionsContext)
+            requestFreshEnrollmentActions(host)
           },
         }
         const backupEnrollment: Parameters<typeof startBackupEnrollment>[0] = {

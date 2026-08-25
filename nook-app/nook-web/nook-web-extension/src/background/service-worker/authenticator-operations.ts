@@ -476,20 +476,23 @@ export async function websiteAuthenticatorEnrollStage({
   const authorizationGeneration = accountPickerAuthorizationGeneration()
   const otpauthUri = { value: message.payload.otpauthUri }
   message.payload.otpauthUri = ''
-  const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
-    sender,
+  const nookTypedArgs0_10: Parameters<
+    typeof authorizedWebsiteGrant
+  >[0]['reasons'] = {
+    forbidden: 'authenticator-forbidden-origin',
+    missing: 'authenticator-vault-not-granted',
+    locked: 'authenticator-locked',
+  }
+  const accessArgs: Parameters<typeof authorizedWebsiteGrant>[0] = {
     origin: message.payload.origin,
+    vaultStoreId: message.payload.vaultStoreId,
+    sender,
+    reasons: nookTypedArgs0_10,
   }
-  if (!isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
+  const access = await authorizedWebsiteGrant(accessArgs)
+  if ('response' in access) {
     otpauthUri.value = ''
-    return { ok: false, reason: 'authenticator-forbidden-origin' }
-  }
-  const grant = (await passwordPairingGrants()).find(
-    (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
-  )
-  if (!grant) {
-    otpauthUri.value = ''
-    return { ok: false, reason: 'authenticator-vault-not-granted' }
+    return access.response
   }
   if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
     otpauthUri.value = ''
