@@ -101,7 +101,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
     promote \
     1 \
     "$promotion_log" \
-    "type=registry,ref=${cache_ref},mode=max,timeout=10m"
+    "type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m"
   rm -f "$promotion_log"
   trap - EXIT
   bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"

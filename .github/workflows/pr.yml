@@ -424,6 +424,14 @@ jobs:
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs
 
+      - name: Install Bun for registry cache descriptor tests
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Test registry cache descriptor integrity
+        run: bun test ./.github/scripts/registry-cache-descriptor.test.ts
+
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:

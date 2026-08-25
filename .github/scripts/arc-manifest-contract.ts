@@ -282,6 +282,7 @@ wasmCacheProof.requireAll([
   "A repair solve must never import the ref it is replacing",
   'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',
   "nook-rust-wasm-source-v2:buildcache,ignore-error=true",
+  "compression=zstd,force-compression=true",
   'builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}',
 ]);
 const cacheRoutingStart = wasmCacheProofSource.indexOf(

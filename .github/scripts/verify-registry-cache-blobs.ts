@@ -1,10 +1,10 @@
 import { createHash } from 'node:crypto'
 
-interface RegistryDescriptor {
-  digest: string
-  mediaType: string
-  size: number
-}
+import {
+  registerRegistryDescriptor,
+  type RegistryDescriptor,
+  type RegistryDescriptorRegistration,
+} from './registry-cache-descriptor'
 
 interface RegistryDocument {
   config?: RegistryDescriptor
@@ -74,6 +74,7 @@ const registryRequest = async (input: RegistryRequest): Promise<Response> => {
 }
 
 const descriptors = new Map<string, RegistryDescriptor>()
+const manifestDescriptors = new Map<string, RegistryDescriptor>()
 const visitedManifests = new Set<string>()
 const manifestRequest = (reference: string): RegistryRequest => ({ path: `manifests/${reference}` })
 const childManifestInput = (descriptor: RegistryDescriptor): ManifestInput => ({
@@ -82,8 +83,25 @@ const childManifestInput = (descriptor: RegistryDescriptor): ManifestInput => ({
 })
 const blobHeadRequest = (path: string): RegistryRequest => ({ method: 'HEAD', path })
 const blobByteRequest = (path: string): RegistryRequest => ({ path, range: 'bytes=0-0' })
+const registerBlobDescriptor = (descriptor: RegistryDescriptor): void => {
+  const registration: RegistryDescriptorRegistration = {
+    collection: descriptors,
+    descriptor,
+    kind: 'blob',
+  }
+  registerRegistryDescriptor(registration)
+}
+const registerManifestDescriptor = (descriptor: RegistryDescriptor): void => {
+  const registration: RegistryDescriptorRegistration = {
+    collection: manifestDescriptors,
+    descriptor,
+    kind: 'manifest',
+  }
+  registerRegistryDescriptor(registration)
+}
 
 const collectManifest = async (input: ManifestInput): Promise<void> => {
+  if (input.descriptor) registerManifestDescriptor(input.descriptor)
   if (visitedManifests.has(input.reference)) return
   visitedManifests.add(input.reference)
   const response = await registryRequest(manifestRequest(input.reference))
@@ -102,8 +120,8 @@ const collectManifest = async (input: ManifestInput): Promise<void> => {
     }
   }
   const document = JSON.parse(new TextDecoder().decode(bytes)) as RegistryDocument
-  if (document.config) descriptors.set(document.config.digest, document.config)
-  for (const layer of document.layers ?? []) descriptors.set(layer.digest, layer)
+  if (document.config) registerBlobDescriptor(document.config)
+  for (const layer of document.layers ?? []) registerBlobDescriptor(layer)
   for (const manifest of document.manifests ?? []) await collectManifest(childManifestInput(manifest))
 }
 
