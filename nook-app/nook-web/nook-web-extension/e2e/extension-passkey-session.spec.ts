@@ -514,9 +514,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     const fillSavedLogin = fillWidget.getByRole('button', {
       name: 'Fill saved login',
     })
-    await expect(compactLauncher.or(fillSavedLogin)).toBeVisible({
-      timeout: 20_000,
-    })
+    await expect(
+      compactLauncher.or(fillSavedLogin).filter({ visible: true }),
+    ).toBeVisible({ timeout: 20_000 })
     if (await compactLauncher.isVisible()) {
       await compactLauncher.click()
     }
