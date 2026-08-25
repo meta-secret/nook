@@ -278,7 +278,7 @@ containerHook.requireAll([
   "mountPath: /mnt/externals",
   "mountPath: /mnt/work",
   "mountPath: /mnt/github",
-  "chmod -R g+rwX /mnt/work",
+  "chmod -R g+rwX /mnt/work/nook",
 ]);
 containerHook.forbidAll([
   "privileged: true",

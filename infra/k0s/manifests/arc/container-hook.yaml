@@ -29,7 +29,7 @@ data:
               mkdir -p /mnt/externals /mnt/work /mnt/github
               && mv /home/runner/externals/* /mnt/externals/
               && mkdir -p /mnt/work/nook/nook
-              && chmod -R g+rwX /mnt/work
+              && chmod -R g+rwX /mnt/work/nook
           securityContext:
             runAsGroup: 1001
             runAsUser: 1001
