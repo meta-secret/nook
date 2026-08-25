@@ -160,7 +160,7 @@ function blockFromNode(args: BlockFromNodeArgs): CortexArticleBlock {
   if (node.type === 'list') {
     return {
       line,
-      ordered: node.ordered === true,
+      ordered: hasVisibleOrderedProcedureList(node),
       type: CortexArticleBlockKind.List,
     };
   }
@@ -221,6 +221,17 @@ function hasVisibleSemanticContent(
   return node.type !== 'break';
 }
 
+function hasVisibleOrderedProcedureList(node: Nodes): boolean {
+  if (node.type === 'blockquote' || node.type === 'code') return false;
+  if (node.type === 'html') return false;
+  if (node.type === 'list' && node.ordered === true) {
+    const inspection: VisibleSemanticContentInspection = { node };
+    return hasVisibleSemanticContent(inspection);
+  }
+  if (!('children' in node)) return false;
+  return node.children.some(hasVisibleOrderedProcedureList);
+}
+
 function htmlContainerDepths(
   children: readonly RootContent[],
 ): HtmlContainerDepth[] {
@@ -265,7 +276,10 @@ function htmlContainerDepths(
             (isNonRenderedHtmlContainer(start.name) ? 1 : 0),
         };
       }
-      starts.splice(startIndex);
+      const retainedTemplates = starts
+        .slice(startIndex + 1)
+        .filter((candidate) => candidate.name === 'template');
+      starts.splice(startIndex, starts.length, ...retainedTemplates);
     }
   }
   for (const start of starts) {
@@ -413,14 +427,17 @@ function htmlTokens(value: string): readonly HtmlToken[] {
     }
     if (value[cursor] === '<') {
       const endArgs: FindHtmlTagEndArgs = { start: cursor, value };
-      const tagEnd = findHtmlTagEnd(endArgs);
-      if (tagEnd >= 0) {
+      const processingInstruction = value.startsWith('<?', cursor);
+      const tagEnd = processingInstruction
+        ? value.indexOf('>', cursor + 2)
+        : findHtmlTagEnd(endArgs);
+      if (tagEnd >= 0 || processingInstruction) {
         const token: HtmlToken = {
           kind: HtmlTokenKind.Tag,
-          value: value.slice(cursor, tagEnd + 1),
+          value: value.slice(cursor, tagEnd < 0 ? value.length : tagEnd + 1),
         };
         tokens.push(token);
-        cursor = tagEnd + 1;
+        cursor = tagEnd < 0 ? value.length : tagEnd + 1;
         const rawName = rawHtmlContainerName(token.value);
         if (rawName !== false) {
           const closeArgs: FindRawHtmlCloseArgs = {
@@ -496,7 +513,7 @@ function hasVisibleSemanticText(value: string): boolean {
 
 function hasVisibleUnparsedHtmlMarkup(value: string): boolean {
   if (/^<!doctype(?:\s|>)/iu.test(value)) return false;
-  if (/^<\?[\s\S]*\?>$/u.test(value)) return false;
+  if (/^<\?/u.test(value)) return false;
   const cdata = /^<!\[CDATA\[([\s\S]*)\]\]>$/u.exec(value);
   const cdataText = cdata?.[1] ?? false;
   if (cdataText !== false) return hasVisibleSemanticText(cdataText);

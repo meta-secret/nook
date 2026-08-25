@@ -310,6 +310,23 @@ test('does not satisfy a procedure with an empty ordered marker', () => {
   ]);
 });
 
+test('recognizes only visible nested ordered procedure lists', () => {
+  const acceptedArgs: MakeDocumentArgs = {
+    path: '.cortex/nested-procedure.md',
+    content:
+      '# Nested\n\n## Recovery procedure\n\n- If needed:\n  1. Recover.\n',
+  };
+  expect(audit([makeDocument(acceptedArgs)])).toEqual([]);
+  const rejectedArgs: MakeDocumentArgs = {
+    path: '.cortex/example-procedure.md',
+    content:
+      '# Example\n\n## Recovery procedure\n\n> 1. Quoted.\n\n```markdown\n1. Fenced.\n```\n\n<div>\n\n1. HTML.\n\n</div>\n',
+  };
+  expect(audit([makeDocument(rejectedArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
 test('treats thematic breaks as invisible density-resetting separators', () => {
   const emptyArgs: MakeDocumentArgs = {
     path: '.cortex/break-only.md',
@@ -379,6 +396,8 @@ test('recursively classifies blank tables and empty HTML containers', () => {
     '<div>&#8203;</div>',
     '<!doctype html>',
     '<?xml version="1.0"?>',
+    '<?hidden>',
+    '<?hidden',
     '<![CDATA[]]>',
     '<!ENTITY foo>',
     '<!-- hidden',
@@ -461,7 +480,7 @@ test('implicitly closes an HTML paragraph before a root article', () => {
   ]);
 });
 
-test('recovers root scope after mismatched HTML container closes', () => {
+test('recovers mismatched scope while retaining descendant templates', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/html-mismatch.md',
     content: `# HTML mismatch
@@ -489,6 +508,14 @@ test('recovers root scope after mismatched HTML container closes', () => {
   expect(findings).toHaveLength(1);
   expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
   expect(findings[0]?.line).toBe(15);
+  const templateArgs: MakeDocumentArgs = {
+    path: '.cortex/template-mismatch.md',
+    content:
+      '# Template mismatch\n\n## Examples\n\n<div>\n\n<template>\n\n</div>\n\n## Recovery procedure\n\n- Hidden.\n',
+  };
+  expect(audit([makeDocument(templateArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.EmptyArticle,
+  ]);
 });
 
 test('ignores tag-looking text inside non-rendered HTML containers', () => {
