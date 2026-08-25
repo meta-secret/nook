@@ -5,6 +5,8 @@ metadata:
   namespace: arc-runners
 data:
   content.yaml: |
+    apiVersion: v1
+    kind: PodTemplate
     metadata:
       labels:
         nook.nokey.sh/role: arc-job-container

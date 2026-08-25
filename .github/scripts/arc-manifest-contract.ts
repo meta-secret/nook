@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { readdir } from "node:fs/promises";
 
 import { assertHiveRenderContract } from "./arc-hive-render-contract";
 
@@ -79,6 +80,16 @@ interface ArcValues {
       volumes: ArcVolume[];
     };
   };
+}
+
+interface WorkflowJob {
+  if?: string;
+  "runs-on"?: string;
+  uses?: string;
+}
+
+interface WorkflowManifest {
+  jobs?: Record<string, WorkflowJob>;
 }
 
 const runnersSource = await read(
@@ -232,6 +243,8 @@ containerRunners.forbidAll([
   "hostPath:",
 ]);
 containerHook.requireAll([
+  "apiVersion: v1",
+  "kind: PodTemplate",
   "name: nook-arc-container-hook",
   'name: "$job"',
   "nook.nokey.sh/arc-build: \"true\"",
@@ -347,7 +360,7 @@ mainWorkflow.requireAll([
   "deploy:",
   "Upload verified development deployment handoff",
   "main-web-deploy-${{ github.run_id }}",
-  "runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}",
+  "runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}",
   "runs-on: nook-k0s-container",
   "Publish exact-source browser job image",
   "task _ci:main:web:e2e-only",
@@ -365,8 +378,14 @@ prWorkflow.requireAll([
   "name: Full browser e2e (main fix)",
   "needs: [full-e2e-shard, wasm]",
   "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
-  "artifact-suffix: shard-${{ matrix.shard }}",
+  "Publish exact-source PR browser job image",
+  "nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "runs-on: nook-k0s-container",
+  "task _ci:main:web:e2e-only",
+  "task _extension:test:e2e",
+  "task _web:test:ui-demo",
 ]);
+prWorkflow.forbid("    runs-on: ubuntu-latest");
 webTasks.requireAll([
   "_web:test:e2e:run-groups:",
   'set -- "--shard=$NOOK_E2E_SHARD"',
@@ -426,3 +445,50 @@ workerTasks.requireAll([
 ]);
 
 await assertHiveRenderContract({ root });
+
+const hostedTrustBoundary = new Set(["hive.yml#verify-fork"]);
+const workflowsDir = resolve(root, ".github/workflows");
+const workflowFiles = (await readdir(workflowsDir))
+  .filter((file) => file.endsWith(".yml") || file.endsWith(".yaml"))
+  .sort();
+const observedHostedExceptions = new Set<string>();
+
+for (const workflowFile of workflowFiles) {
+  const workflow = Bun.YAML.parse(
+    await Bun.file(resolve(workflowsDir, workflowFile)).text(),
+  ) as WorkflowManifest;
+  for (const [jobName, job] of Object.entries(workflow.jobs ?? {})) {
+    if (job.uses) continue;
+    const placement = job["runs-on"];
+    if (!placement) {
+      throw new Error(`${workflowFile}#${jobName} has no runner placement`);
+    }
+    const identity = `${workflowFile}#${jobName}`;
+    if (placement === "ubuntu-latest") {
+      if (!hostedTrustBoundary.has(identity)) {
+        throw new Error(`${identity} routes trusted work to GitHub cloud`);
+      }
+      observedHostedExceptions.add(identity);
+      const condition = job.if ?? "";
+      if (!condition.includes("head.repo.full_name") || !condition.includes("dependabot[bot]")) {
+        throw new Error(`${identity} must be restricted to forks and Dependabot`);
+      }
+      continue;
+    }
+    if (placement.includes("ubuntu-latest")) {
+      if (!placement.includes("head.repo.full_name")) {
+        throw new Error(`${identity} has an unguarded GitHub-hosted fallback`);
+      }
+      continue;
+    }
+    if (!placement.includes("nook-k0s") && !placement.includes("NOOK_RUNS_ON")) {
+      throw new Error(`${identity} is not routed through an ARC scale set`);
+    }
+  }
+}
+
+for (const exception of hostedTrustBoundary) {
+  if (!observedHostedExceptions.has(exception)) {
+    throw new Error(`stale hosted runner exception: ${exception}`);
+  }
+}

@@ -64,7 +64,7 @@ env:
 jobs:
   product-paths:
     name: Classify Main paths
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     outputs:
       changed: ${{ steps.classify.outputs.changed }}
     steps:
@@ -113,7 +113,7 @@ jobs:
     needs: [product-paths]
     if: needs.product-paths.outputs.changed == 'true'
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -175,7 +175,7 @@ jobs:
     # Serialize cache uploads after native verification while retaining the producer's
     # job-scoped builder for a no-rebuild export.
     needs: [rust]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -246,7 +246,7 @@ jobs:
   wasm-cache-proof:
     name: Portable WASM cache publication proof
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -280,7 +280,7 @@ jobs:
   web:
     name: Verify web build
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -480,7 +480,7 @@ jobs:
   deploy:
     name: Deploy development
     needs: [web, web-e2e, wasm-cache-proof]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     environment:
       name: development
       url: https://dev.nokey.sh/

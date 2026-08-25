@@ -38,9 +38,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
-    name: Playwright (${{ inputs.suite }})
-    runs-on: ubuntu-latest
+  image:
+    name: Build PR browser image
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Resolve PR head SHA
         id: pr
@@ -76,14 +76,29 @@ jobs:
           # head. Restore shared layers, but never replace the default-branch cache scopes.
           cache-write: "false"
 
-      - name: Build (format, wasm, verify, web)
-        run: task ci:main:build SETUP_TARGET=nook-web-e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
+      - name: Publish exact-source browser job image
+        run: task web:e2e:kubernetes-image
         env:
-          CI: true
+          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+
+  e2e:
+    name: Playwright (${{ inputs.suite }})
+    needs: image
+    runs-on: nook-k0s-container
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-manual-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+    defaults:
+      run:
+        working-directory: /meta-secret/nook
+    steps:
 
       - name: E2e (e2e-pr)
         if: inputs.suite == 'e2e-pr' || inputs.suite == 'local'
-        run: task web:test:e2e:pr:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
+        run: task _web:test:e2e:pr:parallel
         env:
           CI: true
 
@@ -91,13 +106,13 @@ jobs:
         if: >-
           inputs.suite == 'all' || inputs.suite == 'e2e' ||
           inputs.suite == 'sync-stub'
-        run: task web:test:e2e:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=500 WASM_BUILD_MODE=prod
+        run: task _web:test:e2e:parallel
         env:
           CI: true
 
       - name: E2e (sync-live)
         if: inputs.suite == 'all' || inputs.suite == 'sync-live'
-        run: task web:test:e2e:sync-live:parallel VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000 WASM_BUILD_MODE=prod
+        run: task _web:test:e2e:sync-live:parallel
         env:
           CI: true
           NOOK_E2E_SYNC_PROVIDER: github

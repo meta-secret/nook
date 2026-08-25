@@ -144,7 +144,7 @@ jobs:
   web-e2e-image:
     if: (inputs.tasks || inputs.task) == 'web:e2e' || (inputs.tasks || inputs.task) == 'extension:e2e'
     name: Remote / browser image
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 30
     env:
       DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}

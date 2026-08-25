@@ -36,10 +36,64 @@ env:
   CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS: "500"
 
 jobs:
+  prepare:
+    name: Prepare production browser image
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    steps:
+      - name: Checkout release source
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          fetch-depth: 0
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+
+      - name: Resolve release version
+        id: release
+        env:
+          REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${REQUESTED_VERSION#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?(\+[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$ ]]; then
+            echo "Expected a semantic version; received: $REQUESTED_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish exact-source production browser image
+        run: task web:e2e:kubernetes-image
+        env:
+          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          VITE_BASE: ${{ env.CI_RELEASE_VITE_BASE }}
+          VITE_SITE_URL: ${{ env.CI_RELEASE_URL }}
+          VITE_PUBLIC_APP_URL: ${{ env.CI_RELEASE_URL }}
+          VITE_SIMPLE_APP_URL: https://simple.nokey.sh
+          VITE_SENTINEL_APP_URL: https://sentinel.nokey.sh
+          VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
+          WASM_BUILD_MODE: prod
+          NOOK_SIMPLE_VAULT_URL: https://simple.nokey.sh/
+          NOOK_EXTENSION_CHANNEL: production
+          NOOK_EXTENSION_VERSION: ${{ steps.release.outputs.version }}
+          NOOK_EXTENSION_COMMIT: ${{ steps.release.outputs.sha }}
+          NOOK_EXTENSION_SITE_URL: https://nokey.sh/
+
   deploy:
     name: Verify and deploy production
-    # Release restores the main-seeded BuildKit cache on elastic GitHub-hosted capacity.
-    runs-on: ubuntu-latest
+    needs: prepare
+    runs-on: nook-k0s-container
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -49,22 +103,6 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
-
-      # Keep the current workflow's composite action in an ignored side checkout. Docker setup runs
-      # after the requested source checkout so hashFiles fingerprints that exact release source,
-      # while an older manual release cannot revive retired cache setup logic.
-      - name: Checkout release workflow tooling
-        uses: actions/checkout@v7
-        with:
-          ref: ${{ github.sha }}
-          path: .nook/release-workflow
-
-      - name: Docker setup
-        uses: ./.nook/release-workflow/.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
       - name: Resolve and validate release
         id: release
@@ -122,15 +160,8 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Preflight, check, build once, and e2e
-        run: >-
-          task ci:main
-          VITE_BASE=${{ env.CI_RELEASE_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_RELEASE_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}
-          VITE_SIMPLE_APP_URL=https://simple.nokey.sh
-          VITE_SENTINEL_APP_URL=https://sentinel.nokey.sh
-          VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}
-          WASM_BUILD_MODE=prod
+        working-directory: /meta-secret/nook
+        run: task _ci:main
         env:
           CI: true
           GIT_COMMIT_ID: ${{ steps.release.outputs.sha }}
@@ -153,8 +184,13 @@ jobs:
           git tag --annotate "$RELEASE_TAG" "$RELEASE_SHA" --message "Nook $RELEASE_TAG"
           git push origin "refs/tags/$RELEASE_TAG"
 
-      - name: Extract dist from nook-web image
-        run: task docker:extract:dist
+      - name: Copy verified release artifacts into the Actions workspace
+        run: |
+          set -euo pipefail
+          rm -rf nook-app/nook-web/nook-web-app/dist nook-app/nook-web/nook-vault-simple/dist nook-app/nook-web/nook-vault-sentinel/dist
+          cp -R /meta-secret/nook/nook-app/nook-web/nook-web-app/dist nook-app/nook-web/nook-web-app/dist
+          cp -R /meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist nook-app/nook-web/nook-vault-simple/dist
+          cp -R /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist nook-app/nook-web/nook-vault-sentinel/dist
 
       - name: Add release metadata
         env:
