@@ -98,6 +98,16 @@ describe('identity access cards', () => {
               label: I18N_KEYS.DevicesAccessKeeperLabel,
               value: 'Proton Pass',
             },
+            {
+              kind: 'created',
+              label: I18N_KEYS.DevicesAccessCreated,
+              value: 'Mar 1, 2026, 12:00 PM',
+            },
+            {
+              kind: 'last-used',
+              label: I18N_KEYS.DevicesAccessLastUsedColumn,
+              value: 'Mar 1, 2026, 12:00 PM',
+            },
           ],
         },
       },

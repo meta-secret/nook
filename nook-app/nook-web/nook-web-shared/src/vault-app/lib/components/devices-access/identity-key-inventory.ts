@@ -78,7 +78,7 @@ export function buildIdentityKeyInventory({
               : vault.t(fallbackTitleArgs),
       appId: member.appId,
     };
-    if (!isLocal || localProtection === DeviceAccessProtectionKind.Missing) {
+    if (!isLocal) {
       const linkedRelationshipArgs: Parameters<typeof vault.t>[0] = {
         key: I18N_KEYS.DevicesAccessAppLinkedToIdentity,
         replacements: { identity: identity.label },

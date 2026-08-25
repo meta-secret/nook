@@ -114,7 +114,7 @@ const directorySnapshot = {
     index === 0
       ? identitySnapshot(identities[0])
       : identitySnapshot(identities[1]),
-  deviceAccess: () => accessSnapshot,
+  device_access: () => accessSnapshot,
   free,
 }
 

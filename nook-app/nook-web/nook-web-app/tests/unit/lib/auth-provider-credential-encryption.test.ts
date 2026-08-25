@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, test } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, test } from 'vitest'
 import { default as initNookWasm, NookVaultManager } from '$app-wasm'
 import {
   DEFAULT_DRIVE_BACKUP_NAME,
@@ -20,6 +20,17 @@ import {
 
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
+
+async function clearAuthProviderDatabase(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase('nook_auth')
+    request.onsuccess = () => resolve()
+    request.onerror = () =>
+      reject(request.error ?? new Error('Failed to clear nook_auth.'))
+    request.onblocked = () =>
+      reject(new Error('Clearing nook_auth was blocked by an open connection.'))
+  })
+}
 
 function githubProvider(id: string, pat: string): StorageProvider {
   return {
@@ -117,6 +128,8 @@ describe.sequential(
         setup.free()
       }
     })
+
+    beforeEach(clearAuthProviderDatabase)
 
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'
