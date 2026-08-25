@@ -54,12 +54,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     type IdentityBridgeCopy,
     type IdentityBridgeVaultSelection,
   } from './devices-access/identity-bridge-model'
-  import {
-    buildPasskeyCardSummary,
-    PASSKEY_CARD_SUMMARY_ABSENT,
-    PasskeyCardSummaryKind,
-    type PasskeyCardSummaryState,
-  } from './devices-access/passkey-card'
+  import { passkeyCardSummaryState } from './devices-access/passkey-card'
 
   let {
     vault,
@@ -76,25 +71,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     kind: IdentityDirectoryLoadKind.Loading,
   })
 
-  type ProtectionSummaryRequest = {
-    readonly view: DashboardView
-  }
-
-  function protectionSummaryFor({
-    view,
-  }: ProtectionSummaryRequest): PasskeyCardSummaryState {
-    if (!isPasskeyProtection(view.protection)) {
-      return PASSKEY_CARD_SUMMARY_ABSENT
-    }
-    const summaryArgs: Parameters<typeof buildPasskeyCardSummary>[0] = {
-      vault,
-      view,
-    }
-    return {
-      kind: PasskeyCardSummaryKind.Present,
-      summary: buildPasskeyCardSummary(summaryArgs),
-    }
-  }
   let selectedRepresentation = $state(DevicesAccessRepresentationKind.List)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
   let selectedVault = $state<IdentityBridgeVaultSelection>({
@@ -700,10 +676,13 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 view.deviceId.kind === DashboardTextKind.Known
                   ? view.deviceId.value
                   : vault.t(I18N_KEYS.DevicesAccessUnknown)}
-              {@const protectionSummaryRequest: ProtectionSummaryRequest = {
+              {@const protectionSummaryRequest: Parameters<
+                typeof passkeyCardSummaryState
+              >[0] = {
+                vault,
                 view,
               }}
-              {@const protectionSummary = protectionSummaryFor(
+              {@const protectionSummary = passkeyCardSummaryState(
                 protectionSummaryRequest,
               )}
               {@const companionIdentity =

@@ -10,6 +10,7 @@ import {
 } from "../devices-access-dashboard-state";
 import {
   formatAccessDate,
+  isPasskeyProtection,
   lastUsedLabel,
   protectionLabel,
 } from "./access-chain";
@@ -186,5 +187,17 @@ export function buildPasskeyCardSummary({
         value: lastUsedLabel(lastUsedLabelArgs),
       },
     ],
+  };
+}
+
+export function passkeyCardSummaryState(
+  request: PasskeyCardSummaryRequest,
+): PasskeyCardSummaryState {
+  if (!isPasskeyProtection(request.view.protection)) {
+    return PASSKEY_CARD_SUMMARY_ABSENT;
+  }
+  return {
+    kind: PasskeyCardSummaryKind.Present,
+    summary: buildPasskeyCardSummary(request),
   };
 }
