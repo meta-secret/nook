@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   BUILDKIT_ADDRESS,
   BUILDKIT_IMAGE,
+  BUILDKIT_SHARD_ADDRESSES,
   REGISTRY_HOST,
   SIMULATION_DIRECTORY,
   applyYaml,
@@ -32,6 +33,11 @@ export interface BuildJobResultRequest {
   readonly kubeconfigPath: string;
   readonly name: string;
   readonly expectCached: boolean;
+}
+
+interface JobTerminalRequest {
+  readonly kubeconfigPath: string;
+  readonly name: string;
 }
 
 export interface PodNodeRequest {
@@ -213,18 +219,9 @@ export function startBuildJob(request: BuildJobRequest): void {
 }
 
 export function finishBuildJob(request: BuildJobResultRequest): string {
-  const waitOutcome = runKubectl({
+  const completed = waitForJobTerminal({
     kubeconfigPath: request.kubeconfigPath,
-    label: `wait for build job ${request.name}`,
-    command: [
-      "-n",
-      "arc-runners",
-      "wait",
-      `job/${request.name}`,
-      "--for=condition=complete",
-      "--timeout=300s",
-    ],
-    allowFailure: true,
+    name: request.name,
   });
   const logs = runKubectl({
     kubeconfigPath: request.kubeconfigPath,
@@ -233,7 +230,7 @@ export function finishBuildJob(request: BuildJobResultRequest): string {
     allowFailure: true,
   }).stdout;
   process.stdout.write(`\n== ${request.name} ==\n${logs}`);
-  if (waitOutcome.exitCode !== 0) {
+  if (!completed) {
     const description = runKubectl({
       kubeconfigPath: request.kubeconfigPath,
       label: `describe failed build job ${request.name}`,
@@ -248,6 +245,29 @@ export function finishBuildJob(request: BuildJobResultRequest): string {
     assertCacheStepDidNotExecute({ logs, jobName: request.name });
   }
   return logs;
+}
+
+function waitForJobTerminal(request: JobTerminalRequest): boolean {
+  const deadline = Date.now() + 300_000;
+  while (Date.now() < deadline) {
+    const conditions = runKubectl({
+      kubeconfigPath: request.kubeconfigPath,
+      label: `read terminal state for build job ${request.name}`,
+      command: [
+        "-n",
+        "arc-runners",
+        "get",
+        `job/${request.name}`,
+        "-o",
+        'jsonpath={range .status.conditions[?(@.status=="True")]}{.type}{"\\n"}{end}',
+      ],
+      allowFailure: true,
+    }).stdout;
+    if (conditions.includes("Complete")) return true;
+    if (conditions.includes("Failed")) return false;
+    runCommand({ label: "wait for build job terminal state", command: ["sleep", "1"] });
+  }
+  return false;
 }
 
 function assertCacheStepDidNotExecute(request: {
@@ -337,7 +357,8 @@ spec:
           command: ["sh", "-euc"]
           args:
             - |-
-              if timeout 8 buildctl --addr ${BUILDKIT_ADDRESS} debug workers; then
+              sleep 10
+              if timeout 8 buildctl --addr ${BUILDKIT_SHARD_ADDRESSES[0]} debug workers; then
                 echo "unexpected BuildKit access" >&2
                 exit 1
               fi

@@ -7,6 +7,7 @@ import {
   K3D_VERSION,
   BUILDKIT_ADDRESS,
   BUILDKIT_SHARD_ADDRESSES,
+  CONTROL_PLANE_NODE,
   REGISTRY_HOST,
   REMOTE_SECRET,
   assertContains,
@@ -243,12 +244,12 @@ function runProof(): void {
   proveBuildkitServiceAccess({
     kubeconfigPath,
     name: "cache-service-allowed",
-    nodeName: buildkitNodes[0] ?? "",
+    nodeName: CONTROL_PLANE_NODE,
   });
   proveNetworkPolicy({
     kubeconfigPath,
     name: "cache-network-denied",
-    nodeName: buildkitNodes[0] ?? "",
+    nodeName: CONTROL_PLANE_NODE,
   });
   proveStableCache({ kubeconfigPath, buildkitNodes });
   proveIsolatedCache({ kubeconfigPath, buildkitNodes });

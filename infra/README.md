@@ -73,8 +73,10 @@ Kustomize patches to the production Zot, BuildKit, and NetworkPolicy manifests.
 The proof validates node-local cache retention, cross-node Zot restoration,
 stable-scope ACLs, isolated concurrent refs, and denied unlabeled clients. It
 first proves an authorized BuildKit Service client, then uses StatefulSet
-headless endpoints to bind each cache assertion to one exact shard. It cleans
-up only its exact cluster and uses an isolated kubeconfig. The hosted
+headless endpoints to bind each cache assertion to one exact shard. The denied
+client waits for the K3s policy-controller sync window and targets an exact
+shard from the control-plane node. The proof cleans up only its exact cluster
+and uses an isolated kubeconfig. The hosted
 Remote task installs checksum-pinned k3d automatically. A local caller needs
 k3d v5.9.0, Docker, Bun, and kubectl.
 

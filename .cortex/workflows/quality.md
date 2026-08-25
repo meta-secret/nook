@@ -362,7 +362,8 @@ Use this workflow for quality, CI, and deployment changes.
 
     - one rootless BuildKit shard runs on each distinct agent;
     - a labeled client can reach the BuildKit service before denial is tested;
-    - an unlabeled client cannot reach the BuildKit service;
+    - after the policy controller sync window, an unlabeled control-plane
+      client cannot reach an exact BuildKit shard;
     - the Remote registry identity cannot write a stable Main ref;
     - node-local cache remains CACHED after BuildKit Pod recreation;
     - Zot retains a stable ref after its Pod is recreated;

@@ -97,6 +97,8 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         "cache-proof-execution-marker",
         "cached RUN step executed",
         "proveBuildkitServiceAccess",
+        "sleep 10",
+        "conditions.includes(\"Failed\")",
     ] {
         assert!(
             jobs.contains(required),
@@ -116,6 +118,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
     }
     for required in [
         "cache-service-allowed",
+        "CONTROL_PLANE_NODE",
         "cache-main-local-reuse",
         "cache-main-restart-reuse",
         "cache-main-fresh-shard",
