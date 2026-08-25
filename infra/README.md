@@ -155,6 +155,22 @@ volume. These are ordinary Pods, not per-job microVMs. Kubernetes admits work
 from requests and live node pressure; the scale-set ceilings are queue limits,
 not promises that one node can run every runner simultaneously.
 
+Install the pinned browserless LAN alias before operating the home worker from
+the local operator network:
+
+```sh
+task infra:ssh:home:configure
+task infra:ssh:home:status
+```
+
+The installer verifies the observed Ed25519 host key against the declarative
+inventory before writing `~/.nook/infra/home-known-hosts`. It configures
+`nook-home-lan` for strict public-key-only SSH with no proxy command, then proves
+the expected host non-interactively. The existing `ssh.bynull.link` Cloudflare
+Access path remains the explicit off-network fallback; it is never used
+implicitly by local automation. Keep the home address reserved in router DHCP
+and do not forward public port 22.
+
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 
 ```sh
@@ -162,8 +178,9 @@ task infra:mesh:node:add
 task infra:mesh:status
 ```
 
-The target defaults to `ssh.bynull.link` and node name `nook-servo`; override
-them with `INFRA_MESH_SSH_TARGET` and `INFRA_MESH_NODE_NAME`. It uses the
+The target defaults to `nook-home-lan` and node name `nook-servo`; override it
+with `INFRA_MESH_SSH_TARGET=ssh.bynull.link` only for the interactive
+off-network recovery path. Override the node with `INFRA_MESH_NODE_NAME`. It uses the
 existing Wrangler OAuth session to create or reuse the Cloudflare node and
 streams the one-time connector token to the remote installer without putting it
 in Task output, local files, or SSH command arguments. The SSH account must have

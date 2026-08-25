@@ -1,0 +1,13 @@
+version: '3'
+
+# Browserless operator SSH for the home ARC worker.
+tasks:
+  ssh:home:configure:
+    desc: Install and prove the pinned browserless LAN SSH alias.
+    cmds:
+      - bun infra/operator-ssh.ts install
+
+  ssh:home:status:
+    desc: Prove the configured home LAN SSH route without interactive auth.
+    cmds:
+      - bun infra/operator-ssh.ts status
