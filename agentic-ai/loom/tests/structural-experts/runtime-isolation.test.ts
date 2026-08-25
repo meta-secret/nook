@@ -95,11 +95,12 @@ test('rejects traversal and oversized synthetic context before agent execution',
   }
 });
 
-test('materializes only exact shared lint tooling granted to code refactoring', async () => {
+test('materializes only exact shared formatter and lint tooling', async () => {
   const profile = structuralExpertProfile('code_refactoring_expert');
   if (profile === false)
     throw new Error('Code refactoring profile is missing.');
   const exactRefactoringFiles = [
+    '.github/formatting/format.sh',
     'tooling/eslint-rules/no-raw-object-arguments.js',
     '.agents/skills/eslint.config.js',
     '.agents/skills/package.json',
@@ -148,6 +149,9 @@ test('materializes only exact shared lint tooling granted to code refactoring', 
         ),
       ).toEqual(['no-raw-object-arguments.js']);
       expect(
+        await readdir(join(isolation.repositorySnapshot, '.github/formatting')),
+      ).toEqual(['format.sh']);
+      expect(
         (
           await readdir(join(isolation.repositorySnapshot, '.agents/skills'))
         ).sort(),
@@ -167,6 +171,11 @@ test('materializes only exact shared lint tooling granted to code refactoring', 
             isolation.repositorySnapshot,
             '.agents/skills/cortex-article-structure/SKILL.md',
           ),
+        ),
+      ).rejects.toThrow();
+      await expect(
+        access(
+          join(isolation.repositorySnapshot, '.github/formatting/Dockerfile'),
         ),
       ).rejects.toThrow();
       await expect(

@@ -38,7 +38,7 @@ test('passes deterministic catalog and definition audit', () => {
   expect(report).toEqual(expected);
 });
 
-test('grants shared skill lint tooling through exact files without broad roots', () => {
+test('grants shared formatter and skill lint tooling through exact files', () => {
   const profile = STRUCTURAL_EXPERT_CATALOG[0];
   if (!profile) throw new Error('Code refactoring profile is missing.');
   expect(
@@ -56,12 +56,18 @@ test('grants shared skill lint tooling through exact files without broad roots',
   expect(profile.allowedEvidenceFiles).toContain(
     'tooling/eslint-rules/no-raw-object-arguments.js',
   );
+  expect(profile.allowedEvidenceFiles).toContain(
+    '.github/formatting/format.sh',
+  );
   expect(profile.allowedEvidenceDescendantRoots).not.toContain(
     '.agents/skills',
   );
   expect(profile.allowedEvidenceDescendantRoots).not.toContain('tooling');
   expect(profile.allowedEvidenceDescendantRoots).not.toContain(
     'tooling/eslint-rules',
+  );
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
+    '.github/formatting',
   );
 });
 

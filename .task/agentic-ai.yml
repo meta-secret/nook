@@ -289,6 +289,18 @@ tasks:
       - cd nook-app/nook-web/nook-web-app && bun run format
       - cd nook-app/nook-web/nook-web-extension && bun run format
       - cd agentic-ai/minds && cargo fmt --all
+      - >-
+        agentic-ai/loom/node_modules/.bin/prettier
+        --config .agents/skills/.prettierrc
+        --write
+        --no-error-on-unmatched-pattern
+        ".agents/skills/*/src/**/*.ts"
+        ".agents/skills/*/tests/**/*.ts"
+        ".agents/skills/*/executable-skill.json"
+        ".agents/skills/*/SKILL.md"
+        ".agents/skills/*.{ts,json,md}"
+        .agents/skills/eslint.config.js
+        .agents/skills/.prettierrc
 
   hive:guest:pr:ready:
     desc: Run the existing PR readiness audit natively inside a sealed Hive guest (PR=<number>).

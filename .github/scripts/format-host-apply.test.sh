@@ -7,6 +7,11 @@ script="$(cat "$scripts_dir/format-host-apply.sh")"
 formatter_dir="$scripts_dir/../formatting"
 dockerfile="$(cat "$formatter_dir/Dockerfile")"
 formatter="$(cat "$formatter_dir/format.sh")"
+agentic_taskfile="$(cat "$scripts_dir/../../.task/agentic-ai.yml")"
+guest_formatter="$(
+  printf '%s\n' "$agentic_taskfile" \
+    | sed -n '/^  hive:guest:format:/,/^  hive:guest:pr:ready:/p'
+)"
 
 printf '%s\n' "$script" | grep -q 'formatter_image="nook-source-formatter:' \
   || { echo 'format-host-apply test: expected shared content-addressed image' >&2; exit 1; }
@@ -57,6 +62,24 @@ for required in \
   '"$repo_root/.agents/skills"'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
     || { echo "format-host-apply test: missing executable-skill formatter contract: $required" >&2; exit 1; }
+done
+
+for required in \
+  'agentic-ai/loom/node_modules/.bin/prettier' \
+  '--config .agents/skills/.prettierrc' \
+  '".agents/skills/*/src/**/*.ts"' \
+  '".agents/skills/*/tests/**/*.ts"' \
+  '".agents/skills/*/executable-skill.json"' \
+  '".agents/skills/*/SKILL.md"' \
+  '".agents/skills/*.{ts,json,md}"' \
+  '.agents/skills/eslint.config.js' \
+  '.agents/skills/.prettierrc'; do
+  printf '%s\n' "$guest_formatter" | grep -Fq -- "$required" \
+    || { echo "format-host-apply test: sealed guest misses skill formatter contract: $required" >&2; exit 1; }
+done
+for forbidden in 'task skills:format' 'task skills:install' '.agents/skills && bun install'; do
+  printf '%s\n' "$guest_formatter" | grep -Fq -- "$forbidden" \
+    && { echo "format-host-apply test: sealed guest skill formatting recurses or installs: $forbidden" >&2; exit 1; }
 done
 
 echo 'format-host-apply test: ok'
