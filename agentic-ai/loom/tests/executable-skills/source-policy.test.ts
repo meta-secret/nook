@@ -210,6 +210,9 @@ describe('executable skill source policy', () => {
       "import './styles.css';",
       "import component from './component.tsx';",
       "import raw from './source.ts?raw';",
+      "import disguised from './secret.json?kind=.ts';",
+      "import addon from './addon.node#x.ts';",
+      "import text from './secret.txt?.ts';",
       "export { default as secret } from './secret.txt';",
     ];
     for (const source of nonSourceModules) {

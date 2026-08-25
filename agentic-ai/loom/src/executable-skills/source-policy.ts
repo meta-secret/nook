@@ -95,6 +95,11 @@ enum ExecutableSkillSourceModuleSuffix {
   TypeScript = '.ts',
 }
 
+enum ExecutableSkillModuleSpecifierFragment {
+  Fragment = '#',
+  Query = '?',
+}
+
 enum AmbientCapabilityRoot {
   Bun = 'Bun',
   Object = 'Object',
@@ -886,7 +891,9 @@ function isNonSourceRelativeModule(specifier: string): boolean {
   );
   return (
     isRelative &&
-    !specifier.endsWith(ExecutableSkillSourceModuleSuffix.TypeScript)
+    (!specifier.endsWith(ExecutableSkillSourceModuleSuffix.TypeScript) ||
+      specifier.includes(ExecutableSkillModuleSpecifierFragment.Fragment) ||
+      specifier.includes(ExecutableSkillModuleSpecifierFragment.Query))
   );
 }
 
