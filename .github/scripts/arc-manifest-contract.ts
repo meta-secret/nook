@@ -88,6 +88,16 @@ const runners = new TextContract({
   label: "ARC runner scale set",
   source: runnersSource,
 });
+const containerRunners = new TextContract({
+  label: "ARC Kubernetes container scale set",
+  source: await read(
+    "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
+  ),
+});
+const containerHook = new TextContract({
+  label: "ARC Kubernetes container hook",
+  source: await read("infra/k0s/manifests/arc/container-hook.yaml"),
+});
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
   source: await read("infra/k0s/manifests/arc/buildkit.yaml"),
@@ -201,6 +211,41 @@ runners.forbidAll([
   "DOCKER_HOST",
   "hostPath:",
 ]);
+containerRunners.requireAll([
+  "runnerScaleSetName: nook-k0s-container",
+  "maxRunners: 20",
+  "type: kubernetes-novolume",
+  "ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE",
+  "/etc/nook-arc-hook/content.yaml",
+  "ghcr.io/actions/actions-runner:2.336.0@sha256:",
+]);
+containerRunners.forbidAll([
+  "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
+  "privileged: true",
+  "docker:dind",
+  "dockerd",
+  "docker.sock",
+  "podman",
+  "hostPath:",
+]);
+containerHook.requireAll([
+  "name: nook-arc-container-hook",
+  'name: "$job"',
+  "nook.nokey.sh/arc-build: \"true\"",
+  "values: [primary]",
+  "values: [secondary]",
+  "values: [overflow]",
+  'cpu: "4"',
+  "memory: 6Gi",
+  "ephemeral-storage: 32Gi",
+  'drop: ["ALL"]',
+]);
+containerHook.forbidAll([
+  "privileged: true",
+  "docker.sock",
+  "containerd.sock",
+  "hostPath:",
+]);
 
 buildkit.requireAll([
   "name: nook-buildkit-local-retain",
@@ -278,6 +323,9 @@ tasks.requireAll([
   "nook.nokey.sh/buildkit-config-sha256",
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
+  "container-runner-scale-set-values.yaml",
+  "container-hook.yaml",
+  "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
 mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
@@ -347,6 +395,13 @@ if (!verificationCacheRouting.includes("ref=${cache_ref}")) {
   throw new Error("portable WASM cache verification must import the destination");
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
+remoteWorkflow.requireAll([
+  "Remote / web:e2e image",
+  "runs-on: nook-k0s-container",
+  "task web:e2e:kubernetes-image",
+  "Run Playwright without a nested container runtime",
+  "task _web:test:e2e",
+]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",
   "remote dispatches must permit explicitly distinct concurrent cache proofs",

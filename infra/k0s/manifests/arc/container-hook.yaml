@@ -1,0 +1,61 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nook-arc-container-hook
+  namespace: arc-runners
+data:
+  content.yaml: |
+    metadata:
+      labels:
+        nook.nokey.sh/role: arc-job-container
+        nook.nokey.sh/arc-spread-group: container
+    spec:
+      nodeSelector:
+        nook.nokey.sh/arc-build: "true"
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: nook.nokey.sh/arc-tier
+                    operator: In
+                    values: [primary]
+            - weight: 50
+              preference:
+                matchExpressions:
+                  - key: nook.nokey.sh/arc-tier
+                    operator: In
+                    values: [secondary]
+            - weight: 1
+              preference:
+                matchExpressions:
+                  - key: nook.nokey.sh/arc-tier
+                    operator: In
+                    values: [overflow]
+      topologySpreadConstraints:
+        - maxSkew: 5
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: DoNotSchedule
+          nodeAffinityPolicy: Honor
+          nodeTaintsPolicy: Honor
+          labelSelector:
+            matchLabels:
+              nook.nokey.sh/arc-spread-group: container
+      containers:
+        - name: "$job"
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+              ephemeral-storage: 4Gi
+            limits:
+              cpu: "4"
+              memory: 6Gi
+              ephemeral-storage: 32Gi

@@ -54,7 +54,9 @@ env:
 
 jobs:
   batch:
-    if: inputs.task != 'rust-cache:promote' || inputs.tasks != ''
+    if: >-
+      (inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
+      (inputs.tasks || inputs.task) != 'web:e2e'
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || ((inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest')) }}
@@ -138,6 +140,62 @@ jobs:
           ((inputs.tasks || inputs.task) != 'hive:verify' ||
           (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') != 'nook-k0s-hive')
         run: docker rm --force nook-hive-neo4j
+
+  web-e2e-image:
+    if: (inputs.tasks || inputs.task) == 'web:e2e'
+    name: Remote / web:e2e image
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    timeout-minutes: 30
+    env:
+      DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_REMOTE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_REMOTE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_REMOTE_BUCKET }}
+          cache-write: "false"
+          main-cache-only: "true"
+          isolated-cache-write: "true"
+      - name: Build exact-source Kubernetes job image
+        run: task web:e2e:kubernetes-image
+
+  web-e2e:
+    if: (inputs.tasks || inputs.task) == 'web:e2e'
+    needs: web-e2e-image
+    name: Remote / web:e2e
+    runs-on: nook-k0s-container
+    timeout-minutes: 30
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+    env:
+      CI: "1"
+    steps:
+      - name: Run Playwright without a nested container runtime
+        working-directory: /meta-secret/nook
+        run: |
+          task _web:test:e2e
+          artifact_dir="$GITHUB_WORKSPACE/e2e-artifacts"
+          mkdir -p "$artifact_dir/web" "$artifact_dir/extension"
+          cp -R nook-app/nook-web/nook-web-app/test-results/. "$artifact_dir/web/" 2>/dev/null || true
+          cp -R nook-app/nook-web/nook-web-extension/test-results/. "$artifact_dir/extension/" 2>/dev/null || true
+      - name: Preserve Playwright diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: remote-e2e-${{ github.run_id }}-${{ github.run_attempt }}
+          path: e2e-artifacts
+          if-no-files-found: warn
+          retention-days: 15
 
   rust-cache-promote:
     if: inputs.task == 'rust-cache:promote' && inputs.tasks == ''

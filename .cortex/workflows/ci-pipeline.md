@@ -371,9 +371,11 @@ producers use the configured ARC scale set. Focused `preflight`,
 `rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
 `hive:verify` uses the dedicated
 `nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
-Both routes use `ubuntu-latest` as the explicit fallback. Fork PRs, Dependabot
-PRs, release jobs, and non-Main runtime-dependent, browser, WASM, deployment,
-AI, scheduled, manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`.
+Trusted browser runtime jobs use `nook-k0s-container`. ARC's Kubernetes
+lifecycle hooks create a regular job Pod from the exact image built by the
+general scale set. Fork and Dependabot pull requests retain GitHub-hosted
+isolation. Other hosted exceptions remain explicitly classified while they are
+migrated to a compatible trusted execution contract.
 ARC scales single-use Pods instead of queueing work on one persistent Docker
 host.
 Main's portable WASM cache writer/proof also uses `ubuntu-latest`. This narrow
@@ -415,7 +417,10 @@ job must not reuse an ARC node-local cache.
   on its selected node.
 - `arc:runtime` proves a remote BuildKit result can be exported without a
   Docker daemon, Podman, DinD, or host socket.
-- Every other `remote.yml` selection retains GitHub-hosted placement.
+- `web:e2e` builds its run-scoped image on the general ARC set, then executes
+  Playwright inside an ordinary Pod created by `nook-k0s-container` hooks.
+- Other `remote.yml` selections retain their explicit placement until their
+  runtime wrappers have equivalent Kubernetes-native execution.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
@@ -817,10 +822,13 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
   producers run in disposable ARC Pods.
-- Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
-  WASM, and deployment jobs run on fresh `ubuntu-latest` VMs.
+- Fork and Dependabot pull requests run on fresh `ubuntu-latest` VMs. Trusted
+  container workloads use the dedicated `nook-k0s-container` scale set.
 - On ARC, the shared setup creates a `remote` Buildx builder connected to the
   persistent rootless BuildKit shard on the selected node.
+- Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
+  pushes the exact-source image. ARC lifecycle hooks then create an ordinary
+  job Pod from that immutable run tag on `nook-k0s-container`.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
 - Main's portable WASM cache writer uses one fresh hosted builder rather than
   ARC-local metadata. Zot must prove child manifest digest/size plus every
