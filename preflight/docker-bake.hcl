@@ -26,6 +26,10 @@ preflight_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-preflight-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},timeout=10m",
 ] : []
 
+variable "PREFLIGHT_SOURCE_CONTEXT" {
+  default = "."
+}
+
 target "_preflight-common" {
   inherits   = ["_sccache"]
   context    = "."
@@ -33,6 +37,7 @@ target "_preflight-common" {
   platforms  = ["linux/amd64"]
   contexts = {
     rust-base = "target:rust-base"
+    repository-source = PREFLIGHT_SOURCE_CONTEXT
   }
   cache-from = preflight_cache_from
   cache-to   = preflight_cache_to

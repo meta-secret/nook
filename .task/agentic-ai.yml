@@ -467,21 +467,34 @@ tasks:
     internal: true
     requires:
       vars: [PR, CI_AGENT_CMD]
+    deps:
+      - ci-agent:prepare
     vars:
       PR_GH_TOKEN:
         sh: >-
           bash -c 'printf "%s" "${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"'
       PR_GITHUB_REPOSITORY:
         sh: >-
-          bash -c 'printf "%s" "${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"'
+          bash -c 'if [ -n "${GITHUB_REPOSITORY:-}" ]; then
+          printf "%s" "$GITHUB_REPOSITORY"; else
+          remote="$(git remote get-url origin)";
+          remote="${remote%.git}";
+          case "$remote" in
+          git@github.com:*) remote="${remote#git@github.com:}" ;;
+          ssh://git@github.com/*) remote="${remote#ssh://git@github.com/}" ;;
+          https://github.com/*) remote="${remote#https://github.com/}" ;;
+          *) echo "Unsupported GitHub origin: $remote" >&2; exit 2 ;;
+          esac;
+          case "$remote" in */*/*|/*|*/|*:*|*@*) echo "Invalid GitHub repository: $remote" >&2; exit 2 ;;
+          */*) printf "%s" "$remote" ;;
+          *) echo "Could not derive GITHUB_REPOSITORY from origin: $remote" >&2; exit 2 ;;
+          esac; fi'
     env:
       GH_TOKEN: '{{.PR_GH_TOKEN}}'
       GITHUB_REPOSITORY: '{{.PR_GITHUB_REPOSITORY}}'
       PR_NUMBER: '{{.PR}}'
     cmds:
-      - task: ci-agent:host:run
-        vars:
-          CI_AGENT_CMD: '{{.CI_AGENT_CMD}}'
+      - node '{{.CI_AGENT_DIR}}/dist/main/main.js' '{{.CI_AGENT_CMD}}'
 
   pr:preflight:
     desc: Print a machine-readable PR audit before implementation or final validation (PR=<number>).
