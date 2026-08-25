@@ -54,6 +54,7 @@ import {
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
 import {
+  clearPendingAccountPickers,
   invalidateAllLoginMatchAvailability,
   loginMatchAvailabilityForOriginSafe,
   invalidateLoginMatchAvailabilityForOrigin,
@@ -137,6 +138,7 @@ import {
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
+  clearPendingAccountPickers,
   clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,

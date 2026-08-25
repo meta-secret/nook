@@ -333,12 +333,13 @@ impl AuthenticationWorkflowSnapshot {
             AuthenticationWorkflowAction::ContinueWithNook
             | AuthenticationWorkflowAction::GeneratePassword
             | AuthenticationWorkflowAction::FillTotp
+            | AuthenticationWorkflowAction::EnrollAuthenticator
+            | AuthenticationWorkflowAction::SaveBackupCodes
             | AuthenticationWorkflowAction::UsePasskey
             | AuthenticationWorkflowAction::CreatePasskey => {
                 AuthenticationPilotPresentationCapability::ProposeAction
             }
-            AuthenticationWorkflowAction::EnrollAuthenticator
-            | AuthenticationWorkflowAction::TakeOver => {
+            AuthenticationWorkflowAction::TakeOver => {
                 AuthenticationPilotPresentationCapability::Hidden
             }
         }
@@ -389,7 +390,7 @@ const fn classify_enrollment_workflow(
         return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
             AuthenticationWorkflowStage::Recovery,
-            AuthenticationWorkflowAction::TakeOver,
+            AuthenticationWorkflowAction::SaveBackupCodes,
             4,
             5,
         ));
@@ -749,7 +750,7 @@ mod tests {
         );
         assert_eq!(
             setup.pilot_presentation_capability(),
-            AuthenticationPilotPresentationCapability::Hidden
+            AuthenticationPilotPresentationCapability::ProposeAction
         );
 
         let verify = AuthenticationPageObservation {
@@ -761,6 +762,17 @@ mod tests {
         assert_eq!(verify.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(verify.stage, AuthenticationWorkflowStage::Verification);
         assert_eq!(verify.action, AuthenticationWorkflowAction::FillTotp);
+        let backup_codes = AuthenticationPageObservation {
+            enrollment_evidence: AuthenticationEnrollmentEvidence::BackupCodes,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(backup_codes).snapshot()?;
+        assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Recovery);
+        assert_eq!(snapshot.action.as_str(), "save-backup-codes");
+        assert_eq!(
+            snapshot.pilot_presentation_capability(),
+            AuthenticationPilotPresentationCapability::ProposeAction
+        );
         Ok(())
     }
 

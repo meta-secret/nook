@@ -36,7 +36,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      const widget = loginPage.locator('#nook-auth-widget')
+      const widget = loginPage.locator('body > #nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
@@ -92,7 +92,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      const widget = loginPage.locator('#nook-auth-widget')
+      const widget = loginPage.locator('body > #nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
@@ -115,6 +115,25 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(
         widget.getByRole('button', { name: 'Fill saved login' }),
       ).toBeEnabled()
+      const viewportPickerPromise = paired.context.waitForEvent('page')
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
+      const viewportPicker = await viewportPickerPromise
+      await viewportPicker.waitForURL(/intent=login-picker/)
+      await expect(viewportPicker.getByText('alice@nook.test')).toBeVisible({
+        timeout: 20_000,
+      })
+
+      await loginPage.evaluate(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
+
+      await expect.poll(() => viewportPicker.isClosed()).toBe(true)
+      await expect(widget.getByText('Ready to sign in')).toBeVisible({
+        timeout: 20_000,
+      })
+      await expect(
+        widget.getByRole('button', { name: 'Fill saved login' }),
+      ).toBeEnabled()
       const checkpointPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
       const checkpointPicker = await checkpointPickerPromise
@@ -126,12 +145,15 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.evaluate(() => {
         const form = document.querySelector('form')
         if (!form) throw new Error('mock login form missing')
+        document.body.id = 'nook-auth-widget'
+        if (!form.id) form.id = 'checkpoint-login-form'
         const checkpoint = document.createElement('label')
         checkpoint.setAttribute('data-nook-manual-checkpoint', '')
         const checkbox = document.createElement('input')
         checkbox.type = 'checkbox'
+        checkbox.setAttribute('form', form.id)
         checkpoint.append(checkbox, ' I agree to the Terms')
-        form.append(checkpoint)
+        form.after(checkpoint)
       })
 
       await expect(widget).toHaveCount(0, { timeout: 20_000 })

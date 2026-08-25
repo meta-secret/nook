@@ -7,6 +7,40 @@ type AuthenticationPageObservationRequest = {
   backupCodesPresent: boolean
 }
 
+type AuthenticationEnrollmentObservationRequest = {
+  authenticatorSetupPresent: boolean
+  backupCodesPresent: boolean
+  manualCheckpointPresent: boolean
+}
+
+export function authenticationEnrollmentObservation({
+  authenticatorSetupPresent,
+  backupCodesPresent,
+  manualCheckpointPresent,
+}: AuthenticationEnrollmentObservationRequest): AuthenticationPageObservationView {
+  return {
+    fields: {
+      usernameFieldCount: 0,
+      currentPasswordFieldCount: 0,
+      newPasswordFieldCount: 0,
+      genericPasswordFieldCount: 0,
+      oneTimeCodeFieldCount: 0,
+    },
+    ceremony: {
+      oneTimeCodeProgression: 'advance-control-required',
+      manualCheckpoint: manualCheckpointPresent ? 'present' : 'absent',
+      advanceControl: 'absent',
+    },
+    authenticator: {
+      authenticatorSetup: authenticatorSetupPresent ? 'present' : 'absent',
+      backupCodes: backupCodesPresent ? 'present' : 'absent',
+      passkeyControl: 'absent',
+      passkeyVault: 'unavailable',
+      matchingPasskeyAccountCount: 0,
+    },
+  }
+}
+
 export function authenticationPageObservation({
   summary,
   authenticatorSetupPresent,

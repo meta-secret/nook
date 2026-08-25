@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
+  authenticationEnrollmentObservation,
 } from '../src/content/autofill/authentication-observation'
 
 describe('authentication workflow observation', () => {
@@ -31,6 +32,17 @@ describe('authentication workflow observation', () => {
     expect(AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER).toContain(
       'data-nook-manual-checkpoint',
     )
+  })
+
+  test('reports manual checkpoints alongside direct enrollment evidence', () => {
+    const observation = authenticationEnrollmentObservation({
+      authenticatorSetupPresent: true,
+      backupCodesPresent: false,
+      manualCheckpointPresent: true,
+    })
+
+    expect(observation.authenticator.authenticatorSetup).toBe('present')
+    expect(observation.ceremony.manualCheckpoint).toBe('present')
   })
 
   test('rescans when an explicit passkey-control marker changes', () => {

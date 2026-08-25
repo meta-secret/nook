@@ -41,7 +41,7 @@ body {
 }
 
 body:has(.toolbar-menu) {
-  width: 340px;
+  width: 320px;
 }
 
 .device-setup,
@@ -55,8 +55,62 @@ body:has(.toolbar-menu) {
 }
 
 .toolbar-menu {
-  gap: 12px;
-  padding: 18px;
+  gap: 10px;
+  padding: 14px;
+  border: 0;
+}
+
+.toolbar-menu-header {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.toolbar-menu-summary {
+  min-width: 0;
+}
+
+.toolbar-menu .step-label {
+  color: var(--foreground);
+  font-size: 14px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: none;
+}
+
+.toolbar-menu h1 {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-menu .menu-logo {
+  width: 34px;
+  height: 34px;
+  margin: 0;
+  border-radius: 8px;
+}
+
+.menu-secondary-action {
+  min-height: 34px;
+  justify-self: center;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.menu-secondary-action:hover:not(:disabled) {
+  background: var(--secondary);
+  color: var(--secondary-foreground);
 }
 
 .authenticator-picker {
@@ -317,9 +371,4 @@ button:disabled {
   height: 38px;
   border-radius: 9px;
   margin: 0 auto;
-}
-
-.menu-logo {
-  width: 42px;
-  height: 42px;
 }

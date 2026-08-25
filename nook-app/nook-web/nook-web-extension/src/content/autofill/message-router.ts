@@ -21,6 +21,7 @@ import {
   AuthenticatorPickerKind,
   LoginPickerKind,
   WidgetHostKind,
+  WidgetWorkflowRootKind,
   authenticationActionState,
   pickerState,
   scanState,
@@ -61,7 +62,10 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     widgetState.busy = false
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
-    if (widgetState.host.kind === WidgetHostKind.Attached) {
+    if (
+      widgetState.host.kind === WidgetHostKind.Attached &&
+      widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+    ) {
       widgetState.host.element.inert = true
     }
     scanState.schedule()

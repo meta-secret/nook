@@ -28,6 +28,7 @@ type ExtensionLifecycleRoutingArgs = {
 }
 
 export type ExtensionLifecycleRoutingDependencies = {
+  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
   clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
   ensureExtensionSessionDocument: typeof SessionLifecycle.ensureExtensionSessionDocument
@@ -85,6 +86,7 @@ export function routeExtensionLifecycleMessage({
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
   const {
+    clearPendingAccountPickers,
     clearMountedAuthenticationSurfaces,
     closeExtensionSessionDocument,
     ensureExtensionSessionDocument,
@@ -146,6 +148,7 @@ export function routeExtensionLifecycleMessage({
     }
     invalidateAllLoginMatchAvailability()
     void Promise.all([
+      clearPendingAccountPickers(),
       closeExtensionSessionDocument(),
       clearMountedAuthenticationSurfaces(),
     ])
@@ -165,6 +168,7 @@ export function routeExtensionLifecycleMessage({
     }
     invalidateAllLoginMatchAvailability()
     void Promise.all([
+      clearPendingAccountPickers(),
       closeExtensionSessionDocument(),
       clearMountedAuthenticationSurfaces(),
     ])
@@ -206,6 +210,9 @@ export function routeExtensionLifecycleMessage({
         if (response.ok) {
           await refreshAuthenticationSurfaces()
         } else {
+          if (response.reason === 'event-log-access-revoked') {
+            await clearPendingAccountPickers()
+          }
           await clearMountedAuthenticationSurfaces()
         }
         return response

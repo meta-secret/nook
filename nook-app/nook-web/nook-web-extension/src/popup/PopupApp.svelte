@@ -252,23 +252,19 @@
 
 {#if showToolbarMenu}
   <main class="toolbar-menu" data-testid="extension-toolbar-menu">
-    <p class="step-label">
-      {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
-    </p>
-    <NookIcon src="../icons/nook.png" alt="" class="popup-logo menu-logo" />
-    <h1>
-      {showExistingConnection && vaultName
-        ? connectedVaultLabel(vaultName)
-        : translatePlain(I18N_KEYS.ExtensionCompanionConnectTitle)}
-    </h1>
-    {#if !showExistingConnection}
-      <p class="description">
-        {translatePlain(I18N_KEYS.ExtensionCompanionConnectDescription)}
-      </p>
-      <p class="vault-connection" data-testid="companion-vault-status">
-        {translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
-      </p>
-    {/if}
+    <header class="toolbar-menu-header">
+      <NookIcon src="../icons/nook.png" alt="" class="popup-logo menu-logo" />
+      <div class="toolbar-menu-summary">
+        <p class="step-label">
+          {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
+        </p>
+        <h1 data-testid="companion-vault-status">
+          {showExistingConnection && vaultName
+            ? connectedVaultLabel(vaultName)
+            : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
+        </h1>
+      </div>
+    </header>
 
     {#if showExistingConnection}
       <button
@@ -281,7 +277,7 @@
       {#if pairingCandidate.kind === PairingCandidateKind.Selected}
         <button
           type="button"
-          class="secondary-button"
+          class="menu-secondary-action"
           disabled={busy}
           data-testid="pair-another-vault-btn"
           onclick={() => {
@@ -305,17 +301,6 @@
         {busy
           ? translatePlain(I18N_KEYS.DeviceProtectionAuthorizing)
           : translatePlain(I18N_KEYS.ExtensionSetupConnectSimpleVault)}
-      </button>
-    {/if}
-
-    {#if !showExistingConnection}
-      <button
-        type="button"
-        class="secondary-button"
-        data-testid="open-simple-vault-btn"
-        onclick={openSimpleVault}
-      >
-        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
       </button>
     {/if}
 

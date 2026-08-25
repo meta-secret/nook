@@ -306,6 +306,35 @@ async function attemptMalformedBackupCodeReplace(
 test.describe('Browser 2FA enrollment', () => {
   test.describe.configure({ timeout: 180_000 })
 
+  test('keeps Pilot absent when authenticator setup requires a manual checkpoint', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Enrollment manual checkpoint vault',
+    })
+    try {
+      const enrollPage = await paired.context.newPage()
+      await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
+      await expect(enrollPage.getByTestId('mock-auth-totp-qr')).toBeVisible()
+      await enrollPage.evaluate(() => {
+        const checkpoint = document.createElement('div')
+        checkpoint.dataset.nookManualCheckpoint = 'true'
+        checkpoint.textContent = 'Complete the site check to continue.'
+        document.querySelector('main')?.prepend(checkpoint)
+      })
+
+      await expect(enrollPage.locator('#nook-auth-widget')).toHaveCount(0, {
+        timeout: 15_000,
+      })
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('cancels QR preview without vault write', async ({
     browserName,
   }, testInfo) => {
@@ -362,13 +391,57 @@ test.describe('Browser 2FA enrollment', () => {
       const enrollPage = await paired.context.newPage()
       await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
       const widget = enrollPage.locator('#nook-auth-widget')
+      const enrollmentAction = widget.getByRole('button', {
+        name: 'Add 2FA from this page',
+      })
+      await expect(enrollmentAction).toBeVisible({ timeout: 15_000 })
+      await enrollPage.evaluate(() => {
+        window.dispatchEvent(new Event('resize'))
+      })
       await expect(
-        widget.getByRole('button', { name: 'Add 2FA from this page' }),
-      ).toBeVisible({ timeout: 15_000 })
+        enrollmentAction,
+        'viewport rescans must not inert enrollment actions',
+      ).toBeEnabled()
+      const serviceWorker =
+        paired.context.serviceWorkers()[0] ??
+        (await paired.context.waitForEvent('serviceworker'))
+      await serviceWorker.evaluate(async (origin) => {
+        const [tab] = await new Promise<chrome.tabs.Tab[]>(
+          (resolve, reject) => {
+            globalThis.chrome.tabs.query({ url: `${origin}/*` }, (tabs) => {
+              const error = globalThis.chrome.runtime.lastError?.message
+              if (error) {
+                reject(new Error(error))
+                return
+              }
+              resolve(tabs)
+            })
+          },
+        )
+        if (tab?.id === undefined) {
+          throw new Error('Enrollment tab was not available for refresh.')
+        }
+        await new Promise<void>((resolve, reject) => {
+          globalThis.chrome.tabs.sendMessage(
+            tab.id,
+            { type: 'nook:refresh-authentication-surfaces' },
+            () => {
+              const error = globalThis.chrome.runtime.lastError?.message
+              if (error) {
+                reject(new Error(error))
+                return
+              }
+              resolve()
+            },
+          )
+        })
+      }, mockAuth.origin)
+      await expect(
+        enrollmentAction,
+        'session refreshes must not inert enrollment actions',
+      ).toBeEnabled()
 
-      await widget
-        .getByRole('button', { name: 'Add 2FA from this page' })
-        .click()
+      await enrollmentAction.click()
       await expect(
         widget.getByRole('button', { name: 'Continue enrollment' }),
       ).toBeVisible({ timeout: 20_000 })

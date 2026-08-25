@@ -25,9 +25,11 @@ const ensureExtensionSessionDocument = mock(() => Promise.resolve())
 const openCompanionLauncher = mock(() => Promise.resolve())
 const invalidateAllLoginMatchAvailability = mock(() => {})
 const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
+const clearPendingAccountPickers = mock(() => Promise.resolve())
 const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
+  clearPendingAccountPickers,
   clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument: unusedAsyncDependency,
   ensureExtensionSessionDocument,
@@ -113,6 +115,7 @@ describe('service worker routing', () => {
   test('invalidates login-match metadata before and after locking the session', async () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
+    clearPendingAccountPickers.mockClear()
     const closeExtensionSessionDocument = mock(() => {
       expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
       return Promise.resolve()
@@ -141,12 +144,14 @@ describe('service worker routing', () => {
     await flushResponses()
     expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(clearPendingAccountPickers).toHaveBeenCalledTimes(1)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
   })
 
   test('clears mounted authentication surfaces when the session expires', async () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
+    clearPendingAccountPickers.mockClear()
     const closeExtensionSessionDocument = mock(() => Promise.resolve())
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
@@ -171,6 +176,7 @@ describe('service worker routing', () => {
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
     await flushResponses()
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(clearPendingAccountPickers).toHaveBeenCalledTimes(1)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
@@ -178,6 +184,7 @@ describe('service worker routing', () => {
   test('clears mounted authentication surfaces after a local event-log update', async () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
+    clearPendingAccountPickers.mockClear()
     const importLocalEventLogUpdate = mock(() =>
       Promise.resolve({
         ok: false as const,
@@ -219,6 +226,7 @@ describe('service worker routing', () => {
     await flushResponses()
     expect(importLocalEventLogUpdate).toHaveBeenCalledTimes(1)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
+    expect(clearPendingAccountPickers).toHaveBeenCalledTimes(1)
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,

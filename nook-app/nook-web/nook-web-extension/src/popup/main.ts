@@ -59,11 +59,18 @@ async function main() {
   }
 
   const vaultConnection = await loadCompanionVaultConnection()
-  const protectionStatus = await extensionDeviceProtectionStatus()
+  const observedProtectionStatus = await extensionDeviceProtectionStatus()
   const activeSessionDevice: ExtensionSessionDeviceState =
-    protectionStatus === DeviceProtectionStatus.Unlocked
+    observedProtectionStatus === DeviceProtectionStatus.Unlocked
       ? await extensionSessionDevice()
-      : { kind: ExtensionSessionDeviceStateKind.Locked }
+      : {
+          kind: ExtensionSessionDeviceStateKind.Locked,
+          protectionStatus: observedProtectionStatus,
+        }
+  const protectionStatus =
+    activeSessionDevice.kind === ExtensionSessionDeviceStateKind.Locked
+      ? activeSessionDevice.protectionStatus
+      : observedProtectionStatus
 
   const nookTypedArgs0_2: MountOptions<ComponentProps<typeof PopupApp>> = {
     target,

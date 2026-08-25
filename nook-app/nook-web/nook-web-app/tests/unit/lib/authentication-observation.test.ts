@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest'
 import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
+  authenticationEnrollmentObservation,
   authenticationPageObservation,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-observation'
 import type { PasswordFormSummary } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -79,5 +80,30 @@ describe('authentication observation attributes', () => {
     expect(
       authenticationPageObservation(request).ceremony.oneTimeCodeProgression,
     ).toBe('auto-submit-observed')
+  })
+
+  test('reports direct enrollment evidence without inventing form fields', () => {
+    const request: Parameters<typeof authenticationEnrollmentObservation>[0] = {
+      authenticatorSetupPresent: true,
+      backupCodesPresent: true,
+      manualCheckpointPresent: false,
+    }
+
+    expect(authenticationEnrollmentObservation(request)).toMatchObject({
+      fields: {
+        usernameFieldCount: 0,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 0,
+      },
+      authenticator: {
+        authenticatorSetup: 'present',
+        backupCodes: 'present',
+      },
+      ceremony: {
+        manualCheckpoint: 'absent',
+      },
+    })
   })
 })

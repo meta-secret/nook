@@ -41,6 +41,8 @@ export const demoDomainEnumArgs = {
     continueAction: 'continue-with-nook',
     generatePasswordAction: 'generate-password',
     fillTotpAction: 'fill-totp',
+    enrollAuthenticatorAction: 'enroll-authenticator',
+    saveBackupCodesAction: 'save-backup-codes',
     createPasskeyAction: 'create-passkey',
   },
   authenticatorProtocol: {
@@ -78,6 +80,8 @@ export type DemoChromeStubArgs = {
     continueAction: 'continue-with-nook'
     generatePasswordAction: 'generate-password'
     fillTotpAction: 'fill-totp'
+    enrollAuthenticatorAction: 'enroll-authenticator'
+    saveBackupCodesAction: 'save-backup-codes'
     createPasskeyAction: 'create-passkey'
   }
   authenticatorProtocol: {
@@ -244,6 +248,36 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     }
     if (enrollPilotFlow) {
       switch (message.type) {
+        case 'nook:authentication-workflow-snapshot': {
+          const observation = (
+            message as {
+              payload?: {
+                observations?: Array<{
+                  authenticator?: {
+                    authenticatorSetup?: string
+                    backupCodes?: string
+                  }
+                }>
+              }
+            }
+          ).payload?.observations?.[0]
+          const backupCodesPresent =
+            observation?.authenticator?.backupCodes === 'present'
+          return workflowRuntimeResponse({
+            ok: true,
+            snapshot: {
+              kind: 'totp-enrollment',
+              stage: backupCodesPresent ? 'recovery' : 'setup',
+              action: backupCodesPresent
+                ? authenticationWorkflow.saveBackupCodesAction
+                : authenticationWorkflow.enrollAuthenticatorAction,
+              currentStep: backupCodesPresent ? 4 : 2,
+              totalSteps: 5,
+              approvalRequirement: 'explicit-user-approval',
+              observationIndex: 0,
+            },
+          })
+        }
         case 'nook:extension-pairing-state-query':
           return {
             ok: true,

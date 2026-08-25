@@ -63,6 +63,7 @@ pub enum AuthenticationWorkflowAction {
     GeneratePassword,
     FillTotp,
     EnrollAuthenticator,
+    SaveBackupCodes,
     UsePasskey,
     CreatePasskey,
     TakeOver,
@@ -92,6 +93,7 @@ impl AuthenticationWorkflowAction {
             Self::GeneratePassword => "generate-password",
             Self::FillTotp => "fill-totp",
             Self::EnrollAuthenticator => "enroll-authenticator",
+            Self::SaveBackupCodes => "save-backup-codes",
             Self::UsePasskey => "use-passkey",
             Self::CreatePasskey => "create-passkey",
             Self::TakeOver => "take-over",
@@ -152,6 +154,10 @@ mod tests {
             (
                 AuthenticationWorkflowAction::EnrollAuthenticator,
                 "enroll-authenticator",
+            ),
+            (
+                AuthenticationWorkflowAction::SaveBackupCodes,
+                "save-backup-codes",
             ),
             (AuthenticationWorkflowAction::UsePasskey, "use-passkey"),
             (

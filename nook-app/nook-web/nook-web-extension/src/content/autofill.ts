@@ -3,7 +3,10 @@ import type {
   AuthenticationPageObservationFacts,
   AuthenticationWorkflowRuntimeResponse,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { PasswordFormScopeKind } from '../../../nook-web-shared/src/extension/password-form-fields'
+import {
+  pageHasManualCheckpoint,
+  PasswordFormScopeKind,
+} from '../../../nook-web-shared/src/extension/password-form-fields'
 import {
   summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
@@ -17,6 +20,7 @@ import { cancelPendingAuthenticatorPickerRequest } from './autofill/authenticato
 import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
   AUTHENTICATION_VIEWPORT_EVENTS,
+  authenticationEnrollmentObservation,
   authenticationPageObservation,
 } from './autofill/authentication-observation'
 import {
@@ -49,10 +53,7 @@ import {
   renderWidget,
 } from './autofill/widget-rendering'
 import { clampMountedWidgetPosition } from './autofill/widget-position'
-import {
-  WIDGET_HOST_ID,
-  loadPilotVaultConnection,
-} from './autofill/workflow-ui'
+import { loadPilotVaultConnection } from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
   enrollmentCeremonyActive,
@@ -97,10 +98,39 @@ async function performScanAndRender(): Promise<void> {
   ) {
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
+    const observationRequest: Parameters<
+      typeof authenticationEnrollmentObservation
+    >[0] = {
+      authenticatorSetupPresent: enrollmentHints.qr,
+      backupCodesPresent: enrollmentHints.backupCodes,
+      manualCheckpointPresent: pageHasManualCheckpoint(document),
+    }
+    const message: Parameters<
+      typeof sendAuthenticationWorkflowSnapshotRuntimeMessage
+    >[0] = {
+      type: AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot,
+      payload: {
+        origin: location.origin,
+        observations: [authenticationEnrollmentObservation(observationRequest)],
+      },
+    }
+    const delivery =
+      await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
+    if (sequence !== scanState.sequence) return
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      removeScannedWidget()
+      return
+    }
+    const { workflow: response } = delivery.response
+    if (response.kind !== 'matched' || !('snapshot' in response)) {
+      removeScannedWidget()
+      return
+    }
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanState.sequence) return
     const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
       hints: enrollmentHints,
+      snapshot: response.snapshot,
       vaultConnection,
     }
     renderEnrollmentWidget(nookTypedArgs0_0)
@@ -183,20 +213,16 @@ function scheduleScan(): void {
 }
 
 function isExtensionWidgetMutation(record: MutationRecord): boolean {
-  if (
-    record.target instanceof HTMLElement &&
-    (record.target.id === WIDGET_HOST_ID ||
-      record.target.closest(`#${WIDGET_HOST_ID}`))
-  ) {
+  if (widgetState.host.kind !== WidgetHostKind.Attached) return false
+  const mountedHost = widgetState.host.element
+  if (record.target === mountedHost || mountedHost.contains(record.target)) {
     return true
   }
   if (record.type !== 'childList') return false
   const changedNodes = [...record.addedNodes, ...record.removedNodes]
   return (
     changedNodes.length > 0 &&
-    changedNodes.every(
-      (node) => node instanceof HTMLElement && node.id === WIDGET_HOST_ID,
-    )
+    changedNodes.every((node) => node === mountedHost)
   )
 }
 
@@ -220,12 +246,56 @@ function mutationTouchesRenderedWorkflow(record: MutationRecord): boolean {
     widgetState.renderedWorkflowRoot.observation,
   )
   if (!(boundary instanceof Node)) return true
+  const touchesOwnedFormAssociation = (node: Node): boolean => {
+    if (!(boundary instanceof HTMLFormElement)) return false
+    const controlBelongsToBoundary = (control: HTMLElement): boolean =>
+      (control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement ||
+        control instanceof HTMLSelectElement ||
+        control instanceof HTMLTextAreaElement ||
+        control instanceof HTMLOutputElement) &&
+      control.form === boundary
+    const element =
+      node instanceof Element
+        ? node
+        : node.parentElement instanceof Element
+          ? node.parentElement
+          : false
+    if (!element) return false
+    const formControls = Array.from(boundary.elements)
+    if (
+      formControls.some(
+        (control) =>
+          control === element ||
+          control.contains(element) ||
+          element.contains(control),
+      )
+    ) {
+      return true
+    }
+    const associatedLabel = element.closest('label')
+    if (
+      associatedLabel?.control &&
+      controlBelongsToBoundary(associatedLabel.control)
+    ) {
+      return true
+    }
+    return Array.from(element.querySelectorAll('label')).some(
+      (label) =>
+        Boolean(label.control) &&
+        controlBelongsToBoundary(label.control as HTMLElement),
+    )
+  }
   if (boundary === record.target || boundary.contains(record.target)) {
     return true
   }
+  if (touchesOwnedFormAssociation(record.target)) return true
   if (record.type !== 'childList') return false
   return [...record.addedNodes, ...record.removedNodes].some(
-    (node) => boundary.contains(node) || node.contains(boundary),
+    (node) =>
+      boundary.contains(node) ||
+      node.contains(boundary) ||
+      touchesOwnedFormAssociation(node),
   )
 }
 
@@ -251,6 +321,16 @@ function handleAuthenticationMutations(
 
 function handleViewportChange(): void {
   clampMountedWidgetPosition()
+  if (
+    widgetState.host.kind === WidgetHostKind.Attached &&
+    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned
+  ) {
+    authenticationActionState.invalidate()
+    widgetState.busy = false
+    cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
+    widgetState.host.element.inert = true
+  }
   scheduleScan()
 }
 

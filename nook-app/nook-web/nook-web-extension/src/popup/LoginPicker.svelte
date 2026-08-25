@@ -141,6 +141,10 @@
         return false
       }
       completed = true
+      querySequence += 1
+      accounts = []
+      destinationOrigin = ''
+      error = ''
       window.close()
       return false
     }

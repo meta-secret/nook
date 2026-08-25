@@ -138,8 +138,12 @@ private identity.
 - Before approval, the popup shows device setup or device unlock.
 - After unlock, the menu shows the current vault connection and the actions
   that manage that connection.
+- The unlocked menu uses one compact Nook and connection-status row.
+- It has no hero title, explanatory paragraph, or decorative logo treatment.
 - Open Simple Vault is the explicit primary action for a connected vault.
+- Pair another vault is the only secondary action for a connected vault.
 - Connect to Simple Vault is the explicit primary action before pairing.
+- Before pairing, do not show a competing Open Simple Vault action.
 - The menu has no Ready or Stay ready destination.
 - Completing unlock never opens a detached companion window.
 - Grant metadata by itself never produces connected state.
@@ -235,7 +239,9 @@ bounded quantities. They do not use positional boolean bags or numeric enum
 discriminants. Decisions derived entirely from an observation live on the Rust
 observation model and return an exhaustive named state. The widget consumes
 the Rust-owned Pilot presentation capability; it does not maintain a second
-TypeScript action allowlist.
+TypeScript action allowlist. Direct authenticator setup and backup-code pages
+submit a bounded enrollment observation through the same background classifier
+before Pilot may render the selected enrollment action.
 
 The initial production slice classifies login (including email-first /
 username-only steps used by Microsoft, Slack, and similar SSO shells),

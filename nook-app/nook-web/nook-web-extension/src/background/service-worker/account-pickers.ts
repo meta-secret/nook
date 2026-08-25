@@ -15,6 +15,14 @@ import {
 } from '../../offscreen/session-request-adapter'
 import type { WebsiteLoginMatchAvailabilityWire } from '../../lib/auth-workflow-messages'
 import {
+  WebsiteLoginCanceledMessageType,
+  type WebsiteLoginCanceledMessage,
+} from '../../lib/login-picker-messages'
+import {
+  WebsiteAuthenticatorCanceledMessageType,
+  type WebsiteAuthenticatorCanceledMessage,
+} from '../../lib/authenticator-picker-messages'
+import {
   LoginMatchAvailabilityCache,
   type LoginMatchAvailabilityCacheInvalidation,
   type LoginMatchAvailabilityCacheOptions,
@@ -22,6 +30,7 @@ import {
 } from '../../lib/login-match-availability-cache'
 import {
   availableWebsiteGrants,
+  getAllSessionStorage,
   getSessionStorage,
   isAuthorizedWebsiteSender,
   passwordPairingGrants,
@@ -58,6 +67,79 @@ const pendingAuthenticatorPickers = new Map<
   PendingAuthenticatorPicker
 >()
 const pendingLoginPickers = new Map<string, PendingLoginPicker>()
+
+export type PersistedAccountPickerCleanupPlan = {
+  storageKeys: string[]
+  cancellations: Array<
+    WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+  >
+}
+
+export type PersistedAccountPickerStorage = Record<string, unknown>
+
+export function persistedAccountPickerCleanupPlan(
+  stored: PersistedAccountPickerStorage,
+): PersistedAccountPickerCleanupPlan {
+  const storageKeys: string[] = []
+  const cancellations: PersistedAccountPickerCleanupPlan['cancellations'] = []
+  for (const [key, value] of Object.entries(stored)) {
+    if (key.startsWith(AUTHENTICATOR_PICKER_STORAGE_PREFIX)) {
+      storageKeys.push(key)
+      if (isPendingAuthenticatorPicker(value)) {
+        const cancellation: WebsiteAuthenticatorCanceledMessage = {
+          type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+          payload: { origin: value.origin, requestId: value.requestId },
+        }
+        cancellations.push(cancellation)
+      }
+    } else if (key.startsWith(LOGIN_PICKER_STORAGE_PREFIX)) {
+      storageKeys.push(key)
+      if (isPendingAuthenticatorPicker(value)) {
+        const cancellation: WebsiteLoginCanceledMessage = {
+          type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+          payload: { origin: value.origin, requestId: value.requestId },
+        }
+        cancellations.push(cancellation)
+      }
+    }
+  }
+  return { storageKeys, cancellations }
+}
+
+export async function clearPendingAccountPickers(): Promise<void> {
+  const stored = await getAllSessionStorage()
+  const plan = persistedAccountPickerCleanupPlan(stored)
+  const authenticatorRequests = new Map(pendingAuthenticatorPickers)
+  const loginRequests = new Map(pendingLoginPickers)
+  pendingAuthenticatorPickers.clear()
+  pendingLoginPickers.clear()
+  await Promise.all(plan.storageKeys.map(removeSessionStorage))
+
+  const cancellations: Array<
+    WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+  > = [
+    ...plan.cancellations,
+    ...Array.from(authenticatorRequests.values(), (request) => ({
+      type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+      payload: { origin: request.origin, requestId: request.requestId },
+    })),
+    ...Array.from(loginRequests.values(), (request) => ({
+      type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+      payload: { origin: request.origin, requestId: request.requestId },
+    })),
+  ]
+  const uniqueCancellations = Array.from(
+    new Map(
+      cancellations.map((message) => [
+        `${message.type}:${message.payload.requestId}`,
+        message,
+      ]),
+    ).values(),
+  )
+  await Promise.allSettled(
+    uniqueCancellations.map((message) => chrome.runtime.sendMessage(message)),
+  )
+}
 
 enum SessionAccountListKind {
   Available = 'available',

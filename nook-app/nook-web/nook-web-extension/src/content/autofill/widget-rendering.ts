@@ -29,6 +29,7 @@ import {
   WidgetHostKind,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
+  authenticationActionState,
   widgetState,
 } from './state'
 import {
@@ -47,14 +48,23 @@ import {
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
+  snapshot: AuthenticationWorkflowSnapshot
   vaultConnection: PilotVaultConnection
 }
 
 export function renderEnrollmentWidget({
   hints,
+  snapshot,
   vaultConnection,
 }: RenderEnrollmentWidgetArgs): void {
   if (widgetState.dismissed) {
+    removeWidget()
+    return
+  }
+  if (
+    authentication_workflow_pilot_presentation_capability(snapshot) !==
+    'propose-action'
+  ) {
     removeWidget()
     return
   }
@@ -63,6 +73,8 @@ export function renderEnrollmentWidget({
     'enrollment',
     hints.qr ? 'qr' : '',
     hints.backupCodes ? 'backup' : '',
+    snapshot.action,
+    snapshot.stage,
     vaultConnection.connected ? 'connected' : 'disconnected',
     vaultConnection.vaultName ?? '',
   ].join(':')
@@ -102,7 +114,10 @@ export function renderEnrollmentWidget({
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
-    hints,
+    hints: {
+      qr: snapshot.action === 'enroll-authenticator' && hints.qr,
+      backupCodes: snapshot.action === 'save-backup-codes' && hints.backupCodes,
+    },
   }
   renderEnrollmentActions(nookTypedArgs1_0)
 }
@@ -162,6 +177,10 @@ export function renderWidget({
     return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) {
+    if (!sameRenderedWorkflow) {
+      authenticationActionState.invalidate()
+      widgetState.busy = false
+    }
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
     const preservesPresentation =

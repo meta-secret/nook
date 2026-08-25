@@ -136,7 +136,10 @@ test('creates a passkey from browser-native WASM options after extension messagi
 
   try {
     const popupPage = await setupPasskeyExtensionPopup(context)
-    await expect(popupPage.getByTestId('open-simple-vault-btn')).toBeVisible()
+    await expect(
+      popupPage.getByTestId('connect-simple-vault-btn'),
+    ).toBeVisible()
+    await expect(popupPage.getByTestId('open-simple-vault-btn')).toHaveCount(0)
     await openSimpleVaultConnection(context, popupPage)
   } finally {
     await context.close()
@@ -298,6 +301,14 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       pairingLauncher.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible()
+    await expect(
+      pairingLauncher.getByTestId('open-simple-vault-btn'),
+    ).toHaveCount(0)
+    await expect(
+      pairingLauncher.getByText(
+        'Pair this browser with Simple Vault to use saved logins and passkeys on websites.',
+      ),
+    ).toHaveCount(0)
 
     const reopenedConnectPage = context.waitForEvent('page')
     await pairingLauncher.getByTestId('connect-simple-vault-btn').click()
@@ -350,6 +361,26 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(
       connectedPopupPage.getByTestId('open-simple-vault-btn'),
     ).toBeVisible()
+    await expect(
+      connectedPopupPage.getByTestId('companion-vault-status'),
+    ).toHaveText(`Connected to ${extensionApprovalVaultName}`)
+    await expect(
+      connectedPopupPage.getByText('Nook extension', { exact: true }),
+    ).toBeVisible()
+    await expect(
+      connectedPopupPage.getByTestId('connect-simple-vault-btn'),
+    ).toHaveCount(0)
+    await expect(
+      connectedPopupPage.getByTestId('pair-another-vault-btn'),
+    ).toHaveClass(/menu-secondary-action/)
+    const toolbarBounds = await connectedPopupPage
+      .getByTestId('extension-toolbar-menu')
+      .boundingBox()
+    expect(toolbarBounds?.height).toBeLessThan(180)
+    const menuLogoBounds = await connectedPopupPage
+      .locator('.menu-logo')
+      .boundingBox()
+    expect(menuLogoBounds?.width).toBeLessThanOrEqual(34)
 
     const reopenedVaultPagePromise = context.waitForEvent('page')
     await connectedPopupPage.getByTestId('open-simple-vault-btn').click()
