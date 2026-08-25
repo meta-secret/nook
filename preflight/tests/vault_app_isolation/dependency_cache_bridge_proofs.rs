@@ -354,7 +354,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     );
     assert!(
         !wasm.contains("verify-wasm-gha-cache.sh"),
-        "ARC WASM publish must leave portable dependency publication to the hosted writer/proof job"
+        "the normal ARC WASM publisher must leave portable dependency publication to the dedicated proof job"
     );
 
     assert!(
@@ -362,22 +362,20 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
             && core_bake.contains("inherits   = [\"builder-wasm-deps-restore\"]")
             && core_bake.contains("target     = \"builder-wasm-deps\"")
             && !core_bake.contains("wasm-deps = \"target:builder-wasm-deps-restore\""),
-        "the hosted writer/proof must preserve the product Dockerfile/context cache-key lineage without a hydration-only stage"
+        "the ARC writer/proof must preserve the product Dockerfile/context cache-key lineage without a hydration-only stage"
     );
     assert!(
-        verifier.contains("docker-container")
-            && verifier.contains("--use")
-            && !verifier.contains("--builder")
-            && verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+        !verifier.contains("docker-container")
+            && !verifier.contains("buildx create")
+            && !verifier.contains("buildx rm")
             && verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
-            && verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && verifier
+                .contains("builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}")
             && verifier.contains("verify-registry-cache-blobs.ts")
             && verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
             && verifier.contains("refs/heads/main")
-            && verifier.contains("nook-sccache-report chef-wasm-release")
-            && verifier.contains("nook-sccache-report chef-wasm-clippy")
-            && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "runtime WASM proof must publish on trusted Main with one fresh hosted builder and require CACHED markers from another"
+            && verifier.contains("repair solve never imports the ref it is replacing"),
+        "runtime WASM proof must publish through ARC BuildKit on trusted Main and verify every Zot blob"
     );
     assert!(
         !blob_verifier.contains("method: 'HEAD'")

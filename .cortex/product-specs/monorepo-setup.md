@@ -153,11 +153,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.
-  - The portable WASM cache writer/proof selects `ubuntu-latest` explicitly.
+  - The portable WASM cache writer/proof selects the general ARC scale set.
   - `ubuntu-latest` remains the configuration fallback.
   - Each producer publishes its already-solved registry graph only after its
     lane-specific check succeeds.
-  - The hosted fallback WASM dependency export never imports its destination.
+  - The ARC WASM dependency repair export never imports its destination.
     It may use independent input-fingerprint and Main source refs as optional
     seeds, so a corrupted portable ref heals without manual deletion, and it
     keeps forced-zstd behavior.

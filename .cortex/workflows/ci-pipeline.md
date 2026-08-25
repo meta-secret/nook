@@ -820,11 +820,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
   pushes the exact-source image. ARC lifecycle hooks then create an ordinary
   job Pod from that immutable run tag on `nook-k0s-container`.
-- Main's portable WASM cache writer uses the verified ARC solve. Zot must prove child manifest digest/size plus every
-  declared blob's size and SHA-256 by streaming it completely. A second fresh builder then requires the
-  dependency compiler vertices to be `CACHED`. The target stays in the same
-  Rust Dockerfile and context lineage; a named-context wrapper is invalid
-  because it changes BuildKit cache-key identity.
+- Main's portable WASM cache writer uses the verified ARC solve. Zot must prove
+  child manifest digest/size plus every declared blob's size and SHA-256 by
+  streaming it completely. The target stays in the same Rust Dockerfile and
+  context lineage; a named-context wrapper is invalid because it changes
+  BuildKit cache-key identity.
 - Cold nodes restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.

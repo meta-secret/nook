@@ -445,32 +445,25 @@ webDockerTasks.requireAll([
   "-e NOOK_E2E_SHARD",
 ]);
 wasmCacheProof.requireAll([
-  '--driver-opt "image=${registry_host}/moby/buildkit:buildx-stable-1"',
-  'if [ "$purpose" = "promote" ]',
-  "A repair solve must never import the ref it is replacing",
+  "Publish from the already-selected node-local rootless BuildKit shard",
+  "repair solve never imports the ref it is replacing",
   'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',
   "nook-rust-wasm-source-v2:buildcache,ignore-error=true",
   "compression=zstd,force-compression=true",
-  'builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}',
+  'builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}',
+  "verify-registry-cache-blobs.ts",
 ]);
-const cacheRoutingStart = wasmCacheProofSource.indexOf(
-  'if [ "$purpose" = "promote" ]',
+wasmCacheProof.forbidAll([
+  "--driver docker-container",
+  "docker buildx create",
+  "docker buildx rm",
+]);
+const promotionSolve = wasmCacheProofSource.slice(
+  wasmCacheProofSource.indexOf('if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]'),
+  wasmCacheProofSource.indexOf('bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"'),
 );
-const cacheRoutingEnd = wasmCacheProofSource.indexOf(
-  "command+=(builder-wasm-deps-cache-proof)",
-  cacheRoutingStart,
-);
-const cacheRouting = wasmCacheProofSource.slice(
-  cacheRoutingStart,
-  cacheRoutingEnd,
-);
-const [promotionCacheRouting = "", verificationCacheRouting = ""] =
-  cacheRouting.split("  else\n");
-if (promotionCacheRouting.includes("ref=${cache_ref}")) {
+if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {
   throw new Error("portable WASM cache promotion must not import its destination");
-}
-if (!verificationCacheRouting.includes("ref=${cache_ref}")) {
-  throw new Error("portable WASM cache verification must import the destination");
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([

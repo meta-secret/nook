@@ -426,25 +426,21 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .expect("wasm publish must still seed rust-base after deps/source");
     assert!(
         wasm_source_idx < wasm_rust_base_idx && !wasm_publish.contains("builder-wasm-deps-publish"),
-        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to hosted BuildKit"
+        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to the dedicated proof job"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
-        cache_verifier.contains("docker-container")
-            && cache_verifier
-                .contains("--driver-opt \"image=${registry_host}/moby/buildkit:buildx-stable-1\"",)
-            && cache_verifier.contains("--use")
-            && !cache_verifier.contains("--builder")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+        !cache_verifier.contains("docker-container")
+            && !cache_verifier.contains("buildx create")
+            && !cache_verifier.contains("buildx rm")
             && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && cache_verifier
+                .contains("builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}")
             && cache_verifier.contains("verify-registry-cache-blobs.ts")
             && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
             && cache_verifier.contains("refs/heads/main")
-            && cache_verifier.contains("nook-sccache-report chef-wasm-release")
-            && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
-            && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "trusted Main must publish from one fresh hosted builder and reject the result until another fresh builder hits every dependency vertex"
+            && cache_verifier.contains("repair solve never imports the ref it is replacing"),
+        "trusted Main must publish through ARC BuildKit and reject the result until Zot proves every manifest and blob"
     );
     let base_dockerfile = read(
         root,
