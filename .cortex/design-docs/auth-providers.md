@@ -38,13 +38,14 @@ how provider transports relate independently to identities and vaults.
 
 ## 2. IndexedDB layout (`nook_auth`)
 
-| Piece         | Value                                                           |
-| ------------- | --------------------------------------------------------------- |
-| Database      | `nook_auth`                                                     |
-| Object store  | `auth`                                                          |
-| Key           | `providers`                                                     |
-| Value         | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
-| Schema marker | `providers-schema` (`1`)                                        |
+| Piece              | Value                                                           |
+| ------------------ | --------------------------------------------------------------- |
+| Database           | `nook_auth`                                                     |
+| Object store       | `auth`                                                          |
+| Identity key       | `providers:{app_id}`                                            |
+| Rollback projection | `providers`                                                     |
+| Value              | `{ providers: StorageProvider[], activeVaultStoreId?: string }` |
+| Schema markers     | `providers-schema:{app_id}` and `providers-schema` (`1`)         |
 
 The persisted object is a structured-clone JS object (not a JSON string). Rust
 owns both contracts:
@@ -52,8 +53,18 @@ owns both contracts:
 - semantic enums are used in memory and exported through Tsify/`$app-wasm`; and
 - `legacy_storage.rs` projects them to the schema-1 string-or-absent wire shape.
 
-Keeping schema 1 on disk is intentional rollback compatibility. An older deployed
-build can still deserialize a row saved by a newer build.
+Keeping schema 1 on disk is intentional rollback compatibility.
+
+- The app-scoped row is authoritative for the current build.
+- The singleton row remains readable by the prior deployed build.
+- A sole local identity refreshes both rows in one `nook_auth` transaction.
+- Equality with the app-scoped row proves ownership even when a projection has
+  no credential ciphertext to open.
+- Retiring an identity deletes the singleton row only when it still equals that
+  identity's app-scoped row; a competing singleton remains untouched.
+- Initial migration refreshes the rollback row after credentials are opened
+  and resealed successfully.
+- A competing singleton row is preserved and fails migration closed.
 
 The web layer **re-exports** the semantic types. It does **not** hand-author
 mirror interfaces.

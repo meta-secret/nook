@@ -3,8 +3,7 @@
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::NookVaultManager;
-use crate::identity_record::{NookIdentityDirectorySnapshotRequest, NookIdentitySnapshot};
-use crate::storage::identity_record::update_identity_directory;
+use crate::identity_record::NookIdentityDirectorySnapshotRequest;
 
 #[wasm_bindgen]
 impl NookVaultManager {
@@ -15,27 +14,11 @@ impl NookVaultManager {
         // locked companion session from falling back to this browser's
         // persisted app key and borrowing its identity evidence.
         let session_app_id = self.device.public_app_id();
-        Ok(NookIdentityDirectorySnapshotRequest::new(session_app_id))
-    }
-
-    pub async fn create_identity(&self, label: String) -> Result<NookIdentitySnapshot, JsError> {
-        let app_key = self
-            .device_identity()
-            .map_err(|error| JsError::new(&error.to_string()))?;
-        let current_app_id = app_key.app_id().as_str().to_owned();
-        update_identity_directory(move |directory| {
-            directory
-                .create_identity(&label, &app_key, None)
-                .map_err(|error| crate::NookError::Database(error.to_string()))?;
-            directory
-                .selected()
-                .map(|record| {
-                    NookIdentitySnapshot::from_record(record, Some(current_app_id.as_str()))
-                })
-                .map_err(|error| crate::NookError::Database(error.to_string()))
-        })
-        .await
-        .map_err(|error| JsError::new(&error.to_string()))
+        let session_unlocked = !self.device.identity_private_key.is_empty();
+        Ok(NookIdentityDirectorySnapshotRequest::new(
+            session_app_id,
+            session_unlocked,
+        ))
     }
 }
 

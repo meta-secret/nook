@@ -180,6 +180,11 @@ pub struct NookDeviceVaultAccess {
     verified_at: NookDeviceAccessText,
 }
 
+struct LocalAccessProfile {
+    app_id: String,
+    profile: device_access::DeviceAccessProfile,
+}
+
 #[wasm_bindgen]
 impl NookDeviceVaultAccess {
     #[wasm_bindgen(getter, js_name = storeId)]
@@ -237,6 +242,7 @@ impl NookDeviceAccessSnapshotRequest {
 }
 
 #[wasm_bindgen]
+#[derive(Clone)]
 pub struct NookDeviceAccessSnapshot {
     protection: nook_core::DeviceAccessProtectionKind,
     identity_state: nook_core::DeviceAccessIdentityState,
@@ -257,15 +263,7 @@ pub struct NookDeviceAccessSnapshot {
     vaults: Vec<NookDeviceVaultAccess>,
 }
 
-impl NookDeviceAccessSnapshot {
-    pub(crate) fn vaults_for_identity(
-        &self,
-        identity: &nook_core::IdentityRecord,
-    ) -> Vec<NookDeviceVaultAccess> {
-        vaults_for_identity(&self.vaults, identity)
-    }
-}
-
+#[cfg(test)]
 fn vaults_for_identity(
     vaults: &[NookDeviceVaultAccess],
     identity: &nook_core::IdentityRecord,
@@ -379,7 +377,12 @@ pub(crate) async fn device_access_snapshot_for_session(
     session_device_id: &str,
     session_unlocked: bool,
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
-    let protected = indexed_db::load_wrapped_device_identity().await?;
+    let session_device_id = session_device_id.trim();
+    let protected = if session_device_id.is_empty() {
+        indexed_db::load_wrapped_device_identity().await?
+    } else {
+        indexed_db::load_wrapped_device_identity_for_app_id(session_device_id).await?
+    };
     device_access_snapshot_for_session_with_protected(
         session_device_id,
         session_unlocked,
@@ -426,40 +429,35 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
             None => (String::new(), String::new(), String::new()),
         }
     };
-    let validated_device_id = nook_core::DeviceId::parse(&device_id).ok();
-    let profile = device_access::load_device_access_profile().await?;
+    let profile = if session_uses_companion {
+        device_access::load_companion_device_access_profile().await?
+    } else if device_id.is_empty() {
+        device_access::DeviceAccessProfile::default()
+    } else {
+        device_access::load_device_access_profile_for_app_id(&device_id).await?
+    };
     let passkey = if session_uses_companion {
         device_access::PasskeyAccessProfile::default()
     } else {
         profile
             .passkey
+            .clone()
             .filter(|passkey| passkey.credential_fingerprint == credential_id)
             .unwrap_or_default()
     };
-    let mut vaults = Vec::new();
-    for entry in indexed_db::list_vault_registry_entries().await? {
-        let verified_at = profile
-            .verified_vaults
-            .iter()
-            .find(|access| {
-                validated_device_id
-                    .as_ref()
-                    .is_some_and(|current| &access.device_id == current)
-                    && access.store_id.as_str() == entry.store_id
-            })
-            .map(|access| access.verified_at.to_string());
-        vaults.push(NookDeviceVaultAccess {
-            store_id: entry.store_id,
-            label: entry.label,
-            last_local_update_at: NookDeviceAccessText::from_option(
-                entry
-                    .last_unlocked_at
-                    .map(|timestamp| timestamp.to_string()),
-            ),
-            verified_at: NookDeviceAccessText::from_option(verified_at),
-        });
-    }
-    vaults.sort_by(|left, right| left.label.cmp(&right.label));
+    let profiles = if device_id.is_empty() {
+        Vec::new()
+    } else {
+        vec![LocalAccessProfile {
+            app_id: device_id.clone(),
+            profile: profile.clone(),
+        }]
+    };
+    let vaults = vault_access_rows(
+        indexed_db::list_vault_registry_entries().await?,
+        &profiles,
+        None,
+    );
 
     Ok(NookDeviceAccessSnapshot {
         protection,
@@ -485,6 +483,79 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
         observed_platform: passkey.observation.platform,
         vaults,
     })
+}
+
+pub(crate) async fn device_vault_access_for_identity(
+    identity: &nook_core::IdentityRecord,
+    local_app_ids: &[nook_core::AppId],
+    session_app_id: &str,
+) -> Result<Vec<NookDeviceVaultAccess>, wasm_bindgen::JsError> {
+    let mut profiles = Vec::new();
+    for app_id in local_app_ids {
+        if identity.has_app_id(app_id) {
+            profiles.push(LocalAccessProfile {
+                app_id: app_id.as_str().to_owned(),
+                profile: device_access::load_device_access_profile_for_app_id(app_id.as_str())
+                    .await?,
+            });
+        }
+    }
+    if let Ok(session_app_id) = nook_core::AppId::parse(session_app_id)
+        && identity.has_app_id(&session_app_id)
+        && !local_app_ids.contains(&session_app_id)
+    {
+        profiles.push(LocalAccessProfile {
+            app_id: session_app_id.as_str().to_owned(),
+            profile: device_access::load_companion_device_access_profile().await?,
+        });
+    }
+    Ok(vault_access_rows(
+        indexed_db::list_vault_registry_entries().await?,
+        &profiles,
+        Some(identity),
+    ))
+}
+
+fn vault_access_rows(
+    registry: Vec<indexed_db::VaultRegistryEntry>,
+    profiles: &[LocalAccessProfile],
+    identity: Option<&nook_core::IdentityRecord>,
+) -> Vec<NookDeviceVaultAccess> {
+    let mut vaults = Vec::new();
+    for entry in registry {
+        if identity.is_some_and(|record| {
+            nook_core::StoreId::parse(&entry.store_id)
+                .map_or(true, |store_id| !record.owns_vault(&store_id))
+        }) {
+            continue;
+        }
+        let verified_at = profiles
+            .iter()
+            .flat_map(|local| {
+                local.profile.verified_vaults.iter().filter(|access| {
+                    identity.is_none_or(|record| {
+                        nook_core::AppId::parse(&local.app_id)
+                            .is_ok_and(|app_id| record.has_app_id(&app_id))
+                    }) && access.device_id.as_str() == local.app_id
+                        && access.store_id.as_str() == entry.store_id
+                })
+            })
+            .map(|access| &access.verified_at)
+            .max()
+            .map(ToString::to_string);
+        vaults.push(NookDeviceVaultAccess {
+            store_id: entry.store_id,
+            label: entry.label,
+            last_local_update_at: NookDeviceAccessText::from_option(
+                entry
+                    .last_unlocked_at
+                    .map(|timestamp| timestamp.to_string()),
+            ),
+            verified_at: NookDeviceAccessText::from_option(verified_at),
+        });
+    }
+    vaults.sort_by(|left, right| left.label.cmp(&right.label));
+    vaults
 }
 
 #[wasm_bindgen]
@@ -557,5 +628,179 @@ mod tests {
         assert_eq!(companion_rows.len(), 1);
         assert_eq!(companion_rows[0].store_id(), companion_store.as_str());
         Ok(())
+    }
+
+    #[test]
+    fn scopes_verified_access_to_each_local_identity_profile() -> anyhow::Result<()> {
+        let personal_key = nook_core::AppKey::generate()?;
+        let work_key = nook_core::AppKey::generate()?;
+        let personal_store = nook_core::generate_store_id()?;
+        let work_store = nook_core::generate_store_id()?;
+        let mut personal =
+            nook_core::IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
+        let mut work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        personal.generate_vault_dek(personal_store.clone())?;
+        work.generate_vault_dek(work_store.clone())?;
+        let mut personal_profile = device_access::DeviceAccessProfile::default();
+        personal_profile.record_verified_vault_access(
+            &nook_core::DeviceId::parse(personal_key.app_id().as_str())?,
+            &personal_store,
+            nook_core::IsoTimestamp::from_trusted("2026-08-23T01:00:00.000Z".to_owned()),
+        );
+        let mut work_profile = device_access::DeviceAccessProfile::default();
+        work_profile.record_verified_vault_access(
+            &nook_core::DeviceId::parse(work_key.app_id().as_str())?,
+            &work_store,
+            nook_core::IsoTimestamp::from_trusted("2026-08-23T02:00:00.000Z".to_owned()),
+        );
+        let registry = vec![
+            indexed_db::VaultRegistryEntry {
+                store_id: personal_store.to_string(),
+                label: "Personal vault".to_owned(),
+                last_unlocked_at: None,
+            },
+            indexed_db::VaultRegistryEntry {
+                store_id: work_store.to_string(),
+                label: "Work vault".to_owned(),
+                last_unlocked_at: None,
+            },
+        ];
+        let profiles = vec![
+            LocalAccessProfile {
+                app_id: personal_key.app_id().as_str().to_owned(),
+                profile: personal_profile,
+            },
+            LocalAccessProfile {
+                app_id: work_key.app_id().as_str().to_owned(),
+                profile: work_profile,
+            },
+        ];
+
+        let personal_rows = vault_access_rows(registry.clone(), &profiles, Some(&personal));
+        let work_rows = vault_access_rows(registry, &profiles, Some(&work));
+
+        assert_eq!(personal_rows.len(), 1);
+        assert_eq!(personal_rows[0].store_id(), personal_store.as_str());
+        assert_eq!(
+            personal_rows[0].verified_at().kind(),
+            NookDeviceAccessTextKind::Known
+        );
+        assert_eq!(work_rows.len(), 1);
+        assert_eq!(work_rows[0].store_id(), work_store.as_str());
+        assert_eq!(
+            work_rows[0].verified_at().kind(),
+            NookDeviceAccessTextKind::Known
+        );
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn locked_session_keeps_its_identity_evidence_after_another_tab_switches()
+    -> Result<(), crate::NookError> {
+        crate::storage::identity_record::clear_keyring_for_test().await?;
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
+        let first_key = nook_core::AppKey::generate()
+            .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        let first_wrapped =
+            nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
+        crate::storage::identity_record::save_new_protected_local_identity(
+            &first_key,
+            &first_wrapped,
+            None,
+            "Personal",
+        )
+        .await?;
+        let second_key = nook_core::AppKey::generate()
+            .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        let second_wrapped =
+            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+        crate::storage::identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
+        )
+        .await?;
+
+        let snapshot = device_access_snapshot_for_session(first_key.app_id().as_str(), false)
+            .await
+            .map_err(|error| crate::NookError::Database(format!("{error:?}")))?;
+
+        assert_eq!(
+            snapshot.protection(),
+            nook_core::DeviceAccessProtectionKind::PinOrPassphrase
+        );
+        assert_eq!(
+            snapshot.identity_state(),
+            nook_core::DeviceAccessIdentityState::Locked
+        );
+        assert_eq!(
+            snapshot
+                .device_id()
+                .value()
+                .map_err(|error| crate::NookError::Database(format!("{error:?}")))?,
+            first_key.app_id().as_str()
+        );
+
+        crate::storage::identity_record::clear_keyring_for_test().await?;
+        crate::storage::identity_record::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn companion_session_projects_verified_vault_evidence_from_compatibility_profile()
+    -> Result<(), crate::NookError> {
+        crate::storage::indexed_db::clear_vault_db().await?;
+        let companion_key = nook_core::AppKey::generate()
+            .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        let companion_id = nook_core::DeviceId::parse(companion_key.app_id().as_str())
+            .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        let store_id = nook_core::generate_store_id()
+            .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        let mut identity =
+            nook_core::IdentityRecord::create_with_app_key("Companion", &companion_key, None)
+                .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        identity
+            .generate_vault_dek(store_id.clone())
+            .map_err(|error| crate::NookError::Database(error.to_string()))?;
+        crate::storage::indexed_db::save_vault_blob(store_id.as_str(), "encrypted-vault").await?;
+        device_access::record_verified_vault_access(&companion_id, &store_id).await?;
+
+        let snapshot =
+            device_access_snapshot_for_session_with_protected(companion_id.as_str(), true, None)
+                .await
+                .map_err(|error| crate::NookError::Database(format!("{error:?}")))?;
+
+        assert_eq!(
+            snapshot.protection(),
+            nook_core::DeviceAccessProtectionKind::CompanionSession
+        );
+        let vault = snapshot
+            .vaults()
+            .into_iter()
+            .find(|entry| entry.store_id() == store_id.as_str())
+            .ok_or_else(|| crate::NookError::Database("Companion vault is missing".to_owned()))?;
+        assert_eq!(vault.access_state(), NookDeviceVaultAccessState::Verified);
+        let identity_vault =
+            device_vault_access_for_identity(&identity, &[], companion_key.app_id().as_str())
+                .await
+                .map_err(|error| crate::NookError::Database(format!("{error:?}")))?
+                .into_iter()
+                .find(|entry| entry.store_id() == store_id.as_str())
+                .ok_or_else(|| {
+                    crate::NookError::Database("Companion identity vault is missing".to_owned())
+                })?;
+        assert_eq!(
+            identity_vault.access_state(),
+            NookDeviceVaultAccessState::Verified
+        );
+        crate::storage::indexed_db::clear_vault_db().await
     }
 }

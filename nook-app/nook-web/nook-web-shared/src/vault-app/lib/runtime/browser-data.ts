@@ -10,6 +10,7 @@ enum LocalDataResetMessageType {
   Request = "request",
   Seen = "seen",
   Ready = "ready",
+  Reload = "reload",
 }
 
 type LocalDataResetRequest = {
@@ -42,8 +43,16 @@ type LocalDataResetReady = {
   readiness: LocalDataResetReadiness;
 };
 
+type LocalDataResetReload = {
+  type: LocalDataResetMessageType.Reload;
+  senderId: string;
+};
+
 type LocalDataResetMessage =
-  LocalDataResetRequest | LocalDataResetSeen | LocalDataResetReady;
+  | LocalDataResetRequest
+  | LocalDataResetSeen
+  | LocalDataResetReady
+  | LocalDataResetReload;
 
 type BrowserDataDeletionErrors = Error[];
 
@@ -213,6 +222,10 @@ export function subscribeToLocalBrowserDataDeletion(
   };
 
   channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
+    if (event.data.type === LocalDataResetMessageType.Reload) {
+      if (event.data.senderId !== TAB_ID) window.location.reload();
+      return;
+    }
     void handleRequest(event.data);
   };
   return () => {
@@ -239,6 +252,7 @@ export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
   channel.onmessage = (event: MessageEvent<LocalDataResetMessage>) => {
     const message = event.data;
     if (
+      message.type === LocalDataResetMessageType.Reload ||
       message.requestId !== request.requestId ||
       message.senderId !== TAB_ID ||
       message.type === LocalDataResetMessageType.Request
@@ -251,25 +265,51 @@ export async function quiesceOtherTabsForLocalRecovery(): Promise<void> {
       ready.set(message.responderId, message.readiness);
     }
   };
-  channel.postMessage(request);
+  try {
+    channel.postMessage(request);
 
-  const waitUntil = Date.now() + 20_000;
-  await new Promise((resolve) => setTimeout(resolve, 150));
-  while ([...seen].some((tabId) => !ready.has(tabId))) {
-    if (Date.now() >= waitUntil) {
-      channel.close();
-      throw new Error("Another Nook tab did not stop local storage work");
+    const waitUntil = Date.now() + 20_000;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    while ([...seen].some((tabId) => !ready.has(tabId))) {
+      if (Date.now() >= waitUntil) {
+        throw new Error("Another Nook tab did not stop local storage work");
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
     }
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    const errors = [...ready.values()]
+      .filter(
+        (readiness) => readiness.kind === LocalDataResetReadinessKind.Failed,
+      )
+      .map((readiness) => readiness.error);
+    if (errors.length > 0) {
+      throw new Error(errors.join("; "));
+    }
+  } catch (error) {
+    try {
+      await reloadQuiescedTabsAfterLocalRecovery();
+    } catch {
+      // A peer may already be suspended even when another peer reports a
+      // failure. Reload is best-effort because the channel can disappear as a
+      // tab or origin is torn down.
+    }
+    throw error;
+  } finally {
+    channel.close();
   }
-  channel.close();
-  const errors = [...ready.values()]
-    .filter(
-      (readiness) => readiness.kind === LocalDataResetReadinessKind.Failed,
-    )
-    .map((readiness) => readiness.error);
-  if (errors.length > 0) {
-    throw new Error(errors.join("; "));
+}
+
+export async function reloadQuiescedTabsAfterLocalRecovery(): Promise<void> {
+  if (!("BroadcastChannel" in globalThis)) return;
+  const channel = new BroadcastChannel(LOCAL_DATA_RESET_CHANNEL);
+  try {
+    const message: LocalDataResetReload = {
+      type: LocalDataResetMessageType.Reload,
+      senderId: TAB_ID,
+    };
+    channel.postMessage(message);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  } finally {
+    channel.close();
   }
 }
 
@@ -284,20 +324,29 @@ export async function deleteLocalBrowserData(
 ): Promise<void> {
   requireLocalDataRecoverySupport();
   await quiesceOtherTabsForLocalRecovery();
-  await suspendWasmLogging();
-  await runWithExclusiveLocalDataStorageLock(async () => {
-    const errors: Error[] = [];
+  try {
+    await suspendWasmLogging();
+    await runWithExclusiveLocalDataStorageLock(async () => {
+      const errors: Error[] = [];
+      try {
+        await clearNookDatabases();
+      } catch (error) {
+        errors.push(runtimeError(error));
+      }
+      try {
+        await clearBrowserManagedStorage();
+      } catch (error) {
+        errors.push(runtimeError(error));
+      }
+      if (errors.length > 0) throw combineErrors(errors);
+    });
+  } finally {
     try {
-      await clearNookDatabases();
-    } catch (error) {
-      errors.push(runtimeError(error));
+      await reloadQuiescedTabsAfterLocalRecovery();
+    } catch {
+      // Browser cleanup already completed. Peer reload is best-effort because
+      // a browser may revoke BroadcastChannel while origin data is cleared.
     }
-    try {
-      await clearBrowserManagedStorage();
-    } catch (error) {
-      errors.push(runtimeError(error));
-    }
-    if (errors.length > 0) throw combineErrors(errors);
-  });
+  }
   window.location.replace(appPath("/"));
 }

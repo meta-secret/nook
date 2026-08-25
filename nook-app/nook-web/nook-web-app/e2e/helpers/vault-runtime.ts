@@ -423,6 +423,7 @@ export async function wipeDeviceIdentity(page: Page): Promise<void> {
           const db = request.result
           const tx = db.transaction('vault', 'readwrite')
           const store = tx.objectStore('vault')
+          store.delete('local_identity_keyring_v1')
           store.delete('device_id')
           store.delete('device_identity_wrapped')
           store.delete('app_id')

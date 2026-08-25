@@ -15,13 +15,17 @@ import {
   unselectedVaultScope,
 } from "$lib/auth/providers";
 import { createLogger } from "$lib/runtime/log";
-import { quiesceOtherTabsForLocalRecovery } from "$lib/runtime/browser-data";
+import {
+  quiesceOtherTabsForLocalRecovery,
+  reloadQuiescedTabsAfterLocalRecovery,
+} from "$lib/runtime/browser-data";
 import type { DeviceMode } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 import {
   DeviceProtectionStatus,
   providers_visible_while_device_locked,
+  set_vault_session_locked,
 } from "$app-wasm";
 
 const log = createLogger("vault-device-protection");
@@ -29,6 +33,7 @@ const log = createLogger("vault-device-protection");
 interface AuthorizedDeviceInitialization {
   readonly state: VaultState;
   readonly mode: DeviceProtectionStatus;
+  readonly initializeSession: boolean;
 }
 
 interface FailedDeviceAuthorization {
@@ -45,17 +50,25 @@ interface VaultDeviceProtectionSetupRequest {
   readonly state: VaultState;
   readonly passkeyLabel: string;
   readonly deviceMode: DeviceMode;
+  readonly initializeSession: boolean;
 }
 
 interface PinDeviceProtectionSetupRequest {
   readonly state: VaultState;
   readonly pin: string;
   readonly confirmPin: string;
+  readonly initializeSession: boolean;
 }
 
 interface PinDeviceProtectionUnlockRequest {
   readonly state: VaultState;
   readonly pin: string;
+  readonly initializeSession: boolean;
+}
+
+interface DeviceProtectionUnlockRequest {
+  readonly state: VaultState;
+  readonly initializeSession: boolean;
 }
 
 export function lockDeviceProtection(state: VaultState): Promise<void> {
@@ -95,10 +108,17 @@ export function lockDeviceProtection(state: VaultState): Promise<void> {
 async function finishAuthorizedInitialization({
   state,
   mode,
+  initializeSession,
 }: AuthorizedDeviceInitialization): Promise<void> {
   state.deviceAuthorizationInProgress = true;
   state.deviceProtectionLockedStatus = mode;
-  await state.continueInitializationAfterDeviceUnlock();
+  if (initializeSession) {
+    await state.continueInitializationAfterDeviceUnlock();
+  } else {
+    const manager = state.requireManager();
+    state.deviceId = manager.device_id;
+    state.devicePublicKey = manager.device_public_key;
+  }
   state.deviceProtectionStatus = DeviceProtectionStatus.Unlocked;
 }
 
@@ -126,6 +146,7 @@ export async function setupDeviceProtection({
   state,
   passkeyLabel,
   deviceMode,
+  initializeSession,
 }: VaultDeviceProtectionSetupRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
@@ -146,7 +167,7 @@ export async function setupDeviceProtection({
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs: Parameters<
       typeof finishAuthorizedInitialization
-    >[0] = { state, mode: DeviceProtectionStatus.Passkey };
+    >[0] = { state, mode: DeviceProtectionStatus.Passkey, initializeSession };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs);
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
@@ -191,10 +212,12 @@ export async function setupDeviceProtection({
       data: sanitizedPasskeyCeremonyData(error),
     };
     logPasskeyCeremony(logPasskeyCeremonyArgs4);
-    const lockFailedAuthorizationArgs: Parameters<
-      typeof lockFailedAuthorization
-    >[0] = { state, deviceIdentityUnlocked };
-    lockFailedAuthorization(lockFailedAuthorizationArgs);
+    if (initializeSession) {
+      const lockFailedAuthorizationArgs: Parameters<
+        typeof lockFailedAuthorization
+      >[0] = { state, deviceIdentityUnlocked };
+      lockFailedAuthorization(lockFailedAuthorizationArgs);
+    }
     state.errorMsg =
       error instanceof Error ? error.message : "Failed to create passkey.";
   } finally {
@@ -218,7 +241,11 @@ export async function recoverDeviceProtectionWithPasskey(
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs2: Parameters<
       typeof finishAuthorizedInitialization
-    >[0] = { state, mode: DeviceProtectionStatus.Passkey };
+    >[0] = {
+      state,
+      mode: DeviceProtectionStatus.Passkey,
+      initializeSession: true,
+    };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs2);
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
@@ -285,6 +312,7 @@ export async function setupPinDeviceProtection({
   state,
   pin,
   confirmPin,
+  initializeSession,
 }: PinDeviceProtectionSetupRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
@@ -300,14 +328,16 @@ export async function setupPinDeviceProtection({
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs3: Parameters<
       typeof finishAuthorizedInitialization
-    >[0] = { state, mode: DeviceProtectionStatus.Pin };
+    >[0] = { state, mode: DeviceProtectionStatus.Pin, initializeSession };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs3);
   } catch (error) {
     log.warn("PIN device protection setup failed");
-    const lockFailedAuthorizationArgs3: Parameters<
-      typeof lockFailedAuthorization
-    >[0] = { state, deviceIdentityUnlocked };
-    lockFailedAuthorization(lockFailedAuthorizationArgs3);
+    if (initializeSession) {
+      const lockFailedAuthorizationArgs3: Parameters<
+        typeof lockFailedAuthorization
+      >[0] = { state, deviceIdentityUnlocked };
+      lockFailedAuthorization(lockFailedAuthorizationArgs3);
+    }
     state.errorMsg =
       error instanceof Error ? error.message : "Failed to create PIN.";
   } finally {
@@ -317,7 +347,10 @@ export async function setupPinDeviceProtection({
   }
 }
 
-export async function unlockDeviceProtection(state: VaultState): Promise<void> {
+export async function unlockDeviceProtection({
+  state,
+  initializeSession,
+}: DeviceProtectionUnlockRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
@@ -329,7 +362,11 @@ export async function unlockDeviceProtection(state: VaultState): Promise<void> {
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs4: Parameters<
       typeof finishAuthorizedInitialization
-    >[0] = { state, mode: DeviceProtectionStatus.Passkey };
+    >[0] = {
+      state,
+      mode: DeviceProtectionStatus.Passkey,
+      initializeSession,
+    };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs4);
   } catch (error) {
     if (isPasskeyCeremonyNotAllowedError(error)) {
@@ -365,6 +402,7 @@ export async function unlockDeviceProtection(state: VaultState): Promise<void> {
 export async function unlockPinDeviceProtection({
   state,
   pin,
+  initializeSession,
 }: PinDeviceProtectionUnlockRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
@@ -377,7 +415,11 @@ export async function unlockPinDeviceProtection({
     deviceIdentityUnlocked = true;
     const finishAuthorizedInitializationArgs5: Parameters<
       typeof finishAuthorizedInitialization
-    >[0] = { state, mode: DeviceProtectionStatus.Pin };
+    >[0] = {
+      state,
+      mode: DeviceProtectionStatus.Pin,
+      initializeSession,
+    };
     await finishAuthorizedInitialization(finishAuthorizedInitializationArgs5);
   } catch (error) {
     log.warn("PIN device protection unlock failed");
@@ -394,36 +436,150 @@ export async function unlockPinDeviceProtection({
   }
 }
 
-export async function resetDeviceProtectionForRecovery(
-  state: VaultState,
+type DeviceProtectionRecoveryManager = Pick<
+  ReturnType<VaultState["requireManager"]>,
+  | "local_identity_recovery_app_id"
+  | "reset_device_protection_for_recovery"
+  | "device_protection_status"
+>;
+
+type DeviceProtectionRecoveryState = Pick<
+  VaultState,
+  | "hasManager"
+  | "isVerifying"
+  | "errorMsg"
+  | "deviceProtectionStatus"
+  | "deviceProtectionLockedStatus"
+  | "deviceId"
+  | "devicePublicKey"
+  | "providers"
+  | "providersLoaded"
+  | "githubPat"
+  | "storageMode"
+  | "enqueueExclusiveStorage"
+  | "adoptLocalDataStorageGeneration"
+  | "clearUnlockedSession"
+  | "clearOauthFile"
+  | "clearLocalFolder"
+  | "showSuccess"
+  | "t"
+> & {
+  requireManager: () => DeviceProtectionRecoveryManager;
+};
+
+export type DeviceProtectionRecoveryRequest = {
+  state: DeviceProtectionRecoveryState;
+  expectedAppId: string;
+};
+
+function clearQuiescedRecoverySession(
+  state: DeviceProtectionRecoveryState,
+): void {
+  set_vault_session_locked(true);
+  state.clearUnlockedSession(false);
+  state.deviceId = "";
+  state.devicePublicKey = "";
+  state.providers = [];
+  state.providersLoaded = false;
+  state.githubPat = "";
+  state.clearOauthFile();
+  state.clearLocalFolder();
+  state.storageMode = LOCAL_PROVIDER_TYPE;
+}
+
+type PersistedProtectionStatusRequest = {
+  readonly state: DeviceProtectionRecoveryState;
+  readonly status: DeviceProtectionStatus;
+};
+
+function applyPersistedProtectionStatus({
+  state,
+  status,
+}: PersistedProtectionStatusRequest): void {
+  state.deviceProtectionStatus = status;
+  state.deviceProtectionLockedStatus =
+    status === DeviceProtectionStatus.Pin
+      ? DeviceProtectionStatus.Pin
+      : DeviceProtectionStatus.Passkey;
+}
+
+async function refreshPersistedProtectionStatus(
+  state: DeviceProtectionRecoveryState,
 ): Promise<void> {
+  try {
+    const status = await state.enqueueExclusiveStorage(() =>
+      state.requireManager().device_protection_status(),
+    );
+    const statusRequest: PersistedProtectionStatusRequest = { state, status };
+    applyPersistedProtectionStatus(statusRequest);
+  } finally {
+    state.adoptLocalDataStorageGeneration();
+  }
+}
+
+export async function resetDeviceProtectionForRecovery({
+  state,
+  expectedAppId,
+}: DeviceProtectionRecoveryRequest): Promise<void> {
   if (!state.hasManager || state.isVerifying) return;
   state.isVerifying = true;
   state.errorMsg = "";
+  let localRecoveryAttempted = false;
+  let peerTabsQuiesced = false;
   try {
     await quiesceOtherTabsForLocalRecovery();
+    peerTabsQuiesced = true;
+    let resetProtectionStatus = DeviceProtectionStatus.Missing;
     try {
-      await state.enqueueExclusiveStorage(() =>
-        state.requireManager().reset_device_protection_for_recovery(),
-      );
+      resetProtectionStatus = await state.enqueueExclusiveStorage(async () => {
+        const manager = state.requireManager();
+        let recoveryAppId = expectedAppId;
+        if (!recoveryAppId) {
+          try {
+            recoveryAppId = await manager.local_identity_recovery_app_id();
+          } catch {
+            // An unreadable directory intentionally selects Rust's full
+            // recovery branch. An intact keyring still rejects an empty
+            // target, so unrelated lookup failures remain fail-closed.
+          }
+        }
+        localRecoveryAttempted = true;
+        await manager.reset_device_protection_for_recovery(recoveryAppId);
+        return manager.device_protection_status();
+      });
+      const statusRequest: PersistedProtectionStatusRequest = {
+        state,
+        status: resetProtectionStatus,
+      };
+      applyPersistedProtectionStatus(statusRequest);
     } finally {
       state.adoptLocalDataStorageGeneration();
     }
-    state.deviceProtectionStatus = DeviceProtectionStatus.Missing;
-    state.deviceProtectionLockedStatus = DeviceProtectionStatus.Passkey;
-    state.deviceId = "";
-    state.devicePublicKey = "";
-    state.providers = [];
-    state.providersLoaded = false;
-    state.githubPat = "";
-    state.clearOauthFile();
-    state.clearLocalFolder();
-    state.storageMode = LOCAL_PROVIDER_TYPE;
-    state.showSuccess(state.t(I18N_KEYS.DeviceProtectionRecoveryComplete));
+    clearQuiescedRecoverySession(state);
+    const recoveryCompleteKey =
+      resetProtectionStatus === DeviceProtectionStatus.Missing
+        ? I18N_KEYS.DeviceProtectionRecoveryComplete
+        : I18N_KEYS.DeviceProtectionRecoverySurvivorComplete;
+    state.showSuccess(state.t(recoveryCompleteKey));
   } catch {
     log.warn("device protection recovery reset failed");
+    if (localRecoveryAttempted) {
+      clearQuiescedRecoverySession(state);
+      try {
+        await refreshPersistedProtectionStatus(state);
+      } catch {
+        log.warn("could not refresh device protection after recovery failure");
+      }
+    }
     state.errorMsg = state.t(I18N_KEYS.DeviceProtectionRecoveryFailed);
   } finally {
+    if (peerTabsQuiesced) {
+      try {
+        await reloadQuiescedTabsAfterLocalRecovery();
+      } catch {
+        log.warn("could not reload tabs after device protection recovery");
+      }
+    }
     state.isVerifying = false;
   }
 }

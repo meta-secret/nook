@@ -53,13 +53,22 @@ async function readRecoveryStorage(
           const store = transaction.objectStore('vault')
           const legacyWrapped = store.get('device_identity_wrapped')
           const appKeyWrapped = store.get('app_key_wrapped')
+          const identityKeyring = store.get('local_identity_keyring_v1')
           const registry = store.get('vault_registry')
           transaction.onerror = () => reject(transaction.error)
           transaction.oncomplete = () => {
             db.close()
+            const keyring =
+              typeof identityKeyring.result === 'string'
+                ? (JSON.parse(identityKeyring.result) as {
+                    entries: Array<{ appId: string }>
+                  })
+                : { entries: [] }
             resolve({
               wrappedIdentityStored: Boolean(
-                legacyWrapped.result || appKeyWrapped.result,
+                legacyWrapped.result ||
+                appKeyWrapped.result ||
+                keyring.entries.length > 0,
               ),
               registryStored: Boolean(registry.result),
             })
@@ -79,6 +88,19 @@ test('waits for peer storage work before destructive identity recovery', async (
 
   const peer = await page.context().newPage()
   await peer.goto('/app/')
+  await expect
+    .poll(() =>
+      peer.evaluate(() =>
+        Boolean(
+          (
+            window as Window & {
+              __nookVault?: { readonly localDataDeletionStarted: boolean }
+            }
+          ).__nookVault,
+        ),
+      ),
+    )
+    .toBe(true)
   await peer.evaluate(() => {
     const peerWindow = window as Window & {
       __nookVault?: {
@@ -138,5 +160,117 @@ test('waits for peer storage work before destructive identity recovery', async (
   const persisted = await readRecoveryStorage(page)
   expect(persisted.wrappedIdentityStored).toBe(false)
   expect(persisted.registryStored).toBe(true)
+  await expect
+    .poll(() =>
+      peer.evaluate(() => {
+        const peerVault = (
+          window as Window & {
+            __nookVault?: { readonly localDataDeletionStarted: boolean }
+          }
+        ).__nookVault
+        return peerVault?.localDataDeletionStarted ?? true
+      }),
+    )
+    .toBe(false)
+  await peer.evaluate(async () => {
+    const peerVault = (
+      window as Window & {
+        __nookVault?: {
+          enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
+        }
+      }
+    ).__nookVault
+    if (!peerVault) throw new Error('Vault runtime is not exposed')
+    await peerVault.enqueueStorage(async () => {
+      sessionStorage.setItem('nook_e2e_peer_reinitialized', 'true')
+    })
+  })
+  await expect
+    .poll(() =>
+      peer.evaluate(() =>
+        sessionStorage.getItem('nook_e2e_peer_reinitialized'),
+      ),
+    )
+    .toBe('true')
   await peer.close()
+})
+
+test('keeps recovery reachable when the identity directory is corrupt', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  })
+  await createProtectedVault(page)
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction('vault', 'readwrite')
+          transaction
+            .objectStore('vault')
+            .put('{future-or-corrupt', 'identity_directory_v1')
+          transaction.onerror = () => reject(transaction.error)
+          transaction.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+        }
+      }),
+  )
+
+  await page.reload()
+  await openProtectionOverlay(page)
+  const recovery = page.getByTestId('device-protection-recovery-btn')
+  await expect(recovery).toHaveText('Reset this browser')
+  page.once('dialog', (dialog) => dialog.accept())
+  await recovery.click()
+
+  await expect(
+    page.getByTestId('device-protection-use-existing-choice'),
+  ).toHaveText('Authenticate')
+  const persisted = await readRecoveryStorage(page)
+  expect(persisted.wrappedIdentityStored).toBe(false)
+  expect(persisted.registryStored).toBe(true)
+})
+
+test('uses a safe full reset when the identity directory is missing', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  })
+  await createProtectedVault(page)
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve, reject) => {
+        const request = indexedDB.open('nook_db')
+        request.onerror = () => reject(request.error)
+        request.onsuccess = () => {
+          const db = request.result
+          const transaction = db.transaction('vault', 'readwrite')
+          transaction.objectStore('vault').delete('identity_directory_v1')
+          transaction.onerror = () => reject(transaction.error)
+          transaction.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+        }
+      }),
+  )
+
+  await page.reload()
+  await openProtectionOverlay(page)
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByTestId('device-protection-recovery-btn').click()
+
+  await expect(
+    page.getByTestId('device-protection-use-existing-choice'),
+  ).toHaveText('Authenticate')
+  const persisted = await readRecoveryStorage(page)
+  expect(persisted.wrappedIdentityStored).toBe(false)
+  expect(persisted.registryStored).toBe(true)
 })

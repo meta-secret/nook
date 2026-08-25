@@ -1,5 +1,8 @@
 <script lang="ts">
-  type SecretAddModeChange = { readonly open: boolean; readonly selection: SecretTypeSelection }
+  type SecretAddModeChange = {
+    readonly open: boolean
+    readonly selection: SecretTypeSelection
+  }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { onDestroy, tick } from 'svelte'
@@ -128,32 +131,6 @@
       ?.focus()
   }
 
-  async function openVaultDevices(): Promise<void> {
-    const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-      section: SettingsSection.Storage,
-      accordion: SettingsAccordionSection.Devices,
-    }
-    vault.openSettings(settingsRequest)
-    await tick()
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
-    devicesAccessHost.element
-      .querySelector<HTMLButtonElement>(
-        '[data-testid="vault-devices-section"] > button',
-      )
-      ?.focus()
-  }
-
-  async function openVaultPasswords(): Promise<void> {
-    vault.openAdmin(AdminAccordionSection.Passwords)
-    await tick()
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
-    devicesAccessHost.element
-      .querySelector<HTMLButtonElement>(
-        '[data-testid="vault-unlock-section"] > button',
-      )
-      ?.focus()
-  }
-
   onDestroy(() => {
     onEditorOpenChange(false)
   })
@@ -205,13 +182,11 @@
         <DevicesAccessDashboard
           {vault}
           onBack={() => void closeDevicesAccess()}
-          onManageVaultDevices={() => void openVaultDevices()}
-          onManageVaultPasswords={() => void openVaultPasswords()}
         />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
-          extensionSetupState={extensionSetupState}
+          {extensionSetupState}
           bind:activeSection={vault.adminAccordionSection}
           syncProviders={vault.syncProviders}
           manualProviderSync={vault.manualProviderSync}
@@ -251,9 +226,13 @@
           onIssueCode={({ entryId, password }) => {
             const provider = vault.syncProviders[0]
             if (!provider) {
-              throw new Error(vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr))
+              throw new Error(
+                vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr),
+              )
             }
-            const issueRequest: Parameters<typeof vault.issueEnrollmentCode>[0] = {
+            const issueRequest: Parameters<
+              typeof vault.issueEnrollmentCode
+            >[0] = {
               entryId,
               password,
               providerId: provider.id,
@@ -318,8 +297,7 @@
           hasPasswordEnvelope={vault.hasPasswordEnvelope}
           onApproveJoin={(id) => vault.approveJoin(id)}
           onDenyJoin={(id) => vault.denyJoin(id)}
-          onRenameDevice={(renameRequest) =>
-            vault.renameDevice(renameRequest)}
+          onRenameDevice={(renameRequest) => vault.renameDevice(renameRequest)}
           onRevokeDevice={(id) => vault.revokeDevice(id)}
         />
       {:else}
@@ -331,10 +309,11 @@
             onApproveJoin={(id) => vault.approveJoin(id)}
             onRefresh={() => vault.manualSync()}
             onOpenDevicesSettings={() => {
-              const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-                section: SettingsSection.Storage,
-                accordion: SettingsAccordionSection.Devices,
-              }
+              const settingsRequest: Parameters<typeof vault.openSettings>[0] =
+                {
+                  section: SettingsSection.Storage,
+                  accordion: SettingsAccordionSection.Devices,
+                }
               vault.openSettings(settingsRequest)
             }}
           />
