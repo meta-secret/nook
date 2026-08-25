@@ -349,6 +349,7 @@ runtimeSmoke.requireAll([
 runtimeSmoke.forbidAll(["--load", "docker run", "docker info", "podman"]);
 
 tasks.requireAll([
+  "arc:build-hosts:quarantine:",
   "arc:buildkit:storage:prepare:",
   "install -d -o 1000 -g 1000 -m 0700",
   "infra/k0s/manifests/arc/buildkit.yaml",
@@ -371,6 +372,9 @@ tasks.requireAll([
   'sysctl -p "$keyring_config"',
   'cat /proc/sys/kernel/keys/maxkeys',
   'cat /proc/sys/kernel/keys/maxbytes',
+  'nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite',
+  "ARC build node $node is quarantined for convergence",
+  "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
   "container-hook.yaml",
   "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",

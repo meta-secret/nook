@@ -93,6 +93,36 @@ tasks:
         done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
+  arc:build-hosts:quarantine:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        expected_nodes="$(sed '/^$/d' \
+          "$remote_dir/infra/k0s/config/arc-build-nodes" | sort)"
+        actual_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        if test "$actual_nodes" != "$expected_nodes"; then
+          echo "ARC cannot quarantine an incomplete build-node inventory" >&2
+          printf 'Expected nodes:\n%s\nActual nodes:\n%s\n' \
+            "$expected_nodes" "$actual_nodes" >&2
+          exit 1
+        fi
+        while IFS= read -r node; do
+          test -n "$node"
+          kubectl taint node "$node" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null
+          test "$(kubectl get node "$node" -o \
+            jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].value}:{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')" = \
+            'preparing:NoSchedule'
+          echo "ARC build node $node is quarantined for convergence"
+        done <<< "$actual_nodes"
+        REMOTE
+
 
   arc:build-host:resolve:
     desc: Resolve and persist every Kubernetes ARC build SSH target.
@@ -422,6 +452,7 @@ tasks:
       - task: arc:auth:sync
       - task: arc:controller-build:prepare
       - task: arc:build-host:resolve
+      - task: arc:build-hosts:quarantine
       - task: arc:buildkit:storage:prepare
       - task: arc:render:check
       - |
