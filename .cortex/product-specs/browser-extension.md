@@ -225,7 +225,7 @@ The layers have intentionally different responsibilities:
 
 - content scripts are sensors and actuators: they report bounded, non-secret
   structural observations and perform only the selected DOM action;
-- `nook-core` is the flight computer: it classifies the workflow, stage,
+- `nook-companion-core` is the flight computer: it classifies the workflow, stage,
   progress, allowed next action, approval requirement, and whether Pilot may
   present that action;
 - the extension background/offscreen runtime is the control plane: it binds

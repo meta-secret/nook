@@ -56,17 +56,20 @@ import {
 import { clampMountedWidgetPosition } from './autofill/widget-position'
 import { loadPilotVaultConnection, remountWidget } from './autofill/workflow-ui'
 import {
+  cancelActiveEnrollmentCeremony,
   detectEnrollmentHints,
   enrollmentCeremonyActive,
   enrollmentWidgetHeldAfterSave,
   releaseEnrollmentWidgetHold,
+  renderEnrollmentActions,
 } from './enrollment-flow'
 
 async function performScanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
-  const preservePostSaveWidget = enrollmentWidgetHeldAfterSave()
+  const postSaveWidget = enrollmentWidgetHeldAfterSave()
+  const preservePostSaveWidget = postSaveWidget.kind === 'held'
   const removeUnavailableWidget = (): void => {
     if (!preservePostSaveWidget) removeScannedWidget()
   }
@@ -142,13 +145,32 @@ async function performScanAndRender(): Promise<void> {
     }
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanState.sequence) return
-    const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
-      hints: enrollmentHints,
-      snapshot: response.snapshot,
-      vaultConnection,
+    if (
+      postSaveWidget.kind === 'held' &&
+      postSaveWidget.host.panel.isConnected
+    ) {
+      const approvedHints: Parameters<typeof renderEnrollmentActions>[0] = {
+        host: postSaveWidget.host,
+        hints: {
+          qr:
+            response.snapshot.action === 'enroll-authenticator' &&
+            enrollmentHints.qr,
+          backupCodes:
+            response.snapshot.action === 'save-backup-codes' &&
+            enrollmentHints.backupCodes,
+        },
+      }
+      releaseEnrollmentWidgetHold()
+      renderEnrollmentActions(approvedHints)
+    } else {
+      const nookTypedArgs0_0: Parameters<typeof renderEnrollmentWidget>[0] = {
+        hints: enrollmentHints,
+        snapshot: response.snapshot,
+        vaultConnection,
+      }
+      releaseEnrollmentWidgetHold()
+      renderEnrollmentWidget(nookTypedArgs0_0)
     }
-    releaseEnrollmentWidgetHold()
-    renderEnrollmentWidget(nookTypedArgs0_0)
     return
   }
   if (workflowForms.length === 0) {
@@ -199,13 +221,30 @@ async function performScanAndRender(): Promise<void> {
   ) {
     const vaultConnection = await loadPilotVaultConnection()
     if (sequence !== scanState.sequence) return
-    const nookTypedArgs0_1: Parameters<typeof renderEnrollmentWidget>[0] = {
-      hints: enrollmentHints,
-      snapshot,
-      vaultConnection,
+    if (
+      postSaveWidget.kind === 'held' &&
+      postSaveWidget.host.panel.isConnected
+    ) {
+      const approvedHints: Parameters<typeof renderEnrollmentActions>[0] = {
+        host: postSaveWidget.host,
+        hints: {
+          qr: snapshot.action === 'enroll-authenticator' && enrollmentHints.qr,
+          backupCodes:
+            snapshot.action === 'save-backup-codes' &&
+            enrollmentHints.backupCodes,
+        },
+      }
+      releaseEnrollmentWidgetHold()
+      renderEnrollmentActions(approvedHints)
+    } else {
+      const nookTypedArgs0_1: Parameters<typeof renderEnrollmentWidget>[0] = {
+        hints: enrollmentHints,
+        snapshot,
+        vaultConnection,
+      }
+      releaseEnrollmentWidgetHold()
+      renderEnrollmentWidget(nookTypedArgs0_1)
     }
-    releaseEnrollmentWidgetHold()
-    renderEnrollmentWidget(nookTypedArgs0_1)
     return
   }
   const selected = workflowForms[snapshot.observationIndex]
@@ -388,7 +427,11 @@ function handleAuthenticationMutations(
       cancelPendingAuthenticatorPickerRequest()
       cancelPendingLoginPickerRequest()
       widgetState.detachRenderedWidget()
-      scheduleScan()
+      if (enrollmentCeremonyActive()) {
+        void cancelActiveEnrollmentCeremony().finally(() => scheduleScan())
+      } else {
+        scheduleScan()
+      }
       return
     }
   }
@@ -397,6 +440,7 @@ function handleAuthenticationMutations(
   )
   if (pageMutations.length === 0) return
   if (
+    !enrollmentCeremonyActive() &&
     widgetState.host.kind === WidgetHostKind.Attached &&
     pageMutations.some(
       (record) =>
