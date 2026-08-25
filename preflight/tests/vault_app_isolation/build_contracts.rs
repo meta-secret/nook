@@ -749,7 +749,6 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     for config in [
         "nook-app/nook-web/nook-web-app/playwright.config.ts",
         "nook-app/nook-web/nook-web-app/playwright.isolation.config.ts",
-        "nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts",
         "nook-app/nook-web/nook-web-research/playwright.config.ts",
         "agentic-ai/minds/hive-console/playwright.config.ts",
     ] {
@@ -760,6 +759,14 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             "{config} must pass the e2e image's system Chromium through Playwright launch options"
         );
     }
+    assert!(
+        read(
+            &root,
+            "nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts",
+        )
+        .contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
+        "extension browser helpers must launch the e2e image's system Chromium"
+    );
     for workflow in [
         ".github/workflows/e2e-pr.yml",
         ".github/workflows/hive.yml",
