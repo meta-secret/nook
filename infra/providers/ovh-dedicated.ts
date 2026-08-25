@@ -48,6 +48,11 @@ enum ProvisionResult {
   Unchanged = "unchanged",
 }
 
+enum RecoveryMarkerStatus {
+  Absent = "absent",
+  Pending = "pending",
+}
+
 enum OvhServerState {
   Ready = "ok",
 }
@@ -164,6 +169,17 @@ export interface OvhRecoveryMarker {
   version: 1;
 }
 
+interface AbsentRecoveryMarker {
+  status: RecoveryMarkerStatus.Absent;
+}
+
+interface PendingRecoveryMarker {
+  marker: OvhRecoveryMarker;
+  status: RecoveryMarkerStatus.Pending;
+}
+
+type RecoveryMarkerState = AbsentRecoveryMarker | PendingRecoveryMarker;
+
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const homeDirectory = process.env.HOME;
 if (!homeDirectory) throw new Error("HOME must be set for the private credential store");
@@ -225,14 +241,16 @@ export function recoveryMarkerMatches(input: {
 async function loadRecoveryMarker(input: {
   definition: DedicatedServerDefinition;
   hostname: string;
-}): Promise<OvhRecoveryMarker | undefined> {
+}): Promise<RecoveryMarkerState> {
   const path = recoveryMarkerPath(input.hostname);
-  if (!(await pathExists(path))) return undefined;
+  if (!(await pathExists(path))) {
+    return { status: RecoveryMarkerStatus.Absent };
+  }
   const marker = JSON.parse(await readFile(path, "utf8")) as OvhRecoveryMarker;
   if (!recoveryMarkerMatches({ ...input, marker })) {
     throw new Error(`recovery marker for ${input.hostname} does not match inventory`);
   }
-  return marker;
+  return { marker, status: RecoveryMarkerStatus.Pending };
 }
 
 async function persistRecoveryMarker(input: {
@@ -259,8 +277,8 @@ async function clearRecoveryMarker(input: {
   definition: DedicatedServerDefinition;
   hostname: string;
 }): Promise<void> {
-  const marker = await loadRecoveryMarker(input);
-  if (!marker) return;
+  const state = await loadRecoveryMarker(input);
+  if (state.status === RecoveryMarkerStatus.Absent) return;
   await rm(recoveryMarkerPath(input.hostname));
 }
 
@@ -626,7 +644,9 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
     definition: input.definition,
     hostname: input.hostname,
   });
-  if (recoveryMarker) return ProvisionResult.Reinstalled;
+  if (recoveryMarker.status === RecoveryMarkerStatus.Pending) {
+    return ProvisionResult.Reinstalled;
+  }
   const reinstallInput = {
     allowReinstall: input.allowReinstall,
     currentOperatingSystem: current.os,
@@ -714,9 +734,10 @@ async function main(): Promise<void> {
       hostname: args.node,
     });
     const server = await getServer({ credentials, definition });
-    const required = recoveryMarker
-      ? true
-      : requiresReinstall({
+    const required =
+      recoveryMarker.status === RecoveryMarkerStatus.Pending
+        ? true
+        : requiresReinstall({
           allowReinstall: args.allowReinstall,
           currentOperatingSystem: server.os,
           desiredOperatingSystem: definition.operatingSystem,
