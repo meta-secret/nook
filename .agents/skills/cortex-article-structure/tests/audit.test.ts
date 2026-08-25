@@ -204,6 +204,33 @@ test('treats thematic breaks as invisible density-resetting separators', () => {
   ).toEqual([CortexArticleFindingCode.EmptyArticle]);
 });
 
+test('treats raw HTML void separators as empty but preserves visible HTML', () => {
+  for (const separator of [
+    '<hr>',
+    '<br>',
+    '<hr />',
+    '<BR/>',
+    '<hr>\n<br>',
+    '<hr class="rule">',
+    '<br id="gap"/>',
+    '<!-- spacer -->\n<hr>\n<br class="gap">',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/html-separator.md',
+      content: `# HTML separator\n\n## Empty article\n\n${separator}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((item) => item.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+  }
+  const visibleArgs: MakeDocumentArgs = {
+    path: '.cortex/html-callout.md',
+    content:
+      '# HTML callout\n\n## Visible article\n\n<aside>Warning.</aside>\n',
+  };
+  expect(audit([makeDocument(visibleArgs)])).toEqual([]);
+});
+
 test('audits empty, dense, and procedure articles without a document map', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/no-articles.md',

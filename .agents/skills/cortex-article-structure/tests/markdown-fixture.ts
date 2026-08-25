@@ -44,8 +44,19 @@ function blockFromNode(node: RootContent): CortexArticleBlock {
     };
   }
   if (node.type === 'html') {
+    const comment = /^\s*<!--[\s\S]*-->\s*$/u.test(node.value);
+    if (comment) {
+      return { comment, line, type: CortexArticleBlockKind.Html };
+    }
+    if (
+      /^\s*(?:(?:<!--[\s\S]*?-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
+        node.value,
+      )
+    ) {
+      return { line, type: CortexArticleBlockKind.Separator };
+    }
     return {
-      comment: /^\s*<!--[\s\S]*-->\s*$/u.test(node.value),
+      comment,
       line,
       type: CortexArticleBlockKind.Html,
     };
