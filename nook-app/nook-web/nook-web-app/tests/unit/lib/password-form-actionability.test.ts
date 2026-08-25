@@ -424,7 +424,7 @@ describe('website authentication control actionability', () => {
     })
   })
 
-  test('accepts direct form-less login controls under main', () => {
+  test('rejects unscoped form-less login controls under main', () => {
     document.body.innerHTML = `
       <main>
         <input autocomplete="username" />
@@ -434,7 +434,7 @@ describe('website authentication control actionability', () => {
 
     expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
-      authenticationAdvanceControlPresent: true,
+      authenticationAdvanceControlPresent: false,
     })
   })
 

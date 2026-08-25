@@ -416,7 +416,7 @@ describe('website one-time-code fields', () => {
     })
   })
 
-  test('accepts and activates a nested form-less role button', () => {
+  test('rejects a nested unscoped form-less role button', () => {
     document.body.innerHTML = `
       <section>
         <div><input type="email" autocomplete="username" /></div>
@@ -432,13 +432,13 @@ describe('website one-time-code fields', () => {
     expect(observations).toHaveLength(1)
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
-      authenticationAdvanceControlPresent: true,
+      authenticationAdvanceControlPresent: false,
     })
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
-    expect(activated).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe(false)
   })
 
-  test('activates a labeled control on a form-less password step', () => {
+  test('rejects a labeled control on an unscoped form-less password step', () => {
     document.body.innerHTML = `
       <section>
         <input type="password" autocomplete="current-password" />
@@ -454,10 +454,10 @@ describe('website one-time-code fields', () => {
     expect(observations).toHaveLength(1)
     expect(observations[0]?.summary).toMatchObject({
       currentPasswordFieldCount: 1,
-      authenticationAdvanceControlPresent: true,
+      authenticationAdvanceControlPresent: false,
     })
-    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(true)
-    expect(activated).toBe(true)
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(activated).toBe(false)
   })
 
   test('rejects authentication controls inside an inert subtree', () => {
@@ -848,7 +848,7 @@ describe('website one-time-code fields', () => {
     })
   })
 
-  test('keeps a form-less identity step grouped with its sibling advance control', () => {
+  test('keeps a grouped form-less identity step non-actionable', () => {
     document.body.innerHTML = `
       <section>
         <input autocomplete="username" />
@@ -861,7 +861,7 @@ describe('website one-time-code fields', () => {
     expect(observations[0]?.formScope.kind).toBe('unowned')
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
-      authenticationAdvanceControlPresent: true,
+      authenticationAdvanceControlPresent: false,
     })
   })
 
@@ -925,7 +925,7 @@ describe('website one-time-code fields', () => {
     expect(summarizeAuthenticationWorkflowForms()).toEqual([])
   })
 
-  test('keeps nested form-less identity and advance wrappers in one workflow', () => {
+  test('keeps nested unscoped form-less controls non-actionable', () => {
     document.body.innerHTML = `
       <section>
         <div><input autocomplete="username" /></div>
@@ -938,7 +938,7 @@ describe('website one-time-code fields', () => {
     expect(observations[0]?.formScope.kind).toBe('unowned')
     expect(observations[0]?.summary).toMatchObject({
       usernameFieldCount: 1,
-      authenticationAdvanceControlPresent: true,
+      authenticationAdvanceControlPresent: false,
     })
   })
 
