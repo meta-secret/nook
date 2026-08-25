@@ -49,6 +49,13 @@ type ActionLoaderFixture = {
   readonly source: string;
 };
 
+type RepositoryPackageDocument = {
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
+  readonly name?: string;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
+};
+
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const PROVIDER_ROOT = '.agents/skills/cortex-article-structure';
 const PROVIDER_RUNNER = `${PROVIDER_ROOT}/src/runner.ts`;
@@ -150,7 +157,8 @@ function actionSourceRequiresContent(path: string): boolean {
   return (
     isActionManifest(path) ||
     EXECUTABLE_SOURCE_EXTENSION.test(path) ||
-    posix.extname(path) === ''
+    posix.extname(path) === '' ||
+    path.endsWith('package.json')
   );
 }
 
@@ -181,9 +189,13 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
         throw new Error(`Composite action has no steps: ${manifestPath}`);
       }
       for (const step of runs.steps) {
-        if (typeof step.uses !== 'string' || !step.uses.startsWith('./')) {
+        if (typeof step.uses !== 'string') {
           continue;
         }
+        if (step.uses.startsWith('docker://')) {
+          throw new Error(`Unsupported Docker action step: ${step.uses}`);
+        }
+        if (!step.uses.startsWith('./')) continue;
         const localRoot = posix.normalize(step.uses.slice(2));
         if (localRoot.startsWith('../') || posix.isAbsolute(localRoot)) {
           throw new Error(`Local action escapes the repository: ${step.uses}`);
@@ -243,12 +255,19 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
       throw new Error(`Action source violates runtime boundary: ${importer}`);
     }
     for (const imported of ACTION_IMPORT_SCANNER.scanImports(source)) {
-      if (!imported.path.startsWith('.')) continue;
       const resolution: ActionDependencyResolution = {
         importer,
         sources: graph.sources,
         specifier: imported.path,
       };
+      if (!imported.path.startsWith('.')) {
+        if (isRepositoryBackedActionSpecifier(resolution)) {
+          throw new Error(
+            `Action repository import is unsupported: ${importer} -> ${imported.path}`,
+          );
+        }
+        continue;
+      }
       const dependency = resolveActionDependency(resolution);
       if (
         dependency === false ||
@@ -268,6 +287,42 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
     }
   }
   return [...runtimePaths].sort();
+}
+
+function isRepositoryBackedActionSpecifier(
+  resolution: ActionDependencyResolution,
+): boolean {
+  const specifier = resolution.specifier;
+  if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
+  if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
+  const segments = specifier.split('/');
+  const packageName = specifier.startsWith('@')
+    ? segments.slice(0, 2).join('/')
+    : (segments[0] ?? '');
+  for (const [path, source] of resolution.sources) {
+    if (!path.endsWith('package.json') || source.length === 0) continue;
+    let document: RepositoryPackageDocument;
+    try {
+      document = JSON.parse(source) as RepositoryPackageDocument;
+    } catch {
+      continue;
+    }
+    if (document.name === packageName) return true;
+    for (const dependencies of [
+      document.dependencies,
+      document.devDependencies,
+      document.optionalDependencies,
+    ]) {
+      const dependency = dependencies?.[packageName] ?? false;
+      if (
+        dependency !== false &&
+        (dependency.startsWith('file:') || dependency.startsWith('workspace:'))
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 function resolveActionDependency(
@@ -485,6 +540,49 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   };
   expect(() => actionRuntimePaths(dockerGraph)).toThrow(
     'Unsupported Docker action runtime',
+  );
+
+  const dockerStepSources = new Map(sources);
+  dockerStepSources.set(
+    '.github/actions/root/action.yml',
+    'runs:\n  using: composite\n  steps:\n    - uses: docker://alpine:3.20',
+  );
+  const dockerStepGraph: ActionRuntimeGraph = {
+    roots: ['.github/actions/root/action.yml'],
+    sources: dockerStepSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(() => actionRuntimePaths(dockerStepGraph)).toThrow(
+    'Unsupported Docker action step',
+  );
+
+  const packageSources = new Map(sources);
+  packageSources.set(
+    '.github/actions/nested/main',
+    "import 'local-action/provider';",
+  );
+  packageSources.set(
+    '.github/actions/nested/package.json',
+    '{"name":"local-action","exports":{"./provider":"./neutral.js"}}',
+  );
+  const packageGraph: ActionRuntimeGraph = {
+    roots: ['.github/actions/root/action.yml'],
+    sources: packageSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(() => actionRuntimePaths(packageGraph)).toThrow(
+    'Action repository import is unsupported',
+  );
+
+  const aliasSources = new Map(sources);
+  aliasSources.set('.github/actions/nested/main', "import '#provider';");
+  const aliasGraph: ActionRuntimeGraph = {
+    roots: ['.github/actions/root/action.yml'],
+    sources: aliasSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(() => actionRuntimePaths(aliasGraph)).toThrow(
+    'Action repository import is unsupported',
   );
 
   const loaderFixtures: readonly ActionLoaderFixture[] = [
