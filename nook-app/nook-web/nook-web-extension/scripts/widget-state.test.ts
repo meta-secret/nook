@@ -55,6 +55,20 @@ describe('Nook Pilot presentation state', () => {
     expect(expanded.collapsed).toBe(false)
   })
 
+  test('preserves an explicit presentation while remounting one workflow', () => {
+    const state = new WidgetState()
+    state.assignPresentationScope('login:password')
+    state.collapseByUser()
+    state.detachRenderedWidget()
+
+    state.applyAutomaticCollapse(false)
+    expect(state.collapsed).toBe(true)
+    expect(state.presentationScope).toEqual({
+      kind: 'assigned',
+      key: 'login:password',
+    })
+  })
+
   test('clears only automatic collapse when enrollment begins', () => {
     const automatic = new WidgetState()
     automatic.applyAutomaticCollapse(true)

@@ -89,4 +89,8 @@ export class LoginMatchAvailabilityCache {
   invalidate({ origin }: LoginMatchAvailabilityCacheInvalidation): void {
     this.entries.delete(origin)
   }
+
+  invalidateAll(): void {
+    this.entries.clear()
+  }
 }

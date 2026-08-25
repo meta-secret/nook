@@ -79,7 +79,7 @@ explicit fallback action. Conditional mediation is left to the browser.
 | Spoofed Pilot HUD proposes Create/Use passkey  | Treat HUD approval only as permission to activate a site passkey control. Ceremony consent, RP/origin binding, and private-key ops stay in the existing WebAuthn intercept (`webauthn-content` / Rust).      |
 | Pilot proposal mints challenges or signs       | Forbidden. Proposal policy returns non-secret eligibility only (`none` / `use-passkey` / `create-passkey`). Create/assert remain on the consented ceremony path.                                             |
 | Locked session advertises vault matches        | Matching account counts are attached only from an unlocked, granted Simple Vault projection; locked/unavailable sessions contribute `0` and never expose metadata.                                           |
-| Pilot auto-submits or silently creates         | Default remains explicit user action. No permanent site autopilot grant; Take over always available.                                                                                                         |
+| Pilot auto-submits or silently creates         | Default remains explicit user action. No permanent site autopilot grant. The page HUD never exposes takeover; locked, unavailable, and failed Nook flows yield to the browser's original WebAuthn method.      |
 
 ## Pilot proposals
 

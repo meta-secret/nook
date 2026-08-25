@@ -12,6 +12,7 @@ import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
+import type * as AccountPickers from './account-pickers'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
 
@@ -34,6 +35,7 @@ export type ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  invalidateAllLoginMatchAvailability: typeof AccountPickers.invalidateAllLoginMatchAvailability
   isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
   isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
   isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
@@ -87,6 +89,7 @@ export function routeExtensionLifecycleMessage({
     hasPairingApprovedType,
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
+    invalidateAllLoginMatchAvailability,
     isExtensionPairingStateQueryMessage,
     isExtensionSessionEnsureMessage,
     isExtensionSessionExpiryMessage,
@@ -123,6 +126,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    invalidateAllLoginMatchAvailability()
     void closeExtensionSessionDocument()
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))
@@ -137,6 +141,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    invalidateAllLoginMatchAvailability()
     void closeExtensionSessionDocument().then(() =>
       sendResponse(successResponse),
     )
@@ -148,6 +153,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    invalidateAllLoginMatchAvailability()
     void importPairingAfterCompanionReady(message).then(sendResponse)
     return true
   }
@@ -157,6 +163,7 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    invalidateAllLoginMatchAvailability()
     const importArgs: Parameters<typeof importLocalEventLogUpdate>[0] = {
       vaultStoreId: message.payload.vaultStoreId,
       eventLogRecords: message.payload.eventLogRecords,

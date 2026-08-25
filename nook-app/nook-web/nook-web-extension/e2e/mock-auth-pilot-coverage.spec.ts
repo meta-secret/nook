@@ -37,8 +37,6 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
-      await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
-      await widget.getByTestId('nook-auth-gate-expand').click()
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
@@ -92,7 +90,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         .click()
       await expect(
         loginWidget.getByText(
-          'No saved login matches this site yet. Open the vault to add one.',
+          'No saved login matches this site. Add one through Open Simple Vault in the Nook toolbar menu.',
         ),
       ).toBeVisible()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveCount(0)
@@ -188,6 +186,8 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
+      await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
+      await widget.getByTestId('nook-auth-gate-expand').click()
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(loginPage.getByRole('alert')).toHaveText(

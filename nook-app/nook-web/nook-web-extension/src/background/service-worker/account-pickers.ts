@@ -392,6 +392,22 @@ async function loginMatchAvailabilityForOrigin(
     requireCompleteResponses: true,
   }
   const accounts = await loginAccountsForOrigin(nookTypedArgs0_7)
+  const currentGrantIds = (await passwordPairingGrants())
+    .map((grant) => grant.vaultStoreId)
+    .sort()
+  const lookupGrantIds = grants.map((grant) => grant.vaultStoreId).sort()
+  if (currentGrantIds.join(':') !== lookupGrantIds.join(':')) {
+    return { kind: LoginMatchAvailabilityKind.Unavailable }
+  }
+  const finalStatusDeadline = Date.now() + LOGIN_MATCH_LOOKUP_TIMEOUT_MS
+  const finalStatusArgs: Parameters<typeof sendSessionMessage>[0] = {
+    type: 'nook:extension-session-status',
+    payload: { queue: extensionSessionProbeDeadline(finalStatusDeadline) },
+  }
+  const finalStatus = await sendSessionMessage(finalStatusArgs)
+  if (!isUnlockedSessionStatus(finalStatus)) {
+    return { kind: LoginMatchAvailabilityKind.Locked }
+  }
   return {
     kind: LoginMatchAvailabilityKind.Ready,
     count: accounts.length,
@@ -421,6 +437,10 @@ export function invalidateLoginMatchAvailabilityForOrigin(
   request: LoginMatchAvailabilityCacheInvalidation,
 ): void {
   loginMatchAvailabilityCache.invalidate(request)
+}
+
+export function invalidateAllLoginMatchAvailability(): void {
+  loginMatchAvailabilityCache.invalidateAll()
 }
 
 export function loginMatchAvailabilityForOriginSafe(

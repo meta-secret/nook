@@ -34,7 +34,12 @@ import {
   mountWidgetShell,
 } from './widget-shell'
 import type { PilotVaultConnection } from './workflow-ui'
-import { removeWidget, translatedMessage, workflowCopy } from './workflow-ui'
+import {
+  remountWidget,
+  removeWidget,
+  translatedMessage,
+  workflowCopy,
+} from './workflow-ui'
 
 type RenderEnrollmentWidgetArgs = {
   hints: EnrollmentPageHints
@@ -115,7 +120,7 @@ export function renderWidget({
     removeWidget()
     return
   }
-  const workflowKey = [
+  const presentationScope = [
     snapshot.kind,
     snapshot.stage,
     snapshot.action,
@@ -123,12 +128,15 @@ export function renderWidget({
     snapshot.totalSteps,
     snapshot.approvalRequirement,
     snapshot.observationIndex,
+    vaultConnection.connected ? 'connected' : 'disconnected',
+    vaultConnection.vaultName ?? '',
+  ].join(':')
+  const workflowKey = [
+    presentationScope,
     loginMatches.kind,
     loginMatches.kind === 'ready' && 'count' in loginMatches
       ? loginMatches.count
       : '',
-    vaultConnection.connected ? 'connected' : 'disconnected',
-    vaultConnection.vaultName ?? '',
   ].join(':')
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
@@ -145,7 +153,13 @@ export function renderWidget({
   ) {
     return
   }
-  if (widgetState.host.kind === WidgetHostKind.Attached) removeWidget()
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    const preservesPresentation =
+      widgetState.presentationScope.kind === WidgetWorkflowKeyKind.Assigned &&
+      widgetState.presentationScope.key === presentationScope
+    if (preservesPresentation) remountWidget()
+    else removeWidget()
+  }
 
   const savedLoginCapability =
     authentication_workflow_saved_login_capability(snapshot)
@@ -243,6 +257,7 @@ export function renderWidget({
     workflowRoot: nookTypedArgs0_1,
   }
   mountWidgetShell(nookTypedArgs0_8)
+  widgetState.assignPresentationScope(presentationScope)
 
   const enrollmentHints = detectEnrollmentHints()
   if (enrollmentHints.qr || enrollmentHints.backupCodes) {

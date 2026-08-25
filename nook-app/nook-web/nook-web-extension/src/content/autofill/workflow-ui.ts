@@ -160,3 +160,12 @@ export function removeWidget(): void {
   saveOfferState.clearActiveOffer()
   saveOfferState.confirmationActive = false
 }
+
+export function remountWidget(): void {
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    widgetState.host.element.remove()
+  }
+  widgetState.detachRenderedWidget()
+  saveOfferState.clearActiveOffer()
+  saveOfferState.confirmationActive = false
+}

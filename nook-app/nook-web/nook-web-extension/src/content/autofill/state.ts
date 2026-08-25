@@ -153,6 +153,9 @@ export class WidgetState {
   private workflowRootState: WidgetWorkflowRoot = {
     kind: WidgetWorkflowRootKind.Unassigned,
   }
+  private presentationScopeState: WidgetWorkflowKey = {
+    kind: WidgetWorkflowKeyKind.Unassigned,
+  }
   private placementState: WidgetPlacement = {
     kind: WidgetPlacementKind.Unpositioned,
   }
@@ -192,6 +195,15 @@ export class WidgetState {
       key: value,
     }
   }
+  get presentationScope(): WidgetWorkflowKey {
+    return this.presentationScopeState
+  }
+  assignPresentationScope(value: string): void {
+    this.presentationScopeState = {
+      kind: WidgetWorkflowKeyKind.Assigned,
+      key: value,
+    }
+  }
   get renderedWorkflowRoot(): WidgetWorkflowRoot {
     return this.workflowRootState
   }
@@ -207,10 +219,14 @@ export class WidgetState {
       position: value,
     }
   }
-  clearRenderedWidget(): void {
+  detachRenderedWidget(): void {
     this.hostState = { kind: WidgetHostKind.Detached }
     this.workflowKeyState = { kind: WidgetWorkflowKeyKind.Unassigned }
     this.workflowRootState = { kind: WidgetWorkflowRootKind.Unassigned }
+  }
+  clearRenderedWidget(): void {
+    this.detachRenderedWidget()
+    this.presentationScopeState = { kind: WidgetWorkflowKeyKind.Unassigned }
     this.collapsedState = false
     this.collapseWasSelectedByUser = false
   }

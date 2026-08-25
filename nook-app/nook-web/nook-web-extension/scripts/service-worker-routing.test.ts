@@ -23,6 +23,7 @@ const unusedAsyncDependency = mock(() =>
 )
 const ensureExtensionSessionDocument = mock(() => Promise.resolve())
 const openCompanionLauncher = mock(() => Promise.resolve())
+const invalidateAllLoginMatchAvailability = mock(() => {})
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   closeExtensionSessionDocument: unusedAsyncDependency,
@@ -32,6 +33,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   hasPairingApprovedType: mock(() => false),
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  invalidateAllLoginMatchAvailability,
   isExtensionPairingStateQueryMessage: mock(() => false),
   isExtensionSessionEnsureMessage: (message) =>
     !!message &&
@@ -50,6 +52,7 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   discoverPairedVaultIdentity: unusedAsyncDependency,
   hasPairingApprovedType: mock(() => false),
   importPairingAfterCompanionReady: unusedAsyncDependency,
+  invalidateAllLoginMatchAvailability,
   isExtensionIdentityHandoffRequestMessage: mock(() => false),
   isExtensionPairedVaultIdentityDiscoveryMessage: mock(() => false),
   isExtensionPairedVaultIdentityHandoffRequestMessage: mock(() => false),
@@ -99,6 +102,34 @@ describe('service worker routing', () => {
     await flushResponses()
     expect(ensureExtensionSessionDocument).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('invalidates login-match metadata before locking the session', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    const closeExtensionSessionDocument = mock(() => Promise.resolve())
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      closeExtensionSessionDocument,
+      isExtensionSessionLockMessage: () => true,
+      isExtensionSessionEnsureMessage: () => false,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: { type: 'test-session-lock' },
+      sender: {
+        id: 'nook-extension',
+        url: 'chrome-extension://nook-extension/popup/index.html',
+      },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+    await flushResponses()
+    expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {

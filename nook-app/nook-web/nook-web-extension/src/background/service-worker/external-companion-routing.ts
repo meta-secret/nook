@@ -7,6 +7,7 @@ import {
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
+import type * as AccountPickers from './account-pickers'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessageExternal.addListener
@@ -24,6 +25,7 @@ export type ExternalCompanionRoutingDependencies = {
   discoverPairedVaultIdentity: typeof PairingIdentity.discoverPairedVaultIdentity
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
+  invalidateAllLoginMatchAvailability: typeof AccountPickers.invalidateAllLoginMatchAvailability
   isExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionIdentityHandoffRequestMessage
   isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityDiscoveryMessage
   isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityHandoffRequestMessage
@@ -62,6 +64,7 @@ export function routeExternalCompanionMessage({
     discoverPairedVaultIdentity,
     hasPairingApprovedType,
     importPairingAfterCompanionReady,
+    invalidateAllLoginMatchAvailability,
     isExtensionIdentityHandoffRequestMessage,
     isExtensionPairedVaultIdentityDiscoveryMessage,
     isExtensionPairedVaultIdentityHandoffRequestMessage,
@@ -98,6 +101,7 @@ export function routeExternalCompanionMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
+    invalidateAllLoginMatchAvailability()
     void requestPairedVaultUnlock(message)
       .then(sendResponse)
       .catch(() => {
@@ -128,6 +132,7 @@ export function routeExternalCompanionMessage({
     sendResponse(invalidPairingGrantResponse)
     return false
   }
+  invalidateAllLoginMatchAvailability()
   void importPairingAfterCompanionReady(message).then(sendResponse)
   return true
 }

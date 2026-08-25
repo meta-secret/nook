@@ -93,6 +93,31 @@ describe('login-match availability cache', () => {
     expect(loads).toBe(3)
   })
 
+  test('invalidates every origin when session or grant state changes', async () => {
+    const availabilityCache = cache()
+    let loads = 0
+    const load = async (): Promise<WebsiteLoginMatchAvailabilityWire> => {
+      loads += 1
+      return { kind: 'ready', count: loads }
+    }
+    const first: LoginMatchAvailabilityCacheRequest = {
+      origin: 'https://first.example.test',
+      load,
+    }
+    const second: LoginMatchAvailabilityCacheRequest = {
+      origin: 'https://second.example.test',
+      load,
+    }
+    await availabilityCache.resolve(first)
+    await availabilityCache.resolve(second)
+
+    availabilityCache.invalidateAll()
+
+    await availabilityCache.resolve(first)
+    await availabilityCache.resolve(second)
+    expect(loads).toBe(4)
+  })
+
   test('does not let an invalidated lookup overwrite a newer result', async () => {
     const availabilityCache = cache()
     const stale = deferred<WebsiteLoginMatchAvailabilityWire>()

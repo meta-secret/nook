@@ -54,6 +54,7 @@ import {
   isWebsitePasskeyPerformMessage,
 } from '../lib/webauthn-messages'
 import {
+  invalidateAllLoginMatchAvailability,
   loginMatchAvailabilityForOriginSafe,
   invalidateLoginMatchAvailabilityForOrigin,
   websiteLoginOptions,
@@ -138,6 +139,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   hasPairingApprovedType,
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
+  invalidateAllLoginMatchAvailability,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -154,6 +156,7 @@ const externalCompanionRoutingDependencies: Parameters<
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
   importPairingAfterCompanionReady,
+  invalidateAllLoginMatchAvailability,
   isExtensionIdentityHandoffRequestMessage,
   isExtensionPairedVaultIdentityDiscoveryMessage,
   isExtensionPairedVaultIdentityHandoffRequestMessage,
