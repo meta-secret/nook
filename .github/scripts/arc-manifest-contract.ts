@@ -144,9 +144,9 @@ const values = Bun.YAML.parse(runnersSource) as ArcValues;
 if (
   values.runnerScaleSetName !== "nook-k0s" ||
   values.minRunners !== 0 ||
-  values.maxRunners !== 25
+  values.maxRunners !== 35
 ) {
-  throw new Error("general ARC must scale from zero through 25 runners");
+  throw new Error("general ARC must scale from zero through 35 runners");
 }
 const pod = values.template.spec;
 if ("runtimeClassName" in pod) {
@@ -207,7 +207,7 @@ buildkit.requireAll([
   "volumeBindingMode: WaitForFirstConsumer",
   "internalTrafficPolicy: Local",
   "kind: StatefulSet",
-  "replicas: 3",
+  "replicas: 4",
   "requiredDuringSchedulingIgnoredDuringExecution:",
   "nook.nokey.sh/arc-build: \"true\"",
   "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
@@ -220,10 +220,10 @@ buildkit.requireAll([
   "type: Unconfined",
   'mirrors = ["registry.dev.nokey.sh"]',
 ]);
-buildkit.count({ fragment: "kind: PersistentVolume\n", expected: 3 });
+buildkit.count({ fragment: "kind: PersistentVolume\n", expected: 4 });
 buildkit.count({
   fragment: "local:\n    path: /var/lib/nook-arc-buildkit/state",
-  expected: 3,
+  expected: 4,
 });
 buildkit.forbidAll([
   "runtimeClassName:",
@@ -270,7 +270,7 @@ tasks.requireAll([
   "one persistent rootless BuildKit shard per build node",
   "for scale_set in nook-k0s nook-k0s-hive",
   "helm uninstall nook-k0s-cache",
-  "ARC requires exactly three build hosts",
+  "arc-build-nodes",
   "expected_build_nodes",
   "usable_bytes=$((available_bytes + state_bytes + legacy_bytes))",
   'test "$((available_bytes + state_bytes))" -ge 68719476736',

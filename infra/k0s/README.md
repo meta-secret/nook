@@ -20,14 +20,14 @@ Pinned platform:
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
 - Kata runtime-rs class `kata-dragonball` for persistent Hive workers
-- Three retained 64 GiB rootless BuildKit shards for ARC
+- Four retained 64 GiB rootless BuildKit shards for ARC
 
 Cluster roles:
 
 - The KS-6 node owns the control plane, Neo4j, Zot, Hive, ARC controllers, and
   ARC listeners. It is labeled `nook.nokey.sh/node-role=control-storage` and
   also qualifies as a slower `nook.nokey.sh/arc-build=true` runner node.
-- The Rise-S NVMe node owns one persistent ARC BuildKit shard. It is labeled
+- Each Rise-S NVMe node owns one persistent ARC BuildKit shard. It is labeled
   `nook.nokey.sh/arc-build=true` and uses ARC tier `primary`.
 - The home 7950X3D NVMe node is worker-only, uses ARC tier `secondary`, and
   connects from behind NAT through an outbound WireGuard session. It owns one
@@ -46,8 +46,32 @@ Cluster roles:
   CIDR. Worker-to-worker Pod traffic never depends on the controller as a
   forwarding hop.
 - ARC creates a fresh ordinary Pod for every job. No runner is kept warm. The
-  general scale set can create up to 25 concurrent runners. The Hive scale set
+  general scale set can create up to 35 concurrent runners. The Hive scale set
   can create up to ten.
+
+Provision a declared OVH worker from a blank provider-ready server with one
+Taskfile entrypoint:
+
+```text
+task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
+```
+
+The task verifies the provider identity and installs standard Debian 13. It
+pins a generated Ed25519 host identity through the authenticated OVH install,
+then applies the idempotent SSH and sudo baseline, joins the private mesh,
+installs k0s, and qualifies ARC. It reads the OVH API credential from
+`~/.nook/ovh-api.json`. Credentials and host identities remain beneath
+mode-`0700` `~/.nook` directories with private files mode `0600`.
+
+An already-installed declared OS is reconciled without reinstalling it only
+when its matching host identity is present in the private store. The adapter
+never invents a local identity for an unchanged server. Restore that identity
+or pass `INFRA_OVH_ALLOW_REINSTALL=true` for declared disaster recovery.
+
+The recovery input forces a reinstall even when the OS name already matches.
+Before OVH can wipe the machine, the task authenticates the exact Kubernetes
+node, cordons it, waits up to two hours for active ARC jobs to finish, and
+drains its remaining workloads.
 
 Join or reconcile the compute node only through the Taskfile:
 
@@ -123,7 +147,7 @@ image once for reuse by every runner and node. The initial SeaweedFS bucket
 bootstrap pulls its pinned AWS CLI image directly because Zot does not exist
 yet on a clean controller.
 ARC uses one retained 64 GiB local persistent volume per qualified build
-node. The `nook-buildkit` StatefulSet has three rootless replicas with required
+node. The `nook-buildkit` StatefulSet has four rootless replicas with required
 hostname anti-affinity. Each replica binds to its node's
 `/var/lib/nook-arc-buildkit/state` directory.
 
@@ -141,11 +165,12 @@ referenced blobs. Later jobs on that node reuse the hydrated local snapshots.
 Main and pull requests retain separate publication refs, so concurrent PRs do
 not overwrite shared Main identity.
 
-General and Hive runners prefer Rise-S, then the home 7950X3D worker, then
-KS-6. Hostname spreading permits at most five more runner Pods on one eligible
-node than another. This preserves the intended 10/10/5 burst envelope.
+General and Hive runners prefer either Rise-S, then the home 7950X3D worker,
+then KS-6. Hostname spreading permits at most five more runner Pods on one
+eligible node than another. This expands the aggregate burst envelope without
+changing storage or control-plane ownership.
 
-`task infra:arc:buildkit:benchmark` proves cold and warm timings on all three
+`task infra:arc:buildkit:benchmark` proves cold and warm timings on all four
 nodes. It also recreates every BuildKit Pod and requires the same node-local
 cache to remain `CACHED`.
 

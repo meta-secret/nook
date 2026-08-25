@@ -19,11 +19,12 @@ This directory owns Nook's stateful server infrastructure:
   unprivileged Pods cannot mount the nested `/proc` used by the OCI sandbox.
   Therefore only trusted same-repository jobs use ARC. Fork and Dependabot jobs
   remain hosted.
-- The general `nook-k0s` set permits 25 concurrent jobs. The dedicated
+- The general `nook-k0s` set permits 35 concurrent jobs. The dedicated
   `nook-k0s-hive` set permits ten. Hive adds pinned Neo4j and non-root Trixie
   test-runtime sidecars.
-- Kubernetes prefers Rise-S, then the home 7950X3D node, then KS-6. Topology
-  spreading preserves the intended 10/10/5 burst envelope.
+- Kubernetes prefers either Rise-S worker, then the home 7950X3D node, then
+  KS-6. Topology spreading expands the burst envelope across both primary
+  NVMe workers without concentrating the queue on one machine.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. SeaweedFS
 and private `nook/**` Zot repositories require generated credentials. Zot's
@@ -59,6 +60,10 @@ task infra:arc:activate
 task infra:arc:fallback
 task infra:arc:smoke
 task infra:arc:hive:smoke
+
+# Install or reconcile one reviewed OVH worker through provider API, host
+# bootstrap, authenticated mesh, k0s, BuildKit, and ARC readiness.
+task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
 ```
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and

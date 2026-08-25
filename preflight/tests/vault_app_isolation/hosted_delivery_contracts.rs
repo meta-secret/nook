@@ -750,10 +750,9 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             && web_e2e_artifacts.contains("TASK: _ci:main:web:e2e-only"),
         "Main web e2e artifact consumer must bake the Chromium image then run e2e-only"
     );
-    let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(
-        cleanup.contains("task docker:prune:stale"),
-        "runner cleanup must invoke the Taskfile prune entry"
+        !root.join(".github/workflows/runner-cleanup.yml").exists(),
+        "legacy registered-runner Docker cleanup must not return after ARC migration"
     );
     let prune_script = read(root, ".github/scripts/docker-prune-stale.sh");
     assert!(
