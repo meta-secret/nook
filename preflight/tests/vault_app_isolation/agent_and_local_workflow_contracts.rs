@@ -131,13 +131,17 @@ fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Resu
 fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
-    let token_fallback =
-        r#"export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";"#;
+    let token_fallback = r#"${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"#;
 
     assert_eq!(
         tasks.matches(token_fallback).count(),
+        1,
+        "the shared PR audit wrapper must accept NOOK_GITHUB_PAT before consulting gh auth"
+    );
+    assert_eq!(
+        tasks.matches("task: pr:ci-agent:audit").count(),
         3,
-        "preflight, readiness, and review wrappers must accept NOOK_GITHUB_PAT before consulting gh auth"
+        "preflight, readiness, and review must use the authenticated PR audit wrapper"
     );
     Ok(())
 }
