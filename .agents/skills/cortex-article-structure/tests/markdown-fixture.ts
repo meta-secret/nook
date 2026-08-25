@@ -44,12 +44,12 @@ function blockFromNode(node: RootContent): CortexArticleBlock {
     };
   }
   if (node.type === 'html') {
-    const comment = /^\s*<!--[\s\S]*-->\s*$/u.test(node.value);
+    const comment = /^\s*(?:<!--(?:(?!-->)[\s\S])*-->\s*)+$/u.test(node.value);
     if (comment) {
       return { comment, line, type: CortexArticleBlockKind.Html };
     }
     if (
-      /^\s*(?:(?:<!--[\s\S]*?-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
+      /^\s*(?:(?:<!--(?:(?!-->)[\s\S])*-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
         node.value,
       )
     ) {

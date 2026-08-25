@@ -246,7 +246,7 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
     if (node.type === 'heading') {
       break;
     }
-    if (isTransparentArticleNode(node)) {
+    if (isTransparentDensityNode(node)) {
       continue;
     }
     if (node.type !== 'paragraph') {
@@ -271,10 +271,21 @@ function isTransparentArticleNode(node: RootContent): boolean {
   return node.type === 'definition' || isInvisibleHtml(node);
 }
 
+function isTransparentDensityNode(node: RootContent): boolean {
+  return node.type === 'definition' || isCommentOnlyHtml(node);
+}
+
+function isCommentOnlyHtml(node: RootContent): boolean {
+  return (
+    node.type === 'html' &&
+    /^\s*(?:<!--(?:(?!-->)[\s\S])*-->\s*)+$/u.test(node.value)
+  );
+}
+
 function isInvisibleHtml(node: RootContent): boolean {
   return (
     node.type === 'html' &&
-    /^\s*(?:(?:<!--[\s\S]*?-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
+    /^\s*(?:(?:<!--(?:(?!-->)[\s\S])*-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
       node.value,
     )
   );

@@ -226,9 +226,15 @@ test('treats raw HTML void separators as empty but preserves visible HTML', () =
   const visibleArgs: MakeDocumentArgs = {
     path: '.cortex/html-callout.md',
     content:
-      '# HTML callout\n\n## Visible article\n\n<aside>Warning.</aside>\n',
+      '# HTML callout\n\n## Visible article\n\n<!--a--><aside>Warning.</aside><!--b-->\n',
   };
   expect(audit([makeDocument(visibleArgs)])).toEqual([]);
+  const resetArgs: MakeDocumentArgs = {
+    path: '.cortex/html-reset.md',
+    content:
+      '# HTML reset\n\n## Explanation\n\nOne.\n\nTwo.\n\nThree.\n\n<!--a--><hr><!--b-->\n\nFour.\n',
+  };
+  expect(audit([makeDocument(resetArgs)])).toEqual([]);
 });
 
 test('audits empty, dense, and procedure articles without a document map', () => {
