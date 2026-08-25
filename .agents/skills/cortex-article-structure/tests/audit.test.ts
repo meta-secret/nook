@@ -192,7 +192,16 @@ test('does not count an empty fenced block as article content', () => {
 });
 
 test('does not count empty container blocks as article content', () => {
-  for (const container of ['>', '-', '1.']) {
+  for (const container of [
+    '>',
+    '-',
+    '1.',
+    '> <!-- hidden -->',
+    '- <!-- hidden -->',
+    '1. <!-- hidden -->',
+    '> <hr>',
+    '- <br>',
+  ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/empty-container.md',
       content: `# Empty container\n\n## Empty article\n\n${container}\n`,

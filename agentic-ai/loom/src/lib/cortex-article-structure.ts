@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Heading, Root, RootContent } from 'mdast';
+import type { Heading, Nodes, Root, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -233,11 +233,9 @@ function auditArticle(args: AuditArticleArgs): void {
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
-  if (
-    (node.type === 'blockquote' || node.type === 'list') &&
-    nodeText(node).trim().length === 0
-  ) {
-    return false;
+  if (node.type === 'blockquote' || node.type === 'list') {
+    const inspection: VisibleSemanticContentInspection = { node };
+    return hasVisibleSemanticContent(inspection);
   }
   return (
     node.type !== 'heading' &&
@@ -245,6 +243,32 @@ function isVisibleArticleNode(node: RootContent): boolean {
     (node.type !== 'code' || node.value.trim().length > 0) &&
     !isTransparentArticleNode(node)
   );
+}
+
+type VisibleSemanticContentInspection = {
+  readonly node: Nodes;
+};
+
+function hasVisibleSemanticContent(
+  inspection: VisibleSemanticContentInspection,
+): boolean {
+  const node = inspection.node;
+  if (node.type === 'definition' || node.type === 'thematicBreak') return false;
+  if (node.type === 'html') return !isInvisibleHtml(node);
+  if (
+    node.type === 'code' ||
+    node.type === 'inlineCode' ||
+    node.type === 'text'
+  ) {
+    return node.value.trim().length > 0;
+  }
+  if ('children' in node) {
+    return node.children.some((child) => {
+      const childInspection: VisibleSemanticContentInspection = { node: child };
+      return hasVisibleSemanticContent(childInspection);
+    });
+  }
+  return node.type !== 'break';
 }
 
 function auditConsecutiveParagraphs(args: AuditArticleArgs): void {

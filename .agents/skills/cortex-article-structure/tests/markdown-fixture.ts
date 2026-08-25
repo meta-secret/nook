@@ -1,4 +1,4 @@
-import type { RootContent } from 'mdast';
+import type { Nodes, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -27,11 +27,11 @@ function blockFromNode(node: RootContent): CortexArticleBlock {
       type: CortexArticleBlockKind.Heading,
     };
   }
-  if (
-    (node.type === 'blockquote' || node.type === 'list') &&
-    nodeText(node).trim().length === 0
-  ) {
-    return { line, type: CortexArticleBlockKind.Separator };
+  if (node.type === 'blockquote' || node.type === 'list') {
+    const inspection: VisibleSemanticContentInspection = { node };
+    if (!hasVisibleSemanticContent(inspection)) {
+      return { line, type: CortexArticleBlockKind.Separator };
+    }
   }
   if (node.type === 'paragraph' || node.type === 'definition') {
     return {
@@ -80,4 +80,34 @@ function nodeText(node: RootContent): string {
   if ('value' in node && typeof node.value === 'string') return node.value;
   if (!('children' in node)) return '';
   return node.children.map((child) => nodeText(child as RootContent)).join('');
+}
+
+type VisibleSemanticContentInspection = {
+  readonly node: Nodes;
+};
+
+function hasVisibleSemanticContent(
+  inspection: VisibleSemanticContentInspection,
+): boolean {
+  const node = inspection.node;
+  if (node.type === 'definition' || node.type === 'thematicBreak') return false;
+  if (node.type === 'html') {
+    return !/^\s*(?:(?:<!--(?:(?!-->)[\s\S])*-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
+      node.value,
+    );
+  }
+  if (
+    node.type === 'code' ||
+    node.type === 'inlineCode' ||
+    node.type === 'text'
+  ) {
+    return node.value.trim().length > 0;
+  }
+  if ('children' in node) {
+    return node.children.some((child) => {
+      const childInspection: VisibleSemanticContentInspection = { node: child };
+      return hasVisibleSemanticContent(childInspection);
+    });
+  }
+  return node.type !== 'break';
 }
