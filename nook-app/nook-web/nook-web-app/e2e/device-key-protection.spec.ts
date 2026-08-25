@@ -119,10 +119,24 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('device-protection-gate')).toBeVisible()
 }
 
-async function readRequiredVaultString(
-  page: Page,
-  key: string,
-): Promise<string> {
+interface RequiredVaultStringInput {
+  page: Page
+  key: string
+}
+
+interface LocalIdentityKeyringEntrySnapshot {
+  appId: string
+  wrappedAppKey: string
+}
+
+interface LocalIdentityKeyringSnapshot {
+  entries: LocalIdentityKeyringEntrySnapshot[]
+}
+
+async function readRequiredVaultString({
+  page,
+  key,
+}: RequiredVaultStringInput): Promise<string> {
   return page.evaluate(
     (valueKey) =>
       new Promise<string>((resolve, reject) => {
@@ -149,19 +163,31 @@ async function readRequiredVaultString(
 }
 
 async function readPersistedDeviceIdentity(page: Page): Promise<string> {
-  try {
-    return await readRequiredVaultString(page, 'app_key_wrapped')
-  } catch {
-    return readRequiredVaultString(page, 'device_identity_wrapped')
+  const appId = await readDeviceId(page)
+  const rawKeyring = await readRequiredVaultString({
+    page,
+    key: 'local_identity_keyring_v1',
+  })
+  const keyring = JSON.parse(rawKeyring) as LocalIdentityKeyringSnapshot
+  const entry = keyring.entries.find((candidate) => candidate.appId === appId)
+  if (!entry) {
+    throw new Error(`Local identity keyring entry is missing: ${appId}`)
   }
+  return entry.wrappedAppKey
 }
 
 async function readDeviceId(page: Page): Promise<string> {
-  try {
-    return await readRequiredVaultString(page, 'app_id')
-  } catch {
-    return readRequiredVaultString(page, 'device_id')
-  }
+  return page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          requireManager(): { readonly device_id: string }
+        }
+      }
+    ).__nookVault
+    if (!vault) throw new Error('Vault runtime is unavailable')
+    return vault.requireManager().device_id
+  })
 }
 
 async function clearDeviceMetadata(page: Page): Promise<void> {
@@ -174,6 +200,7 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
           const db = request.result
           const transaction = db.transaction('vault', 'readwrite')
           const store = transaction.objectStore('vault')
+          store.delete('local_identity_keyring_v1')
           store.delete('device_id')
           store.delete('device_identity_wrapped')
           store.delete('app_id')
