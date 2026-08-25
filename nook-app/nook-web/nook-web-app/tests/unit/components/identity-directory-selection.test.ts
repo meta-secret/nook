@@ -27,7 +27,7 @@ const identities = [
     members: [
       {
         appId: 'browser-app',
-        label: 'MacBook app key',
+        label: 'Nook on MacBook',
         currentBrowser: true,
       },
     ],
@@ -40,7 +40,7 @@ const identities = [
     members: [
       {
         appId: 'phone-app',
-        label: 'Work phone app key',
+        label: 'Nook on work phone',
         currentBrowser: false,
       },
     ],
@@ -147,7 +147,7 @@ function createVault(): VaultState {
 }
 
 describe('identity directory selection', () => {
-  test('switches the key inventory to an identity from another installation', async () => {
+  test('switches the app inventory to an identity from another installation', async () => {
     personalLocalAccess = NookIdentityLocalAccessKind.CurrentBrowser
     const renderProps = {
       vault: createVault(),
@@ -164,7 +164,7 @@ describe('identity directory selection', () => {
     await fireEvent.click(rendered.getByRole('button', { name: /Work/ }))
 
     expect(rendered.getByRole('heading', { name: 'Work' })).toBeTruthy()
-    expect(rendered.getByText('Work phone app key')).toBeTruthy()
+    expect(rendered.getByText('Nook on work phone')).toBeTruthy()
     expect(
       rendered.getByTestId('devices-access-other-identity-notice'),
     ).toBeTruthy()
@@ -178,7 +178,7 @@ describe('identity directory selection', () => {
         .getByTestId('devices-access-layout-list')
         .getAttribute('aria-pressed'),
     ).toBe('true')
-    expect(() => rendered.getByText('MacBook app key')).toThrow()
+    expect(() => rendered.getByText('Nook on MacBook')).toThrow()
   })
 
   test('returns to list when refreshed access makes the selected identity remote', async () => {

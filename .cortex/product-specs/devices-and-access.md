@@ -6,13 +6,18 @@
   - It is available before a vault exists, while every vault is locked, and
     while a vault is open.
 - **Identity:** An identity is a logical account.
-  - It possesses passkeys and therefore app keys.
+  - It connects protected Nook apps to vault access.
+  - App keys implement that relationship internally.
   - It owns per-vault DEKs.
-- **Scope:** Explain identity, passkeys, app keys, and the vaults that identity
-  can open.
+- **Scope:** Explain identity, protection methods, apps, and the vaults that
+  identity can open.
   - Do not present this as a universal passkey manager.
-- **Browser extension:** Treat it as another installation with its own app key.
-  - Extension setup enrolls that app key into a selected identity.
+- **User abstraction:** Present passkeys or PINs as protection methods.
+  - Present each protected installation as an **App** beneath that method.
+  - Never present an app key as a peer user-managed key.
+  - Keep the public app ID inside an explicit advanced disclosure.
+- **Browser extension:** Treat it as another app installation.
+  - Extension setup enrolls its internal app key into a selected identity.
 
 See
 [identity-vault-architecture.md](../design-docs/identity-vault-architecture.md).
@@ -259,9 +264,9 @@ It is never shown as stored on one physical laptop.
 The Access canvas is identity-centric:
 
 - center: the selected **Identity** hub;
-- left: passkeys and app keys that belong to that identity;
+- left: passkeys or PINs with their subordinate Nook apps;
 - right: vaults whose DEKs the identity holds;
-- edges: passkey/app key → identity → vaults.
+- edges: protection method → app → identity → vaults.
 
 Current dashboard requirements:
 
@@ -273,8 +278,7 @@ Current dashboard requirements:
 - Create-vault flows require identity creation first when no identity exists.
 - The primary desktop layout uses a persistent identity rail.
   - Every local identity remains visible while one identity is selected.
-  - Each identity row shows the same visible key count as its inventory and its
-    vault count.
+  - Each identity row shows its app count and vault count.
   - Narrow screens stack the identity navigator above the selected identity.
 - Selecting an identity changes the local browse context without changing the
   persisted authorization selection.
@@ -324,12 +328,16 @@ Current dashboard requirements:
   - The prior in-memory app key, vault session, pending extension handoff, and
     decrypted provider state are cleared.
   - The selected identity must authenticate before opening vaults.
-- The selected identity defaults to a flat key inventory.
-  - The current protector and current app key appear as separate rows.
-  - Every other public app-key member also appears.
+- The selected identity defaults to a protection and app inventory.
+  - The current protector appears as the managed row.
+  - Apps connected to the identity appear beneath that row.
+  - Apps with no locally known protector appear in an app group.
+  - Another installation is described as linked to the identity.
+  - The UI must not claim that the current passkey unlocks that installation.
   - The passkey row owns its rename action.
-  - App keys from another installation are read-only.
-  - They never borrow the active identity's protection state.
+  - App names from another installation are read-only.
+  - The public app ID appears only after opening **Advanced**.
+  - Internal app-key terminology does not appear in the primary inventory.
 - A List/Graph control switches between the flat key inventory and relationship
   graph for the same selected identity.
   - The representations are mutually exclusive and never appear one after the
@@ -339,7 +347,10 @@ Current dashboard requirements:
   - Vault browsing remains available inside that relationship detail.
   - It renders only when the browsed identity owns the current browser app key.
   - Another installation receives an explicit local-key-unavailable state.
-- **Add a key** must not imply success before explicit identity enrollment
+- The relationship graph labels the internal app-key node as **App**.
+  - It reads as protection method → app → identity → vault.
+  - Raw app-key identifiers and cryptographic terminology remain internal.
+- **Add app** must not imply success before explicit identity enrollment
   exists.
   - The control explains that another installation must request enrollment.
 - The primary surface omits access-evidence inspection and browser-reported

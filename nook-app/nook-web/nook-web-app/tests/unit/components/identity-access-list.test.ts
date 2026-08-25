@@ -36,10 +36,19 @@ const knownTime: DashboardTimestamp = {
   value: '2026-03-01T12:00:00.000Z',
 }
 
+type TranslationRequest =
+  | string
+  | {
+      readonly key: string
+      readonly replacements: Readonly<Record<string, string>>
+    }
+
 const vault = {
   locale: 'en',
-  t: (key: string, replacements?: Record<string, string>) =>
-    replacements ? `${key}(${JSON.stringify(replacements)})` : key,
+  t: (request: TranslationRequest) =>
+    typeof request === 'string'
+      ? request
+      : `${request.key}(${JSON.stringify(request.replacements)})`,
 } as VaultState
 
 function passkeyView(): DashboardView {
@@ -72,7 +81,7 @@ describe('identity access cards', () => {
     })
   })
 
-  test('omits a sibling app-key card when a passkey already unwraps that key', () => {
+  test('keeps the app as subordinate context when a passkey protects it', () => {
     const buildIdentityAccessCardsArgs: Parameters<
       typeof buildIdentityAccessCards
     >[0] = {
@@ -101,7 +110,7 @@ describe('identity access cards', () => {
 })
 
 describe('identity key inventory', () => {
-  test('lists the protector and every app key as separate rows', () => {
+  test('nests the protected app and keeps remote apps in a linked group', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_personal',
@@ -110,13 +119,13 @@ describe('identity key inventory', () => {
       members: [
         {
           appId: 'device_5678',
-          label: known('MacBook app key'),
+          label: known('Nook on MacBook'),
           currentBrowser: true,
           localProtection: DeviceAccessProtectionKind.PasskeyStandard,
         },
         {
           appId: 'device_peer',
-          label: known('Phone app key'),
+          label: known('Nook on phone'),
           currentBrowser: false,
           localProtection: DeviceAccessProtectionKind.Missing,
         },
@@ -131,21 +140,24 @@ describe('identity key inventory', () => {
 
     expect(rows.map((row) => row.kind)).toEqual([
       IdentityKeyInventoryRowKind.Protector,
-      IdentityKeyInventoryRowKind.AppKey,
-      IdentityKeyInventoryRowKind.AppKey,
+      IdentityKeyInventoryRowKind.Apps,
     ])
     expect(rows[0]).toMatchObject({
       title: 'Work laptop',
-      protector: I18N_KEYS.DevicesAccessThisBrowser,
+      apps: [
+        {
+          title: 'Nook on MacBook',
+          appId: 'device_5678',
+        },
+      ],
     })
     expect(rows[1]).toMatchObject({
-      title: 'MacBook app key',
-      protector: 'Work laptop',
-      lastUsed: I18N_KEYS.DevicesAccessUnknown,
-    })
-    expect(rows[2]).toMatchObject({
-      title: 'Phone app key',
-      lastUsed: I18N_KEYS.DevicesAccessUnknown,
+      apps: [
+        {
+          title: 'Nook on phone',
+          appId: 'device_peer',
+        },
+      ],
     })
   })
 
@@ -158,7 +170,7 @@ describe('identity key inventory', () => {
       members: [
         {
           appId: 'device_peer',
-          label: known('Work phone app key'),
+          label: known('Nook on work phone'),
           currentBrowser: false,
           localProtection: DeviceAccessProtectionKind.Missing,
         },
@@ -173,13 +185,17 @@ describe('identity key inventory', () => {
 
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
-      kind: IdentityKeyInventoryRowKind.AppKey,
-      title: 'Work phone app key',
-      lastUsed: I18N_KEYS.DevicesAccessUnknown,
+      kind: IdentityKeyInventoryRowKind.Apps,
+      apps: [
+        {
+          title: 'Nook on work phone',
+          relationship: `${I18N_KEYS.DevicesAccessAppLinkedToIdentity}(${JSON.stringify({ identity: 'Work' })})`,
+        },
+      ],
     })
   })
 
-  test('distinguishes unlabeled peer app keys by public identifier', () => {
+  test('distinguishes unlabeled apps without exposing their identifiers', () => {
     const view = passkeyView()
     const identity: IdentityDirectoryEntry = {
       identityId: 'identity_work',
@@ -207,9 +223,13 @@ describe('identity key inventory', () => {
 
     const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
 
-    expect(rows.map((row) => row.title)).toEqual([
-      `${I18N_KEYS.DevicesAccessOtherAppKey} · 12345678`,
-      `${I18N_KEYS.DevicesAccessOtherAppKey} · 87654321`,
+    expect(rows[0]?.apps.map((app) => app.title)).toEqual([
+      `${I18N_KEYS.DevicesAccessOtherAppKey}(${JSON.stringify({ count: '1' })})`,
+      `${I18N_KEYS.DevicesAccessOtherAppKey}(${JSON.stringify({ count: '2' })})`,
+    ])
+    expect(rows[0]?.apps.map((app) => app.appId)).toEqual([
+      'app_peer_12345678',
+      'app_peer_87654321',
     ])
   })
 
@@ -236,9 +256,13 @@ describe('identity key inventory', () => {
 
     const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
 
-    expect(rows[1]).toMatchObject({
-      title: `${I18N_KEYS.DevicesAccessCompanionSession} · 12345678`,
-      protector: I18N_KEYS.DevicesAccessCompanionSession,
+    expect(rows[0]).toMatchObject({
+      kind: IdentityKeyInventoryRowKind.Protector,
+      apps: [
+        {
+          title: I18N_KEYS.DevicesAccessCompanionSession,
+        },
+      ],
     })
   })
 
@@ -252,7 +276,7 @@ describe('identity key inventory', () => {
       members: [
         {
           appId: 'device_5678',
-          label: known('Browser app key'),
+          label: known('Nook in this browser'),
           currentBrowser: true,
           localProtection: DeviceAccessProtectionKind.Missing,
         },
@@ -266,6 +290,6 @@ describe('identity key inventory', () => {
     const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
 
     expect(rows).toHaveLength(1)
-    expect(rows[0]?.kind).toBe(IdentityKeyInventoryRowKind.AppKey)
+    expect(rows[0]?.kind).toBe(IdentityKeyInventoryRowKind.Apps)
   })
 })

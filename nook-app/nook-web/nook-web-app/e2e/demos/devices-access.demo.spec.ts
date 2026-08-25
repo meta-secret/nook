@@ -8,7 +8,7 @@ import {
 
 const BEAT_MS = 650
 
-test('walk the access chain from passkey to app key to vaults', async ({
+test('walk the access chain from passkey to app to vaults', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -30,11 +30,13 @@ test('walk the access chain from passkey to app key to vaults', async ({
   await expect(identityOptions).toHaveCount(1)
   await expect(identityOptions).toHaveAttribute('data-selected', 'true')
   await expect(keyInventory).toBeVisible()
-  await expect(keyRows).toHaveCount(2)
+  await expect(keyRows).toHaveCount(1)
   await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
-  await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
+  await expect(page.getByTestId('devices-access-app')).toHaveCount(1)
   await expect(keyInventory).toContainText('Passkey')
-  await expect(keyInventory).toContainText('App key')
+  await expect(keyInventory).toContainText('Apps')
+  await expect(keyInventory).toContainText('Nook in this browser')
+  await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
   await expect(
     page.getByTestId('devices-access-relationship-details'),
   ).toHaveCount(0)
@@ -63,7 +65,7 @@ test('walk the access chain from passkey to app key to vaults', async ({
   ).toHaveCount(1)
   await expect(browse.getByRole('list')).toHaveCount(0)
   const chain = page.getByTestId('devices-access-chain')
-  await expect(chain).toContainText('App key')
+  await expect(chain).toContainText('App')
   await expect(chain).toContainText('Identity')
   await expect(chain).toContainText('Vaults')
   await expect(page.getByTestId('devices-access-strength-vaults')).toHaveCount(
@@ -105,7 +107,7 @@ test('walk the access chain from passkey to app key to vaults', async ({
       name: /Passkey: Passkey · recoverable identity/,
     }),
   ).toBeVisible()
-  await expect(chain.getByRole('article', { name: /App key/ })).toBeVisible()
+  await expect(chain.getByRole('article', { name: /App: App/ })).toBeVisible()
   await page.waitForTimeout(BEAT_MS)
 
   await expect(
@@ -120,7 +122,7 @@ test('walk the access chain from passkey to app key to vaults', async ({
     }),
   ).toBeVisible()
   await expect(chain).toContainText('Selected vault')
-  await expect(chain).toContainText('App key')
+  await expect(chain).toContainText('App')
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('header-lock-vault-btn').click()

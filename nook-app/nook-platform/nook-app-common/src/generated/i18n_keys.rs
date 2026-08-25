@@ -448,6 +448,11 @@ pub const DEVICES_ACCESS_ACCESS_VERIFIED: &str = "devices_access.access_verified
 pub const DEVICES_ACCESS_ADD_IDENTITY: &str = "devices_access.add_identity";
 pub const DEVICES_ACCESS_ADD_KEY: &str = "devices_access.add_key";
 pub const DEVICES_ACCESS_ADD_KEY_UNAVAILABLE: &str = "devices_access.add_key_unavailable";
+pub const DEVICES_ACCESS_ADVANCED_DETAILS: &str = "devices_access.advanced_details";
+pub const DEVICES_ACCESS_APP_LINKED_TO_IDENTITY: &str = "devices_access.app_linked_to_identity";
+pub const DEVICES_ACCESS_APP_PROTECTED_BY: &str = "devices_access.app_protected_by";
+pub const DEVICES_ACCESS_APPS_FOR_IDENTITY: &str = "devices_access.apps_for_identity";
+pub const DEVICES_ACCESS_APPS_HEADING: &str = "devices_access.apps_heading";
 pub const DEVICES_ACCESS_ATTACHMENT: &str = "devices_access.attachment";
 pub const DEVICES_ACCESS_ATTACHMENT_CROSS_PLATFORM: &str =
     "devices_access.attachment_cross_platform";

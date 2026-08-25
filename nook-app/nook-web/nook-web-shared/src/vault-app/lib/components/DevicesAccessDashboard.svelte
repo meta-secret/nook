@@ -1,7 +1,7 @@
 <!--
 THESIS: Identity selection and key ownership must be clear before relationship details.
 OWN-WORLD: Nook's restrained security surfaces, semantic tokens, evidence-aware language, and real local state remain intact.
-STORY: Choose an identity from a persistent rail, scan its protector and app keys, then inspect its vault relationships and technical evidence below.
+STORY: Choose an identity from a persistent rail, scan its protection method and apps, then inspect its vault relationships below.
 FIRST VIEWPORT: The complete local identity directory and one selected-identity representation appear together.
 FORM: A quiet master-detail layout makes identity ownership primary while a compact switch chooses either the key inventory or relationship graph.
 -->
@@ -500,7 +500,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     <div class="grid min-w-0 gap-8 md:grid-cols-[18rem_minmax(0,1fr)] md:gap-0">
       <IdentityDirectoryRail
         {vault}
-        view={accessView}
         identities={directory.identities}
         {selectedIdentityId}
         onSelectIdentity={chooseIdentity}

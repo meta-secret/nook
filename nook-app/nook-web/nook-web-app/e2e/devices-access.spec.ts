@@ -138,16 +138,18 @@ test.describe('devices and access dashboard', () => {
     const bridge = page.getByTestId('devices-access-chain')
     await expect(bridge).toContainText('Passkey')
     await expect(bridge).toContainText('Passkey · recoverable identity')
-    await expect(bridge).toContainText('App key')
+    await expect(bridge).toContainText('App')
     await expect(bridge).toContainText('Vaults')
     await expect(bridge).toContainText('Test vault')
     await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
     await expect(
       bridge.getByRole('article', {
-        name: /Passkey: Passkey · recoverable identity. Unlocks this app key/,
+        name: /Passkey: Passkey · recoverable identity. Protects this app/,
       }),
     ).toBeVisible()
-    await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /App: App/ }),
+    ).toBeVisible()
     await expect(
       bridge.getByRole('article', { name: /Vault access/ }),
     ).toBeVisible()
@@ -190,11 +192,13 @@ test.describe('devices and access dashboard', () => {
       page.getByTestId('devices-access-identity-option'),
     ).toHaveCount(1)
     await expect(keyInventory).toBeVisible()
-    await expect(keyRows).toHaveCount(2)
+    await expect(keyRows).toHaveCount(1)
     await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
-    await expect(keyRows.nth(1)).toHaveAttribute('data-kind', 'app-key')
+    await expect(page.getByTestId('devices-access-app')).toHaveCount(1)
     await expect(keyInventory).toContainText('Passkey')
-    await expect(keyInventory).toContainText('App key')
+    await expect(keyInventory).toContainText('Apps')
+    await expect(keyInventory).toContainText('Nook in this browser')
+    await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
     await expect(listView).toHaveAttribute('aria-pressed', 'true')
     await expect(graphView).toHaveAttribute('aria-pressed', 'false')
     await expect(relationshipDetails).toHaveCount(0)
@@ -227,19 +231,23 @@ test.describe('devices and access dashboard', () => {
     expect(browseBottom).toBeLessThan(headingTop)
 
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /App: App/ }),
+    ).toBeVisible()
 
     await page.getByTestId('devices-access-perspective-vaults').click()
     await listView.click()
     await expect(keyInventory).toBeVisible()
     await expect(relationshipDetails).toHaveCount(0)
-    await expect(keyRows.nth(1).getByRole('button')).toHaveCount(0)
+    await expect(
+      page.getByTestId('devices-access-app').getByRole('button'),
+    ).toHaveCount(0)
 
     await graphView.click()
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(browse.getByRole('list')).toHaveCount(1)
     await expect(
-      browse.getByRole('button', { name: /Test vault.*App keys: 1/ }),
+      browse.getByRole('button', { name: /Test vault.*Apps: 1/ }),
     ).toBeVisible()
   })
 
@@ -405,7 +413,7 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible()
   })
 
-  test('walks the access chain from passkey to app key to vaults', async ({
+  test('walks the access chain from passkey to app to vaults', async ({
     page,
   }) => {
     await connectLocalVault(page)
@@ -428,12 +436,13 @@ test.describe('devices and access dashboard', () => {
     await expect(identityRail).toBeVisible()
     await expect(identityOptions).toHaveCount(1)
     await expect(identityOptions.filter({ hasText: 'Personal' })).toContainText(
-      '2 keys',
+      '1 app',
     )
     await expect(identityKeys).toBeVisible()
-    await expect(keyRows).toHaveCount(2)
+    await expect(keyRows).toHaveCount(1)
     await expect(identityKeys).toContainText('Passkey')
-    await expect(identityKeys).toContainText('App key')
+    await expect(identityKeys).toContainText('Apps')
+    await expect(page.getByTestId('devices-access-app')).toHaveCount(1)
     await expect(
       page.getByTestId('devices-access-relationship-details'),
     ).toHaveCount(0)
@@ -456,15 +465,17 @@ test.describe('devices and access dashboard', () => {
     ).toBeVisible()
 
     const bridge = page.getByTestId('devices-access-chain')
-    await expect(bridge).toContainText('App key')
+    await expect(bridge).toContainText('App')
     await expect(bridge).toContainText('Passkey')
     await expect(bridge).toContainText('Identity')
     await expect(bridge).toContainText('Vaults')
     await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
-    await expect(bridge.getByRole('article', { name: /App key/ })).toBeVisible()
+    await expect(
+      bridge.getByRole('article', { name: /App: App/ }),
+    ).toBeVisible()
     await expect(
       bridge.getByRole('article', {
-        name: /Passkey: Passkey · recoverable identity. Unlocks this app key/,
+        name: /Passkey: Passkey · recoverable identity. Protects this app/,
       }),
     ).toBeVisible()
     await expect(
@@ -526,17 +537,17 @@ test.describe('devices and access dashboard', () => {
     await page.getByTestId('devices-access-perspective-vaults').click()
     await expect(
       page.getByRole('button', {
-        name: /Test vault.*App keys: 1/,
+        name: /Test vault.*Apps: 1/,
       }),
     ).toBeVisible()
     await expect(
       bridge.getByRole('img', {
-        name: /Test vault was opened by this app key/,
+        name: /Test vault was opened by this app/,
       }),
     ).toHaveCount(1)
     await expect(
       bridge.getByRole('article', {
-        name: /App key: App key\. Test vault was opened by this app key/i,
+        name: /App: App\. Test vault was opened by this app/i,
       }),
     ).toBeVisible()
     await expect(bridge).not.toContainText('This browser')

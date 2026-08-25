@@ -27,6 +27,15 @@ test.describe('devices and access passkey inventory', () => {
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
+    const app = page.getByTestId('devices-access-app')
+    await expect(app).toContainText('Nook in this browser')
+    await expect(app).not.toContainText('App key')
+    await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
+    await app.locator('summary').click()
+    await expect(page.getByTestId('devices-access-app-id')).toBeVisible()
+    await expect(page.getByTestId('devices-access-app-id')).toContainText(
+      'Nook app ID',
+    )
     await page.getByTestId('devices-access-rename-passkey').click()
     const nameInput = page.getByTestId('devices-access-passkey-name-input')
     await nameInput.fill('Family passkey')

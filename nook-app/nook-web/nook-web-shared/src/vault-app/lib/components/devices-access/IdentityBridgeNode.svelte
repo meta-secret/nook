@@ -1,5 +1,6 @@
 <script lang="ts">
   import {
+    AppWindow,
     Fingerprint,
     KeyRound,
     Laptop,
@@ -43,11 +44,7 @@
   {/if}
 {/if}
 
-{#if (data.kind === IdentityBridgeNodeKind.Device ||
-    data.kind === IdentityBridgeNodeKind.Identity) &&
-  data.lateralAccessPort &&
-  (data.portMode === IdentityBridgePortMode.Source ||
-    data.portMode === IdentityBridgePortMode.Both)}
+{#if (data.kind === IdentityBridgeNodeKind.Device || data.kind === IdentityBridgeNodeKind.Identity) && data.lateralAccessPort && (data.portMode === IdentityBridgePortMode.Source || data.portMode === IdentityBridgePortMode.Both)}
   <Handle
     class="bridge-handle"
     type={IdentityBridgeHandleType.Source}
@@ -97,13 +94,12 @@
       {#each data.installations as installation (installation.id)}
         <div class="row">
           <span class="key-icon"
-            ><KeyRound class="size-4" aria-hidden="true" /></span
+            ><AppWindow class="size-4" aria-hidden="true" /></span
           >
           <span class="row-copy">
             <strong>{installation.label}</strong>
             <small>{installation.detail}</small>
           </span>
-          <code title={installation.id}>{installation.id}</code>
         </div>
       {/each}
     </div>

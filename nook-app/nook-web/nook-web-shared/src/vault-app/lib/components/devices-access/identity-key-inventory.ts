@@ -14,7 +14,14 @@ import { isPasskeyProtection, protectionLabel } from './access-chain'
 
 export enum IdentityKeyInventoryRowKind {
   Protector = 'protector',
-  AppKey = 'app-key',
+  Apps = 'apps',
+}
+
+export type IdentityAppInventoryItem = {
+  readonly key: string
+  readonly title: string
+  readonly relationship: string
+  readonly appId: string
 }
 
 export type IdentityKeyInventoryRow = {
@@ -22,9 +29,9 @@ export type IdentityKeyInventoryRow = {
   readonly kind: IdentityKeyInventoryRowKind
   readonly title: string
   readonly typeLabel: string
-  readonly protector: string
   readonly lastUsed: string
   readonly renamable: boolean
+  readonly apps: readonly IdentityAppInventoryItem[]
 }
 
 type IdentityKeyInventoryRequest = {
@@ -39,87 +46,106 @@ export function buildIdentityKeyInventory({
   view,
 }: IdentityKeyInventoryRequest): readonly IdentityKeyInventoryRow[] {
   const rows: IdentityKeyInventoryRow[] = []
-  let currentProtector = vault.t(I18N_KEYS.DevicesAccessThisBrowser)
+  const linkedApps: IdentityAppInventoryItem[] = []
   const currentIdentity =
     identity.localAccess === NookIdentityLocalAccessKind.CurrentBrowser
-  const localMember = identity.members.find(
-    (member) => member.localProtection !== DeviceAccessProtectionKind.Missing,
-  )
-  const localProtection = currentIdentity
-    ? view.protection
-    : (localMember?.localProtection ?? DeviceAccessProtectionKind.Missing)
-  if (
-    currentIdentity &&
-    localProtection !== DeviceAccessProtectionKind.Missing
-  ) {
+  for (const [index, member] of identity.members.entries()) {
+    const isCurrent = member.currentBrowser
+    const localProtection =
+      currentIdentity && isCurrent ? view.protection : member.localProtection
+    const isLocal = localProtection !== DeviceAccessProtectionKind.Missing
+    const isCompanion =
+      isCurrent &&
+      view.protection === DeviceAccessProtectionKind.CompanionSession
+    const fallbackTitleArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.DevicesAccessOtherAppKey,
+      replacements: { count: String(index + 1) },
+    }
+    const appBase = {
+      key: `app:${member.appId}`,
+      title:
+        member.label.kind === DashboardTextKind.Known
+          ? member.label.value
+          : isCompanion
+            ? vault.t(I18N_KEYS.DevicesAccessCompanionSession)
+            : isCurrent || isLocal
+              ? vault.t(I18N_KEYS.DevicesAccessThisBrowserAppKey)
+              : vault.t(fallbackTitleArgs),
+      appId: member.appId,
+    }
+    if (!isLocal || localProtection === DeviceAccessProtectionKind.Missing) {
+      const linkedRelationshipArgs: Parameters<typeof vault.t>[0] = {
+        key: I18N_KEYS.DevicesAccessAppLinkedToIdentity,
+        replacements: { identity: identity.label },
+      }
+      const linkedApp: IdentityAppInventoryItem = {
+        ...appBase,
+        relationship: vault.t(linkedRelationshipArgs),
+      }
+      linkedApps.push(linkedApp)
+      continue
+    }
+
     const cardArgs: Parameters<typeof buildIdentityAccessCards>[0] = {
       vault,
       view,
     }
-    const protector = buildIdentityAccessCards(cardArgs)[0]
-    if (protector) {
-      currentProtector = protector.title
-      const protectorRow: IdentityKeyInventoryRow = {
-        key: `protector:${protector.key}`,
-        kind: IdentityKeyInventoryRowKind.Protector,
-        title: protector.title,
-        typeLabel: protector.typeLabel,
-        protector: vault.t(I18N_KEYS.DevicesAccessThisBrowser),
-        lastUsed: protector.lastUsedLabel,
-        renamable: isPasskeyProtection(localProtection),
-      }
-      rows.push(protectorRow)
-    }
-  } else if (localMember) {
+    const currentProtectorCards =
+      currentIdentity && isCurrent ? buildIdentityAccessCards(cardArgs) : []
+    const currentProtector = currentProtectorCards[0]
     const protectionLabelArgs: Parameters<typeof protectionLabel>[0] = {
       vault,
-      protection: localMember.localProtection,
+      protection: localProtection,
     }
-    currentProtector = protectionLabel(protectionLabelArgs)
-    rows.push({
-      key: `protector:${localMember.appId}`,
+    const protectorTitle =
+      currentProtector?.title ?? protectionLabel(protectionLabelArgs)
+    const protectedRelationshipArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.DevicesAccessAppProtectedBy,
+      replacements: { protection: protectorTitle },
+    }
+    const protectorRow: IdentityKeyInventoryRow = {
+      key: `protector:${member.appId}`,
       kind: IdentityKeyInventoryRowKind.Protector,
-      title: currentProtector,
-      typeLabel: vault.t(
-        isPasskeyProtection(localMember.localProtection)
-          ? I18N_KEYS.DevicesAccessKeyTypePasskey
-          : I18N_KEYS.DevicesAccessKeyTypePin,
-      ),
-      protector: vault.t(I18N_KEYS.DevicesAccessThisBrowser),
-      lastUsed: vault.t(I18N_KEYS.DevicesAccessUnknown),
-      renamable: false,
-    })
+      title: protectorTitle,
+      typeLabel:
+        currentProtector?.typeLabel ??
+        vault.t(
+          isPasskeyProtection(localProtection)
+            ? I18N_KEYS.DevicesAccessKeyTypePasskey
+            : localProtection === DeviceAccessProtectionKind.CompanionSession
+              ? I18N_KEYS.DevicesAccessKeyTypeCompanion
+              : I18N_KEYS.DevicesAccessKeyTypePin,
+        ),
+      lastUsed:
+        currentProtector?.lastUsedLabel ??
+        vault.t(I18N_KEYS.DevicesAccessUnknown),
+      renamable:
+        Boolean(currentProtector) && isPasskeyProtection(localProtection),
+      apps: [
+        {
+          ...appBase,
+          relationship: vault.t(protectedRelationshipArgs),
+        },
+      ],
+    }
+    rows.push(protectorRow)
   }
 
-  for (const member of identity.members) {
-    const isCurrent = member.currentBrowser
-    const isLocal =
-      member.localProtection !== DeviceAccessProtectionKind.Missing
-    const isCompanion =
-      isCurrent &&
-      view.protection === DeviceAccessProtectionKind.CompanionSession
-    const appKeyRow: IdentityKeyInventoryRow = {
-      key: `app:${member.appId}`,
-      kind: IdentityKeyInventoryRowKind.AppKey,
-      title:
-        member.label.kind === DashboardTextKind.Known
-          ? member.label.value
-          : `${vault.t(
-              isCompanion
-                ? I18N_KEYS.DevicesAccessCompanionSession
-                : isCurrent || isLocal
-                  ? I18N_KEYS.DevicesAccessThisBrowserAppKey
-                  : I18N_KEYS.DevicesAccessOtherAppKey,
-            )} · ${member.appId.slice(-8)}`,
-      typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeAppKey),
-      protector:
-        isCurrent || isLocal
-          ? currentProtector
-          : vault.t(I18N_KEYS.DevicesAccessOtherInstallation),
+  if (linkedApps.length > 0 || rows.length === 0) {
+    const appsTitleArgs: Parameters<typeof vault.t>[0] = {
+      key: I18N_KEYS.DevicesAccessAppsForIdentity,
+      replacements: { identity: identity.label },
+    }
+    const appsRow: IdentityKeyInventoryRow = {
+      key: `apps:${identity.identityId}`,
+      kind: IdentityKeyInventoryRowKind.Apps,
+      title: vault.t(appsTitleArgs),
+      typeLabel: vault.t(I18N_KEYS.DevicesAccessAppsHeading),
       lastUsed: vault.t(I18N_KEYS.DevicesAccessUnknown),
       renamable: false,
+      apps: linkedApps,
     }
-    rows.push(appKeyRow)
+    rows.push(appsRow)
   }
   return rows
 }
