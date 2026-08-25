@@ -75,6 +75,12 @@ pub(crate) async fn begin_or_resume_staged_simple_genesis(
     ),
     NookError,
 > {
+    if super::recovery::has_pending_identity_recovery_cleanup().await? {
+        return Err(NookError::Database(
+            "Pending identity recovery cleanup must finish before staged vault creation."
+                .to_owned(),
+        ));
+    }
     let base_directory = super::load_identity_directory().await?;
     let mut staged_directory = base_directory.clone();
     let identity_id = bind_staged_genesis_identity(&mut staged_directory, &input)?;
@@ -219,6 +225,42 @@ mod tests {
         );
         crate::storage::indexed_db::idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY)
             .await?;
+        super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn pending_recovery_cleanup_blocks_staged_genesis() -> Result<(), NookError> {
+        super::super::clear_identity_directory_for_test().await?;
+        crate::storage::indexed_db::idb_put_string(
+            super::super::recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
+            "pending",
+        )
+        .await?;
+        let app_key = nook_core::AppKey::generate().map_err(super::super::map_domain_error)?;
+        let (signing, _) = nook_core::SigningIdentity::generate()?;
+
+        let result = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+            app_key: &app_key,
+            signing_public_key: &signing.public_key(),
+            authorizer: None,
+            authorizer_signing: None,
+            label: "Personal",
+        })
+        .await;
+
+        assert!(matches!(
+            result,
+            Err(NookError::Database(message)) if message.contains("recovery cleanup")
+        ));
+        assert!(
+            crate::storage::indexed_db::idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+                .await?
+                .is_none()
+        );
+        crate::storage::indexed_db::idb_delete_key(
+            super::super::recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
+        )
+        .await?;
         super::super::clear_identity_directory_for_test().await
     }
 

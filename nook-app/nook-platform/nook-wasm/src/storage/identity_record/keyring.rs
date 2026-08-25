@@ -172,6 +172,7 @@ async fn migrate_legacy_active_key(
         .iter()
         .any(|entry| entry.app_id() == &app_id)
     {
+        validate_keyring_directory_binding(keyring, directory)?;
         delete_legacy_active_key(store).await?;
         return Ok(true);
     }
@@ -974,5 +975,25 @@ mod tests {
         .await?;
         super::clear_keyring_for_test().await?;
         super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn invalid_keyring_binding_preserves_legacy_protection() -> Result<(), NookError> {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let (app_key, wrapped, _) = create_pin_identity("Personal", "first-secret", None).await?;
+        crate::storage::indexed_db::save_wrapped_device_identity(
+            app_key.app_id().as_str(),
+            &wrapped,
+        )
+        .await?;
+        super::super::clear_identity_directory_for_test().await?;
+        assert!(super::load_keyring().await.is_err());
+        assert!(
+            crate::storage::indexed_db::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
+                .await?
+                .is_some()
+        );
+        let _ = rexie::Rexie::delete("nook_db").await;
+        Ok(())
     }
 }
