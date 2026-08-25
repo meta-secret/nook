@@ -21,6 +21,7 @@
     IdentityBridgePortMode,
     type IdentityBridgeNode,
   } from './identity-bridge-model'
+  import { PasskeyCardSummaryKind } from './passkey-card'
 
   let { data }: NodeProps<IdentityBridgeNode> = $props()
 </script>
@@ -56,12 +57,14 @@
 {#if data.kind === IdentityBridgeNodeKind.Protection}
   <article
     class="bridge-card protection-card"
-    data-testid={data.summary ? 'devices-access-passkey-card' : undefined}
-    aria-label={`${data.caption}: ${data.label}. ${data.description}${data.summary ? `. ${data.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join('. ')}` : ''}`}
+    data-testid={data.summary.kind === PasskeyCardSummaryKind.Present
+      ? 'devices-access-passkey-card'
+      : 'devices-access-protection-card'}
+    aria-label={`${data.caption}: ${data.label}. ${data.description}${data.summary.kind === PasskeyCardSummaryKind.Present ? `. ${data.summary.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join('. ')}` : ''}`}
   >
     <header>
       <span class="node-icon">
-        {#if data.summary}
+        {#if data.summary.kind === PasskeyCardSummaryKind.Present}
           <KeyRound class="size-5" aria-hidden="true" />
         {:else}
           <LockKeyhole class="size-5" aria-hidden="true" />
@@ -73,9 +76,9 @@
       </span>
     </header>
     <p>{data.description}</p>
-    {#if data.summary}
+    {#if data.summary.kind === PasskeyCardSummaryKind.Present}
       <dl class="passkey-facts" data-testid="devices-access-passkey-facts">
-        {#each data.summary.facts as fact (fact.kind)}
+        {#each data.summary.summary.facts as fact (fact.kind)}
           <div data-kind={fact.kind}>
             <dt>{fact.label}</dt>
             <dd>{fact.value}</dd>

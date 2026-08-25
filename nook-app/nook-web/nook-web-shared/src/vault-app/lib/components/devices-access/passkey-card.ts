@@ -34,6 +34,22 @@ export type PasskeyCardSummary = {
   readonly facts: readonly PasskeyCardFact[]
 }
 
+export enum PasskeyCardSummaryKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+export type PasskeyCardSummaryState =
+  | { readonly kind: typeof PasskeyCardSummaryKind.Absent }
+  | {
+      readonly kind: typeof PasskeyCardSummaryKind.Present
+      readonly summary: PasskeyCardSummary
+    }
+
+export const PASSKEY_CARD_SUMMARY_ABSENT: PasskeyCardSummaryState = {
+  kind: PasskeyCardSummaryKind.Absent,
+}
+
 type PasskeyCardSummaryRequest = {
   readonly vault: VaultState
   readonly view: DashboardView

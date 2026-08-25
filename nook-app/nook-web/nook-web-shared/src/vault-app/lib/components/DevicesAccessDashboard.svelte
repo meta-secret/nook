@@ -56,7 +56,9 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   } from './devices-access/identity-bridge-model'
   import {
     buildPasskeyCardSummary,
-    type PasskeyCardSummary,
+    PASSKEY_CARD_SUMMARY_ABSENT,
+    PasskeyCardSummaryKind,
+    type PasskeyCardSummaryState,
   } from './devices-access/passkey-card'
 
   let {
@@ -74,15 +76,18 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     kind: IdentityDirectoryLoadKind.Loading,
   })
 
-  function protectionSummaryFor(
-    view: DashboardView,
-  ): PasskeyCardSummary | undefined {
-    if (!isPasskeyProtection(view.protection)) return undefined
+  function protectionSummaryFor(view: DashboardView): PasskeyCardSummaryState {
+    if (!isPasskeyProtection(view.protection)) {
+      return PASSKEY_CARD_SUMMARY_ABSENT
+    }
     const summaryArgs: Parameters<typeof buildPasskeyCardSummary>[0] = {
       vault,
       view,
     }
-    return buildPasskeyCardSummary(summaryArgs)
+    return {
+      kind: PasskeyCardSummaryKind.Present,
+      summary: buildPasskeyCardSummary(summaryArgs),
+    }
   }
   let selectedRepresentation = $state(DevicesAccessRepresentationKind.List)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)

@@ -20,7 +20,7 @@ on request.
     buildIdentityKeyInventory,
     IdentityKeyInventoryRowKind,
   } from './identity-key-inventory'
-  import { PasskeyCardFactKind } from './passkey-card'
+  import { PasskeyCardFactKind, PasskeyCardSummaryKind } from './passkey-card'
 
   type IdentityKeyInventoryProps = {
     vault: VaultState
@@ -148,15 +148,15 @@ on request.
                   {/if}
                 </span>
               {/if}
-              {#if row.passkeySummary}
+              {#if row.passkeySummary.kind === PasskeyCardSummaryKind.Present}
                 <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {row.passkeySummary.modeLabel}
+                  {row.passkeySummary.summary.modeLabel}
                 </p>
                 <dl
                   class="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4 lg:grid-cols-4"
                   data-testid="devices-access-passkey-facts"
                 >
-                  {#each row.passkeySummary.facts as fact (fact.kind)}
+                  {#each row.passkeySummary.summary.facts as fact (fact.kind)}
                     <div class="min-w-0" data-kind={fact.kind}>
                       <dt class="text-xs text-muted-foreground">
                         {fact.label}

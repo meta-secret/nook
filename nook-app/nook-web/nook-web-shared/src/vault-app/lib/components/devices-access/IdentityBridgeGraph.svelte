@@ -21,7 +21,7 @@
   import type { VaultAccessView } from './access-chain'
   import type { DeviceAccessIdentityState } from '$app-wasm'
   import IdentityBridgeNode from './IdentityBridgeNode.svelte'
-  import type { PasskeyCardSummary } from './passkey-card'
+  import type { PasskeyCardSummaryState } from './passkey-card'
 
   let {
     perspective,
@@ -42,7 +42,7 @@
     deviceIdentifier: string
     identityStatus: DeviceAccessIdentityState
     protectionLabel: string
-    protectionSummary: PasskeyCardSummary | undefined
+    protectionSummary: PasskeyCardSummaryState
     deviceIconKind: IdentityBridgeDeviceIconKind
     vaults: readonly VaultAccessView[]
     copy: IdentityBridgeCopy

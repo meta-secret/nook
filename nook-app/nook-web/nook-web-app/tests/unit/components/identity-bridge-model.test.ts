@@ -10,7 +10,10 @@ import {
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-bridge-model'
 import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { DeviceAccessIdentityState } from '$app-wasm'
-import { PasskeyCardFactKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
+import {
+  PasskeyCardFactKind,
+  PasskeyCardSummaryKind,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 
 const copy: IdentityBridgeCopy = {
   protectionStage: 'Passkey',
@@ -74,31 +77,34 @@ function input(
     identityStatus: DeviceAccessIdentityState.Unlocked,
     protectionLabel: 'Passkey protected',
     protectionSummary: {
-      title: 'Work laptop',
-      typeLabel: 'Passkey',
-      modeLabel: 'Passkey protected',
-      facts: [
-        {
-          kind: PasskeyCardFactKind.Fingerprint,
-          label: 'Passkey ID',
-          value: 'passkey_1234',
-        },
-        {
-          kind: PasskeyCardFactKind.Keeper,
-          label: 'Stored with',
-          value: 'Proton Pass',
-        },
-        {
-          kind: PasskeyCardFactKind.Created,
-          label: 'First recorded by Nook',
-          value: 'Mar 1, 2026',
-        },
-        {
-          kind: PasskeyCardFactKind.LastUsed,
-          label: 'Last used',
-          value: 'Mar 1, 2026',
-        },
-      ],
+      kind: PasskeyCardSummaryKind.Present,
+      summary: {
+        title: 'Work laptop',
+        typeLabel: 'Passkey',
+        modeLabel: 'Passkey protected',
+        facts: [
+          {
+            kind: PasskeyCardFactKind.Fingerprint,
+            label: 'Passkey ID',
+            value: 'passkey_1234',
+          },
+          {
+            kind: PasskeyCardFactKind.Keeper,
+            label: 'Stored with',
+            value: 'Proton Pass',
+          },
+          {
+            kind: PasskeyCardFactKind.Created,
+            label: 'First recorded by Nook',
+            value: 'Mar 1, 2026',
+          },
+          {
+            kind: PasskeyCardFactKind.LastUsed,
+            label: 'Last used',
+            value: 'Mar 1, 2026',
+          },
+        ],
+      },
     },
     deviceIconKind: IdentityBridgeDeviceIconKind.Browser,
     vaults: [vault('home', true), vault('archive', false)],
@@ -177,10 +183,13 @@ describe('identity bridge graph', () => {
       label: 'Work laptop',
       description: 'Passkey protected',
       summary: {
-        facts: expect.arrayContaining([
-          expect.objectContaining({ value: 'passkey_1234' }),
-          expect.objectContaining({ value: 'Proton Pass' }),
-        ]),
+        kind: PasskeyCardSummaryKind.Present,
+        summary: {
+          facts: expect.arrayContaining([
+            expect.objectContaining({ value: 'passkey_1234' }),
+            expect.objectContaining({ value: 'Proton Pass' }),
+          ]),
+        },
       },
     })
     expect(

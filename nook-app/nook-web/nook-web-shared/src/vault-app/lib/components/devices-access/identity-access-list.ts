@@ -9,7 +9,9 @@ import {
 } from './access-chain'
 import {
   buildPasskeyCardSummary,
-  type PasskeyCardSummary,
+  PASSKEY_CARD_SUMMARY_ABSENT,
+  PasskeyCardSummaryKind,
+  type PasskeyCardSummaryState,
 } from './passkey-card'
 
 export enum IdentityAccessKeyKind {
@@ -26,7 +28,7 @@ export type IdentityAccessCard = {
   readonly title: string
   readonly typeLabel: string
   readonly lastUsedLabel: string
-  readonly passkeySummary?: PasskeyCardSummary
+  readonly passkeySummary: PasskeyCardSummaryState
 }
 
 type IdentityAccessCardsRequest = {
@@ -57,7 +59,10 @@ export function buildIdentityAccessCards({
       title: summary.title,
       typeLabel: summary.typeLabel,
       lastUsedLabel: lastUsed,
-      passkeySummary: summary,
+      passkeySummary: {
+        kind: PasskeyCardSummaryKind.Present,
+        summary,
+      },
     }
     cards.push(passkeyCard)
   } else if (view.protection === DeviceAccessProtectionKind.PinOrPassphrase) {
@@ -68,6 +73,7 @@ export function buildIdentityAccessCards({
       title: vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase),
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePin),
       lastUsedLabel: lastUsed,
+      passkeySummary: PASSKEY_CARD_SUMMARY_ABSENT,
     }
     cards.push(pinCard)
   } else if (view.protection === DeviceAccessProtectionKind.CompanionSession) {
@@ -78,6 +84,7 @@ export function buildIdentityAccessCards({
       title: vault.t(I18N_KEYS.DevicesAccessCompanionSession),
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeCompanion),
       lastUsedLabel: lastUsed,
+      passkeySummary: PASSKEY_CARD_SUMMARY_ABSENT,
     }
     cards.push(companionCard)
   }
@@ -93,6 +100,7 @@ export function buildIdentityAccessCards({
     title: vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey),
     typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeAppKey),
     lastUsedLabel: lastUsed,
+    passkeySummary: PASSKEY_CARD_SUMMARY_ABSENT,
   }
   cards.push(appKeyCard)
   return cards

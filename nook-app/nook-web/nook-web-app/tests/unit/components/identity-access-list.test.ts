@@ -23,6 +23,7 @@ import {
   buildIdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
+import { PasskeyCardSummaryKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 
 const known = (value: string): DashboardText => ({
@@ -83,19 +84,22 @@ describe('identity access cards', () => {
       title: 'Work laptop',
       typeLabel: I18N_KEYS.DevicesAccessKeyTypePasskey,
       passkeySummary: {
-        title: 'Work laptop',
-        facts: [
-          {
-            kind: 'fingerprint',
-            label: I18N_KEYS.DevicesAccessCredentialId,
-            value: 'passkey_1234',
-          },
-          {
-            kind: 'keeper',
-            label: I18N_KEYS.DevicesAccessKeeperLabel,
-            value: 'Proton Pass',
-          },
-        ],
+        kind: PasskeyCardSummaryKind.Present,
+        summary: {
+          title: 'Work laptop',
+          facts: [
+            {
+              kind: 'fingerprint',
+              label: I18N_KEYS.DevicesAccessCredentialId,
+              value: 'passkey_1234',
+            },
+            {
+              kind: 'keeper',
+              label: I18N_KEYS.DevicesAccessKeeperLabel,
+              value: 'Proton Pass',
+            },
+          ],
+        },
       },
     })
   })
@@ -164,11 +168,14 @@ describe('identity key inventory', () => {
     expect(rows[0]).toMatchObject({
       title: 'Work laptop',
       passkeySummary: {
-        title: 'Work laptop',
-        facts: expect.arrayContaining([
-          expect.objectContaining({ value: 'passkey_1234' }),
-          expect.objectContaining({ value: 'Proton Pass' }),
-        ]),
+        kind: PasskeyCardSummaryKind.Present,
+        summary: {
+          title: 'Work laptop',
+          facts: expect.arrayContaining([
+            expect.objectContaining({ value: 'passkey_1234' }),
+            expect.objectContaining({ value: 'Proton Pass' }),
+          ]),
+        },
       },
       apps: [
         {
