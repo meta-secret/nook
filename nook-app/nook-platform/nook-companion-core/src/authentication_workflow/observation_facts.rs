@@ -311,6 +311,6 @@ mod tests {
             observations: vec![facts],
         }
         .classify();
-        assert_eq!(workflow, AuthenticationWorkflowMatch::Rejected);
+        assert_eq!(workflow, AuthenticationWorkflowMatch::NoMatch);
     }
 }
