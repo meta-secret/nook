@@ -487,10 +487,15 @@ function clearQuiescedRecoverySession(
   state.storageMode = LOCAL_PROVIDER_TYPE;
 }
 
-function applyPersistedProtectionStatus(
-  state: DeviceProtectionRecoveryState,
-  status: DeviceProtectionStatus,
-): void {
+type PersistedProtectionStatusRequest = {
+  readonly state: DeviceProtectionRecoveryState;
+  readonly status: DeviceProtectionStatus;
+};
+
+function applyPersistedProtectionStatus({
+  state,
+  status,
+}: PersistedProtectionStatusRequest): void {
   state.deviceProtectionStatus = status;
   state.deviceProtectionLockedStatus =
     status === DeviceProtectionStatus.Pin
@@ -505,7 +510,8 @@ async function refreshPersistedProtectionStatus(
     const status = await state.enqueueExclusiveStorage(() =>
       state.requireManager().device_protection_status(),
     );
-    applyPersistedProtectionStatus(state, status);
+    const statusRequest: PersistedProtectionStatusRequest = { state, status };
+    applyPersistedProtectionStatus(statusRequest);
   } finally {
     state.adoptLocalDataStorageGeneration();
   }
@@ -541,7 +547,11 @@ export async function resetDeviceProtectionForRecovery({
         await manager.reset_device_protection_for_recovery(recoveryAppId);
         return manager.device_protection_status();
       });
-      applyPersistedProtectionStatus(state, resetProtectionStatus);
+      const statusRequest: PersistedProtectionStatusRequest = {
+        state,
+        status: resetProtectionStatus,
+      };
+      applyPersistedProtectionStatus(statusRequest);
     } finally {
       state.adoptLocalDataStorageGeneration();
     }

@@ -76,7 +76,13 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     kind: IdentityDirectoryLoadKind.Loading,
   })
 
-  function protectionSummaryFor(view: DashboardView): PasskeyCardSummaryState {
+  type ProtectionSummaryRequest = {
+    readonly view: DashboardView
+  }
+
+  function protectionSummaryFor({
+    view,
+  }: ProtectionSummaryRequest): PasskeyCardSummaryState {
     if (!isPasskeyProtection(view.protection)) {
       return PASSKEY_CARD_SUMMARY_ABSENT
     }
@@ -694,7 +700,12 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 view.deviceId.kind === DashboardTextKind.Known
                   ? view.deviceId.value
                   : vault.t(I18N_KEYS.DevicesAccessUnknown)}
-              {@const protectionSummary = protectionSummaryFor(view)}
+              {@const protectionSummaryRequest: ProtectionSummaryRequest = {
+                view,
+              }}
+              {@const protectionSummary = protectionSummaryFor(
+                protectionSummaryRequest,
+              )}
               {@const companionIdentity =
                 view.protection === DeviceAccessProtectionKind.CompanionSession}
               {@const identityTitle = companionIdentity

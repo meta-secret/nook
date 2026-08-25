@@ -21,14 +21,28 @@ import {
 const AGE_ARMOR_MARKER = 'BEGIN AGE ENCRYPTED FILE'
 let manager: NookVaultManager
 
-async function clearAuthProviderDatabase(): Promise<void> {
+async function clearAuthProviderStore(): Promise<void> {
   await new Promise<void>((resolve, reject) => {
-    const request = indexedDB.deleteDatabase('nook_auth')
-    request.onsuccess = () => resolve()
+    const request = indexedDB.open('nook_auth', 1)
+    request.onupgradeneeded = () => {
+      const db = request.result
+      if (!db.objectStoreNames.contains('auth')) {
+        db.createObjectStore('auth')
+      }
+    }
     request.onerror = () =>
       reject(request.error ?? new Error('Failed to clear nook_auth.'))
-    request.onblocked = () =>
-      reject(new Error('Clearing nook_auth was blocked by an open connection.'))
+    request.onsuccess = () => {
+      const db = request.result
+      const transaction = db.transaction('auth', 'readwrite')
+      transaction.objectStore('auth').clear()
+      transaction.oncomplete = () => {
+        db.close()
+        resolve()
+      }
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error('Failed to clear nook_auth.'))
+    }
   })
 }
 
@@ -129,7 +143,7 @@ describe.sequential(
       }
     })
 
-    beforeEach(clearAuthProviderDatabase)
+    beforeEach(clearAuthProviderStore)
 
     test('saveAuthProviders seals GitHub PAT in IndexedDB', async () => {
       const pat = 'github_pat_11UNITtestSECRETtoken'

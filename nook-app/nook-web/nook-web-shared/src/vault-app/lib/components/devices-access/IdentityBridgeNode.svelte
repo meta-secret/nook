@@ -346,7 +346,6 @@
     color: var(--muted-foreground);
     font-size: 0.625rem;
   }
-  .row code,
   header > code {
     overflow: hidden;
     max-width: 8rem;
