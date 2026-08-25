@@ -363,7 +363,13 @@ function isUnboundedAmbientLoaderRootValue(
       return false;
     }
     const parent = node.parent;
-    if (ts.isPartOfTypeNode(node) || isDeclarationName(node)) return false;
+    if (
+      ts.isPartOfTypeNode(node) ||
+      isDeclarationName(node) ||
+      isNonComputedMemberDeclarationName(node)
+    ) {
+      return false;
+    }
     if (ts.isPropertyAccessExpression(parent) && parent.name === node)
       return false;
     if (ts.isPropertyAssignment(parent) && parent.name === node) return false;
@@ -404,7 +410,7 @@ function isUnboundedRequireValue(inspection: BoundaryNodeInspection): boolean {
   const parent = node.parent;
   if (ts.isTypeNode(parent)) return false;
   if (isErasedRequireDeclarationName(node)) return false;
-  if (isRuntimeMemberDeclarationName(node)) return false;
+  if (isNonComputedMemberDeclarationName(node)) return false;
   if (ts.isPropertyAccessExpression(parent) && parent.name === node)
     return false;
   if (ts.isPropertyAssignment(parent) && parent.name === node) return false;
@@ -416,11 +422,14 @@ function isUnboundedRequireValue(inspection: BoundaryNodeInspection): boolean {
   return !(ts.isCallExpression(parent) && parent.expression === node);
 }
 
-function isRuntimeMemberDeclarationName(node: ts.Identifier): boolean {
+function isNonComputedMemberDeclarationName(node: ts.Identifier): boolean {
   const parent = node.parent;
   if (
+    !ts.isPropertyAssignment(parent) &&
     !ts.isPropertyDeclaration(parent) &&
+    !ts.isPropertySignature(parent) &&
     !ts.isMethodDeclaration(parent) &&
+    !ts.isMethodSignature(parent) &&
     !ts.isGetAccessorDeclaration(parent) &&
     !ts.isSetAccessorDeclaration(parent)
   ) {
@@ -852,6 +861,37 @@ test('distinguishes emitted loader shadows from erased ambient declarations', ()
       'const process = { getBuiltinModule: () => false }; const holder = { process };',
   };
   expect(violatesSkillProviderBoundary(localInspection)).toBe(false);
+});
+
+test('treats ambient-root member names as declarations, not runtime uses', () => {
+  for (const root of ['process', 'module', 'global', 'globalThis']) {
+    for (const source of [
+      `class Safe { ${root} = 'label' }`,
+      `class Safe { ${root}() { return false } }`,
+      `class Safe { get ${root}() { return false } }`,
+      `class Safe { set ${root}(value: boolean) { consume(value) } }`,
+      `const safe = { ${root}: 'label', get ${root}() { return false } };`,
+      `interface Safe { ${root}: Loader; ${root}(): string }`,
+      `type Safe = { ${root}: Loader; ${root}(): string }`,
+    ]) {
+      const inspection: SkillProviderImportInspection = {
+        filePath: 'ambient-member-name.ts',
+        source,
+      };
+      expect(violatesSkillProviderBoundary(inspection)).toBe(false);
+    }
+    for (const source of [
+      `class Unsafe { [${root}] = false }`,
+      `const unsafe = { [${root}]: false };`,
+      `class Unsafe { value = ${root}; run() { return ${root}; } }`,
+    ]) {
+      const inspection: SkillProviderImportInspection = {
+        filePath: 'ambient-member-runtime.ts',
+        source,
+      };
+      expect(violatesSkillProviderBoundary(inspection)).toBe(true);
+    }
+  }
 });
 
 test('resolves globalThis bindings in their exact lexical scopes', () => {
