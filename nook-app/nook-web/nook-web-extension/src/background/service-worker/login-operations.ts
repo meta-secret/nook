@@ -266,18 +266,20 @@ export async function cancelLoginPicker({
     return { ok: false, reason: 'login-picker-forbidden' }
   }
   await removeLoginPicker(request.requestId)
-  try {
-    const nookTypedArgs0_4: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: 'nook:website-login-canceled',
-      payload: {
-        origin: request.origin,
-        requestId: request.requestId,
-      },
-    }
-    await chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_4)
-  } catch {
-    // The website may have navigated while its picker was open.
+  const nookTypedArgs0_4: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+    type: 'nook:website-login-canceled',
+    payload: {
+      origin: request.origin,
+      requestId: request.requestId,
+    },
   }
+  const extensionCancellation: Parameters<
+    typeof chrome.runtime.sendMessage
+  >[0] = nookTypedArgs0_4
+  await Promise.allSettled([
+    chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_4),
+    chrome.runtime.sendMessage(extensionCancellation),
+  ])
   return { ok: true }
 }
 

@@ -52,6 +52,7 @@ export const AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER = [
   'data-auto-submit',
   'data-autosubmit',
   'data-nook-manual-checkpoint',
+  'data-nook-passkey-control',
   'data-submit-on-input',
   'data-testid',
   'disabled',

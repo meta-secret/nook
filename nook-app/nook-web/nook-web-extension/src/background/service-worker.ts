@@ -119,8 +119,10 @@ import {
   extensionSessionDocument,
   openCompanionLauncher,
   openSimpleVault,
+  refreshAuthenticationSurfaces,
 } from './service-worker/session-lifecycle'
 import {
+  isExtensionAuthenticationSurfacesRefreshMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,
@@ -144,6 +146,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
   invalidateAllLoginMatchAvailability,
+  isExtensionAuthenticationSurfacesRefreshMessage,
   isExtensionPairingStateQueryMessage,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
@@ -151,6 +154,7 @@ const extensionLifecycleRoutingDependencies: Parameters<
   openCompanionLauncher,
   openExtensionPairing,
   openSimpleVault,
+  refreshAuthenticationSurfaces,
 }
 
 const externalCompanionRoutingDependencies: Parameters<

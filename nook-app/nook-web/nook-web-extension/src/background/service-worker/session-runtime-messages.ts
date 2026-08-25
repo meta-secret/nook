@@ -5,8 +5,20 @@ import { ExtensionSessionMessageType } from '../../lib/extension-session-message
 type ExtensionSessionRuntimeMessage = {
   type:
     | ExtensionRuntimeRequestType.EnsureRuntime
+    | ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
     | ExtensionSessionLifecycleMessageType.Expired
     | ExtensionSessionMessageType.Lock
+}
+
+export function isExtensionAuthenticationSurfacesRefreshMessage(
+  message: ChromeRuntimeMessage,
+): message is ExtensionSessionRuntimeMessage {
+  return (
+    !!message &&
+    typeof message === 'object' &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+  )
 }
 
 type ChromeMessageListener = Parameters<

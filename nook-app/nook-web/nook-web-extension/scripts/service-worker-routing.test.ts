@@ -25,6 +25,7 @@ const ensureExtensionSessionDocument = mock(() => Promise.resolve())
 const openCompanionLauncher = mock(() => Promise.resolve())
 const invalidateAllLoginMatchAvailability = mock(() => {})
 const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
+const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   clearMountedAuthenticationSurfaces,
@@ -36,6 +37,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   importLocalEventLogUpdate: unusedAsyncDependency,
   importPairingAfterCompanionReady: unusedAsyncDependency,
   invalidateAllLoginMatchAvailability,
+  isExtensionAuthenticationSurfacesRefreshMessage: mock(() => false),
   isExtensionPairingStateQueryMessage: mock(() => false),
   isExtensionSessionEnsureMessage: (message) =>
     !!message &&
@@ -47,6 +49,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   openCompanionLauncher,
   openExtensionPairing: unusedAsyncDependency,
   openSimpleVault: mock(() => {}),
+  refreshAuthenticationSurfaces,
 }
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {
@@ -220,6 +223,77 @@ describe('service worker routing', () => {
       ok: false,
       reason: 'event-log-access-revoked',
     })
+  })
+
+  test('refreshes mounted authentication surfaces after a successful local event-log update', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    clearMountedAuthenticationSurfaces.mockClear()
+    refreshAuthenticationSurfaces.mockClear()
+    const importLocalEventLogUpdate = mock(() =>
+      Promise.resolve({ ok: true as const }),
+    )
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      importLocalEventLogUpdate,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: {
+        type: 'nook:extension-local-event-log-updated',
+        payload: {
+          vaultStoreId: 'vault-1',
+          eventLogRecords: [
+            {
+              eventId: 'event-1',
+              path: '/vault-1/event-1',
+              event: { schema_version: 1 },
+            },
+          ],
+        },
+      },
+      sender: {
+        id: 'nook-extension',
+        url: 'https://simple.example.test/',
+      },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    await flushResponses()
+    await flushResponses()
+    expect(clearMountedAuthenticationSurfaces).not.toHaveBeenCalled()
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+  })
+
+  test('routes an authorized authentication-surface refresh', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    refreshAuthenticationSurfaces.mockClear()
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      isExtensionAuthenticationSurfacesRefreshMessage: () => true,
+      isExtensionSessionEnsureMessage: () => false,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: {
+        type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+      },
+      sender: { id: 'nook-extension' },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    await flushResponses()
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+    expect(refreshAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {

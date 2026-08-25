@@ -33,6 +33,7 @@
     type ExtensionDeviceProtectionResult,
     type ExtensionSessionDeviceState,
   } from '../lib/nook-wasm'
+  import { ExtensionRuntimeRequestType } from '../lib/extension-runtime-request-type'
   import {
     PairingCandidateKind,
     type PairingCandidate,
@@ -169,7 +170,12 @@
     busy = true
     error = ''
     try {
-      enterToolbarMenu(await action())
+      const device = await action()
+      const message: Parameters<typeof chrome.runtime.sendMessage>[0] = {
+        type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+      }
+      chrome.runtime.sendMessage(message, () => void chrome.runtime.lastError)
+      enterToolbarMenu(device)
     } catch (caught) {
       busy = false
       if (

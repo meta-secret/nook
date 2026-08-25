@@ -38,12 +38,14 @@ export type ExtensionLifecycleRoutingDependencies = {
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
   invalidateAllLoginMatchAvailability: typeof AccountPickers.invalidateAllLoginMatchAvailability
   isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
+  isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
   isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
   isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
   isExtensionSessionLockMessage: typeof SessionRuntimeMessages.isExtensionSessionLockMessage
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
 }
 
 type MessageResponse = Parameters<
@@ -92,6 +94,7 @@ export function routeExtensionLifecycleMessage({
     importLocalEventLogUpdate,
     importPairingAfterCompanionReady,
     invalidateAllLoginMatchAvailability,
+    isExtensionAuthenticationSurfacesRefreshMessage,
     isExtensionPairingStateQueryMessage,
     isExtensionSessionEnsureMessage,
     isExtensionSessionExpiryMessage,
@@ -99,6 +102,7 @@ export function routeExtensionLifecycleMessage({
     openCompanionLauncher,
     openExtensionPairing,
     openSimpleVault,
+    refreshAuthenticationSurfaces,
   } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
@@ -114,6 +118,18 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     void ensureExtensionSessionDocument()
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(sessionRuntimeFailureResponse))
+    return true
+  }
+
+  if (isExtensionAuthenticationSurfacesRefreshMessage(message)) {
+    if (!isExtensionRuntimeSender(sender)) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
+    invalidateAllLoginMatchAvailability()
+    void refreshAuthenticationSurfaces()
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionRuntimeFailureResponse))
     return true
@@ -181,7 +197,11 @@ export function routeExtensionLifecycleMessage({
     void importLocalEventLogUpdate(importArgs)
       .then(async (response) => {
         invalidateAllLoginMatchAvailability()
-        await clearMountedAuthenticationSurfaces()
+        if (response.ok) {
+          await refreshAuthenticationSurfaces()
+        } else {
+          await clearMountedAuthenticationSurfaces()
+        }
         return response
       })
       .then(sendResponse)

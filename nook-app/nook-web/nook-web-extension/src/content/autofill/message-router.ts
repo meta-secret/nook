@@ -20,6 +20,7 @@ import {
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
+  WidgetHostKind,
   authenticationActionState,
   pickerState,
   scanState,
@@ -46,6 +47,24 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     authenticationActionState.invalidate()
     widgetState.busy = false
     removeScannedWidget()
+    const response: Parameters<typeof sendResponse>[0] = { ok: true }
+    sendResponse(response)
+    return false
+  }
+  if (
+    sender.id === chrome.runtime.id &&
+    'type' in message &&
+    message.type === ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+  ) {
+    scanState.invalidateCurrentResult()
+    authenticationActionState.invalidate()
+    widgetState.busy = false
+    cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
+    if (widgetState.host.kind === WidgetHostKind.Attached) {
+      widgetState.host.element.inert = true
+    }
+    scanState.schedule()
     const response: Parameters<typeof sendResponse>[0] = { ok: true }
     sendResponse(response)
     return false

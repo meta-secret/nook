@@ -315,13 +315,54 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         ),
       ).toBeVisible({ timeout: 15_000 })
 
+      await lockExtensionSession(paired.context)
+      await expect(widget).toHaveCount(0)
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
 
+      await expect(widget.getByText('Ready to sign in')).toBeVisible({
+        timeout: 20_000,
+      })
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
       )
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('rescans when an existing control gains the explicit passkey marker', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock auth passkey marker vault',
+    })
+    try {
+      const page = await paired.context.newPage()
+      await page.goto(`${mockAuth.origin}/plain/login`)
+      await page.evaluate(() => {
+        document.body.replaceChildren()
+        const passkeyControl = document.createElement('button')
+        passkeyControl.type = 'button'
+        passkeyControl.textContent = 'Continue'
+        passkeyControl.dataset.testid = 'dynamic-passkey-control'
+        document.body.append(passkeyControl)
+      })
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget).toHaveCount(0, { timeout: 20_000 })
+
+      await page.getByTestId('dynamic-passkey-control').evaluate((control) => {
+        control.setAttribute('data-nook-passkey-control', '')
+      })
+
+      await expect(
+        widget.getByRole('button', { name: 'Create passkey' }),
+      ).toBeVisible({ timeout: 20_000 })
     } finally {
       await paired.context.close()
       await mockAuth.close()

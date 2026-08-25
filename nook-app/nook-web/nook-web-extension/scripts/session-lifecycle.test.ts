@@ -118,4 +118,28 @@ describe('clearMountedAuthenticationSurfaces', () => {
     await clearMountedAuthenticationSurfaces()
     expect(notifiedTabIds).toEqual([1, 2])
   })
+
+  test('requests a rescan from every content-script tab', async () => {
+    const messageTypes: string[] = []
+    globalThis.chrome = {
+      tabs: {
+        query: ((...args: Parameters<typeof chrome.tabs.query>) => {
+          const callback = args[1]
+          callback([{ id: 1 }, { id: 2 }])
+        }) as typeof chrome.tabs.query,
+        sendMessage: (_tabId: number, message: { type: string }) => {
+          messageTypes.push(message.type)
+          return Promise.resolve({ ok: true })
+        },
+      },
+    } as typeof chrome
+    const { refreshAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await refreshAuthenticationSurfaces()
+    expect(messageTypes).toEqual([
+      'nook:refresh-authentication-surfaces',
+      'nook:refresh-authentication-surfaces',
+    ])
+  })
 })

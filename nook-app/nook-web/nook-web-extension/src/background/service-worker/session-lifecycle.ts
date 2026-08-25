@@ -130,14 +130,22 @@ export function openSimpleVault(path = ''): void {
   void chrome.tabs.create(nookTypedArgs0_1)
 }
 
-export async function clearMountedAuthenticationSurfaces(): Promise<void> {
+type AuthenticationSurfaceNotificationArgs = {
+  type:
+    | ExtensionRuntimeRequestType.ClearAuthenticationSurface
+    | ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
+}
+
+async function notifyAuthenticationSurfaces({
+  type,
+}: AuthenticationSurfaceNotificationArgs): Promise<void> {
   try {
     const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
     const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
       chrome.tabs.query(queryArgs, resolve)
     })
     const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-      type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
+      type,
     }
     await Promise.allSettled(
       tabs.map(async (tab) => {
@@ -149,6 +157,20 @@ export async function clearMountedAuthenticationSurfaces(): Promise<void> {
     // Session locking must still complete if browser tab enumeration is
     // temporarily unavailable. Match metadata is invalidated independently.
   }
+}
+
+export function clearMountedAuthenticationSurfaces(): Promise<void> {
+  const args: AuthenticationSurfaceNotificationArgs = {
+    type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
+  }
+  return notifyAuthenticationSurfaces(args)
+}
+
+export function refreshAuthenticationSurfaces(): Promise<void> {
+  const args: AuthenticationSurfaceNotificationArgs = {
+    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+  }
+  return notifyAuthenticationSurfaces(args)
 }
 
 export async function openCompanionLauncher(
