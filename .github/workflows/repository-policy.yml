@@ -110,6 +110,12 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Install Ruby for the legacy Hive values renderer
+        if: steps.policy-paths.outputs.runner_placement == 'true'
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+
       - name: Enforce Actions runner placement inventory
         if: steps.policy-paths.outputs.runner_placement == 'true'
         run: bun .github/scripts/arc-manifest-contract.ts
