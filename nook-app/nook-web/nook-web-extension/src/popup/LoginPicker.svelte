@@ -156,10 +156,7 @@
     }
     chrome.runtime.onMessage.addListener(runtimeListener)
     window.addEventListener('pagehide', cancelPendingPicker)
-    return () => {
-      chrome.runtime.onMessage.removeListener(runtimeListener)
-      window.removeEventListener('pagehide', cancelPendingPicker)
-    }
+    return () => window.removeEventListener('pagehide', cancelPendingPicker)
   })
 </script>
 
