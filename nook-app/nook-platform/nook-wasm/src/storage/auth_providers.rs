@@ -87,23 +87,6 @@ async fn write_snapshot_to_store(
     Ok(())
 }
 
-async fn delete_snapshot_from_store(
-    store: &rexie::Store,
-    state_key: &str,
-    schema_key: &str,
-) -> Result<(), NookError> {
-    for key in [state_key, schema_key] {
-        store
-            .delete(
-                serde_wasm_bindgen::to_value(key)
-                    .map_err(|e| idb_err("nook_auth delete key error", e))?,
-            )
-            .await
-            .map_err(|e| idb_err("nook_auth delete error", e))?;
-    }
-    Ok(())
-}
-
 /// Read the raw persisted snapshot object as JSON (`Null` when absent).
 async fn read_raw_snapshot_at(state_key: &str) -> Result<serde_json::Value, NookError> {
     let rexie = open_auth_db().await?;
@@ -166,7 +149,16 @@ async fn may_migrate_legacy_snapshot(app_id: &nook_core::AppId) -> Result<bool, 
                 .is_some_and(|entry| entry.app_id() == app_id)))
 }
 
-fn require_safe_legacy_deletion(
+async fn should_refresh_legacy_projection(app_id: &nook_core::AppId) -> Result<bool, NookError> {
+    let keyring = crate::storage::identity_record::load_keyring().await?;
+    Ok(keyring.entries().len() == 1
+        && keyring
+            .entries()
+            .first()
+            .is_some_and(|entry| entry.app_id() == app_id))
+}
+
+fn require_compatible_legacy_snapshot(
     scoped: &serde_json::Value,
     legacy: &serde_json::Value,
 ) -> Result<(), NookError> {
@@ -184,6 +176,15 @@ fn require_safe_legacy_deletion(
     ))
 }
 
+fn legacy_snapshot_belongs_to_identity(identity: &DeviceIdentity, raw: &serde_json::Value) -> bool {
+    if raw.is_null() {
+        return false;
+    }
+    let mut snapshot = nook_core::normalize_auth_snapshot(raw).snapshot;
+    let sealed = snapshot.clone();
+    open_provider_credentials(identity, &mut snapshot).is_ok() && snapshot != sealed
+}
+
 pub(crate) async fn migrate_legacy_auth_providers_for_identity(
     identity: &DeviceIdentity,
 ) -> Result<(), NookError> {
@@ -198,15 +199,13 @@ pub(crate) async fn migrate_legacy_auth_providers_for_identity(
         .map_err(|e| idb_err("nook_auth migration store error", e))?;
     let scoped = read_raw_snapshot_from_store(&store, &state_key).await?;
     let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
-    require_safe_legacy_deletion(&scoped, &legacy)?;
+    require_compatible_legacy_snapshot(&scoped, &legacy)?;
     if scoped.is_null() && !legacy.is_null() {
         let mut snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
         open_provider_credentials(identity, &mut snapshot)?;
         seal_provider_credentials(identity, &mut snapshot)?;
         write_snapshot_to_store(&store, &state_key, &schema_key, &snapshot).await?;
-    }
-    if !legacy.is_null() {
-        delete_snapshot_from_store(&store, STATE_KEY, SCHEMA_KEY).await?;
+        write_snapshot_to_store(&store, STATE_KEY, SCHEMA_KEY, &snapshot).await?;
     }
     transaction
         .done()
@@ -233,7 +232,7 @@ pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Res
         .map_err(|e| idb_err("nook_auth locked migration store error", e))?;
     let scoped = read_raw_snapshot_from_store(&store, &state_key).await?;
     let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
-    require_safe_legacy_deletion(&scoped, &legacy)?;
+    require_compatible_legacy_snapshot(&scoped, &legacy)?;
     if scoped.is_null() {
         let snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
         if !legacy.is_null() && !provider_credentials_are_presealed(&snapshot) {
@@ -243,10 +242,8 @@ pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Res
         }
         if !legacy.is_null() {
             write_snapshot_to_store(&store, &state_key, &schema_key, &snapshot).await?;
+            write_snapshot_to_store(&store, STATE_KEY, SCHEMA_KEY, &snapshot).await?;
         }
-    }
-    if !legacy.is_null() {
-        delete_snapshot_from_store(&store, STATE_KEY, SCHEMA_KEY).await?;
     }
     transaction
         .done()
@@ -284,12 +281,34 @@ pub(crate) async fn save_auth_providers(
 ) -> Result<(), NookError> {
     let mut sealed = snapshot.clone();
     seal_provider_credentials(identity, &mut sealed)?;
-    write_snapshot_at(
-        &state_key_for_app_id(identity.app_id()),
-        &schema_key_for_app_id(identity.app_id()),
-        &sealed,
-    )
-    .await
+    let state_key = state_key_for_app_id(identity.app_id());
+    let schema_key = schema_key_for_app_id(identity.app_id());
+    let refresh_legacy = should_refresh_legacy_projection(identity.app_id()).await?;
+    let rexie = open_auth_db().await?;
+    let transaction = rexie
+        .transaction(&[STORE], rexie::TransactionMode::ReadWrite)
+        .map_err(|e| idb_err("nook_auth save transaction error", e))?;
+    let store = transaction
+        .store(STORE)
+        .map_err(|e| idb_err("nook_auth save store error", e))?;
+    let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
+    let legacy_belongs_to_identity = legacy_snapshot_belongs_to_identity(identity, &legacy);
+    if refresh_legacy && !legacy.is_null() && !legacy_belongs_to_identity {
+        return Err(NookError::Database(
+            "Legacy auth providers belong to another identity; both records were preserved"
+                .to_owned(),
+        ));
+    }
+    let refresh_legacy = refresh_legacy || legacy_belongs_to_identity;
+    write_snapshot_to_store(&store, &state_key, &schema_key, &sealed).await?;
+    if refresh_legacy {
+        write_snapshot_to_store(&store, STATE_KEY, SCHEMA_KEY, &sealed).await?;
+    }
+    transaction
+        .done()
+        .await
+        .map_err(|e| idb_err("nook_auth save completion error", e))
+        .map(|_| ())
 }
 
 /// Persist a snapshot whose credential fields are already age-sealed (or empty).
@@ -336,7 +355,7 @@ pub(crate) async fn save_presealed_auth_providers_for_app_id(
     let merged = nook_core::replace_active_vault_provider_grants(&existing, snapshot);
     write_snapshot_to_store(&store, &state_key, &schema_key, &merged).await?;
     if !legacy.is_null() {
-        delete_snapshot_from_store(&store, STATE_KEY, SCHEMA_KEY).await?;
+        write_snapshot_to_store(&store, STATE_KEY, SCHEMA_KEY, &merged).await?;
     }
     transaction
         .done()
@@ -523,7 +542,7 @@ mod wasm_idb_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn legacy_provider_snapshot_is_claimed_before_a_second_identity_is_added()
+    async fn legacy_provider_snapshot_keeps_a_rollback_projection_before_a_second_identity()
     -> anyhow::Result<()> {
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
@@ -532,7 +551,12 @@ mod wasm_idb_tests {
         write_snapshot(&legacy).await?;
 
         migrate_legacy_auth_providers_for_identity(&first).await?;
-        assert!(read_raw_snapshot().await?.is_null());
+        let mut rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        open_provider_credentials(&first, &mut rollback)?;
+        assert_eq!(
+            rollback.providers[0].github_pat.as_deref(),
+            Some("github_pat_legacy_first")
+        );
         save_auth_providers(&second, &github_snapshot("github_pat_second")).await?;
 
         assert_eq!(
@@ -576,7 +600,12 @@ mod wasm_idb_tests {
                 .as_deref(),
             Some("github_pat_newer")
         );
-        assert!(read_raw_snapshot().await?.is_null());
+        let mut rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        open_provider_credentials(&identity, &mut rollback)?;
+        assert_eq!(
+            rollback.providers[0].github_pat.as_deref(),
+            Some("github_pat_newer")
+        );
         clear_auth_providers_db().await?;
         Ok(())
     }
@@ -651,7 +680,12 @@ mod wasm_idb_tests {
 
         migrate_legacy_auth_providers_for_selected_identity().await?;
 
-        assert!(read_raw_snapshot().await?.is_null());
+        let mut rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        open_provider_credentials(&first, &mut rollback)?;
+        assert_eq!(
+            rollback.providers[0].github_pat.as_deref(),
+            Some("github_pat_locked_legacy")
+        );
         assert_eq!(
             load_auth_providers(&first).await?.snapshot.providers[0]
                 .github_pat
@@ -740,7 +774,14 @@ mod wasm_idb_tests {
         provider_ids.sort_unstable();
         assert_eq!(provider_ids, vec!["gh-incoming", "gh-legacy"]);
         assert!(provider_credentials_are_presealed(&stored));
-        assert!(read_raw_snapshot().await?.is_null());
+        let rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        let mut rollback_provider_ids = rollback
+            .providers
+            .iter()
+            .map(|provider| provider.id.as_str())
+            .collect::<Vec<_>>();
+        rollback_provider_ids.sort_unstable();
+        assert_eq!(rollback_provider_ids, vec!["gh-incoming", "gh-legacy"]);
         clear_auth_providers_db().await?;
         crate::storage::identity_record::clear_keyring_for_test().await?;
         crate::storage::identity_record::clear_identity_directory_for_test().await?;

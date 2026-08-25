@@ -85,8 +85,10 @@ It is never shown as stored on one physical laptop.
   - Key identity-sealed sync-provider snapshots by local app ID.
   - Migrate the legacy singleton provider snapshot only when it belongs to the
     sole local keyring entry.
-  - Delete a competing legacy provider snapshot only when its normalized stored
-    value matches the identity-scoped snapshot.
+  - Keep the schema-1 singleton provider row as a rollback-readable projection.
+  - Refresh that projection atomically with the scoped snapshot while one local
+    identity owns it.
+  - A locked pre-sealed migration must refresh both projections atomically.
   - Preserve both provider snapshots and fail closed when their values differ.
   - A locked pre-sealed provider import must claim eligible legacy grants before
     it writes the first app-scoped snapshot.
