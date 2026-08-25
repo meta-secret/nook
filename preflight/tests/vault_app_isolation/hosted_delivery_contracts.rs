@@ -696,18 +696,17 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
-    let release_tooling = release
-        .find("- name: Checkout release workflow tooling")
-        .context("release workflow must check out workflow tooling")?;
     let release_setup = release
-        .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
-        .context("release workflow must configure Docker through preserved tooling")?;
+        .find("uses: ./.github/actions/nook-docker-setup")
+        .context("release workflow must configure BuildKit from the requested source")?;
     assert!(
-        release_source < release_tooling && release_tooling < release_setup,
-        "release must fingerprint its requested source with preserved workflow-ref Docker tooling"
+        release_source < release_setup,
+        "release must fingerprint its requested source before connecting BuildKit"
     );
-    assert!(release.contains("ref: ${{ github.sha }}"));
-    assert!(release.contains("path: .nook/release-workflow"));
+    assert!(release.contains(
+        "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"
+    ));
+    assert!(!release.contains("path: .nook/release-workflow"));
     let main = read(root, ".github/workflows/main.yml");
     for required in [
         "\n  rust:\n",
