@@ -374,6 +374,8 @@ tasks.requireAll([
   'cat /proc/sys/kernel/keys/maxbytes',
   'nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite',
   "ARC build node $node is quarantined for convergence",
+  'quarantine_failed=0',
+  'test "$quarantine_failed" = 0',
   "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
   "container-hook.yaml",

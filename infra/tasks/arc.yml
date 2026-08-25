@@ -112,15 +112,28 @@ tasks:
             "$expected_nodes" "$actual_nodes" >&2
           exit 1
         fi
+        quarantine_failed=0
         while IFS= read -r node; do
           test -n "$node"
-          kubectl taint node "$node" \
-            nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null
-          test "$(kubectl get node "$node" -o \
-            jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].value}:{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')" = \
-            'preparing:NoSchedule'
+          if ! kubectl taint node "$node" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null; then
+            echo "Failed to quarantine ARC build node $node" >&2
+            quarantine_failed=1
+          fi
+        done <<< "$actual_nodes"
+        while IFS= read -r node; do
+          test -n "$node"
+          observed_taint="$(kubectl get node "$node" -o \
+            jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].value}:{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}' \
+            2>/dev/null || true)"
+          if test "$observed_taint" != 'preparing:NoSchedule'; then
+            echo "ARC build node $node did not enter quarantine" >&2
+            quarantine_failed=1
+            continue
+          fi
           echo "ARC build node $node is quarantined for convergence"
         done <<< "$actual_nodes"
+        test "$quarantine_failed" = 0
         REMOTE
 
 
