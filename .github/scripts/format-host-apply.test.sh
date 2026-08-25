@@ -8,6 +8,8 @@ formatter_dir="$scripts_dir/../formatting"
 dockerfile="$(cat "$formatter_dir/Dockerfile")"
 formatter="$(cat "$formatter_dir/format.sh")"
 agentic_taskfile="$(cat "$scripts_dir/../../.task/agentic-ai.yml")"
+web_package="$(cat "$scripts_dir/../../nook-app/nook-web/nook-web-app/package.json")"
+loom_package="$(cat "$scripts_dir/../../agentic-ai/loom/package.json")"
 guest_formatter="$(
   printf '%s\n' "$agentic_taskfile" \
     | sed -n '/^  hive:guest:format:/,/^  hive:guest:pr:ready:/p'
@@ -65,7 +67,7 @@ for required in \
 done
 
 for required in \
-  'agentic-ai/loom/node_modules/.bin/prettier' \
+  'nook-app/nook-web/nook-web-app/node_modules/.bin/prettier' \
   '--config .agents/skills/.prettierrc' \
   '".agents/skills/*/src/**/*.ts"' \
   '".agents/skills/*/tests/**/*.ts"' \
@@ -76,6 +78,22 @@ for required in \
   '.agents/skills/.prettierrc'; do
   printf '%s\n' "$guest_formatter" | grep -Fq -- "$required" \
     || { echo "format-host-apply test: sealed guest misses skill formatter contract: $required" >&2; exit 1; }
+done
+install_line="$(
+  printf '%s\n' "$guest_formatter" \
+    | grep -Fn 'cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile' \
+    | cut -d: -f1
+)"
+skill_format_line="$(
+  printf '%s\n' "$guest_formatter" \
+    | grep -Fn 'nook-app/nook-web/nook-web-app/node_modules/.bin/prettier' \
+    | cut -d: -f1
+)"
+test -n "$install_line" && test -n "$skill_format_line" && test "$install_line" -lt "$skill_format_line" \
+  || { echo 'format-host-apply test: sealed guest must frozen-install web Prettier before skill formatting' >&2; exit 1; }
+for package in "$web_package" "$loom_package"; do
+  printf '%s\n' "$package" | grep -Fq '"prettier": "3.9.6"' \
+    || { echo 'format-host-apply test: skill formatter Prettier version is not pinned consistently' >&2; exit 1; }
 done
 for forbidden in 'task skills:format' 'task skills:install' '.agents/skills && bun install'; do
   printf '%s\n' "$guest_formatter" | grep -Fq -- "$forbidden" \

@@ -290,7 +290,7 @@ tasks:
       - cd nook-app/nook-web/nook-web-extension && bun run format
       - cd agentic-ai/minds && cargo fmt --all
       - >-
-        agentic-ai/loom/node_modules/.bin/prettier
+        nook-app/nook-web/nook-web-app/node_modules/.bin/prettier
         --config .agents/skills/.prettierrc
         --write
         --no-error-on-unmatched-pattern
