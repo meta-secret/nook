@@ -125,12 +125,23 @@ interface RequiredVaultStringInput {
 }
 
 interface LocalIdentityKeyringEntrySnapshot {
+  identityId: string
   appId: string
-  wrappedAppKey: string
+  wrappedAppKey: {
+    protection: string
+    ciphertext?: string
+  }
 }
 
 interface LocalIdentityKeyringSnapshot {
   entries: LocalIdentityKeyringEntrySnapshot[]
+}
+
+interface IdentityDirectorySnapshot {
+  selection: {
+    kind: 'empty' | 'selected'
+    identityId?: string
+  }
 }
 
 async function readRequiredVaultString({
@@ -162,32 +173,39 @@ async function readRequiredVaultString({
   )
 }
 
-async function readPersistedDeviceIdentity(page: Page): Promise<string> {
-  const appId = await readDeviceId(page)
+async function readActiveIdentityKeyringEntry(
+  page: Page,
+): Promise<LocalIdentityKeyringEntrySnapshot> {
+  const rawDirectory = await readRequiredVaultString({
+    page,
+    key: 'identity_directory_v1',
+  })
   const rawKeyring = await readRequiredVaultString({
     page,
     key: 'local_identity_keyring_v1',
   })
+  const directory = JSON.parse(rawDirectory) as IdentityDirectorySnapshot
   const keyring = JSON.parse(rawKeyring) as LocalIdentityKeyringSnapshot
-  const entry = keyring.entries.find((candidate) => candidate.appId === appId)
+  const selectedIdentityId = directory.selection.identityId
+  const entry = keyring.entries.find(
+    (candidate) => candidate.identityId === selectedIdentityId,
+  )
   if (!entry) {
-    throw new Error(`Local identity keyring entry is missing: ${appId}`)
+    throw new Error(
+      `Selected local identity keyring entry is missing: ${selectedIdentityId ?? directory.selection.kind}`,
+    )
   }
-  return entry.wrappedAppKey
+  return entry
+}
+
+async function readPersistedDeviceIdentity(page: Page): Promise<string> {
+  const entry = await readActiveIdentityKeyringEntry(page)
+  return JSON.stringify(entry.wrappedAppKey)
 }
 
 async function readDeviceId(page: Page): Promise<string> {
-  return page.evaluate(() => {
-    const vault = (
-      window as Window & {
-        __nookVault?: {
-          requireManager(): { readonly device_id: string }
-        }
-      }
-    ).__nookVault
-    if (!vault) throw new Error('Vault runtime is unavailable')
-    return vault.requireManager().device_id
-  })
+  const entry = await readActiveIdentityKeyringEntry(page)
+  return entry.appId
 }
 
 async function clearDeviceMetadata(page: Page): Promise<void> {
