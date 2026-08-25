@@ -22,8 +22,8 @@ export * from "./identity-bridge-elements";
 function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
   const verifiedVaults = input.vaults.filter((vault) => vault.verified);
   if (input.compact) {
-    const identityY = 500;
-    const vaultStartY = 790;
+    const identityY = 630;
+    const vaultStartY = 920;
     const vaultNodes = verifiedVaults.map(
       // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
       (vault, index) =>
@@ -97,7 +97,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             label: input.copy.deviceStage,
             flow: IdentityBridgeFlow.Vertical,
             x: 20,
-            y: 200,
+            y: 310,
             width: 300,
           };
           return stageNode(stageNodeArgs2);
@@ -116,7 +116,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             id: "device-current",
             data,
             x: 20,
-            y: 244,
+            y: 354,
             width: 300,
           };
           return graphNode(nodeRequest);
@@ -127,7 +127,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             label: input.copy.identityStage,
             flow: IdentityBridgeFlow.Vertical,
             x: 20,
-            y: 450,
+            y: 580,
             width: 300,
           };
           return stageNode(stageNodeArgs3);
@@ -154,7 +154,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
             label: input.copy.vaultStage,
             flow: IdentityBridgeFlow.Vertical,
             x: 20,
-            y: 740,
+            y: 870,
             width: 300,
           };
           return stageNode(stageNodeArgs4);
@@ -226,7 +226,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         const graphNodeArgs7: Parameters<typeof graphNode>[0] = {
           id: `vault-${vault.storeId}`,
           data: vaultData(vaultDataArgs2),
-          x: 700,
+          x: 800,
           y: vaultStartY + index * gap,
           width: 350,
         };
@@ -243,7 +243,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         label: input.copy.noVerifiedVaults,
         description: input.copy.noVerifiedVaultsDescription,
       },
-      x: 700,
+      x: 800,
       y: identityY,
       width: 350,
     };
@@ -258,7 +258,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           flow: IdentityBridgeFlow.Horizontal,
           x: 0,
           y: -54,
-          width: 250,
+          width: 320,
         };
         return stageNode(stageNodeArgs5);
       })(),
@@ -267,9 +267,9 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           id: "stage-device",
           label: input.copy.deviceStage,
           flow: IdentityBridgeFlow.Horizontal,
-          x: 280,
+          x: 350,
           y: -54,
-          width: 280,
+          width: 190,
         };
         return stageNode(stageNodeArgs6);
       })(),
@@ -278,7 +278,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           id: "stage-identity",
           label: input.copy.identityStage,
           flow: IdentityBridgeFlow.Horizontal,
-          x: 480,
+          x: 570,
           y: -54,
           width: 180,
         };
@@ -289,7 +289,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           id: "stage-vault",
           label: input.copy.vaultStage,
           flow: IdentityBridgeFlow.Horizontal,
-          x: 700,
+          x: 800,
           y: -54,
           width: 350,
         };
@@ -308,7 +308,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
           data,
           x: 0,
           y: identityY,
-          width: 250,
+          width: 320,
         };
         return graphNode(nodeRequest);
       })(),
@@ -325,9 +325,9 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         const nodeRequest: Parameters<typeof graphNode>[0] = {
           id: "device-current",
           data,
-          x: 280,
+          x: 350,
           y: identityY,
-          width: 180,
+          width: 190,
         };
         return graphNode(nodeRequest);
       })(),
@@ -341,7 +341,7 @@ function identityGraph(input: IdentityBridgeInput): IdentityBridgeDefinition {
         const graphNodeArgs11: Parameters<typeof graphNode>[0] = {
           id: "identity-current",
           data: identityData(identityDataArgs2),
-          x: 490,
+          x: 570,
           y: identityY,
           width: 180,
         };

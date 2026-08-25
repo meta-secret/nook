@@ -7,6 +7,7 @@ use crate::{NookError, storage::open_nook_database};
 mod genesis_cleanup;
 mod genesis_flow;
 mod handoff;
+mod keyring;
 mod reconciliation;
 mod recovery;
 pub(crate) mod simple_genesis;
@@ -16,6 +17,86 @@ pub(crate) use genesis_flow::SimpleGenesisCompletion;
 pub(crate) use handoff::{
     ExistingVaultImportCommit, IdentityHandoffCommit, commit_authenticated_identity_handoff,
 };
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use keyring::{LOCAL_IDENTITY_KEYRING_KEY, clear_keyring_for_test};
+pub(crate) use keyring::{
+    ProtectedLocalIdentitySave, load_entry_for_app_id, load_keyring,
+    load_or_create_signing_seed_for_app_key, load_selected_entry, select_local_identity,
+    selected_legacy_signer_requires_authorization,
+};
+
+pub(crate) struct LocalIdentityProjection {
+    pub(crate) directory: nook_core::IdentityDirectory,
+    pub(crate) keyring: nook_core::LocalIdentityKeyring,
+    pub(crate) protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
+}
+
+pub(crate) async fn load_local_identity_projection(
+    session_app_id: &str,
+) -> Result<LocalIdentityProjection, NookError> {
+    let requested_app_id = if session_app_id.is_empty() {
+        None
+    } else {
+        Some(
+            nook_core::AppId::parse(session_app_id)
+                .map_err(|error| NookError::Database(error.to_string()))?,
+        )
+    };
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| {
+            NookError::IndexedDb(format!("Identity projection transaction error: {error:?}"))
+        })?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Identity projection store error: {error:?}"))
+    })?;
+    let directory = load_directory_for_write(&store).await?;
+    let keyring = keyring::load_keyring_for_store(&store, &directory).await?;
+    let entry = match requested_app_id.as_ref() {
+        Some(app_id) => keyring
+            .entries()
+            .iter()
+            .find(|entry| entry.app_id() == app_id),
+        None => match directory.selection() {
+            nook_core::IdentitySelection::Empty => None,
+            nook_core::IdentitySelection::Selected(identity_id) => keyring.entry(identity_id),
+        },
+    };
+    let protected = match entry {
+        Some(entry) => Some((
+            entry.app_id().as_str().to_owned(),
+            entry.wrapped_app_key().clone(),
+        )),
+        None => crate::storage::indexed_db::load_legacy_wrapped_device_identity_from_store(&store)
+            .await?
+            .filter(|(app_id, _)| {
+                requested_app_id
+                    .as_ref()
+                    .is_none_or(|requested| requested.as_str() == app_id)
+            }),
+    };
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Identity projection completion error: {error:?}"))
+    })?;
+    Ok(LocalIdentityProjection {
+        directory,
+        keyring,
+        protected,
+    })
+}
+
+pub(super) async fn selected_local_keyring_entry_for_store(
+    store: &rexie::Store,
+) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
+    keyring::selected_entry_from_store(store).await
+}
+pub(super) async fn local_keyring_entry_for_app_id_from_store(
+    store: &rexie::Store,
+    app_id: &nook_core::AppId,
+) -> Result<Option<nook_core::LocalIdentityKeyringEntry>, NookError> {
+    keyring::entry_for_app_id_from_store(store, app_id).await
+}
 pub(crate) use reconciliation::{
     PendingIdentityRotation, abort_prepared_identity_reconciliation,
     commit_identity_reconciliation_checkpoint, commit_identity_reconciliation_epoch,
@@ -24,11 +105,17 @@ pub(crate) use reconciliation::{
 use reconciliation::{
     clear_consumed_identity_reconciliation, is_identity_reconciliation_key, resolve_identity_epoch,
 };
-pub(crate) use recovery::delete_identity_directory_for_recovery;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) use recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY;
+pub(crate) use recovery::{
+    LocalIdentityRecovery, complete_identity_recovery_cleanup,
+    delete_identity_directory_for_recovery, has_pending_identity_recovery_cleanup,
+};
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
-    PendingSimpleGenesis, begin_or_resume_simple_genesis, pending_simple_genesis_for_store,
-    persist_simple_genesis_event, resume_staged_simple_genesis_signing_seed,
+    PendingSimpleGenesis, begin_or_resume_simple_genesis, pending_simple_genesis,
+    pending_simple_genesis_for_store, persist_simple_genesis_event,
+    resume_staged_simple_genesis_signing_seed,
 };
 pub(crate) use staged_genesis::{StagedSimpleGenesisInput, begin_or_resume_staged_simple_genesis};
 
@@ -344,7 +431,7 @@ pub(crate) async fn save_protected_local_identity(
     app_key: &nook_core::AppKey,
     record: &nook_core::WrappedDeviceIdentity,
     label: &str,
-) -> Result<nook_core::IdentityRecord, NookError> {
+) -> Result<ProtectedLocalIdentitySave, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
@@ -353,16 +440,40 @@ pub(crate) async fn save_protected_local_identity(
         .store("vault")
         .map_err(|error| NookError::IndexedDb(format!("Identity setup store error: {error:?}")))?;
     let mut directory = load_directory_for_write(&store).await?;
-    let identity = ensure_local_identity_in_directory(&mut directory, app_key, label)?;
-    crate::storage::indexed_db::put_wrapped_device_identity(
-        &store,
-        app_key.app_id().as_str(),
-        record,
-    )
-    .await?;
-    write_identity_directory(&store, &directory).await?;
+    let identity =
+        keyring::save_existing_protected_identity(&store, &mut directory, app_key, record, label)
+            .await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Identity setup completion error: {error:?}"))
+    })?;
+    Ok(identity)
+}
+
+pub(crate) async fn save_new_protected_local_identity(
+    app_key: &nook_core::AppKey,
+    record: &nook_core::WrappedDeviceIdentity,
+    prior_app_key: Option<&nook_core::AppKey>,
+    label: &str,
+) -> Result<ProtectedLocalIdentitySave, NookError> {
+    let rexie = open_nook_database().await?;
+    let transaction = rexie
+        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .map_err(|error| NookError::IndexedDb(format!("Identity creation error: {error:?}")))?;
+    let store = transaction.store("vault").map_err(|error| {
+        NookError::IndexedDb(format!("Identity creation store error: {error:?}"))
+    })?;
+    let mut directory = load_directory_for_write(&store).await?;
+    let identity = keyring::save_new_protected_identity(
+        &store,
+        &mut directory,
+        app_key,
+        record,
+        prior_app_key,
+        label,
+    )
+    .await?;
+    transaction.done().await.map_err(|error| {
+        NookError::IndexedDb(format!("Identity creation completion error: {error:?}"))
     })?;
     Ok(identity)
 }
@@ -407,10 +518,12 @@ pub(crate) async fn set_identity_member_signing_public_key(
     .await
 }
 
-/// Ensure the selected identity contains the current app key.
+/// Resolve the identity owned by the current app key.
 ///
 /// This preserves the legacy single-installation bootstrap. New cross-installation
 /// membership uses the explicit enrollment flow rather than this compatibility path.
+/// Persisted selection is only a default for a new browser session; an already-open
+/// manager remains bound to its own app key when another tab changes that selection.
 pub(crate) async fn ensure_local_identity_for_app_key(
     app_key: &nook_core::AppKey,
     label: &str,
@@ -418,7 +531,7 @@ pub(crate) async fn ensure_local_identity_for_app_key(
     let app_key = app_key.clone();
     let label = label.to_owned();
     update_identity_directory(move |directory| {
-        ensure_local_identity_in_directory(directory, &app_key, &label)
+        ensure_local_identity_in_directory(directory, &app_key, &label, false)
     })
     .await
 }
@@ -427,29 +540,35 @@ fn ensure_local_identity_in_directory(
     directory: &mut nook_core::IdentityDirectory,
     app_key: &nook_core::AppKey,
     label: &str,
+    allow_peer_only_bootstrap: bool,
 ) -> Result<nook_core::IdentityRecord, NookError> {
-    if matches!(directory.selection(), nook_core::IdentitySelection::Empty) {
-        directory
+    let identity_id = match directory
+        .identity_for_app_key(app_key)
+        .map_err(map_domain_error)?
+    {
+        Some(identity_id) => identity_id,
+        None if directory.identities().is_empty() || allow_peer_only_bootstrap => directory
             .create_identity(label, app_key, None)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-    } else {
-        let selected = directory
-            .selected_mut()
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        if !selected
-            .members
-            .iter()
-            .any(|member| member.app_id == *app_key.app_id())
-        {
+            .map_err(map_domain_error)?,
+        None => {
             return Err(NookError::Database(
                 nook_core::MultiDeviceError::IdentityEnrollmentRequired.to_string(),
             ));
         }
-    }
+    };
     directory
-        .selected()
+        .identities()
+        .iter()
+        .find(|identity| identity.identity_id == identity_id)
         .cloned()
-        .map_err(|error| NookError::Database(error.to_string()))
+        .ok_or_else(|| {
+            NookError::Database(
+                nook_core::MultiDeviceError::IdentityNotFound {
+                    identity_id: identity_id.to_string(),
+                }
+                .to_string(),
+            )
+        })
 }
 
 /// Associate a legacy vault with an identity without guessing from active selection.
@@ -552,6 +671,7 @@ pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError>
     idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
     idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
     idb_delete_key(RETIRED_APP_IDS_KEY).await?;
+    idb_delete_key(recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY).await?;
     simple_genesis::clear_pending_simple_genesis_for_test().await
 }
 
@@ -615,6 +735,29 @@ mod tests {
         assert_eq!(selected.label(), "Work");
         assert_eq!(selected.members().len(), 1);
         assert!(selected.vault_store_ids().is_empty());
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn existing_app_key_resolution_ignores_another_tabs_selection() -> Result<(), NookError> {
+        clear_identity_directory_for_test().await?;
+        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first = ensure_local_identity_for_app_key(&first_key, "Personal").await?;
+        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let second_id = update_identity_directory(move |directory| {
+            directory
+                .create_identity("Work", &second_key, None)
+                .map_err(map_domain_error)
+        })
+        .await?;
+
+        let resolved = ensure_local_identity_for_app_key(&first_key, "Ignored").await?;
+
+        assert_eq!(resolved.identity_id, first.identity_id);
+        assert_eq!(
+            load_identity_directory().await?.selection(),
+            &nook_core::IdentitySelection::Selected(second_id),
+        );
         clear_identity_directory_for_test().await
     }
 

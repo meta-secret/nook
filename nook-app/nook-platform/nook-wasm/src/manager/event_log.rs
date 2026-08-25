@@ -165,6 +165,18 @@ impl NookVaultManager {
                 &self.event_log.signing_seed,
             )?);
         }
+        let app_key = self.device_identity()?;
+        if crate::storage::identity_record::load_entry_for_app_id(app_key.app_id())
+            .await?
+            .is_some()
+        {
+            self.event_log.signing_seed =
+                crate::storage::identity_record::load_or_create_signing_seed_for_app_key(&app_key)
+                    .await?;
+            return Ok(SigningIdentity::from_seed_hex_stored(
+                &self.event_log.signing_seed,
+            )?);
+        }
         if self.event_log.signing_seed.is_empty() {
             if let Some(seed) = load_signing_seed().await? {
                 self.event_log.signing_seed = seed;

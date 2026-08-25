@@ -54,6 +54,10 @@ type IdentityBridgeDeviceDataRequest = {
 import { MarkerType, type Edge, type Node } from "@xyflow/svelte";
 import type { DeviceAccessIdentityState } from "$app-wasm";
 import type { VaultAccessView } from "./access-chain";
+import {
+  PasskeyCardSummaryKind,
+  type PasskeyCardSummaryState,
+} from "./passkey-card";
 import { DashboardTextKind } from "../devices-access-dashboard-state";
 
 export enum IdentityBridgePerspective {
@@ -140,6 +144,7 @@ export type IdentityBridgeProtectionData = {
   label: string;
   caption: string;
   description: string;
+  summary: PasskeyCardSummaryState;
   incomingRelation: string;
 };
 
@@ -261,6 +266,7 @@ export type IdentityBridgeInput = {
   deviceIdentifier: string;
   identityStatus: DeviceAccessIdentityState;
   protectionLabel: string;
+  protectionSummary: PasskeyCardSummaryState;
   deviceIconKind: IdentityBridgeDeviceIconKind;
   vaults: readonly VaultAccessView[];
   copy: IdentityBridgeCopy;
@@ -275,7 +281,7 @@ export type IdentityBridgeDefinition = {
 function nodeAriaLabel(data: IdentityBridgeNodeData): string {
   switch (data.kind) {
     case IdentityBridgeNodeKind.Protection:
-      return `${data.caption}: ${data.label}. ${data.description}`;
+      return `${data.caption}: ${data.label}. ${data.description}${data.summary.kind === PasskeyCardSummaryKind.Present ? `. ${data.summary.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join(". ")}` : ""}`;
     case IdentityBridgeNodeKind.Device:
       return `${data.caption}: ${data.label}${data.incomingRelation ? `. ${data.incomingRelation}` : ""}`;
     case IdentityBridgeNodeKind.Identity:
@@ -391,13 +397,20 @@ export function protectionData({
   input,
   flow,
 }: IdentityBridgeProtectionDataRequest): IdentityBridgeProtectionData {
+  const passkeySummary =
+    input.protectionSummary.kind === PasskeyCardSummaryKind.Present
+      ? input.protectionSummary.summary
+      : false;
   return {
     kind: IdentityBridgeNodeKind.Protection,
     flow,
     portMode: IdentityBridgePortMode.Source,
-    label: input.protectionLabel,
+    label: passkeySummary ? passkeySummary.title : input.protectionLabel,
     caption: input.copy.protectionStage,
-    description: input.copy.protectionDeviceRelation,
+    description: passkeySummary
+      ? passkeySummary.modeLabel
+      : input.copy.protectionDeviceRelation,
+    summary: input.protectionSummary,
     incomingRelation: "",
   };
 }

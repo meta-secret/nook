@@ -320,7 +320,11 @@ impl NookVaultManager {
             )
             .await?;
             self.event_log.signing_seed.clone_from(&pinned.signing_seed);
-            if !pending.is_staged() {
+            let keyring_backed =
+                crate::storage::identity_record::load_entry_for_app_id(app_key.app_id())
+                    .await?
+                    .is_some();
+            if !pending.is_staged() && !keyring_backed {
                 save_signing_seed(&pinned.signing_seed).await?;
             }
             pinned.event_yaml.into_bytes()

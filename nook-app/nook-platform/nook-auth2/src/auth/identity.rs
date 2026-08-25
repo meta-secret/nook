@@ -354,6 +354,14 @@ impl IdentityRecord {
                 "identity must keep at least one app key".to_owned(),
             ));
         }
+        for vault_dek in &mut self.vault_deks {
+            vault_dek
+                .secrets_envelopes
+                .retain(|envelope| &envelope.app_id != app_id);
+            vault_dek
+                .members_envelopes
+                .retain(|envelope| &envelope.app_id != app_id);
+        }
         self.members.remove(index);
         self.control_epoch = self.control_epoch.saturating_add(1);
         Ok(())
@@ -798,7 +806,25 @@ mod tests {
             signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
+        let store_id = crate::generate_store_id()?;
+        let _ = identity.generate_vault_dek(store_id.clone())?;
         identity.remove_member(second.app_id())?;
+        let vault_dek = identity
+            .vault_dek(&store_id)
+            .ok_or_else(|| anyhow::anyhow!("vault DEK is missing"))?;
+        assert!(
+            vault_dek
+                .secrets_envelopes
+                .iter()
+                .all(|envelope| envelope.app_id != *second.app_id())
+        );
+        assert!(
+            vault_dek
+                .members_envelopes
+                .iter()
+                .all(|envelope| envelope.app_id != *second.app_id())
+        );
+        let _ = identity.open_or_generate_vault_dek(&first, store_id)?;
         assert!(identity.remove_member(first.app_id()).is_err());
         Ok(())
     }

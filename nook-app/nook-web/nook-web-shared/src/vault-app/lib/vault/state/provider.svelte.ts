@@ -278,6 +278,27 @@ export class VaultProviderState {
   clearOauthSetupPreset(): void {
     this.oauthSetupPresetState = { kind: OAuthSetupPresetKind.NotSelected };
   }
+  clearIdentityProviderSession(): void {
+    this.providers = [];
+    this.providersLoaded = false;
+    this.clearActiveVaultStore();
+    this.clearSelectedLoginVaultStore();
+    this.localLoginPreparation = LocalLoginPreparationState.Idle;
+    this.clearLoginSetup();
+    this.loginRequiresExistingVault = false;
+    this.clearExistingVaultRecoverySummary();
+    this.addProviderOpen = false;
+    this.storageMode = LOCAL_PROVIDER_TYPE;
+    this.githubPat = "";
+    this.githubRepo = DEFAULT_GITHUB_REPO;
+    this.clearOauthFile();
+    this.clearLocalFolder();
+    this.clearOauthSetupPreset();
+    this.googleOAuthBusy = false;
+    this.icloudOAuthPreparing = false;
+    this.icloudOAuthReady = false;
+    this.icloudOAuthBusy = false;
+  }
   googleOAuthBusy = $state(false);
   icloudOAuthPreparing = $state(false);
   icloudOAuthReady = $state(false);

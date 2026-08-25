@@ -1,7 +1,13 @@
 <script lang="ts">
-  type EnrollmentCodeUnlock = { readonly code: string; readonly password: string }
+  type EnrollmentCodeUnlock = {
+    readonly code: string
+    readonly password: string
+  }
 
-  type VaultPasswordUnlock = { readonly entryId: string; readonly password: string }
+  type VaultPasswordUnlock = {
+    readonly entryId: string
+    readonly password: string
+  }
 
   import {
     configured_vault_application,
@@ -11,6 +17,11 @@
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
   import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
+  import {
+    WorkspaceRoute,
+    WorkspaceRouteLookupKind,
+    workspaceRouteFromPath,
+  } from '$lib/app/workspace-route'
   import type { VaultState } from '$lib/vault.svelte'
 
   const APP_KIND = configured_vault_application()
@@ -60,11 +71,20 @@
   } = $props()
 
   const appVersion = '0.1.0'
+
+  function devicesAccessRouteOpen(): boolean {
+    if (!('window' in globalThis)) return false
+    const route = workspaceRouteFromPath(window.location.pathname)
+    return (
+      route.kind === WorkspaceRouteLookupKind.Workspace &&
+      route.route === WorkspaceRoute.DevicesAccess
+    )
+  }
 </script>
 
 <div class="space-y-6">
   {#if showAccessGate}
-    {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock}
+    {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen()}
       <LoginGate
         {vault}
         appKind={APP_KIND}

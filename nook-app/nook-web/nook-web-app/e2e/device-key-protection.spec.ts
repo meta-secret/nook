@@ -119,10 +119,40 @@ async function openPasskeyOverlayForSimpleCreate(page: Page) {
   await expect(page.getByTestId('device-protection-gate')).toBeVisible()
 }
 
-async function readRequiredVaultString(
-  page: Page,
-  key: string,
-): Promise<string> {
+interface RequiredVaultStringInput {
+  page: Page
+  key: string
+}
+
+interface LocalIdentityKeyringEntrySnapshot {
+  identityId: string
+  appId: string
+  wrappedAppKey: {
+    protection: string
+    ciphertext?: string
+  }
+}
+
+interface LocalIdentityKeyringSnapshot {
+  entries: LocalIdentityKeyringEntrySnapshot[]
+}
+
+enum IdentityDirectorySelectionKind {
+  Empty = 'empty',
+  Selected = 'selected',
+}
+
+interface IdentityDirectorySnapshot {
+  selection: {
+    kind: IdentityDirectorySelectionKind
+    identityId?: string
+  }
+}
+
+async function readRequiredVaultString({
+  page,
+  key,
+}: RequiredVaultStringInput): Promise<string> {
   return page.evaluate(
     (valueKey) =>
       new Promise<string>((resolve, reject) => {
@@ -148,23 +178,42 @@ async function readRequiredVaultString(
   )
 }
 
-async function readPersistedDeviceIdentity(page: Page): Promise<string> {
-  try {
-    return await readRequiredVaultString(page, 'app_key_wrapped')
-  } catch {
-    return readRequiredVaultString(page, 'device_identity_wrapped')
+async function readActiveIdentityKeyringEntry(
+  page: Page,
+): Promise<LocalIdentityKeyringEntrySnapshot> {
+  const rawDirectory = await readRequiredVaultString({
+    page,
+    key: 'identity_directory_v1',
+  })
+  const rawKeyring = await readRequiredVaultString({
+    page,
+    key: 'local_identity_keyring_v1',
+  })
+  const directory = JSON.parse(rawDirectory) as IdentityDirectorySnapshot
+  const keyring = JSON.parse(rawKeyring) as LocalIdentityKeyringSnapshot
+  const selectedIdentityId = directory.selection.identityId
+  const entry = keyring.entries.find(
+    (candidate) => candidate.identityId === selectedIdentityId,
+  )
+  if (!entry) {
+    throw new Error(
+      `Selected local identity keyring entry is missing: ${selectedIdentityId ?? directory.selection.kind}`,
+    )
   }
+  return entry
+}
+
+async function readPersistedDeviceIdentity(page: Page): Promise<string> {
+  const entry = await readActiveIdentityKeyringEntry(page)
+  return JSON.stringify(entry.wrappedAppKey)
 }
 
 async function readDeviceId(page: Page): Promise<string> {
-  try {
-    return await readRequiredVaultString(page, 'app_id')
-  } catch {
-    return readRequiredVaultString(page, 'device_id')
-  }
+  const entry = await readActiveIdentityKeyringEntry(page)
+  return entry.appId
 }
 
-async function clearDeviceMetadata(page: Page): Promise<void> {
+async function clearProtectedAppKeyMetadata(page: Page): Promise<void> {
   await page.evaluate(
     () =>
       new Promise<void>((resolve, reject) => {
@@ -174,6 +223,7 @@ async function clearDeviceMetadata(page: Page): Promise<void> {
           const db = request.result
           const transaction = db.transaction('vault', 'readwrite')
           const store = transaction.objectStore('vault')
+          store.delete('local_identity_keyring_v1')
           store.delete('device_id')
           store.delete('device_identity_wrapped')
           store.delete('app_id')
@@ -434,7 +484,7 @@ test.describe('passkey device-key protection', () => {
     )
   })
 
-  test('recovers the same device identity from an existing passkey after local metadata is cleared', async ({
+  test('fails closed when protected identity metadata is missing after vault use', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -448,8 +498,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    const originalDeviceId = await readDeviceId(page)
-    await clearDeviceMetadata(page)
+    await clearProtectedAppKeyMetadata(page)
 
     await page.reload()
     // Existing vault stays in the app unlock workflow while device recovery is
@@ -463,12 +512,10 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
-    const recoveredDeviceId = await readDeviceId(page)
-    expect(recoveredDeviceId).toBe(originalDeviceId)
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'missing its established signing seed',
+    )
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
 
   test('falls back to PIN wrapping when the authenticator does not support PRF', async ({
@@ -497,19 +544,13 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
-    const pinDeviceId = await readDeviceId(page)
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('devices-access-layout-graph').click()
-    await page.getByTestId('devices-access-node-device-key').click()
-    await expect(page.getByTestId('devices-access-device-id')).toContainText(
-      pinDeviceId,
-    )
-    await expect(page.getByTestId('devices-access-dashboard')).toContainText(
-      'PIN or passphrase',
-    )
+    await expect(
+      page.getByTestId('devices-access-key-inventory'),
+    ).toContainText('PIN or passphrase')
 
     // Leave Access before locking. PIN unlock uses the login Unlock button;
     // locking while Access stays open leaves neither Unlock nor an overlay.

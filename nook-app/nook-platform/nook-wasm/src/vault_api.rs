@@ -192,9 +192,22 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn save_presealed_auth_providers_snapshot(
         &self,
+        app_id: &str,
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
-        crate::storage::auth_providers::save_presealed_auth_providers(&snapshot).await?;
+        let app_id = nook_core::AppId::parse(app_id)?;
+        if crate::storage::identity_record::load_entry_for_app_id(&app_id)
+            .await?
+            .is_none()
+        {
+            return Err(wasm_bindgen::JsError::new(
+                "Presealed provider snapshot has no protected local app key",
+            ));
+        }
+        crate::storage::auth_providers::save_presealed_auth_providers_for_app_id(
+            &app_id, &snapshot,
+        )
+        .await?;
         Ok(())
     }
 }

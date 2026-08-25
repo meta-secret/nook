@@ -108,8 +108,12 @@ flowchart TD
   - It possesses passkeys and therefore app keys.
   - It owns each vault DEK.
   - One person may use multiple identities.
-- **Installation:** An installation holds one local app private key (`app_id`).
-  - Passkeys protect app keys.
+- **Browser application:** A browser application holds a local identity keyring.
+  - Each local identity owns one independently protected app private key
+    (`app_id`).
+  - A browser application may retain multiple wrapped app keys.
+  - Passkeys or PINs protect app keys.
+  - The browser extension is a separate application with its own app key.
   - Identity records replicate app public keys and passkey credential records.
   - Private app keys remain local.
 - **Vault:** A vault owns its `store_id`, secret ciphertext, signed event log,
@@ -195,8 +199,12 @@ Nook operates on three primary data flows: multi-device vault unlock, incrementa
 | Vault authorization envelopes    | YAML `auth:` list                             | Per-device encrypted key envelopes               |
 | Vault member catalog             | YAML `members:` list                          | `members_key`-encrypted relationship data        |
 | Vault-coupled joins              | YAML `joins:` list                            | Transient device join wire                       |
-| Device identity (X25519 private) | AES-256-GCM wrapped or passkey-derived secret | IndexedDB `device_identity_wrapped`              |
-| Replication-provider connections | JSON snapshot                                 | IndexedDB `nook_auth` → `providers`              |
+| Local identity keyring           | Wrapped X25519 app keys and sealed signer seeds | IndexedDB `local_identity_keyring_v1`           |
+| Identity directory               | Public membership and local selection          | IndexedDB `identity_directory_v1`               |
+| Replication-provider connections | App-key-sealed JSON snapshots                   | IndexedDB `nook_auth` → app-scoped providers    |
+
+Legacy `device_identity_wrapped` and singleton provider records are read only
+during migration into the keyring and app-scoped provider storage.
 
 Search catalog detail:
 

@@ -35,6 +35,13 @@ describe('vault state slice transitions', () => {
     state.clearSyncingProvider()
     expect(state.manualProviderSyncRunning).toBe(false)
 
+    state.localVaultPresent = true
+    state.clearIdentityProviderSession()
+    expect(state.localVaultPresent).toBe(true)
+
+    state.devicesAccessIdentityProtectionOpen = true
+    expect(state.devicesAccessIdentityProtectionOpen).toBe(true)
+
     const syncedAt = Date.parse('2026-07-30T00:00:00.000Z')
     state.markSynced(syncedAt)
     expect(state.lastSync.state).toBe(NookVaultLastSyncState.Synced)

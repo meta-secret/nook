@@ -185,7 +185,7 @@ impl std::fmt::Display for DeviceAccessProfileTransitionError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CredentialChanged => {
-                formatter.write_str("passkey changed before its provider label was saved")
+                formatter.write_str("passkey changed before its metadata was saved")
             }
         }
     }
@@ -194,6 +194,30 @@ impl std::fmt::Display for DeviceAccessProfileTransitionError {
 impl std::error::Error for DeviceAccessProfileTransitionError {}
 
 impl DeviceAccessProfile {
+    pub fn set_passkey_name(
+        &mut self,
+        credential_fingerprint: &str,
+        name: String,
+    ) -> Result<(), DeviceAccessProfileTransitionError> {
+        if self
+            .passkey
+            .as_ref()
+            .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
+        {
+            return Err(DeviceAccessProfileTransitionError::CredentialChanged);
+        }
+        if let Some(passkey) = self.passkey.as_mut() {
+            passkey.nook_name = name;
+            return Ok(());
+        }
+        self.passkey = Some(PasskeyAccessProfile {
+            credential_fingerprint: credential_fingerprint.to_owned(),
+            nook_name: name,
+            ..PasskeyAccessProfile::default()
+        });
+        Ok(())
+    }
+
     pub fn set_passkey_provider_label(
         &mut self,
         credential_fingerprint: &str,
@@ -340,6 +364,12 @@ pub fn normalize_device_access_provider_label(
     Ok(value.to_owned())
 }
 
+pub fn normalize_device_access_passkey_name(
+    value: &str,
+) -> Result<String, DeviceAccessProviderLabelError> {
+    normalize_device_access_provider_label(value)
+}
+
 fn short_identifier(prefix: &str, bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     format!("{prefix}_{}", hex::encode(&digest[..8]))
@@ -476,6 +506,73 @@ mod tests {
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         Ok(())
+    }
+
+    #[test]
+    fn passkey_name_transition_creates_metadata_for_an_empty_profile() -> anyhow::Result<()> {
+        let mut profile = DeviceAccessProfile::default();
+
+        profile.set_passkey_name("passkey:first", "MacBook passkey".to_owned())?;
+
+        let passkey = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("passkey metadata is missing"))?;
+        assert_eq!(passkey.credential_fingerprint, "passkey:first");
+        assert_eq!(passkey.nook_name, "MacBook passkey");
+        Ok(())
+    }
+
+    #[test]
+    fn passkey_name_transition_preserves_matching_credential_evidence() -> anyhow::Result<()> {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:first",
+            "Old name",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationAndAssertion,
+        );
+        profile.set_passkey_provider_label("passkey:first", "Proton Pass".to_owned())?;
+        let evidence = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("passkey metadata is missing"))?
+            .clone();
+
+        profile.set_passkey_name("passkey:first", "New name".to_owned())?;
+
+        let renamed = profile
+            .passkey
+            .as_ref()
+            .ok_or_else(|| anyhow::anyhow!("renamed passkey metadata is missing"))?;
+        assert_eq!(renamed.nook_name, "New name");
+        assert_eq!(renamed.provider_label, evidence.provider_label);
+        assert_eq!(renamed.created_at, evidence.created_at);
+        assert_eq!(renamed.last_used_at, evidence.last_used_at);
+        assert_eq!(renamed.observation, evidence.observation);
+        Ok(())
+    }
+
+    #[test]
+    fn passkey_name_transition_rejects_a_changed_credential_without_mutation() {
+        let mut profile = DeviceAccessProfile::default();
+        profile.record_passkey_created(
+            "passkey:first",
+            "Original name",
+            observation(),
+            timestamp("2026-01-01T00:00:00.000Z"),
+            PasskeyCreationCeremony::RegistrationOnly,
+        );
+        let original = profile.clone();
+
+        let result = profile.set_passkey_name("passkey:other", "Wrong key".to_owned());
+
+        assert_eq!(
+            result,
+            Err(DeviceAccessProfileTransitionError::CredentialChanged)
+        );
+        assert_eq!(profile, original);
     }
 
     #[test]
