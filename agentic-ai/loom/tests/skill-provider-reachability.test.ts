@@ -1,5 +1,6 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
+import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
 
 type RuntimeDependencyGraphInspection = {
   readonly roots: readonly string[];
@@ -70,6 +71,14 @@ function runtimeDependencyViolations(
       continue;
     }
     const sourceBody = source.replace(/^#![^\n]*(?:\n|$)/u, '');
+    const boundaryInspection = {
+      filePath: path,
+      source: sourceBody,
+    };
+    if (violatesSkillProviderBoundary(boundaryInspection)) {
+      violations.push(path);
+      continue;
+    }
     for (const imported of RUNTIME_IMPORT_SCANNER.scanImports(sourceBody)) {
       const resolution: RuntimeDependencyResolution = {
         importer: path,
@@ -170,6 +179,27 @@ test('ignores erased and inert text while failing closed on missing runtime edge
   expect(runtimeDependencyViolations(missingInspection)).toEqual([
     'agentic-ai/loom/src/unsafe.ts',
   ]);
+});
+
+test('applies the unbounded loader boundary throughout the runtime closure', () => {
+  for (const facadeSource of [
+    'const path = computePath(); import(path);',
+    'const path = computePath(); require(path);',
+    'const path = computePath(); import(`../${path}`);',
+    'const load = require; load(computePath());',
+  ]) {
+    const sources = new Map<string, string>([
+      ['agentic-ai/loom/src/cli.ts', "import '../../provider-facade.ts';"],
+      ['agentic-ai/provider-facade.ts', facadeSource],
+    ]);
+    const inspection: RuntimeDependencyGraphInspection = {
+      roots: ['agentic-ai/loom/src/cli.ts'],
+      sources,
+    };
+    expect(runtimeDependencyViolations(inspection)).toEqual([
+      'agentic-ai/provider-facade.ts',
+    ]);
+  }
 });
 
 test('production Loom runtime closure cannot reach dormant providers', async () => {

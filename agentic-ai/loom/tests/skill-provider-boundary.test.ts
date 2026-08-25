@@ -97,7 +97,7 @@ const UNBOUNDED_RUNTIME_MODULE_REFERENCE: RuntimeModuleReference = {
   kind: RuntimeModuleReferenceKind.Unbounded,
 };
 
-function violatesSkillProviderBoundary(
+export function violatesSkillProviderBoundary(
   inspection: SkillProviderImportInspection,
 ): boolean {
   const context = createBoundarySourceContext(inspection);
