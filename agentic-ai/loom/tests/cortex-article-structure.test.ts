@@ -412,6 +412,36 @@ ${container}
   }
 });
 
+test('recovers root scope after mismatched HTML container closes', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/html-mismatch.md',
+    content: `# HTML mismatch
+
+## Examples
+
+<div>
+
+<section>
+
+## Fake procedure
+
+1. fake
+
+</div>
+
+## Recovery procedure
+
+- Prepare the input.
+
+</section>
+`,
+  };
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+  expect(findings[0]?.line).toBe(15);
+});
+
 test('does not treat an H1 title as a substantive article', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/title-only.md',

@@ -40,8 +40,14 @@ type HtmlTag = {
   readonly selfClosing: boolean;
 };
 
+enum HtmlTokenKind {
+  Comment = 'comment',
+  Tag = 'tag',
+  Text = 'text',
+}
+
 type HtmlToken = {
-  readonly kind: 'comment' | 'tag' | 'text';
+  readonly kind: HtmlTokenKind;
   readonly value: string;
 };
 
@@ -176,12 +182,12 @@ function htmlContainerDepths(children: readonly RootContent[]): number[] {
       };
       const startIndex = lastHtmlContainerStartIndex(startArgs);
       if (startIndex < 0) continue;
-      const start = starts[startIndex];
-      if (start === undefined) continue;
+      const start = starts[startIndex] ?? false;
+      if (start === false) continue;
       for (let index = start.nodeIndex + 1; index < nodeIndex; index += 1) {
         depths[index] = (depths[index] ?? 0) + 1;
       }
-      starts.splice(startIndex, 1);
+      starts.splice(startIndex);
     }
   }
   return depths;
@@ -199,7 +205,7 @@ function lastHtmlContainerStartIndex(
 function htmlTags(value: string): readonly HtmlTag[] {
   const tags: HtmlTag[] = [];
   for (const token of htmlTokens(value)) {
-    if (token.kind !== 'tag') continue;
+    if (token.kind !== HtmlTokenKind.Tag) continue;
     const parts = /^<\s*(\/?)\s*([A-Za-z][A-Za-z0-9:-]*)/u.exec(token.value);
     const name = parts?.[2];
     if (typeof name !== 'string') continue;
@@ -215,10 +221,12 @@ function htmlTags(value: string): readonly HtmlTag[] {
 
 function hasVisibleHtmlContent(value: string): boolean {
   for (const token of htmlTokens(value)) {
-    if (token.kind === 'text' && token.value.trim().length > 0) return true;
-    if (token.kind !== 'tag') continue;
-    const tag = htmlTags(token.value)[0];
-    if (tag === undefined) return true;
+    if (token.kind === HtmlTokenKind.Text && token.value.trim().length > 0) {
+      return true;
+    }
+    if (token.kind !== HtmlTokenKind.Tag) continue;
+    const tag = htmlTags(token.value)[0] ?? false;
+    if (tag === false) return true;
     if (!tag.closing && isVisibleHtmlElement(tag.name)) return true;
   }
   return false;
@@ -231,12 +239,15 @@ function htmlTokens(value: string): readonly HtmlToken[] {
     if (value.startsWith('<!--', cursor)) {
       const commentEnd = value.indexOf('-->', cursor + 4);
       if (commentEnd < 0) {
-        const token: HtmlToken = { kind: 'text', value: value.slice(cursor) };
+        const token: HtmlToken = {
+          kind: HtmlTokenKind.Text,
+          value: value.slice(cursor),
+        };
         tokens.push(token);
         break;
       }
       const token: HtmlToken = {
-        kind: 'comment',
+        kind: HtmlTokenKind.Comment,
         value: value.slice(cursor, commentEnd + 3),
       };
       tokens.push(token);
@@ -248,7 +259,7 @@ function htmlTokens(value: string): readonly HtmlToken[] {
       const tagEnd = findHtmlTagEnd(endArgs);
       if (tagEnd >= 0) {
         const token: HtmlToken = {
-          kind: 'tag',
+          kind: HtmlTokenKind.Tag,
           value: value.slice(cursor, tagEnd + 1),
         };
         tokens.push(token);
@@ -259,7 +270,7 @@ function htmlTokens(value: string): readonly HtmlToken[] {
     const nextTag = value.indexOf('<', cursor + 1);
     const textEnd = nextTag < 0 ? value.length : nextTag;
     const token: HtmlToken = {
-      kind: 'text',
+      kind: HtmlTokenKind.Text,
       value: value.slice(cursor, textEnd),
     };
     tokens.push(token);

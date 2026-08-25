@@ -371,6 +371,37 @@ ${container}
   }
 });
 
+test('recovers root blocks after mismatched HTML container closes', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/html-mismatch.md',
+    content: `# HTML mismatch
+
+## Examples
+
+<div>
+
+<section>
+
+## Fake procedure
+
+1. fake
+
+</div>
+
+## Recovery procedure
+
+- Prepare the input.
+
+</section>
+`,
+  };
+  const document = makeDocument(documentArgs);
+  const findings = audit([document]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+  expect(findings[0]?.line).toBe(15);
+});
+
 test('audits empty, dense, and procedure articles without a document map', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/no-articles.md',
