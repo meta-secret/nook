@@ -670,10 +670,11 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
             && workflow.matches("Publish verified Hive cache").count() == 1
             && !workflow.contains("verify-hosted:")
             && workflow.contains("verify-fork:")
+            && workflow.contains("console-untrusted:")
             && workflow.contains("Set up untrusted cache-free BuildKit")
-            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 2
+            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 3
             && workflow.matches("HIVE_CACHE_FROM: \"\"").count() == 1,
-        "trusted Main must publish from ARC, while untrusted PRs remain cache-free on the hosted boundary"
+        "trusted Main must publish from ARC, while untrusted PR and console validation remain secret-free on the hosted boundary"
     );
     Ok(())
 }
