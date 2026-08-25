@@ -670,7 +670,8 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "release must perform one optimized WASM artifact batch"
     );
     assert!(
-        release.contains("task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\"\n          preflight"),
+        release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE/.nook/release-workflow\"\n          PREFLIGHT_SOURCE_ROOT=\"$GITHUB_WORKSPACE\"")
+            && release.contains("task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\"\n          preflight"),
         "release must run current repository preflight tooling against the immutable source before publishing its job image"
     );
     let manual_e2e = read(&root, ".github/workflows/e2e-pr.yml");
@@ -681,6 +682,15 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     assert!(
         !release.contains("Build stable Pages artifact") && !release.contains("run: task setup"),
         "release must extract the already-tested sealed image instead of running setup twice"
+    );
+    let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    let preflight_dockerfile = read(&root, "preflight/Dockerfile");
+    let preflight_tasks = read(&root, "preflight/Taskfile.yml");
+    assert!(
+        preflight_bake.contains("repository-source = PREFLIGHT_SOURCE_CONTEXT")
+            && preflight_dockerfile.contains("COPY --from=repository-source / /meta-secret/nook")
+            && preflight_tasks.contains("PREFLIGHT_SOURCE_CONTEXT=\"{{.PREFLIGHT_SOURCE_ROOT}}\""),
+        "current preflight tooling must inspect a separately selected immutable source context"
     );
     for required in [
         "VITE_SITE_URL: ${{ env.CI_RELEASE_URL }}",
@@ -823,5 +833,45 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         !read(&root, ".github/workflows/web-research.yml").contains("context.payload"),
         "ARC research actions must receive event identity explicitly"
     );
+
+    let main_workflow = read(&root, ".github/workflows/main.yml");
+    let main_browser_image = section(
+        &main_workflow,
+        "      - name: Publish exact-source browser job image\n",
+        "\n      - name: Preserve cache telemetry",
+    );
+    for required in [
+        "VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}",
+        "VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}",
+        "VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}",
+        "VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}",
+        "VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}",
+        "NOOK_EXTENSION_CHANNEL: development",
+        "NOOK_EXTENSION_COMMIT: ${{ github.sha }}",
+    ] {
+        assert!(
+            main_browser_image.contains(required),
+            "Main browser image must preserve build configuration: {required}"
+        );
+    }
+
+    let pr_browser_image = section(
+        &pr_workflow,
+        "      - name: Publish exact-source PR browser job image\n",
+        "\n      - name: Upload preview dist handoff",
+    );
+    for required in [
+        "VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev",
+        "VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev",
+        "VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev",
+        "VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev",
+        "NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}",
+        "NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}",
+    ] {
+        assert!(
+            pr_browser_image.contains(required),
+            "PR browser image must preserve preview configuration: {required}"
+        );
+    }
     Ok(())
 }
