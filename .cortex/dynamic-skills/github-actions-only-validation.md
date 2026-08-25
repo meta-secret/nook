@@ -5,11 +5,10 @@
 Keep agent machines on the lightest possible local work.
 
 Use the configured GitHub Actions runner for iterative builds and tests.
-Trusted native Rust and Rust ecosystem PR gates plus Main build producers use
-ARC. Main's portable WASM dependency writer/proof stays GitHub-hosted so a
-persistent ARC shard cannot publish worker-specific metadata or mask missing
-registry records. Fork PRs, Dependabot PRs, releases, and other non-Main
-runtime-dependent gates also stay GitHub-hosted.
+Trusted validation and delivery jobs use ARC. Build producers use the general
+scale set with persistent node-local BuildKit. Browser jobs use ordinary Pods
+on `nook-k0s-container`. Untrusted fork and Dependabot code stays on
+GitHub-hosted runners without private credentials.
 
 ## Problem Pattern
 
@@ -31,14 +30,10 @@ Validation has three layers:
 - **Required remotely:** explicitly trigger complete exact-head PR validation.
   - Trusted same-repository native Rust and Rust ecosystem PR jobs and Main
     build producers select ARC.
-  - General ARC provides Main's job-scoped image runtime inside the disposable
-    ARC runner Pod.
-  - Main's portable WASM dependency job writes from one fresh hosted builder.
-    Zot verifies child manifest digest/size and every blob's readability. A second
-    cache-only builder requires the expensive dependency vertices to hit before
-    deployment without hydrating their full snapshots.
-  - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
-    browser, WASM, and deployment jobs stay on GitHub-hosted workers.
+  - General ARC provides persistent BuildKit for image producers.
+  - Container ARC creates an ordinary Kubernetes job Pod from each exact image.
+  - Main's portable WASM cache proof uses the general ARC scale set.
+  - Fork and Dependabot code stays on secret-free GitHub-hosted workers.
 
 Validate request example:
 

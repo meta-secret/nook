@@ -1,6 +1,0 @@
-node_modules
-dist
-src/test
-*.test.ts
-tsconfig.test.build.json
-README.md

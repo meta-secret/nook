@@ -18,7 +18,9 @@ fn read(path: &str) -> String {
 
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let setup = read(".github/actions/nook-docker-setup/action.yml");
-    assert!(setup.contains("cache-telemetry.cjs start"));
+    assert!(
+        setup.contains("\"${{ github.action_path }}/../../scripts/cache-telemetry.cjs\" start")
+    );
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
     assert!(setup.contains("if [[ \"$pr_number\" =~ ^[0-9]+$ ]]"));
     assert!(setup.contains("Pull-request jobs are forced to restore Main's cache read-only"));
@@ -62,9 +64,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     assert!(
-        setup.contains(
-            "rust_deps_fingerprint=\"$(bash .github/scripts/rust-deps-cache-fingerprint.sh)\""
-        ) && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
+        setup.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE\"")
+            && setup.contains(
+                "bash \"${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh\""
+            )
+            && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
             && setup
                 .contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint")
     );
@@ -148,7 +152,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
             && wasm_cache_verifier.contains("nook/buildcache/${cache_scope}:buildcache")
             && !docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
-        "hosted Main WASM cache publication must require GHA_RUST_WASM_DEPS_SCOPE while ARC never invokes the verifier"
+        "dedicated Main WASM cache publication must require GHA_RUST_WASM_DEPS_SCOPE while the normal ARC publisher never invokes the verifier"
     );
     let root_tasks = read("Taskfile.yml");
     assert!(
@@ -355,18 +359,15 @@ fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
     let release_source = release
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
-    let release_tooling = release
-        .find("- name: Checkout release workflow tooling")
-        .context("release workflow must check out workflow tooling")?;
     let release_docker_setup = release
         .find("- name: Docker setup")
-        .context("release workflow must configure Docker")?;
+        .context("release workflow must configure BuildKit")?;
     assert!(
-        release_source < release_tooling && release_tooling < release_docker_setup,
+        release_source < release_docker_setup,
         "release Docker setup must fingerprint the requested source after checkout"
     );
-    assert!(release.contains("path: .nook/release-workflow"));
     assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
+    assert!(release.contains("path: .nook/release-workflow"));
     Ok(())
 }
 
@@ -436,10 +437,13 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     }
 
     let pr = read(".github/workflows/pr.yml");
+    let buildkit_jobs = pr
+        .matches("uses: ./.github/actions/nook-docker-setup")
+        .count();
     assert!(
         pr.matches("uses: ./.github/actions/nook-cache-telemetry")
             .count()
-            >= 5,
+            == buildkit_jobs,
         "every Buildx-backed PR job must preserve cache telemetry"
     );
     let main = read(".github/workflows/main.yml");

@@ -158,7 +158,6 @@ tasks:
         {{.DOCKER_RUN_LIMITS}}
         -e REPO_ROOT=/meta-secret/nook
         -e GIT_COMMIT_ID="{{.GIT_COMMIT_ID}}"
-        -e CI_AGENT_IMAGE=nook-ci-agent:local
         -e WASM_BUILD_MODE=dev
         -e CARGO_TARGET_DIR=/opt/nook/cargo-target
         -v "{{.REPO_ROOT}}:/meta-secret/nook"

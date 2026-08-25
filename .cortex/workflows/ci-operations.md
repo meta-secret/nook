@@ -117,17 +117,15 @@ Merge still requires the standard exact-head readiness audit.
     requests write on this repository.
 - **Execution:**
   1. Run `task setup` to bake sealed `nook-web:local`.
-  2. Run `task ci-agent:implement` to build and start `nook-ci-agent:local`.
-  3. Use Docker CLI and Buildx in the container for repository Task targets.
-  4. Start with `docker run --init`, bind-mount the checkout, and mount
-     `/var/run/docker.sock` for sibling containers on the host daemon.
-- **Runner:** `agent-implement.yml` uses GitHub-hosted `ubuntu-latest`.
-  - Concurrent work scales across hosted capacity.
-  - Host Node is not required.
+  2. Provision Task and the Actions Node.js runtime on the ARC checkout.
+  3. Run `task ci-agent:implement` directly in that checkout.
+  4. Let repository build tasks use the configured persistent BuildKit service.
+- **Runner:** `agent-implement.yml` uses the general `nook-k0s` ARC scale set.
+  - Concurrent work scales across the ARC worker pool.
+  - No nested runtime or host container socket is available.
 - **Teardown:** await `agent[Symbol.asyncDispose]()`, call `process.exit`, and
   best-effort kill direct child PIDs.
-- **Optional environment:** `CI_AGENT_PROMPT_FILE`, `CI_FIX_LABEL`, and
-  `DOCKER_SOCK` with default `/var/run/docker.sock`.
+- **Optional environment:** `CI_AGENT_PROMPT_FILE` and `CI_FIX_LABEL`.
 
 ### Logging
 
@@ -198,7 +196,7 @@ implementation opens a PR or blocks. Drafts, manually owned issues, and
 historical imports cannot trigger it.
 
 Loop: claim Workbench record → `task setup` → **`task ci-agent:implement`**
-(nook-ci-agent container + docker.sock) → push branch → open a Nook PR →
+(direct Node process on ARC with persistent BuildKit) → push branch → open a Nook PR →
 assign and directly mention the continuing owner → publish Workbench
 progress/worklog → exit. The assigned owner then follows the standard
 failure/comment/conflict loop, exact-head readiness audit, squash merge, and

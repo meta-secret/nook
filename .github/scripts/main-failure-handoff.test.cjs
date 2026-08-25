@@ -313,7 +313,7 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
   assert.match(
     main,
-    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm\]\n\s+runs-on: ubuntu-latest[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
+    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm\]\n\s+runs-on: \$\{\{ vars\.NOOK_RUNS_ON \|\| 'nook-k0s' \}\}[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
   )
   assert.match(
     main,
@@ -338,7 +338,10 @@ test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () =>
 
   assert.match(telemetry, /timeout 15s .*cache-telemetry\.cjs start/)
   assert.match(telemetry, /timeout 30s .*cache-telemetry\.cjs collect/)
-  assert.match(dockerSetup, /timeout 15s .*cache-telemetry\.cjs start/)
+  assert.match(
+    dockerSetup,
+    /timeout 15s [^\n]*cache-telemetry\.cjs["']? start/,
+  )
 })
 
 test('handoff workflow trusts default-branch code and writes only Workbench', () => {
