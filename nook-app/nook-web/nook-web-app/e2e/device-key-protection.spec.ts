@@ -208,7 +208,7 @@ async function readDeviceId(page: Page): Promise<string> {
   return entry.appId
 }
 
-async function clearDeviceMetadata(page: Page): Promise<void> {
+async function clearProtectedAppKeyMetadata(page: Page): Promise<void> {
   await page.evaluate(
     () =>
       new Promise<void>((resolve, reject) => {
@@ -479,7 +479,7 @@ test.describe('passkey device-key protection', () => {
     )
   })
 
-  test('recovers the same device identity from an existing passkey after local metadata is cleared', async ({
+  test('fails closed when protected identity metadata is missing after vault use', async ({
     page,
   }) => {
     await page.addInitScript(() => {
@@ -493,8 +493,7 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
-    const originalDeviceId = await readDeviceId(page)
-    await clearDeviceMetadata(page)
+    await clearProtectedAppKeyMetadata(page)
 
     await page.reload()
     // Existing vault stays in the app unlock workflow while device recovery is
@@ -508,12 +507,10 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible()
     await expect(page.getByTestId('passkey-auth-overlay-dismiss')).toBeVisible()
     await page.getByTestId('device-protection-use-existing-choice').click()
-    await expect(page.getByTestId('vault-panel')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
-
-    const recoveredDeviceId = await readDeviceId(page)
-    expect(recoveredDeviceId).toBe(originalDeviceId)
+    await expect(page.getByTestId('device-protection-error')).toContainText(
+      'missing its established signing seed',
+    )
+    await expect(page.getByTestId('vault-panel')).toHaveCount(0)
   })
 
   test('falls back to PIN wrapping when the authenticator does not support PRF', async ({
@@ -542,19 +539,13 @@ test.describe('passkey device-key protection', () => {
     expect(wrapped).toContain('"protection":"pin"')
     expect(wrapped).not.toContain('AGE-SECRET-KEY-')
 
-    const pinDeviceId = await readDeviceId(page)
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('devices-access-layout-graph').click()
-    await page.getByTestId('devices-access-node-device-key').click()
-    await expect(page.getByTestId('devices-access-device-id')).toContainText(
-      pinDeviceId,
-    )
-    await expect(page.getByTestId('devices-access-dashboard')).toContainText(
-      'PIN or passphrase',
-    )
+    await expect(
+      page.getByTestId('devices-access-key-inventory'),
+    ).toContainText('PIN or passphrase')
 
     // Leave Access before locking. PIN unlock uses the login Unlock button;
     // locking while Access stays open leaves neither Unlock nor an overlay.
