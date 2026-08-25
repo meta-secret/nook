@@ -516,6 +516,8 @@ task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2 # install/reconcile a declared OVH worker and join k0s/ARC
+task infra:ssh:home:configure # install and prove pinned browserless LAN SSH for the home worker
+task infra:ssh:home:status # verify the home worker remains reachable without interactive authentication
 task infra:arc:deploy       # deploy ARC plus one persistent BuildKit shard per build node
 task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
 task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity

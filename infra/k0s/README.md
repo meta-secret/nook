@@ -82,7 +82,7 @@ task --taskfile infra/Taskfile.yml k0s:worker:deploy \
   INFRA_WORKER_ARC_TIER=primary
 
 task --taskfile infra/Taskfile.yml k0s:worker:deploy \
-  INFRA_WORKER_SSH_TARGET=ssh.bynull.link \
+  INFRA_WORKER_SSH_TARGET=nook-home-lan \
   INFRA_WORKER_REMOTE_DIR=/home/bynull/.local/share/nook-infra \
   INFRA_WORKER_MESH_ADDRESS=10.202.0.3 \
   INFRA_WORKER_ENDPOINT_MODE=roaming \
