@@ -503,6 +503,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await fillLoginPage.goto(`${loginServer.origin}/login`)
     const fillWidget = fillLoginPage.locator('#nook-auth-widget')
     await expect(fillWidget).toBeVisible()
+    const compactLauncher = fillWidget.getByTestId('nook-auth-gate-expand')
+    await expect(compactLauncher).toBeVisible({ timeout: 20_000 })
+    await compactLauncher.click()
     const fillSavedLogin = fillWidget.getByRole('button', {
       name: 'Fill saved login',
     })
