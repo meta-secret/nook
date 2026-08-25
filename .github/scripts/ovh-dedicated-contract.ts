@@ -57,10 +57,14 @@ for (const fragment of [
   "getServer({ credentials: candidate",
   "await rename(next, target)",
   ".nook/infra/ovh-host-identities",
+  ".nook/infra/ovh-recovery",
   "postInstallationScript",
   "missing trusted SSH host identity",
   "stored SSH host keypair",
   "prepareReinstall",
+  "persistRecoveryMarker",
+  "RecoveryComplete",
+  "clearRecoveryMarker",
   "preSubmission",
   "approved US API endpoint",
   'currentOperatingSystem === "none_64"',
@@ -84,10 +88,14 @@ for (const fragment of [
 for (const fragment of [
   "ovh:server:deploy:",
   "reinstall-required",
+  "recovery-complete",
+  "--ignore-not-found",
   "kubectl cordon",
   "actions.github.com/scale-set-name",
   "kubectl drain",
   "ssh-keyscan -t ed25519 -T 3 -H",
+  ".known_hosts.lock",
+  "known_hosts.next.XXXXXX",
   "expected_fingerprint",
   "CONTROLLER_RECOVERY",
   "/etc/sudoers.d/90-nook-infra",
@@ -103,7 +111,12 @@ for (const fragment of [
   requireFragment({ fragment, label: "OVH Taskfile", source: tasks });
 }
 
-for (const fragment of ["cloud-init", "PasswordAuthentication yes"]) {
+for (const fragment of [
+  "cloud-init",
+  "PasswordAuthentication yes",
+  'if ! sudo -n k0s kubectl get node "$node"',
+  '"$known_hosts.merged"',
+]) {
   forbidFragment({ fragment, label: "OVH Taskfile", source: tasks });
 }
 

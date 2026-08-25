@@ -48,9 +48,12 @@ tasks:
         set -euo pipefail
         node="$1"
         mesh_address="$2"
-        if ! sudo -n k0s kubectl get node "$node" >/dev/null 2>&1; then
+        node_resource="$(sudo -n k0s kubectl get node "$node" \
+          -o name --ignore-not-found)"
+        if test -z "$node_resource"; then
           exit 0
         fi
+        test "$node_resource" = "node/$node"
         actual_mesh_address="$(sudo -n k0s kubectl get node "$node" \
           -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
         test "$actual_mesh_address" = "$mesh_address"
@@ -118,13 +121,21 @@ tasks:
         esac
 
         known_hosts="$HOME/.ssh/known_hosts"
+        known_hosts_lock="$HOME/.ssh/.known_hosts.lock"
         expected_fingerprint="$(bun "$provider" host-fingerprint --node "$node")"
+        install -d -m 0700 "$HOME/.ssh"
         scanned_hosts="$(mktemp)"
+        known_hosts_next="$(mktemp "$HOME/.ssh/known_hosts.next.XXXXXX")"
+        known_hosts_merged="$(mktemp "$HOME/.ssh/known_hosts.merged.XXXXXX")"
+        known_hosts_lock_held=false
         cleanup() {
-          rm -f "$scanned_hosts" "$known_hosts.next" "$known_hosts.merged"
+          rm -f "$scanned_hosts" "$known_hosts_next" "$known_hosts_merged"
+          if test "$known_hosts_lock_held" = true; then
+            rm -f "$known_hosts_lock/pid"
+            rmdir "$known_hosts_lock" 2>/dev/null || true
+          fi
         }
         trap cleanup EXIT
-        install -d -m 0700 "$HOME/.ssh"
         touch "$known_hosts"
         chmod 0600 "$known_hosts"
         scanned=false
@@ -134,10 +145,34 @@ tasks:
             scanned_fingerprint="$(ssh-keygen -l -f "$scanned_hosts" -E sha256 \
               | awk 'NR == 1 { print $2 }')"
             test "$scanned_fingerprint" = "$expected_fingerprint"
-            ssh-keygen -R "$public_address" -f "$known_hosts" >/dev/null 2>&1 || true
-            sort -u "$known_hosts" "$scanned_hosts" > "$known_hosts.merged"
-            mv "$known_hosts.merged" "$known_hosts"
+            lock_deadline="$(( $(date +%s) + 120 ))"
+            until mkdir "$known_hosts_lock" 2>/dev/null; do
+              if test -r "$known_hosts_lock/pid"; then
+                lock_owner="$(cat "$known_hosts_lock/pid")"
+                if printf '%s\n' "$lock_owner" | grep -Eq '^[0-9]+$' \
+                   && ! kill -0 "$lock_owner" 2>/dev/null; then
+                  rm -f "$known_hosts_lock/pid"
+                  rmdir "$known_hosts_lock" 2>/dev/null || true
+                  continue
+                fi
+              fi
+              if test "$(date +%s)" -ge "$lock_deadline"; then
+                echo 'Timed out waiting for known_hosts lock' >&2
+                exit 1
+              fi
+              sleep 1
+            done
+            known_hosts_lock_held=true
+            printf '%s\n' "$$" > "$known_hosts_lock/pid"
+            cp "$known_hosts" "$known_hosts_next"
+            ssh-keygen -R "$public_address" -f "$known_hosts_next" \
+              >/dev/null 2>&1 || true
+            sort -u "$known_hosts_next" "$scanned_hosts" > "$known_hosts_merged"
+            mv "$known_hosts_merged" "$known_hosts"
             chmod 0600 "$known_hosts"
+            rm -f "$known_hosts_lock/pid"
+            rmdir "$known_hosts_lock"
+            known_hosts_lock_held=false
             scanned=true
             break
           fi
@@ -205,6 +240,7 @@ tasks:
           INFRA_WORKER_MESH_ADDRESS="$mesh_address" \
           INFRA_WORKER_ENDPOINT_MODE="$endpoint_mode" \
           INFRA_WORKER_ARC_TIER="$arc_tier"
+        bun "$provider" recovery-complete --node "$node"
         cleanup
         trap - EXIT
         BASH

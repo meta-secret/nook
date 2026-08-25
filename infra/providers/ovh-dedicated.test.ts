@@ -4,6 +4,7 @@ import {
   createOvhSignature,
   isTerminalTaskFailure,
   OvhTaskStatus,
+  recoveryMarkerMatches,
   requiresReinstall,
 } from "./ovh-dedicated";
 
@@ -59,5 +60,40 @@ describe("OVH dedicated provider", () => {
     expect(isTerminalTaskFailure(OvhTaskStatus.CustomerError)).toBeTrue();
     expect(isTerminalTaskFailure(OvhTaskStatus.OvhError)).toBeTrue();
     expect(isTerminalTaskFailure(OvhTaskStatus.Doing)).toBeFalse();
+  });
+
+  test("accepts only the exact durable recovery operation", () => {
+    const definition = {
+      arcTier: "primary",
+      endpointMode: "direct",
+      expectedCommercialRange: "RISE-S | AMD Ryzen 7 9700X",
+      expectedDatacenter: "vin",
+      meshAddress: "10.202.0.4",
+      operatingSystem: "debian13_64",
+      publicAddress: "167.114.158.40",
+      serviceName: "ns513432.ip-167-114-158.net",
+      sshPublicKeyFile: "~/.ssh/id_ed25519.pub",
+      sshUser: "debian",
+    } as const;
+    const marker = {
+      hostname: "nook-rise-s-2",
+      operatingSystem: "debian13_64",
+      serviceName: "ns513432.ip-167-114-158.net",
+      version: 1,
+    } as const;
+    expect(
+      recoveryMarkerMatches({
+        definition,
+        hostname: "nook-rise-s-2",
+        marker,
+      }),
+    ).toBeTrue();
+    expect(
+      recoveryMarkerMatches({
+        definition,
+        hostname: "nook-rise-s-1",
+        marker,
+      }),
+    ).toBeFalse();
   });
 });

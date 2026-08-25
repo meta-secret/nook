@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { chmod, mkdir, readFile, rename, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
 interface OvhCredentials {
@@ -34,6 +34,7 @@ enum CliAction {
   HostFingerprint = "host-fingerprint",
   Inspect = "inspect",
   Provision = "provision",
+  RecoveryComplete = "recovery-complete",
   ReinstallRequired = "reinstall-required",
 }
 
@@ -156,6 +157,13 @@ interface PreparedReinstall {
   publicKey: string;
 }
 
+export interface OvhRecoveryMarker {
+  hostname: string;
+  operatingSystem: string;
+  serviceName: string;
+  version: 1;
+}
+
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const homeDirectory = process.env.HOME;
 if (!homeDirectory) throw new Error("HOME must be set for the private credential store");
@@ -170,6 +178,10 @@ const defaultCredentialFile = resolve(
 const hostIdentityRoot = resolve(
   homeDirectory,
   ".nook/infra/ovh-host-identities",
+);
+const recoveryMarkerRoot = resolve(
+  homeDirectory,
+  ".nook/infra/ovh-recovery",
 );
 
 function requireString(input: { label: string; value: string }): string {
@@ -191,6 +203,65 @@ async function pathExists(path: string): Promise<boolean> {
   return stat(path)
     .then(() => true)
     .catch(() => false);
+}
+
+function recoveryMarkerPath(hostname: string): string {
+  return resolve(recoveryMarkerRoot, `${hostname}.json`);
+}
+
+export function recoveryMarkerMatches(input: {
+  definition: DedicatedServerDefinition;
+  hostname: string;
+  marker: OvhRecoveryMarker;
+}): boolean {
+  return (
+    input.marker.version === 1 &&
+    input.marker.hostname === input.hostname &&
+    input.marker.serviceName === input.definition.serviceName &&
+    input.marker.operatingSystem === input.definition.operatingSystem
+  );
+}
+
+async function loadRecoveryMarker(input: {
+  definition: DedicatedServerDefinition;
+  hostname: string;
+}): Promise<OvhRecoveryMarker | undefined> {
+  const path = recoveryMarkerPath(input.hostname);
+  if (!(await pathExists(path))) return undefined;
+  const marker = JSON.parse(await readFile(path, "utf8")) as OvhRecoveryMarker;
+  if (!recoveryMarkerMatches({ ...input, marker })) {
+    throw new Error(`recovery marker for ${input.hostname} does not match inventory`);
+  }
+  return marker;
+}
+
+async function persistRecoveryMarker(input: {
+  definition: DedicatedServerDefinition;
+  hostname: string;
+}): Promise<void> {
+  await mkdir(recoveryMarkerRoot, { mode: 0o700, recursive: true });
+  await chmod(recoveryMarkerRoot, 0o700);
+  const path = recoveryMarkerPath(input.hostname);
+  const next = `${path}.next`;
+  const marker: OvhRecoveryMarker = {
+    hostname: input.hostname,
+    operatingSystem: input.definition.operatingSystem,
+    serviceName: input.definition.serviceName,
+    version: 1,
+  };
+  await writeFile(next, `${JSON.stringify(marker)}\n`, { mode: 0o600 });
+  await chmod(next, 0o600);
+  await rename(next, path);
+  await chmod(path, 0o600);
+}
+
+async function clearRecoveryMarker(input: {
+  definition: DedicatedServerDefinition;
+  hostname: string;
+}): Promise<void> {
+  const marker = await loadRecoveryMarker(input);
+  if (!marker) return;
+  await rm(recoveryMarkerPath(input.hostname));
 }
 
 async function runCommand(command: string[]): Promise<string> {
@@ -551,6 +622,11 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
     credentials: input.credentials,
     definition: input.definition,
   });
+  const recoveryMarker = await loadRecoveryMarker({
+    definition: input.definition,
+    hostname: input.hostname,
+  });
+  if (recoveryMarker) return ProvisionResult.Reinstalled;
   const reinstallInput = {
     allowReinstall: input.allowReinstall,
     currentOperatingSystem: current.os,
@@ -581,6 +657,10 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
     desiredOperatingSystem: input.definition.operatingSystem,
   };
   if (!requiresReinstall(preSubmissionInput)) return ProvisionResult.Unchanged;
+  await persistRecoveryMarker({
+    definition: input.definition,
+    hostname: input.hostname,
+  });
   const task = await ovhApi<OvhTask>({ credentials: input.credentials, request });
   await waitForTask({
     credentials: input.credentials,
@@ -616,6 +696,10 @@ async function main(): Promise<void> {
     process.stdout.write(`${hostIdentity.fingerprint}\n`);
     return;
   }
+  if (args.action === CliAction.RecoveryComplete) {
+    await clearRecoveryMarker({ definition, hostname: args.node });
+    return;
+  }
   const credentials = await loadCredentials({ definition });
   if (args.action === CliAction.Inspect) {
     const server = await getServer({ credentials, definition });
@@ -625,12 +709,18 @@ async function main(): Promise<void> {
     return;
   }
   if (args.action === CliAction.ReinstallRequired) {
-    const server = await getServer({ credentials, definition });
-    const required = requiresReinstall({
-      allowReinstall: args.allowReinstall,
-      currentOperatingSystem: server.os,
-      desiredOperatingSystem: definition.operatingSystem,
+    const recoveryMarker = await loadRecoveryMarker({
+      definition,
+      hostname: args.node,
     });
+    const server = await getServer({ credentials, definition });
+    const required = recoveryMarker
+      ? true
+      : requiresReinstall({
+          allowReinstall: args.allowReinstall,
+          currentOperatingSystem: server.os,
+          desiredOperatingSystem: definition.operatingSystem,
+        });
     if (required) {
       await prepareReinstall({
         allowReinstall: args.allowReinstall,
