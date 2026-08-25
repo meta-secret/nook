@@ -1,7 +1,3 @@
-import {
-  LoginDetectionStatus,
-  type LoginDetectionResponse,
-} from '../../lib/login-detection-messages'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
@@ -9,6 +5,10 @@ import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/ext
 export const extensionSessionDocument = 'offscreen/session.html'
 
 export const SESSION_INTERACTIVE_QUEUE_TIMEOUT_MS = 4_000
+
+type ToolbarActionPopupApi = typeof chrome.action & {
+  openPopup?: () => Promise<void>
+}
 
 enum ExtensionSessionDocumentStateKind {
   Closed = 'closed',
@@ -129,101 +129,16 @@ export function openSimpleVault(path = ''): void {
   void chrome.tabs.create(nookTypedArgs0_1)
 }
 
-enum ActiveTabQueryKind {
-  Found = 'found',
-  Unavailable = 'unavailable',
-}
-
-type ActiveTabQuery =
-  | { kind: ActiveTabQueryKind.Found; tab: chrome.tabs.Tab }
-  | { kind: ActiveTabQueryKind.Unavailable }
-
-function queryActiveTab(): Promise<ActiveTabQuery> {
-  return new Promise((resolve) => {
-    const nookTypedArgs0_2: Parameters<typeof chrome.tabs.query>[0] = {
-      active: true,
-      currentWindow: true,
-    }
-    chrome.tabs.query(nookTypedArgs0_2, (tabs) => {
-      const tab = tabs[0]
-      const result: ActiveTabQuery = tab
-        ? { kind: ActiveTabQueryKind.Found, tab }
-        : { kind: ActiveTabQueryKind.Unavailable }
-      resolve(result)
-    })
-  })
-}
-
-export async function queryActiveTabLoginDetection(): Promise<LoginDetectionResponse> {
-  const activeTab = await queryActiveTab()
-  if (activeTab.kind === ActiveTabQueryKind.Unavailable) {
-    return { ok: true, status: LoginDetectionStatus.Unavailable }
-  }
-  const tabId = activeTab.tab.id
-  if (typeof tabId !== 'number' || !Number.isInteger(tabId)) {
-    return { ok: true, status: LoginDetectionStatus.Unavailable }
-  }
-  try {
-    const response = await new Promise<LoginDetectionResponse>((resolve) => {
-      const nookTypedArgs1_0: Parameters<typeof chrome.tabs.sendMessage>[1] = {
-        type: 'nook:query-login-detection',
-      }
-      chrome.tabs.sendMessage(tabId, nookTypedArgs1_0, (result: unknown) => {
-        if (chrome.runtime.lastError) {
-          const nookTypedArgs0_3: Parameters<typeof resolve>[0] = {
-            ok: true,
-            status: LoginDetectionStatus.Unavailable,
-          }
-          resolve(nookTypedArgs0_3)
-          return
-        }
-        if (!result || typeof result !== 'object') {
-          const nookTypedArgs0_4: Parameters<typeof resolve>[0] = {
-            ok: true,
-            status: LoginDetectionStatus.Unavailable,
-          }
-          resolve(nookTypedArgs0_4)
-          return
-        }
-        const payload = result as {
-          ok?: unknown
-          status?: unknown
-        }
-        if (
-          payload.ok !== true ||
-          (payload.status !== LoginDetectionStatus.Detected &&
-            payload.status !== LoginDetectionStatus.NotDetected &&
-            payload.status !== LoginDetectionStatus.Unavailable)
-        ) {
-          const nookTypedArgs0_5: Parameters<typeof resolve>[0] = {
-            ok: true,
-            status: LoginDetectionStatus.Unavailable,
-          }
-          resolve(nookTypedArgs0_5)
-          return
-        }
-        const nookTypedArgs0_6: Parameters<typeof resolve>[0] = {
-          ok: true,
-          status: payload.status as LoginDetectionStatus,
-        }
-        resolve(nookTypedArgs0_6)
-      })
-    })
-    return response
-  } catch {
-    // Content script may be absent on restricted pages.
-  }
-  return { ok: true, status: LoginDetectionStatus.Unavailable }
-}
-
 export async function openCompanionLauncher(
   intent: OpenCompanionLauncherIntent,
 ): Promise<void> {
   const popupUrl = chrome.runtime.getURL('popup/index.html')
-  const launcherUrl =
-    intent === OpenCompanionLauncherIntent.Pair
-      ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
-      : popupUrl
+  if (intent === OpenCompanionLauncherIntent.Default) {
+    const toolbarAction = chrome.action as ToolbarActionPopupApi
+    if (toolbarAction.openPopup) await toolbarAction.openPopup()
+    return
+  }
+  const launcherUrl = `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
   if (chrome.windows?.create) {
     const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
       url: launcherUrl,

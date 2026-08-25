@@ -40,14 +40,23 @@ body {
   overflow-y: auto;
 }
 
+body:has(.toolbar-menu) {
+  width: 340px;
+}
+
 .device-setup,
-.companion-home,
+.toolbar-menu,
 .authenticator-picker {
   display: grid;
   gap: 14px;
   padding: 22px;
   border: 1px solid var(--border);
   background: var(--background);
+}
+
+.toolbar-menu {
+  gap: 12px;
+  padding: 18px;
 }
 
 .authenticator-picker {
@@ -184,27 +193,6 @@ h1 {
   text-align: center;
 }
 
-.vault-connection[data-connected='true'] {
-  color: color-mix(in oklab, oklch(0.78 0.08 155) 85%, var(--foreground));
-}
-
-.vault-connection[data-connected='false'] {
-  color: color-mix(in oklab, oklch(0.8 0.08 70) 80%, var(--foreground));
-}
-
-.login-detection {
-  margin: -4px 8px 4px;
-  color: var(--muted-foreground);
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.login-detection[data-status='detected'] {
-  color: color-mix(in oklab, oklch(0.78 0.08 155) 85%, var(--foreground));
-}
-
 .field-group {
   display: grid;
   gap: 7px;
@@ -331,7 +319,7 @@ button:disabled {
   margin: 0 auto;
 }
 
-.companion-logo {
-  width: 52px;
-  height: 52px;
+.menu-logo {
+  width: 42px;
+  height: 42px;
 }

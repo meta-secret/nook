@@ -46,7 +46,7 @@ describe('Nook Pilot in-page authorization policy', () => {
     })
   })
 
-  test('starts compact only for a fillable login with a confirmed empty match set', () => {
+  test('starts compact until a fillable login has a confirmed saved match', () => {
     const emptyMatches: AuthWidgetPresentationInput = {
       savedLoginCapability: 'fill-saved-login',
       loginMatches: {
@@ -74,7 +74,7 @@ describe('Nook Pilot in-page authorization policy', () => {
       },
     ]
     for (const unresolvedMatches of unresolvedStates) {
-      expect(authWidgetStartsCollapsed(unresolvedMatches)).toBe(false)
+      expect(authWidgetStartsCollapsed(unresolvedMatches)).toBe(true)
     }
   })
 

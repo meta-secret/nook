@@ -21,8 +21,8 @@ export async function ensurePinProtectedPopup(
   popupPage: Page,
   pin = MOCK_AUTH_DEFAULT_PIN,
 ): Promise<void> {
-  const companionHome = popupPage.getByTestId('extension-companion-home')
-  if (await companionHome.isVisible().catch(() => false)) {
+  const toolbarMenu = popupPage.getByTestId('extension-toolbar-menu')
+  if (await toolbarMenu.isVisible().catch(() => false)) {
     return
   }
 
@@ -30,7 +30,7 @@ export async function ensurePinProtectedPopup(
   if (await pinUnlock.isVisible().catch(() => false)) {
     await popupPage.getByTestId('device-protection-pin-unlock-input').fill(pin)
     await pinUnlock.click()
-    await expect(companionHome).toBeVisible({ timeout: 45_000 })
+    await expect(toolbarMenu).toBeVisible({ timeout: 45_000 })
     return
   }
 
@@ -45,5 +45,5 @@ export async function ensurePinProtectedPopup(
   await popupPage.getByTestId('device-protection-pin-input').fill(pin)
   await popupPage.getByTestId('device-protection-pin-confirm').fill(pin)
   await popupPage.getByTestId('device-protection-pin-setup-btn').click()
-  await expect(companionHome).toBeVisible({ timeout: 45_000 })
+  await expect(toolbarMenu).toBeVisible({ timeout: 45_000 })
 }

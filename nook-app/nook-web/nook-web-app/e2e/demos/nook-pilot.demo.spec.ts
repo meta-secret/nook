@@ -134,27 +134,24 @@ test('guide a login through the Nook Pilot control plane', async ({ page }) => {
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
   await expect(
-    widget.getByRole('button', { name: 'Continue with Nook' }),
+    widget.getByRole('button', { name: 'Fill saved login' }),
   ).toBeHidden()
   await demoBeat(page)
 
   await widget.getByTestId('nook-auth-gate-expand').click()
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Connected to Demo vault',
-  )
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Fill saved login' }).click()
   await expect(
     widget.getByText(
-      'Unlock Nook in the companion window, then click Continue with Nook again.',
+      'Open Nook from the browser toolbar, unlock it, then choose Fill saved login again.',
     ),
   ).toBeVisible()
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Fill saved login' }).click()
   await expect(
     widget.getByText(
       'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
@@ -361,18 +358,18 @@ test('advance a Microsoft-like email-first Login control through Nook Pilot', as
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(
-    widget.getByRole('button', { name: 'Continue with Nook' }),
+    widget.getByRole('button', { name: 'Fill saved login' }),
   ).toBeVisible()
   await expect(page.locator('[name="loginfmt"]')).toBeVisible()
   await demoBeat(page)
 
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Fill saved login' }).click()
   await expect(
     widget.getByText(
-      'Unlock Nook in the companion window, then click Continue with Nook again.',
+      'Open Nook from the browser toolbar, unlock it, then choose Fill saved login again.',
     ),
   ).toBeVisible()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Fill saved login' }).click()
   await expect(page.locator('[name="loginfmt"]')).toHaveValue(
     'pilot@example.test',
   )
@@ -430,16 +427,6 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
             color: #fff;
             font: 700 20px/1 Helvetica, Arial, sans-serif;
           }
-          .companion-hint {
-            margin: 16px 0 0;
-            padding: 10px 12px;
-            border-radius: 8px;
-            background: #111827;
-            color: #e5e7eb;
-            font-size: 13px;
-            text-align: center;
-          }
-          .companion-hint[data-status="detected"] { color: #86efac; }
         </style>
       </head>
       <body>
@@ -464,13 +451,6 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
               />
               <button type="submit" name="login" id="loginbutton">Log in</button>
             </form>
-            <p
-              class="companion-hint"
-              data-testid="companion-login-detection"
-              data-status="detected"
-            >
-              Login form detected on this page
-            </p>
           </main>
         </div>
       </body>
@@ -482,12 +462,9 @@ test('detect a Facebook-like login under an aria-hidden consent layer', async ({
   await expect(widget.getByText('Nook Pilot · 1/3')).toBeVisible()
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
   await expect(
-    widget.getByRole('button', { name: 'Continue with Nook' }),
+    widget.getByRole('button', { name: 'Fill saved login' }),
   ).toBeVisible()
   await expect(page.locator('[name="email"]')).toBeVisible()
   await expect(page.locator('[name="pass"]')).toBeVisible()
-  await expect(page.getByTestId('companion-login-detection')).toHaveText(
-    'Login form detected on this page',
-  )
   await demoBeat(page)
 })

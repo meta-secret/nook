@@ -192,9 +192,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await expect(
     widget.getByRole('button', { name: 'Add 2FA from this page' }),
   ).toBeVisible()
-  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Connected to Demo vault',
-  )
   await expect(
     page.locator('[data-bootstrap-sentinel="replacement-root"]'),
   ).toBeVisible()
@@ -236,9 +233,6 @@ test('uses the paired demo vault for authenticator enrollment', async ({
   await expect(
     widget.getByText('Authenticator saved to your vault.'),
   ).toBeVisible({ timeout: 30_000 })
-  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Connected to Demo vault',
-  )
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Save backup codes' }).click()

@@ -57,12 +57,8 @@ export function authWidgetStartsCollapsed({
   savedLoginCapability,
   loginMatches,
 }: AuthWidgetPresentationInput): boolean {
-  return (
-    savedLoginCapability === 'fill-saved-login' &&
-    loginMatches.kind === 'ready' &&
-    'count' in loginMatches &&
-    loginMatches.count === 0
-  )
+  if (savedLoginCapability !== 'fill-saved-login') return false
+  return loginMatches.kind !== 'ready' || loginMatches.count === 0
 }
 
 export function safeSavedOptionNumber(index: number): string {

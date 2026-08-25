@@ -194,7 +194,6 @@ async function buildSveltePage(page: 'popup') {
 type NookLocaleCatalog = {
   extension: {
     widget: {
-      open_vault: string
       dismiss: string
       collapse: string
       expand: string
@@ -226,14 +225,13 @@ type NookLocaleCatalog = {
       totp_description: string
       manual_title: string
       manual_description: string
-      take_over: string
       filling_title: string
       verifying_title: string
       submitted: string
       gate_step: string
       gate_title: string
       gate_description: string
-      continue: string
+      fill_login: string
       working: string
       unlock_then_continue: string
       no_match: string
@@ -309,7 +307,6 @@ async function buildChromeLocales() {
         await readFile(join(appCommonLocalesRoot, `${locale}.json`), 'utf8'),
       ) as NookLocaleCatalog
       const messages = {
-        widgetOpenVault: { message: catalog.extension.widget.open_vault },
         widgetDismiss: { message: catalog.extension.widget.dismiss },
         widgetCollapse: { message: catalog.extension.widget.collapse },
         widgetExpand: { message: catalog.extension.widget.expand },
@@ -401,7 +398,6 @@ async function buildChromeLocales() {
         widgetManualDescription: {
           message: catalog.extension.widget.manual_description,
         },
-        widgetTakeOver: { message: catalog.extension.widget.take_over },
         widgetFillingTitle: { message: catalog.extension.widget.filling_title },
         widgetVerifyingTitle: {
           message: catalog.extension.widget.verifying_title,
@@ -412,7 +408,7 @@ async function buildChromeLocales() {
         widgetGateDescription: {
           message: catalog.extension.widget.gate_description,
         },
-        widgetContinue: { message: catalog.extension.widget.continue },
+        widgetFillLogin: { message: catalog.extension.widget.fill_login },
         widgetWorking: { message: catalog.extension.widget.working },
         widgetUnlockThenContinue: {
           message: catalog.extension.widget.unlock_then_continue,

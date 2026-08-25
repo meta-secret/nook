@@ -80,9 +80,6 @@ test('propose Create passkey through Nook Pilot without silent ceremony', async 
   await expect(
     widget.getByRole('button', { name: 'Create passkey' }),
   ).toBeVisible()
-  await expect(widget.getByTestId('nook-auth-gate-vault-status')).toHaveText(
-    'Connected to Demo vault',
-  )
   await demoBeat(page)
 
   await widget.getByRole('button', { name: 'Create passkey' }).click()

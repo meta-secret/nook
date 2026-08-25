@@ -74,7 +74,6 @@ type TranslatedMessageWithSubstitutionArgs = {
 export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
   step: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
   setBusy: (busy: boolean) => void
   isBusy: () => boolean
   sendDecodedRuntimeMessage: <Response>(

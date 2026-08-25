@@ -66,11 +66,11 @@ test.describe('popular login fixture coverage', () => {
           `Pilot missing for template ${templateId}`,
         ).toBeVisible({ timeout: 20_000 })
         await expect(
-          widget.getByRole('button', { name: 'Continue with Nook' }),
+          widget.getByRole('button', { name: 'Fill saved login' }),
         ).toBeHidden()
         await compactLauncher.click()
         await expect(
-          widget.getByRole('button', { name: 'Continue with Nook' }),
+          widget.getByRole('button', { name: 'Fill saved login' }),
         ).toBeVisible()
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
           `${templateId}-login`,
@@ -108,7 +108,7 @@ test.describe('popular login fixture coverage', () => {
         await expect(widget.getByText('Ready to sign in')).toBeVisible({
           timeout: 20_000,
         })
-        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await widget.getByRole('button', { name: 'Fill saved login' }).click()
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },

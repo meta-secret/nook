@@ -9,7 +9,7 @@ import { startMockAuthServer } from './mock-auth'
 test.describe('PIN Pilot against mock auth', () => {
   test.describe.configure({ timeout: 180_000 })
 
-  test('completes plain login through Continue with Nook', async ({
+  test('completes plain login through Fill saved login', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -28,11 +28,8 @@ test.describe('PIN Pilot against mock auth', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await expect(
-        widget.getByTestId('nook-auth-gate-vault-status'),
-      ).toHaveText(/Connected to Mock auth vault/)
       // Single matching login fills and submits without an account chooser.
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -76,7 +73,7 @@ test.describe('PIN Pilot against mock auth', () => {
         timeout: 20_000,
       })
       await loginWidget
-        .getByRole('button', { name: 'Continue with Nook' })
+        .getByRole('button', { name: 'Fill saved login' })
         .click()
 
       await expect(loginPage).toHaveURL(/\/totp\/verify$/, { timeout: 20_000 })

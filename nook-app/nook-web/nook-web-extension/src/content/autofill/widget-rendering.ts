@@ -15,12 +15,8 @@ import {
   renderEnrollmentActions,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
+import { continueWithAuthenticator } from './authenticator-actions'
 import {
-  cancelPendingAuthenticatorPickerRequest,
-  continueWithAuthenticator,
-} from './authenticator-actions'
-import {
-  cancelPendingLoginPickerRequest,
   continueWithNook,
   generatePasswordWithNook,
   proposePasskeyWithNook,
@@ -72,15 +68,12 @@ export function renderEnrollmentWidget({
 
   const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
     copy: enrollmentCopy(hints),
-    vaultConnection,
     currentStep: 1,
     totalSteps: 1,
   }
   const shell = createWidgetShell(nookTypedArgs0_0)
-  const { body, step, title, description, continueButton, openVaultButton } =
-    shell
+  const { body, step, title, description, continueButton } = shell
   continueButton.hidden = true
-  openVaultButton.hidden = true
   const workflowRoot: Parameters<typeof mountWidgetShell>[0]['workflowRoot'] = {
     kind: WidgetWorkflowRootKind.Unassigned,
   }
@@ -97,7 +90,6 @@ export function renderEnrollmentWidget({
     title,
     description,
     continueButton,
-    openVaultButton,
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),
@@ -157,6 +149,15 @@ export function renderWidget({
 
   const savedLoginCapability =
     authentication_workflow_saved_login_capability(snapshot)
+  const pilotActionInput: Parameters<typeof authWidgetAllowsPilotAction>[0] = {
+    action: snapshot.action,
+    approvalRequirement: snapshot.approvalRequirement,
+  }
+  const canContinueWithNook = authWidgetAllowsPilotAction(pilotActionInput)
+  if (!canContinueWithNook) {
+    removeWidget()
+    return
+  }
   const nookTypedArgs0_0: Parameters<typeof authWidgetStartsCollapsed>[0] = {
     savedLoginCapability,
     loginMatches,
@@ -167,18 +168,11 @@ export function renderWidget({
 
   const nookTypedArgs0_3: Parameters<typeof createWidgetShell>[0] = {
     copy: workflowCopy(snapshot.kind),
-    vaultConnection,
     currentStep: snapshot.currentStep,
     totalSteps: snapshot.totalSteps,
   }
   const shell = createWidgetShell(nookTypedArgs0_3)
-  const { body, step, title, description, continueButton, openVaultButton } =
-    shell
-  const pilotActionInput: Parameters<typeof authWidgetAllowsPilotAction>[0] = {
-    action: snapshot.action,
-    approvalRequirement: snapshot.approvalRequirement,
-  }
-  const canContinueWithNook = authWidgetAllowsPilotAction(pilotActionInput)
+  const { body, step, title, description, continueButton } = shell
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
@@ -188,9 +182,7 @@ export function renderWidget({
           ? BROWSER_MESSAGE_KEYS.WidgetUsePasskey
           : snapshot.action === 'create-passkey'
             ? BROWSER_MESSAGE_KEYS.WidgetCreatePasskey
-            : canContinueWithNook
-              ? BROWSER_MESSAGE_KEYS.WidgetContinue
-              : BROWSER_MESSAGE_KEYS.WidgetTakeOver
+            : BROWSER_MESSAGE_KEYS.WidgetFillLogin
   continueButton.setAttribute(
     'aria-label',
     translatedMessage(continueMessageKey),
@@ -199,13 +191,6 @@ export function renderWidget({
 
   continueButton.addEventListener('click', (event) => {
     if (!isTrustedAuthAction(event.isTrusted)) return
-    if (!canContinueWithNook) {
-      cancelPendingAuthenticatorPickerRequest()
-      cancelPendingLoginPickerRequest()
-      widgetState.dismissed = true
-      removeWidget()
-      return
-    }
     if (snapshot.action === 'fill-totp') {
       const nookTypedArgs0_4: Parameters<typeof continueWithAuthenticator>[0] =
         {
@@ -248,22 +233,6 @@ export function renderWidget({
     }
   })
 
-  const takeOverButton = document.createElement('button')
-  takeOverButton.type = 'button'
-  takeOverButton.className = 'text-button'
-  takeOverButton.textContent = translatedMessage(
-    BROWSER_MESSAGE_KEYS.WidgetTakeOver,
-  )
-  takeOverButton.hidden = !canContinueWithNook
-  takeOverButton.addEventListener('click', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted)) return
-    cancelPendingAuthenticatorPickerRequest()
-    cancelPendingLoginPickerRequest()
-    widgetState.dismissed = true
-    removeWidget()
-  })
-
-  body.append(takeOverButton)
   const nookTypedArgs0_1: Parameters<
     typeof mountWidgetShell
   >[0]['workflowRoot'] = {
@@ -285,7 +254,6 @@ export function renderWidget({
       title,
       description,
       continueButton,
-      openVaultButton,
     }
     const nookTypedArgs1_1: Parameters<typeof renderEnrollmentActions>[0] = {
       host: buildEnrollmentFlowHost(nookTypedArgs0_9),

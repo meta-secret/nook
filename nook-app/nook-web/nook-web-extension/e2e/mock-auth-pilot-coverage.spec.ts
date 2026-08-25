@@ -37,9 +37,11 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
+      await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
+      await widget.getByTestId('nook-auth-gate-expand').click()
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(
         widget.getByText(
           'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
@@ -86,7 +88,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginWidget.getByTestId('nook-auth-gate-expand').click()
       await expect(loginWidget.getByText('Ready to sign in')).toBeVisible()
       await loginWidget
-        .getByRole('button', { name: 'Continue with Nook' })
+        .getByRole('button', { name: 'Fill saved login' })
         .click()
       await expect(
         loginWidget.getByText(
@@ -187,7 +189,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(loginPage.getByRole('alert')).toHaveText(
         'Invalid username or password.',
         { timeout: 20_000 },
@@ -200,7 +202,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
-  test('prompts unlock when locked then resumes Continue with Nook', async ({
+  test('prompts toolbar unlock when locked then resumes Fill saved login', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -223,16 +225,16 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(
         widget.getByText(
-          'Unlock Nook in the companion window, then click Continue with Nook again.',
+          'Open Nook from the browser toolbar, unlock it, then choose Fill saved login again.',
         ),
       ).toBeVisible({ timeout: 15_000 })
 
       await unlockExtensionPopupPin(paired.context, paired.extensionId)
 
-      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(
         'Authentication complete',
         { timeout: 20_000 },
@@ -315,7 +317,7 @@ async function expectPilotPlainSuccess(
   if (beforeContinue) await beforeContinue(page)
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await widget.getByRole('button', { name: 'Fill saved login' }).click()
   await expect(page.getByTestId('mock-auth-success')).toHaveText(
     'Authentication complete',
     { timeout: 20_000 },

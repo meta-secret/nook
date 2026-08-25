@@ -27,14 +27,13 @@ import {
   PointerDragBehaviorKind,
   clampWidgetPosition,
 } from './widget-position'
-import type { PilotVaultConnection, WorkflowCopy } from './workflow-ui'
+import type { WorkflowCopy } from './workflow-ui'
 import {
   WIDGET_HOST_ID,
   progressLabel,
   removeWidget,
   translatedMessage,
   translatedMessageWithSubstitution,
-  vaultConnectionLabel,
 } from './workflow-ui'
 
 const WIDGET_PANEL_STYLES = `
@@ -55,10 +54,10 @@ const WIDGET_PANEL_STYLES = `
     }
     .panel {
       position: relative;
-      width: min(320px, calc(100vw - 36px));
+      width: min(288px, calc(100vw - 36px));
       display: grid;
-      gap: 12px;
-      padding: 14px 14px 16px;
+      gap: 10px;
+      padding: 12px;
       border: 1px solid rgb(255 255 255 / 10%);
       border-radius: 12px;
       background: oklch(0.141 0.005 285.823);
@@ -112,12 +111,12 @@ const WIDGET_PANEL_STYLES = `
     }
     .body {
       display: grid;
-      gap: 12px;
+      gap: 9px;
     }
     .site-context {
       width: fit-content;
       max-width: 100%;
-      margin: -4px auto 0;
+      margin: 0;
       overflow: hidden;
       color: oklch(0.82 0.01 286);
       font-size: 11px;
@@ -125,33 +124,6 @@ const WIDGET_PANEL_STYLES = `
       letter-spacing: 0.02em;
       text-overflow: ellipsis;
       white-space: nowrap;
-    }
-    .vault-status {
-      width: fit-content;
-      max-width: 100%;
-      margin: -8px auto 0;
-      overflow: hidden;
-      color: oklch(0.705 0.015 286.067);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-      text-align: center;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .vault-status[data-connected='true'] {
-      color: oklch(0.82 0.04 155);
-    }
-    .vault-status[data-connected='false'] {
-      color: oklch(0.78 0.05 70);
-    }
-    .mark {
-      display: block;
-      width: 52px;
-      height: 52px;
-      margin: 0 auto;
-      border-radius: 12px;
-      object-fit: contain;
     }
     .collapsed-launch {
       appearance: none;
@@ -194,16 +166,16 @@ const WIDGET_PANEL_STYLES = `
     }
     h1 {
       margin: 0;
-      font-size: 18px;
+      font-size: 16px;
       line-height: 1.25;
-      text-align: center;
+      text-align: left;
     }
     .description {
       margin: 0;
       color: oklch(0.705 0.015 286.067);
-      font-size: 13px;
+      font-size: 12px;
       line-height: 1.4;
-      text-align: center;
+      text-align: left;
     }
     .account-list {
       display: grid;
@@ -212,7 +184,7 @@ const WIDGET_PANEL_STYLES = `
     button.primary-button,
     button.secondary-button {
       appearance: none;
-      min-height: 40px;
+      min-height: 38px;
       border-radius: 9px;
       cursor: pointer;
       font: inherit;
@@ -264,7 +236,6 @@ type BuildEnrollmentFlowHostArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
 }
 
 export function buildEnrollmentFlowHost({
@@ -273,7 +244,6 @@ export function buildEnrollmentFlowHost({
   title,
   description,
   continueButton,
-  openVaultButton,
 }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
   return {
     panel,
@@ -281,7 +251,6 @@ export function buildEnrollmentFlowHost({
     title,
     description,
     continueButton,
-    openVaultButton,
     setBusy: (value: boolean) => {
       widgetState.busy = value
     },
@@ -322,7 +291,6 @@ interface WidgetShell {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
-  openVaultButton: HTMLButtonElement
   collapseButton: HTMLButtonElement
   collapsedLaunch: HTMLButtonElement
 }
@@ -348,14 +316,12 @@ export function createWidgetMark({
 
 type CreateWidgetShellArgs = {
   copy: WorkflowCopy
-  vaultConnection: PilotVaultConnection
   currentStep: number
   totalSteps: number
 }
 
 export function createWidgetShell({
   copy,
-  vaultConnection,
   currentStep,
   totalSteps,
 }: CreateWidgetShellArgs): WidgetShell {
@@ -410,24 +376,12 @@ export function createWidgetShell({
   const body = document.createElement('div')
   body.className = 'body'
 
-  const nookTypedArgs0_1: Parameters<typeof createWidgetMark>[0] = {
-    className: 'mark',
-    size: 52,
-  }
-  const mark = createWidgetMark(nookTypedArgs0_1)
-
   const title = document.createElement('h1')
   title.textContent = translatedMessage(copy.titleKey)
 
   const site = document.createElement('p')
   site.className = 'site-context'
   site.textContent = location.hostname
-
-  const vaultStatus = document.createElement('p')
-  vaultStatus.className = 'vault-status'
-  vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
-  vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
-  vaultStatus.textContent = vaultConnectionLabel(vaultConnection)
 
   const description = document.createElement('p')
   description.className = 'description'
@@ -437,32 +391,7 @@ export function createWidgetShell({
   continueButton.type = 'button'
   continueButton.className = 'primary-button'
 
-  const openVaultButton = document.createElement('button')
-  openVaultButton.type = 'button'
-  openVaultButton.className = 'secondary-button'
-  openVaultButton.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetOpenVault),
-  )
-  openVaultButton.textContent = translatedMessage(
-    BROWSER_MESSAGE_KEYS.WidgetOpenVault,
-  )
-  openVaultButton.addEventListener('click', () => {
-    const nookTypedArgs0_0: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-      type: 'nook:open-simple-vault',
-    }
-    void chrome.runtime.sendMessage(nookTypedArgs0_0)
-  })
-
-  body.append(
-    mark,
-    site,
-    vaultStatus,
-    title,
-    description,
-    continueButton,
-    openVaultButton,
-  )
+  body.append(site, title, description, continueButton)
 
   const collapsedLaunch = document.createElement('button')
   collapsedLaunch.type = 'button'
@@ -496,7 +425,6 @@ export function createWidgetShell({
     title,
     description,
     continueButton,
-    openVaultButton,
     collapseButton,
     collapsedLaunch,
   }

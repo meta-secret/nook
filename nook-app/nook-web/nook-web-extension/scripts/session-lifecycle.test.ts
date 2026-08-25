@@ -24,7 +24,9 @@ describe('ensureExtensionSessionDocument', () => {
 })
 
 describe('openCompanionLauncherBestEffort', () => {
-  test('preserves launcher failures for strict unlock callers', async () => {
+  test('opens the toolbar popup without creating a detached window', async () => {
+    let toolbarPopupOpens = 0
+    let detachedWindowOpens = 0
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
@@ -32,16 +34,25 @@ describe('openCompanionLauncherBestEffort', () => {
       runtime: {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
+      action: {
+        openPopup: () => {
+          toolbarPopupOpens += 1
+          return Promise.resolve()
+        },
+      },
       windows: {
-        create: () => Promise.reject(new Error('launcher unavailable')),
+        create: () => {
+          detachedWindowOpens += 1
+          return Promise.resolve({})
+        },
       },
     } as typeof chrome
     const { openCompanionLauncher } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      openCompanionLauncher(OpenCompanionLauncherIntent.Default),
-    ).rejects.toThrow('launcher unavailable')
+    await openCompanionLauncher(OpenCompanionLauncherIntent.Default)
+    expect(toolbarPopupOpens).toBe(1)
+    expect(detachedWindowOpens).toBe(0)
   })
 
   test('contains launcher failures for callers returning locked responses', async () => {
@@ -52,8 +63,8 @@ describe('openCompanionLauncherBestEffort', () => {
       runtime: {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
-      windows: {
-        create: () => Promise.reject(new Error('launcher unavailable')),
+      action: {
+        openPopup: () => Promise.reject(new Error('toolbar unavailable')),
       },
     } as typeof chrome
     const { openCompanionLauncherBestEffort } =

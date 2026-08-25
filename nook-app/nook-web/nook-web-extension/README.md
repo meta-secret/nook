@@ -119,7 +119,7 @@ That suite includes:
   Auth quirks run in the browser; TOTP verify uses `nook-core` via WASM.
 - PIN-initialized Pilot flows (`e2e/mock-auth-pilot.spec.ts`) that force
   passkey unavailability, protect the extension device with PIN `123456`, pair
-  a vault, and complete Continue with Nook / Fill 2FA against mock auth — no
+  a vault, and complete Fill saved login / Fill 2FA against mock auth — no
   real third-party sites.
 - Expanded PIN Pilot coverage (`e2e/mock-auth-pilot-coverage.spec.ts`):
   multi-login chooser, no-match / empty 2FA, quirk fill-to-success, wrong

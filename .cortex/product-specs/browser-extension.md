@@ -5,11 +5,10 @@
 Status: Implemented direction for #234, #235, #237, #239, #244, #441, and #461.
 
 `nook-web-extension` is the browser integration for Simple Vault. It does not
-duplicate the vault application UI. On first run, clicking the extension opens
-the standard device-protection widget inside the trusted toolbar popup. After
-the extension device exists, the popup sends its public keys directly to the
-configured Simple Vault deployment, which remains the only surface for creating,
-importing, unlocking, browsing, editing, recovering, and administering vaults.
+duplicate the vault application UI. Clicking the extension opens the trusted
+toolbar popup. That popup owns extension-device protection and the explicit
+Open Simple Vault action. Simple Vault remains the only surface for creating,
+importing, browsing, editing, recovering, and administering vaults.
 
 The extension owns browser-only responsibilities:
 
@@ -45,9 +44,9 @@ application capability checks enforce the vault-type boundary.
 | Surface                           | Responsibility                                                                                                |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------- |
 | `simple.nokey.sh`                 | Complete vault UI, unlock, consent, device management, recovery, and settings                                 |
-| Extension toolbar action          | Create or unlock the extension device; companion home always offers stay-ready and optional Open Simple Vault |
+| Extension toolbar action          | Create or unlock the extension device; show connection status, pairing, and Open Simple Vault                |
 | Extension background/WASM runtime | Local device key, selected identity, encrypted state, sync, domain matching, and fill authorization           |
-| In-page auth gate                 | Universal Continue with Nook gate plus optional open/unlock/select/fill/save actions                          |
+| In-page auth gate                 | One Rust-approved authentication action plus compact, dismiss, and progress controls                         |
 | Content script                    | DOM detection and the minimum selected fill payload; never vault search, crypto, or provider credentials      |
 
 Authenticator items remain standalone.
@@ -79,9 +78,9 @@ recover, or administer vault items.
 2. One user action creates or recovers the separate extension device and
    protects its private key using WebAuthn PRF through Rust/WASM. Existing
    protected devices ask only for their passkey or PIN unlock.
-3. The popup immediately opens the configured Simple Vault `/extension-connect`
+3. The toolbar popup opens the configured Simple Vault `/extension-connect`
    route with the extension runtime id and its public device request. There is
-   no website-first enable screen and no second extension window.
+   no website-first enable screen and no detached companion window.
 4. The user creates, imports, or unlocks the full Simple vault on the website.
    When creating a vault from this route, the unlocked extension sends its age
    identity and matching event-signing seed in a one-time, nonce-bound age
@@ -135,26 +134,26 @@ private identity.
 
 ## Toolbar Behavior
 
-- The toolbar always opens the extension-owned launcher.
-- Before approval, the popup shows device setup or device unlock. Completing
-  that action lands on a companion-home choice: connect/pair with Simple Vault,
-  open Simple Vault, or stay ready without opening a vault tab.
-- After a grant and usable encrypted event-log projection are persisted, unlock
-  or a ready session shows the same companion home: stay ready for site auth,
-  with Open Simple Vault as an explicit secondary option. Grant metadata by
-  itself never produces connected state, and a connected unlock never auto-opens
-  Simple Vault.
+- The toolbar always opens the extension-owned menu.
+- Before approval, the popup shows device setup or device unlock.
+- After unlock, the menu shows the current vault connection and the actions
+  that manage that connection.
+- Open Simple Vault is the explicit primary action for a connected vault.
+- Connect to Simple Vault is the explicit primary action before pairing.
+- The menu has no Ready or Stay ready destination.
+- Completing unlock never opens a detached companion window.
+- Grant metadata by itself never produces connected state.
 - The popup starts the Simple Vault approval route only after an explicit
   Connect / pair action (or Open Simple Vault).
 - The Simple Vault header vault menu lists every local vault in the viewport.
 - The vault that currently holds the companion grant shows a connected badge.
 - An unlocked vault that is not the connected vault can start pairing from that
   menu.
-- The companion popup can start pairing another vault while a grant already
+- The toolbar menu can start pairing another vault while a grant already
   exists.
-- Never put vault browsing or management in the launcher.
-- Management actions originating from the widget open the corresponding Simple
-  Vault route rather than recreating that interface in the extension.
+- Never put vault browsing or management in the toolbar menu.
+- Vault management starts only from the toolbar menu's Open Simple Vault
+  action.
 - Primary popup controls use the same neutral primary tokens as nook-web dark
   mode rather than a separate green button style.
 
@@ -216,8 +215,7 @@ The in-page auth gate is the visible HUD for **Nook Pilot**, an
 extension-owned authentication control plane. Nook Pilot follows the reusable
 workflow shape `Observe -> Understand -> Propose -> Approve -> Act -> Verify ->
 Save`. It reports where the user is in a login, signup, password-change,
-passkey, or second-factor ceremony and offers one safe next action plus manual
-takeover.
+passkey, or second-factor ceremony and offers one safe next action.
 
 The layers have intentionally different responsibilities:
 
@@ -265,8 +263,8 @@ Signup and password-change pages may offer **Generate password** through
 Rust/WASM.
 Generated values fill only `new-password` fields.
 They stay in page memory until an evidence-gated Save / Update.
-CAPTCHA, terms acceptance, and email-verification style checkpoints force Take
-over.
+CAPTCHA, terms acceptance, and email-verification style checkpoints leave Pilot
+absent. The user continues those checkpoints manually.
 Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
 consent.
 It fills the verification code via Rust/WASM.
@@ -274,10 +272,9 @@ It encrypts the authenticator only after Sufficient outcome evidence.
 Consented backup-code capture follows.
 Secrets never appear in the HUD.
 
-The companion popup “Ready / Connected” state means the extension device is
-paired to a vault. It is not login detection. Login detection is the in-page
-Nook Pilot HUD; the companion may also show a one-line current-tab hint
-(“Login form detected on this page” / “No login form detected”).
+The toolbar menu may report the connected vault. It does not report login
+detection or readiness. Login detection belongs only to the in-page Nook Pilot
+surface.
 
 ### Popular-site detection coverage
 
@@ -329,20 +326,23 @@ The gate must:
 - be visibly Nook-owned and keyboard accessible;
 - be draggable so the user can move it away from site chrome;
 - support collapsing to a compact Nook mark and expanding again;
-- start as the compact Nook mark when the unlocked extension confirms that a
-  detected login flow has zero saved login matches for the origin;
-- start expanded when a saved login matches, or when the extension is locked or
-  unavailable and the next useful action is unlock or connect;
+- start as the compact Nook mark until the extension confirms that a detected
+  login flow has at least one saved login match for the origin;
+- start expanded when a saved login matches or when a non-login workflow has a
+  safe action;
 - preserve current/total progress in the compact state and accessible label;
 - support dismissal without blocking the host page;
-- show the requesting hostname, Rust-classified workflow, current step, and
-  manual takeover without exposing a username, password, TOTP code, setup key,
-  recovery code, or provider credential;
-- offer a primary Continue with Nook action that lists matching logins for the
+- show the requesting hostname, Rust-classified workflow, and current step
+  without exposing a username, password, TOTP code, setup key, recovery code,
+  or provider credential;
+- name the exact approved action instead of using a generic continuation label;
+- offer a primary Fill saved login action that lists matching logins for the
   page origin, reveals one credential after explicit choice, fills the form,
-  and submits; when locked, open the companion launcher and ask the user to
-  unlock then continue again;
-- keep Open vault as an optional secondary action;
+  and submits;
+- when locked, open the trusted toolbar popup when the browser permits it and
+  ask the user to unlock there before retrying the action;
+- keep Open Simple Vault out of the host-page DOM;
+- omit the gate when Rust allows no safe action;
 - never request a vault password, recovery secret, or provider credential;
 - never silently fill or submit;
 - when more than one login matches the page origin, open an extension-owned
@@ -353,7 +353,8 @@ The gate must:
   issuer/account labels out of the host-page DOM;
 - open a browser-native or extension-controlled authorization surface when the
   extension is locked;
-- open Simple Vault for full search, creation, editing, and settings.
+- leave full search, creation, editing, and settings to the toolbar menu's Open
+  Simple Vault action.
 
 An injected DOM widget is not a trusted place for primary authentication because
 the host page can imitate it. Passkey authorization stays browser-native or in

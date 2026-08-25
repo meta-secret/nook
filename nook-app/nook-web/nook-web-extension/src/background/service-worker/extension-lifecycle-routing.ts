@@ -14,11 +14,6 @@ import type * as PairingImport from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
-import {
-  LoginDetectionStatus,
-  isQueryActiveTabLoginDetectionMessage,
-  type LoginDetectionResponse,
-} from '../../lib/login-detection-messages'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -46,7 +41,6 @@ export type ExtensionLifecycleRoutingDependencies = {
   openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
   openExtensionPairing: typeof PairingIdentity.openExtensionPairing
   openSimpleVault: typeof SessionLifecycle.openSimpleVault
-  queryActiveTabLoginDetection: typeof SessionLifecycle.queryActiveTabLoginDetection
 }
 
 type MessageResponse = Parameters<
@@ -100,7 +94,6 @@ export function routeExtensionLifecycleMessage({
     openCompanionLauncher,
     openExtensionPairing,
     openSimpleVault,
-    queryActiveTabLoginDetection,
   } = dependencies
   if (isExtensionPairingStateQueryMessage(message)) {
     const queryContext: Parameters<typeof handlePairingStateQuery>[0] = {
@@ -169,23 +162,6 @@ export function routeExtensionLifecycleMessage({
       eventLogRecords: message.payload.eventLogRecords,
     }
     void importLocalEventLogUpdate(importArgs).then(sendResponse)
-    return true
-  }
-
-  if (isQueryActiveTabLoginDetectionMessage(message)) {
-    if (!isExtensionRuntimeSender(sender)) {
-      sendResponse(forbiddenSenderResponse)
-      return false
-    }
-    void queryActiveTabLoginDetection()
-      .then(sendResponse)
-      .catch(() => {
-        const response: LoginDetectionResponse = {
-          ok: true,
-          status: LoginDetectionStatus.Unavailable,
-        }
-        return sendResponse(response)
-      })
     return true
   }
 

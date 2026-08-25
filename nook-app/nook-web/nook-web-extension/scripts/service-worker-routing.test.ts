@@ -43,7 +43,6 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
   openCompanionLauncher,
   openExtensionPairing: unusedAsyncDependency,
   openSimpleVault: mock(() => {}),
-  queryActiveTabLoginDetection: unusedAsyncDependency,
 }
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {

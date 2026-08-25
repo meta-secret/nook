@@ -21,7 +21,6 @@
     type ExtensionI18n,
     type ExtensionTranslationRequest,
   } from '../lib/i18n'
-  import { LoginDetectionStatus } from '../lib/login-detection-messages'
   import {
     createExtensionPasskey,
     createExtensionPin,
@@ -36,9 +35,7 @@
   } from '../lib/nook-wasm'
   import {
     PairingCandidateKind,
-    LoginDetectionViewKind,
     type PairingCandidate,
-    type LoginDetectionView,
   } from './popup-app-state'
   import { DeviceProtectionSetupWorkflow } from '../../../nook-web-shared/src/vault-app/lib/components/device-protection-gate-state'
 
@@ -77,28 +74,13 @@
   let pairingCandidate = $state<PairingCandidate>({
     kind: PairingCandidateKind.NotSelected,
   })
-  let loginDetectionView = $state<LoginDetectionView>({
-    kind: LoginDetectionViewKind.Loading,
-  })
 
   const needsSetup = $derived(
     status === DeviceProtectionStatus.Missing ||
       status === DeviceProtectionStatus.Plaintext,
   )
-  const showCompanionHome = $derived(status === DeviceProtectionStatus.Unlocked)
+  const showToolbarMenu = $derived(status === DeviceProtectionStatus.Unlocked)
   const showExistingConnection = $derived(isConnected && !pairingRequested)
-
-  const loginDetectionKey = $derived(
-    loginDetectionView.kind === LoginDetectionViewKind.Loading
-      ? I18N_KEYS.ExtensionCompanionLoginChecking
-      : loginDetectionView.status === LoginDetectionStatus.Detected
-        ? I18N_KEYS.ExtensionCompanionLoginDetected
-        : loginDetectionView.status === LoginDetectionStatus.NotDetected
-          ? I18N_KEYS.ExtensionCompanionLoginNotDetected
-          : loginDetectionView.status === LoginDetectionStatus.Unavailable
-            ? I18N_KEYS.ExtensionCompanionLoginUnavailable
-            : I18N_KEYS.ExtensionCompanionLoginChecking,
-  )
 
   function connectedVaultLabel(vault: string): string {
     const request: ExtensionTranslationRequest = {
@@ -117,40 +99,6 @@
       response.ok === true,
     )
   }
-
-  function refreshLoginDetection(): void {
-    loginDetectionView = { kind: LoginDetectionViewKind.Loading }
-    const message: { type: string } = {
-      type: 'nook:query-active-tab-login-detection',
-    }
-    chrome.runtime.sendMessage(message, (response: unknown) => {
-      if (
-        chrome.runtime.lastError ||
-        !isOkResponse(response) ||
-        !response ||
-        typeof response !== 'object' ||
-        !('status' in response) ||
-        (response.status !== LoginDetectionStatus.Detected &&
-          response.status !== LoginDetectionStatus.NotDetected &&
-          response.status !== LoginDetectionStatus.Unavailable)
-      ) {
-        loginDetectionView = {
-          kind: LoginDetectionViewKind.Ready,
-          status: LoginDetectionStatus.Unavailable,
-        }
-        return
-      }
-      loginDetectionView = {
-        kind: LoginDetectionViewKind.Ready,
-        status: response.status as LoginDetectionStatus,
-      }
-    })
-  }
-
-  $effect(() => {
-    if (!showCompanionHome) return
-    refreshLoginDetection()
-  })
 
   function errorMessage(args: ErrorMessageArgs): string {
     const { caught, fallbackKey } = args
@@ -202,11 +150,7 @@
     })
   }
 
-  function stayAsCompanion(): void {
-    window.close()
-  }
-
-  function enterCompanionHome(device: ExtensionDeviceProtectionResult): void {
+  function enterToolbarMenu(device: ExtensionDeviceProtectionResult): void {
     pairingCandidate = { kind: PairingCandidateKind.Selected, device }
     status = DeviceProtectionStatus.Unlocked
     busy = false
@@ -216,7 +160,7 @@
   $effect(() => {
     if (activeSessionDevice.kind !== ExtensionSessionDeviceStateKind.Active)
       return
-    enterCompanionHome(activeSessionDevice.device)
+    enterToolbarMenu(activeSessionDevice.device)
   })
 
   async function runDeviceAction(args: RunDeviceActionArgs): Promise<void> {
@@ -225,7 +169,7 @@
     busy = true
     error = ''
     try {
-      enterCompanionHome(await action())
+      enterToolbarMenu(await action())
     } catch (caught) {
       busy = false
       if (
@@ -300,56 +244,33 @@
   }
 </script>
 
-{#if showCompanionHome}
-  <main class="companion-home" data-testid="extension-companion-home">
+{#if showToolbarMenu}
+  <main class="toolbar-menu" data-testid="extension-toolbar-menu">
     <p class="step-label">
       {translatePlain(I18N_KEYS.ExtensionCompanionStepLabel)}
     </p>
-    <NookIcon
-      src="../icons/nook.png"
-      alt=""
-      class="popup-logo companion-logo"
-    />
+    <NookIcon src="../icons/nook.png" alt="" class="popup-logo menu-logo" />
     <h1>
-      {translatePlain(
-        showExistingConnection
-          ? I18N_KEYS.ExtensionCompanionReadyTitle
-          : I18N_KEYS.ExtensionCompanionConnectTitle,
-      )}
-    </h1>
-    <p class="description">
-      {translatePlain(
-        showExistingConnection
-          ? I18N_KEYS.ExtensionCompanionReadyDescription
-          : I18N_KEYS.ExtensionCompanionConnectDescription,
-      )}
-    </p>
-    <p
-      class="vault-connection"
-      data-testid="companion-vault-status"
-      data-connected={showExistingConnection ? 'true' : 'false'}
-    >
       {showExistingConnection && vaultName
         ? connectedVaultLabel(vaultName)
-        : translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
-    </p>
-    <p
-      class="login-detection"
-      data-testid="companion-login-detection"
-      data-status={loginDetectionView.kind === LoginDetectionViewKind.Ready
-        ? loginDetectionView.status
-        : LoginDetectionViewKind.Loading}
-    >
-      {translatePlain(loginDetectionKey)}
-    </p>
+        : translatePlain(I18N_KEYS.ExtensionCompanionConnectTitle)}
+    </h1>
+    {#if !showExistingConnection}
+      <p class="description">
+        {translatePlain(I18N_KEYS.ExtensionCompanionConnectDescription)}
+      </p>
+      <p class="vault-connection" data-testid="companion-vault-status">
+        {translatePlain(I18N_KEYS.ExtensionCompanionNotConnected)}
+      </p>
+    {/if}
 
     {#if showExistingConnection}
       <button
         type="button"
-        data-testid="stay-as-companion-btn"
-        onclick={stayAsCompanion}
+        data-testid="open-simple-vault-btn"
+        onclick={openSimpleVault}
       >
-        {translatePlain(I18N_KEYS.ExtensionCompanionStayReady)}
+        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
       </button>
       {#if pairingCandidate.kind === PairingCandidateKind.Selected}
         <button
@@ -381,23 +302,14 @@
       </button>
     {/if}
 
-    <button
-      type="button"
-      class="secondary-button"
-      data-testid="open-simple-vault-btn"
-      onclick={openSimpleVault}
-    >
-      {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
-    </button>
-
     {#if !showExistingConnection}
       <button
         type="button"
         class="secondary-button"
-        data-testid="stay-as-companion-btn"
-        onclick={stayAsCompanion}
+        data-testid="open-simple-vault-btn"
+        onclick={openSimpleVault}
       >
-        {translatePlain(I18N_KEYS.ExtensionCompanionNotNow)}
+        {translatePlain(I18N_KEYS.ExtensionSetupOpenSimpleVault)}
       </button>
     {/if}
 

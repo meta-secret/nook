@@ -235,7 +235,7 @@ export async function setupPasskeyExtensionPopup(
   await expect(popupPage.getByTestId('extension-device-setup')).toBeVisible()
   await popupPage.getByTestId('device-protection-create-new-choice').click()
   await popupPage.getByTestId('device-protection-setup-btn').click()
-  await expect(popupPage.getByTestId('extension-companion-home')).toBeVisible()
+  await expect(popupPage.getByTestId('extension-toolbar-menu')).toBeVisible()
   return popupPage
 }
 

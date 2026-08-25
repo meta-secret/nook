@@ -1,16 +1,8 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import {
-  authenticationWorkflowFormsHaveActionableControl,
-  summarizeAuthenticationWorkflowForms,
-} from '../../../../nook-web-shared/src/extension/password-forms'
-import {
   isWebsiteAuthenticatorCanceledMessage,
   isWebsiteAuthenticatorSelectedMessage,
 } from '../../lib/authenticator-picker-messages'
-import {
-  isQueryLoginDetectionMessage,
-  LoginDetectionStatus,
-} from '../../lib/login-detection-messages'
 import {
   isWebsiteLoginCanceledMessage,
   isWebsiteLoginSelectedMessage,
@@ -42,25 +34,6 @@ export function removeScannedWidget(): void {
 chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   if (!runtimeMessage || typeof runtimeMessage !== 'object') return false
   const message = runtimeMessage
-  if (
-    sender.id === chrome.runtime.id &&
-    isQueryLoginDetectionMessage(message)
-  ) {
-    const observations = summarizeAuthenticationWorkflowForms()
-    const actionabilityQuery: Parameters<
-      typeof authenticationWorkflowFormsHaveActionableControl
-    >[0] = { observations }
-    const detected =
-      authenticationWorkflowFormsHaveActionableControl(actionabilityQuery)
-    const nookTypedArgs0_0: Parameters<typeof sendResponse>[0] = {
-      ok: true,
-      status: detected
-        ? LoginDetectionStatus.Detected
-        : LoginDetectionStatus.NotDetected,
-    }
-    sendResponse(nookTypedArgs0_0)
-    return false
-  }
   if (
     sender.id === chrome.runtime.id &&
     isWebsiteLoginCanceledMessage(message) &&

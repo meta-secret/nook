@@ -115,7 +115,6 @@ import {
   extensionSessionDocument,
   openCompanionLauncher,
   openSimpleVault,
-  queryActiveTabLoginDetection,
 } from './service-worker/session-lifecycle'
 import {
   isExtensionSessionEnsureMessage,
@@ -146,7 +145,6 @@ const extensionLifecycleRoutingDependencies: Parameters<
   openCompanionLauncher,
   openExtensionPairing,
   openSimpleVault,
-  queryActiveTabLoginDetection,
 }
 
 const externalCompanionRoutingDependencies: Parameters<
