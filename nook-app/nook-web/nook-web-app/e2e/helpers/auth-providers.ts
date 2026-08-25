@@ -217,15 +217,24 @@ export async function waitForAuthProviderIds(
   page: Page,
   expectedIds: string[],
 ): Promise<void> {
+  const stateKey = await activeAuthProviderStateKey(page)
+  type AuthProviderIdsWait = {
+    readonly ids: string[]
+    readonly scopedStateKey: string
+  }
+  const authProviderIdsWait: AuthProviderIdsWait = {
+    ids: expectedIds,
+    scopedStateKey: stateKey,
+  }
   await page.waitForFunction(
-    (ids) =>
+    ({ ids, scopedStateKey }: AuthProviderIdsWait) =>
       new Promise<boolean>((resolve) => {
         const request = indexedDB.open('nook_auth', 1)
         request.onerror = () => resolve(false)
         request.onsuccess = () => {
           const db = request.result
           const tx = db.transaction('auth', 'readonly')
-          const getRequest = tx.objectStore('auth').get('providers')
+          const getRequest = tx.objectStore('auth').get(scopedStateKey)
           getRequest.onerror = () => resolve(false)
           getRequest.onsuccess = () => {
             const rawSnapshot = getRequest.result as unknown
@@ -243,7 +252,7 @@ export async function waitForAuthProviderIds(
           tx.oncomplete = () => db.close()
         }
       }),
-    expectedIds,
+    authProviderIdsWait,
     { timeout: UI_TIMEOUT_MS },
   )
 }
@@ -352,12 +361,34 @@ export type RawAuthProvidersSnapshot = {
   }>
 }
 
+async function activeAuthProviderStateKey(page: Page): Promise<string> {
+  return page.evaluate(() => {
+    const vault = (
+      window as Window & {
+        __nookVault?: {
+          readonly hasManager: boolean
+          requireManager(): { readonly device_id: string }
+        }
+      }
+    ).__nookVault
+    if (!vault?.hasManager) return 'providers'
+    const appId = vault.requireManager().device_id
+    return appId ? `providers:${appId}` : 'providers'
+  })
+}
+
 /** Read the raw `nook_auth` snapshot as persisted (sealed credential fields). */
 export async function readRawAuthProvidersFromIdb(
   page: Page,
 ): Promise<RawAuthProvidersSnapshot> {
-  return page.evaluate(() => {
+  const stateKey = await activeAuthProviderStateKey(page)
+  return page.evaluate((scopedStateKey) => {
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
+      const resolveSnapshot = (
+        rawSnapshot: RawAuthProvidersSnapshot | undefined,
+      ) => {
+        resolve(rawSnapshot ?? { providers: [] })
+      }
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
@@ -365,22 +396,29 @@ export async function readRawAuthProvidersFromIdb(
         const db = request.result
         const tx = db.transaction('auth', 'readonly')
         const store = tx.objectStore('auth')
-        const getReq = store.get('providers')
+        const getReq = store.get(scopedStateKey)
         getReq.onerror = () =>
           reject(getReq.error ?? new Error('idb read failed'))
         getReq.onsuccess = () => {
-          const rawSnapshot = getReq.result as unknown
-          resolve(
-            rawSnapshot && typeof rawSnapshot === 'object'
-              ? (rawSnapshot as RawAuthProvidersSnapshot)
-              : { providers: [] },
-          )
+          const rawSnapshot = getReq.result as
+            RawAuthProvidersSnapshot | undefined
+          if (rawSnapshot || scopedStateKey === 'providers') {
+            resolveSnapshot(rawSnapshot)
+            return
+          }
+          const legacyReq = store.get('providers')
+          legacyReq.onerror = () =>
+            reject(legacyReq.error ?? new Error('legacy idb read failed'))
+          legacyReq.onsuccess = () =>
+            resolveSnapshot(
+              legacyReq.result as RawAuthProvidersSnapshot | undefined,
+            )
         }
         tx.oncomplete = () => db.close()
         tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))
       }
     })
-  })
+  }, stateKey)
 }
 
 export async function waitForAuthProvidersE2eHook(page: Page) {

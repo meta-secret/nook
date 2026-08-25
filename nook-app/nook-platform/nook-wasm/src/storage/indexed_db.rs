@@ -315,11 +315,15 @@ where
         NookError::IndexedDb(format!("Atomic string update key error: {error:?}"))
     })?;
     let mut current = read_optional_string_from_store(&store, key, "Atomic string update").await?;
+    let mut adopted_fallback_key = None;
     if current.is_none()
         && let Some(fallback_key) = fallback_key
     {
         current =
             read_optional_string_from_store(&store, fallback_key, "Atomic string fallback").await?;
+        if current.is_some() {
+            adopted_fallback_key = Some(fallback_key);
+        }
     }
     let updated = update(current)?;
     let updated_value = serde_wasm_bindgen::to_value(&updated).map_err(|error| {
@@ -331,6 +335,14 @@ where
         .map_err(|error| {
             NookError::IndexedDb(format!("Atomic string update write error: {error:?}"))
         })?;
+    if let Some(fallback_key) = adopted_fallback_key {
+        let fallback_id = serde_wasm_bindgen::to_value(fallback_key).map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string fallback key error: {error:?}"))
+        })?;
+        store.delete(fallback_id).await.map_err(|error| {
+            NookError::IndexedDb(format!("Atomic string fallback delete error: {error:?}"))
+        })?;
+    }
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Atomic string update completion error: {error:?}"))
     })?;
@@ -705,6 +717,32 @@ mod sentinel_genesis_storage_tests {
             Some("scoped-value")
         );
         idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn atomic_update_adopts_and_removes_legacy_fallback() -> Result<(), wasm_bindgen::JsError>
+    {
+        const SOURCE_KEY: &str = "test-legacy-profile-adoption";
+        const TARGET_KEY: &str = "test-scoped-profile-adoption";
+        idb_put_string(SOURCE_KEY, "legacy-value").await?;
+        idb_delete_key(TARGET_KEY).await?;
+
+        let result = idb_update_string_with_fallback(
+            TARGET_KEY,
+            Some(SOURCE_KEY),
+            StringUpdateGuard::Unconditional,
+            |current| Ok(format!("{}-updated", current.unwrap_or_default())),
+        )
+        .await?;
+
+        assert_eq!(result, StringUpdateResult::Applied);
+        assert!(idb_get_string(SOURCE_KEY).await?.is_none());
+        assert_eq!(
+            idb_get_string(TARGET_KEY).await?.as_deref(),
+            Some("legacy-value-updated")
+        );
+        idb_delete_key(TARGET_KEY).await?;
         Ok(())
     }
 
