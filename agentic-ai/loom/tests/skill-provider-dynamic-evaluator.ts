@@ -295,11 +295,7 @@ function isComputedValueInvoked(
       }
       if (target !== false && value !== false) {
         const symbol = inspection.checker.getSymbolAtLocation(target);
-        if (
-          symbol &&
-          !taintedSymbols.has(symbol) &&
-          carries(value)
-        ) {
+        if (symbol && !taintedSymbols.has(symbol) && carries(value)) {
           taintedSymbols.add(symbol);
           changed = true;
         }
