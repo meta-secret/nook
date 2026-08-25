@@ -319,6 +319,7 @@ webDockerTasks.requireAll([
   "-e NOOK_E2E_SHARD",
 ]);
 wasmCacheProof.requireAll([
+  '--driver-opt "image=${registry_host}/moby/buildkit:buildx-stable-1"',
   'if [ "$purpose" = "promote" ]',
   "A repair solve must never import the ref it is replacing",
   'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',

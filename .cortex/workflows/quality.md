@@ -313,6 +313,8 @@ Use this workflow for quality, CI, and deployment changes.
     Runtime CACHED proof for published WASM deps remains Main
     `verify-wasm-gha-cache.sh`. One fresh hosted builder writes the portable
     ref, and a second fresh builder verifies the three expensive vertices.
+    Both fresh builders bootstrap the authenticated Zot-qualified BuildKit
+    image and never resolve their runtime image from Docker Hub.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
     It reproduces the rejected three-linked-target nightly miss.

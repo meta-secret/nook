@@ -54,6 +54,7 @@ run_fresh_builder() {
   "$docker_bin" buildx create \
     --name "$proof_builder" \
     --driver docker-container \
+    --driver-opt "image=${registry_host}/moby/buildkit:buildx-stable-1" \
     --use \
     --bootstrap >/dev/null
   local command=(

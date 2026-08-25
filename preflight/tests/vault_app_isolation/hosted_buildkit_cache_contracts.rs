@@ -436,6 +436,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         cache_verifier.contains("docker-container")
+            && cache_verifier
+                .contains("--driver-opt \"image=${registry_host}/moby/buildkit:buildx-stable-1\"",)
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
             && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
