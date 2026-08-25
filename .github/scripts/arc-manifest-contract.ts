@@ -474,8 +474,13 @@ remoteWorkflow.requireAll([
   "Remote / browser image",
   "runs-on: nook-k0s-container",
   "task web:e2e:kubernetes-image",
-  "Run Playwright without a nested container runtime",
+  "Run selected task without a nested container runtime",
+  "web:build) task _web:build",
   "task _web:test:e2e",
+  "extension:e2e) task _extension:test:e2e",
+  "check) task _check",
+  "ci:pr) task _ci:pr",
+  "ci:pr:e2e) task _ci:main",
 ]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

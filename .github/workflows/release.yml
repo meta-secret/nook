@@ -50,8 +50,16 @@ jobs:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
           fetch-depth: 0
 
+      # Keep current workflow tooling beside the immutable requested source. This
+      # prevents historical manual refs from reviving retired ARC/cache logic.
+      - name: Checkout release workflow tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: .nook/release-workflow
+
       - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
+        uses: ./.nook/release-workflow/.github/actions/nook-docker-setup
         with:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
@@ -72,7 +80,10 @@ jobs:
           echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Publish exact-source production browser image
-        run: task web:e2e:kubernetes-image
+        run: >-
+          REPO_ROOT="$GITHUB_WORKSPACE"
+          task --taskfile "$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml"
+          web:e2e:kubernetes-image
         env:
           DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
           DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-release-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}

@@ -501,6 +501,11 @@ jobs:
           name: main-web-deploy-${{ github.run_id }}
           path: nook-app
 
+      - name: Setup Node for host Pages deploy
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+
       - name: Deploy isolated development applications to Cloudflare Pages
         id: deploy-dev
         env:
@@ -508,7 +513,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CI_MAIN_VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
           CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-        run: task ci:main:deploy-development
+          NOOK_WRANGLER_VERSION: "4.120.0"
+        run: bash .github/scripts/ci-main-deploy-development.sh
 
       - name: Configure and verify isolated development domains
         id: configure-dev-domain
@@ -522,7 +528,7 @@ jobs:
           SIMPLE_PAGES_URL: ${{ steps.deploy-dev.outputs.simple_pages_url }}
           SENTINEL_PAGES_URL: ${{ steps.deploy-dev.outputs.sentinel_pages_url }}
           COMMIT_SHA: ${{ github.sha }}
-        run: task ci:main:configure-dev-domains
+        run: bash .github/scripts/ci-main-configure-dev-domains.sh
 
       - name: Record development deployment
         uses: actions/github-script@v9

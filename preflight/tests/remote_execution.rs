@@ -150,6 +150,10 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         "rust:test, web:check",
         "rust:test,web:e2e",
         "rust:test,extension:e2e",
+        "rust:test,web:build",
+        "rust:test,check",
+        "rust:test,ci:pr",
+        "rust:test,ci:pr:e2e",
         "preflight,rust:test,rust:lint,rust:coverage,wasm:build,wasm:test,web:check,web:test,web:build",
     ] {
         assert!(
@@ -181,8 +185,36 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         );
     }
     let batch_script = read(".github/scripts/remote-task-batch.sh");
+    let workflow = read(".github/workflows/remote.yml");
     assert!(batch_script.contains("timeout --kill-after=1m"));
     assert!(!batch_script.contains("timeout --foreground"));
+    for task in [
+        "web:build",
+        "web:e2e",
+        "extension:e2e",
+        "check",
+        "ci:pr",
+        "ci:pr:e2e",
+    ] {
+        assert!(
+            workflow.contains(&format!("(inputs.tasks || inputs.task) != '{task}'"))
+                && workflow.contains(&format!("(inputs.tasks || inputs.task) == '{task}'")),
+            "runtime-backed remote task must bypass the daemonless batch: {task}"
+        );
+    }
+    for direct_task in [
+        "web:build) task _web:build",
+        "web:e2e) task _web:test:e2e",
+        "extension:e2e) task _extension:test:e2e",
+        "check) task _check",
+        "ci:pr) task _ci:pr",
+        "ci:pr:e2e) task _ci:main",
+    ] {
+        assert!(
+            workflow.contains(direct_task),
+            "container execution must call the internal daemonless task: {direct_task}"
+        );
+    }
     assert!(batch_script.contains("snapshot_daemon_containers > \"$daemon_snapshot\""));
     assert!(batch_script.contains("status == 124 || status == 137"));
     assert!(batch_script.contains("docker rm -f \"$container\""));
@@ -332,7 +364,7 @@ fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<(
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in ["web:e2e", "extension:e2e", "web:test,ci:pr"] {
+    for tasks in ["web:e2e", "extension:e2e", "ci:pr"] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status

@@ -244,6 +244,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "WEB_RESULT: ${{ needs.verify.result }}",
         "WASM_NODE_RESULT: ${{ needs.wasm-node-test.result }}",
         "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
+        "UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}",
+        "Headless UI demo is not required for this untrusted source",
+        "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
         "types: [labeled]",
@@ -476,6 +479,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && preview_job.contains("name: Enforce required verification results")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
             && preview_job.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
+            && preview_job.contains(
+                "Credentialed preview deployment is intentionally skipped for untrusted source"
+            )
             && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
             && !preview_job.contains("attempt $attempt/900"),
         "PR preview must deploy only after Native Rust, WASM, web verification, WASM Node tests, and the UI demo succeed"
@@ -785,8 +791,8 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         .find("- name: Checkout release source")
         .context("release workflow must check out release source")?;
     let release_setup = release
-        .find("uses: ./.github/actions/nook-docker-setup")
-        .context("release workflow must configure BuildKit from the requested source")?;
+        .find("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup")
+        .context("release workflow must configure BuildKit from current side-checkout tooling")?;
     assert!(
         release_source < release_setup,
         "release must fingerprint its requested source before connecting BuildKit"
@@ -803,7 +809,14 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             && release.matches("inputs.ref || github.ref }}").count() == 1,
         "release deployment must consume the immutable SHA prepared with its browser image"
     );
-    assert!(!release.contains("path: .nook/release-workflow"));
+    assert!(
+        release.contains("path: .nook/release-workflow")
+            && release.contains(
+                "task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\""
+            )
+            && release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE\""),
+        "historical release refs must use current workflow tooling against the immutable source root"
+    );
     let main = read(root, ".github/workflows/main.yml");
     for required in [
         "\n  rust:\n",

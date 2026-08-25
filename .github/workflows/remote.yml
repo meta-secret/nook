@@ -57,8 +57,12 @@ jobs:
   batch:
     if: >-
       (inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
+      (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
-      (inputs.tasks || inputs.task) != 'extension:e2e'
+      (inputs.tasks || inputs.task) != 'extension:e2e' &&
+      (inputs.tasks || inputs.task) != 'check' &&
+      (inputs.tasks || inputs.task) != 'ci:pr' &&
+      (inputs.tasks || inputs.task) != 'ci:pr:e2e'
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ (inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')) && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
@@ -126,7 +130,13 @@ jobs:
           if-no-files-found: warn
           retention-days: 15
   web-e2e-image:
-    if: (inputs.tasks || inputs.task) == 'web:e2e' || (inputs.tasks || inputs.task) == 'extension:e2e'
+    if: >-
+      (inputs.tasks || inputs.task) == 'web:build' ||
+      (inputs.tasks || inputs.task) == 'web:e2e' ||
+      (inputs.tasks || inputs.task) == 'extension:e2e' ||
+      (inputs.tasks || inputs.task) == 'check' ||
+      (inputs.tasks || inputs.task) == 'ci:pr' ||
+      (inputs.tasks || inputs.task) == 'ci:pr:e2e'
     name: Remote / browser image
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 30
@@ -151,7 +161,13 @@ jobs:
         run: task web:e2e:kubernetes-image
 
   web-e2e:
-    if: (inputs.tasks || inputs.task) == 'web:e2e' || (inputs.tasks || inputs.task) == 'extension:e2e'
+    if: >-
+      (inputs.tasks || inputs.task) == 'web:build' ||
+      (inputs.tasks || inputs.task) == 'web:e2e' ||
+      (inputs.tasks || inputs.task) == 'extension:e2e' ||
+      (inputs.tasks || inputs.task) == 'check' ||
+      (inputs.tasks || inputs.task) == 'ci:pr' ||
+      (inputs.tasks || inputs.task) == 'ci:pr:e2e'
     needs: web-e2e-image
     name: Remote / web:e2e
     runs-on: nook-k0s-container
@@ -164,14 +180,21 @@ jobs:
     env:
       CI: "1"
     steps:
-      - name: Run Playwright without a nested container runtime
-        if: (inputs.tasks || inputs.task) == 'web:e2e'
+      - name: Run selected task without a nested container runtime
         working-directory: /meta-secret/nook
-        run: task _web:test:e2e
-      - name: Run extension Playwright without a nested container runtime
-        if: (inputs.tasks || inputs.task) == 'extension:e2e'
-        working-directory: /meta-secret/nook
-        run: task _extension:test:e2e
+        env:
+          REMOTE_CONTAINER_TASK: ${{ inputs.tasks || inputs.task }}
+        run: |
+          set -euo pipefail
+          case "$REMOTE_CONTAINER_TASK" in
+            web:build) task _web:build ;;
+            web:e2e) task _web:test:e2e ;;
+            extension:e2e) task _extension:test:e2e ;;
+            check) task _check ;;
+            ci:pr) task _ci:pr ;;
+            ci:pr:e2e) task _ci:main ;;
+            *) echo "Unsupported Kubernetes container task: $REMOTE_CONTAINER_TASK" >&2; exit 2 ;;
+          esac
 
       - name: Collect Playwright diagnostics
         if: always()

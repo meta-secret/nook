@@ -362,8 +362,8 @@ fn assert_release_cache_fingerprint_contract() -> anyhow::Result<()> {
         release_source < release_docker_setup,
         "release Docker setup must fingerprint the requested source after checkout"
     );
-    assert!(release.contains("uses: ./.github/actions/nook-docker-setup"));
-    assert!(!release.contains("path: .nook/release-workflow"));
+    assert!(release.contains("uses: ./.nook/release-workflow/.github/actions/nook-docker-setup"));
+    assert!(release.contains("path: .nook/release-workflow"));
     Ok(())
 }
 

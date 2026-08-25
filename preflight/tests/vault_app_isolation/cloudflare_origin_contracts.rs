@@ -112,8 +112,10 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
     let root = repository_root();
     let main = read(&root, ".github/workflows/main.yml");
     for required in [
-        "task ci:main:deploy-development",
-        "task ci:main:configure-dev-domains",
+        "bash .github/scripts/ci-main-deploy-development.sh",
+        "bash .github/scripts/ci-main-configure-dev-domains.sh",
+        "name: Setup Node for host Pages deploy",
+        "NOOK_WRANGLER_VERSION: \"4.120.0\"",
         "CI_MAIN_SIMPLE_DOMAIN: simple.dev.nokey.sh",
         "CI_MAIN_SENTINEL_DOMAIN: sentinel.dev.nokey.sh",
     ] {
@@ -131,6 +133,7 @@ fn development_cloudflare_deploy_preserves_isolated_origins() -> anyhow::Result<
 
     let deploy_script = read(&root, ".github/scripts/ci-main-deploy-development.sh");
     for required in [
+        "bash \"$ROOT/.github/scripts/ci-pr-host-pages-deploy.sh\"",
         "deploy nokey-sh development nook-app/nook-web/nook-web-app/dist/site",
         "deploy nokey-simple development nook-app/nook-web/nook-vault-simple/dist",
         "deploy nokey-sentinel development nook-app/nook-web/nook-vault-sentinel/dist",

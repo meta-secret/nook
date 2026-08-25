@@ -415,9 +415,12 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   on its selected node.
 - `arc:runtime` proves a remote BuildKit result can be exported without a
   Docker daemon, Podman, DinD, or host socket.
-- `web:e2e` and `extension:e2e` each build a run-scoped image on the general ARC
-  set, then execute Playwright inside an ordinary Pod created by
-  `nook-k0s-container` hooks. Each must be dispatched alone; mixed batches are
+- Runtime-backed selectors build a run-scoped image on the general ARC set.
+  They then execute their internal daemonless task inside an ordinary Pod
+  created by `nook-k0s-container` hooks.
+- These selectors are `web:build`, `web:e2e`, `extension:e2e`, `check`,
+  `ci:pr`, and `ci:pr:e2e`.
+- Each runtime-backed selector must be dispatched alone. Mixed batches are
   rejected before repository commands execute.
 - Other `remote.yml` selections use the general or Hive ARC scale set. Browser
   tasks use the container scale set.
@@ -840,7 +843,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Optional browser-e2e consumers wait for the fully verified producer.
 - Native Rust separately uploads the coverage handoff consumed by the small Rust-dependent reporting job.
 - The preview job never waits for native coverage.
-- It runs without browser e2e, deploys the Cloudflare previews, and records a successful `github-pages` deployment status for the PR head SHA.
+- It runs without browser e2e. Trusted sources deploy Cloudflare previews and
+  record a successful `github-pages` deployment status for the PR head SHA.
+- Fork and Dependabot validation remains secret-free. It succeeds without a UI
+  demo when the UI demo contract is not required, and it never attempts a
+  credentialed preview deployment.
 - A `ci:full-e2e` PR also runs the parallel artifact-backed web and extension browser jobs.
 - The preview deploy reuses that prepared sealed image and must not declare another `setup` dependency.
 - PR coverage always checks the current portable Rust artifact against the floor.
@@ -917,7 +924,10 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Deploy and release:**
 
-- Main deploys `dist/site`, Simple, and Sentinel independently to `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the same prepared image and without a second setup.
+- Main deploys `dist/site`, Simple, and Sentinel independently to `dev.nokey.sh`,
+  `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh` from the verified handoff.
+- Deployment uses pinned host-native Wrangler with Node. It does not require a
+  Docker runtime or a second image solve.
 - The combined `dist` tree is reserved for the internal PR/local/e2e harness; `/site/`, `/simple/`, and `/sentinel/` are not routes on the public development landing origin.
 - `release.yml` runs the main-equivalent gate, deploys an immutable semantic-version tag to GitHub Pages for the public `nokey.sh` site and to independent Cloudflare Pages projects for Simple and Sentinel, then verifies app identity, security headers, exact commit, and extension-route presence/absence before publishing the GitHub Release.
 
