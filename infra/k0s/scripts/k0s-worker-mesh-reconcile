@@ -153,6 +153,7 @@ while IFS=$'\t' read -r worker_kind node_name address pod_cidr public_key endpoi
     continue
   fi
   if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
+    -o StrictHostKeyChecking=accept-new \
     -J "$controller_target" "$ssh_target" true; then
     set_mesh_pending "$node_name"
     echo "Deferred offline worker $address ($ssh_target)" >&2

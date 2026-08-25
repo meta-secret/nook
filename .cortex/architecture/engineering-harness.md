@@ -115,8 +115,8 @@ and proof is the narrow hosted exception. One fresh hosted builder publishes the
 portable Zot metadata. A registry audit verifies child manifest digest/size and
 streams every complete blob to verify its declared size and SHA-256. Another cache-only builder then
 requires every expensive dependency vertex to hit before deployment without
-hydrating the complete dependency filesystem. The self-hosted `nook` pool
-remains maintenance-only.
+hydrating the complete dependency filesystem. The legacy registered `nook`
+runner is not used.
 
 ---
 

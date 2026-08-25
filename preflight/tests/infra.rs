@@ -66,7 +66,7 @@ fn arc_buildkit_resolves_docker_hub_only_through_zot() {
     assert!(!manifest.contains("registry-1.docker.io"));
     assert!(manifest.contains("internalTrafficPolicy: Local"));
     assert!(manifest.contains("kind: StatefulSet"));
-    assert_eq!(manifest.matches("kind: PersistentVolume\n").count(), 3);
+    assert_eq!(manifest.matches("kind: PersistentVolume\n").count(), 4);
 
     let proof = read("infra/tasks/bake-cache.yml");
     let zot = read("infra/sim/bake-cache/zot-config.json");
@@ -236,7 +236,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let pull_request_workflow = read(".github/workflows/pr.yml");
 
     for contract in [
-        "maxRunners: 25",
+        "maxRunners: 35",
         "topologySpreadConstraints:",
         "maxSkew: 5",
         "topologyKey: kubernetes.io/hostname",
@@ -265,16 +265,16 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             && hive_values.contains("nook.nokey.sh/arc-spread-group\"] = \"hive\""),
         "Hive ARC must own its bounded independent spread group"
     );
-    assert_eq!(buildkit.matches("kind: PersistentVolume\n").count(), 3);
+    assert_eq!(buildkit.matches("kind: PersistentVolume\n").count(), 4);
     assert!(buildkit.contains("internalTrafficPolicy: Local"));
-    assert!(buildkit.contains("replicas: 3"));
+    assert!(buildkit.contains("replicas: 4"));
     assert!(buildkit.contains("requiredDuringSchedulingIgnoredDuringExecution"));
     assert_eq!(
         buildkit
             .matches("  labels:\n    app.kubernetes.io/name: nook-buildkit")
             .count(),
-        3,
-        "all three BuildKit PVs must carry the operational status label"
+        4,
+        "all four BuildKit PVs must carry the operational status label"
     );
     assert!(buildkit.contains("--oci-worker-no-process-sandbox"));
     assert!(
@@ -288,7 +288,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(tasks.contains("test \"$((available_bytes + state_bytes))\" -ge 68719476736"));
     assert!(tasks.contains("- task: arc:auth:sync"));
     assert!(tasks.contains("nook.nokey.sh/buildkit-config-sha256"));
-    assert!(tasks.contains("ARC requires exactly three build hosts"));
+    assert!(tasks.contains("ARC requires exactly $expected_count build hosts"));
     assert!(tasks.contains("expected_build_nodes"));
     assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));
     assert!(tasks.contains("$legacy_image_next"));

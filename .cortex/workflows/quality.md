@@ -432,7 +432,8 @@ Use this workflow for quality, CI, and deployment changes.
     - It must run `task hive:verify`.
     - `task hive:verify` must compile, lint, and test both Hive and Lace.
     - The harness opens its PR only after those validations succeed.
-    - `.github/workflows/runner-cleanup.yml` remains on `nook` for registered-host maintenance.
+    - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
+      collection; no registered-host cleanup workflow is allowed.
 
     #### Main failure incidents (Hive)
     - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident per failed SHA.

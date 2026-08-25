@@ -1,0 +1,251 @@
+version: '3'
+
+vars:
+  INFRA_OVH_SERVER: '{{default "" .INFRA_OVH_SERVER}}'
+  INFRA_OVH_ALLOW_REINSTALL: '{{default "false" .INFRA_OVH_ALLOW_REINSTALL}}'
+
+tasks:
+  ovh:server:inspect:
+    desc: Verify one declared OVH dedicated server without changing it.
+    preconditions:
+      - sh: test -n "{{.INFRA_OVH_SERVER}}"
+        msg: INFRA_OVH_SERVER must name a server in the reviewed inventory.
+      - sh: printf '%s\n' "{{.INFRA_OVH_SERVER}}" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        msg: INFRA_OVH_SERVER must be a lowercase host label.
+    cmds:
+      - bun infra/providers/ovh-dedicated.ts inspect --node "{{.INFRA_OVH_SERVER}}"
+
+  ovh:server:deploy:
+    desc: Install, bootstrap, and join one declared OVH worker from scratch.
+    preconditions:
+      - sh: test -n "{{.INFRA_OVH_SERVER}}"
+        msg: INFRA_OVH_SERVER must name a server in the reviewed inventory.
+      - sh: printf '%s\n' "{{.INFRA_OVH_SERVER}}" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        msg: INFRA_OVH_SERVER must be a lowercase host label.
+      - sh: printf '%s\n' "{{.INFRA_OVH_ALLOW_REINSTALL}}" | grep -Eq '^(true|false)$'
+        msg: INFRA_OVH_ALLOW_REINSTALL must be true or false.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        node='{{.INFRA_OVH_SERVER}}'
+        allow_reinstall='{{.INFRA_OVH_ALLOW_REINSTALL}}'
+        provider='infra/providers/ovh-dedicated.ts'
+        field() { bun "$provider" field --node "$node" --field "$1"; }
+        public_address="$(field publicAddress)"
+        ssh_user="$(field sshUser)"
+        mesh_address="$(field meshAddress)"
+        endpoint_mode="$(field endpointMode)"
+        arc_tier="$(field arcTier)"
+        ssh_target="$ssh_user@$public_address"
+        controller_target='{{.INFRA_SSH_TARGET}}'
+
+        planned_reinstall="$(bun "$provider" reinstall-required --node "$node" \
+          --allow-reinstall "$allow_reinstall")"
+        if test "$planned_reinstall" = true; then
+          ssh -o BatchMode=yes "$controller_target" bash -s -- \
+            "$node" "$mesh_address" <<'CONTROLLER_QUIESCE'
+        set -euo pipefail
+        node="$1"
+        mesh_address="$2"
+        node_resource="$(sudo -n k0s kubectl get node "$node" \
+          -o name --ignore-not-found)"
+        if test -z "$node_resource"; then
+          exit 0
+        fi
+        test "$node_resource" = "node/$node"
+        actual_mesh_address="$(sudo -n k0s kubectl get node "$node" \
+          -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
+        test "$actual_mesh_address" = "$mesh_address"
+        sudo -n k0s kubectl cordon "$node"
+        deadline="$(( $(date +%s) + 7200 ))"
+        while :; do
+          active_runners="$(sudo -n k0s kubectl get pods -n arc-runners \
+            --field-selector "spec.nodeName=$node" \
+            -l actions.github.com/scale-set-name -o json \
+            | jq '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+          if test "$active_runners" = 0; then
+            break
+          fi
+          if test "$(date +%s)" -ge "$deadline"; then
+            echo "Timed out waiting for $active_runners ARC runner(s) on $node" >&2
+            exit 1
+          fi
+          echo "Waiting for $active_runners ARC runner(s) to finish on $node" >&2
+          sleep 30
+        done
+        sudo -n k0s kubectl delete pod arc-worker-kata-smoke -n arc-runners \
+          --ignore-not-found --wait=true
+        sudo -n k0s kubectl drain "$node" --ignore-daemonsets \
+          --delete-emptydir-data --grace-period=120 --timeout=20m
+        CONTROLLER_QUIESCE
+        fi
+
+        result="$(bun "$provider" provision --node "$node" \
+          --allow-reinstall "$allow_reinstall")"
+        case "$result" in
+          reinstalled)
+            ssh-keygen -R "$public_address" >/dev/null 2>&1 || true
+            ssh-keygen -R "$mesh_address" >/dev/null 2>&1 || true
+            ssh -o BatchMode=yes "$controller_target" bash -s -- \
+              "$node" "$mesh_address" <<'CONTROLLER_RECOVERY'
+        set -euo pipefail
+        node="$1"
+        mesh_address="$2"
+        pod_cidr="$(sudo -n k0s kubectl get node "$node" \
+          -o jsonpath='{.spec.podCIDR}' 2>/dev/null || true)"
+        peer_file="/etc/wireguard/nook-peers/$mesh_address.conf"
+        if sudo -n test -f "$peer_file"; then
+          peer_key="$(sudo -n awk '/^PublicKey = / { print $3 }' "$peer_file")"
+          if test -n "$peer_key"; then
+            sudo -n wg set wg-nook peer "$peer_key" remove 2>/dev/null || true
+          fi
+          sudo -n rm -f "$peer_file"
+        fi
+        if test -n "$pod_cidr"; then
+          sudo -n ip route del "$pod_cidr" dev wg-nook 2>/dev/null || true
+        fi
+        sudo -n k0s kubectl delete node "$node" \
+          --ignore-not-found --wait=true
+        ssh-keygen -R "$mesh_address" >/dev/null 2>&1 || true
+        ssh-keygen -R "$node" >/dev/null 2>&1 || true
+        CONTROLLER_RECOVERY
+            ;;
+          unchanged)
+            if test "$planned_reinstall" = true; then
+              ssh -o BatchMode=yes "$controller_target" \
+                "sudo -n k0s kubectl uncordon '$node'"
+            fi
+            ;;
+          *) echo "Unexpected provider convergence result" >&2; exit 1 ;;
+        esac
+
+        known_hosts="$HOME/.ssh/known_hosts"
+        known_hosts_lock="$HOME/.ssh/.known_hosts.lock"
+        expected_fingerprint="$(bun "$provider" host-fingerprint --node "$node")"
+        install -d -m 0700 "$HOME/.ssh"
+        scanned_hosts="$(mktemp)"
+        known_hosts_next="$(mktemp "$HOME/.ssh/known_hosts.next.XXXXXX")"
+        known_hosts_merged="$(mktemp "$HOME/.ssh/known_hosts.merged.XXXXXX")"
+        known_hosts_lock_held=false
+        cleanup() {
+          rm -f "$scanned_hosts" "$known_hosts_next" "$known_hosts_merged"
+          if test "$known_hosts_lock_held" = true; then
+            rm -f "$known_hosts_lock/pid"
+            rmdir "$known_hosts_lock" 2>/dev/null || true
+          fi
+        }
+        trap cleanup EXIT
+        touch "$known_hosts"
+        chmod 0600 "$known_hosts"
+        scanned=false
+        for _ in $(seq 1 180); do
+          if ssh-keyscan -t ed25519 -T 3 -H "$public_address" \
+               > "$scanned_hosts" 2>/dev/null && test -s "$scanned_hosts"; then
+            scanned_fingerprint="$(ssh-keygen -l -f "$scanned_hosts" -E sha256 \
+              | awk 'NR == 1 { print $2 }')"
+            test "$scanned_fingerprint" = "$expected_fingerprint"
+            lock_deadline="$(( $(date +%s) + 120 ))"
+            until mkdir "$known_hosts_lock" 2>/dev/null; do
+              if test -r "$known_hosts_lock/pid"; then
+                lock_owner="$(cat "$known_hosts_lock/pid")"
+                if printf '%s\n' "$lock_owner" | grep -Eq '^[0-9]+$' \
+                   && ! kill -0 "$lock_owner" 2>/dev/null; then
+                  rm -f "$known_hosts_lock/pid"
+                  rmdir "$known_hosts_lock" 2>/dev/null || true
+                  continue
+                fi
+              fi
+              if test "$(date +%s)" -ge "$lock_deadline"; then
+                echo 'Timed out waiting for known_hosts lock' >&2
+                exit 1
+              fi
+              sleep 1
+            done
+            known_hosts_lock_held=true
+            printf '%s\n' "$$" > "$known_hosts_lock/pid"
+            cp "$known_hosts" "$known_hosts_next"
+            ssh-keygen -R "$public_address" -f "$known_hosts_next" \
+              >/dev/null 2>&1 || true
+            sort -u "$known_hosts_next" "$scanned_hosts" > "$known_hosts_merged"
+            mv "$known_hosts_merged" "$known_hosts"
+            chmod 0600 "$known_hosts"
+            rm -f "$known_hosts_lock/pid"
+            rmdir "$known_hosts_lock"
+            known_hosts_lock_held=false
+            scanned=true
+            break
+          fi
+          sleep 5
+        done
+        test "$scanned" = true
+        connected=false
+        for _ in $(seq 1 120); do
+          if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$ssh_target" true 2>/dev/null; then
+            connected=true
+            break
+          fi
+          sleep 5
+        done
+        test "$connected" = true
+        ssh -o BatchMode=yes "$ssh_target" 'bash -s' -- "$node" <<'REMOTE'
+        set -euo pipefail
+        expected_hostname="$1"
+        export DEBIAN_FRONTEND=noninteractive
+        sudo -n --preserve-env=DEBIAN_FRONTEND apt-get update -qq
+        sudo -n --preserve-env=DEBIAN_FRONTEND apt-get install -y -qq --no-install-recommends \
+          acl btrfs-progs ca-certificates curl e2fsprogs jq nftables \
+          openssh-server ruby sudo util-linux wireguard-tools
+        sudoers="$(mktemp)"
+        sshd_config="$(mktemp)"
+        cleanup() { rm -f "$sudoers" "$sshd_config"; }
+        trap cleanup EXIT
+        printf '%s ALL=(ALL) NOPASSWD:ALL\n' "$(id -un)" > "$sudoers"
+        cat > "$sshd_config" <<'EOF'
+        PasswordAuthentication no
+        PermitRootLogin no
+        PubkeyAuthentication yes
+        KbdInteractiveAuthentication no
+        EOF
+        sudo -n install -m 0440 "$sudoers" /etc/sudoers.d/90-nook-infra
+        sudo -n visudo -cf /etc/sudoers.d/90-nook-infra
+        sudo -n install -d -m 0755 /etc/ssh/sshd_config.d
+        sudo -n rm -f /etc/ssh/sshd_config.d/90-nook-infra.conf
+        sudo -n install -m 0644 "$sshd_config" \
+          /etc/ssh/sshd_config.d/00-nook-infra.conf
+        sudo -n sshd -t
+        sudo -n sshd -T | grep -Fx 'passwordauthentication no'
+        sudo -n sshd -T | grep -Fx 'permitrootlogin no'
+        sudo -n sshd -T | grep -Fx 'pubkeyauthentication yes'
+        sudo -n sshd -T | grep -Fx 'kbdinteractiveauthentication no'
+        sudo -n systemctl enable --now ssh.service
+        sudo -n systemctl reload ssh.service
+        sudo -n install -d -m 0755 /var/lib/nook-bootstrap
+        sudo -n touch /var/lib/nook-bootstrap/taskfile-complete
+        test "$(hostname -s)" = "$expected_hostname"
+        . /etc/os-release
+        test "$ID:$VERSION_ID" = debian:13
+        test -c /dev/kvm
+        test "$(findmnt -n -o SOURCE /)" = /dev/md3
+        test "$(lsblk -d -n -o NAME | grep -Ec '^nvme[0-9]+n[0-9]+$')" = 2
+        grep -Eq '^md3 : active raid1 ' /proc/mdstat
+        test "$(cat /sys/block/md3/md/raid_disks)" = 2
+        test "$(cat /sys/block/md3/md/degraded)" = 0
+        sudo -n visudo -cf /etc/sudoers.d/90-nook-infra
+        sudo -n test -f /var/lib/nook-bootstrap/taskfile-complete
+        REMOTE
+
+        task --taskfile infra/Taskfile.yml k0s:worker:deploy \
+          INFRA_WORKER_SSH_TARGET="$ssh_target" \
+          INFRA_WORKER_MESH_ADDRESS="$mesh_address" \
+          INFRA_WORKER_ENDPOINT_MODE="$endpoint_mode" \
+          INFRA_WORKER_ARC_TIER="$arc_tier"
+        bun "$provider" recovery-complete --node "$node"
+        cleanup
+        trap - EXIT
+        BASH
+
+  ovh:server:test:
+    desc: Validate the provider client and server inventory contract.
+    cmds:
+      - bun test infra/providers/ovh-dedicated.test.ts

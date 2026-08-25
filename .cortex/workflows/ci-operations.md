@@ -2,23 +2,16 @@
 
 ## Overview
 
-This authority owns CI runner cleanup, application-log inspection, secrets,
+This authority owns CI storage reclamation, application-log inspection, secrets,
 provider operations, and automated implementation-agent behavior. The core
 workflow graph and runner placement remain in [CI / GitHub Actions Pipeline](ci-pipeline.md).
 
-## Runner cleanup
+## Storage reclamation
 
-[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) runs daily on
-the self-hosted `nook` runner label and can also be triggered manually. It runs
-`docker system prune --all --force --volumes` to reclaim unused containers,
-networks, build cache, tagged and dangling images, and anonymous volumes without
-touching the Docker daemon itself. `--all` is required because the default prune
-only removes dangling images while `docker system df` includes tagged images
-that no container uses in its reclaimable estimate. That estimate can exceed
-the image-store total because shared image layers are counted for each image; it
-is not a physical-byte reclamation guarantee.
-The compiler cache is remote and is unaffected by runner pruning. SeaweedFS S3
-disk usage on Borg is controlled independently of BuildKit cleanup.
+ARC runner Pods are disposable. Kubelet image garbage collection reclaims Pod
+runtime content. Each persistent rootless BuildKit shard applies its own cache
+garbage collection. The repository does not run host Docker pruning from a
+workflow and does not use the legacy registered `nook` runner.
 
 ### CI verification — always check app logs
 
