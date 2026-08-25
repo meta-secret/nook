@@ -17,9 +17,11 @@ import {
 } from './login-save-offers'
 import {
   flushPasskeyEventToProviders,
+  type ActivatedExtensionIdentityOperation,
   importExtensionVault,
   type ImportExtensionVaultArgs,
   openPasskeyVault,
+  withActivatedExtensionIdentity,
 } from './session-vault-operations'
 import { toBytes, toNumbers } from './session-key-material'
 import { extensionVaultGrant } from './session-vault-grant'
@@ -258,17 +260,27 @@ export async function handleSessionMessage({
         payload.eventLogRecords,
       )
       const activeManager = await getManager()
-      const statusValue =
-        await activeManager.import_extension_event_log_records_js(
-          grant.vaultStoreId,
-          grant.deviceId,
-          grant.devicePublicKey,
-          grant.deviceSigningPublicKey,
-          recordValues,
-        )
-      const status = statusValue.to_object()
-      statusValue.free()
-      return { ok: true, status }
+      const operation = async () => {
+        const statusValue =
+          await activeManager.import_extension_event_log_records_js(
+            grant.vaultStoreId,
+            grant.deviceId,
+            grant.devicePublicKey,
+            grant.deviceSigningPublicKey,
+            recordValues,
+          )
+        const status = statusValue.to_object()
+        statusValue.free()
+        return { ok: true, status }
+      }
+      const activationArgs: ActivatedExtensionIdentityOperation<
+        Awaited<ReturnType<typeof operation>>
+      > = {
+        activeManager,
+        deviceId: grant.deviceId,
+        operation,
+      }
+      return withActivatedExtensionIdentity(activationArgs)
     }
     case ExtensionSessionMessageType.ListPasskeys: {
       const payload = message.payload

@@ -1,11 +1,6 @@
 //! Ownership proof for migrating the single-profile compatibility record.
 
-use crate::NookError;
-
-use super::{
-    DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
-    decode_device_access_profile,
-};
+use super::DeviceAccessProfile;
 
 pub(super) fn profile_belongs_to_entry(
     profile: &DeviceAccessProfile,
@@ -25,21 +20,6 @@ pub(super) fn profile_belongs_to_entry(
             .verified_vaults
             .iter()
             .all(|access| access.device_id.as_str() == entry.app_id().as_str())
-}
-
-pub(super) async fn legacy_profile_belongs_to_entry(
-    entry: &nook_core::LocalIdentityKeyringEntry,
-) -> Result<bool, NookError> {
-    let Some(raw) = super::idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await? else {
-        return Ok(false);
-    };
-    Ok(match decode_device_access_profile(&raw) {
-        DeviceAccessProfileDecodeResult::Current(profile) => {
-            profile_belongs_to_entry(&profile, entry)
-        }
-        DeviceAccessProfileDecodeResult::RecoverableDefault
-        | DeviceAccessProfileDecodeResult::FutureVersion => false,
-    })
 }
 
 #[cfg(test)]

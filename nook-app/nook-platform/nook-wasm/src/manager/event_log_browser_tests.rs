@@ -743,8 +743,7 @@ async fn extension_repair_import_replaces_sentinel_vault_and_preserves_device() 
 }
 
 #[wasm_bindgen_test]
-async fn extension_import_resolves_the_granted_identity_instead_of_the_selection()
--> anyhow::Result<()> {
+async fn extension_import_rejects_a_grant_for_an_inactive_identity() -> anyhow::Result<()> {
     let fixture = import_fixture(false).await?;
     let mut other_identity = NookVaultManager::new();
     other_identity
@@ -766,7 +765,7 @@ async fn extension_import_resolves_the_granted_identity_instead_of_the_selection
         .identity_private_key
         .clone_from(&selected_device_secret);
 
-    let status = importer
+    let result = importer
         .import_extension_event_log_records(
             &fixture.store_id,
             &fixture.device_id,
@@ -774,9 +773,9 @@ async fn extension_import_resolves_the_granted_identity_instead_of_the_selection
             fixture.signing_public_key.as_str(),
             fixture.records,
         )
-        .await?;
+        .await;
 
-    assert!(status.access_granted);
+    assert!(result.is_err());
     assert_eq!(importer.device.id, selected_device_id);
     assert_eq!(importer.device.identity_private_key, selected_device_secret);
     importer

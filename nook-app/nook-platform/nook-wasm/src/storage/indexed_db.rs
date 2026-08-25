@@ -234,17 +234,19 @@ pub(super) async fn idb_update_string<F>(
 where
     F: FnOnce(Option<String>) -> Result<String, NookError>,
 {
-    idb_update_string_with_fallback(key, None, guard, update).await
+    idb_update_string_with_fallback(key, None, guard, |_| true, update).await
 }
 
-pub(super) async fn idb_update_string_with_fallback<F>(
+pub(super) async fn idb_update_string_with_fallback<F, P>(
     key: &str,
     fallback_key: Option<&str>,
     guard: StringUpdateGuard<'_>,
+    can_adopt_fallback: P,
     update: F,
 ) -> Result<StringUpdateResult, NookError>
 where
     F: FnOnce(Option<String>) -> Result<String, NookError>,
+    P: FnOnce(&str) -> bool,
 {
     let rexie = open_nook_database().await?;
     // IndexedDB serializes read-write transactions that overlap one object
@@ -319,9 +321,10 @@ where
     if current.is_none()
         && let Some(fallback_key) = fallback_key
     {
-        current =
+        let fallback =
             read_optional_string_from_store(&store, fallback_key, "Atomic string fallback").await?;
-        if current.is_some() {
+        if fallback.as_deref().is_some_and(can_adopt_fallback) {
+            current = fallback;
             adopted_fallback_key = Some(fallback_key);
         }
     }
@@ -732,6 +735,7 @@ mod sentinel_genesis_storage_tests {
             TARGET_KEY,
             Some(SOURCE_KEY),
             StringUpdateGuard::Unconditional,
+            |_| true,
             |current| Ok(format!("{}-updated", current.unwrap_or_default())),
         )
         .await?;

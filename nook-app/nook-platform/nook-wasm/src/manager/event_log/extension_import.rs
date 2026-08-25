@@ -181,6 +181,12 @@ impl NookVaultManager {
             expected_device_signing_public_key,
         )
         .await?;
+        if self.device.public_app_id() != targets.device_id.as_str() {
+            return Err(NookError::Decryption(
+                "Approved extension device does not match the active protected local identity."
+                    .to_owned(),
+            ));
+        }
         Self::validate_extension_import_records(&targets.store_id, &records)?;
 
         let previous_active_store_id = crate::storage::indexed_db::get_active_vault_id().await?;

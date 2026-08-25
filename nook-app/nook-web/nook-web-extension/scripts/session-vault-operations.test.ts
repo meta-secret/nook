@@ -27,6 +27,7 @@ type ImportManagerState = {
   saved: boolean
   savedAppId: string
   activatedAppId: string
+  activatedAppIds: string[]
   replacedSnapshot: AuthProvidersSnapshot
   savedSnapshot: AuthProvidersSnapshot
 }
@@ -105,10 +106,11 @@ function importManager(state: ImportManagerState): NookVaultManager {
       state.operationOrder.push('activate')
       if (state.rejectActivation) throw new Error('activation failed')
       state.activatedAppId = appId
+      state.activatedAppIds.push(appId)
       if (state.deviceId !== appId) {
-        state.deviceId = ''
         state.protection = DeviceProtectionStatus.Passkey
       }
+      state.deviceId = appId
     },
   } as NookVaultManager
 }
@@ -130,6 +132,7 @@ function importState(protection: DeviceProtectionStatus): ImportManagerState {
     saved: false,
     savedAppId: '',
     activatedAppId: '',
+    activatedAppIds: [],
     replacedSnapshot: structuredClone(emptySnapshot),
     savedSnapshot: structuredClone(emptySnapshot),
   }
@@ -187,7 +190,7 @@ describe('extension vault import operations', () => {
     expect(provider).not.toHaveProperty('githubPat')
   })
 
-  test('rebinds to the granted app when another identity remains unlocked', async () => {
+  test('preserves another unlocked identity instead of rebinding it', async () => {
     const provider = githubProvider()
     const state = importState(DeviceProtectionStatus.Unlocked)
     state.deviceId = 'other-device'
@@ -197,20 +200,16 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
-      ok: true,
-      status: { imported: true },
-    })
+    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
+      'Lock the active local identity',
+    )
+    expect(state.importedRecords).toBe(false)
     expect(state.replaced).toBe(false)
-    expect(state.saved).toBe(true)
-    expect(state.savedAppId).toBe('device')
-    expect(state.savedSnapshot.activeVaultStoreId).toEqual({
-      state: 'storeId',
-      value: 'vault',
-    })
-    expect(state.activatedAppId).toBe('device')
-    expect(state.operationOrder).toEqual(['activate', 'import'])
-    expect(state.protection).toBe(DeviceProtectionStatus.Passkey)
+    expect(state.saved).toBe(false)
+    expect(state.activatedAppIds).toEqual([])
+    expect(state.operationOrder).toEqual([])
+    expect(state.deviceId).toBe('other-device')
+    expect(state.protection).toBe(DeviceProtectionStatus.Unlocked)
     expect(provider).not.toHaveProperty('githubPat')
   })
 
@@ -230,6 +229,28 @@ describe('extension vault import operations', () => {
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate', 'import'])
+    expect(provider).not.toHaveProperty('githubPat')
+  })
+
+  test('restores the prior locked identity selection when import rejects', async () => {
+    const provider = githubProvider()
+    const state = importState(DeviceProtectionStatus.Pin)
+    state.deviceId = 'other-device'
+    state.rejectImport = true
+    const args: ImportExtensionVaultWithDependenciesArgs = {
+      activeManager: importManager(state),
+      message: importRequest(provider),
+      dependencies: importDependencies(provider),
+    }
+
+    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
+      'import failed',
+    )
+    expect(state.activatedAppIds).toEqual(['device', 'other-device'])
+    expect(state.operationOrder).toEqual(['activate', 'import', 'activate'])
+    expect(state.deviceId).toBe('other-device')
+    expect(state.replaced).toBe(false)
+    expect(state.saved).toBe(false)
     expect(provider).not.toHaveProperty('githubPat')
   })
 
