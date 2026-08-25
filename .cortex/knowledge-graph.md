@@ -478,7 +478,6 @@
   - [Validation](dynamic-skills/web-unused-code.md#validation)
 
 ## Product Specifications (`product-specs/`)
-
 - [Authenticator Items](product-specs/authenticator-items.md)
   - [Overview](product-specs/authenticator-items.md#overview)
   - [Product model](product-specs/authenticator-items.md#product-model)
@@ -540,7 +539,9 @@
   - [Executable scenarios](product-specs/file-attachments.md#executable-scenarios)
   - [Out of scope (for now)](product-specs/file-attachments.md#out-of-scope-for-now)
   - [Status](product-specs/file-attachments.md#status)
-- [Product Specifications Index](product-specs/index.md): [Overview](product-specs/index.md#overview); [Product catalog](product-specs/index.md#product-catalog).
+- [Product Specifications Index](product-specs/index.md)
+  - [Overview](product-specs/index.md#overview)
+  - [Product catalog](product-specs/index.md#product-catalog)
 - [Product Spec: Monorepo & Toolchain Setup](product-specs/monorepo-setup.md)
   - [1. Goal & Context](product-specs/monorepo-setup.md#1-goal--context)
   - [2. Core Requirements](product-specs/monorepo-setup.md#2-core-requirements)
@@ -622,7 +623,6 @@
   - [Deployment](product-specs/vault-app-isolation.md#deployment)
 
 ## Design Documents (`design-docs/`)
-
 - [Agent Workflow Orchestration](design-docs/agent-workflow-orchestration.md)
   - [Overview](design-docs/agent-workflow-orchestration.md#overview)
   - [Static graph decision](design-docs/agent-workflow-orchestration.md#static-graph-decision)
@@ -713,7 +713,9 @@
   - [Browser extension boundary](design-docs/identity-vault-architecture.md#browser-extension-boundary)
   - [Invariants](design-docs/identity-vault-architecture.md#invariants)
   - [Related records](design-docs/identity-vault-architecture.md#related-records)
-- [Design Docs Index](design-docs/index.md): [Overview](design-docs/index.md#overview); [Document catalog](design-docs/index.md#document-catalog).
+- [Design Docs Index](design-docs/index.md)
+  - [Overview](design-docs/index.md#overview)
+  - [Document catalog](design-docs/index.md#document-catalog)
 - [Website Passkey Manager](design-docs/passkey-manager.md)
   - [Overview](design-docs/passkey-manager.md#overview)
   - [Trust and ownership boundaries](design-docs/passkey-manager.md#trust-and-ownership-boundaries)
@@ -988,7 +990,6 @@
   - [Validation](workflows/structural-refactoring.md#validation)
 
 ## References (`references/`)
-
 - [Playwright MCP Annotation Pilot](references/ai-debugging.md): [Overview](references/ai-debugging.md#overview); [Purpose and completion contract](references/ai-debugging.md#purpose-and-completion-contract); [What the pilot proves](references/ai-debugging.md#what-the-pilot-proves); [What "enable AI-debug mode" means](references/ai-debugging.md#what-enable-ai-debug-mode-means); [One-time setup](references/ai-debugging.md#one-time-setup); [Codex](references/ai-debugging.md#codex); [Cursor](references/ai-debugging.md#cursor); [Verify](references/ai-debugging.md#verify); [Concurrent AI-debug sessions](references/ai-debugging.md#concurrent-ai-debug-sessions); [Run an annotation session](references/ai-debugging.md#run-an-annotation-session); [Interaction and annotation are separate modes](references/ai-debugging.md#interaction-and-annotation-are-separate-modes); [Read application logs safely](references/ai-debugging.md#read-application-logs-safely); [Three required pilot scenarios](references/ai-debugging.md#three-required-pilot-scenarios); [Security and platform boundaries](references/ai-debugging.md#security-and-platform-boundaries); [Passkey behavior in the pilot browser](references/ai-debugging.md#passkey-behavior-in-the-pilot-browser); [Evaluation gate](references/ai-debugging.md#evaluation-gate); [References](references/ai-debugging.md#references).
 - [Reference: Svelte + Vite + Bun](references/bun-svelte.md): [1. Package Manager](references/bun-svelte.md#1-package-manager); [2. Dev Server and Build](references/bun-svelte.md#2-dev-server-and-build); [Blank page after WASM changes](references/bun-svelte.md#blank-page-after-wasm-changes); [3. E2e tests](references/bun-svelte.md#3-e2e-tests).
 - [Cloudflare Operations](references/cloudflare-operations.md): [Overview](references/cloudflare-operations.md#overview); [Operating contract](references/cloudflare-operations.md#operating-contract).
