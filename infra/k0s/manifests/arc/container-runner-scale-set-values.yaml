@@ -48,7 +48,9 @@ template:
   spec:
     nodeSelector:
       nook.nokey.sh/arc-build: "true"
-    automountServiceAccountToken: false
+    # The novolume container hook creates and watches the per-job pod through
+    # the chart-owned, namespace-scoped service account.
+    automountServiceAccountToken: true
     enableServiceLinks: false
     terminationGracePeriodSeconds: 60
     containers:
@@ -56,6 +58,8 @@ template:
         image: ghcr.io/actions/actions-runner:2.336.0@sha256:0cfdcc701ce933c6d243c6b0b2da767366dc9f2e99961d4c3754b0b78084cdda
         command: ["/home/runner/run.sh"]
         env:
+          - name: ACTIONS_RUNNER_KUBERNETES_NAMESPACE
+            value: arc-runners
           - name: ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE
             value: /etc/nook-arc-hook/content.yaml
         securityContext:
