@@ -406,9 +406,21 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, wasm]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    outputs:
+      ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}
+      ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+
+      - name: Enforce the UI demo contract
+        id: ui-demo-contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch "https://github.com/${{ github.repository }}.git" "$BASE_SHA" --depth=1
+          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
 
       - name: Expose Actions Node.js runtime
         uses: ./.github/actions/nook-node-setup
@@ -526,28 +538,18 @@ jobs:
         username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     steps:
-      - name: Enforce the UI demo contract
-        id: ui-demo-contract
-        working-directory: /meta-secret/nook
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-        run: |
-          set -euo pipefail
-          git fetch "https://github.com/${{ github.repository }}.git" "$BASE_SHA" --depth=1
-          bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
-
       - name: Record headless UI demo
         id: record-ui-demo
-        if: steps.ui-demo-contract.outputs.required == 'true'
+        if: needs.verify.outputs.ui-demo-required == 'true'
         working-directory: /meta-secret/nook
         run: task _web:test:ui-demo
         env:
           CI: true
           NOOK_UI_DEMO_OUTPUT_DIR: ${{ github.workspace }}/ui-demo
-          UI_DEMO_SPECS: ${{ steps.ui-demo-contract.outputs.specs }}
+          UI_DEMO_SPECS: ${{ needs.verify.outputs.ui-demo-specs }}
 
       - name: Upload UI demo video
-        if: always() && steps.ui-demo-contract.outputs.required == 'true'
+        if: always() && needs.verify.outputs.ui-demo-required == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ui-demo-pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
@@ -557,11 +559,11 @@ jobs:
           overwrite: true
 
       - name: Link UI demo from the pull request
-        if: always() && steps.ui-demo-contract.outputs.required == 'true'
+        if: always() && needs.verify.outputs.ui-demo-required == 'true'
         uses: actions/github-script@v9
         env:
           DEMO_OUTCOME: ${{ steps.record-ui-demo.outcome }}
-          DEMO_SPECS: ${{ steps.ui-demo-contract.outputs.specs }}
+          DEMO_SPECS: ${{ needs.verify.outputs.ui-demo-specs }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         with:

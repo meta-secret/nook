@@ -280,7 +280,7 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && ui_demo.contains("runs-on: nook-k0s-container")
             && ui_demo.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && ui_demo[..ui_demo_verify]
-                .contains("steps.ui-demo-contract.outputs.required == 'true'")
+                .contains("needs.verify.outputs.ui-demo-required == 'true'")
             && !ui_demo.contains("nook-docker-setup")
             && !ui_demo.contains("publish-web-e2e-cache")
             && full_e2e[..full_e2e_verify].contains("runs-on: nook-k0s-container")

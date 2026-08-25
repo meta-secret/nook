@@ -287,16 +287,21 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "native PR validation must use sccache, isolate BuildKit writes, and run explicit preflight only for an exact handoff"
     );
     assert!(
-        !verify_job.contains("Record headless UI demo")
+        verify_job.contains("id: ui-demo-contract")
+            && verify_job
+                .contains("ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}")
+            && verify_job.contains("ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}")
+            && !verify_job.contains("Record headless UI demo")
             && ui_demo_job.contains("needs: [validation-request, verify]")
             && ui_demo_job.contains("runs-on: nook-k0s-container")
             && ui_demo_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
-            && ui_demo_job.contains("Enforce the UI demo contract")
+            && !ui_demo_job.contains("Enforce the UI demo contract")
             && ui_demo_job.contains("task _web:test:ui-demo")
             && !ui_demo_job.contains("nook-docker-setup")
-            && ui_demo_job.contains("steps.ui-demo-contract.outputs.required == 'true'"),
-        "changed PR demos must consume the exact browser image on container ARC without serializing web verification"
+            && ui_demo_job.contains("needs.verify.outputs.ui-demo-required == 'true'")
+            && ui_demo_job.contains("needs.verify.outputs.ui-demo-specs"),
+        "the real ARC checkout must classify UI changes before changed PR demos consume the exact browser image on container ARC"
     );
     assert!(
         !pr.contains("actions/cache/"),
