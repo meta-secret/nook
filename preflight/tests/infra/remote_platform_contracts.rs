@@ -119,6 +119,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "manifests",
         "providers",
         "mesh",
+        "operator-ssh",
         "host-services",
         "kubernetes-tools",
         "k0s",

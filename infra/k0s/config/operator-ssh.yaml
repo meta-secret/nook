@@ -1,0 +1,8 @@
+home:
+  alias: nook-home-lan
+  address: 192.168.1.140
+  accessFallback: ssh.bynull.link
+  expectedHostname: bynull-servo
+  hostKeyFingerprint: SHA256:t5b9Th9JNrNxRyb4HqnDD9iAPBCzlAqjxJIZOza+cLU
+  identityFile: ~/.ssh/id_ed25519
+  user: bynull
