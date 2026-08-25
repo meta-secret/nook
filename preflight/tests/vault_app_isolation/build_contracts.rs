@@ -729,6 +729,21 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "e2e must not download Playwright's duplicate Chromium and headless-shell bundle"
     );
     let web_image = read(&root, "nook-app/nook-web/nook-web-app/Dockerfile");
+    let web_image_bake = read(&root, "nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    assert!(web_image.contains("FROM web-runtime AS nook-web-source"));
+    assert!(web_image.contains("test -x \"$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH\""));
+    assert!(web_image_bake.contains("web-runtime   = \"target:web-base\""));
+    assert_eq!(
+        web_image_bake
+            .matches("web-runtime = \"target:web-e2e-base\"")
+            .count(),
+        2,
+        "both browser image targets must replace the distinct runtime context with Chromium"
+    );
+    assert!(
+        !web_image_bake.contains("web-base = \"target:web-e2e-base\""),
+        "a named context must not collide with the internal web-base Dockerfile stage"
+    );
     assert!(web_image.contains("playwright-core/browsers.json"));
     assert!(web_image.contains("/usr/bin/ffmpeg"));
     for config in [
