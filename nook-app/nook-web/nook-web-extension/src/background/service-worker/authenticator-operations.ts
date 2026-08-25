@@ -463,17 +463,28 @@ export async function websiteAuthenticatorEnrollStage({
   message,
   sender,
 }: WebsiteAuthenticatorEnrollStageArgs): Promise<AuthenticatorStageResponse> {
+  const authorizationGeneration = accountPickerAuthorizationGeneration()
+  const otpauthUri = { value: message.payload.otpauthUri }
+  message.payload.otpauthUri = ''
   const nookTypedArgs0_10: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
     sender,
     origin: message.payload.origin,
   }
   if (!isAuthorizedWebsiteSender(nookTypedArgs0_10)) {
+    otpauthUri.value = ''
     return { ok: false, reason: 'authenticator-forbidden-origin' }
   }
   const grant = (await passwordPairingGrants()).find(
     (candidate) => candidate.vaultStoreId === message.payload.vaultStoreId,
   )
-  if (!grant) return { ok: false, reason: 'authenticator-vault-not-granted' }
+  if (!grant) {
+    otpauthUri.value = ''
+    return { ok: false, reason: 'authenticator-vault-not-granted' }
+  }
+  if (!accountPickerAuthorizationIsCurrent(authorizationGeneration)) {
+    otpauthUri.value = ''
+    return { ok: false, reason: 'authenticator-locked' }
+  }
   purgeExpiredStagedEnrollments()
   for (const [stageId, staged] of stagedAuthenticatorEnrollments) {
     if (staged.origin === message.payload.origin) {
@@ -487,10 +498,11 @@ export async function websiteAuthenticatorEnrollStage({
     stageId,
     origin: message.payload.origin,
     vaultStoreId: message.payload.vaultStoreId,
-    otpauthUri: message.payload.otpauthUri,
+    otpauthUri: otpauthUri.value,
     expiresAt: Date.now() + STAGED_ENROLLMENT_TTL_MS,
   }
   stagedAuthenticatorEnrollments.set(stageId, nookTypedArgs0_11)
+  otpauthUri.value = ''
   return { ok: true, stageId }
 }
 
