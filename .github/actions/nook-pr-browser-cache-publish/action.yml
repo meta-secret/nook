@@ -1,0 +1,52 @@
+name: Publish verified PR browser cache
+description: Publish one exact-head browser cache only after the caller joins every required browser shard.
+
+inputs:
+  registry-username:
+    description: Zot cache writer username.
+    required: true
+  registry-password:
+    description: Zot cache writer password.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Docker setup
+      uses: ./.github/actions/nook-docker-setup
+      with:
+        registry-host: registry.dev.nokey.sh
+        registry-username: ${{ inputs.registry-username }}
+        registry-password: ${{ inputs.registry-password }}
+        cache-write: "false"
+        main-cache-only: "true"
+        isolated-cache-write: "true"
+
+    - name: Download verified WASM handoff
+      uses: actions/download-artifact@v8
+      with:
+        name: pr-wasm-${{ github.run_id }}
+        path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+
+    - name: Publish browser cache after both shards pass
+      shell: bash
+      env:
+        CI: true
+        GHA_CACHE_WRITE_ENABLED: "1"
+        NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
+        NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
+        NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
+        NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
+      run: >-
+        task ci:main:publish-web-e2e-cache
+        CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+        VITE_BASE=/
+        VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+        VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
+        VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+        VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
+        WASM_BUILD_MODE=dev
+
+    - name: Preserve joined cache telemetry
+      if: always()
+      uses: ./.github/actions/nook-cache-telemetry

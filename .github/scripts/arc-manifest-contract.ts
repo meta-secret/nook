@@ -124,6 +124,10 @@ const webDockerTasks = new TextContract({
   label: "web Docker browser tasks",
   source: await read("nook-app/nook-web/docker/Taskfile.yml"),
 });
+const prBrowserCachePublisher = new TextContract({
+  label: "joined PR browser cache publisher",
+  source: await read(".github/actions/nook-pr-browser-cache-publish/action.yml"),
+});
 const wasmCacheProofSource = await read(
   ".github/scripts/verify-wasm-gha-cache.sh",
 );
@@ -299,8 +303,14 @@ prWorkflow.requireAll([
   "name: Full browser e2e (main fix)",
   "needs: [full-e2e-shard, wasm]",
   "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
-  "Publish browser cache after both shards pass",
+  "uses: ./.github/actions/nook-pr-browser-cache-publish",
   "artifact-suffix: shard-${{ matrix.shard }}",
+]);
+prBrowserCachePublisher.requireAll([
+  "Publish browser cache after both shards pass",
+  "task ci:main:publish-web-e2e-cache",
+  'GHA_CACHE_WRITE_ENABLED: "1"',
+  "uses: ./.github/actions/nook-cache-telemetry",
 ]);
 webTasks.requireAll([
   "_web:test:e2e:run-groups:",
