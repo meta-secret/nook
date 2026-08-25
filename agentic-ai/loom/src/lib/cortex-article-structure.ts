@@ -284,7 +284,7 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
     if (isTransparentDensityNode(node)) {
       continue;
     }
-    if (node.type !== 'paragraph') {
+    if (node.type !== 'paragraph' || !isVisibleArticleNode(node)) {
       consecutive = 0;
       continue;
     }

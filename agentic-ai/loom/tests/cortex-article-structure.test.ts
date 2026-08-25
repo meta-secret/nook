@@ -287,6 +287,12 @@ test('does not count paragraphs with only empty inline content', () => {
     };
     expect(audit([makeDocument(documentArgs)])).toEqual([]);
   }
+  const resetArgs: MakeDocumentArgs = {
+    path: '.cortex/empty-inline-reset.md',
+    content:
+      '# Empty inline reset\n\n## Explanation\n\nOne.\n\nTwo.\n\nThree.\n\n` `\n\nFour.\n',
+  };
+  expect(audit([makeDocument(resetArgs)])).toEqual([]);
 });
 
 test('treats thematic breaks as invisible density-resetting separators', () => {
