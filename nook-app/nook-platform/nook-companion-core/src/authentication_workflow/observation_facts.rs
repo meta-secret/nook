@@ -185,7 +185,6 @@ impl AuthenticationPageObservationFactsBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AuthenticationWorkflowAction;
 
     #[test]
     fn rejects_semantic_evidence_outside_rust_vocabulary() {
@@ -291,7 +290,7 @@ mod tests {
     }
 
     #[test]
-    fn unavailable_passkey_vault_suppresses_page_control_proposals() -> anyhow::Result<()> {
+    fn unavailable_passkey_vault_suppresses_page_control_proposals() {
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
                 passkey_control: AuthenticationPasskeyControlObservation::Present,
@@ -308,15 +307,10 @@ mod tests {
         let observation = facts.into_observation();
 
         assert_eq!(observation.passkey, AuthenticationPasskeyEvidence::Absent);
-        let snapshot = AuthenticationPageObservationFactsBatch {
+        let workflow = AuthenticationPageObservationFactsBatch {
             observations: vec![facts],
         }
-        .classify()
-        .snapshot()?;
-        assert!(!matches!(
-            snapshot.action,
-            AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
-        ));
-        Ok(())
+        .classify();
+        assert_eq!(workflow, AuthenticationWorkflowMatch::Rejected);
     }
 }
