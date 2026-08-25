@@ -425,6 +425,42 @@ test.describe('Browser 2FA enrollment', () => {
     }
   })
 
+  test('cancels staged enrollment when a manual checkpoint appears', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Enrollment checkpoint cancellation vault',
+    })
+    try {
+      const enrollPage = await paired.context.newPage()
+      await enrollPage.goto(`${mockAuth.origin}/totp/enroll`)
+      const widget = enrollPage.locator('#nook-auth-widget')
+      await widget
+        .getByRole('button', { name: 'Add 2FA from this page' })
+        .click()
+      await widget.getByRole('button', { name: 'Continue enrollment' }).click()
+      await expect(
+        widget.getByText(/Verification code filled|Complete verification/i),
+      ).toBeVisible({ timeout: 20_000 })
+
+      await enrollPage.evaluate(() => {
+        const checkpoint = document.createElement('div')
+        checkpoint.dataset.nookManualCheckpoint = 'true'
+        checkpoint.textContent = 'Complete the site check to continue.'
+        document.querySelector('main')?.prepend(checkpoint)
+      })
+
+      await expect(widget).toHaveCount(0, { timeout: 10_000 })
+      expect(await listExtensionAuthenticators(paired.context)).toEqual([])
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('stages QR, fills verify, encrypts only after Sufficient evidence', async ({
     browserName,
   }, testInfo) => {

@@ -278,7 +278,8 @@ Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
 consent.
 It fills the verification code via Rust/WASM.
 It encrypts the authenticator only after Sufficient outcome evidence.
-Consented backup-code capture follows.
+Consented backup-code capture follows. When recovery codes appear while the
+setup QR remains visible, the recovery action takes precedence.
 Secrets never appear in the HUD.
 
 The toolbar menu may report the connected vault. It does not report login

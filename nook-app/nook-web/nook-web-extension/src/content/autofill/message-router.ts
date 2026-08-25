@@ -17,6 +17,7 @@ import {
   fillAndSubmitAccount,
   setStatus,
 } from './login-passkey-actions'
+import { stopPendingSaveWatch } from './login-save'
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
@@ -31,6 +32,7 @@ import { removeWidget, translatedMessage } from './workflow-ui'
 import { cancelActiveEnrollmentCeremony } from '../enrollment-flow'
 
 export function removeScannedWidget(): void {
+  stopPendingSaveWatch()
   cancelPendingAuthenticatorPickerRequest()
   cancelPendingLoginPickerRequest()
   removeWidget()

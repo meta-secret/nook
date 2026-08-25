@@ -439,6 +439,14 @@ function handleAuthenticationMutations(
     (record) => !isExtensionWidgetMutation(record),
   )
   if (pageMutations.length === 0) return
+  if (pageHasManualCheckpoint(document)) {
+    authenticationActionState.invalidate()
+    widgetState.busy = false
+    const enrollmentCancellation = cancelActiveEnrollmentCeremony()
+    removeScannedWidget()
+    void enrollmentCancellation.finally(() => scheduleScan())
+    return
+  }
   if (
     !enrollmentCeremonyActive() &&
     widgetState.host.kind === WidgetHostKind.Attached &&
