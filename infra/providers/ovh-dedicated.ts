@@ -151,6 +151,11 @@ interface HostIdentityInput {
   hostname: string;
 }
 
+interface PreparedReinstall {
+  hostIdentity: HostIdentity;
+  publicKey: string;
+}
+
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const homeDirectory = process.env.HOME;
 if (!homeDirectory) throw new Error("HOME must be set for the private credential store");
@@ -233,6 +238,18 @@ async function loadHostIdentity(input: HostIdentityInput): Promise<HostIdentity>
   }
   await chmod(privateKeyPath, 0o600);
   await chmod(publicKeyPath, 0o600);
+  const derivedPublicKey = await runCommand([
+    "ssh-keygen",
+    "-y",
+    "-f",
+    privateKeyPath,
+  ]);
+  const derivedKeyMaterial = derivedPublicKey.split(/\s+/).slice(0, 2).join(" ");
+  const storedPublicKey = (await readFile(publicKeyPath, "utf8")).trim();
+  const storedKeyMaterial = storedPublicKey.split(/\s+/).slice(0, 2).join(" ");
+  if (derivedKeyMaterial !== storedKeyMaterial) {
+    throw new Error(`stored SSH host keypair for ${input.hostname} does not match`);
+  }
   const fingerprintOutput = await runCommand([
     "ssh-keygen",
     "-l",
@@ -248,7 +265,7 @@ async function loadHostIdentity(input: HostIdentityInput): Promise<HostIdentity>
   return {
     fingerprint,
     privateKey: await readFile(privateKeyPath, "utf8"),
-    publicKey: await readFile(publicKeyPath, "utf8"),
+    publicKey: `${storedPublicKey}\n`,
   };
 }
 
@@ -480,6 +497,30 @@ async function requireCompatibleTemplate(input: {
   }
 }
 
+async function prepareReinstall(input: ProvisionContext): Promise<PreparedReinstall> {
+  await requireCompatibleTemplate({
+    credentials: input.credentials,
+    definition: input.definition,
+  });
+  const publicKey = await readFile(
+    expandHome(input.definition.sshPublicKeyFile),
+    "utf8",
+  );
+  if (!/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(input.hostname)) {
+    throw new Error("hostname is not a valid lowercase host label");
+  }
+  if (!/^ssh-(?:ed25519|rsa) [A-Za-z0-9+/=]+(?: .*)?$/.test(publicKey.trim())) {
+    throw new Error("SSH public key must be an OpenSSH ed25519 or RSA key");
+  }
+  return {
+    hostIdentity: await loadHostIdentity({
+      allowCreate: true,
+      hostname: input.hostname,
+    }),
+    publicKey: publicKey.trim(),
+  };
+}
+
 async function waitForTask(input: {
   credentials: OvhCredentials;
   definition: DedicatedServerDefinition;
@@ -513,26 +554,12 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
     desiredOperatingSystem: input.definition.operatingSystem,
   };
   if (!requiresReinstall(reinstallInput)) return ProvisionResult.Unchanged;
-  await requireCompatibleTemplate({
-    credentials: input.credentials,
-    definition: input.definition,
-  });
-  const publicKey = await readFile(expandHome(input.definition.sshPublicKeyFile), "utf8");
-  if (!/^[a-z0-9](?:[-a-z0-9]*[a-z0-9])?$/.test(input.hostname)) {
-    throw new Error("hostname is not a valid lowercase host label");
-  }
-  if (!/^ssh-(?:ed25519|rsa) [A-Za-z0-9+/=]+(?: .*)?$/.test(publicKey.trim())) {
-    throw new Error("SSH public key must be an OpenSSH ed25519 or RSA key");
-  }
-  const hostIdentity = await loadHostIdentity({
-    allowCreate: true,
-    hostname: input.hostname,
-  });
+  const prepared = await prepareReinstall(input);
   const payload: ReinstallRequest = {
     customizations: {
       hostname: input.hostname,
-      postInstallationScript: hostIdentityInstallScript(hostIdentity),
-      sshKey: publicKey.trim(),
+      postInstallationScript: hostIdentityInstallScript(prepared.hostIdentity),
+      sshKey: prepared.publicKey,
     },
     operatingSystem: input.definition.operatingSystem,
   };
@@ -601,6 +628,14 @@ async function main(): Promise<void> {
       currentOperatingSystem: server.os,
       desiredOperatingSystem: definition.operatingSystem,
     });
+    if (required) {
+      await prepareReinstall({
+        allowReinstall: args.allowReinstall,
+        credentials,
+        definition,
+        hostname: args.node,
+      });
+    }
     process.stdout.write(`${required}\n`);
     return;
   }

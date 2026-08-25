@@ -58,6 +58,8 @@ for (const fragment of [
   ".nook/infra/ovh-host-identities",
   "postInstallationScript",
   "missing trusted SSH host identity",
+  "stored SSH host keypair",
+  "prepareReinstall",
   "preSubmission",
   "approved US API endpoint",
   'currentOperatingSystem === "none_64"',
