@@ -380,8 +380,7 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
         "the internal cache promoter must stay on GitHub-hosted capacity"
     );
     assert!(
-        workflow.contains("inputs.runner_label == 'nook-k0s-cache' && (vars.NOOK_CACHE_RUNS_ON || 'ubuntu-latest')")
-            && workflow.contains("inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')")
+        workflow.contains("inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')")
             && workflow.contains("inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest')")
             && workflow.contains(
                 "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
@@ -767,7 +766,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         "--add-label \"$validation_label\"",
         "task remote TASK_NAME=rust:test",
         "task pr:validate PR=<number>",
-        "Any later push changes the PR head",
+        "becomes stale after any later push",
     ] {
         assert!(
             remote_tasks.contains(required) || remote_doc.contains(required),

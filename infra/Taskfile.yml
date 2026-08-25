@@ -26,6 +26,10 @@ vars:
   NEO4J_CHART_SHA256: 62de9ecce52cc0078742a7b98649719cdb55c0458df69ee16230e26b010aedd9
 
 includes:
+  providers:
+    taskfile: tasks/providers.yml
+    dir: ..
+    flatten: true
   manifests:
     taskfile: tasks/manifests.yml
     dir: ..

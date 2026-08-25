@@ -158,10 +158,12 @@ Use this workflow for quality, CI, and deployment changes.
 10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
-    - Trusted native Rust and Rust ecosystem PR jobs and every explicit Main
-      job use ARC.
-    - General ARC exposes a job-scoped Podman API only inside each disposable
-      Kata guest for Main runtime and browser jobs.
+    - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
+      use ARC.
+    - Main's portable WASM dependency writer/proof uses two fresh
+      GitHub-hosted builders.
+    - General ARC exposes only a Buildx client connected to the persistent
+      rootless BuildKit shard on its selected node.
     - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
       browser, WASM, and deployment jobs use GitHub-hosted `ubuntu-latest`.
     - Delivery cache-only Bake may use a job-scoped `docker-container` Buildx
@@ -171,10 +173,10 @@ Use this workflow for quality, CI, and deployment changes.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
     #### BuildKit cache
-    - The cache-primary node-local seed is authoritative for ARC Main producers.
-    - Every ARC build node receives the same pool, cloner, verifier, and pinned
-      BuildKit image contract before it becomes schedulable.
-    - Private Zot is the authenticated fallback for hosted jobs and recovery.
+    - Every ARC build node owns one retained 64 GiB rootless BuildKit shard.
+    - The node-local Service keeps runner traffic on the selected node.
+    - Private Zot is the portable cache boundary for cross-node and hosted
+      recovery.
     - The k0s Zot Pod reserves two CPUs and 4 GiB of memory.
     - It may burst to eight CPUs and 12 GiB during parallel cache transfers.
     - Raise that ceiling only after production telemetry proves Zot is the
@@ -250,8 +252,8 @@ Use this workflow for quality, CI, and deployment changes.
     - A present exact scope is the only importer for that graph.
     - Hosted exact PR writers publish `mode=max`, so replay keeps the full leaf
       lineage.
-    - ARC exact PR writers publish `mode=min` retry handoffs because their full
-      working graph already lives in private node-local state during the job.
+    - ARC exact PR writers use isolated refs so concurrent jobs cannot overwrite
+      another commit's graph.
     - Docker setup also probes trusted Main native and WASM source refs.
     - A present Main source graph is the only importer for that solve.
     - Shorter dependency indexes join only while that Main source ref is absent.
@@ -259,10 +261,10 @@ Use this workflow for quality, CI, and deployment changes.
       dependencies without cold `cargo install`.
     - Trusted Hive PR verification runs on the dedicated `nook-k0s-hive` ARC
       scale set.
-    - Each fresh Hive runner receives a reflink clone of the node-local,
-      validated BuildKit seed.
-    - Hive PRs may import the trusted Main registry seed when the local clone
-      does not already contain the needed graph.
+    - Each Hive runner reuses the persistent BuildKit shard on its selected
+      node.
+    - Hive PRs may import trusted Main registry refs when the local shard does
+      not already contain the needed graph.
     - Hive PRs export one minimal isolated exact-SHA registry handoff because
       that handoff is small and has proven fast enough for retries.
     - Main remains the only workflow writer of the shared Hive registry seed.
@@ -273,11 +275,14 @@ Use this workflow for quality, CI, and deployment changes.
       cannot rewrite apt while cooking chef.
     - ARC Native and ecosystem jobs do not export per-PR Rust target trees.
       Even `mode=min` can contain a result layer larger than 15 GiB.
-    - WASM publishers stage deps-publish and source export before rust-base.
-    - Staging rust-base first on WASM imports the shorter parent index and
-      orphans local chef cook layers for the next bake.
+    - ARC WASM publishers keep source state portable but never overwrite the
+      portable dependency ref with worker-specific metadata.
+    - A trusted hosted builder is the sole writer of the portable WASM
+      dependency ref. A second fresh hosted builder validates cache hits.
     - Publishers keep configured `cache-from` on every Bake.
-    - Main verifies published WASM fingerprints from a fresh builder.
+    - Main audits child manifest digest/size and every published blob's declared
+      size and SHA-256 by streaming the blob completely. It then verifies the WASM fingerprint from a
+      second fresh builder without hydrating its complete filesystem.
     - One CI job writes each shared ecosystem registry ref.
     - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
       inputs only.
@@ -306,7 +311,10 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_wasm_and_native_publish_staging`
 
     Runtime CACHED proof for published WASM deps remains Main
-    `verify-wasm-gha-cache.sh` on a fresh builder.
+    `verify-wasm-gha-cache.sh`. One fresh hosted builder writes the portable
+    ref, and a second fresh builder verifies the three expensive vertices.
+    Both fresh builders bootstrap the authenticated Zot-qualified BuildKit
+    image and never resolve their runtime image from Docker Hub.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
     It reproduces the rejected three-linked-target nightly miss.
@@ -320,7 +328,7 @@ Use this workflow for quality, CI, and deployment changes.
     Main, publishes only its isolated PR leaf, and replays that leaf on a fresh
     runner. General trusted ARC verification reuses its private local BuildKit
     state and publishes only a minimal per-PR retry handoff. Hive ARC keeps its
-    separate smoke-promoted seed contract without per-PR registry refs.
+    separate exact-head registry contract.
     Scenario R proves exact-only selection replays the leaf across both a bare
     Bake-linked parent and the production internal-stage architecture on fresh
     builders.
@@ -343,6 +351,8 @@ Use this workflow for quality, CI, and deployment changes.
     ARC-shaped builders and publish separate exact-head v2 graphs.
     Fresh builders replay each PR graph without executing the cargo-fetch
     analogue, and neither PR can consume or overwrite the other's source graph.
+    Scenario Z keeps one ARC-shaped BuildKit container and local state across a
+    daemon restart. The exact parent and leaf steps remain CACHED afterward.
 
     #### SeaweedFS sccache
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.
@@ -354,30 +364,32 @@ Use this workflow for quality, CI, and deployment changes.
     - Forks stay secret-free and cold-compile.
     - Hosted PR jobs export only git-commit refs under `nook/remote-buildcache/**` while restoring Main's trusted `nook/buildcache/**` lineage.
     - Trusted ARC PR jobs restore Main plus any existing exact scope, then build
-      into private job-local BuildKit state.
-    - They do not publish general exact-SHA handoffs. Concurrent multi-gigabyte
-      result layers would serialize the cluster behind Zot's HDD.
+      into the persistent BuildKit shard on the selected node.
+    - Exact-SHA handoffs remain isolated by commit identity.
     - Hive alone keeps a small minimal exact-SHA retry handoff.
     - Release and browser-only jobs receive neither cache credential and cannot evict Main.
 
     #### Main workflow
     - Main serializes native → WASM → web publisher lanes.
-    - Cache-primary ARC lanes verify read-only first, then promote the same
-      job-scoped graph into the node-local seed.
-    - Hosted fallback lanes export their verified graph to Zot for cold-node recovery.
-    - Hosted WASM dependency export uses no reimport and forces zstd compression.
+    - ARC lanes verify first, then publish the lane's shared Zot refs.
+    - Hosted fallback lanes use the same portable Zot contract.
+    - Hosted WASM dependency export never reimports its destination, so a
+      corrupted portable ref can heal on the next Main run. It may import only
+      independent input-fingerprint and Main source refs as optional seeds, and
+      it forces zstd compression.
     - Browser/UI validation remains read-only and receives no compiler-cache identity.
-    - After UI-demo assertions pass, cache-primary ARC promotes the warm browser
-      graph; hosted fallback uses the dedicated cache-only Zot publisher.
+    - After UI-demo assertions pass, the producer publishes the verified browser
+      graph.
     - Main runs full local-provider and extension e2e.
     - Main deploys `dev.nokey.sh`, `simple.dev.nokey.sh`, and `sentinel.dev.nokey.sh`.
 
     #### PR workflow
-    - Trusted same-repository PRs run native Rust on a fresh ARC Kata producer.
+    - Trusted same-repository PRs run native Rust on a fresh ARC Pod.
     - Fork PR native Rust and every verified WASM producer remain GitHub-hosted.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
-    - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.
+    - Main-fix PRs carrying `ci:full-e2e` feed two deterministic local-provider web shards plus an independent extension browser job.
+    - A stable browser join requires both web shards without rebuilding a low-reuse exact-head browser cache afterward.
     - `Verify and preview` uses `always()`.
     - It fails explicitly when any required producer or consumer fails.
     - The established required check cannot be skipped by dependency failure.
@@ -420,7 +432,8 @@ Use this workflow for quality, CI, and deployment changes.
     - It must run `task hive:verify`.
     - `task hive:verify` must compile, lint, and test both Hive and Lace.
     - The harness opens its PR only after those validations succeed.
-    - `.github/workflows/runner-cleanup.yml` remains on `nook` for registered-host maintenance.
+    - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
+      collection; no registered-host cleanup workflow is allowed.
 
     #### Main failure incidents (Hive)
     - Every actionable unsuccessful Main run creates one `automation: hive` Workbench incident per failed SHA.
@@ -435,8 +448,8 @@ Use this workflow for quality, CI, and deployment changes.
     - The explicitly dispatched implementation worker does not claim it.
     - Hive verification materializes its real-lock test and Clippy dependency graphs in independent BuildKit stages so they execute in parallel.
     - SeaweedFS S3 `sccache` supplies compiler objects.
-    - Main ARC producers promote the shared cache-primary node-local seed.
-    - Hosted jobs restore the verified Zot fallback read-only.
+    - Main ARC producers publish shared Zot refs after verification.
+    - Hosted jobs restore the same verified Zot refs read-only.
 
 11. **GitHub Actions agent execution:**
     - When an iteration is coherent, agents run `task loom:pre-push`, commit,

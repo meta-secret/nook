@@ -325,7 +325,7 @@ The feedback inspection and readiness audit replace any blind review-batching gr
 ### 5. Hosted iteration and explicit validation
 
 **GitHub Actions is the normal build/test path.** `remote.yml` runs allowlisted
-focused tasks on the configured ARC Kata scale set, with `ubuntu-latest` as its
+focused tasks on the configured ARC scale set, with `ubuntu-latest` as its
 fallback. It always targets an exact pushed branch head. `pr.yml` remains the
 GitHub Actions merge-validation pipeline and runs only when an agent explicitly
 applies a validation label through `task pr:validate`. Its trusted daemon-free
@@ -415,9 +415,10 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 
 **Main-fix browser jobs:**
 
-- PRs labeled `ci:full-e2e` additionally run independent web and extension jobs on separate hosted runners.
+- PRs labeled `ci:full-e2e` additionally run two deterministic web shards and one independent extension job on separate hosted runners.
 - Each builds the Chromium image from verified WASM.
-- The overall `PR` workflow cannot succeed until both jobs succeed.
+- The stable web join fails unless both shards succeed and does not rebuild the browser image merely to publish a low-reuse exact-head cache.
+- The overall `PR` workflow cannot succeed until both web shards, the join, and extension e2e succeed.
 
 **Do not stop after opening the PR.** Wait only for applicable repository-owned workflows:
 

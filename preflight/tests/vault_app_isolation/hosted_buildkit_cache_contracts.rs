@@ -260,13 +260,10 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let ui_demo_publish = ui_demo
         .find("task ci:main:publish-web-e2e-cache")
         .context("PR UI demo job must publish its cache")?;
-    let full_e2e = section(&pr, "  full-e2e:\n", "\n  full-extension-e2e:\n");
+    let full_e2e = section(&pr, "  full-e2e-shard:\n", "\n  full-e2e:\n");
     let full_e2e_verify = full_e2e
         .find("task ci:pr:e2e:web:artifacts")
-        .context("PR full-e2e job must verify the browser image")?;
-    let full_e2e_publish = full_e2e
-        .find("task ci:main:publish-web-e2e-cache")
-        .context("PR full-e2e job must publish its verified browser cache")?;
+        .context("each PR full-e2e shard must verify its browser half")?;
     assert!(
         rust_verify < rust_publish
             && pr[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED=\"\"")
@@ -292,12 +289,9 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && ui_demo[..ui_demo_publish]
                 .contains("!contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
-            && full_e2e_verify < full_e2e_publish
-            && full_e2e[full_e2e_verify..full_e2e_publish]
-                .contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && full_e2e[..full_e2e_publish]
-                .contains("ARC keeps the verified full-e2e graph local; Main remains reusable")
-            && full_e2e[full_e2e_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\""),
+            && full_e2e[full_e2e_verify..].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && full_e2e.contains("NOOK_E2E_SHARD: ${{ matrix.shard }}/2")
+            && !full_e2e.contains("task ci:main:publish-web-e2e-cache"),
         "PR producers must verify read-only, keep ARC graphs local, and retain isolated hosted publication"
     );
     Ok(())
@@ -404,13 +398,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("rust-base-publish")
             && docker_tasks.contains("builder-core-deps-publish")
-            && docker_tasks.contains("builder-wasm-deps-publish")
             && docker_tasks.contains("web-deps-publish")
             && docker_tasks.contains("nook-web-e2e-publish")
             && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh")
             && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned publishers must bake scoped *-publish targets and verify Main WASM from a fresh builder"
+        "producer-owned ARC publishers must bake scoped targets without owning the portable WASM dependency ref"
     );
     assert_no_empty_cache_overrides(&docker_tasks);
     let native_publish = docker_tasks
@@ -431,9 +423,6 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .nth(1)
         .and_then(|tail| tail.split("docker:rust-base:").next())
         .unwrap_or("");
-    let wasm_deps_idx = wasm_publish
-        .find("builder-wasm-deps-publish")
-        .expect("wasm publish must bake builder-wasm-deps-publish");
     let wasm_source_idx = wasm_publish
         .find("wasm-export")
         .expect("wasm publish must bake wasm-export");
@@ -441,20 +430,26 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("task: docker:ci:cache:publish:rust-base")
         .expect("wasm publish must still seed rust-base after deps/source");
     assert!(
-        wasm_deps_idx < wasm_source_idx && wasm_source_idx < wasm_rust_base_idx,
-        "wasm cache publish must stage deps-publish, then source export, then rust-base (never rust-base first)"
+        wasm_source_idx < wasm_rust_base_idx && !wasm_publish.contains("builder-wasm-deps-publish"),
+        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to hosted BuildKit"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         cache_verifier.contains("docker-container")
+            && cache_verifier
+                .contains("--driver-opt \"image=${registry_host}/moby/buildkit:buildx-stable-1\"",)
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
-            && cache_verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
-            && cache_verifier.contains("builder-wasm-deps-restore 2>&1")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && cache_verifier.contains("verify-registry-cache-blobs.ts")
+            && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
+            && cache_verifier.contains("refs/heads/main")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
+        "trusted Main must publish from one fresh hosted builder and reject the result until another fresh builder hits every dependency vertex"
     );
     let base_dockerfile = read(
         root,
@@ -532,6 +527,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 
 fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
+    let web_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
+    let deploy = main
+        .split("\n  deploy:\n")
+        .nth(1)
+        .context("Main must define the development deployment job")?;
     assert!(
         main.contains("\n  rust:\n")
             && main.contains("\n  wasm:\n")
@@ -541,8 +541,21 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task ci:main:e2e:web:artifacts")
-            && main.contains("needs: [web, web-e2e]"),
-        "Main must split native Rust, WASM, web verify, and browser suites without a duplicate cache publisher"
+            && main.contains("\n  wasm-cache-proof:\n")
+            && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
+            && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
+        "Main must split native Rust, WASM, fresh registry cache proof, web verify, and browser suites without a duplicate cache publisher"
+    );
+    assert!(
+        web_tasks.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
+            && web_tasks.contains("nook-web-ci.output=type=cacheonly"),
+        "daemon-free ARC web verification must retain its solved graph without exporting a Docker image"
+    );
+    assert!(
+        deploy.starts_with(
+            "    name: Deploy development\n    needs: [web, web-e2e, wasm-cache-proof]"
+        ) && deploy.contains("\n    runs-on: ubuntu-latest\n"),
+        "the remaining Docker-runtime deployment lane must stay on a fresh hosted runner"
     );
     let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")

@@ -310,6 +310,8 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let root = repository_root();
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
+    let blob_verifier = read(&root, ".github/scripts/verify-registry-cache-blobs.ts");
+    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
 
     let native = docker_tasks
         .split("docker:ci:cache:publish:native:")
@@ -340,9 +342,6 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         .nth(1)
         .and_then(|tail| tail.split("docker:rust-base:").next())
         .context("wasm publish task missing")?;
-    let wasm_deps = wasm
-        .find("builder-wasm-deps-publish")
-        .context("wasm publish must bake builder-wasm-deps-publish")?;
     let wasm_source = wasm
         .find("wasm-export")
         .context("wasm publish must bake wasm-export")?;
@@ -350,24 +349,47 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         .find("task: docker:ci:cache:publish:rust-base")
         .context("wasm publish must seed rust-base after deps/source")?;
     assert!(
-        wasm_deps < wasm_source && wasm_source < wasm_base,
-        "wasm publish must stage deps-publish, then source export, then rust-base"
+        wasm_source < wasm_base && !wasm.contains("builder-wasm-deps-publish"),
+        "ARC WASM publish must stage source then rust-base without overwriting the portable dependency ref"
     );
     assert!(
-        wasm.contains("verify-wasm-gha-cache.sh") && wasm.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "Main WASM publish must invoke the fresh-builder fingerprint verifier"
+        !wasm.contains("verify-wasm-gha-cache.sh"),
+        "ARC WASM publish must leave portable dependency publication to the hosted writer/proof job"
     );
 
+    assert!(
+        core_bake.contains("target \"builder-wasm-deps-cache-proof\"")
+            && core_bake.contains("inherits   = [\"builder-wasm-deps-restore\"]")
+            && core_bake.contains("target     = \"builder-wasm-deps\"")
+            && !core_bake.contains("wasm-deps = \"target:builder-wasm-deps-restore\""),
+        "the hosted writer/proof must preserve the product Dockerfile/context cache-key lineage without a hydration-only stage"
+    );
     assert!(
         verifier.contains("docker-container")
             && verifier.contains("--use")
             && !verifier.contains("--builder")
-            && verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
-            && verifier.contains("builder-wasm-deps-restore 2>&1")
+            && verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+            && verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
+            && verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && verifier.contains("verify-registry-cache-blobs.ts")
+            && verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
+            && verifier.contains("refs/heads/main")
             && verifier.contains("nook-sccache-report chef-wasm-release")
             && verifier.contains("nook-sccache-report chef-wasm-clippy")
             && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "runtime WASM proof must use a fresh docker-container builder and require chef CACHED markers"
+        "runtime WASM proof must publish on trusted Main with one fresh hosted builder and require CACHED markers from another"
+    );
+    assert!(
+        !blob_verifier.contains("method: 'HEAD'")
+            && !blob_verifier.contains("Range")
+            && blob_verifier.contains("content-length")
+            && blob_verifier.contains("response.body?.getReader()")
+            && blob_verifier.contains("createHash('sha256')")
+            && blob_verifier.contains("hash.update(chunk.value)")
+            && blob_verifier.contains("digest !== descriptor.digest")
+            && blob_verifier.contains("bytes.length !== input.descriptor.size")
+            && blob_verifier.contains("descriptor.size"),
+        "portable cache proof must validate child manifests and stream every complete Zot blob through SHA-256 without hydrating its filesystem"
     );
     Ok(())
 }

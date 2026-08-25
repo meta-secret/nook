@@ -151,6 +151,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
                 .contains("Scenario W: independent Node consumer owns and replays its exact leaf",)
             && tasks.contains("Scenario X: later crate edit keeps earlier crate CACHED")
             && tasks.contains("Scenario Y: concurrent Hive ARC jobs replay isolated Zot graphs",)
+            && tasks.contains("Scenario Z: persistent ARC-shaped shard survives daemon restart")
+            && tasks.contains("buildx inspect \"$builder\" --bootstrap")
             && tasks.contains("bake-sim-crate-a-expensive")
             && tasks.contains("bake-sim-crate-b-expensive")
             && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-a")
@@ -173,7 +175,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, Node consumer ownership, sequential crates, Hive dependency replay, and the broken/fixed nightly leaf graph"
+        "infra proof must cover fallback, PR isolation, concurrent graphs, persistent shard restart reuse, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     assert!(

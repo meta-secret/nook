@@ -78,6 +78,7 @@ tasks:
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      NOOK_E2E_SHARD: '{{.NOOK_E2E_SHARD}}'
       E2E_SPEC: '{{.E2E_SPEC}}'
       CHANNEL: '{{default "" .CHANNEL}}'
       PR: '{{default "" .PR}}'
@@ -113,6 +114,7 @@ tasks:
         -e VITE_SIMPLE_APP_URL="{{.VITE_SIMPLE_APP_URL}}" \
         -e VITE_SENTINEL_APP_URL="{{.VITE_SENTINEL_APP_URL}}" \
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}" \
+        -e NOOK_E2E_SHARD \
         -e NOOK_GITHUB_PAT \
         -e CI=1 \
         -e NOOK_GITHUB_E2E_REPO \
@@ -222,7 +224,11 @@ tasks:
         test -s "$artifacts/nook-wasm/nook-companion-wasm/nook_companion_wasm.js";
         mkdir -p "$artifacts/coverage/nook-core";
         : > "$artifacts/coverage/nook-core/.web-only";
-        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
+        web_output="";
+        if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+          web_output="--set nook-web-ci.output=type=cacheonly";
+        fi;
+        WEB_ARTIFACTS_CONTEXT="$artifacts" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "docker:ci:web:build" {{.DOCKER}} buildx bake --allow="fs.read=$artifacts" {{.NOOK_BAKE_FILES}} $web_output --set "web-deps.output=type=cacheonly" nook-web-ci web-deps'
       - task: registry-cache:publish:web
 
   docker:ci:web:e2e:build:

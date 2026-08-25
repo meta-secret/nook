@@ -45,6 +45,8 @@ for (const fragment of [
   "disable --now",
   "Host must not listen on :5000",
   "gh secret set NOOK_REGISTRY_PASSWORD",
+  "remote_mirror_read",
+  "/v2/moby/buildkit/manifests/buildx-stable-1",
   "kubectl.*port-forward.*nook-zot",
 ]) {
   const assertion = {
@@ -70,6 +72,7 @@ for (const fragment of [
   '"onDemand": true',
   '"preserveDigest": true',
   '"anonymousPolicy": ["read"]',
+  '"actions": ["read"]',
   '"nook-hive": {',
   '"users": ["__NOOK_REGISTRY_USERNAME__"]',
   "kind: Service",
@@ -112,6 +115,7 @@ for (const fragment of [
   "seaweedfs",
   "chrislusf/seaweedfs",
   "-s3.port=8333",
+  "--entryPoints.websecure.transport.respondingTimeouts.readTimeout=15m",
 ]) {
   const assertion = {
     source: compose,

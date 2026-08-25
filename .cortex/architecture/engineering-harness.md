@@ -104,14 +104,19 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Web checks consume only web dependencies plus the generated WASM package.
 - They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
 
-Trusted same-repository PR native Rust plus Rust ecosystem validation and every
-explicit Main job execute in fresh Kata QEMU microVMs through ARC. Focused
+Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
+build producers execute in disposable ordinary Pods through ARC. Focused
 `preflight`, `rust:ci`, and `arc:runtime` jobs may use the same scale set. The
-general set's job-scoped Podman API supplies Main's image-runtime boundary
-inside the disposable guest. Fork PRs, Dependabot PRs, releases, and non-Main
-runtime-dependent, browser, WASM, and deployment validation execute on
-ephemeral GitHub-hosted runners. The self-hosted `nook` pool remains
-maintenance-only.
+Docker CLI connects only to the persistent rootless BuildKit shard on its node.
+It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
+and non-Main runtime-dependent, browser, WASM, and deployment validation execute
+on ephemeral GitHub-hosted runners. Main's portable WASM dependency-cache writer
+and proof is the narrow hosted exception. One fresh hosted builder publishes the
+portable Zot metadata. A registry audit verifies child manifest digest/size and
+streams every complete blob to verify its declared size and SHA-256. Another cache-only builder then
+requires every expensive dependency vertex to hit before deployment without
+hydrating the complete dependency filesystem. The legacy registered `nook`
+runner is not used.
 
 ---
 
@@ -255,29 +260,32 @@ maintenance-only.
 ### Builder Selection
 
 - Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder (`desktop-linux` or `default`).
-- GitHub Actions creates an ephemeral job-scoped `docker-container` builder with `docker/setup-buildx-action`.
-- Warm layers come from authenticated registry cache refs, not from reusing one host container.
+- GitHub-hosted Actions creates an ephemeral job-scoped `docker-container`
+  builder with `docker/setup-buildx-action`; the authenticated setup preloads
+  its BuildKit image from Zot before builder creation instead of resolving
+  Docker Hub.
+- ARC Actions registers the node-local persistent BuildKit service as a remote
+  Buildx builder.
+- Zot refs carry cache state between nodes and hosted runners.
 
 ### CI Parity (`.github/actions/nook-docker-setup`)
 
 - Raises Linux watcher limits.
-- Exports the hosted `docker-container` builder for Task callers.
+- Exports either the hosted `docker-container` builder or the ARC remote
+  builder for Task callers.
 - Logs into `registry.dev.nokey.sh` and enables Bake registry cache refs.
 - Trusted Main and PR Rust producers receive SeaweedFS writer identity; Remote receives read-only identity.
 
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
-- ARC starts each fresh Kata guest from a private reflink clone of a trusted
-  32 GiB BuildKit seed.
-- A credential-free sidecar forwards a Pod-scoped candidate. The authenticated
-  host verifier promotes local state only after the exact Main runner job
-  reaches a final `success` conclusion.
-- Main cache-producing jobs are serialized. Their authenticated promotion
-  intents live in a host-private runtime directory. They block the next producer
-  clone until the preceding generation is promoted. A cache-primary node
-  selector keeps that lineage on one local seed.
-- Hosted fallback publication keeps Zot as the cross-node bootstrap source.
+- Every qualified node owns one retained 64 GiB rootless BuildKit shard.
+- The node-local Service routes each runner only to the shard on its own node.
+- BuildKit requests 4 CPU and 8 GiB. It has no CPU limit and may use up to
+  48 GiB during large parallel web and Rust builds.
+- Concurrent jobs share BuildKit's content-addressed store on that node.
+- Main and pull requests retain separate registry publication refs.
+- Zot remains the cross-node bootstrap and recovery source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
   so ARC remains daemon-free and the helpers stop with the runner. Hive keeps
@@ -290,6 +298,8 @@ maintenance-only.
 - Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
 - Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
+- Traefik allows 15 minutes to read an incoming registry request so one large
+  BuildKit layer upload is not cut off by Traefik's 60-second default.
 
 ### Rust Compiler Cache (`sccache`)
 
@@ -306,7 +316,7 @@ maintenance-only.
 - General trusted ARC PR jobs do not write registry cache refs.
 - Trusted Hive ARC jobs may write only their minimal exact-SHA ref under
   `nook/remote-buildcache/**`.
-- Their fresh Kata guests start from the private node-local COW seed.
+- Their runner Pods reuse the persistent BuildKit shard on the selected node.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
 ### Docker Bake Orchestration

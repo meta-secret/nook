@@ -58,6 +58,27 @@ if ! bash "$retry_script" frontend-authorization "$authorization_command" "$auth
 fi
 assert_equals "$(<"$authorization_count")" 2 'frontend authorization retry count'
 
+session_count="$test_dir/session-count"
+session_command="$test_dir/session-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'if [ "$count" -eq 1 ]; then' \
+  '  printf "%s\n" "ERROR: failed to solve: DeadlineExceeded: no active session for abc: context deadline exceeded"' \
+  '  exit 130' \
+  'fi' >"$session_command"
+chmod +x "$session_command"
+if ! bash "$retry_script" session-timeout "$session_command" "$session_count"; then
+  echo 'BuildKit client session timeout should retry' >&2
+  exit 1
+fi
+assert_equals "$(<"$session_count")" 2 'session retry count'
+
 application_count="$test_dir/application-count"
 application_command="$test_dir/application-command"
 printf '%s\n' \
