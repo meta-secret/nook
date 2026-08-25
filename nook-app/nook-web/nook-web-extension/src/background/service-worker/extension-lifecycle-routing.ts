@@ -178,7 +178,13 @@ export function routeExtensionLifecycleMessage({
       vaultStoreId: message.payload.vaultStoreId,
       eventLogRecords: message.payload.eventLogRecords,
     }
-    void importLocalEventLogUpdate(importArgs).then(sendResponse)
+    void importLocalEventLogUpdate(importArgs)
+      .then(async (response) => {
+        invalidateAllLoginMatchAvailability()
+        await clearMountedAuthenticationSurfaces()
+        return response
+      })
+      .then(sendResponse)
     return true
   }
 

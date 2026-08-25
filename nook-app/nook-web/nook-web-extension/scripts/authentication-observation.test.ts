@@ -27,6 +27,12 @@ describe('authentication workflow observation', () => {
     }
   })
 
+  test('rescans when a manual checkpoint marker changes', () => {
+    expect(AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER).toContain(
+      'data-nook-manual-checkpoint',
+    )
+  })
+
   test('rescans when responsive CSS can change control visibility', () => {
     expect(AUTHENTICATION_VIEWPORT_EVENTS).toContain('resize')
   })
