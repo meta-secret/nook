@@ -39,7 +39,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 FROM build AS test
 
-COPY . /meta-secret/nook
+COPY --from=repository-source / /meta-secret/nook
 ENV NOOK_REPO_ROOT=/meta-secret/nook
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \

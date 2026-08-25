@@ -108,15 +108,13 @@ Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
 build producers execute in disposable ordinary Pods through ARC. Focused
 `preflight`, `rust:ci`, and `arc:runtime` jobs may use the same scale set. The
 Docker CLI connects only to the persistent rootless BuildKit shard on its node.
-It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
-and non-Main runtime-dependent, browser, WASM, and deployment validation execute
-on ephemeral GitHub-hosted runners. Main's portable WASM dependency-cache writer
-and proof is the narrow hosted exception. One fresh hosted builder publishes the
-portable Zot metadata. A registry audit verifies child manifest digest/size and
-streams every complete blob to verify its declared size and SHA-256. Another cache-only builder then
-requires every expensive dependency vertex to hit before deployment without
-hydrating the complete dependency filesystem. The legacy registered `nook`
-runner is not used.
+It is not a general container-runtime API. Fork and Dependabot PRs retain
+secret-free checks on ephemeral GitHub-hosted runners. Trusted release,
+browser, WASM, deployment, and agent workflows execute through ARC. Main's
+portable WASM dependency-cache writer uses the selected node-local BuildKit
+shard. A Zot audit verifies child manifest digest/size and streams every
+complete blob to verify its declared size and SHA-256 before deployment. The
+legacy registered `nook` runner is not used.
 
 ---
 
@@ -255,15 +253,12 @@ runner is not used.
   - They cross through the commit-scoped, invocation-isolated host directory.
   - The common runtime image contains no Rust toolchain or `target/`.
 - **Local export:** The normal **`docker` driver** writes the web result directly to the containerd image store to avoid extra archive/import cycles.
-- **Hosted export:** Delivery validation uses an ephemeral `docker-container` builder restoring from `registry.dev.nokey.sh`.
+- **ARC export:** Trusted delivery validation uses the selected node-local
+  rootless BuildKit shard and exports portable state to `registry.dev.nokey.sh`.
 
 ### Builder Selection
 
 - Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder (`desktop-linux` or `default`).
-- GitHub-hosted Actions creates an ephemeral job-scoped `docker-container`
-  builder with `docker/setup-buildx-action`; the authenticated setup preloads
-  its BuildKit image from Zot before builder creation instead of resolving
-  Docker Hub.
 - ARC Actions registers the node-local persistent BuildKit service as a remote
   Buildx builder.
 - Zot refs carry cache state between nodes and hosted runners.
@@ -286,8 +281,7 @@ runner is not used.
 ### CI Parity (`.github/actions/nook-docker-setup`)
 
 - Raises Linux watcher limits.
-- Exports either the hosted `docker-container` builder or the ARC remote
-  builder for Task callers.
+- Exports the ARC remote builder for trusted Task callers.
 - Logs into `registry.dev.nokey.sh` and enables Bake registry cache refs.
 - Trusted Main and PR Rust producers receive SeaweedFS writer identity; Remote receives read-only identity.
 

@@ -94,9 +94,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "Main must call the shared Rust ecosystem checks in its own run"
     );
     assert!(
-        main.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+        main.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
             && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
-            && pr.contains("(vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest'")
+            && pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
             && checks
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()

@@ -289,12 +289,16 @@ tasks:
       NOOK_EXTENSION_SITE_URL: '{{.NOOK_EXTENSION_SITE_URL}}'
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
+    vars:
+      SETUP_OUTPUT: '{{default "" .SETUP_OUTPUT}}'
     cmds:
       - >-
         bash -c 'set -euo pipefail;
         commit_id="${GIT_COMMIT_ID:?task setup requires GIT_COMMIT_ID}";
         setup_target="{{.SETUP_TARGET}}";
+        setup_output="{{.SETUP_OUTPUT}}";
         case "$setup_target" in nook-web|nook-web-e2e) ;; *) echo "Unsupported SETUP_TARGET=$setup_target" >&2; exit 2 ;; esac;
+        case "$setup_output" in ""|type=registry) ;; *) echo "Unsupported SETUP_OUTPUT=$setup_output" >&2; exit 2 ;; esac;
         if [ "${#commit_id}" -ne 40 ] || [[ "$commit_id" == *[!0-9a-f]* ]]; then
           echo "task setup: GIT_COMMIT_ID must be a full lowercase git SHA" >&2;
           exit 1;
@@ -315,7 +319,9 @@ tasks:
         artifact_kib="$(du -sk "$artifacts_dir" | cut -f1)";
         echo "task setup: commit-scoped host WASM/coverage handoff is ${artifact_kib} KiB";
         test "$artifact_kib" -le 262144 || { echo "task setup: refusing oversized Rust/web handoff (${artifact_kib} KiB)" >&2; exit 1; };
-        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$setup_target"'
+        set --;
+        if [ -n "$setup_output" ]; then set -- --set "$setup_target.output=$setup_output"; fi;
+        WEB_ARTIFACTS_CONTEXT="$artifacts_dir" bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh" "setup: $setup_target" {{.DOCKER}} buildx bake --allow=fs.read="$artifacts_dir" {{.NOOK_BAKE_FILES}} "$@" "$setup_target"'
       - task: registry-cache:publish:local-format-deps
 
   setup:web:focused:

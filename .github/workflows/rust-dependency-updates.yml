@@ -20,7 +20,7 @@ concurrency:
 jobs:
   audit:
     name: Audit direct Cargo dependencies
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     outputs:
       outdated: ${{ steps.audit.outputs.outdated }}
     steps:
@@ -47,7 +47,7 @@ jobs:
     name: AI update, full test, and PR
     needs: audit
     if: needs.audit.outputs.outdated == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 360
     permissions:
       contents: write
@@ -67,6 +67,14 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.NOOK_GITHUB_PAT }}
 
+      - name: Setup Task
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
+
+      - name: Expose Actions Node.js runtime
+        uses: ./.github/actions/nook-node-setup
+
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
@@ -76,7 +84,7 @@ jobs:
       - name: Build split Rust/WASM and web images
         run: task setup WASM_BUILD_MODE=prod
 
-      - name: Run dependency-update agent (Docker + docker.sock)
+      - name: Run dependency-update agent directly on ARC
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}

@@ -23,7 +23,7 @@ deploy() {
   output="$4"
   label="$5"
   set +e
-  out="$(CF_PAGES_PROJECT_NAME="$project" CF_PAGES_PRODUCTION_BRANCH=main CF_PAGES_BRANCH="$branch" CF_PAGES_DIST_DIR="$dist" task ci:cloudflare:deploy VITE_BASE="$CI_MAIN_VITE_BASE" VITE_VAULT_SYNC_INTERVAL_MS="$CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS" WASM_BUILD_MODE=dev 2>&1)"
+  out="$(CF_PAGES_PROJECT_NAME="$project" CF_PAGES_PRODUCTION_BRANCH=main CF_PAGES_BRANCH="$branch" CF_PAGES_DIST_DIR="$dist" bash "$ROOT/.github/scripts/ci-pr-host-pages-deploy.sh" 2>&1)"
   status=$?
   set -e
   echo "$out"

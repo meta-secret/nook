@@ -2,7 +2,7 @@
 # Rust ecosystem gates beside the product pipeline. Serialize the native, WASM, and web
 # cache-writing lanes so each verifies read-only and exports its already-solved local graph
 # without competing uploads. After the verified
-# WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on hosted
+# WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on ARC
 # runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
 # Pages only after web verify, web e2e, and the portable WASM cache proof succeed.
@@ -47,6 +47,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
   DOCKER_IMAGE: nook-web:run-${{ github.run_id }}-${{ github.run_attempt }}
   DOCKER_E2E_IMAGE: nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
   CI_MAIN_DEV_DOMAIN: dev.nokey.sh
@@ -64,7 +65,7 @@ env:
 jobs:
   product-paths:
     name: Classify Main paths
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     outputs:
       changed: ${{ steps.classify.outputs.changed }}
     steps:
@@ -113,7 +114,7 @@ jobs:
     needs: [product-paths]
     if: needs.product-paths.outputs.changed == 'true'
     # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -175,7 +176,7 @@ jobs:
     # Serialize cache uploads after native verification while retaining the producer's
     # job-scoped builder for a no-rebuild export.
     needs: [rust]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -240,13 +241,13 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           # ARC publishes source state from its persistent shard. The portable
-          # dependency ref is owned by the separate hosted writer/proof job.
+          # dependency ref is owned by the separate ARC writer/proof job.
           WASM_BUILD_MODE: dev
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof
     needs: [wasm]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -280,7 +281,7 @@ jobs:
   web:
     name: Verify web build
     needs: [wasm]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
       pull-requests: read
@@ -319,6 +320,35 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+          WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/web-deploy
+
+      - name: Upload verified development deployment handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: main-web-deploy-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/web-deploy/nook-app
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Publish exact-source browser job image
+        run: >-
+          task web:e2e:kubernetes-image:artifacts
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
+        env:
+          DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          CI: true
+          GIT_COMMIT_ID: ${{ github.sha }}
+          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
+          WASM_BUILD_MODE: dev
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
       - name: Preserve cache telemetry
         if: always()
@@ -334,158 +364,71 @@ jobs:
 
   web-e2e:
     name: Web e2e
-    needs: [wasm]
-    # This lane runs a browser container and therefore needs a general runtime.
-    runs-on: ubuntu-latest
+    needs: [web]
+    runs-on: nook-k0s-container
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
     permissions:
       contents: read
       pull-requests: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-      - name: Download verified WASM handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-
       - name: Local-provider web e2e
-        run: >-
-          task ci:main:e2e:web:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
+        working-directory: /meta-secret/nook
+        run: task _ci:main:web:e2e-only
         env:
           CI: true
-          GHA_CACHE_WRITE_ENABLED: ""
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
 
   extension-e2e:
     name: Extension e2e
-    needs: [wasm]
-    # This lane runs a browser container and therefore needs a general runtime.
-    runs-on: ubuntu-latest
+    needs: [web]
+    runs-on: nook-k0s-container
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
     permissions:
       contents: read
       pull-requests: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          cache-write: "false"
-
-      - name: Download verified WASM handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-
       - name: Extension e2e
-        run: >-
-          task ci:main:e2e:extension:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
+        working-directory: /meta-secret/nook
+        run: task _extension:test:e2e
         env:
           CI: true
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
 
   ui-demos:
     name: UI demos
     # This is the final local cache producer. Serialize it behind web so it
     # clones the promoted web generation instead of racing a sibling lineage.
     needs: [web]
-    # This lane runs a browser container and therefore needs a general runtime.
-    runs-on: ubuntu-latest
+    runs-on: nook-k0s-container
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
     permissions:
       contents: read
       pull-requests: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          cache-write: "false"
-
-      - name: Download verified WASM handoff
-        uses: actions/download-artifact@v8
-        with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-
       - name: Headless UI demos
         id: record-ui-demo
+        working-directory: /meta-secret/nook
         env:
-          UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
-
+          NOOK_UI_DEMO_OUTPUT_DIR: ${{ github.workspace }}/ui-demo
           CI: true
-          GHA_CACHE_WRITE_ENABLED: ""
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
-        run: >-
-          task ci:main:ui-demo:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          UI_DEMO_OUTPUT_DIR=${{ runner.temp }}/nook-ui-demo
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
+        run: task _web:test:ui-demo
 
       - name: Upload complete Main UI demo artifact
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: ui-demo-main-${{ github.sha }}
-          path: ${{ runner.temp }}/nook-ui-demo
+          path: ui-demo
           retention-days: 90
           if-no-files-found: warn
           overwrite: true
@@ -496,7 +439,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          UI_DEMO_OUTPUT_DIR: ${{ runner.temp }}/nook-ui-demo
+          UI_DEMO_OUTPUT_DIR: ${{ github.workspace }}/ui-demo
         with:
           retries: 3
           script: |
@@ -518,7 +461,7 @@ jobs:
             }
 
             const { syncUiDemoIssue, transitionUiDemoIssue } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+              '/meta-secret/nook/.github/scripts/linear-ui-demo.cjs',
             )
             const config = {
               labelId: process.env.LINEAR_UI_DEMO_LABEL_ID,
@@ -548,37 +491,11 @@ jobs:
             })
             core.info(`Published Main UI demos to ${issue.identifier}: ${issue.url}`)
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-      - name: Publish verified browser web BuildKit cache
-        if: success()
-        run: >-
-          task ci:main:publish-web-e2e-cache
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
   deploy:
     name: Deploy development
     needs: [web, web-e2e, wasm-cache-proof]
-    # This lane still invokes the sealed image through Docker while direct
-    # BuildKit artifact deployment is migrated separately. Keep that runtime
-    # boundary on a fresh hosted VM; daemon-free ARC owns build producers only.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     environment:
       name: development
       url: https://dev.nokey.sh/
@@ -590,37 +507,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          cache-write: "false"
-
-      - name: Download verified WASM handoff
+      - name: Download verified development deployment handoff
         uses: actions/download-artifact@v8
         with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
+          name: main-web-deploy-${{ github.run_id }}
+          path: nook-app
 
-      - name: Build sealed web image for development deploy
-        run: >-
-          task ci:main:web:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+      - name: Setup Node for host Pages deploy
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
 
       - name: Deploy isolated development applications to Cloudflare Pages
         id: deploy-dev
@@ -629,7 +525,8 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUD_FLARE_ACCOUNT_ID }}
           CI_MAIN_VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
           CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_MAIN_VITE_VAULT_SYNC_INTERVAL_MS }}
-        run: task ci:main:deploy-development
+          NOOK_WRANGLER_VERSION: "4.120.0"
+        run: bash .github/scripts/ci-main-deploy-development.sh
 
       - name: Configure and verify isolated development domains
         id: configure-dev-domain
@@ -643,7 +540,7 @@ jobs:
           SIMPLE_PAGES_URL: ${{ steps.deploy-dev.outputs.simple_pages_url }}
           SENTINEL_PAGES_URL: ${{ steps.deploy-dev.outputs.sentinel_pages_url }}
           COMMIT_SHA: ${{ github.sha }}
-        run: task ci:main:configure-dev-domains
+        run: bash .github/scripts/ci-main-configure-dev-domains.sh
 
       - name: Record development deployment
         uses: actions/github-script@v9
@@ -689,6 +586,3 @@ jobs:
               description: 'Development channel deployed to Cloudflare Pages',
               auto_inactive: false,
             })
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
