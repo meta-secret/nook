@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
 docker_bin="${DOCKER:-docker}"
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
+deps_fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing NOOK_RUST_DEPS_INPUT_FINGERPRINT}"
 sccache_mode="${SCCACHE_S3_MODE:-external}"
 sccache_endpoint="${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
 sccache_bucket="${SCCACHE_BUCKET:-nook-sccache}"
@@ -23,7 +24,6 @@ bake_args=(
   --set "*.args.SCCACHE_S3_MODE=$sccache_mode"
   --set "*.args.SCCACHE_ENDPOINT=$sccache_endpoint"
   --set "*.args.SCCACHE_BUCKET=$sccache_bucket"
-  --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}"
 )
 
 if [ -r "${SCCACHE_S3_ACCESS_KEY_FILE:-}" ] \
@@ -64,6 +64,20 @@ run_fresh_builder() {
   )
   if [ -n "$cache_to" ]; then
     command+=(--set "builder-wasm-deps-cache-proof.cache-to=$cache_to")
+  fi
+  if [ "$purpose" = "promote" ]; then
+    # A repair solve must never import the ref it is replacing. Otherwise a
+    # parseable but incomplete destination can be faithfully republished and
+    # leave Main unable to heal without manual tag deletion. These independent
+    # refs are optional acceleration only; a miss rebuilds from source.
+    command+=(
+      --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint},ignore-error=true"
+      --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v2:buildcache,ignore-error=true"
+    )
+  else
+    command+=(
+      --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}"
+    )
   fi
   command+=(builder-wasm-deps-cache-proof)
   set +e

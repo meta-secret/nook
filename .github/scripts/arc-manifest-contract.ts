@@ -112,6 +112,13 @@ const mainWorkflow = new TextContract({
   label: "Main workflow",
   source: await read(".github/workflows/main.yml"),
 });
+const wasmCacheProofSource = await read(
+  ".github/scripts/verify-wasm-gha-cache.sh",
+);
+const wasmCacheProof = new TextContract({
+  label: "portable WASM cache proof",
+  source: wasmCacheProofSource,
+});
 const remoteWorkflow = new TextContract({
   label: "Remote workflow",
   source: await read(".github/workflows/remote.yml"),
@@ -270,6 +277,32 @@ mainWorkflow.requireAll([
   "This lane still invokes the sealed image through Docker",
   "This lane runs a browser container and therefore needs a general runtime.",
 ]);
+wasmCacheProof.requireAll([
+  'if [ "$purpose" = "promote" ]',
+  "A repair solve must never import the ref it is replacing",
+  'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',
+  "nook-rust-wasm-source-v2:buildcache,ignore-error=true",
+  'builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}',
+]);
+const cacheRoutingStart = wasmCacheProofSource.indexOf(
+  'if [ "$purpose" = "promote" ]',
+);
+const cacheRoutingEnd = wasmCacheProofSource.indexOf(
+  "command+=(builder-wasm-deps-cache-proof)",
+  cacheRoutingStart,
+);
+const cacheRouting = wasmCacheProofSource.slice(
+  cacheRoutingStart,
+  cacheRoutingEnd,
+);
+const [promotionCacheRouting = "", verificationCacheRouting = ""] =
+  cacheRouting.split("  else\n");
+if (promotionCacheRouting.includes("ref=${cache_ref}")) {
+  throw new Error("portable WASM cache promotion must not import its destination");
+}
+if (!verificationCacheRouting.includes("ref=${cache_ref}")) {
+  throw new Error("portable WASM cache verification must import the destination");
+}
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

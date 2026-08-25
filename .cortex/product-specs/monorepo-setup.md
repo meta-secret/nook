@@ -154,8 +154,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `ubuntu-latest` remains the configuration fallback.
   - Each producer publishes its already-solved registry graph only after its
     lane-specific check succeeds.
-  - The hosted fallback WASM dependency export keeps its no-import,
-    forced-zstd behavior.
+  - The hosted fallback WASM dependency export never imports its destination.
+    It may use independent input-fingerprint and Main source refs as optional
+    seeds, so a corrupted portable ref heals without manual deletion, and it
+    keeps forced-zstd behavior.
   - Later browser/UI consumers remain read-only.
   - Development deploy waits on web verify, web e2e, and the portable WASM
     cache publication proof.

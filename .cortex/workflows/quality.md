@@ -371,7 +371,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Main serializes native → WASM → web publisher lanes.
     - ARC lanes verify first, then publish the lane's shared Zot refs.
     - Hosted fallback lanes use the same portable Zot contract.
-    - Hosted WASM dependency export uses no reimport and forces zstd compression.
+    - Hosted WASM dependency export never reimports its destination, so a
+      corrupted portable ref can heal on the next Main run. It may import only
+      independent input-fingerprint and Main source refs as optional seeds, and
+      it forces zstd compression.
     - Browser/UI validation remains read-only and receives no compiler-cache identity.
     - After UI-demo assertions pass, the producer publishes the verified browser
       graph.
