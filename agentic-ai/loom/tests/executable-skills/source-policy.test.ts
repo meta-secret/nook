@@ -191,6 +191,35 @@ describe('executable skill source policy', () => {
     expect(analyzeFixture(request)).toEqual(['./local.ts', '../domain.ts']);
   });
 
+  test('rejects import attributes and non-TypeScript relative modules', () => {
+    const attributedSources = [
+      "import secret from './secret.txt' with { type: 'text' };",
+      "import data from './data.json' with { type: 'json' };",
+      "export { default as secret } from './secret.txt' with { type: 'text' };",
+    ];
+    for (const source of attributedSources) {
+      const request: AnalyzeFixtureRequest = { source };
+      expect(() => analyzeFixture(request)).toThrow(
+        'runtime import attributes',
+      );
+    }
+
+    const nonSourceModules = [
+      "import secret from './secret.txt';",
+      "import data from '../data.json';",
+      "import './styles.css';",
+      "import component from './component.tsx';",
+      "import raw from './source.ts?raw';",
+      "export { default as secret } from './secret.txt';",
+    ];
+    for (const source of nonSourceModules) {
+      const request: AnalyzeFixtureRequest = { source };
+      expect(() => analyzeFixture(request)).toThrow(
+        'relative TypeScript source imports',
+      );
+    }
+  });
+
   test('rejects forbidden ambient roots read through shorthand properties', () => {
     for (const capability of [
       'Bun',

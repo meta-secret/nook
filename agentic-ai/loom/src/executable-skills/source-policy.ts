@@ -91,6 +91,10 @@ const EXECUTABLE_SKILL_RELATIVE_MODULE_PREFIXES = new Set<string>(
   Object.values(ExecutableSkillRelativeModulePrefix),
 );
 
+enum ExecutableSkillSourceModuleSuffix {
+  TypeScript = '.ts',
+}
+
 enum AmbientCapabilityRoot {
   Bun = 'Bun',
   Object = 'Object',
@@ -181,6 +185,7 @@ export function analyzeExecutableSkillSource(
       !isTypeOnlyImport(node) &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
+      assertNoRuntimeImportAttributes(node);
       const appendRequest: AppendModuleSpecifierRequest = {
         moduleSpecifiers,
         specifier: node.moduleSpecifier.text,
@@ -193,6 +198,7 @@ export function analyzeExecutableSkillSource(
       node.moduleSpecifier &&
       ts.isStringLiteral(node.moduleSpecifier)
     ) {
+      assertNoRuntimeImportAttributes(node);
       const appendRequest: AppendModuleSpecifierRequest = {
         moduleSpecifiers,
         specifier: node.moduleSpecifier.text,
@@ -221,6 +227,11 @@ export function analyzeExecutableSkillSource(
   if (moduleSpecifiers.some(isExternalRuntimePackage)) {
     throw new Error(
       'Executable skill forbids external runtime package imports.',
+    );
+  }
+  if (moduleSpecifiers.some(isNonSourceRelativeModule)) {
+    throw new Error(
+      'Executable skill permits only relative TypeScript source imports.',
     );
   }
   const analysis: ExecutableSkillSourceAnalysis = {
@@ -867,6 +878,24 @@ function isExternalRuntimePackage(specifier: string): boolean {
       specifier.startsWith(prefix),
     ) || specifier.startsWith(ExecutableSkillRuntimeModulePrefix.NodeNamespace)
   );
+}
+
+function isNonSourceRelativeModule(specifier: string): boolean {
+  const isRelative = [...EXECUTABLE_SKILL_RELATIVE_MODULE_PREFIXES].some(
+    (prefix) => specifier.startsWith(prefix),
+  );
+  return (
+    isRelative &&
+    !specifier.endsWith(ExecutableSkillSourceModuleSuffix.TypeScript)
+  );
+}
+
+function assertNoRuntimeImportAttributes(
+  node: ts.ImportDeclaration | ts.ExportDeclaration,
+): void {
+  if (node.attributes) {
+    throw new Error('Executable skill forbids runtime import attributes.');
+  }
 }
 
 function isTypeOnlyImport(node: ts.ImportDeclaration): boolean {
