@@ -111,9 +111,11 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
         "dirty-safe publishers must inherit only source-free dependency stages"
     );
     assert!(
-        hosted_setup.contains(
-            "rust_deps_fingerprint=\"$(bash .github/scripts/rust-deps-cache-fingerprint.sh)\""
-        ) && hosted_setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint"),
+        hosted_setup.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE\"")
+            && hosted_setup.contains(
+                "bash \"${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh\""
+            )
+            && hosted_setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint"),
         "PR jobs must derive and import the identical formatter dependency fingerprint"
     );
     for marker in [

@@ -64,9 +64,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     assert!(
-        setup.contains(
-            "rust_deps_fingerprint=\"$(bash .github/scripts/rust-deps-cache-fingerprint.sh)\""
-        ) && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
+        setup.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE\"")
+            && setup.contains(
+                "bash \"${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh\""
+            )
+            && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
             && setup
                 .contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint")
     );
