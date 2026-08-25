@@ -144,7 +144,10 @@ function readAccess(snapshot: NookDeviceAccessSnapshot): DashboardView {
       deviceId: readText(snapshot.deviceId),
       credentialId: readText(snapshot.credentialId),
       passkeyName: readText(snapshot.passkeyName),
+      providerLabel: readText(snapshot.providerLabel),
+      createdAt: readTimestamp(snapshot.createdAt),
       lastUsedAt: readTimestamp(snapshot.lastUsedAt),
+      keeper: snapshot.keeper,
       vaults: snapshot.vaults().map(readVaultAccess),
     }
   } finally {

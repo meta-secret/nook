@@ -11,6 +11,7 @@ import {
 import type { IdentityDirectoryEntry } from './identity-directory-view'
 import { buildIdentityAccessCards } from './identity-access-list'
 import { isPasskeyProtection, protectionLabel } from './access-chain'
+import type { PasskeyCardSummary } from './passkey-card'
 
 export enum IdentityKeyInventoryRowKind {
   Protector = 'protector',
@@ -31,6 +32,7 @@ export type IdentityKeyInventoryRow = {
   readonly typeLabel: string
   readonly lastUsed: string
   readonly renamable: boolean
+  readonly passkeySummary: PasskeyCardSummary | undefined
   readonly apps: readonly IdentityAppInventoryItem[]
 }
 
@@ -121,6 +123,7 @@ export function buildIdentityKeyInventory({
         vault.t(I18N_KEYS.DevicesAccessUnknown),
       renamable:
         Boolean(currentProtector) && isPasskeyProtection(localProtection),
+      passkeySummary: currentProtector?.passkeySummary,
       apps: [
         {
           ...appBase,
@@ -143,6 +146,7 @@ export function buildIdentityKeyInventory({
       typeLabel: vault.t(I18N_KEYS.DevicesAccessAppsHeading),
       lastUsed: vault.t(I18N_KEYS.DevicesAccessUnknown),
       renamable: false,
+      passkeySummary: undefined,
       apps: linkedApps,
     }
     rows.push(appsRow)

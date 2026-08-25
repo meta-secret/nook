@@ -51,7 +51,10 @@ export type DashboardView = {
   deviceId: DashboardText
   credentialId: DashboardText
   passkeyName: DashboardText
+  providerLabel: DashboardText
+  createdAt: DashboardTimestamp
   lastUsedAt: DashboardTimestamp
+  keeper: PasskeyKeeperKind
   vaults: VaultAccessView[]
 }
 
@@ -123,5 +126,6 @@ export function parseDevicesAccessNudgePreference(
 import type {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
+  PasskeyKeeperKind,
 } from '$app-wasm'
 import type { VaultAccessView } from './devices-access/access-chain'

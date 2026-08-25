@@ -3,6 +3,7 @@ import {
   DeviceAccessIdentityState,
   DeviceAccessProtectionKind,
   NookIdentityLocalAccessKind,
+  PasskeyKeeperKind,
 } from '$app-wasm'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import {
@@ -58,7 +59,10 @@ function passkeyView(): DashboardView {
     deviceId: known('device_5678'),
     credentialId: known('passkey_1234'),
     passkeyName: known('Work laptop'),
+    providerLabel: known('Proton Pass'),
+    createdAt: knownTime,
     lastUsedAt: knownTime,
+    keeper: PasskeyKeeperKind.ProtonPass,
     vaults: [],
   }
 }
@@ -78,6 +82,21 @@ describe('identity access cards', () => {
       stage: AccessChainStage.Unlock,
       title: 'Work laptop',
       typeLabel: I18N_KEYS.DevicesAccessKeyTypePasskey,
+      passkeySummary: {
+        title: 'Work laptop',
+        facts: [
+          {
+            kind: 'fingerprint',
+            label: I18N_KEYS.DevicesAccessCredentialId,
+            value: 'passkey_1234',
+          },
+          {
+            kind: 'keeper',
+            label: I18N_KEYS.DevicesAccessKeeperLabel,
+            value: 'Proton Pass',
+          },
+        ],
+      },
     })
   })
 
@@ -144,6 +163,13 @@ describe('identity key inventory', () => {
     ])
     expect(rows[0]).toMatchObject({
       title: 'Work laptop',
+      passkeySummary: {
+        title: 'Work laptop',
+        facts: expect.arrayContaining([
+          expect.objectContaining({ value: 'passkey_1234' }),
+          expect.objectContaining({ value: 'Proton Pass' }),
+        ]),
+      },
       apps: [
         {
           title: 'Nook on MacBook',

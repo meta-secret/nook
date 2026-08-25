@@ -56,18 +56,33 @@
 {#if data.kind === IdentityBridgeNodeKind.Protection}
   <article
     class="bridge-card protection-card"
-    aria-label={`${data.caption}: ${data.label}. ${data.description}`}
+    data-testid={data.summary ? 'devices-access-passkey-card' : undefined}
+    aria-label={`${data.caption}: ${data.label}. ${data.description}${data.summary ? `. ${data.summary.facts.map((fact) => `${fact.label}: ${fact.value}`).join('. ')}` : ''}`}
   >
     <header>
-      <span class="node-icon"
-        ><LockKeyhole class="size-5" aria-hidden="true" /></span
-      >
+      <span class="node-icon">
+        {#if data.summary}
+          <KeyRound class="size-5" aria-hidden="true" />
+        {:else}
+          <LockKeyhole class="size-5" aria-hidden="true" />
+        {/if}
+      </span>
       <span class="node-heading">
         <small>{data.caption}</small>
         <strong>{data.label}</strong>
       </span>
     </header>
     <p>{data.description}</p>
+    {#if data.summary}
+      <dl class="passkey-facts" data-testid="devices-access-passkey-facts">
+        {#each data.summary.facts as fact (fact.kind)}
+          <div data-kind={fact.kind}>
+            <dt>{fact.label}</dt>
+            <dd>{fact.value}</dd>
+          </div>
+        {/each}
+      </dl>
+    {/if}
   </article>
 {:else if data.kind === IdentityBridgeNodeKind.Device}
   <article
@@ -268,6 +283,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+  .protection-card .node-heading strong {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
   .node-heading small,
   .state,
   header > code {
@@ -354,6 +375,10 @@
     padding-top: 0.7rem;
     border-top: 1px solid var(--border);
   }
+  .passkey-facts [data-kind='fingerprint'],
+  .passkey-facts [data-kind='keeper'] {
+    grid-column: 1 / -1;
+  }
   dl div {
     min-width: 0;
   }
@@ -371,6 +396,16 @@
     font-size: 0.625rem;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+  .passkey-facts dd {
+    overflow: visible;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+    white-space: normal;
+  }
+  .passkey-facts [data-kind='fingerprint'] dd {
+    font-family:
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
   .stage {
     display: grid;

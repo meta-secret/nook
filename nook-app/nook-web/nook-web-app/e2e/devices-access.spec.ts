@@ -142,11 +142,10 @@ test.describe('devices and access dashboard', () => {
     await expect(bridge).toContainText('Vaults')
     await expect(bridge).toContainText('Test vault')
     await expect(bridge.locator('.svelte-flow__edge')).not.toHaveCount(0)
-    await expect(
-      bridge.getByRole('article', {
-        name: /Passkey: Passkey · recoverable identity. Protects this app/,
-      }),
-    ).toBeVisible()
+    await expect(page.getByTestId('devices-access-passkey-card')).toBeVisible()
+    await expect(page.getByTestId('devices-access-passkey-card')).toContainText(
+      'Passkey ID',
+    )
     await expect(
       bridge.getByRole('article', { name: /App: App/ }),
     ).toBeVisible()
@@ -473,11 +472,7 @@ test.describe('devices and access dashboard', () => {
     await expect(
       bridge.getByRole('article', { name: /App: App/ }),
     ).toBeVisible()
-    await expect(
-      bridge.getByRole('article', {
-        name: /Passkey: Passkey · recoverable identity. Protects this app/,
-      }),
-    ).toBeVisible()
+    await expect(page.getByTestId('devices-access-passkey-card')).toBeVisible()
     await expect(
       bridge.getByRole('article', {
         name: /Identity.*Identity unlocked/,

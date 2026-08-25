@@ -10,6 +10,7 @@ import {
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-bridge-model'
 import { DashboardTextKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { DeviceAccessIdentityState } from '$app-wasm'
+import { PasskeyCardFactKind } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/passkey-card'
 
 const copy: IdentityBridgeCopy = {
   protectionStage: 'Passkey',
@@ -72,6 +73,33 @@ function input(
     deviceIdentifier: 'app_public_key',
     identityStatus: DeviceAccessIdentityState.Unlocked,
     protectionLabel: 'Passkey protected',
+    protectionSummary: {
+      title: 'Work laptop',
+      typeLabel: 'Passkey',
+      modeLabel: 'Passkey protected',
+      facts: [
+        {
+          kind: PasskeyCardFactKind.Fingerprint,
+          label: 'Passkey ID',
+          value: 'passkey_1234',
+        },
+        {
+          kind: PasskeyCardFactKind.Keeper,
+          label: 'Stored with',
+          value: 'Proton Pass',
+        },
+        {
+          kind: PasskeyCardFactKind.Created,
+          label: 'First recorded by Nook',
+          value: 'Mar 1, 2026',
+        },
+        {
+          kind: PasskeyCardFactKind.LastUsed,
+          label: 'Last used',
+          value: 'Mar 1, 2026',
+        },
+      ],
+    },
     deviceIconKind: IdentityBridgeDeviceIconKind.Browser,
     vaults: [vault('home', true), vault('archive', false)],
     copy,
@@ -146,7 +174,14 @@ describe('identity bridge graph', () => {
       graph.nodes.find((node) => node.id === 'protection-current')?.data,
     ).toMatchObject({
       kind: IdentityBridgeNodeKind.Protection,
-      label: 'Passkey protected',
+      label: 'Work laptop',
+      description: 'Passkey protected',
+      summary: {
+        facts: expect.arrayContaining([
+          expect.objectContaining({ value: 'passkey_1234' }),
+          expect.objectContaining({ value: 'Proton Pass' }),
+        ]),
+      },
     })
     expect(
       graph.edges.find((edge) => edge.id === 'protection-to-device'),

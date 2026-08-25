@@ -33,6 +33,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     deviceKeyTitle,
     formatAccessDate,
     identityStateLabel,
+    isPasskeyProtection,
     protectionLabel,
     type VaultAccessView,
   } from './devices-access/access-chain'
@@ -53,6 +54,10 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     type IdentityBridgeCopy,
     type IdentityBridgeVaultSelection,
   } from './devices-access/identity-bridge-model'
+  import {
+    buildPasskeyCardSummary,
+    type PasskeyCardSummary,
+  } from './devices-access/passkey-card'
 
   let {
     vault,
@@ -68,6 +73,17 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
   let directoryLoadState = $state<IdentityDirectoryLoadState>({
     kind: IdentityDirectoryLoadKind.Loading,
   })
+
+  function protectionSummaryFor(
+    view: DashboardView,
+  ): PasskeyCardSummary | undefined {
+    if (!isPasskeyProtection(view.protection)) return undefined
+    const summaryArgs: Parameters<typeof buildPasskeyCardSummary>[0] = {
+      vault,
+      view,
+    }
+    return buildPasskeyCardSummary(summaryArgs)
+  }
   let selectedRepresentation = $state(DevicesAccessRepresentationKind.List)
   let selectedPerspective = $state(IdentityBridgePerspective.Identities)
   let selectedVault = $state<IdentityBridgeVaultSelection>({
@@ -673,6 +689,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                 view.deviceId.kind === DashboardTextKind.Known
                   ? view.deviceId.value
                   : vault.t(I18N_KEYS.DevicesAccessUnknown)}
+              {@const protectionSummary = protectionSummaryFor(view)}
               {@const companionIdentity =
                 view.protection === DeviceAccessProtectionKind.CompanionSession}
               {@const identityTitle = companionIdentity
@@ -891,6 +908,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
                       {selectedVault}
                       {deviceIdentifier}
                       identityStatus={view.identityState}
+                      {protectionSummary}
                       protectionLabel={(() => {
                         const protectionLabelArgs2: Parameters<
                           typeof protectionLabel

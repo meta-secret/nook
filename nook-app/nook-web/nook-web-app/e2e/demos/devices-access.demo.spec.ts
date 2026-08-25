@@ -36,6 +36,12 @@ test('walk the access chain from passkey to app to vaults', async ({
   await expect(keyInventory).toContainText('Passkey')
   await expect(keyInventory).toContainText('Apps')
   await expect(keyInventory).toContainText('Nook in this browser')
+  const listPasskeyFacts = page.getByTestId('devices-access-passkey-facts')
+  await expect(listPasskeyFacts).toContainText('Passkey ID')
+  await expect(listPasskeyFacts).toContainText('passkey_')
+  await expect(listPasskeyFacts).toContainText('Stored with')
+  await expect(listPasskeyFacts).toContainText('First recorded by Nook')
+  await expect(listPasskeyFacts).toContainText('Last used')
   await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
   await expect(
     page.getByTestId('devices-access-relationship-details'),
@@ -65,6 +71,12 @@ test('walk the access chain from passkey to app to vaults', async ({
   ).toHaveCount(1)
   await expect(browse.getByRole('list')).toHaveCount(0)
   const chain = page.getByTestId('devices-access-chain')
+  const graphPasskeyCard = page.getByTestId('devices-access-passkey-card')
+  await expect(graphPasskeyCard).toContainText('Passkey ID')
+  await expect(graphPasskeyCard).toContainText('passkey_')
+  await expect(graphPasskeyCard).toContainText('Stored with')
+  await expect(graphPasskeyCard).toContainText('First recorded by Nook')
+  await expect(graphPasskeyCard).toContainText('Last used')
   await expect(chain).toContainText('App')
   await expect(chain).toContainText('Identity')
   await expect(chain).toContainText('Vaults')
@@ -82,9 +94,12 @@ test('walk the access chain from passkey to app to vaults', async ({
 
         const bridgeBounds = element.getBoundingClientRect()
         const protectionBounds = protection.getBoundingClientRect()
+        const title = protection.querySelector('.node-heading strong')
+        if (!(title instanceof HTMLElement)) return false
         return (
           protectionBounds.left >= bridgeBounds.left &&
-          protectionBounds.right <= bridgeBounds.right
+          protectionBounds.right <= bridgeBounds.right &&
+          title.scrollWidth <= title.clientWidth
         )
       }),
     )
@@ -102,11 +117,9 @@ test('walk the access chain from passkey to app to vaults', async ({
   await page.waitForTimeout(BEAT_MS)
 
   await page.getByTestId('devices-access-layout-graph').click()
-  await expect(
-    chain.getByRole('article', {
-      name: /Passkey: Passkey · recoverable identity/,
-    }),
-  ).toBeVisible()
+  await expect(page.getByTestId('devices-access-passkey-card')).toContainText(
+    'Personal devices passkey',
+  )
   await expect(chain.getByRole('article', { name: /App: App/ })).toBeVisible()
   await page.waitForTimeout(BEAT_MS)
 

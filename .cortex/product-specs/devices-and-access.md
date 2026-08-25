@@ -16,6 +16,14 @@
   - Present each protected installation as an **App** beneath that method.
   - Never present an app key as a peer user-managed key.
   - Keep the public app ID inside an explicit advanced disclosure.
+- **Passkey recognition:** Make each passkey recognizable without opening
+  diagnostic detail.
+  - Lead with its user-defined Nook name or an explicit unnamed state.
+  - Show its safe credential fingerprint.
+  - Show the user-provided provider label when one exists.
+  - Otherwise show a keeper recognized from typed authenticator evidence.
+  - Show when Nook first recorded it and when Nook last used it.
+  - Use explicit unknown or legacy states when evidence is unavailable.
 - **Browser extension:** Treat it as another app installation.
   - Extension setup enrolls its internal app key into a selected identity.
 
@@ -52,14 +60,16 @@ Stored access facts remain typed by provenance:
 - **unknown** — unavailable, unsupported, or predating collection.
 
 WebAuthn cannot inventory external passkey managers.
-The primary dashboard must not present browser ceremony metadata as product
-information.
+The primary card may show a recognized keeper as a storage clue.
+It must not claim a physical storage location or enumerate other credentials.
+Raw attachment, transport, AAGUID, browser, platform, and backup observations
+remain diagnostic details.
 
 Registration evidence may include an authenticator GUID.
 Nook maps known GUIDs to a typed keeper name such as Apple Passwords,
 Proton Pass, or Google Password Manager.
-That name is internal diagnostic metadata.
-It is not an inventory of the keeper.
+That name may appear as the passkey's **Stored with** value.
+It is a clue about this credential, not an inventory of the keeper.
 
 A synced passkey is shown as provider-available.
 It is never shown as stored on one physical laptop.

@@ -20,6 +20,7 @@ on request.
     buildIdentityKeyInventory,
     IdentityKeyInventoryRowKind,
   } from './identity-key-inventory'
+  import { PasskeyCardFactKind } from './passkey-card'
 
   type IdentityKeyInventoryProps = {
     vault: VaultState
@@ -129,7 +130,7 @@ on request.
               {:else}
                 <span class="mt-1 flex min-w-0 flex-wrap items-center gap-2">
                   <span
-                    class="min-w-0 flex-1 truncate text-base font-semibold text-foreground"
+                    class="min-w-0 flex-1 break-words text-base font-semibold text-foreground"
                   >
                     {row.title}
                   </span>
@@ -147,7 +148,32 @@ on request.
                   {/if}
                 </span>
               {/if}
-              {#if row.kind === IdentityKeyInventoryRowKind.Protector}
+              {#if row.passkeySummary}
+                <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  {row.passkeySummary.modeLabel}
+                </p>
+                <dl
+                  class="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4 lg:grid-cols-4"
+                  data-testid="devices-access-passkey-facts"
+                >
+                  {#each row.passkeySummary.facts as fact (fact.kind)}
+                    <div class="min-w-0" data-kind={fact.kind}>
+                      <dt class="text-xs text-muted-foreground">
+                        {fact.label}
+                      </dt>
+                      <dd
+                        class="mt-1 break-words text-sm text-foreground"
+                        class:font-mono={fact.kind ===
+                          PasskeyCardFactKind.Fingerprint}
+                        class:break-all={fact.kind ===
+                          PasskeyCardFactKind.Fingerprint}
+                      >
+                        {fact.value}
+                      </dd>
+                    </div>
+                  {/each}
+                </dl>
+              {:else if row.kind === IdentityKeyInventoryRowKind.Protector}
                 <span class="mt-1 block text-xs text-muted-foreground">
                   {vault.t(I18N_KEYS.DevicesAccessLastUsedColumn)}: {row.lastUsed}
                 </span>

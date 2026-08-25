@@ -5,10 +5,12 @@ import { type DashboardView } from '../devices-access-dashboard-state'
 import {
   AccessChainStage,
   isPasskeyProtection,
-  knownText,
   lastUsedLabel,
-  textValue,
 } from './access-chain'
+import {
+  buildPasskeyCardSummary,
+  type PasskeyCardSummary,
+} from './passkey-card'
 
 export enum IdentityAccessKeyKind {
   Passkey = 'passkey',
@@ -24,6 +26,7 @@ export type IdentityAccessCard = {
   readonly title: string
   readonly typeLabel: string
   readonly lastUsedLabel: string
+  readonly passkeySummary?: PasskeyCardSummary
 }
 
 type IdentityAccessCardsRequest = {
@@ -42,16 +45,19 @@ export function buildIdentityAccessCards({
   }
   const lastUsed = lastUsedLabel(lastUsedLabelArgs)
   if (isPasskeyProtection(view.protection)) {
-    const namedPasskey = knownText(view.passkeyName)
-      ? textValue(view.passkeyName)
-      : vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed)
+    const summaryArgs: Parameters<typeof buildPasskeyCardSummary>[0] = {
+      vault,
+      view,
+    }
+    const summary = buildPasskeyCardSummary(summaryArgs)
     const passkeyCard: IdentityAccessCard = {
       key: 'passkey',
       kind: IdentityAccessKeyKind.Passkey,
       stage: AccessChainStage.Unlock,
-      title: namedPasskey,
-      typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey),
+      title: summary.title,
+      typeLabel: summary.typeLabel,
       lastUsedLabel: lastUsed,
+      passkeySummary: summary,
     }
     cards.push(passkeyCard)
   } else if (view.protection === DeviceAccessProtectionKind.PinOrPassphrase) {

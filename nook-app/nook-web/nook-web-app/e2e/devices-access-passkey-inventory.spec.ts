@@ -28,6 +28,12 @@ test.describe('devices and access passkey inventory', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     const app = page.getByTestId('devices-access-app')
+    const passkeyFacts = page.getByTestId('devices-access-passkey-facts')
+    await expect(passkeyFacts).toContainText('Passkey ID')
+    await expect(passkeyFacts).toContainText('passkey_')
+    await expect(passkeyFacts).toContainText('Stored with')
+    await expect(passkeyFacts).toContainText('First recorded by Nook')
+    await expect(passkeyFacts).toContainText('Last used')
     await expect(app).toContainText('Nook in this browser')
     await expect(app).not.toContainText('App key')
     await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
