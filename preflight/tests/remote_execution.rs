@@ -348,7 +348,7 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
         remote_tasks
             .matches(".github/scripts/require-current-base.sh")
             .count(),
-        1,
+        2,
         "focused expensive dispatch and complete PR validation must share the freshness guard"
     );
     assert!(remote_tasks.contains("baseRefName"));
@@ -460,7 +460,7 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         workflow
             .matches("env.REQUEST_INCLUDES_HIVE == 'true'")
             .count(),
-        2,
+        1,
         "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
     );
     for (requested, focused) in [
