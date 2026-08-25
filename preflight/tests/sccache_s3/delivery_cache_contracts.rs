@@ -18,7 +18,9 @@ fn read(path: &str) -> String {
 
 fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let setup = read(".github/actions/nook-docker-setup/action.yml");
-    assert!(setup.contains("cache-telemetry.cjs start"));
+    assert!(
+        setup.contains("\"${{ github.action_path }}/../../scripts/cache-telemetry.cjs\" start")
+    );
     assert!(setup.contains("NOOK_CACHE_TELEMETRY_BASELINE"));
     assert!(setup.contains("if [[ \"$pr_number\" =~ ^[0-9]+$ ]]"));
     assert!(setup.contains("Pull-request jobs are forced to restore Main's cache read-only"));
