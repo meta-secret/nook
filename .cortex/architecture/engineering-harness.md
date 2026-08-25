@@ -267,6 +267,17 @@ runner is not used.
 - ARC Actions registers the node-local persistent BuildKit service as a remote
   Buildx builder.
 - Zot refs carry cache state between nodes and hosted runners.
+- `task infra:kubernetes-cache:prove` creates an isolated three-agent k3d
+  cluster on a GitHub-hosted runner.
+- The proof applies Kustomize patches to the production Zot, BuildKit, and
+  NetworkPolicy resources. It does not maintain copied workload manifests.
+- Each simulated node retains one rootless BuildKit shard on node-local
+  storage. In-cluster Zot remains the portable cache boundary between shards.
+- Proof clients mount no host runtime socket. They receive no Kubernetes
+  service-account token and do not run privileged.
+- k3d proves portable Kubernetes workload behavior. It does not claim parity
+  for k0s lifecycle, WireGuard routing, Kata isolation, ARC control-plane
+  lifecycle, node capacity, or production performance.
 
 ### CI Parity (`.github/actions/nook-docker-setup`)
 

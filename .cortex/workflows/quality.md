@@ -354,6 +354,25 @@ Use this workflow for quality, CI, and deployment changes.
     Scenario Z keeps one ARC-shaped BuildKit container and local state across a
     daemon restart. The exact parent and leaf steps remain CACHED afterward.
 
+    `task infra:kubernetes-cache:prove` is the Kubernetes integration proof.
+    It derives an ephemeral three-agent k3d cluster from the production Zot,
+    BuildKit, and NetworkPolicy manifests.
+
+    The proof requires these outcomes:
+
+    - one rootless BuildKit shard runs on each distinct agent;
+    - an unlabeled client cannot reach the BuildKit service;
+    - the Remote registry identity cannot write a stable Main ref;
+    - node-local cache remains CACHED after BuildKit Pod recreation;
+    - Zot retains a stable ref after its Pod is recreated;
+    - a cold shard restores the stable ref through Zot;
+    - concurrent isolated refs remain separate; and
+    - each isolated ref restores as CACHED on a different shard.
+
+    The hosted Remote task installs checksum-pinned k3d and runs this proof
+    alone. The controller refuses to replace a pre-existing cluster with the
+    proof name. Cleanup targets only the cluster that the invocation created.
+
     #### SeaweedFS sccache
     - Trusted Main Rust/WASM producers receive fixed-ID SeaweedFS secret mounts.
     - They read/write compiler objects in `nook-sccache` and publish shared verified Zot refs.

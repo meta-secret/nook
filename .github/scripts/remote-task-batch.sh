@@ -9,6 +9,7 @@ preflight
 arc:runtime
 rust:ci
 bake-cache:prove
+kubernetes-cache:prove
 rust:test
 rust:lint
 rust:coverage
@@ -73,6 +74,10 @@ normalize_tasks() {
     echo "arc:runtime must be dispatched as a single ARC task." >&2
     return 2
   fi
+  if (( count > 1 )) && [[ "$seen" == *",kubernetes-cache:prove,"* ]]; then
+    echo "kubernetes-cache:prove must be dispatched as a single hosted task." >&2
+    return 2
+  fi
 
   printf '%s\n' "$normalized"
 }
@@ -83,6 +88,7 @@ task_command() {
     arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
     rust:ci) echo "task ci:pr:rust" ;;
     bake-cache:prove) echo "task infra:bake-cache:prove" ;;
+    kubernetes-cache:prove) echo "task infra:kubernetes-cache:prove" ;;
     rust:test) echo "task remote:rust:test" ;;
     rust:lint) echo "task remote:rust:lint" ;;
     rust:coverage) echo "task remote:rust:coverage" ;;
@@ -111,7 +117,7 @@ task_timeout_minutes() {
     wasm:test:browser|web:build) echo 25 ;;
     rust:coverage|web:e2e|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
-    ci:pr:e2e) echo 45 ;;
+    ci:pr:e2e|kubernetes-cache:prove) echo 45 ;;
     *) return 2 ;;
   esac
 }
@@ -182,6 +188,7 @@ run_task() {
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
     bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
+    kubernetes-cache:prove) run_with_timeout "$timeout_minutes" task infra:kubernetes-cache:prove ;;
     rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;
     rust:lint) run_with_timeout "$timeout_minutes" task remote:rust:lint ;;
     rust:coverage) run_with_timeout "$timeout_minutes" task remote:rust:coverage ;;

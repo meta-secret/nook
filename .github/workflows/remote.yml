@@ -105,6 +105,19 @@ jobs:
           cache-write: "false"
           main-cache-only: "true"
           isolated-cache-write: ${{ (inputs.tasks || inputs.task) == 'hive:verify' && 'false' || 'true' }}
+      - name: Install pinned k3d for Kubernetes cache proof
+        if: ${{ (inputs.tasks || inputs.task) == 'kubernetes-cache:prove' }}
+        env:
+          K3D_SHA256: 06d8f25bc3a971c4eb29e0ff08429b180402db0f4dec838c9eac427e296800a0
+          K3D_VERSION: v5.9.0
+        run: |
+          set -euo pipefail
+          k3d_path="$RUNNER_TEMP/k3d"
+          curl --fail --location --retry 3 --output "$k3d_path" \
+            "https://github.com/k3d-io/k3d/releases/download/${K3D_VERSION}/k3d-linux-amd64"
+          printf '%s  %s\n' "$K3D_SHA256" "$k3d_path" | sha256sum --check --strict
+          chmod 0755 "$k3d_path"
+          echo "NOOK_K3D_BIN=$k3d_path" >> "$GITHUB_ENV"
       - name: Start hosted Hive Neo4j service
         if: >-
           env.REQUEST_INCLUDES_HIVE == 'true' &&

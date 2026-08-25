@@ -56,6 +56,12 @@ Dispatch one ARC-native Rust task:
 task remote TASK_NAME=rust:ci
 ```
 
+Dispatch the hosted Kubernetes cache proof:
+
+```bash
+task remote TASK_NAME=kubernetes-cache:prove
+```
+
 Reuse one hosted job for a batch:
 
 ```bash
@@ -68,6 +74,7 @@ Routing rules:
   `NOOK_RUNS_ON=nook-k0s`.
 - Trusted `hive:verify` uses `NOOK_HIVE_RUNS_ON=nook-k0s-hive`.
 - Mixed batches and unsupported selections use `ubuntu-latest`.
+- `kubernetes-cache:prove` always uses `ubuntu-latest` and runs alone.
 - Fork and Dependabot jobs stay hosted and secret-free.
 - The Hive Control Center browser job stays hosted.
 
@@ -82,6 +89,7 @@ Batch rules:
 - Fail the final job when any selection failed.
 - Keep the configured per-task timeout.
 - Restore the checkout after timeout before continuing.
+- Run `kubernetes-cache:prove` alone so it owns one exact k3d lifecycle.
 
 ARC cache rules:
 
@@ -105,11 +113,21 @@ Security rules:
 - Never evaluate user input as shell.
 - Disable runner Kubernetes service-account tokens.
 - Prohibit DinD, Docker daemons, Podman, Sysbox, host runtime sockets, runner
-  host paths, privileged runners, and Kata runtime classes.
+  host paths, privileged contexts, and Kata runtime classes inside ARC runners
+  and Kubernetes workloads.
 - Give Remote read-only access to Main cache refs.
 - Give Remote write access only to commit-scoped refs.
 - Mount SeaweedFS credentials only as fixed BuildKit secrets.
 - Never place credential bytes in build arguments, layers, or cache checksums.
+
+`kubernetes-cache:prove` is one explicit GitHub-hosted harness exception:
+
+- The hosted VM's existing Docker daemon creates the k3d node containers.
+- The harness does not start a Docker daemon or mount a runtime socket into a
+  k3d node or Kubernetes workload.
+- Kubernetes proof clients remain unprivileged and tokenless.
+- The controller refuses a pre-existing cluster name and deletes only the
+  cluster that it created.
 
 The narrow ARC tasks avoid a general container-runtime requirement:
 

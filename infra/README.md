@@ -60,11 +60,25 @@ task infra:arc:activate
 task infra:arc:fallback
 task infra:arc:smoke
 task infra:arc:hive:smoke
+task infra:kubernetes-cache:prove
 
 # Install or reconcile one reviewed OVH worker through provider API, host
 # bootstrap, authenticated mesh, k0s, BuildKit, and ARC readiness.
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
 ```
+
+`task infra:kubernetes-cache:prove` runs the portable Kubernetes integration
+proof. It creates one isolated k3d server and three agents, then applies
+Kustomize patches to the production Zot, BuildKit, and NetworkPolicy manifests.
+The proof validates node-local cache retention, cross-node Zot restoration,
+stable-scope ACLs, isolated concurrent refs, and denied unlabeled clients. It
+cleans up only its exact cluster and uses an isolated kubeconfig. The hosted
+Remote task installs checksum-pinned k3d automatically. A local caller needs
+k3d v5.9.0, Docker, Bun, and kubectl.
+
+This proof covers portable Kubernetes workload behavior. k0s lifecycle,
+WireGuard routing, Kata isolation, ARC controller lifecycle, node capacity, and
+production performance remain production-only evidence.
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
 remote deployment directory. The default target is

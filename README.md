@@ -512,6 +512,7 @@ task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2 # install/reconcile 
 task infra:arc:deploy       # deploy ARC plus one persistent BuildKit shard per build node
 task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
 task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity
+task infra:kubernetes-cache:prove # prove production-derived Zot and BuildKit behavior on ephemeral k3d
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
@@ -616,6 +617,15 @@ publishes Main's dedicated, complete WASM dependency boundary so it does not
 compete with the larger native dependency lineage. ARC publishes verified
 native/WASM source state and the native dependency ref. Merely consuming those
 targets as BuildKit contexts does not run their cache exporters.
+
+`task infra:kubernetes-cache:prove` is the portable Kubernetes integration
+proof. It creates three k3d agents on a GitHub-hosted runner and patches the
+production Zot, rootless BuildKit, and NetworkPolicy resources. The hosted
+runner's Docker daemon creates only the k3d infrastructure containers.
+Kubernetes workloads receive no runtime socket, service-account token, host
+path, or privileged context. The proof covers cache persistence and
+cross-shard portability. It does not replace production evidence for k0s,
+WireGuard, Kata, ARC lifecycle, capacity, or performance.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
