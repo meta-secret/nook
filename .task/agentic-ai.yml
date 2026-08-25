@@ -286,6 +286,7 @@ tasks:
       - sh: test -n "${FORMAT_CHANGED_FILES:-}" && test -r "$FORMAT_CHANGED_FILES"
         msg: hive:guest:format:changed requires the canonical changed-file list
     cmds:
+      - cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
       - |
         bash <<'FORMAT_CHANGED_BASH'
         set -euo pipefail

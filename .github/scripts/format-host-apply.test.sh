@@ -89,6 +89,7 @@ for required in \
 done
 
 for required in \
+  'cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile' \
   'nook-app/nook-web/nook-web-app/node_modules/.bin/prettier' \
   'done <"$FORMAT_CHANGED_FILES"' \
   'skill_files+=("${file_name#.agents/skills/}")' \
@@ -132,9 +133,17 @@ exec "$FORMAT_TEST_REAL_TASK" \
   --taskfile "$PWD/.task/agentic-ai.yml" \
   "$@"
 EOF
+cat >"$fixture_root/bin/bun" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >>"$FORMAT_TEST_INSTALL_LOG"
+test "$#" -eq 2 && test "$1" = install && test "$2" = --frozen-lockfile
+: >"$FORMAT_TEST_READY"
+EOF
 cat >"$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+test -f "$FORMAT_TEST_READY"
 record=false
 for argument in "$@"; do
   if [[ "$record" == true ]]; then
@@ -145,6 +154,7 @@ for argument in "$@"; do
 done
 EOF
 chmod +x \
+  "$fixture_root/bin/bun" \
   "$fixture_root/bin/task" \
   "$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier"
 printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/changed.ts"
@@ -167,11 +177,16 @@ printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments
   printf 'unrelated\n' >README.md
   printf 'const changed = true;\n' >tooling/eslint-rules/no-raw-object-arguments.js
   FORMAT_TEST_LOG="$fixture_root/format.log" \
+  FORMAT_TEST_INSTALL_LOG="$fixture_root/install.log" \
+  FORMAT_TEST_READY="$fixture_root/prettier.ready" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   HIVE_SEALED_GUEST=1 \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
 )
+printf '%s\n' 'install --frozen-lockfile' >"$fixture_root/expected-install.log"
+cmp -s "$fixture_root/expected-install.log" "$fixture_root/install.log" \
+  || { echo 'format-host-apply test: sealed guest did not frozen-install pinned Prettier' >&2; exit 1; }
 printf '%s\n' \
   'demo/src/changed.ts' \
   'demo/src/staged.ts' \
@@ -187,11 +202,13 @@ if grep -Fq 'untouched.ts' "$fixture_root/format.log"; then
 fi
 (
   cd "$fixture_root"
-  rm -f format.log expected.log actual.log
+  rm -f format.log expected.log actual.log install.log expected-install.log prettier.ready
   git add -A
   git commit -qm formatted-state
   git update-ref refs/remotes/origin/main HEAD
   FORMAT_TEST_LOG="$fixture_root/format.log" \
+  FORMAT_TEST_INSTALL_LOG="$fixture_root/install.log" \
+  FORMAT_TEST_READY="$fixture_root/prettier.ready" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   HIVE_SEALED_GUEST=1 \
   PATH="$fixture_root/bin:$PATH" \
