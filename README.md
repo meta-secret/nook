@@ -609,6 +609,13 @@ share BuildKit's content-addressed store. Zot carries portable cache refs betwee
 nodes and hosted runners. A cold node imports referenced blobs once. Later jobs
 reuse the hydrated local state.
 
+`task infra:arc:deploy` temporarily quarantines every declared build node from
+new ARC scheduling while it converges host prerequisites. It persists
+`kernel.keys.maxkeys=20000` and `kernel.keys.maxbytes=2000000` in
+`/etc/sysctl.d/91-nook-buildkit-keyring.conf`, applies them at runtime, and
+verifies every host before reactivating any node. Operators need passwordless
+sudo for `sysctl`, `install`, and the existing k0s administration commands.
+
 Hive Rust uses the dedicated `nook-k0s-hive` ARC set with pinned Neo4j and
 Trixie test-runtime sidecars. Fork PRs, Dependabot PRs, releases, and unsupported
 runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
