@@ -222,11 +222,22 @@ type ComputedElementInspection = {
   readonly node: ts.Node;
 };
 
+type RuntimeReceiverResolution = {
+  readonly checker: ts.TypeChecker;
+  readonly expression: ts.Expression;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
 function isComputedCallableElementAccess(
   inspection: ComputedElementInspection,
 ): boolean {
   if (!ts.isElementAccessExpression(inspection.node)) return false;
-  const runtimeReceiver = unwrapExpression(inspection.node.expression);
+  const runtimeResolution: RuntimeReceiverResolution = {
+    checker: inspection.checker,
+    expression: inspection.node.expression,
+    seen: new Set<ts.Symbol>(),
+  };
+  const runtimeReceiver = runtimeReceiverExpression(runtimeResolution);
   const receiverType = inspection.checker.getTypeAtLocation(
     inspection.node.expression,
   );
@@ -240,6 +251,28 @@ function isComputedCallableElementAccess(
     typeCanExposeEvaluator(runtimeReceiverType) ||
     typeCanExposeEvaluator(resultType)
   );
+}
+
+function runtimeReceiverExpression(
+  resolution: RuntimeReceiverResolution,
+): ts.Expression {
+  const expression = unwrapExpression(resolution.expression);
+  if (!ts.isIdentifier(expression)) return expression;
+  const symbol = resolution.checker.getSymbolAtLocation(expression);
+  if (!symbol || resolution.seen.has(symbol)) return expression;
+  const declaration = symbol.declarations?.find(
+    (candidate): candidate is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(candidate) && Boolean(candidate.initializer),
+  );
+  if (!declaration?.initializer) return expression;
+  const seen = new Set(resolution.seen);
+  seen.add(symbol);
+  const nested: RuntimeReceiverResolution = {
+    checker: resolution.checker,
+    expression: declaration.initializer,
+    seen,
+  };
+  return runtimeReceiverExpression(nested);
 }
 
 function typeCanExposeEvaluator(type: ts.Type): boolean {
