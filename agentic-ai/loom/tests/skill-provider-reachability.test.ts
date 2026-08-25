@@ -1,6 +1,9 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
-import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
+import {
+  LOOM_EXECUTABLE_SOURCE,
+  violatesSkillProviderBoundary,
+} from './skill-provider-boundary.test.ts';
 
 type RuntimeDependencyGraphInspection = {
   readonly roots: readonly string[];
@@ -223,4 +226,47 @@ test('production Loom runtime closure cannot reach dormant providers', async () 
   }
   const inspection: RuntimeDependencyGraphInspection = { roots, sources };
   expect(runtimeDependencyViolations(inspection)).toEqual([]);
+});
+
+test('audits every executable Loom source extension', () => {
+  for (const extension of [
+    'ts',
+    'tsx',
+    'mts',
+    'cts',
+    'js',
+    'jsx',
+    'mjs',
+    'cjs',
+  ]) {
+    expect(LOOM_EXECUTABLE_SOURCE.test(`src/facade.${extension}`)).toBe(true);
+  }
+  expect(LOOM_EXECUTABLE_SOURCE.test('src/facade.txt')).toBe(false);
+});
+
+test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
+  const sources = [
+    'eval("import(\'../../../.agents/skills/provider/src/audit.ts\')");',
+    'const run = eval; run(source);',
+    'new Function(source)();',
+    'new AsyncFunction(source)();',
+    'new GeneratorFunction(source)();',
+    'globalThis.eval(source);',
+    'global["Function"](source);',
+    '(() => {}).constructor(source)();',
+    '(() => {})["constructor"](source)();',
+  ];
+  for (const source of sources) {
+    const inspection = {
+      filePath: 'dynamic-evaluator.mts',
+      source,
+    };
+    expect(violatesSkillProviderBoundary(inspection)).toBe(true);
+  }
+  const localInspection = {
+    filePath: 'local-evaluator.ts',
+    source:
+      'const eval = (value: string) => value; class Function {}; eval("local"); new Function();',
+  };
+  expect(violatesSkillProviderBoundary(localInspection)).toBe(false);
 });

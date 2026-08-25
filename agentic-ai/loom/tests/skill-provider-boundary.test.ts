@@ -1,6 +1,10 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import ts from 'typescript';
+import {
+  type DynamicEvaluatorInspection,
+  isAmbientDynamicEvaluator,
+} from './skill-provider-dynamic-evaluator.ts';
 
 type LoomSourceScanOptions = {
   readonly cwd: string;
@@ -35,6 +39,7 @@ enum AmbientLoaderMember {
   Require = 'require',
 }
 
+
 enum LoaderCapableModuleSpecifier {
   Module = 'module',
   NodeModule = 'node:module',
@@ -59,6 +64,7 @@ const AMBIENT_PROCESS_LOADER_MEMBERS = new Set<string>([
   AmbientLoaderMember.GetBuiltinModule,
   AmbientLoaderMember.MainModule,
 ]);
+export const LOOM_EXECUTABLE_SOURCE = /\.(?:[cm]?[jt]sx?)$/u;
 
 type RuntimeModuleReference =
   | { readonly kind: RuntimeModuleReferenceKind.None }
@@ -108,6 +114,23 @@ export function violatesSkillProviderBoundary(
       node,
     };
     const reference = runtimeModuleReference(nodeInspection);
+    const evaluatorInspection: DynamicEvaluatorInspection = {
+      node,
+      isAmbientGlobalRoot: (candidate) => {
+        const candidateInspection: BoundaryNodeInspection = {
+          checker: context.checker,
+          node: candidate,
+        };
+        return isAmbientGlobalRoot(candidateInspection);
+      },
+      isAmbientIdentifier: (candidate) => {
+        const candidateInspection: AmbientIdentifierInspection = {
+          checker: context.checker,
+          node: candidate,
+        };
+        return isAmbientIdentifier(candidateInspection);
+      },
+    };
     if (
       reference.kind === RuntimeModuleReferenceKind.Unbounded ||
       (reference.kind === RuntimeModuleReferenceKind.Literal &&
@@ -115,7 +138,8 @@ export function violatesSkillProviderBoundary(
           LOADER_CAPABLE_MODULE_SPECIFIERS.has(reference.specifier))) ||
       isUnboundedRequireValue(nodeInspection) ||
       isAmbientRequireMember(nodeInspection) ||
-      isUnboundedAmbientLoaderRootValue(nodeInspection)
+      isUnboundedAmbientLoaderRootValue(nodeInspection) ||
+      isAmbientDynamicEvaluator(evaluatorInspection)
     ) {
       boundaryViolation = true;
       return;
@@ -936,7 +960,7 @@ test('resolves globalThis bindings in their exact lexical scopes', () => {
 });
 
 test('production Loom does not runtime-import dormant skill providers', async () => {
-  const sourceGlob = new Bun.Glob('src/**/*.{js,ts}');
+  const sourceGlob = new Bun.Glob('src/**/*');
   const scanOptions: LoomSourceScanOptions = {
     cwd: LOOM_ROOT,
     onlyFiles: true,
@@ -944,6 +968,7 @@ test('production Loom does not runtime-import dormant skill providers', async ()
   const violations: string[] = [];
 
   for await (const relativePath of sourceGlob.scan(scanOptions)) {
+    if (!LOOM_EXECUTABLE_SOURCE.test(relativePath)) continue;
     const source = await Bun.file(join(LOOM_ROOT, relativePath)).text();
     const inspection: SkillProviderImportInspection = {
       filePath: relativePath,

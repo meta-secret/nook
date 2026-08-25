@@ -268,11 +268,16 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
 }
 
 function isTransparentArticleNode(node: RootContent): boolean {
-  return node.type === 'definition' || isInvisibleHtmlComment(node);
+  return node.type === 'definition' || isInvisibleHtml(node);
 }
 
-function isInvisibleHtmlComment(node: RootContent): boolean {
-  return node.type === 'html' && /^\s*<!--[\s\S]*-->\s*$/.test(node.value);
+function isInvisibleHtml(node: RootContent): boolean {
+  return (
+    node.type === 'html' &&
+    /^\s*(?:(?:<!--[\s\S]*?-->)|(?:<(?:hr|br)\s*\/?\s*>))\s*$/iu.test(
+      node.value,
+    )
+  );
 }
 
 function auditProcedure(args: AuditArticleArgs): void {

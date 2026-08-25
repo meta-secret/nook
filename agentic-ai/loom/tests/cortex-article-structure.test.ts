@@ -259,6 +259,24 @@ test('treats thematic breaks as invisible density-resetting separators', () => {
   ).toEqual([CortexArticleFindingCode.EmptyArticle]);
 });
 
+test('treats raw HTML void separators as empty but preserves visible HTML', () => {
+  for (const separator of ['<hr>', '<br>', '<hr />', '<BR/>']) {
+    const emptyArgs: MakeDocumentArgs = {
+      path: '.cortex/html-separator.md',
+      content: `# HTML separator\n\n## Empty article\n\n${separator}\n`,
+    };
+    expect(audit([makeDocument(emptyArgs)]).map((finding) => finding.code)).toEqual(
+      [CortexArticleFindingCode.EmptyArticle],
+    );
+  }
+  const visibleArgs: MakeDocumentArgs = {
+    path: '.cortex/html-callout.md',
+    content:
+      '# HTML callout\n\n## Visible article\n\n<aside>Operational warning.</aside>\n',
+  };
+  expect(audit([makeDocument(visibleArgs)])).toEqual([]);
+});
+
 test('does not treat an H1 title as a substantive article', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/title-only.md',
