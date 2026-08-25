@@ -285,6 +285,23 @@ tasks:
         legacy_image="$pool_root/pool.btrfs"
         legacy_image_next="$pool_root/pool.btrfs.next"
         legacy_mount_unit="$(systemd-escape --path --suffix=mount "$legacy_pool")"
+        keyring_config=/etc/sysctl.d/91-nook-buildkit-keyring.conf
+        # Rootless shards concentrate processes under host UID 1000. The
+        # Debian default of 200 keys surfaces as a misleading runc EDQUOT once
+        # concurrent BuildKit solves exhaust that per-user kernel quota.
+        keyring_maxkeys=20000
+        keyring_maxbytes=2000000
+        keyring_config_next="$(mktemp)"
+        trap 'rm -f "$keyring_config_next"' EXIT
+        printf '%s\n' \
+          "kernel.keys.maxkeys=$keyring_maxkeys" \
+          "kernel.keys.maxbytes=$keyring_maxbytes" > "$keyring_config_next"
+        sudo -n install -m 0644 "$keyring_config_next" "$keyring_config"
+        rm -f "$keyring_config_next"
+        trap - EXIT
+        sudo -n sysctl -p "$keyring_config" >/dev/null
+        test "$(cat /proc/sys/kernel/keys/maxkeys)" -ge "$keyring_maxkeys"
+        test "$(cat /proc/sys/kernel/keys/maxbytes)" -ge "$keyring_maxbytes"
         sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
