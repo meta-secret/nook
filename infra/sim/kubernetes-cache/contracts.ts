@@ -2,7 +2,6 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 
 export const CLUSTER_NAME = "nook-cache-proof";
-export const CONTROL_PLANE_NODE = `k3d-${CLUSTER_NAME}-server-0`;
 export const K3D_VERSION = "v5.9.0";
 export const K3D_BINARY = process.env.NOOK_K3D_BIN?.trim() || "k3d";
 export const K3S_IMAGE =

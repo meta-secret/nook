@@ -117,7 +117,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
     }
     for required in [
         "cache-shard-allowed",
-        "CONTROL_PLANE_NODE",
+        "nodeName: buildkitNodes[0]",
         "cache-main-local-reuse",
         "cache-main-restart-reuse",
         "cache-main-fresh-shard",

@@ -75,7 +75,8 @@ stable-scope ACLs, isolated concurrent refs, and denied unlabeled clients. It
 first proves an authorized BuildKit shard client, then uses StatefulSet
 headless endpoints to bind every cache assertion to one exact shard. The denied
 client waits for the K3s policy-controller sync window and targets an exact
-shard from the control-plane node. The proof cleans up only its exact cluster
+shard from the shard's own node, matching production runner placement. The
+proof cleans up only its exact cluster
 and uses an isolated kubeconfig. The hosted
 Remote task installs checksum-pinned k3d automatically. A local caller needs
 k3d v5.9.0, Docker, Bun, and kubectl.
