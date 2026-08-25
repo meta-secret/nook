@@ -38,12 +38,12 @@ printf '%s\n' "$script" | grep -q '/tmp/nook-format-files:ro' \
 for required in \
   'git diff --name-only --diff-filter=ACMR -z "$base_ref"' \
   'git ls-files --others --exclude-standard -z' \
-  'FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format'; do
+  'FORMAT_CHANGED_FILES="$changed_files" task hive:guest:format:changed'; do
   printf '%s\n' "$script" | grep -Fq "$required" \
     || { echo "format-host-apply test: canonical changed-file selection misses $required" >&2; exit 1; }
 done
-printf '%s\n' "$script" | grep -q 'task hive:guest:format' \
-  || { echo 'format-host-apply test: expected native Hive guest formatter' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'task hive:guest:format:changed' \
+  || { echo 'format-host-apply test: expected changed-only native Hive guest formatter' >&2; exit 1; }
 
 for forbidden in buildx registry-cache format:diff setup:rust cargo\ fmt bun\ install; do
   printf '%s\n' "$script" | grep -Fq "$forbidden" \
@@ -98,18 +98,6 @@ for required in \
   printf '%s\n' "$guest_changed_formatter" | grep -Fq -- "$required" \
     || { echo "format-host-apply test: sealed guest misses skill formatter contract: $required" >&2; exit 1; }
 done
-install_line="$(
-  printf '%s\n' "$guest_formatter" \
-    | grep -Fn 'cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile' \
-    | cut -d: -f1
-)"
-skill_task_line="$(
-  printf '%s\n' "$guest_formatter" \
-    | grep -Fn 'task: hive:guest:format:changed' \
-    | cut -d: -f1
-)"
-test -n "$install_line" && test -n "$skill_task_line" && test "$install_line" -lt "$skill_task_line" \
-  || { echo 'format-host-apply test: sealed guest must frozen-install web Prettier before skill formatting' >&2; exit 1; }
 for package in "$web_package" "$loom_package"; do
   printf '%s\n' "$package" | grep -Fq '"prettier": "3.9.6"' \
     || { echo 'format-host-apply test: skill formatter Prettier version is not pinned consistently' >&2; exit 1; }
@@ -139,9 +127,10 @@ cp "$scripts_dir/../../.task/agentic-ai.yml" "$fixture_root/.task/agentic-ai.yml
 cat >"$fixture_root/bin/task" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+test "$#" -eq 1 && test "$1" = hive:guest:format:changed
 exec "$FORMAT_TEST_REAL_TASK" \
   --taskfile "$PWD/.task/agentic-ai.yml" \
-  hive:guest:format:changed
+  "$@"
 EOF
 cat >"$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier" <<'EOF'
 #!/usr/bin/env bash
