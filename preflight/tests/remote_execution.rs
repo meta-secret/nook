@@ -454,15 +454,14 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     ), "Remote Docker batches must preserve git-commit handoffs unless the selection is exactly Hive");
     assert!(batch_script.contains(
         "hive:verify) run_with_timeout \"$timeout_minutes\" env HIVE_CACHE_TO= task hive:verify ;;"
-    ), "Hive must not publish a per-branch cache even when another task makes a mixed hosted batch writable");
+    ), "Hive must not publish a per-branch cache even when another task makes a mixed ARC batch writable");
     assert!(workflow.contains("env.REQUEST_INCLUDES_HIVE == 'true'"));
-    assert!(workflow.contains("(inputs.tasks || inputs.task) != 'hive:verify' ||"));
     assert_eq!(
         workflow
             .matches("env.REQUEST_INCLUDES_HIVE == 'true'")
             .count(),
-        3,
-        "Hive-containing batches must wait for and clean up the service they start"
+        2,
+        "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
     );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
