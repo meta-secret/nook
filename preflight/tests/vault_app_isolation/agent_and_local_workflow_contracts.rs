@@ -131,10 +131,11 @@ fn local_https_material_lives_under_home_nook_across_worktrees() -> anyhow::Resu
 fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
+    let audit = section(&tasks, "  pr:ci-agent:audit:\n", "  pr:preflight:\n");
     let token_fallback = r#"${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"#;
 
     assert_eq!(
-        tasks.matches(token_fallback).count(),
+        audit.matches(token_fallback).count(),
         1,
         "the shared PR audit wrapper must accept NOOK_GITHUB_PAT before consulting gh auth"
     );
@@ -142,6 +143,13 @@ fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
         tasks.matches("task: pr:ci-agent:audit").count(),
         3,
         "preflight, readiness, and review must use the authenticated PR audit wrapper"
+    );
+    assert!(
+        audit.contains("git remote get-url origin")
+            && audit.contains("ssh://git@github.com/")
+            && audit.contains("node '{{.CI_AGENT_DIR}}/dist/main/main.js'")
+            && !audit.contains("gh repo view --json nameWithOwner"),
+        "repository discovery must remain local and normalize standard GitHub SSH remotes so PAT-only audit setup does not require prior gh authentication"
     );
     Ok(())
 }
