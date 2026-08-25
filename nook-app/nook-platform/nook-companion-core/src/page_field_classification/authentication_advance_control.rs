@@ -174,12 +174,7 @@ impl AuthenticationAdvanceControlObservation {
             && semantic_submit_ceremony_present
             && (self.semantic_submit_control_count == 0
                 || looks_like_explicit_authentication_advance_control_label(&self.label));
-        let activation_can_replace_semantic_submit =
-            !matches!(self.semantics, PageControlSemantics::Activation)
-                || self.semantic_submit_control_count == 0
-                || looks_like_explicit_authentication_advance_control_label(&self.label);
         let accepted_login_label = authentication_scope_owns_control
-            && activation_can_replace_semantic_submit
             && looks_like_login_advance_control_label(&self.label)
             && (semantic_submit_ceremony_present
                 || looks_like_explicit_authentication_advance_control_label(&self.label));
@@ -300,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn rejects_non_advance_authentication_controls() {
+    fn rejects_unowned_authentication_controls() {
         let localized_identity_submit = localized_identity_submit();
         let unrelated_formless_activation = AuthenticationAdvanceControlObservation {
             ownership: PageControlOwnership::Unowned,
@@ -321,6 +316,11 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&unowned_login_labeled_activation));
+    }
+
+    #[test]
+    fn rejects_non_advance_authentication_controls() {
+        let localized_identity_submit = localized_identity_submit();
 
         let account_email_submit = AuthenticationAdvanceControlObservation {
             form_identity: "account-settings".to_owned(),
@@ -402,6 +402,15 @@ mod tests {
         };
         assert!(!advances_authentication(
             &generic_activation_beside_disabled_submit
+        ));
+
+        let login_labeled_activation_beside_rejected_submit =
+            AuthenticationAdvanceControlObservation {
+                label: "Next".to_owned(),
+                ..generic_activation_beside_disabled_submit.clone()
+            };
+        assert!(advances_authentication(
+            &login_labeled_activation_beside_rejected_submit
         ));
 
         let explicit_login_activation_beside_disabled_submit =
