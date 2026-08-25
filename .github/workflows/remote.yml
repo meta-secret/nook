@@ -59,7 +59,7 @@ jobs:
       (inputs.tasks || inputs.task) != 'web:e2e'
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
-    runs-on: ${{ inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || ((inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest') || (((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime') && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest')) }}
+    runs-on: ${{ inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (inputs.tasks || inputs.task) == 'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}
     timeout-minutes: 360
     env:
       REQUESTED_REMOTE_BATCH: ${{ inputs.tasks }}
@@ -142,8 +142,8 @@ jobs:
         run: docker rm --force nook-hive-neo4j
 
   web-e2e-image:
-    if: (inputs.tasks || inputs.task) == 'web:e2e'
-    name: Remote / web:e2e image
+    if: (inputs.tasks || inputs.task) == 'web:e2e' || (inputs.tasks || inputs.task) == 'extension:e2e'
+    name: Remote / browser image
     runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     timeout-minutes: 30
     env:
@@ -167,7 +167,7 @@ jobs:
         run: task web:e2e:kubernetes-image
 
   web-e2e:
-    if: (inputs.tasks || inputs.task) == 'web:e2e'
+    if: (inputs.tasks || inputs.task) == 'web:e2e' || (inputs.tasks || inputs.task) == 'extension:e2e'
     needs: web-e2e-image
     name: Remote / web:e2e
     runs-on: nook-k0s-container
@@ -181,6 +181,7 @@ jobs:
       CI: "1"
     steps:
       - name: Run Playwright without a nested container runtime
+        if: (inputs.tasks || inputs.task) == 'web:e2e'
         working-directory: /meta-secret/nook
         run: |
           task _web:test:e2e
@@ -188,6 +189,14 @@ jobs:
           mkdir -p "$artifact_dir/web" "$artifact_dir/extension"
           cp -R nook-app/nook-web/nook-web-app/test-results/. "$artifact_dir/web/" 2>/dev/null || true
           cp -R nook-app/nook-web/nook-web-extension/test-results/. "$artifact_dir/extension/" 2>/dev/null || true
+      - name: Run extension Playwright without a nested container runtime
+        if: (inputs.tasks || inputs.task) == 'extension:e2e'
+        working-directory: /meta-secret/nook
+        run: |
+          task _extension:test:e2e
+          artifact_dir="$GITHUB_WORKSPACE/e2e-artifacts/extension"
+          mkdir -p "$artifact_dir"
+          cp -R nook-app/nook-web/nook-web-extension/test-results/. "$artifact_dir/" 2>/dev/null || true
       - name: Preserve Playwright diagnostics
         if: always()
         uses: actions/upload-artifact@v7
@@ -200,7 +209,7 @@ jobs:
   rust-cache-promote:
     if: inputs.task == 'rust-cache:promote' && inputs.tasks == ''
     name: Remote / rust-cache:promote
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7

@@ -23,7 +23,7 @@ concurrency:
 jobs:
   verify:
     name: Enforce repository policy
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - name: Checkout

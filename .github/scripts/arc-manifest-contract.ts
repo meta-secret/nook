@@ -242,6 +242,8 @@ containerHook.requireAll([
   "memory: 6Gi",
   "ephemeral-storage: 32Gi",
   'drop: ["ALL"]',
+  "fsGroup: 1000",
+  "fsGroupChangePolicy: OnRootMismatch",
 ]);
 containerHook.forbidAll([
   "privileged: true",
@@ -331,7 +333,7 @@ tasks.requireAll([
   "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
-mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 4 });
+mainWorkflow.forbid("    runs-on: ubuntu-latest");
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
@@ -346,7 +348,11 @@ mainWorkflow.requireAll([
   "Upload verified development deployment handoff",
   "main-web-deploy-${{ github.run_id }}",
   "runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}",
-  "This lane runs a browser container and therefore needs a general runtime.",
+  "runs-on: nook-k0s-container",
+  "Publish exact-source browser job image",
+  "task _ci:main:web:e2e-only",
+  "task _extension:test:e2e",
+  "task _web:test:ui-demo",
 ]);
 mainWorkflow.forbid("Build sealed web image for development deploy");
 prWorkflow.requireAll([
@@ -402,7 +408,7 @@ if (!verificationCacheRouting.includes("ref=${cache_ref}")) {
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([
-  "Remote / web:e2e image",
+  "Remote / browser image",
   "runs-on: nook-k0s-container",
   "task web:e2e:kubernetes-image",
   "Run Playwright without a nested container runtime",
