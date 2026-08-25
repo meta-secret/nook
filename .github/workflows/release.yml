@@ -81,7 +81,8 @@ jobs:
 
       - name: Run repository invariant preflight
         run: >-
-          REPO_ROOT="$GITHUB_WORKSPACE"
+          REPO_ROOT="$GITHUB_WORKSPACE/.nook/release-workflow"
+          PREFLIGHT_SOURCE_ROOT="$GITHUB_WORKSPACE"
           task --taskfile "$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml"
           preflight
 

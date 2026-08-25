@@ -337,6 +337,18 @@ jobs:
         env:
           DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
           DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+          CI: true
+          GIT_COMMIT_ID: ${{ github.sha }}
+          VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}
+          VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}
+          VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}
+          VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}
+          WASM_BUILD_MODE: dev
+          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
+          NOOK_EXTENSION_CHANNEL: development
+          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
+          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
 
       - name: Preserve cache telemetry
         if: always()
