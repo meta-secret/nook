@@ -3,7 +3,7 @@ githubConfigSecret: nook-arc-github
 
 runnerScaleSetName: nook-k0s
 minRunners: 0
-maxRunners: 25
+maxRunners: 35
 
 controllerServiceAccount:
   namespace: arc-systems

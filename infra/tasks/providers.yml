@@ -1,0 +1,137 @@
+version: '3'
+
+vars:
+  INFRA_OVH_SERVER: '{{default "" .INFRA_OVH_SERVER}}'
+  INFRA_OVH_ALLOW_REINSTALL: '{{default "false" .INFRA_OVH_ALLOW_REINSTALL}}'
+
+tasks:
+  ovh:server:inspect:
+    desc: Verify one declared OVH dedicated server without changing it.
+    preconditions:
+      - sh: test -n "{{.INFRA_OVH_SERVER}}"
+        msg: INFRA_OVH_SERVER must name a server in the reviewed inventory.
+      - sh: printf '%s\n' "{{.INFRA_OVH_SERVER}}" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        msg: INFRA_OVH_SERVER must be a lowercase host label.
+    cmds:
+      - bun infra/providers/ovh-dedicated.ts inspect --node "{{.INFRA_OVH_SERVER}}"
+
+  ovh:server:deploy:
+    desc: Install, bootstrap, and join one declared OVH worker from scratch.
+    preconditions:
+      - sh: test -n "{{.INFRA_OVH_SERVER}}"
+        msg: INFRA_OVH_SERVER must name a server in the reviewed inventory.
+      - sh: printf '%s\n' "{{.INFRA_OVH_SERVER}}" | grep -Eq '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+        msg: INFRA_OVH_SERVER must be a lowercase host label.
+      - sh: printf '%s\n' "{{.INFRA_OVH_ALLOW_REINSTALL}}" | grep -Eq '^(true|false)$'
+        msg: INFRA_OVH_ALLOW_REINSTALL must be true or false.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        node='{{.INFRA_OVH_SERVER}}'
+        allow_reinstall='{{.INFRA_OVH_ALLOW_REINSTALL}}'
+        provider='infra/providers/ovh-dedicated.ts'
+        field() { bun "$provider" field --node "$node" --field "$1"; }
+        public_address="$(field publicAddress)"
+        ssh_user="$(field sshUser)"
+        mesh_address="$(field meshAddress)"
+        endpoint_mode="$(field endpointMode)"
+        arc_tier="$(field arcTier)"
+        ssh_target="$ssh_user@$public_address"
+
+        result="$(bun "$provider" provision --node "$node" \
+          --allow-reinstall "$allow_reinstall")"
+        case "$result" in
+          reinstalled)
+            ssh-keygen -R "$public_address" >/dev/null 2>&1 || true
+            ;;
+          unchanged) ;;
+          *) echo "Unexpected provider convergence result" >&2; exit 1 ;;
+        esac
+
+        known_hosts="$HOME/.ssh/known_hosts"
+        scanned_hosts="$(mktemp)"
+        cleanup() {
+          rm -f "$scanned_hosts" "$known_hosts.next" "$known_hosts.merged"
+        }
+        trap cleanup EXIT
+        install -d -m 0700 "$HOME/.ssh"
+        touch "$known_hosts"
+        chmod 0600 "$known_hosts"
+        if ! ssh-keygen -F "$public_address" -f "$known_hosts" >/dev/null; then
+          scanned=false
+          for _ in $(seq 1 180); do
+            if ssh-keyscan -T 3 -H "$public_address" > "$scanned_hosts" 2>/dev/null &&
+               test -s "$scanned_hosts"; then
+              sort -u "$known_hosts" "$scanned_hosts" > "$known_hosts.merged"
+              mv "$known_hosts.merged" "$known_hosts"
+              chmod 0600 "$known_hosts"
+              scanned=true
+              break
+            fi
+            sleep 5
+          done
+          test "$scanned" = true
+        fi
+        connected=false
+        for _ in $(seq 1 120); do
+          if ssh -n -o BatchMode=yes -o ConnectTimeout=5 "$ssh_target" true 2>/dev/null; then
+            connected=true
+            break
+          fi
+          sleep 5
+        done
+        test "$connected" = true
+        ssh -o BatchMode=yes "$ssh_target" 'bash -s' -- "$node" <<'REMOTE'
+        set -euo pipefail
+        expected_hostname="$1"
+        export DEBIAN_FRONTEND=noninteractive
+        sudo -n --preserve-env=DEBIAN_FRONTEND apt-get update -qq
+        sudo -n --preserve-env=DEBIAN_FRONTEND apt-get install -y -qq --no-install-recommends \
+          acl btrfs-progs ca-certificates curl e2fsprogs jq nftables \
+          openssh-server ruby sudo util-linux wireguard-tools
+        sudoers="$(mktemp)"
+        sshd_config="$(mktemp)"
+        cleanup() { rm -f "$sudoers" "$sshd_config"; }
+        trap cleanup EXIT
+        printf '%s ALL=(ALL) NOPASSWD:ALL\n' "$(id -un)" > "$sudoers"
+        cat > "$sshd_config" <<'EOF'
+        PasswordAuthentication no
+        PermitRootLogin no
+        PubkeyAuthentication yes
+        KbdInteractiveAuthentication no
+        EOF
+        sudo -n install -m 0440 "$sudoers" /etc/sudoers.d/90-nook-infra
+        sudo -n visudo -cf /etc/sudoers.d/90-nook-infra
+        sudo -n install -d -m 0755 /etc/ssh/sshd_config.d
+        sudo -n install -m 0644 "$sshd_config" \
+          /etc/ssh/sshd_config.d/90-nook-infra.conf
+        sudo -n sshd -t
+        sudo -n systemctl enable --now ssh.service
+        sudo -n systemctl reload ssh.service
+        sudo -n install -d -m 0755 /var/lib/nook-bootstrap
+        sudo -n touch /var/lib/nook-bootstrap/taskfile-complete
+        test "$(hostname -s)" = "$expected_hostname"
+        . /etc/os-release
+        test "$ID:$VERSION_ID" = debian:13
+        test -c /dev/kvm
+        test "$(findmnt -n -o SOURCE /)" = /dev/md3
+        test "$(lsblk -d -n -o NAME | grep -Ec '^nvme[0-9]+n[0-9]+$')" = 2
+        grep -Eq '^md3 : active raid1 ' /proc/mdstat
+        sudo -n visudo -cf /etc/sudoers.d/90-nook-infra
+        sudo -n test -f /var/lib/nook-bootstrap/taskfile-complete
+        REMOTE
+
+        task --taskfile infra/Taskfile.yml k0s:worker:deploy \
+          INFRA_WORKER_SSH_TARGET="$ssh_target" \
+          INFRA_WORKER_MESH_ADDRESS="$mesh_address" \
+          INFRA_WORKER_ENDPOINT_MODE="$endpoint_mode" \
+          INFRA_WORKER_ARC_TIER="$arc_tier"
+        cleanup
+        trap - EXIT
+        BASH
+
+  ovh:server:test:
+    desc: Validate the provider client and server inventory contract.
+    cmds:
+      - bun test infra/providers/ovh-dedicated.test.ts

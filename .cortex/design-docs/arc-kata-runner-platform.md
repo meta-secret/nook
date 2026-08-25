@@ -55,21 +55,21 @@ Two scale sets serve trusted work:
 
 - **`nook-k0s`**
   - Serves general trusted jobs.
-  - Advertises `maxRunners: 25`.
+  - Advertises `maxRunners: 35`.
 - **`nook-k0s-hive`**
   - Serves Hive Rust verification.
   - Advertises `maxRunners: 10`.
 
-The three qualified nodes use tier preferences:
+The four qualified nodes use tier preferences:
 
-1. Rise-S is `primary`.
+1. Both Rise-S workers are `primary`.
 2. The home 7950X3D worker is `secondary`.
 3. KS-6 is `overflow`.
 
 Topology spreading prevents all burst work from concentrating on one node. The
 target aggregate envelope remains:
 
-- Rise-S: about 8-10 runners;
+- each Rise-S: about 8-10 runners;
 - home worker: about 8-10 runners; and
 - KS-6: about 5-7 runners.
 
@@ -78,7 +78,7 @@ final admission boundary.
 
 ## Persistent local BuildKit shards
 
-The `nook-buildkit` StatefulSet has three replicas. Required anti-affinity keeps
+The `nook-buildkit` StatefulSet has four replicas. Required anti-affinity keeps
 one replica on each qualified node.
 
 Each replica uses:
@@ -101,10 +101,15 @@ Dependabot, and other untrusted jobs remain on GitHub-hosted runners. Build
 publication refs and credentials remain job scoped, but they are not a sandbox
 for hostile build instructions.
 
-The manifest and deployment currently own exactly three qualified build nodes:
-Rise-S, Home, and KS-6. Adding a fourth node requires adding its retained PV and
-increasing the StatefulSet replica count in the same change. Deployment fails
-closed when the qualified-node inventory differs.
+The manifest and deployment own exactly four qualified build nodes:
+
+- two Rise-S workers;
+- the home worker; and
+- KS-6.
+
+Adding another node requires its retained PV and a matching StatefulSet replica
+in the same change. Deployment fails closed when the qualified-node inventory
+differs.
 
 The node-local Service uses `internalTrafficPolicy: Local`. A runner therefore
 reaches only the BuildKit endpoint on its own node.
@@ -193,6 +198,33 @@ Deploy the platform with:
 task infra:arc:deploy
 ```
 
+Provision a declared OVH worker from provider-ready state with:
+
+```bash
+task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
+```
+
+The provider adapter reads OVH credentials from `~/.nook/ovh-api.json`. OVH's
+standard installer owns Debian and software RAID. The Taskfile owns the generic
+SSH and sudo baseline plus all later convergence.
+
+The workflow then performs these operations:
+
+1. Verify the exact service, address, hardware range, datacenter, and current OS.
+2. Install Debian only when the declared server is blank.
+3. Wait for SSH and apply the idempotent base host contract.
+4. Reconcile WireGuard, k0s, ARC storage, and runner placement.
+
+Replacing an installed OS requires the explicit
+`INFRA_OVH_ALLOW_REINSTALL=true` disaster-recovery input.
+
+Cloud-init user-data is not used with the standard OVH image. OVH exposes that
+customization only for BYOI and BYOLinux. Owning a custom image pipeline would
+add recovery risk. BYOI would also bypass the standard software RAID install.
+
+Ironic is not part of this boundary. OVH already owns PXE, BMC, and physical
+installation lifecycle.
+
 Inspect the live state with:
 
 ```bash
@@ -207,7 +239,7 @@ task infra:arc:buildkit:benchmark
 
 The benchmark must prove:
 
-1. one ready BuildKit endpoint on each of three nodes;
+1. one ready BuildKit endpoint on each of four nodes;
 2. a cold solve on each local shard;
 3. a faster `CACHED` replay;
 4. a new BuildKit Pod UID after restart;
