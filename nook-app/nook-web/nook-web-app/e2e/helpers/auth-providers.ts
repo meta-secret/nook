@@ -384,11 +384,9 @@ export async function readRawAuthProvidersFromIdb(
   const stateKey = await activeAuthProviderStateKey(page)
   return page.evaluate((scopedStateKey) => {
     return new Promise<RawAuthProvidersSnapshot>((resolve, reject) => {
-      const resolveSnapshot = (
-        rawSnapshot: RawAuthProvidersSnapshot | undefined,
-      ) => {
-        resolve(rawSnapshot ?? { providers: [] })
-      }
+      const resolveEmptySnapshot = () => resolve({ providers: [] })
+      const resolveSnapshot = (rawSnapshot: RawAuthProvidersSnapshot) =>
+        resolve(rawSnapshot)
       const request = indexedDB.open('nook_auth', 1)
       request.onerror = () =>
         reject(request.error ?? new Error('idb open failed'))
@@ -400,19 +398,24 @@ export async function readRawAuthProvidersFromIdb(
         getReq.onerror = () =>
           reject(getReq.error ?? new Error('idb read failed'))
         getReq.onsuccess = () => {
-          const rawSnapshot = getReq.result as
-            RawAuthProvidersSnapshot | undefined
-          if (rawSnapshot || scopedStateKey === 'providers') {
-            resolveSnapshot(rawSnapshot)
+          if (getReq.result) {
+            resolveSnapshot(getReq.result as RawAuthProvidersSnapshot)
+            return
+          }
+          if (scopedStateKey === 'providers') {
+            resolveEmptySnapshot()
             return
           }
           const legacyReq = store.get('providers')
           legacyReq.onerror = () =>
             reject(legacyReq.error ?? new Error('legacy idb read failed'))
-          legacyReq.onsuccess = () =>
-            resolveSnapshot(
-              legacyReq.result as RawAuthProvidersSnapshot | undefined,
-            )
+          legacyReq.onsuccess = () => {
+            if (legacyReq.result) {
+              resolveSnapshot(legacyReq.result as RawAuthProvidersSnapshot)
+              return
+            }
+            resolveEmptySnapshot()
+          }
         }
         tx.oncomplete = () => db.close()
         tx.onerror = () => reject(tx.error ?? new Error('idb tx failed'))

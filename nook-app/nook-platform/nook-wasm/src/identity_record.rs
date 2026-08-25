@@ -339,7 +339,6 @@ impl NookIdentityDirectorySnapshot {
 
     /// Return access evidence captured from the same protected app ID as the
     /// directory selection and current-browser ownership flags.
-    #[wasm_bindgen(js_name = deviceAccess)]
     pub fn device_access(&self) -> crate::device_access::NookDeviceAccessSnapshot {
         self.access.clone()
     }

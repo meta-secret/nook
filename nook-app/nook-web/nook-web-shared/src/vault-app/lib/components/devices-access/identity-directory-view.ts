@@ -185,7 +185,7 @@ export async function loadIdentityDirectoryAccessView(
         : { kind: IdentityDirectorySelectionKind.Empty }
     return {
       directory: { identities, selection },
-      access: readAccess(snapshot.deviceAccess()),
+      access: readAccess(snapshot.device_access()),
     }
   } finally {
     snapshot.free()

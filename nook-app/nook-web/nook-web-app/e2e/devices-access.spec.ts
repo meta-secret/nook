@@ -280,10 +280,10 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('device-protection-error')).toBeVisible()
     await expect(identityOptions).toHaveCount(1)
     expect(
-      await page.evaluate(() =>
-        sessionStorage.getItem('nook_vault_session_locked'),
+      await page.evaluate(
+        () => sessionStorage.getItem('nook_vault_session_locked') ?? '',
       ),
-    ).toBeNull()
+    ).toBe('')
     await page.evaluate(() => {
       localStorage.setItem('nook_e2e_passkey_mode', 'unavailable')
     })
@@ -634,9 +634,9 @@ test.describe('devices and access dashboard', () => {
           const snapshot = await resolve()
           return new Proxy(snapshot, {
             get(target, property) {
-              if (property === 'deviceAccess') {
+              if (property === 'device_access') {
                 return () => {
-                  const access = target.deviceAccess()
+                  const access = target.device_access()
                   return new Proxy(access, {
                     get(accessTarget, accessProperty) {
                       if (
@@ -709,9 +709,9 @@ test.describe('devices and access dashboard', () => {
           const snapshot = await resolve()
           return new Proxy(snapshot, {
             get(target, property) {
-              if (property === 'deviceAccess') {
+              if (property === 'device_access') {
                 return () => {
-                  const access = target.deviceAccess()
+                  const access = target.device_access()
                   return new Proxy(access, {
                     get(accessTarget, accessProperty) {
                       if (accessProperty === 'protection') {

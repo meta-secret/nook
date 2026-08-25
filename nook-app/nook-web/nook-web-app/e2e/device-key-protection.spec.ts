@@ -137,9 +137,14 @@ interface LocalIdentityKeyringSnapshot {
   entries: LocalIdentityKeyringEntrySnapshot[]
 }
 
+enum IdentityDirectorySelectionKind {
+  Empty = 'empty',
+  Selected = 'selected',
+}
+
 interface IdentityDirectorySnapshot {
   selection: {
-    kind: 'empty' | 'selected'
+    kind: IdentityDirectorySelectionKind
     identityId?: string
   }
 }
