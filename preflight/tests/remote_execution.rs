@@ -109,7 +109,7 @@ fn complete_validation_starts_before_non_blocking_review_request() -> Result<()>
         "codex review --base origin/main",
         "Cloud review will request Cursor Bugbot if Codex reports a usage limit.",
         "pr:review:",
-        "CI_AGENT_CMD=pr-review",
+        "CI_AGENT_CMD: pr-review",
     ] {
         assert!(
             agentic_tasks.contains(required),
@@ -148,6 +148,12 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         "rust:test,rust:test",
         "rust:test,arbitrary:command",
         "rust:test, web:check",
+        "rust:test,web:e2e",
+        "rust:test,extension:e2e",
+        "rust:test,web:build",
+        "rust:test,check",
+        "rust:test,ci:pr",
+        "rust:test,ci:pr:e2e",
         "preflight,rust:test,rust:lint,rust:coverage,wasm:build,wasm:test,web:check,web:test,web:build",
     ] {
         assert!(
@@ -179,8 +185,36 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         );
     }
     let batch_script = read(".github/scripts/remote-task-batch.sh");
+    let workflow = read(".github/workflows/remote.yml");
     assert!(batch_script.contains("timeout --kill-after=1m"));
     assert!(!batch_script.contains("timeout --foreground"));
+    for task in [
+        "web:build",
+        "web:e2e",
+        "extension:e2e",
+        "check",
+        "ci:pr",
+        "ci:pr:e2e",
+    ] {
+        assert!(
+            workflow.contains(&format!("(inputs.tasks || inputs.task) != '{task}'"))
+                && workflow.contains(&format!("(inputs.tasks || inputs.task) == '{task}'")),
+            "runtime-backed remote task must bypass the daemonless batch: {task}"
+        );
+    }
+    for direct_task in [
+        "web:build) task _web:build",
+        "web:e2e) task _web:test:e2e",
+        "extension:e2e) task _extension:test:e2e",
+        "check) task _check",
+        "ci:pr) task _ci:pr",
+        "ci:pr:e2e) task _ci:main",
+    ] {
+        assert!(
+            workflow.contains(direct_task),
+            "container execution must call the internal daemonless task: {direct_task}"
+        );
+    }
     assert!(batch_script.contains("snapshot_daemon_containers > \"$daemon_snapshot\""));
     assert!(batch_script.contains("status == 124 || status == 137"));
     assert!(batch_script.contains("docker rm -f \"$container\""));
@@ -330,7 +364,7 @@ fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<(
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in ["web:e2e", "rust:test,extension:e2e", "web:test,ci:pr"] {
+    for tasks in ["web:e2e", "extension:e2e", "ci:pr"] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status
@@ -361,7 +395,7 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
 }
 
 #[test]
-fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
+fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
     let batch_script = read(".github/scripts/remote-task-batch.sh");
@@ -376,20 +410,20 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
 
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
-        1,
-        "the internal cache promoter must stay on GitHub-hosted capacity"
+        0,
+        "trusted remote execution must not consume GitHub-hosted capacity"
     );
     assert!(
-        workflow.contains("inputs.runner_label == 'nook-k0s-hive' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')")
-            && workflow.contains("inputs.runner_label == 'nook-k0s' && (vars.NOOK_RUNS_ON || 'ubuntu-latest')")
-            && workflow.contains(
-                "'hive:verify' && (vars.NOOK_HIVE_RUNS_ON || 'ubuntu-latest')"
-            )
-            && workflow.contains(
-                "((inputs.tasks || inputs.task) == 'preflight' || (inputs.tasks || inputs.task) == 'rust:ci' || (inputs.tasks || inputs.task) == 'arc:runtime')"
-            ) && workflow.contains("vars.NOOK_RUNS_ON || 'ubuntu-latest'")
-            && workflow.contains("|| 'ubuntu-latest')) }}"),
-        "explicit ARC labels must select their matching scale sets; default Hive and focused general tasks must retain their routed fallbacks"
+        workflow.contains("inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')")
+            && workflow.contains("vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive'")
+            && workflow.contains("vars.NOOK_RUNS_ON || 'nook-k0s'")
+            && workflow.contains("runs-on: nook-k0s-container"),
+        "remote tasks must select the general, Hive, or container ARC scale set"
+    );
+    assert!(
+        !workflow.contains("Start hosted Hive Neo4j service")
+            && !workflow.contains("docker run --detach"),
+        "ARC remote tasks must use the Hive scale set sidecar instead of a nested daemon"
     );
     assert!(
         workflow.contains("if: inputs.task == 'rust-cache:promote'")
@@ -454,15 +488,14 @@ fn hosted_workflow_matches_the_taskfile_catalog() -> Result<()> {
     ), "Remote Docker batches must preserve git-commit handoffs unless the selection is exactly Hive");
     assert!(batch_script.contains(
         "hive:verify) run_with_timeout \"$timeout_minutes\" env HIVE_CACHE_TO= task hive:verify ;;"
-    ), "Hive must not publish a per-branch cache even when another task makes a mixed hosted batch writable");
+    ), "Hive must not publish a per-branch cache even when another task makes a mixed ARC batch writable");
     assert!(workflow.contains("env.REQUEST_INCLUDES_HIVE == 'true'"));
-    assert!(workflow.contains("(inputs.tasks || inputs.task) != 'hive:verify' ||"));
     assert_eq!(
         workflow
             .matches("env.REQUEST_INCLUDES_HIVE == 'true'")
             .count(),
-        3,
-        "Hive-containing batches must wait for and clean up the service they start"
+        1,
+        "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
     );
     for (requested, focused) in [
         ("rust:test", "remote:rust:test"),
@@ -744,12 +777,10 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         full_e2e.contains(full_e2e_label) && full_extension_e2e.contains(full_e2e_label),
         "a persistent Main-fix label must keep both full e2e jobs active"
     );
-    assert!(
-        ui_demo.contains(&format!("!{full_e2e_label}")),
-        "the UI demo publisher must yield exact-head cache ownership to full e2e"
-    );
+    assert!(ui_demo.contains("runs-on: nook-k0s-container"));
     for required in [
         "E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts",
+        "name: Collect Playwright diagnostics",
         "name: Preserve Playwright diagnostics",
         "if: always()",
         "uses: actions/upload-artifact@v7",

@@ -21,7 +21,9 @@ This directory owns Nook's stateful server infrastructure:
   remain hosted.
 - The general `nook-k0s` set permits 35 concurrent jobs. The dedicated
   `nook-k0s-hive` set permits ten. Hive adds pinned Neo4j and non-root Trixie
-  test-runtime sidecars.
+  test-runtime sidecars. The `nook-k0s-container` set permits twenty declared
+  job containers through ARC's Kubernetes lifecycle hooks. These jobs become
+  ordinary short-lived Pods and never receive a Docker daemon or runtime socket.
 - Kubernetes prefers either Rise-S worker, then the home 7950X3D node, then
   KS-6. Topology spreading expands the burst envelope across both primary
   NVMe workers without concentrating the queue on one machine.
@@ -127,11 +129,11 @@ never enter image layers or cache checksums.
 
 `preflight`, `rust:ci`, and `arc:runtime` Remote selections use
 `nook-k0s` through `NOOK_RUNS_ON`. Trusted Hive Rust uses `nook-k0s-hive`
-through `NOOK_HIVE_RUNS_ON`. Unsupported tasks, forks, and Dependabot retain
-hosted routing.
+through `NOOK_HIVE_RUNS_ON`. The browser image is built and pushed by
+`nook-k0s`; browser tasks then run that exact image on `nook-k0s-container`.
+Forks and Dependabot retain hosted routing.
 
-`task infra:arc:activate` configures both ARC routes.
-`task infra:arc:fallback` restores both routes to `ubuntu-latest`.
+`task infra:arc:activate` configures the ARC routes.
 
 ARC Buildx uses the remote driver against
 `tcp://nook-buildkit.arc-runners.svc.cluster.local:1234`. BuildKit's local state

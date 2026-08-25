@@ -34,7 +34,7 @@ jobs:
     if: >-
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Locate the PR UI demo artifact
         id: artifact
@@ -153,7 +153,7 @@ jobs:
   close:
     name: Complete or cancel trusted PR UI demo issue
     if: github.event_name == 'pull_request_target'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Checkout the trusted publisher
         uses: actions/checkout@v7

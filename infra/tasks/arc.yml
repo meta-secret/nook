@@ -288,7 +288,11 @@ tasks:
         sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
-        state_bytes="$(sudo -n du -s -B1 "$state_dir" | awk '{ print $1 }')"
+        # Active BuildKit GC can remove a snapshot between du's directory scan
+        # and stat. du still prints the aggregate; do not turn that harmless
+        # race into a failed cluster convergence.
+        state_bytes="$(sudo -n du -s -B1 "$state_dir" 2>/dev/null | awk '{ print $1 }' || true)"
+        state_bytes="${state_bytes:-0}"
         legacy_bytes=0
         for legacy_path in "$legacy_image" "$legacy_image_next"; do
           if sudo -n test -e "$legacy_path"; then
@@ -324,7 +328,8 @@ tasks:
         test "$(sudo -n stat -c %u "$state_dir")" = 1000
         test "$(sudo -n stat -c %g "$state_dir")" = 1000
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
-        state_bytes="$(sudo -n du -s -B1 "$state_dir" | awk '{ print $1 }')"
+        state_bytes="$(sudo -n du -s -B1 "$state_dir" 2>/dev/null | awk '{ print $1 }' || true)"
+        state_bytes="${state_bytes:-0}"
         test "$((available_bytes + state_bytes))" -ge 68719476736
         REMOTE
         done < "$targets_file"
@@ -342,9 +347,10 @@ tasks:
         chart_version="{{.ARC_CHART_VERSION}}"
         controller_render="$(mktemp)"
         runner_render="$(mktemp)"
+        container_render="$(mktemp)"
         hive_values="$(mktemp)"
         hive_render="$(mktemp)"
-        trap 'rm -f "$controller_render" "$runner_render" "$hive_values" "$hive_render"' EXIT
+        trap 'rm -f "$controller_render" "$runner_render" "$container_render" "$hive_values" "$hive_render"' EXIT
 
         ruby "$remote_dir/infra/k0s/scripts/arc-hive-values.rb" \
           "$remote_dir/infra/k0s/manifests/arc/runner-scale-set-values.yaml" \
@@ -367,9 +373,19 @@ tasks:
           --namespace arc-runners \
           --values "$hive_values" \
           > "$hive_render"
+        helm template nook-k0s-container \
+          "{{.ARC_RUNNER_CHART}}" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/container-runner-scale-set-values.yaml" \
+          > "$container_render"
         grep -q 'kind: Deployment' "$controller_render"
         grep -q 'kind: AutoscalingRunnerSet' "$runner_render"
         grep -q 'kind: AutoscalingRunnerSet' "$hive_render"
+        grep -q 'kind: AutoscalingRunnerSet' "$container_render"
+        grep -q 'ACTIONS_RUNNER_CONTAINER_HOOKS' "$container_render"
+        grep -q 'ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE' "$container_render"
+        grep -q 'nook-k0s-container' "$container_render"
         grep -q 'tcp://nook-buildkit.arc-runners.svc.cluster.local:1234' "$runner_render"
         if grep -Eq 'runtimeClassName:|docker:dind|dockerd|docker\.sock|podman|privileged: true|hostPath:' "$runner_render" "$hive_render"; then
           echo "Rendered ARC runner violates the regular-pod rootless-BuildKit contract" >&2
@@ -377,6 +393,8 @@ tasks:
         fi
         sudo -n k0s kubectl apply --dry-run=client \
           -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml" >/dev/null
+        sudo -n k0s kubectl apply --dry-run=client \
+          -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml" >/dev/null
         echo "Pinned ARC renders satisfy the regular-pod persistent-BuildKit contract"
         REMOTE
 
@@ -436,6 +454,7 @@ tasks:
           --namespace arc-systems --timeout=10m
 
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/network-policy.yaml"
+        kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/container-hook.yaml"
         kubectl apply -f "$remote_dir/infra/k0s/manifests/arc/buildkit.yaml"
         config_hash="$(kubectl get configmap nook-buildkit \
           --namespace arc-runners -o json | jq -cS '.data' | sha256sum | awk '{ print $1 }')"
@@ -462,13 +481,31 @@ tasks:
           --namespace arc-runners \
           --values "$hive_values" \
           --wait --timeout 10m
+        helm upgrade --install nook-k0s-container \
+          "$runner_chart" \
+          --version "$chart_version" \
+          --namespace arc-runners \
+          --values "$remote_dir/infra/k0s/manifests/arc/container-runner-scale-set-values.yaml" \
+          --wait --timeout 10m
         helm uninstall nook-k0s-cache --namespace arc-runners >/dev/null 2>&1 || true
 
         test "$(kubectl get autoscalingrunnerset/nook-k0s \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 35
         test "$(kubectl get autoscalingrunnerset/nook-k0s-hive \
           --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 10
-        for scale_set in nook-k0s nook-k0s-hive; do
+        test "$(kubectl get autoscalingrunnerset/nook-k0s-container \
+          --namespace arc-runners -o jsonpath='{.spec.maxRunners}')" = 20
+        for scale_set in nook-k0s nook-k0s-hive nook-k0s-container; do
+          deadline="$(( $(date +%s) + 600 ))"
+          until kubectl get pod --namespace arc-systems \
+            -l "actions.github.com/scale-set-name=$scale_set" \
+            -o name | grep -q .; do
+            if test "$(date +%s)" -ge "$deadline"; then
+              echo "Timed out waiting for $scale_set listener creation" >&2
+              exit 1
+            fi
+            sleep 2
+          done
           kubectl wait pod --namespace arc-systems \
             -l "actions.github.com/scale-set-name=$scale_set" \
             --for=condition=Ready --timeout=10m

@@ -312,7 +312,7 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
     assert!(
         manual_e2e.contains("- sync-live")
             && manual_e2e.contains("NOOK_E2E_SYNC_PROVIDER: github")
-            && manual_e2e.contains("task web:test:e2e:sync-live:parallel")
+            && manual_e2e.contains("task _web:test:e2e:sync-live:parallel")
             && manual_e2e.contains("- name: Clean up live-sync test repository")
             && manual_e2e.contains("if: >-\n          always() &&")
             && manual_e2e.contains("github.rest.users.getAuthenticated()")
@@ -547,6 +547,8 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
         "cargo install cargo-outdated --version 0.19.0 --locked",
         "task rust:deps:outdated",
         "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
+        "uses: ./.github/actions/nook-node-setup",
+        "uses: go-task/setup-task@v2",
         "task ci-agent:fix",
     ] {
         assert!(
@@ -663,18 +665,37 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     let root = repository_root();
     let release = read(&root, ".github/workflows/release.yml");
     assert_eq!(
-        release.matches("WASM_BUILD_MODE=prod").count(),
+        release.matches("WASM_BUILD_MODE: prod").count(),
         1,
         "release must perform one optimized WASM artifact batch"
+    );
+    assert!(
+        release.contains("REPO_ROOT=\"$GITHUB_WORKSPACE/.nook/release-workflow\"\n          PREFLIGHT_SOURCE_ROOT=\"$GITHUB_WORKSPACE\"")
+            && release.contains("task --taskfile \"$GITHUB_WORKSPACE/.nook/release-workflow/Taskfile.yml\"\n          preflight"),
+        "release must run current repository preflight tooling against the immutable source before publishing its job image"
+    );
+    let manual_e2e = read(&root, ".github/workflows/e2e-pr.yml");
+    assert!(
+        manual_e2e.contains("WASM_BUILD_MODE: prod"),
+        "manual PR e2e images must preserve the production WASM build mode"
     );
     assert!(
         !release.contains("Build stable Pages artifact") && !release.contains("run: task setup"),
         "release must extract the already-tested sealed image instead of running setup twice"
     );
+    let preflight_bake = read(&root, "preflight/docker-bake.hcl");
+    let preflight_dockerfile = read(&root, "preflight/Dockerfile");
+    let preflight_tasks = read(&root, "preflight/Taskfile.yml");
+    assert!(
+        preflight_bake.contains("repository-source = PREFLIGHT_SOURCE_CONTEXT")
+            && preflight_dockerfile.contains("COPY --from=repository-source / /meta-secret/nook")
+            && preflight_tasks.contains("PREFLIGHT_SOURCE_CONTEXT=\"{{.PREFLIGHT_SOURCE_ROOT}}\""),
+        "current preflight tooling must inspect a separately selected immutable source context"
+    );
     for required in [
-        "VITE_SITE_URL=${{ env.CI_RELEASE_URL }}",
-        "VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}",
-        "VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}",
+        "VITE_SITE_URL: ${{ env.CI_RELEASE_URL }}",
+        "VITE_PUBLIC_APP_URL: ${{ env.CI_RELEASE_URL }}",
+        "VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}",
     ] {
         assert!(
             release.contains(required),
@@ -729,16 +750,127 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "e2e must not download Playwright's duplicate Chromium and headless-shell bundle"
     );
     let web_image = read(&root, "nook-app/nook-web/nook-web-app/Dockerfile");
+    let web_image_bake = read(&root, "nook-app/nook-web/nook-web-app/docker-bake.hcl");
+    assert!(web_image.contains("FROM web-runtime AS nook-web-source"));
+    assert!(web_image.contains("test -x \"$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH\""));
+    assert!(web_image_bake.contains("web-runtime   = \"target:web-base\""));
+    assert_eq!(
+        web_image_bake
+            .matches("web-runtime = \"target:web-e2e-base\"")
+            .count(),
+        2,
+        "both browser image targets must replace the distinct runtime context with Chromium"
+    );
+    assert!(
+        !web_image_bake.contains("web-base = \"target:web-e2e-base\""),
+        "a named context must not collide with the internal web-base Dockerfile stage"
+    );
     assert!(web_image.contains("playwright-core/browsers.json"));
     assert!(web_image.contains("/usr/bin/ffmpeg"));
     for config in [
         "nook-app/nook-web/nook-web-app/playwright.config.ts",
         "nook-app/nook-web/nook-web-app/playwright.isolation.config.ts",
-        "nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts",
+        "nook-app/nook-web/nook-web-research/playwright.config.ts",
+        "agentic-ai/minds/hive-console/playwright.config.ts",
+    ] {
+        let playwright_config = read(&root, config);
+        assert!(
+            playwright_config.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+                && playwright_config.contains("launchOptions"),
+            "{config} must pass the e2e image's system Chromium through Playwright launch options"
+        );
+    }
+    assert!(
+        read(
+            &root,
+            "nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts",
+        )
+        .contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
+        "extension browser helpers must launch the e2e image's system Chromium"
+    );
+    for workflow in [
+        ".github/workflows/e2e-pr.yml",
+        ".github/workflows/hive.yml",
+        ".github/workflows/main.yml",
+        ".github/workflows/pr.yml",
+        ".github/workflows/release.yml",
+        ".github/workflows/remote.yml",
+        ".github/workflows/web-research.yml",
     ] {
         assert!(
-            read(&root, config).contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
-            "{config} must use the e2e image's system Chromium"
+            read(&root, workflow)
+                .contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
+            "{workflow} must explicitly pass system Chromium through the ARC container hook"
+        );
+    }
+    let hive_workflow = read(&root, ".github/workflows/hive.yml");
+    let hive_global = section(&hive_workflow, "env:\n", "\njobs:\n");
+    let hive_console = section(&hive_workflow, "  console:\n", "\n  console-untrusted:\n");
+    assert!(
+        !hive_global.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+            && hive_console.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
+        "Hive must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
+    );
+    let research_workflow = read(&root, ".github/workflows/web-research.yml");
+    let research_global = section(&research_workflow, "env:\n", "\njobs:\n");
+    let research_deploy = section(
+        &research_workflow,
+        "  deploy:\n",
+        "\n      - name: Install dependencies",
+    );
+    assert!(
+        !research_global.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+            && research_deploy.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium"),
+        "research must scope system Chromium to the ARC container job so hosted validation uses Playwright Chromium"
+    );
+    let pr_workflow = read(&root, ".github/workflows/pr.yml");
+    let pr_ui_demo = section(&pr_workflow, "  ui-demo:\n", "\n  preview:\n");
+    assert!(
+        !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
+        "ARC container actions must receive PR identity explicitly instead of reading a missing event file"
+    );
+    assert!(
+        !read(&root, ".github/workflows/web-research.yml").contains("context.payload"),
+        "ARC research actions must receive event identity explicitly"
+    );
+
+    let main_workflow = read(&root, ".github/workflows/main.yml");
+    let main_browser_image = section(
+        &main_workflow,
+        "      - name: Publish exact-source browser job image\n",
+        "\n      - name: Preserve cache telemetry",
+    );
+    for required in [
+        "VITE_BASE: ${{ env.CI_MAIN_VITE_BASE }}",
+        "VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}",
+        "VITE_PUBLIC_APP_URL: ${{ env.CI_MAIN_DEV_URL }}",
+        "VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}",
+        "VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}",
+        "NOOK_EXTENSION_CHANNEL: development",
+        "NOOK_EXTENSION_COMMIT: ${{ github.sha }}",
+    ] {
+        assert!(
+            main_browser_image.contains(required),
+            "Main browser image must preserve build configuration: {required}"
+        );
+    }
+
+    let pr_browser_image = section(
+        &pr_workflow,
+        "      - name: Publish exact-source PR browser job image\n",
+        "\n      - name: Upload preview dist handoff",
+    );
+    for required in [
+        "VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev",
+        "VITE_PUBLIC_APP_URL: https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev",
+        "VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev",
+        "VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev",
+        "NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}",
+        "NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}",
+    ] {
+        assert!(
+            pr_browser_image.contains(required),
+            "PR browser image must preserve preview configuration: {required}"
         );
     }
     Ok(())

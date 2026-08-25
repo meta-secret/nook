@@ -73,6 +73,16 @@ normalize_tasks() {
     echo "arc:runtime must be dispatched as a single ARC task." >&2
     return 2
   fi
+  if (( count > 1 )) \
+    && { [[ "$seen" == *",web:build,"* ]] \
+      || [[ "$seen" == *",web:e2e,"* ]] \
+      || [[ "$seen" == *",extension:e2e,"* ]] \
+      || [[ "$seen" == *",check,"* ]] \
+      || [[ "$seen" == *",ci:pr,"* ]] \
+      || [[ "$seen" == *",ci:pr:e2e,"* ]]; }; then
+    echo "Runtime-backed tasks must be dispatched alone on the Kubernetes container runner." >&2
+    return 2
+  fi
 
   printf '%s\n' "$normalized"
 }

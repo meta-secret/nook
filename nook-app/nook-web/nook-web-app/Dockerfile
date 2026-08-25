@@ -7,7 +7,7 @@
 # `task setup` first exports web-artifacts to a temporary host directory while web-deps builds in
 # parallel. Bake then injects web-base, web-deps, and that small host directory as named contexts.
 
-FROM web-base AS nook-web-source
+FROM web-runtime AS nook-web-source
 
 # Production Vite base path (GitHub Pages / Cloudflare use "/").
 ARG VITE_BASE=/
@@ -53,7 +53,10 @@ RUN test -f nook-app/Taskfile.yml \
     && test ! -d nook-core \
     && test ! -f Cargo.toml \
     && test ! -e /usr/local/cargo \
-    && test ! -d nook-app/target
+    && test ! -d nook-app/target \
+    && if [ -n "${PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH:-}" ]; then \
+         test -x "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"; \
+       fi
 
 # WASM handoff nests companion under /nook-wasm/nook-companion-wasm so CI can ship both packages
 # through the existing artifact path. Apply after COPY . . so a host placeholder directory cannot
@@ -113,6 +116,15 @@ RUN cd nook-app/nook-web/nook-web-extension \
     bun run package:deployment
 
 FROM nook-web-build AS nook-web
+
+# Export the already-built static applications without requiring a container
+# runtime. Main uploads this filesystem as the deployment handoff, so the
+# Pages job never repeats verification or recompiles the web applications.
+FROM scratch AS nook-web-deploy-artifacts
+
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-web-app/dist /nook-app/nook-web/nook-web-app/dist
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist /nook-app/nook-web/nook-vault-simple/dist
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist /nook-app/nook-web/nook-vault-sentinel/dist
 
 # Hosted PR CI selects this target. Copying the marker creates an explicit BuildKit dependency on
 # the sibling verification stage while preserving the same sealed runtime image and build outputs.

@@ -77,7 +77,7 @@ target "_nook-web-base" {
     NOOK_EXTENSION_SITE_URL = NOOK_EXTENSION_SITE_URL
   }
   contexts = {
-    web-base      = "target:web-base"
+    web-runtime   = "target:web-base"
     web-deps      = "target:web-deps"
     web-artifacts = WEB_ARTIFACTS_CONTEXT
   }
@@ -120,12 +120,19 @@ target "nook-web-ci" {
   cache-to   = web_cache_to
 }
 
+target "nook-web-deploy-artifacts" {
+  inherits = ["_nook-web-base"]
+  target   = "nook-web-deploy-artifacts"
+  output   = ["type=cacheonly"]
+  cache-from = web_cache_from
+}
+
 # Main/manual-e2e image. Same sealed app as nook-web, Chromium base swapped in.
 # Tag as DOCKER_IMAGE too so deploy/extract tasks consume the already-tested image.
 target "nook-web-e2e" {
   inherits = ["_nook-web-common"]
   contexts = {
-    web-base = "target:web-e2e-base"
+    web-runtime = "target:web-e2e-base"
   }
   tags       = [DOCKER_IMAGE, DOCKER_E2E_IMAGE]
   output     = ["type=docker"]
@@ -137,7 +144,7 @@ target "nook-web-e2e" {
 target "nook-web-e2e-publish" {
   inherits = ["_nook-web-common"]
   contexts = {
-    web-base = "target:web-e2e-base"
+    web-runtime = "target:web-e2e-base"
   }
   output     = ["type=cacheonly"]
   cache-from = web_e2e_cache_from
