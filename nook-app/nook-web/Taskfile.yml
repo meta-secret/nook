@@ -87,6 +87,13 @@ tasks:
   web:e2e:kubernetes-image:artifacts:
     desc: Build and push the browser image from the verified split-CI WASM artifact.
     cmds:
+      - task: _buildx:healthy
+        vars:
+          BUILD_TASK: _web:e2e:kubernetes-image:artifacts:host
+
+  _web:e2e:kubernetes-image:artifacts:host:
+    internal: true
+    cmds:
       - task: docker:ci:web:e2e:build
         vars:
           E2E_OUTPUT: type=registry
