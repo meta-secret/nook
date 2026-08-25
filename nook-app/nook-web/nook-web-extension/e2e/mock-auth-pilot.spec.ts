@@ -28,6 +28,13 @@ test.describe('PIN Pilot against mock auth', () => {
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await loginPage.evaluate(() => {
+        document.querySelector('#nook-auth-widget')?.remove()
+      })
+      await expect(
+        widget.getByText('Ready to sign in'),
+        'Pilot must remount after page code removes its host',
+      ).toBeVisible({ timeout: 15_000 })
       // Single matching login fills and submits without an account chooser.
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
       await expect(loginPage.getByTestId('mock-auth-success')).toHaveText(

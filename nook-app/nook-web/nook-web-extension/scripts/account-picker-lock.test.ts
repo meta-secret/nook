@@ -56,4 +56,45 @@ describe('account picker lock cleanup', () => {
       ],
     })
   })
+
+  test('scrubs in-memory pickers before persistence cleanup can fail', async () => {
+    const { takePendingAccountPickerMemoryCleanup } =
+      await import('../src/background/service-worker/account-pickers')
+    const authenticatorRequests = new Map([
+      [
+        'authenticator-request',
+        {
+          requestId: 'authenticator-request',
+          origin: 'https://login.example.test',
+          tabId: 7,
+          allowedVaultStoreIds: ['vault-1'],
+          expiresAt: Date.now() + 60_000,
+        },
+      ],
+    ])
+    const loginRequests = new Map([
+      [
+        'login-request',
+        {
+          requestId: 'login-request',
+          origin: 'https://login.example.test',
+          tabId: 7,
+          allowedVaultStoreIds: ['vault-1'],
+          expiresAt: Date.now() + 60_000,
+        },
+      ],
+    ])
+    const cleanupArgs: Parameters<
+      typeof takePendingAccountPickerMemoryCleanup
+    >[0] = { authenticatorRequests, loginRequests }
+
+    const cancellations = takePendingAccountPickerMemoryCleanup(cleanupArgs)
+
+    expect(authenticatorRequests.size).toBe(0)
+    expect(loginRequests.size).toBe(0)
+    expect(cancellations.map((message) => message.payload.requestId)).toEqual([
+      'authenticator-request',
+      'login-request',
+    ])
+  })
 })

@@ -99,6 +99,34 @@ export type PersistedAccountPickerCleanupPlan = {
 
 export type PersistedAccountPickerStorage = Record<string, unknown>
 
+type PendingAccountPickerMemoryCleanupArgs = {
+  authenticatorRequests: Map<string, PendingAuthenticatorPicker>
+  loginRequests: Map<string, PendingLoginPicker>
+}
+
+export function takePendingAccountPickerMemoryCleanup({
+  authenticatorRequests,
+  loginRequests,
+}: PendingAccountPickerMemoryCleanupArgs): Array<
+  WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+> {
+  const cancellations: Array<
+    WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+  > = [
+    ...Array.from(authenticatorRequests.values(), (request) => ({
+      type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
+      payload: { origin: request.origin, requestId: request.requestId },
+    })),
+    ...Array.from(loginRequests.values(), (request) => ({
+      type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
+      payload: { origin: request.origin, requestId: request.requestId },
+    })),
+  ]
+  authenticatorRequests.clear()
+  loginRequests.clear()
+  return cancellations
+}
+
 export function persistedAccountPickerCleanupPlan(
   stored: PersistedAccountPickerStorage,
 ): PersistedAccountPickerCleanupPlan {
@@ -130,38 +158,41 @@ export function persistedAccountPickerCleanupPlan(
 
 export async function clearPendingAccountPickers(): Promise<void> {
   accountPickerAuthorizationState.invalidate()
-  const stored = await getAllSessionStorage()
-  const plan = persistedAccountPickerCleanupPlan(stored)
-  const authenticatorRequests = new Map(pendingAuthenticatorPickers)
-  const loginRequests = new Map(pendingLoginPickers)
-  pendingAuthenticatorPickers.clear()
-  pendingLoginPickers.clear()
-  await Promise.all(plan.storageKeys.map(removeSessionStorage))
+  const memoryCleanupArgs: Parameters<
+    typeof takePendingAccountPickerMemoryCleanup
+  >[0] = {
+    authenticatorRequests: pendingAuthenticatorPickers,
+    loginRequests: pendingLoginPickers,
+  }
+  const memoryCancellations =
+    takePendingAccountPickerMemoryCleanup(memoryCleanupArgs)
+  const memoryCancellationDelivery = Promise.allSettled(
+    memoryCancellations.map((message) =>
+      Promise.resolve().then(() => chrome.runtime.sendMessage(message)),
+    ),
+  )
 
-  const cancellations: Array<
-    WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
-  > = [
-    ...plan.cancellations,
-    ...Array.from(authenticatorRequests.values(), (request) => ({
-      type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
-      payload: { origin: request.origin, requestId: request.requestId },
-    })),
-    ...Array.from(loginRequests.values(), (request) => ({
-      type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
-      payload: { origin: request.origin, requestId: request.requestId },
-    })),
-  ]
-  const uniqueCancellations = Array.from(
-    new Map(
-      cancellations.map((message) => [
-        `${message.type}:${message.payload.requestId}`,
-        message,
-      ]),
-    ).values(),
+  let stored: PersistedAccountPickerStorage
+  try {
+    stored = await getAllSessionStorage()
+  } catch {
+    await memoryCancellationDelivery
+    throw new Error('account picker storage lookup failed')
+  }
+  const plan = persistedAccountPickerCleanupPlan(stored)
+  const persistedCancellationDelivery = Promise.allSettled(
+    plan.cancellations.map((message) =>
+      Promise.resolve().then(() => chrome.runtime.sendMessage(message)),
+    ),
   )
-  await Promise.allSettled(
-    uniqueCancellations.map((message) => chrome.runtime.sendMessage(message)),
+  const storageRemovalResults = await Promise.allSettled(
+    plan.storageKeys.map(removeSessionStorage),
   )
+  await memoryCancellationDelivery
+  await persistedCancellationDelivery
+  if (storageRemovalResults.some((result) => result.status === 'rejected')) {
+    throw new Error('account picker storage removal failed')
+  }
 }
 
 enum SessionAccountListKind {

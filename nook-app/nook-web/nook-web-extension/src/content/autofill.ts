@@ -323,6 +323,24 @@ function mutationTouchesRenderedWorkflow(record: MutationRecord): boolean {
 function handleAuthenticationMutations(
   records: AuthenticationMutationRecords,
 ): void {
+  if (widgetState.host.kind === WidgetHostKind.Attached) {
+    const mountedHost = widgetState.host.element
+    const mountedHostWasRemoved = records.some(
+      (record) =>
+        record.type === 'childList' &&
+        !mountedHost.isConnected &&
+        [...record.removedNodes].some((node) => node === mountedHost),
+    )
+    if (mountedHostWasRemoved) {
+      authenticationActionState.invalidate()
+      widgetState.busy = false
+      cancelPendingAuthenticatorPickerRequest()
+      cancelPendingLoginPickerRequest()
+      widgetState.detachRenderedWidget()
+      scheduleScan()
+      return
+    }
+  }
   const pageMutations = records.filter(
     (record) => !isExtensionWidgetMutation(record),
   )
