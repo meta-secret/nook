@@ -1,0 +1,121 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../k0s/manifests/namespaces.yaml
+  - ../../k0s/manifests/registry/zot.yaml
+  - ../../k0s/manifests/arc/buildkit.yaml
+  - ../../k0s/manifests/arc/network-policy.yaml
+
+patches:
+  - patch: |-
+      $patch: delete
+      apiVersion: v1
+      kind: PersistentVolume
+      metadata:
+        name: nook-buildkit-rise-s-2
+  - target:
+      kind: PersistentVolume
+      name: nook-zot-data
+    patch: |-
+      - op: replace
+        path: /spec/capacity/storage
+        value: 2Gi
+  - target:
+      kind: PersistentVolumeClaim
+      name: nook-zot-data
+      namespace: hive-data
+    patch: |-
+      - op: replace
+        path: /spec/resources/requests/storage
+        value: 2Gi
+  - target:
+      kind: Deployment
+      name: nook-zot
+      namespace: hive-data
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: "1"
+            memory: 512Mi
+      - op: replace
+        path: /spec/template/spec/containers/0/startupProbe/failureThreshold
+        value: 60
+  - target:
+      kind: PersistentVolume
+      name: nook-buildkit-rise-s
+    patch: |-
+      - op: replace
+        path: /spec/capacity/storage
+        value: 4Gi
+      - op: replace
+        path: /spec/nodeAffinity/required/nodeSelectorTerms/0/matchExpressions/0/values/0
+        value: k3d-nook-cache-proof-agent-0
+  - target:
+      kind: PersistentVolume
+      name: nook-buildkit-home
+    patch: |-
+      - op: replace
+        path: /spec/capacity/storage
+        value: 4Gi
+      - op: replace
+        path: /spec/nodeAffinity/required/nodeSelectorTerms/0/matchExpressions/0/values/0
+        value: k3d-nook-cache-proof-agent-1
+  - target:
+      kind: PersistentVolume
+      name: nook-buildkit-ks6
+    patch: |-
+      - op: replace
+        path: /spec/capacity/storage
+        value: 4Gi
+      - op: replace
+        path: /spec/nodeAffinity/required/nodeSelectorTerms/0/matchExpressions/0/values/0
+        value: k3d-nook-cache-proof-agent-2
+  - target:
+      kind: ConfigMap
+      name: nook-buildkit
+      namespace: arc-runners
+    patch: |-
+      - op: replace
+        path: /data/buildkitd.toml
+        value: |-
+          [registry."docker.io"]
+            mirrors = ["nook-zot.hive-data.svc.cluster.local:5000"]
+
+          [registry."nook-zot.hive-data.svc.cluster.local:5000"]
+            http = true
+            insecure = true
+  - target:
+      kind: StatefulSet
+      name: nook-buildkit
+      namespace: arc-runners
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+      - op: replace
+        path: /spec/template/spec/containers/0/image
+        value: docker.io/moby/buildkit:v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9
+      - op: replace
+        path: /spec/template/spec/containers/0/args/9
+        value: "3072"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources
+        value:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: "2"
+            memory: 2Gi
+      - op: replace
+        path: /spec/template/spec/volumes/2/emptyDir/sizeLimit
+        value: 512Mi
+      - op: replace
+        path: /spec/volumeClaimTemplates/0/spec/resources/requests/storage
+        value: 4Gi

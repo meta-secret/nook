@@ -102,3 +102,7 @@ includes:
     taskfile: tasks/bake-cache.yml
     dir: ..
     flatten: true
+  kubernetes-cache:
+    taskfile: tasks/kubernetes-cache.yml
+    dir: ..
+    flatten: true

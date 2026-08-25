@@ -2,6 +2,8 @@ use std::{fs, path::PathBuf, process::Command};
 
 use anyhow::Context;
 
+#[path = "infra/kubernetes_cache_sim.rs"]
+mod kubernetes_cache_sim;
 #[path = "infra/remote_platform_contracts.rs"]
 mod remote_platform_contracts;
 
