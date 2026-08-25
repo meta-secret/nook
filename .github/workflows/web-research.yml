@@ -100,15 +100,17 @@ jobs:
         uses: actions/github-script@v9
         env:
           PREVIEW_URL: ${{ steps.deploy.outputs.deployment_url }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         with:
           retries: 3
           script: |
             const marker = '### Web research preview'
             const body = `${marker}\n\n${process.env.PREVIEW_URL}`
+            const issueNumber = Number(process.env.PR_NUMBER)
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
+              issue_number: issueNumber,
               per_page: 100,
             })
             const existing = comments.find((comment) => comment.body?.startsWith(marker))
@@ -123,7 +125,7 @@ jobs:
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                issue_number: context.payload.pull_request.number,
+                issue_number: issueNumber,
                 body,
               })
             }
@@ -133,11 +135,13 @@ jobs:
         env:
           DEPLOYMENT_URL: ${{ steps.deploy.outputs.deployment_url }}
           DEPLOY_BRANCH: ${{ steps.deploy.outputs.deploy_branch }}
+          DEPLOY_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          EVENT_NAME: ${{ github.event_name }}
         with:
           retries: 3
           script: |
-            const isPreview = context.eventName === 'pull_request'
-            const ref = isPreview ? context.payload.pull_request.head.sha : context.sha
+            const isPreview = process.env.EVENT_NAME === 'pull_request'
+            const ref = process.env.DEPLOY_REF
             const environment = isPreview ? 'github-pages' : 'web-research'
             const environmentUrl = isPreview
               ? process.env.DEPLOYMENT_URL

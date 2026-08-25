@@ -782,5 +782,15 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             "{workflow} must explicitly pass system Chromium through the ARC container hook"
         );
     }
+    let pr_workflow = read(&root, ".github/workflows/pr.yml");
+    let pr_ui_demo = section(&pr_workflow, "  ui-demo:\n", "\n  preview:\n");
+    assert!(
+        !pr_ui_demo.contains("context.payload") && !pr_ui_demo.contains("context.issue"),
+        "ARC container actions must receive PR identity explicitly instead of reading a missing event file"
+    );
+    assert!(
+        !read(&root, ".github/workflows/web-research.yml").contains("context.payload"),
+        "ARC research actions must receive event identity explicitly"
+    );
     Ok(())
 }
