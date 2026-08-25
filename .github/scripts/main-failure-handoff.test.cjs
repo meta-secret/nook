@@ -338,7 +338,10 @@ test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () =>
 
   assert.match(telemetry, /timeout 15s .*cache-telemetry\.cjs start/)
   assert.match(telemetry, /timeout 30s .*cache-telemetry\.cjs collect/)
-  assert.match(dockerSetup, /timeout 15s .*cache-telemetry\.cjs start/)
+  assert.match(
+    dockerSetup,
+    /timeout 15s [^\n]*cache-telemetry\.cjs["']? start/,
+  )
 })
 
 test('handoff workflow trusts default-branch code and writes only Workbench', () => {
