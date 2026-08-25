@@ -94,6 +94,14 @@ pub enum AuthenticationPageProgression {
     AutoSubmitOneTimeCode,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationApprovalRequirement {
+    ExplicitUserApproval,
+    TakeoverRequired,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -238,6 +246,7 @@ pub struct AuthenticationWorkflowSnapshot {
     pub action: AuthenticationWorkflowAction,
     pub current_step: u8,
     pub total_steps: u8,
+    pub approval_requirement: AuthenticationApprovalRequirement,
     pub observation_index: u32,
 }
 
@@ -291,6 +300,11 @@ impl AuthenticationWorkflowSnapshot {
             action,
             current_step,
             total_steps,
+            approval_requirement: if matches!(action, AuthenticationWorkflowAction::TakeOver) {
+                AuthenticationApprovalRequirement::TakeoverRequired
+            } else {
+                AuthenticationApprovalRequirement::ExplicitUserApproval
+            },
             observation_index: 0,
         }
     }
@@ -579,6 +593,10 @@ mod tests {
         assert_eq!(login.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(login.action, AuthenticationWorkflowAction::ContinueWithNook);
         assert_eq!(
+            login.approval_requirement,
+            AuthenticationApprovalRequirement::ExplicitUserApproval
+        );
+        assert_eq!(
             login.saved_login_capability(),
             AuthenticationSavedLoginCapability::FillSavedLogin
         );
@@ -651,6 +669,10 @@ mod tests {
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
         assert_eq!(
+            snapshot.approval_requirement,
+            AuthenticationApprovalRequirement::TakeoverRequired
+        );
+        assert_eq!(
             snapshot.saved_login_capability(),
             AuthenticationSavedLoginCapability::Unavailable
         );
@@ -669,6 +691,10 @@ mod tests {
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
         assert_eq!(snapshot.stage, AuthenticationWorkflowStage::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(
+            snapshot.approval_requirement,
+            AuthenticationApprovalRequirement::TakeoverRequired
+        );
         assert_eq!(
             snapshot.saved_login_capability(),
             AuthenticationSavedLoginCapability::Unavailable

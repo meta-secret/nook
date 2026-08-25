@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn enforces_the_rust_snapshot_contract() -> anyhow::Result<()> {
         let valid = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
         )?;
         assert!(matches!(
             decode_authentication_workflow_snapshot_response(valid)?,
@@ -183,7 +183,7 @@ mod tests {
 
         assert!(
             serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":-1,"totalSteps":300,"observationIndex":-1}}"#,
+                r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":-1,"totalSteps":300,"approvalRequirement":"explicit-user-approval","observationIndex":-1}}"#,
             )
             .is_err()
         );
@@ -212,11 +212,18 @@ mod tests {
         let contradictory_matched = serde_json::from_str::<
             AuthenticationWorkflowSnapshotResponseWire,
         >(
-            r#"{"ok":false,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"observationIndex":0}}"#,
+            r#"{"ok":false,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(contradictory_matched),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
+
+        assert!(
+            serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+                r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"observationIndex":0}}"#,
+            )
+            .is_err()
         );
 
         for malformed in [

@@ -668,6 +668,8 @@ mod tests {
             action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
             current_step: 1,
             total_steps: 3,
+            approval_requirement:
+                nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
             observation_index: 0,
         };
         assert_eq!(
