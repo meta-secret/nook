@@ -753,9 +753,11 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "nook-app/nook-web/nook-web-research/playwright.config.ts",
         "agentic-ai/minds/hive-console/playwright.config.ts",
     ] {
+        let playwright_config = read(&root, config);
         assert!(
-            read(&root, config).contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
-            "{config} must use the e2e image's system Chromium"
+            playwright_config.contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH")
+                && playwright_config.contains("launchOptions"),
+            "{config} must pass the e2e image's system Chromium through Playwright launch options"
         );
     }
     for workflow in [
