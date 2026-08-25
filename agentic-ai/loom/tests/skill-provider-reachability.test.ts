@@ -1,6 +1,10 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
-import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
+import {
+  referencesSkillProvider as specifierReferencesSkillProvider,
+  violatesSkillProviderBoundary,
+} from './skill-provider-boundary.test.ts';
+import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
 
 type RuntimeDependencyGraphInspection = {
   readonly roots: readonly string[];
@@ -28,6 +32,13 @@ type RuntimeTranspilerOptions = {
 type TrackedRepositoryInventory = {
   readonly paths: readonly string[];
   readonly symlinkPaths: ReadonlySet<string>;
+};
+
+type RepositoryPackageDocument = {
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
+  readonly name?: string;
+  readonly optionalDependencies?: Readonly<Record<string, string>>;
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
@@ -107,8 +118,12 @@ function runtimeDependencyViolations(
         sources: inspection.sources,
         specifier: imported.path,
       };
-      if (referencesSkillProvider(resolution)) violations.push(path);
-      else {
+      if (
+        specifierReferencesSkillProvider(imported.path) ||
+        referencesSkillProvider(resolution)
+      ) {
+        violations.push(path);
+      } else {
         const dependency = resolveRuntimeDependency(resolution);
         if (
           dependency &&
@@ -116,7 +131,11 @@ function runtimeDependencyViolations(
             posix.extname(dependency) === '')
         ) {
           pending.push(dependency);
-        } else if (!dependency && imported.path.startsWith('.')) {
+        } else if (
+          !dependency &&
+          (imported.path.startsWith('.') ||
+            isRepositoryBackedSpecifier(resolution))
+        ) {
           violations.push(path);
         }
       }
@@ -135,6 +154,42 @@ function resolveRuntimeDependency(
     if (resolution.sources.has(direct)) return direct;
     const indexed = `${base}/index${suffix}`;
     if (resolution.sources.has(indexed)) return indexed;
+  }
+  return false;
+}
+
+function isRepositoryBackedSpecifier(
+  resolution: RuntimeDependencyResolution,
+): boolean {
+  const specifier = resolution.specifier;
+  if (specifier.startsWith('#') || specifier.startsWith('file:')) return true;
+  if (specifier.startsWith('.') || specifier.startsWith('node:')) return false;
+  const segments = specifier.split('/');
+  const packageName = specifier.startsWith('@')
+    ? segments.slice(0, 2).join('/')
+    : (segments[0] ?? '');
+  for (const [path, source] of resolution.sources) {
+    if (!path.endsWith('package.json') || source.length === 0) continue;
+    let document: RepositoryPackageDocument;
+    try {
+      document = JSON.parse(source) as RepositoryPackageDocument;
+    } catch {
+      continue;
+    }
+    if (document.name === packageName) return true;
+    for (const dependencies of [
+      document.dependencies,
+      document.devDependencies,
+      document.optionalDependencies,
+    ]) {
+      const dependency = dependencies?.[packageName] ?? false;
+      if (
+        dependency !== false &&
+        (dependency.startsWith('file:') || dependency.startsWith('workspace:'))
+      ) {
+        return true;
+      }
+    }
   }
   return false;
 }
@@ -184,6 +239,37 @@ test('follows runtime facades without scanning unrelated provider references', (
   ]);
 });
 
+test('fails closed for repository-backed module aliases', () => {
+  expect(PRODUCTION_SOURCE_EXTENSIONS).toEqual([
+    '.ts',
+    '.tsx',
+    '.mts',
+    '.cts',
+    '.js',
+    '.jsx',
+    '.mjs',
+    '.cjs',
+  ]);
+  const sources = new Map<string, string>([
+    ['agentic-ai/loom/src/cli.js', ''],
+    [
+      'agentic-ai/loom/package.json',
+      '{"dependencies":{"local-provider":"file:../local-provider"}}',
+    ],
+  ]);
+  for (const specifier of ['local-provider', '#provider']) {
+    sources.set('agentic-ai/loom/src/cli.js', `import '${specifier}';`);
+    const inspection: RuntimeDependencyGraphInspection = {
+      roots: ['agentic-ai/loom/src/cli.js'],
+      sources,
+      symlinkPaths: new Set<string>(),
+    };
+    expect(runtimeDependencyViolations(inspection), specifier).toEqual([
+      'agentic-ai/loom/src/cli.js',
+    ]);
+  }
+});
+
 test('production Loom runtime closure cannot reach dormant providers', async () => {
   const inventory = trackedRepositoryInventory();
   const trackedPaths = inventory.paths;
@@ -198,7 +284,9 @@ test('production Loom runtime closure cannot reach dormant providers', async () 
   for (const path of trackedPaths) {
     const source =
       !inventory.symlinkPaths.has(path) &&
-      (EXECUTABLE_SOURCE_EXTENSION.test(path) || posix.extname(path) === '')
+      (EXECUTABLE_SOURCE_EXTENSION.test(path) ||
+        posix.extname(path) === '' ||
+        path.endsWith('package.json'))
         ? await Bun.file(join(REPOSITORY_ROOT, path)).text()
         : '';
     sources.set(path, source);

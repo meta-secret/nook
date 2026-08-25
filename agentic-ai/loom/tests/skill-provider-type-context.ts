@@ -15,6 +15,7 @@ const LOOM_ROOT = join(import.meta.dir, '..');
 const REPOSITORY_ROOT = join(LOOM_ROOT, '../..');
 const PRODUCTION_LOOM_PREFIX = 'agentic-ai/loom/src/';
 const BOUNDARY_COMPILER_OPTIONS: ts.CompilerOptions = {
+  allowJs: true,
   allowImportingTsExtensions: true,
   module: ts.ModuleKind.ESNext,
   moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -27,7 +28,16 @@ const TYPESCRIPT_LIB_ROOT = dirname(
   ts.getDefaultLibFilePath(BOUNDARY_COMPILER_OPTIONS),
 );
 const TYPESCRIPT_LIB_SOURCES = new Map<string, ts.SourceFile>();
-const PRODUCTION_SOURCE_EXTENSIONS = ['.ts', '.tsx', '.mts', '.cts'];
+export const PRODUCTION_SOURCE_EXTENSIONS = [
+  '.ts',
+  '.tsx',
+  '.mts',
+  '.cts',
+  '.js',
+  '.jsx',
+  '.mjs',
+  '.cjs',
+] as const;
 const PRODUCTION_SOURCE_EXCLUDES: string[] = [];
 const PRODUCTION_SOURCE_INCLUDES = ['**/*'];
 let productionBoundaryProgram: ts.Program | false = false;

@@ -200,7 +200,9 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
       }
       continue;
     }
-    if (runs.using === 'docker') continue;
+    if (runs.using === 'docker') {
+      throw new Error(`Unsupported Docker action runtime: ${manifestPath}`);
+    }
     if (!runs.using.startsWith('node') || typeof runs.main !== 'string') {
       throw new Error(`Unsupported action runtime: ${manifestPath}`);
     }
@@ -469,6 +471,20 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   };
   expect(() => actionRuntimePaths(unresolvedImportGraph)).toThrow(
     'Action relative import is unresolved',
+  );
+
+  const dockerSources = new Map(sources);
+  dockerSources.set(
+    '.github/actions/root/action.yml',
+    'runs:\n  using: docker\n  image: Dockerfile',
+  );
+  const dockerGraph: ActionRuntimeGraph = {
+    roots: ['.github/actions/root/action.yml'],
+    sources: dockerSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(() => actionRuntimePaths(dockerGraph)).toThrow(
+    'Unsupported Docker action runtime',
   );
 
   const loaderFixtures: readonly ActionLoaderFixture[] = [

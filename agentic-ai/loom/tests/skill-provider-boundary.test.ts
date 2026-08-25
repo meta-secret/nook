@@ -1,4 +1,5 @@
 import { join, posix } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from 'bun:test';
 import ts from 'typescript';
 import {
@@ -639,8 +640,15 @@ function isDeclarationName(node: ts.Identifier): boolean {
   );
 }
 
-function referencesSkillProvider(specifier: string): boolean {
-  const normalized = posix.normalize(specifier);
+export function referencesSkillProvider(specifier: string): boolean {
+  let normalized = posix.normalize(specifier);
+  if (specifier.startsWith('file:')) {
+    try {
+      normalized = posix.normalize(fileURLToPath(specifier));
+    } catch {
+      return true;
+    }
+  }
   return (
     normalized === '.agents/skills' ||
     normalized.endsWith('/.agents/skills') ||
@@ -709,6 +717,7 @@ test('recognizes static and dynamic skill-provider runtime imports', () => {
     "import '../../../.agents/elsewhere/../skills/provider/src/runner.ts';",
     "import '../../../.agents/skills';",
     "import '../.agents/skills';",
+    "import 'file:///workspace/nook/%2Eagents/skills/provider/src/audit.ts';",
   ];
 
   for (const runtimeImport of runtimeImports) {
