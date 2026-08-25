@@ -79,9 +79,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 **`remote.yml`**
 
-- One or more selected Taskfile commands on one configured GitHub Actions
-  runner. Single `preflight` and `rust:ci` selections use the disposable ARC
-  scale set. The repository variable can fall back to `ubuntu-latest`.
+- One or more selected Taskfile commands on one configured ARC runner.
+  Browser selections use the container scale set.
 - Checkout, Docker setup, and cache connection happen once per batch.
 - Selected tasks run sequentially and report individual results.
 - Git-commit-scoped Zot writes (`-git-<sha>`), with Main used only while the
@@ -101,7 +100,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Internal harness plus isolated native Pages aliases.
 - `github-pages` deployment status.
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
-- Keep independent long-running gates on separate hosted runners.
+- Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
 
 **`repository-policy.yml`**
@@ -153,8 +152,7 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
 - Classifies changed paths and skips the product job chain for minds-only pushes.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
-- Native Rust and WASM producers use the configured ARC scale set. Browser-free
-  web verification uses a fresh `ubuntu-latest` runner.
+- Native Rust, WASM, and browser-free web verification use the configured ARC scale set.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
 - Each browser solve is read-only.
@@ -374,19 +372,17 @@ producers use the configured ARC scale set. Focused `preflight`,
 Trusted browser runtime jobs use `nook-k0s-container`. ARC's Kubernetes
 lifecycle hooks create a regular job Pod from the exact image built by the
 general scale set. Fork and Dependabot pull requests retain GitHub-hosted
-isolation. Other hosted exceptions remain explicitly classified while they are
-migrated to a compatible trusted execution contract.
+isolation. The typed placement inventory prohibits every other hosted route.
 ARC scales single-use Pods instead of queueing work on one persistent Docker
 host.
-Main's portable WASM cache writer/proof also uses `ubuntu-latest`. This narrow
-job must not reuse an ARC node-local cache.
+Main's portable WASM cache writer/proof uses the general ARC scale set.
 
 **Zot cache policy:**
 
-- Hosted delivery builds restore distinct private Zot BuildKit cache refs.
+- Cold or cross-node delivery builds restore distinct private Zot BuildKit cache refs.
 - Main ARC producers publish shared Zot refs after verification. Persistent
   node-local BuildKit shards accelerate repeated solves.
-- Hosted PR jobs that publish registry cache write only immutable git-commit scopes
+- Trusted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
 - Trusted ARC PR verification reuses the persistent BuildKit shard on its node.
 - Exact-SHA handoffs retain commit-scoped registry identity.
@@ -397,9 +393,9 @@ job must not reuse an ARC node-local cache.
 - Once an exact PR scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.
 - Exact-input handoffs own repeat-run acceleration without mutable branch refs.
-- WASM consumers read the hosted-published dependency ref instead of competing with the larger native dependency lineage.
+- WASM consumers read the verified dependency ref instead of competing with the larger native dependency lineage.
 - Main ARC prepares native dependency/source and WASM source targets as cache-only outputs.
-- A fresh hosted builder selects the WASM dependency target and owns its exporter.
+- The verified Main ARC solve owns the WASM dependency exporter.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, and manual workflows are read-only unless they use an
   explicitly isolated git-commit publisher.
@@ -419,14 +415,12 @@ job must not reuse an ARC node-local cache.
   Docker daemon, Podman, DinD, or host socket.
 - `web:e2e` builds its run-scoped image on the general ARC set, then executes
   Playwright inside an ordinary Pod created by `nook-k0s-container` hooks.
-- Other `remote.yml` selections retain their explicit placement until their
-  runtime wrappers have equivalent Kubernetes-native execution.
+- Other `remote.yml` selections use the general or Hive ARC scale set. Browser
+  tasks use the container scale set.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
-- Complete PR graphs place only their trusted native Rust jobs on ARC. Main
-  build producers use ARC. The portable WASM cache writer/proof, remaining PR
-  jobs, and the release graph stay hosted.
+- Complete trusted PR, Main, manual, agent, and release graphs run on ARC.
 
 **BuildKit cache propagation:**
 
@@ -452,7 +446,7 @@ job must not reuse an ARC node-local cache.
 - Loadable `nook-rust*` tags live in the platform core/wasm bake files.
 - `nook-app/docker-bake.hcl` stays thin: shared GHA/registry/sccache
   variables, `_sccache`, and cross-lineage prepare groups.
-- Main publishes the portable WASM dependency fingerprint from one fresh hosted builder, then verifies it from a second fresh cache-only builder.
+- Main publishes the portable WASM dependency fingerprint from its verified ARC solve.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
 **Exact-input handoffs:**
@@ -516,9 +510,9 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Preview and both browser jobs download that artifact instead of recompiling Rust.
 - **Parallel browser jobs:**
   - Two web shards run deterministic halves of every fully-parallel local-provider and split-app Playwright project.
-  - Extension e2e runs independently on a third hosted runner.
-  - Commands: `task ci:pr:e2e:web:artifacts` and `task ci:pr:e2e:extension:artifacts`.
-  - Both task families use the bounded BuildKit health and recovery wrapper.
+  - Extension e2e runs independently in a third Kubernetes job Pod.
+  - Browser commands execute directly inside the exact-source image built by
+    the verified PR web job.
 - **Exact-head cache policy:**
   - PR browser consumers publish only isolated exact-head cache refs.
   - Each consumer probes its exact browser ref.
@@ -533,24 +527,22 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 - **Extension e2e environment:**
   - Extension e2e starts an automatically selected Xvfb display.
   - It waits for readiness and prevents resets between Playwright retries.
-  - It uses one hosted worker so persistent-context smoke does not compete with headed Chromium tests.
+  - It uses one Kubernetes job Pod so persistent-context smoke does not compete with headed Chromium tests.
 
 ### Runner allocation
 
 - **`pr.yml`, `main.yml`, `release.yml`**
-  - Runner: trusted same-repository PR and Main native jobs use ARC. Hosted
-    capacity remains for releases, forks, Dependabot, browser, WASM, and
-    runtime-dependent gates.
-  - Purpose: Elastic delivery with a node-local ARC seed and private Zot as the
-    hosted fallback.
+  - Runner: trusted jobs use general, Hive, or container ARC scale sets. Fork
+    and Dependabot code alone uses GitHub-hosted isolation.
+  - Purpose: Elastic delivery with persistent node-local BuildKit and private Zot recovery.
 - **`repository-policy.yml`, `hive.yml`**
-  - Runner: `ubuntu-latest`
+  - Runner: ARC for trusted sources; GitHub-hosted only for untrusted sources.
   - Purpose: Independent architecture and package verification
 - **`agent-implement.yml`, `ci-agent-smoke.yml`**
-  - Runner: `ubuntu-latest`
+  - Runner: general ARC
   - Purpose: Background implementation and bounded smoke work
 - **`e2e-pr.yml`, `web-research.yml`**
-  - Runner: `ubuntu-latest`
+  - Runner: general ARC plus container ARC for Playwright
   - Purpose: Manual and research work scales independently
 ## Why local-provider e2e vs sync-live
 
@@ -586,7 +578,7 @@ The audit covers every direct library declared in those `Cargo.toml` manifests.
 It does not audit only the current lockfile's transitive graph.
 
 If any audit reports a newer release, the workflow starts the existing
-isolated CI agent on `ubuntu-latest`. The agent updates **all** outdated direct
+isolated CI agent on the general ARC scale set. The agent updates **all** outdated direct
 Rust dependencies and makes compatibility fixes. It runs the required
 validation before the CI-agent harness commits, pushes, and opens the PR:
 
@@ -792,9 +784,8 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Main serializes native, WASM, and web producer lanes so they advance one
   verified default-branch lineage.
 - ARC jobs reuse the persistent BuildKit content store on their selected node.
-- Verified Main ARC jobs publish portable source and tool cache refs. One fresh hosted
-  builder alone publishes the WASM dependency ref so ARC-local metadata cannot replace the consumer lineage.
-- Hosted fallback jobs export their verified graph to Zot for cold-node recovery.
+- Verified Main ARC jobs publish portable source, tool, and WASM dependency refs.
+- Zot exports provide cold-node recovery.
 - `task docker:extract:coverage` remains a copy-only path that invokes neither BuildKit nor Rust tests.
 - It also serves workflows that already have a sealed `nook-web:local` image, including main's commit-keyed coverage artifact.
 - `task setup` gets those files into the slim web image through the same temporary host artifact directory as generated WASM.
@@ -818,7 +809,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 ## Agent host vs GitHub-hosted execution
 
-**Delivery CI uses isolated ARC or GitHub-hosted runners with remote BuildKit layers.**
+**Trusted delivery CI uses isolated ARC with persistent BuildKit layers.**
 
 - Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
   producers run in disposable ARC Pods.
@@ -829,14 +820,12 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
   pushes the exact-source image. ARC lifecycle hooks then create an ordinary
   job Pod from that immutable run tag on `nook-k0s-container`.
-- On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
-- Main's portable WASM cache writer uses one fresh hosted builder rather than
-  ARC-local metadata. Zot must prove child manifest digest/size plus every
+- Main's portable WASM cache writer uses the verified ARC solve. Zot must prove child manifest digest/size plus every
   declared blob's size and SHA-256 by streaming it completely. A second fresh builder then requires the
   dependency compiler vertices to be `CACHED`. The target stays in the same
   Rust Dockerfile and context lineage; a named-context wrapper is invalid
   because it changes BuildKit cache-key identity.
-- Hosted placements restore separate Zot scopes for stable and source-sensitive
+- Cold nodes restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.
 - Neither placement uses GitHub Actions cache storage for BuildKit layers.
@@ -877,11 +866,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- Trusted same-repository PR jobs and Main build producers use ARC. Main's WASM
-  cache writer/proof, fork PRs, other PR jobs, and releases use hosted runners.
-- Main verifies each lane. ARC publishes source/tool refs; the hosted writer
-  alone publishes the portable WASM dependency ref.
-- Hosted fallback jobs use the same portable Zot contract.
+- Trusted same-repository PR jobs, Main, releases, and manual jobs use ARC.
+- Main verifies each lane and publishes portable source, tool, and WASM dependency refs.
+- Cold ARC nodes use the same portable Zot contract.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
 - Protected default-branch Zot refs remain available to every node and hosted
   job. ARC jobs reuse a warm local shard before registry transfer.
@@ -904,11 +891,11 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - SeaweedFS remains an optimization and never a correctness input.
 - Each workflow run and retry loads its sealed web and e2e results under run-scoped Docker image tags; concurrent jobs must never replace one another's runtime image between build and deploy.
 - `task sccache:ensure` fails closed when credential files are missing or SeaweedFS is unhealthy, so a local misconfiguration cannot silently cold-compile.
-- Secret-free hosted jobs (forks, release, arbitrary-ref) set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
+- Secret-free fork jobs set `SCCACHE_OPTIONAL=1` through `nook-cache-connect`; the wrapper then bypasses sccache without replacing cargo-chef or changing build correctness.
 
 **Hive workflow cache:**
 
-- Manual e2e, research, and every AI-agent job also use isolated GitHub-hosted runners and may restore the same scoped BuildKit layers.
+- Manual e2e, research, and AI-agent jobs use isolated ARC Pods and may restore the same scoped BuildKit layers.
 - The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v2` scope.
 - Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
 - The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.

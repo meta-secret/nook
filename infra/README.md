@@ -113,11 +113,10 @@ never enter image layers or cache checksums.
 `preflight`, `rust:ci`, and `arc:runtime` Remote selections use
 `nook-k0s` through `NOOK_RUNS_ON`. Trusted Hive Rust uses `nook-k0s-hive`
 through `NOOK_HIVE_RUNS_ON`. The browser image is built and pushed by
-`nook-k0s`; `web:e2e` then runs that exact image on `nook-k0s-container`.
-Unsupported tasks, forks, and Dependabot retain hosted routing.
+`nook-k0s`; browser tasks then run that exact image on `nook-k0s-container`.
+Forks and Dependabot retain hosted routing.
 
-`task infra:arc:activate` configures both ARC routes.
-`task infra:arc:fallback` restores both routes to `ubuntu-latest`.
+`task infra:arc:activate` configures the ARC routes.
 
 ARC Buildx uses the remote driver against
 `tcp://nook-buildkit.arc-runners.svc.cluster.local:1234`. BuildKit's local state
