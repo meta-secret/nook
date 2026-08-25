@@ -341,7 +341,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     ));
 
     let remote = read(".github/workflows/remote.yml");
-    let compiler_jobs = 1;
+    let compiler_jobs = 2;
     assert!(remote.contains("if: inputs.task == 'rust-cache:promote'"));
     assert_eq!(
         remote.matches("NOOK_SCCACHE_REMOTE_ACCESS_KEY").count(),

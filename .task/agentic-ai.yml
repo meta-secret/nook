@@ -4,19 +4,6 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   CI_AGENT_DIR: agentic-ai/ci-agent
-  CI_AGENT_IMAGE:
-    sh: >-
-      if [ -n "${CI_AGENT_IMAGE:-}" ]; then
-        printf '%s\n' "$CI_AGENT_IMAGE";
-      else
-        repo_root="$(git rev-parse --show-toplevel)";
-        worktree_id="$(printf '%s' "$repo_root" | cksum | awk '{print $1}')";
-        printf 'nook-ci-agent:local-%s\n' "$worktree_id";
-      fi
-  # Host Docker socket (sibling containers via sock — not DinD). Override on unusual setups.
-  DOCKER_SOCK: '{{default "/var/run/docker.sock" .DOCKER_SOCK}}'
-  DOCKER: '{{default "docker" .DOCKER}}'
-  DOCKER_NOFILE_LIMIT: '{{default "1048576" .DOCKER_NOFILE_LIMIT}}'
 
 tasks:
   loom:install:
@@ -378,7 +365,7 @@ tasks:
       - bash "{{.REPO_ROOT}}/.github/scripts/ci-agent-plan.sh"
 
   ci-agent:prepare:
-    desc: Install and build ci-agent on the host (Node 22.13+). Prefer Docker tasks for CI.
+    desc: Install and build ci-agent on the provisioned host (Node 22.13+).
     cmds:
       - >-
         node -e "const [maj,min]=process.versions.node.split('.').map(Number);
@@ -419,90 +406,22 @@ tasks:
       - task: hive:console:e2e:prepare
       - task: hive:console:e2e
 
-  ci-agent:docker:build:
-    desc: Build the worktree-scoped nook-ci-agent image (Node + Docker CLI + task; no daemon).
-    sources:
-      - agentic-ai/ci-agent/Dockerfile
-      - agentic-ai/ci-agent/.dockerignore
-      - agentic-ai/ci-agent/package.json
-      - agentic-ai/ci-agent/package-lock.json
-      - agentic-ai/ci-agent/tsconfig.json
-      - agentic-ai/ci-agent/src/**/*
-    cmds:
-      - >-
-        {{.DOCKER}} build
-        --platform linux/amd64
-        -t {{.CI_AGENT_IMAGE}}
-        -f {{.CI_AGENT_DIR}}/Dockerfile
-        {{.CI_AGENT_DIR}}
-
-  ci-agent:docker:run:
-    desc: Run a ci-agent command in Docker with repo bind-mount and docker.sock.
+  ci-agent:host:run:
+    internal: true
+    desc: Run a ci-agent command directly in the provisioned checkout.
     deps:
-      - ci-agent:docker:build
+      - ci-agent:prepare
     vars:
-      REPO_ROOT:
-        sh: 'echo "${REPO_ROOT:-$(git rev-parse --show-toplevel)}"'
       CI_AGENT_CMD: '{{.CI_AGENT_CMD}}'
     cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        repo_root="{{.REPO_ROOT}}";
-        if [ ! -e "$repo_root/.git" ]; then
-          echo "ci-agent:docker:run: missing $repo_root/.git — refuse to start agent without a checkout" >&2;
-          ls -la "$repo_root" >&2 || true;
-          exit 1;
-        fi;
-        mounts=(-v "$repo_root:$repo_root");
-        if [ -n "${RUNNER_WORKSPACE:-}" ]; then mounts+=(-v "$RUNNER_WORKSPACE:$RUNNER_WORKSPACE"); fi;
-        if [ -n "${RUNNER_TEMP:-}" ]; then mounts+=(-v "$RUNNER_TEMP:$RUNNER_TEMP"); fi;
-        {{.DOCKER}} run --rm
-        --init
-        --platform linux/amd64
-        --ulimit nofile={{.DOCKER_NOFILE_LIMIT}}:{{.DOCKER_NOFILE_LIMIT}}
-        "${mounts[@]}"
-        -w "$repo_root"
-        -v {{.DOCKER_SOCK}}:/var/run/docker.sock
-        -e REPO_ROOT="$repo_root"
-        -e CURSOR_API_KEY
-        -e CURSOR_AGENT_MODEL
-        -e NOOK_GITHUB_PAT
-        -e GITHUB_TOKEN
-        -e GH_TOKEN
-        -e GITHUB_REPOSITORY
-        -e GITHUB_RUN_ID
-        -e FIX_BRANCH
-        -e AGENT_BRANCH
-        -e CI_AGENT_PROMPT_FILE
-        -e CI_FIX_LABEL
-        -e CI_AGENT_TIMEOUT_MS
-        -e CI_AGENT_HEARTBEAT_MS
-        -e CI_AGENT_LOG_LEVEL
-        -e AGENT_PROMPT
-        -e AGENT_PR_TITLE
-        -e AGENT_PR_BODY
-        -e AGENT_COMMIT_MESSAGE
-        -e PR_NUMBER
-        -e VITE_BASE
-        -e VITE_VAULT_SYNC_INTERVAL_MS
-        -e WASM_BUILD_MODE
-        -e NOOK_GITHUB_E2E_REPO
-        -e NOOK_GITHUB_POLL_MS
-        -e NOOK_GITHUB_SYNC_TIMEOUT_MS
-        -e NOOK_GITHUB_CONNECT_TIMEOUT_MS
-        -e DOCKER={{.DOCKER}}
-        -e DOCKER_IMAGE
-        -e NOOK_ENV
-        -e CI=1
-        {{.CI_AGENT_IMAGE}}
-        {{.CI_AGENT_CMD}}'
+      - node '{{.CI_AGENT_DIR}}/dist/main/main.js' '{{.CI_AGENT_CMD}}'
 
   ci-agent:run:
-    desc: Run Cursor SDK agent only (in Docker; host docker.sock).
+    desc: Run Cursor SDK agent directly in the provisioned checkout.
     deps:
       - setup
     cmds:
-      - task: ci-agent:docker:run
+      - task: ci-agent:host:run
         vars:
           CI_AGENT_CMD: agent
 
@@ -511,7 +430,7 @@ tasks:
     deps:
       - setup
     cmds:
-      - task: ci-agent:docker:run
+      - task: ci-agent:host:run
         vars:
           CI_AGENT_CMD: fix
 
@@ -520,21 +439,39 @@ tasks:
     deps:
       - setup
     cmds:
-      - task: ci-agent:docker:run
+      - task: ci-agent:host:run
         vars:
           CI_AGENT_CMD: implement
+
+  pr:ci-agent:audit:
+    internal: true
+    requires:
+      vars: [PR, CI_AGENT_CMD]
+    vars:
+      PR_GH_TOKEN:
+        sh: >-
+          bash -c 'printf "%s" "${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"'
+      PR_GITHUB_REPOSITORY:
+        sh: >-
+          bash -c 'printf "%s" "${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"'
+    env:
+      GH_TOKEN: '{{.PR_GH_TOKEN}}'
+      GITHUB_REPOSITORY: '{{.PR_GITHUB_REPOSITORY}}'
+      PR_NUMBER: '{{.PR}}'
+    cmds:
+      - task: ci-agent:host:run
+        vars:
+          CI_AGENT_CMD: '{{.CI_AGENT_CMD}}'
 
   pr:preflight:
     desc: Print a machine-readable PR audit before implementation or final validation (PR=<number>).
     requires:
       vars: [PR]
     cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:docker:run CI_AGENT_CMD=pr-preflight'
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-preflight
 
   pr:ready:
     desc: Read-only assertion that the exact PR head is current, deployed, repository-green, and has no pending feedback (PR=<number>); never merges or waits for reviewers.
@@ -542,24 +479,20 @@ tasks:
       vars: [PR]
     cmds:
       - task loom:cortex-session-clean
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:docker:run CI_AGENT_CMD=pr-ready'
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-ready
 
   pr:review:
     desc: Request exact-head Codex review, or Cursor Bugbot when Codex is unavailable (PR=<number>); never waits and is not required for readiness.
     requires:
       vars: [PR]
     cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:docker:run CI_AGENT_CMD=pr-review'
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-review
 
   pr:review-local:
     desc: Run an advisory local Codex review against origin/main; unavailable Codex access skips without blocking delivery.

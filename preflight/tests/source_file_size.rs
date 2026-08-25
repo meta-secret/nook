@@ -103,8 +103,9 @@ fn source_architecture_gate_runs_for_every_pull_request_tree() -> anyhow::Result
         "repository policy must not skip source architecture for authored PR trees"
     );
     assert!(
-        workflow.contains("if: github.event_name == 'pull_request'\n        run: task preflight:source-architecture"),
-        "repository policy must run source architecture for every PR event"
+        workflow.contains("github.event.pull_request.head.repo.full_name != github.repository")
+            && workflow.contains("run: task preflight:source-architecture"),
+        "repository policy must run native source architecture for untrusted PR events"
     );
     assert_hosted_preflight_rust_cache(&workflow, "repository-policy")?;
     assert!(

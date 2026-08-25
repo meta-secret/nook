@@ -29,7 +29,7 @@ permissions:
 jobs:
   agent-implement:
     name: Implement and open PR
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 360
     env:
       GITHUB_REPOSITORY: ${{ github.repository }}
@@ -236,6 +236,17 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+
+      - name: Setup Task
+        if: steps.task.outputs.ready == 'true'
+        uses: go-task/setup-task@v2
+        with:
+          version: 3.52.0
+
+      - name: Expose Actions Node.js runtime
+        if: steps.task.outputs.ready == 'true'
+        uses: ./.github/actions/nook-node-setup
+
       - name: Build split Rust/WASM and web images
         if: steps.task.outputs.ready == 'true'
         run: task setup WASM_BUILD_MODE=prod

@@ -220,7 +220,10 @@ runs:
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
         # Use the same worktree-content fingerprint as local sealed formatting.
         # Bake cache wiring and source files do not rotate this dependency scope.
-        rust_deps_fingerprint="$(bash .github/scripts/rust-deps-cache-fingerprint.sh)"
+        rust_deps_fingerprint="$(
+          NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
+            bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
+        )"
         if [[ ! "$rust_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
           echo "Could not fingerprint the hosted Rust dependency graph" >&2
           exit 1
@@ -375,5 +378,5 @@ runs:
           exit 0
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
-        timeout 15s "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
+        timeout 15s "$node_bin" "${{ github.action_path }}/../../scripts/cache-telemetry.cjs" start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"
