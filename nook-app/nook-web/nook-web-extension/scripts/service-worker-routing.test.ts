@@ -223,7 +223,11 @@ describe('service worker routing', () => {
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
-    const sendResponse = mock(() => {})
+    let completeResponse: () => void = () => {}
+    const responseDelivered = new Promise<void>((resolve) => {
+      completeResponse = resolve
+    })
+    const sendResponse = mock(() => completeResponse())
     const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies,
       message: { type: 'test-session-expiry' },
@@ -236,8 +240,7 @@ describe('service worker routing', () => {
 
     expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
-    await flushResponses()
-    await flushResponses()
+    await responseDelivered
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
     expect(clearPendingAccountPickers).toHaveBeenCalledTimes(2)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)

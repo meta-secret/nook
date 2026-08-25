@@ -250,6 +250,19 @@ export class WidgetState {
   }
 }
 
+type InvalidateAuthenticationActionContextArgs = {
+  actionState: AuthenticationActionState
+  widget: WidgetState
+}
+
+export function invalidateAuthenticationActionContext({
+  actionState,
+  widget,
+}: InvalidateAuthenticationActionContextArgs): void {
+  actionState.invalidate()
+  widget.busy = false
+}
+
 class SaveOfferState {
   private offerState: SaveOfferDisplay = { kind: SaveOfferDisplayKind.Hidden }
   private watchState: SavePageWatch = { kind: SavePageWatchKind.Idle }

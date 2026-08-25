@@ -29,6 +29,7 @@ import {
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
   authenticationActionState,
+  invalidateAuthenticationActionContext,
   widgetState,
 } from './state'
 import {
@@ -56,6 +57,15 @@ export function renderEnrollmentWidget({
   snapshot,
   vaultConnection,
 }: RenderEnrollmentWidgetArgs): void {
+  const actionContextArgs: Parameters<
+    typeof invalidateAuthenticationActionContext
+  >[0] = {
+    actionState: authenticationActionState,
+    widget: widgetState,
+  }
+  invalidateAuthenticationActionContext(actionContextArgs)
+  cancelPendingAuthenticatorPickerRequest()
+  cancelPendingLoginPickerRequest()
   if (widgetState.dismissed) {
     removeWidget()
     return

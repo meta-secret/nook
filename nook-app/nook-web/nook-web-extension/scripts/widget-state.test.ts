@@ -3,6 +3,7 @@ import {
   AuthenticationActionState,
   ScanState,
   WidgetState,
+  invalidateAuthenticationActionContext,
 } from '../src/content/autofill/state'
 
 describe('authentication scan scheduling', () => {
@@ -64,6 +65,21 @@ describe('authentication DOM action scheduling', () => {
 
     expect(state.isCurrent(first)).toBe(false)
     expect(state.isCurrent(second)).toBe(true)
+  })
+
+  test('invalidates a pending direct action before enrollment presentation', () => {
+    const actionState = new AuthenticationActionState()
+    const widget = new WidgetState()
+    widget.busy = true
+    const generation = actionState.begin()
+    const actionContextArgs: Parameters<
+      typeof invalidateAuthenticationActionContext
+    >[0] = { actionState, widget }
+
+    invalidateAuthenticationActionContext(actionContextArgs)
+
+    expect(actionState.isCurrent(generation)).toBe(false)
+    expect(widget.busy).toBe(false)
   })
 })
 
