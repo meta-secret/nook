@@ -16,6 +16,7 @@ extension_files=()
 research_files=()
 hive_console_files=()
 loom_files=()
+executable_skill_files=()
 for path in "${changed_files[@]}"; do
   case "$path" in
     nook-app/nook-web/nook-web-app/*)
@@ -35,6 +36,9 @@ for path in "${changed_files[@]}"; do
       ;;
     agentic-ai/loom/*)
       loom_files+=("${path#agentic-ai/loom/}")
+      ;;
+    .agents/skills/*)
+      executable_skill_files+=("${path#.agents/skills/}")
       ;;
   esac
 done
@@ -77,3 +81,7 @@ format_changed_files \
   "$default_config" \
   "$repo_root/agentic-ai/loom" \
   "${loom_files[@]}"
+format_changed_files \
+  "$default_config" \
+  "$repo_root/.agents/skills" \
+  "${executable_skill_files[@]}"

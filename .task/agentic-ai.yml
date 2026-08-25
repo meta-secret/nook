@@ -13,11 +13,9 @@ tasks:
       - bun install --frozen-lockfile
 
   skills:format:
-    desc: Format executable skill TypeScript capability packages.
-    dir: .agents/skills
-    deps: [skills:install]
+    desc: Format executable skill files through the shared pinned host formatter.
     cmds:
-      - bun run format
+      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
 
   skills:verify:
     desc: Format-check, lint, typecheck, and test executable skill capability packages.
@@ -149,7 +147,6 @@ tasks:
     vars:
       CONFIG: '{{default "" .CONFIG}}'
     cmds:
-      - task: skills:format
       - |
         set -euo pipefail
         if [ -n "{{.CONFIG}}" ]; then

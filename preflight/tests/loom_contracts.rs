@@ -15,6 +15,19 @@ fn read(root: &Path, path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
+fn task_body<'a>(taskfile: &'a str, task: &str, next_task: &str) -> &'a str {
+    let start_marker = format!("  {task}:\n");
+    let end_marker = format!("  {next_task}:\n");
+    let start = taskfile
+        .find(&start_marker)
+        .unwrap_or_else(|| panic!("missing task {task}"));
+    let body = &taskfile[start..];
+    let end = body
+        .find(&end_marker)
+        .unwrap_or_else(|| panic!("missing following task {next_task}"));
+    &body[..end]
+}
+
 #[test]
 fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let root = repository_root();
@@ -99,6 +112,28 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             "Loom Taskfile wiring must retain `{required}`"
         );
     }
+
+    let skills_format = task_body(&taskfile, "skills:format", "skills:verify");
+    assert!(
+        skills_format.contains(".github/scripts/format-host-apply.sh")
+            && !skills_format.contains("skills:install")
+            && !skills_format.contains("bun install"),
+        "skills:format must use the shared pinned formatter without a package install"
+    );
+    let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
+    assert!(
+        pre_push.contains("deps: [loom:install]")
+            && pre_push.contains("task loom:default FAMILY=prePush")
+            && !pre_push.contains("skills:format"),
+        "loom:pre-push must retain Loom setup while its shared formatter avoids a separate skills install"
+    );
+
+    let skills_manifest = read(&root, ".agents/skills/package.json");
+    assert_eq!(
+        skills_manifest.matches("eslint.config.js").count(),
+        2,
+        "executable-skill format and format:check must both own eslint.config.js"
+    );
 }
 
 #[test]

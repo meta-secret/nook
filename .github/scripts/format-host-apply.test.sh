@@ -51,5 +51,12 @@ for manifest in \
 done
 printf '%s\n' "$formatter" | grep -Fq 'prettier-plugin-svelte' \
   || { echo 'format-host-apply test: missing Svelte formatter' >&2; exit 1; }
+for required in \
+  '.agents/skills/*' \
+  'executable_skill_files+=' \
+  '"$repo_root/.agents/skills"'; do
+  printf '%s\n' "$formatter" | grep -Fq "$required" \
+    || { echo "format-host-apply test: missing executable-skill formatter contract: $required" >&2; exit 1; }
+done
 
 echo 'format-host-apply test: ok'

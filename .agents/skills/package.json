@@ -7,8 +7,8 @@
   "scripts": {
     "check": "tsc --noEmit",
     "lint": "eslint .",
-    "format": "prettier --no-error-on-unmatched-pattern --write \"*/src/**/*.ts\" \"*/tests/**/*.ts\" \"*/executable-skill.json\" \"*.{ts,json,md}\" .prettierrc",
-    "format:check": "prettier --no-error-on-unmatched-pattern --check \"*/src/**/*.ts\" \"*/tests/**/*.ts\" \"*/executable-skill.json\" \"*.{ts,json,md}\" .prettierrc",
+    "format": "prettier --no-error-on-unmatched-pattern --write \"*/src/**/*.ts\" \"*/tests/**/*.ts\" \"*/executable-skill.json\" \"*.{ts,json,md}\" eslint.config.js .prettierrc",
+    "format:check": "prettier --no-error-on-unmatched-pattern --check \"*/src/**/*.ts\" \"*/tests/**/*.ts\" \"*/executable-skill.json\" \"*.{ts,json,md}\" eslint.config.js .prettierrc",
     "test": "bun test */tests",
     "verify": "bun run format:check && bun run lint && bun run check && bun test */tests"
   },
