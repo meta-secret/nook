@@ -138,11 +138,28 @@ export class ScanState {
     this.followUpRequested = true
     return true
   }
+  invalidateCurrentResult(): void {
+    this.sequence += 1
+  }
   finishScan(): boolean {
     this.currentActivity = ScanActivityKind.Idle
     const shouldRunFollowUp = this.followUpRequested
     this.followUpRequested = false
     return shouldRunFollowUp
+  }
+}
+
+export class AuthenticationActionState {
+  private generation = 0
+  begin(): number {
+    this.generation += 1
+    return this.generation
+  }
+  invalidate(): void {
+    this.generation += 1
+  }
+  isCurrent(candidate: number): boolean {
+    return candidate === this.generation
   }
 }
 
@@ -287,6 +304,7 @@ class PickerState {
 }
 
 export const scanState = new ScanState()
+export const authenticationActionState = new AuthenticationActionState()
 export const widgetState = new WidgetState()
 export const saveOfferState = new SaveOfferState()
 export const pickerState = new PickerState()

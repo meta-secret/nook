@@ -23,6 +23,7 @@ const validMessage = {
           authenticatorSetup: 'absent',
           backupCodes: 'absent',
           passkeyControl: 'absent',
+          passkeyVault: 'unavailable',
           matchingPasskeyAccountCount: 0,
         },
       },
@@ -94,6 +95,30 @@ describe('authentication workflow snapshot messages', () => {
         payload: {
           ...validMessage.payload,
           observations: [observationWithoutProgression],
+        },
+      }),
+    ).toBe(false)
+  })
+
+  test('requires explicit passkey vault availability', () => {
+    const observationWithoutAvailability = {
+      ...validMessage.payload.observations[0],
+      authenticator: {
+        ...validMessage.payload.observations[0].authenticator,
+      },
+    }
+    expect(
+      Reflect.deleteProperty(
+        observationWithoutAvailability.authenticator,
+        'passkeyVault',
+      ),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [observationWithoutAvailability],
         },
       }),
     ).toBe(false)

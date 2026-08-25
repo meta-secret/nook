@@ -47,12 +47,12 @@ pub use authentication_workflow::{
     AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
     AuthenticationPageObservations, AuthenticationPageProgression,
     AuthenticationPasskeyControlObservation, AuthenticationPasskeyEvidence,
-    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
-    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
-    AuthenticationWorkflowStage, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, authentication_page_observations_are_valid,
-    classify_authentication_workflow,
+    AuthenticationPasskeyVaultAvailability, AuthenticationPilotPresentationCapability,
+    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowStage,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    authentication_page_observations_are_valid, classify_authentication_workflow,
 };
 pub use authentication_workflow_response::{
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,

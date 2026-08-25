@@ -20,7 +20,9 @@ import {
 import {
   AuthenticatorPickerKind,
   LoginPickerKind,
+  authenticationActionState,
   pickerState,
+  scanState,
   widgetState,
 } from './state'
 import { removeWidget, translatedMessage } from './workflow-ui'
@@ -40,6 +42,9 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     'type' in message &&
     message.type === ExtensionRuntimeRequestType.ClearAuthenticationSurface
   ) {
+    scanState.invalidateCurrentResult()
+    authenticationActionState.invalidate()
+    widgetState.busy = false
     removeScannedWidget()
     const response: Parameters<typeof sendResponse>[0] = { ok: true }
     sendResponse(response)
@@ -82,6 +87,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = { ok: true }
     sendResponse(nookTypedArgs0_2)
     widgetState.busy = true
+    const actionGeneration = authenticationActionState.begin()
     pending.continueButton.disabled = true
     const nookTypedArgs0_1: Parameters<typeof fillAndSubmitAccount>[0] = {
       account: message.payload.account,
@@ -90,8 +96,10 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       title: pending.title,
       description: pending.description,
       continueButton: pending.continueButton,
+      actionGeneration,
     }
     void fillAndSubmitAccount(nookTypedArgs0_1).finally(() => {
+      if (!authenticationActionState.isCurrent(actionGeneration)) return
       widgetState.busy = false
       if (
         pending.continueButton.isConnected &&
@@ -143,6 +151,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
   const nookTypedArgs0_4: Parameters<typeof sendResponse>[0] = { ok: true }
   sendResponse(nookTypedArgs0_4)
   widgetState.busy = true
+  const actionGeneration = authenticationActionState.begin()
   pending.continueButton.disabled = true
   const nookTypedArgs0_3: Parameters<typeof fillAuthenticatorCode>[0] = {
     account: message.payload.account,
@@ -151,8 +160,10 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     title: pending.title,
     description: pending.description,
     continueButton: pending.continueButton,
+    actionGeneration,
   }
   void fillAuthenticatorCode(nookTypedArgs0_3).finally(() => {
+    if (!authenticationActionState.isCurrent(actionGeneration)) return
     widgetState.busy = false
     if (pending.continueButton.isConnected && !pending.continueButton.hidden) {
       pending.continueButton.disabled = false

@@ -101,7 +101,9 @@ import { handlePairingStateQuery } from './service-worker/pairing-state-query'
 import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   cancelWebsitePasskey,
-  matchingPasskeyAccountCountForOriginSafe,
+  MatchingPasskeyAvailabilityKind,
+  type MatchingPasskeyAvailability,
+  matchingPasskeyAvailabilityForOriginSafe,
   performWebsitePasskey,
   websitePasskeyOptions,
 } from './service-worker/passkey-operations'
@@ -336,23 +338,33 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     const needsPasskeyLookup = message.payload.observations.some(
       (observation) => observation.authenticator.passkeyControl === 'present',
     )
+    const noPasskeyLookup: MatchingPasskeyAvailability = {
+      kind: MatchingPasskeyAvailabilityKind.Unavailable,
+    }
     const passkeyLookup = needsPasskeyLookup
-      ? matchingPasskeyAccountCountForOriginSafe(message.payload.origin)
-      : Promise.resolve(0)
+      ? matchingPasskeyAvailabilityForOriginSafe(message.payload.origin)
+      : Promise.resolve(noPasskeyLookup)
     void passkeyLookup
-      .then(async (matchingPasskeyAccountCount) => {
-        const observations = message.payload.observations.map(
-          (observation) => ({
+      .then(async (passkeyAvailability) => {
+        const observations = message.payload.observations.map((observation) => {
+          const passkeyControlPresent =
+            observation.authenticator.passkeyControl === 'present'
+          const passkeyVaultAvailable =
+            passkeyControlPresent &&
+            passkeyAvailability.kind === MatchingPasskeyAvailabilityKind.Ready
+          return {
             ...observation,
             authenticator: {
               ...observation.authenticator,
-              matchingPasskeyAccountCount:
-                observation.authenticator.passkeyControl === 'present'
-                  ? matchingPasskeyAccountCount
-                  : 0,
+              passkeyVault: passkeyVaultAvailable
+                ? ('available' as const)
+                : ('unavailable' as const),
+              matchingPasskeyAccountCount: passkeyVaultAvailable
+                ? passkeyAvailability.accountCount
+                : 0,
             },
-          }),
-        )
+          }
+        })
         const workflowInput: Parameters<
           typeof authenticationWorkflowSnapshot
         >[0] = { observations }

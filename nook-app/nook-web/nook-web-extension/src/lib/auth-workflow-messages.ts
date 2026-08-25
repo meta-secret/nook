@@ -84,6 +84,7 @@ export function isAuthenticationWorkflowSnapshotMessage(
       typeof observation.authenticator.authenticatorSetup === 'string' &&
       typeof observation.authenticator.backupCodes === 'string' &&
       typeof observation.authenticator.passkeyControl === 'string' &&
+      typeof observation.authenticator.passkeyVault === 'string' &&
       typeof observation.authenticator.matchingPasskeyAccountCount ===
         'number' &&
       Number.isInteger(observation.authenticator.matchingPasskeyAccountCount) &&

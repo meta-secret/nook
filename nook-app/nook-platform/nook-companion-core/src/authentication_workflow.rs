@@ -15,6 +15,7 @@ pub use observation_facts::{
     AuthenticationBackupCodesObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPasskeyControlObservation,
+    AuthenticationPasskeyVaultAvailability,
 };
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,

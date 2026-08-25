@@ -39,6 +39,7 @@ import {
   WidgetHostKind,
   WidgetWorkflowKeyKind,
   WidgetWorkflowRootKind,
+  authenticationActionState,
   saveOfferState,
   scanState,
   widgetState,
@@ -239,6 +240,8 @@ function handleAuthenticationMutations(
     widgetState.host.kind === WidgetHostKind.Attached &&
     pageMutations.some(mutationTouchesRenderedWorkflow)
   ) {
+    authenticationActionState.invalidate()
+    widgetState.busy = false
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
     widgetState.host.element.inert = true

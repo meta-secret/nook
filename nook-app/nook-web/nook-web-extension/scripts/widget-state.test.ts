@@ -1,5 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { ScanState, WidgetState } from '../src/content/autofill/state'
+import {
+  AuthenticationActionState,
+  ScanState,
+  WidgetState,
+} from '../src/content/autofill/state'
 
 describe('authentication scan scheduling', () => {
   test('keeps the first pending timer under continuous mutations', () => {
@@ -31,6 +35,35 @@ describe('authentication scan scheduling', () => {
 
     expect(state.beginScan()).toBe(true)
     expect(state.finishScan()).toBe(false)
+  })
+
+  test('invalidates a running scan when session-owned UI is cleared', () => {
+    const state = new ScanState()
+    const sequence = state.sequence
+
+    state.invalidateCurrentResult()
+
+    expect(state.sequence).toBe(sequence + 1)
+  })
+})
+
+describe('authentication DOM action scheduling', () => {
+  test('rejects an action result after authentication context changes', () => {
+    const state = new AuthenticationActionState()
+    const generation = state.begin()
+
+    expect(state.isCurrent(generation)).toBe(true)
+    state.invalidate()
+    expect(state.isCurrent(generation)).toBe(false)
+  })
+
+  test('allows only the newest direct authentication action', () => {
+    const state = new AuthenticationActionState()
+    const first = state.begin()
+    const second = state.begin()
+
+    expect(state.isCurrent(first)).toBe(false)
+    expect(state.isCurrent(second)).toBe(true)
   })
 })
 

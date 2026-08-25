@@ -33,6 +33,7 @@ export function authenticationPageObservation({
       authenticatorSetup: authenticatorSetupPresent ? 'present' : 'absent',
       backupCodes: backupCodesPresent ? 'present' : 'absent',
       passkeyControl: summary.passkeyControlPresent ? 'present' : 'absent',
+      passkeyVault: 'unavailable',
       matchingPasskeyAccountCount: 0,
     },
   }

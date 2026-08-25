@@ -56,6 +56,15 @@ pub enum AuthenticationPasskeyControlObservation {
     Present,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPasskeyVaultAvailability {
+    #[default]
+    Unavailable,
+    Available,
+}
+
 /// Raw, non-secret authenticator and passkey facts for one authentication scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -64,6 +73,7 @@ pub struct AuthenticationAuthenticatorObservationFacts {
     pub authenticator_setup: AuthenticationAuthenticatorSetupObservation,
     pub backup_codes: AuthenticationBackupCodesObservation,
     pub passkey_control: AuthenticationPasskeyControlObservation,
+    pub passkey_vault: AuthenticationPasskeyVaultAvailability,
     pub matching_passkey_account_count: u32,
 }
 
@@ -90,6 +100,12 @@ impl AuthenticationAuthenticatorObservationFacts {
     }
 
     const fn passkey_evidence(self) -> AuthenticationPasskeyEvidence {
+        if matches!(
+            self.passkey_vault,
+            AuthenticationPasskeyVaultAvailability::Unavailable
+        ) {
+            return AuthenticationPasskeyEvidence::Absent;
+        }
         match (self.passkey_control, self.matching_passkey_account_count) {
             (AuthenticationPasskeyControlObservation::Present, account_count)
                 if account_count > 0 =>
@@ -169,6 +185,7 @@ impl AuthenticationPageObservationFactsBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AuthenticationWorkflowAction;
 
     #[test]
     fn rejects_semantic_evidence_outside_rust_vocabulary() {
@@ -189,6 +206,7 @@ mod tests {
                 "authenticatorSetup": "absent",
                 "backupCodes": "absent",
                 "passkeyControl": "absent",
+                "passkeyVault": "unavailable",
                 "matchingPasskeyAccountCount": 0
             }
         });
@@ -209,6 +227,7 @@ mod tests {
                 authenticator_setup: AuthenticationAuthenticatorSetupObservation::Present,
                 backup_codes: AuthenticationBackupCodesObservation::Present,
                 passkey_control: AuthenticationPasskeyControlObservation::Present,
+                passkey_vault: AuthenticationPasskeyVaultAvailability::Available,
                 matching_passkey_account_count: 2,
             },
             fields: AuthenticationFieldObservationFacts::default(),
@@ -243,6 +262,7 @@ mod tests {
             AuthenticationPageObservationFacts {
                 authenticator: AuthenticationAuthenticatorObservationFacts {
                     passkey_control,
+                    passkey_vault: AuthenticationPasskeyVaultAvailability::Available,
                     matching_passkey_account_count,
                     ..Default::default()
                 },
@@ -268,5 +288,35 @@ mod tests {
             passkey(AuthenticationPasskeyControlObservation::Present, 3),
             AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 3 }
         );
+    }
+
+    #[test]
+    fn unavailable_passkey_vault_suppresses_page_control_proposals() -> anyhow::Result<()> {
+        let facts = AuthenticationPageObservationFacts {
+            authenticator: AuthenticationAuthenticatorObservationFacts {
+                passkey_control: AuthenticationPasskeyControlObservation::Present,
+                passkey_vault: AuthenticationPasskeyVaultAvailability::Unavailable,
+                matching_passkey_account_count: 0,
+                ..Default::default()
+            },
+            fields: AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let observation = facts.into_observation();
+
+        assert_eq!(observation.passkey, AuthenticationPasskeyEvidence::Absent);
+        let snapshot = AuthenticationPageObservationFactsBatch {
+            observations: vec![facts],
+        }
+        .classify()
+        .snapshot()?;
+        assert!(!matches!(
+            snapshot.action,
+            AuthenticationWorkflowAction::UsePasskey | AuthenticationWorkflowAction::CreatePasskey
+        ));
+        Ok(())
     }
 }

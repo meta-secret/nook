@@ -21,7 +21,12 @@ import {
   sendRuntimeMessageWithoutResponse,
   setStatus,
 } from './login-passkey-actions'
-import { AuthenticatorPickerKind, pickerState, widgetState } from './state'
+import {
+  AuthenticatorPickerKind,
+  authenticationActionState,
+  pickerState,
+  widgetState,
+} from './state'
 import { setFlightProgress, translatedMessage } from './workflow-ui'
 
 type FillAuthenticatorCodeArgs = {
@@ -31,6 +36,7 @@ type FillAuthenticatorCodeArgs = {
   title: HTMLHeadingElement
   description: HTMLParagraphElement
   continueButton: HTMLButtonElement
+  actionGeneration: number
 }
 
 export async function fillAuthenticatorCode({
@@ -40,6 +46,7 @@ export async function fillAuthenticatorCode({
   title,
   description,
   continueButton,
+  actionGeneration,
 }: FillAuthenticatorCodeArgs): Promise<boolean> {
   const message: Parameters<typeof sendAuthenticatorCodeRuntimeMessage>[0] = {
     type: WebsiteAuthenticatorFillMessageType.NookWebsiteAuthenticatorFill,
@@ -50,6 +57,16 @@ export async function fillAuthenticatorCode({
     },
   }
   const delivery = await sendAuthenticatorCodeRuntimeMessage(message)
+  if (!authenticationActionState.isCurrent(actionGeneration)) {
+    if (
+      delivery.kind !== RuntimeMessageDeliveryKind.Unavailable &&
+      delivery.response.kind === AuthenticatorCodeResponseKind.Ready &&
+      'code' in delivery.response
+    ) {
+      delivery.response.code = ''
+    }
+    return false
+  }
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
       step,
@@ -161,6 +178,7 @@ export async function continueWithAuthenticator({
   ) {
     return
   }
+  const actionGeneration = authenticationActionState.begin()
   widgetState.busy = true
   continueButton.disabled = true
   const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
@@ -187,6 +205,16 @@ export async function continueWithAuthenticator({
       payload: { origin: location.origin },
     }
     const delivery = await sendAuthenticatorPickerOpenRuntimeMessage(message)
+    if (!authenticationActionState.isCurrent(actionGeneration)) {
+      if (
+        delivery.kind !== RuntimeMessageDeliveryKind.Unavailable &&
+        delivery.response.kind === AuthenticatorPickerOpenResponseKind.Ready &&
+        'requestId' in delivery.response
+      ) {
+        cancelAuthenticatorPickerRequest(delivery.response.requestId)
+      }
+      return
+    }
     if (
       delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
       delivery.response.kind === AuthenticatorPickerOpenResponseKind.Rejected
@@ -336,13 +364,15 @@ export async function continueWithAuthenticator({
     }
     setStatus(nookTypedArgs0_20)
   } finally {
-    widgetState.busy = false
-    if (
-      pickerState.authenticator.kind === AuthenticatorPickerKind.Closed &&
-      continueButton.isConnected &&
-      !continueButton.hidden
-    ) {
-      continueButton.disabled = false
+    if (authenticationActionState.isCurrent(actionGeneration)) {
+      widgetState.busy = false
+      if (
+        pickerState.authenticator.kind === AuthenticatorPickerKind.Closed &&
+        continueButton.isConnected &&
+        !continueButton.hidden
+      ) {
+        continueButton.disabled = false
+      }
     }
   }
 }

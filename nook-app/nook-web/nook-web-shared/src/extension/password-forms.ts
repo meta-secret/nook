@@ -481,6 +481,7 @@ function portableAuthenticationPageObservationFacts(
       authenticatorSetup: "absent",
       backupCodes: "absent",
       passkeyControl: summary.passkeyControlPresent ? "present" : "absent",
+      passkeyVault: "available",
       matchingPasskeyAccountCount: 0,
     },
   };
