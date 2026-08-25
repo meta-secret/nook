@@ -361,7 +361,7 @@ Use this workflow for quality, CI, and deployment changes.
     The proof requires these outcomes:
 
     - one rootless BuildKit shard runs on each distinct agent;
-    - a labeled client can reach the BuildKit service before denial is tested;
+    - a labeled client can reach an exact BuildKit shard before denial is tested;
     - after the policy controller sync window, an unlabeled control-plane
       client cannot reach an exact BuildKit shard;
     - the Remote registry identity cannot write a stable Main ref;
@@ -371,9 +371,9 @@ Use this workflow for quality, CI, and deployment changes.
     - concurrent isolated refs remain separate; and
     - each isolated ref restores as CACHED on a different shard.
 
-    The hosted overlay uses cluster-wide Service routing. Exact-shard cache
-    assertions use StatefulSet headless endpoints. Production node-local
-    `internalTrafficPolicy` routing remains a k0s deployment proof.
+    Exact-shard access and cache assertions use StatefulSet headless endpoints.
+    The production node-local Service remains unchanged in the rendered
+    overlay. Its `internalTrafficPolicy` routing remains a k0s deployment proof.
 
     The hosted Remote task installs checksum-pinned k3d and runs this proof
     alone. The controller refuses to replace a pre-existing cluster with the

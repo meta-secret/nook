@@ -91,14 +91,6 @@ patches:
             http = true
             insecure = true
   - target:
-      kind: Service
-      name: nook-buildkit
-      namespace: arc-runners
-    patch: |-
-      - op: replace
-        path: /spec/internalTrafficPolicy
-        value: Cluster
-  - target:
       kind: StatefulSet
       name: nook-buildkit
       namespace: arc-runners

@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
-  BUILDKIT_ADDRESS,
   BUILDKIT_IMAGE,
   BUILDKIT_SHARD_ADDRESSES,
   REGISTRY_HOST,
@@ -285,7 +284,7 @@ function assertCacheStepDidNotExecute(request: {
   }
 }
 
-function serviceAccessJobYaml(request: NetworkPolicyJobRequest): string {
+function shardAccessJobYaml(request: NetworkPolicyJobRequest): string {
   return `apiVersion: batch/v1
 kind: Job
 metadata:
@@ -307,7 +306,7 @@ spec:
         - name: buildctl
           image: ${BUILDKIT_IMAGE}
           command: ["buildctl"]
-          args: ["--addr", "${BUILDKIT_ADDRESS}", "debug", "workers"]
+          args: ["--addr", "${BUILDKIT_SHARD_ADDRESSES[0]}", "debug", "workers"]
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:
@@ -321,11 +320,11 @@ spec:
 `;
 }
 
-export function proveBuildkitServiceAccess(request: NetworkPolicyJobRequest): void {
+export function proveBuildkitShardAccess(request: NetworkPolicyJobRequest): void {
   applyYaml({
     kubeconfigPath: request.kubeconfigPath,
-    label: "start authorized BuildKit service client",
-    yaml: serviceAccessJobYaml(request),
+    label: "start authorized BuildKit shard client",
+    yaml: shardAccessJobYaml(request),
   });
   finishBuildJob({
     kubeconfigPath: request.kubeconfigPath,

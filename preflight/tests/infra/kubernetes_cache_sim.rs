@@ -24,7 +24,6 @@ fn kubernetes_cache_proof_reuses_production_workloads() {
         "name: nook-buildkit-rise-s-2",
         "path: /spec/replicas\n        value: 3",
         "nook-zot.hive-data.svc.cluster.local:5000",
-        "path: /spec/internalTrafficPolicy\n        value: Cluster",
     ] {
         assert!(
             overlay.contains(required),
@@ -96,7 +95,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         "registry-write-denied",
         "cache-proof-execution-marker",
         "cached RUN step executed",
-        "proveBuildkitServiceAccess",
+        "proveBuildkitShardAccess",
         "sleep 10",
         "conditions.includes(\"Failed\")",
     ] {
@@ -117,7 +116,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         );
     }
     for required in [
-        "cache-service-allowed",
+        "cache-shard-allowed",
         "CONTROL_PLANE_NODE",
         "cache-main-local-reuse",
         "cache-main-restart-reuse",
@@ -152,8 +151,8 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         );
     }
     let allowed = proof
-        .find("name: \"cache-service-allowed\"")
-        .expect("authorized BuildKit service proof is missing");
+        .find("name: \"cache-shard-allowed\"")
+        .expect("authorized BuildKit shard proof is missing");
     let denied = proof
         .find("name: \"cache-network-denied\"")
         .expect("denied BuildKit service proof is missing");

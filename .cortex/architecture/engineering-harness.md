@@ -273,11 +273,11 @@ runner is not used.
   NetworkPolicy resources. It does not maintain copied workload manifests.
 - Each simulated node retains one rootless BuildKit shard on node-local
   storage. In-cluster Zot remains the portable cache boundary between shards.
-- The proof first requires an authorized BuildKit Service connection.
+- The proof first requires an authorized exact-shard BuildKit connection.
 - Cache assertions use exact StatefulSet headless endpoints so every local,
   restart, and cold-restore result belongs to a known shard.
-- The hosted overlay uses cluster-wide Service routing because k3d does not
-  reliably reproduce production's node-local `internalTrafficPolicy` path.
+- The production node-local Service remains unchanged in the rendered overlay.
+- Hosted k3d clients do not exercise its `internalTrafficPolicy` path.
 - Proof clients mount no host runtime socket. They receive no Kubernetes
   service-account token and do not run privileged.
 - k3d proves portable Kubernetes workload behavior. It does not claim parity

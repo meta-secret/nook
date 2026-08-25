@@ -5,7 +5,6 @@ import {
   ADMIN_SECRET,
   K3D_BINARY,
   K3D_VERSION,
-  BUILDKIT_ADDRESS,
   BUILDKIT_SHARD_ADDRESSES,
   CONTROL_PLANE_NODE,
   REGISTRY_HOST,
@@ -18,7 +17,7 @@ import {
   type BuildJobResultRequest,
   finishBuildJob,
   podNode,
-  proveBuildkitServiceAccess,
+  proveBuildkitShardAccess,
   proveNetworkPolicy,
   restartBuildkitPod,
   restartZot,
@@ -99,7 +98,7 @@ function proveStableCache(request: {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-stable-write-denied",
     nodeName: request.buildkitNodes[2] ?? "",
-    buildkitAddress: BUILDKIT_ADDRESS,
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[2],
     input: "forbidden-stable-write",
     dockerConfigSecret: REMOTE_SECRET,
     cacheImport: "",
@@ -241,9 +240,9 @@ function runProof(): void {
   if (new Set(buildkitNodes).size !== 3) {
     throw new Error(`BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`);
   }
-  proveBuildkitServiceAccess({
+  proveBuildkitShardAccess({
     kubeconfigPath,
-    name: "cache-service-allowed",
+    name: "cache-shard-allowed",
     nodeName: CONTROL_PLANE_NODE,
   });
   proveNetworkPolicy({
