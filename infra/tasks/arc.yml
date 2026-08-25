@@ -93,6 +93,49 @@ tasks:
         done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
+  arc:build-hosts:quarantine:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        expected_nodes="$(sed '/^$/d' \
+          "$remote_dir/infra/k0s/config/arc-build-nodes" | sort)"
+        actual_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        if test "$actual_nodes" != "$expected_nodes"; then
+          echo "ARC cannot quarantine an incomplete build-node inventory" >&2
+          printf 'Expected nodes:\n%s\nActual nodes:\n%s\n' \
+            "$expected_nodes" "$actual_nodes" >&2
+          exit 1
+        fi
+        quarantine_failed=0
+        while IFS= read -r node; do
+          test -n "$node"
+          if ! kubectl taint node "$node" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null; then
+            echo "Failed to quarantine ARC build node $node" >&2
+            quarantine_failed=1
+          fi
+        done <<< "$actual_nodes"
+        while IFS= read -r node; do
+          test -n "$node"
+          observed_taint="$(kubectl get node "$node" -o \
+            jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].value}:{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}' \
+            2>/dev/null || true)"
+          if test "$observed_taint" != 'preparing:NoSchedule'; then
+            echo "ARC build node $node did not enter quarantine" >&2
+            quarantine_failed=1
+            continue
+          fi
+          echo "ARC build node $node is quarantined for convergence"
+        done <<< "$actual_nodes"
+        test "$quarantine_failed" = 0
+        REMOTE
+
 
   arc:build-host:resolve:
     desc: Resolve and persist every Kubernetes ARC build SSH target.
@@ -285,6 +328,23 @@ tasks:
         legacy_image="$pool_root/pool.btrfs"
         legacy_image_next="$pool_root/pool.btrfs.next"
         legacy_mount_unit="$(systemd-escape --path --suffix=mount "$legacy_pool")"
+        keyring_config=/etc/sysctl.d/91-nook-buildkit-keyring.conf
+        # Rootless shards concentrate processes under host UID 1000. The
+        # Debian default of 200 keys surfaces as a misleading runc EDQUOT once
+        # concurrent BuildKit solves exhaust that per-user kernel quota.
+        keyring_maxkeys=20000
+        keyring_maxbytes=2000000
+        keyring_config_next="$(mktemp)"
+        trap 'rm -f "$keyring_config_next"' EXIT
+        printf '%s\n' \
+          "kernel.keys.maxkeys=$keyring_maxkeys" \
+          "kernel.keys.maxbytes=$keyring_maxbytes" > "$keyring_config_next"
+        sudo -n install -m 0644 "$keyring_config_next" "$keyring_config"
+        rm -f "$keyring_config_next"
+        trap - EXIT
+        sudo -n sysctl -p "$keyring_config" >/dev/null
+        test "$(cat /proc/sys/kernel/keys/maxkeys)" -ge "$keyring_maxkeys"
+        test "$(cat /proc/sys/kernel/keys/maxbytes)" -ge "$keyring_maxbytes"
         sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
@@ -405,6 +465,7 @@ tasks:
       - task: arc:auth:sync
       - task: arc:controller-build:prepare
       - task: arc:build-host:resolve
+      - task: arc:build-hosts:quarantine
       - task: arc:buildkit:storage:prepare
       - task: arc:render:check
       - |
