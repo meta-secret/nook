@@ -433,10 +433,13 @@ fn cache_hit_telemetry_distinguishes_compiler_and_buildkit_reuse() -> anyhow::Re
     }
 
     let pr = read(".github/workflows/pr.yml");
+    let buildkit_jobs = pr
+        .matches("uses: ./.github/actions/nook-docker-setup")
+        .count();
     assert!(
         pr.matches("uses: ./.github/actions/nook-cache-telemetry")
             .count()
-            >= 5,
+            == buildkit_jobs,
         "every Buildx-backed PR job must preserve cache telemetry"
     );
     let main = read(".github/workflows/main.yml");
