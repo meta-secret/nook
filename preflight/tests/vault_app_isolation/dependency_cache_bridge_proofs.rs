@@ -111,9 +111,11 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
         "dirty-safe publishers must inherit only source-free dependency stages"
     );
     assert!(
-        hosted_setup.contains(
-            "rust_deps_fingerprint=\"$(bash .github/scripts/rust-deps-cache-fingerprint.sh)\""
-        ) && hosted_setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint"),
+        hosted_setup.contains("NOOK_RUST_DEPS_FINGERPRINT_ROOT=\"$GITHUB_WORKSPACE\"")
+            && hosted_setup.contains(
+                "bash \"${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh\""
+            )
+            && hosted_setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint"),
         "PR jobs must derive and import the identical formatter dependency fingerprint"
     );
     for marker in [
@@ -312,6 +314,10 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
     let blob_verifier = read(&root, ".github/scripts/verify-registry-cache-blobs.ts");
     let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let product_dockerfile = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
 
     let native = docker_tasks
         .split("docker:ci:cache:publish:native:")
@@ -354,7 +360,7 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     );
     assert!(
         !wasm.contains("verify-wasm-gha-cache.sh"),
-        "ARC WASM publish must leave portable dependency publication to the hosted writer/proof job"
+        "the normal ARC WASM publisher must leave portable dependency publication to the dedicated proof job"
     );
 
     assert!(
@@ -362,23 +368,31 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
             && core_bake.contains("inherits   = [\"builder-wasm-deps-restore\"]")
             && core_bake.contains("target     = \"builder-wasm-deps\"")
             && !core_bake.contains("wasm-deps = \"target:builder-wasm-deps-restore\""),
-        "the hosted writer/proof must preserve the product Dockerfile/context cache-key lineage without a hydration-only stage"
+        "the ARC writer/proof must preserve the product Dockerfile/context cache-key lineage without a hydration-only stage"
     );
     assert!(
-        verifier.contains("docker-container")
-            && verifier.contains("--use")
-            && !verifier.contains("--builder")
-            && verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+        !verifier.contains("docker-container")
+            && !verifier.contains("buildx create")
+            && !verifier.contains("buildx rm")
             && verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
-            && verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && verifier
+                .contains("builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}")
             && verifier.contains("verify-registry-cache-blobs.ts")
             && verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
             && verifier.contains("refs/heads/main")
-            && verifier.contains("nook-sccache-report chef-wasm-release")
-            && verifier.contains("nook-sccache-report chef-wasm-clippy")
-            && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "runtime WASM proof must publish on trusted Main with one fresh hosted builder and require CACHED markers from another"
+            && verifier.contains("repair solve never imports the ref it is replacing"),
+        "runtime WASM proof must publish through ARC BuildKit on trusted Main and verify every Zot blob"
     );
+    for marker in [
+        "nook-sccache-report chef-wasm-release",
+        "nook-sccache-report chef-wasm-clippy",
+        "nook-sccache-report wasm-release-test-dependencies",
+    ] {
+        assert!(
+            product_dockerfile.contains(marker),
+            "portable WASM publication target lost required dependency vertex: {marker}"
+        );
+    }
     assert!(
         !blob_verifier.contains("method: 'HEAD'")
             && !blob_verifier.contains("Range")

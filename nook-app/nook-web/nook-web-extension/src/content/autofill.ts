@@ -53,7 +53,7 @@ import {
   renderWidget,
 } from './autofill/widget-rendering'
 import { clampMountedWidgetPosition } from './autofill/widget-position'
-import { loadPilotVaultConnection } from './autofill/workflow-ui'
+import { loadPilotVaultConnection, remountWidget } from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
   enrollmentCeremonyActive,
@@ -177,6 +177,20 @@ async function performScanAndRender(): Promise<void> {
     return
   }
   const { snapshot } = response
+  if (
+    (snapshot.action === 'enroll-authenticator' && enrollmentHints.qr) ||
+    (snapshot.action === 'save-backup-codes' && enrollmentHints.backupCodes)
+  ) {
+    const vaultConnection = await loadPilotVaultConnection()
+    if (sequence !== scanState.sequence) return
+    const nookTypedArgs0_1: Parameters<typeof renderEnrollmentWidget>[0] = {
+      hints: enrollmentHints,
+      snapshot,
+      vaultConnection,
+    }
+    renderEnrollmentWidget(nookTypedArgs0_1)
+    return
+  }
   const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
     removeScannedWidget()
@@ -184,13 +198,13 @@ async function performScanAndRender(): Promise<void> {
   }
   const vaultConnection = await loadPilotVaultConnection()
   if (sequence !== scanState.sequence) return
-  const nookTypedArgs0_1: Parameters<typeof renderWidget>[0] = {
+  const nookTypedArgs0_2: Parameters<typeof renderWidget>[0] = {
     snapshot,
     workflow: selected,
     vaultConnection,
     loginMatches,
   }
-  renderWidget(nookTypedArgs0_1)
+  renderWidget(nookTypedArgs0_2)
 }
 
 async function scanAndRender(): Promise<void> {
@@ -289,6 +303,13 @@ function mutationTouchesRenderedWorkflow(record: MutationRecord): boolean {
   if (boundary === record.target || boundary.contains(record.target)) {
     return true
   }
+  if (
+    record.type === 'attributes' &&
+    record.target instanceof Element &&
+    record.target.contains(boundary)
+  ) {
+    return true
+  }
   if (touchesOwnedFormAssociation(record.target)) return true
   if (record.type !== 'childList') return false
   return [...record.addedNodes, ...record.removedNodes].some(
@@ -314,7 +335,7 @@ function handleAuthenticationMutations(
     widgetState.busy = false
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
-    widgetState.host.element.inert = true
+    remountWidget()
   }
   scheduleScan()
 }
@@ -329,7 +350,7 @@ function handleViewportChange(): void {
     widgetState.busy = false
     cancelPendingAuthenticatorPickerRequest()
     cancelPendingLoginPickerRequest()
-    widgetState.host.element.inert = true
+    remountWidget()
   }
   scheduleScan()
 }

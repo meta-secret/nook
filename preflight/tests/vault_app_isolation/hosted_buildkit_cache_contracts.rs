@@ -224,11 +224,9 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         "Publish git-scoped native BuildKit cache",
         "Publish git-scoped WASM BuildKit cache",
         "Publish git-scoped web BuildKit cache",
-        "Publish verified browser BuildKit cache",
         "task ci:main:publish-native-cache",
         "task ci:main:publish-wasm-cache",
         "task ci:main:publish-web-cache",
-        "task ci:main:publish-web-e2e-cache",
     ] {
         assert!(
             pr.contains(marker),
@@ -255,14 +253,11 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .context("PR web job must publish its cache")?;
     let ui_demo = section(&pr, "  ui-demo:\n", "\n  preview:\n");
     let ui_demo_verify = ui_demo
-        .find("task ci:pr:ui-demo")
+        .find("task _web:test:ui-demo")
         .context("PR UI demo job must verify")?;
-    let ui_demo_publish = ui_demo
-        .find("task ci:main:publish-web-e2e-cache")
-        .context("PR UI demo job must publish its cache")?;
     let full_e2e = section(&pr, "  full-e2e-shard:\n", "\n  full-e2e:\n");
     let full_e2e_verify = full_e2e
-        .find("task ci:pr:e2e:web:artifacts")
+        .find("task _ci:main:web:e2e-only")
         .context("each PR full-e2e shard must verify its browser half")?;
     assert!(
         rust_verify < rust_publish
@@ -282,17 +277,17 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && pr[..web_publish]
                 .contains("ARC keeps the verified web graph local; Main remains reusable")
             && pr[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_verify..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && ui_demo[..ui_demo_publish]
-                .contains("ARC keeps the verified browser graph local; Main remains reusable")
-            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo[..ui_demo_publish]
-                .contains("!contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')")
-            && full_e2e[full_e2e_verify..].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && ui_demo.contains("runs-on: nook-k0s-container")
+            && ui_demo.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && ui_demo[..ui_demo_verify]
+                .contains("needs.verify.outputs.ui-demo-required == 'true'")
+            && !ui_demo.contains("nook-docker-setup")
+            && !ui_demo.contains("publish-web-e2e-cache")
+            && full_e2e[..full_e2e_verify].contains("runs-on: nook-k0s-container")
+            && full_e2e.contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && full_e2e.contains("NOOK_E2E_SHARD: ${{ matrix.shard }}/2")
             && !full_e2e.contains("task ci:main:publish-web-e2e-cache"),
-        "PR producers must verify read-only, keep ARC graphs local, and retain isolated hosted publication"
+        "PR producers must verify read-only, keep ARC graphs local, and hand exact browser images to container ARC consumers"
     );
     Ok(())
 }
@@ -338,15 +333,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let web_publish = web
         .find("task ci:main:publish-web-cache")
         .context("Main web job must publish its cache")?;
+    let web_browser_image = web
+        .find("- name: Publish exact-source browser job image")
+        .context("Main web producer must publish the exact browser image")?;
     let ui_demo_step = ui_demo
         .find("- name: Headless UI demos")
         .context("Main UI demo job must declare its verification step")?;
-    let ui_demo_verify = ui_demo
-        .find("task ci:main:ui-demo:artifacts")
-        .context("Main UI demo job must verify the browser image")?;
-    let ui_demo_publish = ui_demo
-        .find("task ci:main:publish-web-e2e-cache")
-        .context("Main UI demo job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -357,16 +349,19 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && web_verify < web_publish
+            && web_verify < web_browser_image
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo_step < ui_demo_verify
-            && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_step..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo.contains("needs: [web]")
+            && ui_demo.contains("runs-on: nook-k0s-container")
+            && ui_demo.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && ui_demo[ui_demo_step..].contains("task _web:test:ui-demo")
+            && !ui_demo.contains("nook-docker-setup")
+            && !ui_demo.contains("publish-web-e2e-cache")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
-        "Main producers must verify read-only, serialize native before WASM, and publish from their warm builders only after all lane validation succeeds"
+        "Main producers must verify read-only, publish from warm builders, and hand the exact browser image to container ARC consumers"
     );
     let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     assert!(
@@ -431,25 +426,21 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .expect("wasm publish must still seed rust-base after deps/source");
     assert!(
         wasm_source_idx < wasm_rust_base_idx && !wasm_publish.contains("builder-wasm-deps-publish"),
-        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to hosted BuildKit"
+        "ARC WASM cache publish must stage source then rust-base and leave portable dependency publication to the dedicated proof job"
     );
     let cache_verifier = read(root, ".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
-        cache_verifier.contains("docker-container")
-            && cache_verifier
-                .contains("--driver-opt \"image=${registry_host}/moby/buildkit:buildx-stable-1\"",)
-            && cache_verifier.contains("--use")
-            && !cache_verifier.contains("--builder")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+        !cache_verifier.contains("docker-container")
+            && !cache_verifier.contains("buildx create")
+            && !cache_verifier.contains("buildx rm")
             && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=cacheonly")
-            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-to=$cache_to")
+            && cache_verifier
+                .contains("builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}")
             && cache_verifier.contains("verify-registry-cache-blobs.ts")
             && cache_verifier.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED")
             && cache_verifier.contains("refs/heads/main")
-            && cache_verifier.contains("nook-sccache-report chef-wasm-release")
-            && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
-            && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "trusted Main must publish from one fresh hosted builder and reject the result until another fresh builder hits every dependency vertex"
+            && cache_verifier.contains("repair solve never imports the ref it is replacing"),
+        "trusted Main must publish through ARC BuildKit and reject the result until Zot proves every manifest and blob"
     );
     let base_dockerfile = read(
         root,
@@ -540,7 +531,11 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:pr:rust")
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
-            && main.contains("task ci:main:e2e:web:artifacts")
+            && main.contains("task _ci:main:web:e2e-only")
+            && main.contains("task _extension:test:e2e")
+            && main.contains("task _web:test:ui-demo")
+            && main.matches("runs-on: nook-k0s-container").count() == 3
+            && main.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
             && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
@@ -554,8 +549,8 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     assert!(
         deploy.starts_with(
             "    name: Deploy development\n    needs: [web, web-e2e, wasm-cache-proof]"
-        ) && deploy.contains("\n    runs-on: ubuntu-latest\n"),
-        "the remaining Docker-runtime deployment lane must stay on a fresh hosted runner"
+        ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
+        "the development deployment lane must use the general ARC scale set"
     );
     let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")

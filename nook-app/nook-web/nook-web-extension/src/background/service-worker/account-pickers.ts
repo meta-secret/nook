@@ -68,6 +68,28 @@ const pendingAuthenticatorPickers = new Map<
 >()
 const pendingLoginPickers = new Map<string, PendingLoginPicker>()
 
+export class AccountPickerAuthorizationState {
+  private generation = 0
+
+  snapshot(): number {
+    return this.generation
+  }
+
+  invalidate(): void {
+    this.generation += 1
+  }
+
+  isCurrent(candidate: number): boolean {
+    return candidate === this.generation
+  }
+}
+
+const accountPickerAuthorizationState = new AccountPickerAuthorizationState()
+
+export function accountPickerAuthorizationGeneration(): number {
+  return accountPickerAuthorizationState.snapshot()
+}
+
 export type PersistedAccountPickerCleanupPlan = {
   storageKeys: string[]
   cancellations: Array<
@@ -107,6 +129,7 @@ export function persistedAccountPickerCleanupPlan(
 }
 
 export async function clearPendingAccountPickers(): Promise<void> {
+  accountPickerAuthorizationState.invalidate()
   const stored = await getAllSessionStorage()
   const plan = persistedAccountPickerCleanupPlan(stored)
   const authenticatorRequests = new Map(pendingAuthenticatorPickers)
@@ -194,14 +217,29 @@ function isPendingAuthenticatorPicker(
   )
 }
 
-export async function storeAuthenticatorPicker(
-  request: PendingAuthenticatorPicker,
-): Promise<void> {
+type StoreAuthenticatorPickerRequest = {
+  request: PendingAuthenticatorPicker
+  authorizationGeneration: number
+}
+
+export async function storeAuthenticatorPicker({
+  request,
+  authorizationGeneration,
+}: StoreAuthenticatorPickerRequest): Promise<boolean> {
+  if (!accountPickerAuthorizationState.isCurrent(authorizationGeneration)) {
+    return false
+  }
   pendingAuthenticatorPickers.set(request.requestId, request)
   const nookTypedArgs0_0: Parameters<typeof setSessionStorage>[0] = {
     [authenticatorPickerStorageKey(request.requestId)]: request,
   }
   await setSessionStorage(nookTypedArgs0_0)
+  if (accountPickerAuthorizationState.isCurrent(authorizationGeneration)) {
+    return true
+  }
+  pendingAuthenticatorPickers.delete(request.requestId)
+  await removeSessionStorage(authenticatorPickerStorageKey(request.requestId))
+  return false
 }
 
 export async function removeAuthenticatorPicker(
@@ -572,14 +610,29 @@ function isPendingLoginPicker(value: unknown): value is PendingLoginPicker {
   return isPendingAuthenticatorPicker(value)
 }
 
-export async function storeLoginPicker(
-  request: PendingLoginPicker,
-): Promise<void> {
+type StoreLoginPickerRequest = {
+  request: PendingLoginPicker
+  authorizationGeneration: number
+}
+
+export async function storeLoginPicker({
+  request,
+  authorizationGeneration,
+}: StoreLoginPickerRequest): Promise<boolean> {
+  if (!accountPickerAuthorizationState.isCurrent(authorizationGeneration)) {
+    return false
+  }
   pendingLoginPickers.set(request.requestId, request)
   const nookTypedArgs0_7: Parameters<typeof setSessionStorage>[0] = {
     [loginPickerStorageKey(request.requestId)]: request,
   }
   await setSessionStorage(nookTypedArgs0_7)
+  if (accountPickerAuthorizationState.isCurrent(authorizationGeneration)) {
+    return true
+  }
+  pendingLoginPickers.delete(request.requestId)
+  await removeSessionStorage(loginPickerStorageKey(request.requestId))
+  return false
 }
 
 export async function removeLoginPicker(requestId: string): Promise<void> {

@@ -58,6 +58,8 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "Claim ready Workbench issue",
         "Run task-planning agent",
         "task ci-agent:plan",
+        "uses: ./.github/actions/nook-node-setup",
+        "uses: go-task/setup-task@v2",
         "Validate and publish Workbench task plan",
         "Publish Workbench result",
         "MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}",

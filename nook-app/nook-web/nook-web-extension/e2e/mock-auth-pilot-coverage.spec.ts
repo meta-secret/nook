@@ -36,7 +36,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      const widget = loginPage.locator('body > #nook-auth-widget')
+      const widget = loginPage.locator('html > aside#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
@@ -92,7 +92,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
 
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
-      const widget = loginPage.locator('body > #nook-auth-widget')
+      const widget = loginPage.locator('html > aside#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Fill saved login' }).click()
@@ -112,6 +112,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget.getByText('Ready to sign in')).toBeVisible({
         timeout: 20_000,
       })
+      await expect(widget).not.toHaveAttribute('inert', '')
       await expect(
         widget.getByRole('button', { name: 'Fill saved login' }),
       ).toBeEnabled()
@@ -131,6 +132,39 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget.getByText('Ready to sign in')).toBeVisible({
         timeout: 20_000,
       })
+      await expect(widget).not.toHaveAttribute('inert', '')
+      await expect(
+        widget.getByRole('button', { name: 'Fill saved login' }),
+      ).toBeEnabled()
+      const hiddenAncestorPickerPromise = paired.context.waitForEvent('page')
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
+      const hiddenAncestorPicker = await hiddenAncestorPickerPromise
+      await hiddenAncestorPicker.waitForURL(/intent=login-picker/)
+      await expect(
+        hiddenAncestorPicker.getByText('alice@nook.test'),
+      ).toBeVisible({
+        timeout: 20_000,
+      })
+
+      await loginPage.evaluate(() => {
+        const form = document.querySelector('form')
+        if (!form?.parentElement)
+          throw new Error('mock login form owner missing')
+        form.parentElement.hidden = true
+      })
+
+      await expect.poll(() => hiddenAncestorPicker.isClosed()).toBe(true)
+      await expect(widget).toHaveCount(0, { timeout: 20_000 })
+      await loginPage.evaluate(() => {
+        const form = document.querySelector('form')
+        if (!form?.parentElement)
+          throw new Error('mock login form owner missing')
+        form.parentElement.hidden = false
+      })
+      await expect(widget.getByText('Ready to sign in')).toBeVisible({
+        timeout: 20_000,
+      })
+      await expect(widget).not.toHaveAttribute('inert', '')
       await expect(
         widget.getByRole('button', { name: 'Fill saved login' }),
       ).toBeEnabled()

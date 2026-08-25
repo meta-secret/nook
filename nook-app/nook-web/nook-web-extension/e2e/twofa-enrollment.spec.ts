@@ -395,6 +395,7 @@ test.describe('Browser 2FA enrollment', () => {
         name: 'Add 2FA from this page',
       })
       await expect(enrollmentAction).toBeVisible({ timeout: 15_000 })
+      await expect(widget.locator('.step-label')).toHaveText(/2\/5$/)
       await enrollPage.evaluate(() => {
         window.dispatchEvent(new Event('resize'))
       })
@@ -418,7 +419,7 @@ test.describe('Browser 2FA enrollment', () => {
             })
           },
         )
-        if (tab?.id === undefined) {
+        if (typeof tab?.id !== 'number') {
           throw new Error('Enrollment tab was not available for refresh.')
         }
         await new Promise<void>((resolve, reject) => {
@@ -554,10 +555,23 @@ test.describe('Browser 2FA enrollment', () => {
 
       const backupPage = await paired.context.newPage()
       await backupPage.goto(`${mockAuth.origin}/totp/backup-codes`)
+      await backupPage.evaluate(() => {
+        const form = document.createElement('form')
+        form.innerHTML = `
+          <label>Account <input autocomplete="username" /></label>
+          <label>Password <input autocomplete="current-password" type="password" /></label>
+          <button type="submit">Sign in</button>
+        `
+        document.body.append(form)
+      })
       const widget = backupPage.locator('#nook-auth-widget')
       await expect(
         widget.getByRole('button', { name: 'Save backup codes' }),
       ).toBeVisible({ timeout: 15_000 })
+      await expect(widget.locator('.step-label')).toHaveText(/4\/5$/)
+      await expect(
+        widget.getByRole('button', { name: 'Fill saved login' }),
+      ).toHaveCount(0)
 
       // CTA opens the review UI; the confirm control reuses the same label.
       await widget.getByRole('button', { name: 'Save backup codes' }).click()

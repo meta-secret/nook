@@ -8,6 +8,7 @@ import {
 } from '../../lib/login-fill-messages'
 import {
   AuthenticatorPickerLoadKind,
+  accountPickerAuthorizationGeneration,
   authenticatorAccounts,
   authorizedWebsiteGrant,
   isAuthenticatorPickerSender,
@@ -120,6 +121,7 @@ export async function openWebsiteAuthenticatorPicker({
   message,
   sender,
 }: OpenWebsiteAuthenticatorPickerArgs): Promise<AuthenticatorPickerOpenResponse> {
+  const authorizationGeneration = accountPickerAuthorizationGeneration()
   const nookTypedArgs0_1: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -136,14 +138,23 @@ export async function openWebsiteAuthenticatorPicker({
   }
 
   const requestId = randomNonce()
-  const request: Parameters<typeof storeAuthenticatorPicker>[0] = {
+  const request: Parameters<typeof storeAuthenticatorPicker>[0]['request'] = {
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + AUTHENTICATOR_PICKER_TTL_MS,
   }
-  await storeAuthenticatorPicker(request)
+  const storeRequest: Parameters<typeof storeAuthenticatorPicker>[0] = {
+    request,
+    authorizationGeneration,
+  }
+  if (!(await storeAuthenticatorPicker(storeRequest))) {
+    return {
+      ok: true,
+      status: WebsiteAuthenticatorResponseStatus.Locked,
+    }
+  }
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'authenticator-picker')
   pickerUrl.searchParams.set('request', requestId)

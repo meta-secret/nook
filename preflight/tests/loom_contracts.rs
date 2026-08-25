@@ -111,7 +111,7 @@ fn loom_workflow_audits_every_cortex_change() {
         workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")
             && workflow.contains("git diff --no-renames --name-only HEAD^1 HEAD^2")
             && workflow
-                .matches("if: steps.policy-paths.outputs.loom == 'true'")
+                .matches("steps.policy-paths.outputs.loom == 'true'")
                 .count()
                 == 5,
         "repository policy must classify rename sources and condition every Loom-only step"

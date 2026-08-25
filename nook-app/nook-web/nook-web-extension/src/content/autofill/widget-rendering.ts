@@ -11,7 +11,6 @@ import {
   type AuthenticationWorkflowSnapshot,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  detectEnrollmentHints,
   renderEnrollmentActions,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
@@ -89,8 +88,8 @@ export function renderEnrollmentWidget({
 
   const nookTypedArgs0_0: Parameters<typeof createWidgetShell>[0] = {
     copy: enrollmentCopy(hints),
-    currentStep: 1,
-    totalSteps: 1,
+    currentStep: snapshot.currentStep,
+    totalSteps: snapshot.totalSteps,
   }
   const shell = createWidgetShell(nookTypedArgs0_0)
   const { body, step, title, description, continueButton } = shell
@@ -215,7 +214,7 @@ export function renderWidget({
     totalSteps: snapshot.totalSteps,
   }
   const shell = createWidgetShell(nookTypedArgs0_3)
-  const { body, step, title, description, continueButton } = shell
+  const { step, title, description, continueButton } = shell
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
@@ -289,20 +288,4 @@ export function renderWidget({
   }
   mountWidgetShell(nookTypedArgs0_8)
   widgetState.assignPresentationScope(presentationScope)
-
-  const enrollmentHints = detectEnrollmentHints()
-  if (enrollmentHints.qr || enrollmentHints.backupCodes) {
-    const nookTypedArgs0_9: Parameters<typeof buildEnrollmentFlowHost>[0] = {
-      panel: body,
-      step,
-      title,
-      description,
-      continueButton,
-    }
-    const nookTypedArgs1_1: Parameters<typeof renderEnrollmentActions>[0] = {
-      host: buildEnrollmentFlowHost(nookTypedArgs0_9),
-      hints: enrollmentHints,
-    }
-    renderEnrollmentActions(nookTypedArgs1_1)
-  }
 }

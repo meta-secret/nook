@@ -104,16 +104,16 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - Trusted same-repository PR Rust jobs and Main build producers use ARC.
-  - Main's portable WASM dependency writer/proof uses two fresh GitHub-hosted
-    builders. Zot must prove child manifest digests and sizes plus every blob's
-    declared size and SHA-256 by streaming it completely. Deployment then waits until the second
-    cache-only solve reports every expensive dependency vertex cached.
+  - Main's portable WASM dependency writer/proof uses the persistent ARC
+    BuildKit service. Zot proves child manifest digests and sizes plus every
+    blob's declared size and SHA-256 before deployment proceeds.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
   - Every ARC job receives a fresh ordinary Pod.
   - The job reuses the persistent BuildKit shard on its selected node.
-  - Fork PRs, Dependabot PRs, releases, and unsupported runtime lanes use
-    GitHub-hosted `ubuntu-latest`.
+  - Fork and Dependabot PRs use GitHub-hosted `ubuntu-latest`.
+  - Trusted release and agent workflows use ARC and must not mount a host
+    container-runtime socket.
   - Delivery jobs restore portable cache layers through private Zot.
   - The legacy registered `nook` runner is not used.
   - Do not use Blacksmith or other third-party runner labels.
@@ -126,7 +126,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
   - `preflight`, `rust:ci`, and `arc:runtime` may run on a fresh general ARC Pod.
   - `hive:verify` may run on a fresh dedicated Hive ARC Pod.
-  - Other selections run on an ephemeral GitHub-hosted runner.
+  - Other non-browser selections run on general ARC.
+  - Browser selections build their immutable image on general ARC and execute
+    it in an ordinary `nook-k0s-container` job Pod.
   - A batch shares one checkout, Docker setup, and cache connection.
   - Selected tasks run sequentially.
   - Each task retains its bounded timeout.
@@ -151,11 +153,11 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.
-  - The portable WASM cache writer/proof selects `ubuntu-latest` explicitly.
+  - The portable WASM cache writer/proof selects the general ARC scale set.
   - `ubuntu-latest` remains the configuration fallback.
   - Each producer publishes its already-solved registry graph only after its
     lane-specific check succeeds.
-  - The hosted fallback WASM dependency export never imports its destination.
+  - The ARC WASM dependency repair export never imports its destination.
     It may use independent input-fingerprint and Main source refs as optional
     seeds, so a corrupted portable ref heals without manual deletion, and it
     keeps forced-zstd behavior.

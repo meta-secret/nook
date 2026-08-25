@@ -8,7 +8,7 @@ the complete vault interface. The extension contains browser-only behavior:
 device protection, the in-page **Nook Pilot** authentication HUD, minimal DOM
 observation/fill integration, and background coordination. The HUD reports the
 current Rust-classified authentication workflow, progress, site context, next
-approved action, and manual takeover without becoming a second vault interface.
+approved action without becoming a second vault interface.
 
 On OTP challenges, the same widget detects standard one-time-code fields. It
 asks the unlocked Rust/WASM session for safe authenticator labels, requires the

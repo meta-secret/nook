@@ -19,6 +19,7 @@ import {
 } from '../../offscreen/session-request-adapter'
 import {
   LoginPickerLoadKind,
+  accountPickerAuthorizationGeneration,
   authorizedWebsiteGrant,
   isLoginPickerSender,
   loadLoginPicker,
@@ -79,6 +80,7 @@ export async function openWebsiteLoginPicker({
   message,
   sender,
 }: OpenWebsiteLoginPickerArgs): Promise<LoginPickerOpenResponse> {
+  const authorizationGeneration = accountPickerAuthorizationGeneration()
   const nookTypedArgs0_0: Parameters<typeof availableWebsiteGrants>[0] = {
     origin: message.payload.origin,
     sender,
@@ -104,14 +106,20 @@ export async function openWebsiteLoginPicker({
   }
 
   const requestId = randomNonce()
-  const request: Parameters<typeof storeLoginPicker>[0] = {
+  const request: Parameters<typeof storeLoginPicker>[0]['request'] = {
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + LOGIN_PICKER_TTL_MS,
   }
-  await storeLoginPicker(request)
+  const storeRequest: Parameters<typeof storeLoginPicker>[0] = {
+    request,
+    authorizationGeneration,
+  }
+  if (!(await storeLoginPicker(storeRequest))) {
+    return { ok: true, status: LoginPickerOpenStatus.Locked }
+  }
   const pickerUrl = new URL(chrome.runtime.getURL('popup/index.html'))
   pickerUrl.searchParams.set('intent', 'login-picker')
   pickerUrl.searchParams.set('request', requestId)

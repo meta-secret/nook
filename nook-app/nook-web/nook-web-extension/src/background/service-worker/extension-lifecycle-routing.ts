@@ -149,7 +149,7 @@ export function routeExtensionLifecycleMessage({
     invalidateAllLoginMatchAvailability()
     void Promise.all([
       clearPendingAccountPickers(),
-      closeExtensionSessionDocument(),
+      closeExtensionSessionDocument().finally(clearPendingAccountPickers),
       clearMountedAuthenticationSurfaces(),
     ])
       .finally(invalidateAllLoginMatchAvailability)
@@ -169,7 +169,7 @@ export function routeExtensionLifecycleMessage({
     invalidateAllLoginMatchAvailability()
     void Promise.all([
       clearPendingAccountPickers(),
-      closeExtensionSessionDocument(),
+      closeExtensionSessionDocument().finally(clearPendingAccountPickers),
       clearMountedAuthenticationSurfaces(),
     ])
       .finally(invalidateAllLoginMatchAvailability)
