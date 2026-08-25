@@ -47,11 +47,19 @@ enum LoaderCapableModuleSpecifier {
   Process = 'process',
 }
 
+enum DynamicEvaluatorModuleSpecifier {
+  NodeVm = 'node:vm',
+  Vm = 'vm',
+}
+
 const AMBIENT_MODULE_LOADER_ROOTS = new Set<string>(
   Object.values(AmbientModuleLoaderRoot),
 );
 const LOADER_CAPABLE_MODULE_SPECIFIERS = new Set<string>(
   Object.values(LoaderCapableModuleSpecifier),
+);
+const DYNAMIC_EVALUATOR_MODULE_SPECIFIERS = new Set<string>(
+  Object.values(DynamicEvaluatorModuleSpecifier),
 );
 const AMBIENT_GLOBAL_LOADER_MEMBERS = new Set<string>([
   AmbientLoaderMember.Global,
@@ -131,7 +139,8 @@ export function violatesSkillProviderBoundary(
       reference.kind === RuntimeModuleReferenceKind.Unbounded ||
       (reference.kind === RuntimeModuleReferenceKind.Literal &&
         (referencesSkillProvider(reference.specifier) ||
-          LOADER_CAPABLE_MODULE_SPECIFIERS.has(reference.specifier))) ||
+          LOADER_CAPABLE_MODULE_SPECIFIERS.has(reference.specifier) ||
+          DYNAMIC_EVALUATOR_MODULE_SPECIFIERS.has(reference.specifier))) ||
       isUnboundedRequireValue(nodeInspection) ||
       isAmbientRequireMember(nodeInspection) ||
       isUnboundedAmbientLoaderRootValue(nodeInspection) ||
@@ -721,6 +730,33 @@ test('recognizes static and dynamic skill-provider runtime imports', () => {
     const inspection: SkillProviderImportInspection = {
       filePath: 'inert-source.ts',
       source: inertSource,
+    };
+    expect(violatesSkillProviderBoundary(inspection)).toBe(false);
+  }
+});
+
+test('rejects every runtime reference to Node evaluator modules', () => {
+  for (const source of [
+    "import { runInThisContext } from 'node:vm';",
+    "import vm from 'vm';",
+    "export { runInThisContext } from 'vm';",
+    "import vm = require('node:vm');",
+    "await import('node:vm');",
+    "require('vm').runInThisContext(source);",
+  ]) {
+    const inspection: SkillProviderImportInspection = {
+      filePath: 'node-vm-evaluator.ts',
+      source,
+    };
+    expect(violatesSkillProviderBoundary(inspection)).toBe(true);
+  }
+  for (const source of [
+    "import type { Context } from 'node:vm';",
+    "export type { Context } from 'vm';",
+  ]) {
+    const inspection: SkillProviderImportInspection = {
+      filePath: 'node-vm-type.ts',
+      source,
     };
     expect(violatesSkillProviderBoundary(inspection)).toBe(false);
   }

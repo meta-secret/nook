@@ -226,12 +226,19 @@ function isComputedCallableElementAccess(
   inspection: ComputedElementInspection,
 ): boolean {
   if (!ts.isElementAccessExpression(inspection.node)) return false;
+  const runtimeReceiver = unwrapExpression(inspection.node.expression);
   const receiverType = inspection.checker.getTypeAtLocation(
     inspection.node.expression,
   );
+  const runtimeReceiverType =
+    runtimeReceiver === inspection.node.expression
+      ? receiverType
+      : inspection.checker.getTypeAtLocation(runtimeReceiver);
   const resultType = inspection.checker.getTypeAtLocation(inspection.node);
   return (
-    typeCanExposeEvaluator(receiverType) || typeCanExposeEvaluator(resultType)
+    typeCanExposeEvaluator(receiverType) ||
+    typeCanExposeEvaluator(runtimeReceiverType) ||
+    typeCanExposeEvaluator(resultType)
   );
 }
 

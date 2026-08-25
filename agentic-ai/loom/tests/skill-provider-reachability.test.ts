@@ -256,6 +256,8 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     "import { fn } from './fn.ts'; const key = computeKey(); (0, fn[key])(source)();",
     "import * as mod from './fn.ts'; const key = computeKey(); (choose ? mod[key] : fallback)(source)();",
     "import { fn } from './fn.ts'; const key = computeKey(); ((fn[key] as never)!)(source)();",
+    'const fn = () => {}; const key = computeKey(); ((fn as never)[key])(source);',
+    'const fn = () => {}; const key = computeKey(); ((fn as Record<string, string>)[key])(source);',
     "import { fn } from './fn.ts'; const key = computeKey(); const holder = { evaluator: fn[key] }; holder.evaluator(source)();",
     "import * as mod from './fn.ts'; const key = computeKey(); const holder = [mod[key]]; holder.at(0)(source)();",
     "import { fn } from './fn.ts'; const key = computeKey(); const [evaluator] = [fn[key]]; evaluator(source)();",
@@ -280,6 +282,9 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     'export {}; class Function {};',
     'export {}; class Function {}; new Function();',
     "const values = ['safe']; const key = computeKey(); values[key];",
+    "const values = ['safe']; const key = computeKey(); (values as never)[key];",
+    "const values = ['safe']; const key = computeKey(); (values as Record<string, string>)[key];",
+    "const record = { label: 'safe' }; const key = computeKey(); (record as Record<string, string>)[key];",
   ]) {
     const localInspection = { filePath: 'local-evaluator.ts', source };
     expect(violatesSkillProviderBoundary(localInspection), source).toBe(false);
