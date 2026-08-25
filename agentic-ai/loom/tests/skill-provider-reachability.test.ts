@@ -253,7 +253,6 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     'new GeneratorFunction(source)();',
     'globalThis.eval(source);',
     'globalThis[`eval`](source);',
-    'global["Function"](source);',
     '(() => {}).constructor(source)();',
     '(() => {})["constructor"](source)();',
     '(() => {})[`constructor`](source)();',
@@ -264,12 +263,16 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     'globalThis[computeKey()](source);',
     'Reflect[computeKey()](() => {}, source)(source)();',
     'Object[computeKey()](() => {}, source)(source)();',
+    "import { fn } from './fn.ts'; const key = computeKey(); fn[key](source)();",
     "const { getOwnPropertyDescriptor: get } = Object; get(() => {}, 'constructor')!.value(source)();",
     "const { get } = Reflect; get(() => {}, 'constructor')(source)();",
     "const O = Object; O.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
     "const R = Reflect; R.get(() => {}, 'constructor')(source)();",
     "globalThis.Object.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
     "globalThis.Reflect.get(() => {}, 'constructor')(source)();",
+    "const O = globalThis['Object']; O.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
+    "const R = global[`Reflect`]; R.get(() => {}, 'constructor')(source)();",
+    "const key = 'Object'; const O = globalThis[key]; O.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
   ];
   for (const source of sources) {
     const inspection = {

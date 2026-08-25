@@ -158,9 +158,14 @@ function isAmbientNamedRoot(request: AmbientNamedRootInspection): boolean {
   if (ts.isIdentifier(root) && root.text === request.rootName) {
     return request.inspection.isAmbientIdentifier(root);
   }
+  const memberInspection: DynamicEvaluatorMemberInspection = {
+    checker: request.inspection.checker,
+    node: root,
+  };
   return (
-    ts.isPropertyAccessExpression(root) &&
-    root.name.text === request.rootName &&
+    (ts.isPropertyAccessExpression(root) ||
+      ts.isElementAccessExpression(root)) &&
+    dynamicEvaluatorMember(memberInspection) === request.rootName &&
     request.inspection.isAmbientGlobalRoot(root.expression)
   );
 }
@@ -170,17 +175,25 @@ function isUnboundedAmbientCapabilityRoot(
 ): boolean {
   const node = inspection.node;
   let ambient = false;
+  const memberInspection: DynamicEvaluatorMemberInspection = {
+    checker: inspection.checker,
+    node,
+  };
+  const rootName = ts.isIdentifier(node)
+    ? node.text
+    : dynamicEvaluatorMember(memberInspection);
   if (
     ts.isIdentifier(node) &&
-    (node.text === AmbientEvaluatorRoot.Object ||
-      node.text === AmbientEvaluatorRoot.Reflect) &&
+    (rootName === AmbientEvaluatorRoot.Object ||
+      rootName === AmbientEvaluatorRoot.Reflect) &&
     !isNonRuntimeIdentifierPosition(node)
   ) {
     ambient = inspection.isAmbientIdentifier(node);
   } else if (
-    ts.isPropertyAccessExpression(node) &&
-    (node.name.text === AmbientEvaluatorRoot.Object ||
-      node.name.text === AmbientEvaluatorRoot.Reflect)
+    (ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node)) &&
+    (rootName === AmbientEvaluatorRoot.Object ||
+      rootName === AmbientEvaluatorRoot.Reflect)
   ) {
     ambient = inspection.isAmbientGlobalRoot(node.expression);
   }
@@ -213,6 +226,13 @@ function isComputedCallableElementAccess(
   inspection: ComputedElementInspection,
 ): boolean {
   if (!ts.isElementAccessExpression(inspection.node)) return false;
+  const parent = inspection.node.parent;
+  if (
+    (ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+    parent.expression === inspection.node
+  ) {
+    return true;
+  }
   const receiverType = inspection.checker.getTypeAtLocation(
     inspection.node.expression,
   );
