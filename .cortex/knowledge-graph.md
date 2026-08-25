@@ -842,7 +842,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [CI operator and agent operations](workflows/ci-pipeline.md#ci-operator-and-agent-operations)
 - [CI Operator and Agent Operations](workflows/ci-operations.md)
   - [Overview](workflows/ci-operations.md#overview)
-  - [Runner cleanup](workflows/ci-operations.md#runner-cleanup)
+  - [Storage reclamation](workflows/ci-operations.md#storage-reclamation)
     - [CI verification — always check app logs](workflows/ci-operations.md#ci-verification--always-check-app-logs)
   - [Secrets and env](workflows/ci-operations.md#secrets-and-env)
   - [Google Cloud operations](workflows/ci-operations.md#google-cloud-operations)

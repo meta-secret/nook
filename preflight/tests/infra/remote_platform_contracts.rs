@@ -117,6 +117,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
     let infra_root = read("infra/Taskfile.yml");
     let expected_domains = [
         "manifests",
+        "providers",
         "mesh",
         "host-services",
         "kubernetes-tools",

@@ -12,6 +12,7 @@ on:
       - .github/actions/nook-docker-setup/**
       - .github/scripts/rust-deps-cache-fingerprint.sh
       - .github/scripts/hive-manifest-contract.rb
+      - .github/scripts/ovh-dedicated-contract.ts
       - agentic-ai/minds/hive/controller/reaper.ts
       - agentic-ai/minds/hive/controller/reaper.test.ts
       - .github/scripts/k0s-firewall-rollback-test.ts
@@ -26,6 +27,7 @@ on:
       - agentic-ai/minds/**
       - infra/compose.yaml
       - infra/k0s/**
+      - infra/providers/**
       - infra/tasks/**
       - infra/Taskfile.yml
   push:
@@ -36,6 +38,7 @@ on:
       - .github/actions/nook-docker-setup/**
       - .github/scripts/rust-deps-cache-fingerprint.sh
       - .github/scripts/hive-manifest-contract.rb
+      - .github/scripts/ovh-dedicated-contract.ts
       - agentic-ai/minds/hive/controller/reaper.ts
       - agentic-ai/minds/hive/controller/reaper.test.ts
       - .github/scripts/k0s-firewall-rollback-test.ts
@@ -50,6 +53,7 @@ on:
       - agentic-ai/minds/**
       - infra/compose.yaml
       - infra/k0s/**
+      - infra/providers/**
       - infra/tasks/**
       - infra/Taskfile.yml
 

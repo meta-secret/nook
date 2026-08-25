@@ -55,6 +55,29 @@ spec:
 apiVersion: v1
 kind: PersistentVolume
 metadata:
+  name: nook-buildkit-rise-s-2
+  labels:
+    app.kubernetes.io/name: nook-buildkit
+spec:
+  capacity:
+    storage: 64Gi
+  volumeMode: Filesystem
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: nook-buildkit-local-retain
+  local:
+    path: /var/lib/nook-arc-buildkit/state
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["nook-rise-s-2"]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
   name: nook-buildkit-ks6
   labels:
     app.kubernetes.io/name: nook-buildkit
@@ -121,7 +144,7 @@ metadata:
 spec:
   serviceName: nook-buildkit-headless
   podManagementPolicy: Parallel
-  replicas: 3
+  replicas: 4
   selector:
     matchLabels:
       app.kubernetes.io/name: nook-buildkit

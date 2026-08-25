@@ -5,6 +5,8 @@ tasks:
   k0s:manifests:check:
     desc: Validate Hive isolation and TLS invariants in repository manifests.
     cmds:
+      - bun test infra/providers/ovh-dedicated.test.ts
+      - bun .github/scripts/ovh-dedicated-contract.ts
       - ruby .github/scripts/hive-manifest-contract.rb
       - bun test agentic-ai/minds/hive/controller/reaper.test.ts
       - bun .github/scripts/k0s-firewall-rollback-test.ts
