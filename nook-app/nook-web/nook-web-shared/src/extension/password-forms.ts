@@ -19,6 +19,16 @@ import type {
   PageControlSemantics,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
+  authenticationAdvanceControls,
+  authenticationAdvanceControlSelector,
+  hasAssociatedForm,
+  isPlainNavigationControl,
+  isResetControl,
+  isSemanticSubmitControl,
+  PasswordFormQueryKind,
+} from "./authentication-advance-controls";
+import type { PasswordFormScopeQuery } from "./authentication-advance-controls";
+import {
   findOneTimeCodeFields,
   findPasswordFields,
   findUsernameFields,
@@ -27,7 +37,6 @@ import {
   isAuthUsernameField,
   authenticationUsernameEvidence,
   oneTimeCodeFieldHasAutoSubmitEvidence,
-  pageControlBelongsToFormScope,
   pageControlLabel,
   pageHasManualCheckpoint,
   pageHasManualCheckpointForScope,
@@ -54,6 +63,8 @@ export type {
   PasskeyControlLookup,
   PasswordFormScope,
 } from "./password-form-fields";
+export { PasswordFormQueryKind } from "./authentication-advance-controls";
+export type { PasswordFormScopeQuery } from "./authentication-advance-controls";
 
 void companionWasmReady;
 
@@ -120,19 +131,6 @@ type AuthenticationContainerLookup =
       kind: AuthenticationContainerLookupKind.Found;
       container: HTMLElement;
       context: AuthenticationContainerContextKind;
-    };
-
-export enum PasswordFormQueryKind {
-  Root = "root",
-  Scoped = "scoped",
-}
-
-export type PasswordFormScopeQuery =
-  | { kind: PasswordFormQueryKind.Root; root: ParentNode }
-  | {
-      kind: PasswordFormQueryKind.Scoped;
-      root: ParentNode;
-      formScope: PasswordFormScope;
     };
 
 type PasswordFormSummaryRequest = PasswordFormScopeQuery;
@@ -285,62 +283,6 @@ function summarizeRoot(
   };
 }
 
-function isSemanticSubmitControl(control: HTMLElement): boolean {
-  return (
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement) &&
-    (control.type === "submit" || control.type === "image")
-  );
-}
-
-function isResetControl(control: HTMLElement): boolean {
-  return (
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement) &&
-    control.type === "reset"
-  );
-}
-
-function isPlainNavigationControl(control: HTMLElement): boolean {
-  return control instanceof HTMLAnchorElement && control.hasAttribute("href");
-}
-
-function hasAssociatedForm(control: HTMLElement): boolean {
-  if (
-    control instanceof HTMLButtonElement ||
-    control instanceof HTMLInputElement
-  ) {
-    return Boolean(control.form);
-  }
-  return Boolean(control.closest("form"));
-}
-
-const authenticationAdvanceControlSelector =
-  'button, input[type="submit"], input[type="button"], input[type="image"], a[href], [role="button"]';
-
-function authenticationAdvanceControls(
-  request: PasswordFormScopeQuery,
-): HTMLElement[] {
-  const queryRoot =
-    request.kind === PasswordFormQueryKind.Scoped &&
-    request.formScope.kind === PasswordFormScopeKind.Owned
-      ? request.formScope.owner.ownerDocument
-      : request.root;
-  const controls = Array.from(
-    queryRoot.querySelectorAll<HTMLElement>(
-      authenticationAdvanceControlSelector,
-    ),
-  );
-  if (request.kind !== PasswordFormQueryKind.Scoped) return controls;
-  return controls.filter((control) => {
-    const scopeQuery: Parameters<typeof pageControlBelongsToFormScope>[0] = {
-      control,
-      formScope: request.formScope,
-    };
-    return pageControlBelongsToFormScope(scopeQuery);
-  });
-}
-
 type AuthenticationAdvanceControlQuery = {
   request: PasswordFormScopeQuery;
   authenticationUsernameEvidence: AuthenticationUsernameEvidence;
@@ -404,6 +346,14 @@ function authenticationAdvanceControlContext({
   const usernameEvidenceBatch: AuthenticationUsernameEvidenceBatch = {
     evidence: usernameFields.map(authenticationUsernameEvidence),
   };
+  const semanticSubmitControls = authenticationAdvanceControls(request).filter(
+    isSemanticSubmitControl,
+  );
+  const semanticSubmitControlCount =
+    request.kind === PasswordFormQueryKind.Scoped &&
+    request.formScope.kind === PasswordFormScopeKind.LocallyScoped
+      ? semanticSubmitControls.filter(isActionablePageControl).length
+      : semanticSubmitControls.length;
   return {
     authenticationUsernameEvidence: strongest_authentication_username_evidence(
       usernameEvidenceBatch,
@@ -411,9 +361,7 @@ function authenticationAdvanceControlContext({
     passwordFieldCount,
     newPasswordFieldCount,
     oneTimeCodeFieldCount,
-    semanticSubmitControlCount: authenticationAdvanceControls(request).filter(
-      isSemanticSubmitControl,
-    ).length,
+    semanticSubmitControlCount,
     formIdentity,
   };
 }
@@ -734,7 +682,9 @@ export function authenticationWorkflowFormsHaveActionableControl({
   const input: AuthenticationPageObservationFactsBatch = {
     observations: observations
       .slice(0, MAX_AUTHENTICATION_WORKFLOW_CLASSIFICATION_OBSERVATIONS)
-      .map(({ summary }) => portableAuthenticationPageObservationFacts(summary)),
+      .map(({ summary }) =>
+        portableAuthenticationPageObservationFacts(summary),
+      ),
   };
   const workflowMatch = classify_companion_authentication_workflow(input);
   return (
@@ -857,17 +807,27 @@ export function readLoginCredentials(
 }
 
 export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
-  const nookTypedArgs0_26 = passwordFieldQuery(request);
-  const passwordFields = findPasswordFields(nookTypedArgs0_26);
-  const passwordField = passwordFields[0];
-  const nookTypedArgs0_27 = passwordFieldQuery(request);
-  const usernameFields = findUsernameFields(nookTypedArgs0_27);
-  const usernameField = usernameFields[0];
-  const anchor = passwordField ?? usernameField;
+  const initialPasswordFieldQuery = passwordFieldQuery(request);
+  const initialPasswordFields = findPasswordFields(initialPasswordFieldQuery);
+  const initialUsernameFieldQuery = passwordFieldQuery(request);
+  const initialUsernameFields = findUsernameFields(initialUsernameFieldQuery);
+  const anchor = initialPasswordFields[0] ?? initialUsernameFields[0];
   if (!anchor) return false;
 
   const form = anchor.form;
-  const oneTimeCodeFieldQuery = passwordFieldQuery(request);
+  const authenticationRequest: PasswordFormScopeQuery =
+    request.kind === PasswordFormQueryKind.Root && form
+      ? {
+          kind: PasswordFormQueryKind.Scoped,
+          root: request.root,
+          formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+        }
+      : request;
+  const passwordFieldsQuery = passwordFieldQuery(authenticationRequest);
+  const passwordFields = findPasswordFields(passwordFieldsQuery);
+  const usernameFieldsQuery = passwordFieldQuery(authenticationRequest);
+  const usernameFields = findUsernameFields(usernameFieldsQuery);
+  const oneTimeCodeFieldQuery = passwordFieldQuery(authenticationRequest);
   const oneTimeCodeFields = findOneTimeCodeFields(oneTimeCodeFieldQuery);
   const newPasswordFieldCount = passwordFields.filter((field) => {
     const autocompleteQuery: Parameters<typeof hasAutocompleteToken>[0] = {
@@ -877,7 +837,7 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
     return hasAutocompleteToken(autocompleteQuery);
   }).length;
   const contextSource: AuthenticationAdvanceControlContextSource = {
-    request,
+    request: authenticationRequest,
     usernameFields,
     passwordFieldCount: passwordFields.length,
     newPasswordFieldCount,
@@ -885,20 +845,54 @@ export function submitLoginForm(request: PasswordFormScopeQuery): boolean {
   };
   const authenticationControlContext =
     authenticationAdvanceControlContext(contextSource);
-  const candidateControls = authenticationAdvanceControls(request);
+  const candidateControls = authenticationAdvanceControls(
+    authenticationRequest,
+  );
   const acceptedControls = candidateControls.filter((control) => {
     if (isResetControl(control) || isPlainNavigationControl(control)) {
       return false;
     }
     const decision: AuthenticationAdvanceControlCandidate = {
       control,
-      request,
+      request: authenticationRequest,
       ...authenticationControlContext,
     };
     return isAuthenticationAdvanceControl(decision);
   });
+  const actionableSemanticSubmitPresent = candidateControls.some(
+    (control) =>
+      isSemanticSubmitControl(control) && isActionablePageControl(control),
+  );
+  const recognizedActivationControls = actionableSemanticSubmitPresent
+    ? candidateControls.filter((control) => {
+        if (
+          isSemanticSubmitControl(control) ||
+          isResetControl(control) ||
+          isPlainNavigationControl(control)
+        ) {
+          return false;
+        }
+        const unownedProbeRequest: PasswordFormScopeQuery = {
+          kind: PasswordFormQueryKind.Scoped,
+          root: authenticationRequest.root,
+          formScope: { kind: PasswordFormScopeKind.Unowned },
+        };
+        const decision: AuthenticationAdvanceControlCandidate = {
+          control,
+          request: unownedProbeRequest,
+          ...authenticationControlContext,
+          semanticSubmitControlCount: 0,
+          formIdentity: "",
+        };
+        return isAuthenticationAdvanceControl(decision);
+      })
+    : [];
+  const selectableControls =
+    acceptedControls.length > 0
+      ? acceptedControls
+      : recognizedActivationControls;
   const advanceControl =
-    acceptedControls.find(isSemanticSubmitControl) ?? acceptedControls[0];
+    selectableControls.find(isSemanticSubmitControl) ?? selectableControls[0];
   if (advanceControl) {
     if (!form || !isSemanticSubmitControl(advanceControl)) {
       advanceControl.click();

@@ -148,6 +148,30 @@ describe('website authentication form submission', () => {
     expect(languageActivations).toBe(0)
   })
 
+  test('does not substitute a generic activation for a rejected submit', () => {
+    document.body.innerHTML = `
+      <form id="login">
+        <input autocomplete="username" value="pilot" />
+        <input type="password" autocomplete="current-password" value="secret" />
+        <button id="language" type="button">Language</button>
+        <button id="save" type="submit">Save</button>
+      </form>
+    `
+    let languageActivations = 0
+    let saveActivations = 0
+    document.querySelector('#language')?.addEventListener('click', () => {
+      languageActivations++
+    })
+    document.querySelector('#save')?.addEventListener('click', (event) => {
+      event.preventDefault()
+      saveActivations++
+    })
+
+    expect(submitLoginForm(wholeDocumentPasswordFormSubmission)).toBe(false)
+    expect(languageActivations).toBe(0)
+    expect(saveActivations).toBe(0)
+  })
+
   test('does not activate a submit disabled through pointer events', () => {
     document.body.innerHTML = `
       <form id="login">
