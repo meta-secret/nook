@@ -289,6 +289,10 @@ test('reopens an incident retired by the former E2E suppression policy', () => {
 test('workflow preserves the Main cache order and coalesces only pending runs', () => {
   const root = path.join(__dirname, '..', '..')
   const main = fs.readFileSync(path.join(root, '.github/workflows/main.yml'), 'utf8')
+  const dockerTasks = fs.readFileSync(
+    path.join(root, 'nook-app/nook-platform/docker/Taskfile.yml'),
+    'utf8',
+  )
   assert.match(
     main,
     /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
@@ -303,6 +307,38 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     main,
     /Publish verified WASM BuildKit cache[\s\S]*task ci:main:publish-wasm-cache/,
   )
+  assert.match(
+    main,
+    /Publish verified WASM BuildKit cache[\s\S]*NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"/,
+  )
+  assert.match(
+    main,
+    /wasm-cache-proof:\n\s+name: Fresh WASM cache restore proof\n\s+needs: \[wasm\]\n\s+runs-on: ubuntu-latest[\s\S]*main-cache-only: "true"[\s\S]*verify-wasm-gha-cache\.sh/,
+  )
+  assert.match(
+    main,
+    /deploy:\n\s+name: Deploy development\n\s+needs: \[web, web-e2e, wasm-cache-proof\]/,
+  )
+  assert.match(
+    dockerTasks,
+    /GHA_CACHE_SCOPE_SUFFIX:-[\s\S]*NOOK_DEFER_FRESH_WASM_CACHE_PROOF:-[\s\S]*verify-wasm-gha-cache\.sh/,
+  )
+})
+
+test('cache telemetry cannot hold a cancelled delivery lane indefinitely', () => {
+  const root = path.join(__dirname, '..', '..')
+  const telemetry = fs.readFileSync(
+    path.join(root, '.github/actions/nook-cache-telemetry/action.yml'),
+    'utf8',
+  )
+  const dockerSetup = fs.readFileSync(
+    path.join(root, '.github/actions/nook-docker-setup/action.yml'),
+    'utf8',
+  )
+
+  assert.match(telemetry, /timeout 15s .*cache-telemetry\.cjs start/)
+  assert.match(telemetry, /timeout 30s .*cache-telemetry\.cjs collect/)
+  assert.match(dockerSetup, /timeout 15s .*cache-telemetry\.cjs start/)
 })
 
 test('handoff workflow trusts default-branch code and writes only Workbench', () => {

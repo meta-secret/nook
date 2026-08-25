@@ -58,6 +58,8 @@ tasks:
     cmds:
       # rust-base is restored via Bake contexts; never let this target write it.
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "preflight:test"
         {{.DOCKER}} buildx bake
         {{.PREFLIGHT_BAKE_FILES}}
         preflight-test
@@ -77,6 +79,8 @@ tasks:
     cmds:
       - mkdir -p '{{.PREFLIGHT_OUTPUT_DIR}}'
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "preflight:export"
         {{.DOCKER}} buildx bake
         {{.PREFLIGHT_BAKE_FILES}}
         --allow="fs.write={{.PREFLIGHT_OUTPUT_PARENT}}"

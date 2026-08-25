@@ -178,7 +178,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(
         platform_tasks.contains("${GITHUB_ACTIONS:-}")
             && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
-            && platform_tasks.contains("tcp://127.0.0.1:1234")
+            && platform_tasks.contains("tcp://nook-buildkit.arc-runners.svc.cluster.local:1234")
             && platform_tasks.contains("docker/sccache-health.Dockerfile")
             && platform_tasks.contains("--output type=cacheonly")
             && arc_sccache_health.contains("s3api head-bucket")

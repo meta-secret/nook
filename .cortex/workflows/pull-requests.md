@@ -325,7 +325,7 @@ The feedback inspection and readiness audit replace any blind review-batching gr
 ### 5. Hosted iteration and explicit validation
 
 **GitHub Actions is the normal build/test path.** `remote.yml` runs allowlisted
-focused tasks on the configured ARC Kata scale set, with `ubuntu-latest` as its
+focused tasks on the configured ARC scale set, with `ubuntu-latest` as its
 fallback. It always targets an exact pushed branch head. `pr.yml` remains the
 GitHub Actions merge-validation pipeline and runs only when an agent explicitly
 applies a validation label through `task pr:validate`. Its trusted daemon-free

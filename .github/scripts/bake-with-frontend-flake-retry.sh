@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Retry a BuildKit command once only for the known immediate BuildKit
-# frontend/Dockerfile-load flake. Application/build failures fail closed.
+# Retry a BuildKit command once only for known frontend or client-session
+# transport flakes. Application/build failures fail closed.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -24,6 +24,7 @@ is_buildkit_frontend_flake() {
     -e 'rpc error: code = Unavailable' \
     -e 'rpc error: code = DeadlineExceeded' \
     -e 'rpc error: code = Canceled' \
+    -e 'no active session for .*: context deadline exceeded' \
     -e 'transport is closing' \
     -e 'connection reset by peer' \
     -e 'use of closed network connection' \

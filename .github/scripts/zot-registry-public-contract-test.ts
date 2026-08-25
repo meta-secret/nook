@@ -112,6 +112,7 @@ for (const fragment of [
   "seaweedfs",
   "chrislusf/seaweedfs",
   "-s3.port=8333",
+  "--entryPoints.websecure.transport.respondingTimeouts.readTimeout=15m",
 ]) {
   const assertion = {
     source: compose,

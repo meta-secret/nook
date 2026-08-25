@@ -449,12 +449,14 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         cache_verifier.contains("docker-container")
             && cache_verifier.contains("--use")
             && !cache_verifier.contains("--builder")
-            && cache_verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
-            && cache_verifier.contains("builder-wasm-deps-restore 2>&1")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof.output=type=local")
+            && cache_verifier.contains("builder-wasm-deps-cache-proof 2>&1")
+            && cache_verifier.contains("hydrated-wasm-dependency-cache")
             && cache_verifier.contains("nook-sccache-report chef-wasm-release")
             && cache_verifier.contains("nook-sccache-report chef-wasm-clippy")
             && cache_verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "Main must reject a published WASM cache until a fresh builder restores every dependency layer without --builder"
+        "Main must reject a published WASM cache until a fresh builder hydrates every dependency layer without --builder"
     );
     let base_dockerfile = read(
         root,
@@ -532,6 +534,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 
 fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
+    let web_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
+    let deploy = main
+        .split("\n  deploy:\n")
+        .nth(1)
+        .context("Main must define the development deployment job")?;
     assert!(
         main.contains("\n  rust:\n")
             && main.contains("\n  wasm:\n")
@@ -541,8 +548,21 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task ci:main:e2e:web:artifacts")
-            && main.contains("needs: [web, web-e2e]"),
-        "Main must split native Rust, WASM, web verify, and browser suites without a duplicate cache publisher"
+            && main.contains("\n  wasm-cache-proof:\n")
+            && main.contains("NOOK_DEFER_FRESH_WASM_CACHE_PROOF: \"1\"")
+            && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
+        "Main must split native Rust, WASM, fresh registry cache proof, web verify, and browser suites without a duplicate cache publisher"
+    );
+    assert!(
+        web_tasks.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
+            && web_tasks.contains("nook-web-ci.output=type=cacheonly"),
+        "daemon-free ARC web verification must retain its solved graph without exporting a Docker image"
+    );
+    assert!(
+        deploy.starts_with(
+            "    name: Deploy development\n    needs: [web, web-e2e, wasm-cache-proof]"
+        ) && deploy.contains("\n    runs-on: ubuntu-latest\n"),
+        "the remaining Docker-runtime deployment lane must stay on a fresh hosted runner"
     );
     let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")

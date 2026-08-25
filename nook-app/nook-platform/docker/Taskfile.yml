@@ -310,7 +310,8 @@ tasks:
       - task: docker:ci:cache:publish:rust-base
       - |
         set -euo pipefail
-        if [ -z "${GHA_CACHE_SCOPE_SUFFIX:-}" ]; then
+        if [ -z "${GHA_CACHE_SCOPE_SUFFIX:-}" ] \
+          && [ "${NOOK_DEFER_FRESH_WASM_CACHE_PROOF:-}" != "1" ]; then
           bash "{{.REPO_ROOT}}/.github/scripts/verify-wasm-gha-cache.sh"
         fi
 
@@ -377,6 +378,8 @@ tasks:
       - task: docker:rust-base
       - >-
         GHA_CACHE_WRITE_ENABLED=
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ecosystem:deterministic"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         rust-ecosystem-deterministic

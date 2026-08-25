@@ -22,8 +22,7 @@ bake_args=(
   --set "*.args.SCCACHE_S3_MODE=$sccache_mode"
   --set "*.args.SCCACHE_ENDPOINT=$sccache_endpoint"
   --set "*.args.SCCACHE_BUCKET=$sccache_bucket"
-  --set "*.output=type=cacheonly"
-  --set "builder-wasm-deps-restore.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
+  --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/buildcache/$cache_scope:buildcache"
 )
 
 require_cached_step() {
@@ -37,9 +36,11 @@ require_cached_step() {
 for attempt in 1 2 3; do
   proof_builder="nook-wasm-cache-proof-${GITHUB_RUN_ID:-local}-${attempt}-${RANDOM}"
   proof_log="$(mktemp)"
+  proof_output="$(mktemp -d)"
   cleanup() {
     "$docker_bin" buildx rm "$proof_builder" >/dev/null 2>&1 || true
     rm -f "$proof_log"
+    rm -rf "$proof_output"
   }
   trap cleanup EXIT
 
@@ -52,11 +53,14 @@ for attempt in 1 2 3; do
   if "$docker_bin" buildx bake \
     --progress=plain \
     "${bake_args[@]}" \
-    builder-wasm-deps-restore 2>&1 | tee "$proof_log" \
+    --set "builder-wasm-deps-cache-proof.output=type=local,dest=$proof_output" \
+    builder-wasm-deps-cache-proof 2>&1 | tee "$proof_log" \
     && require_cached_step "$proof_log" "nook-sccache-report chef-wasm-release" \
     && require_cached_step "$proof_log" "nook-sccache-report chef-wasm-clippy" \
-    && require_cached_step "$proof_log" "nook-sccache-report wasm-release-test-dependencies"; then
-    echo "verified fresh-builder WASM dependency cache reuse from $cache_scope"
+    && require_cached_step "$proof_log" "nook-sccache-report wasm-release-test-dependencies" \
+    && grep -Fxq 'hydrated-wasm-dependency-cache' \
+      "$proof_output/nook-wasm-cache-proof.txt"; then
+    echo "verified fresh-builder WASM dependency cache hydration from $cache_scope"
     cleanup
     trap - EXIT
     exit 0

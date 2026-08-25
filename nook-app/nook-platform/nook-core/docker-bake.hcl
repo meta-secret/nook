@@ -54,6 +54,14 @@ target "builder-wasm-deps-restore" {
   cache-from = rust_wasm_deps_cache_from
 }
 
+// Clean hosted proof target. Keep it in product.Dockerfile's frontend/context
+// lineage so a fresh BuildKit worker verifies the exact cache keys published by
+// builder-wasm-deps instead of rebuilding them through a named-context graph.
+target "builder-wasm-deps-cache-proof" {
+  inherits   = ["builder-wasm-deps-restore"]
+  target     = "builder-wasm-deps-cache-proof"
+}
+
 // Explicit writer for the WASM deps Zot scope. Main writes
 // GHA_RUST_WASM_DEPS_SCOPE; isolated writes use the exact git scope.
 target "builder-wasm-deps-publish" {

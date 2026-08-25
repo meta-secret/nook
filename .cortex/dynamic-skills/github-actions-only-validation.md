@@ -5,9 +5,10 @@
 Keep agent machines on the lightest possible local work.
 
 Use the configured GitHub Actions runner for iterative builds and tests.
-Trusted native Rust and Rust ecosystem PR gates plus every explicit Main job
-use ARC. Fork PRs, Dependabot PRs, releases, and other non-Main runtime-
-dependent gates stay GitHub-hosted.
+Trusted native Rust and Rust ecosystem PR gates plus Main build producers use
+ARC. Main's clean-room Zot hydration proof stays GitHub-hosted so a persistent
+ARC shard cannot mask missing registry data. Fork PRs, Dependabot PRs, releases,
+and other non-Main runtime-dependent gates also stay GitHub-hosted.
 
 ## Problem Pattern
 
@@ -27,10 +28,12 @@ Validation has three layers:
   feedback than complete validation.
   - Do not batch broad gates sequentially before complete validation.
 - **Required remotely:** explicitly trigger complete exact-head PR validation.
-  - Trusted same-repository native Rust and Rust ecosystem PR jobs and every
-    explicit Main job select ARC.
+  - Trusted same-repository native Rust and Rust ecosystem PR jobs and Main
+    build producers select ARC.
   - General ARC provides Main's job-scoped image runtime inside the disposable
-    Kata guest.
+    ARC runner Pod.
+  - Main's small post-publication Zot proof uses a fresh hosted builder. It
+    hydrates cached snapshots and exports only a marker before deployment.
   - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
     browser, WASM, and deployment jobs stay on GitHub-hosted workers.
 

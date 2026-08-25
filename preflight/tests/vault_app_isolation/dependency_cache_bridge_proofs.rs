@@ -310,6 +310,11 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let root = repository_root();
     let docker_tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
+    let product_dockerfile = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
+    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
 
     let native = docker_tasks
         .split("docker:ci:cache:publish:native:")
@@ -359,15 +364,27 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     );
 
     assert!(
+        product_dockerfile
+            .contains("FROM builder-wasm-deps AS builder-wasm-deps-cache-proof-hydrated")
+            && product_dockerfile.contains("FROM scratch AS builder-wasm-deps-cache-proof")
+            && product_dockerfile.contains("hydrated-wasm-dependency-cache")
+            && core_bake.contains("target \"builder-wasm-deps-cache-proof\"")
+            && core_bake.contains("inherits   = [\"builder-wasm-deps-restore\"]")
+            && !core_bake.contains("wasm-deps = \"target:builder-wasm-deps-restore\""),
+        "the fresh proof must preserve the publisher's Dockerfile/context cache-key lineage, hydrate the dependency snapshot, and export only its marker"
+    );
+    assert!(
         verifier.contains("docker-container")
             && verifier.contains("--use")
             && !verifier.contains("--builder")
-            && verifier.contains("builder-wasm-deps-restore.cache-from=type=registry")
-            && verifier.contains("builder-wasm-deps-restore 2>&1")
+            && verifier.contains("builder-wasm-deps-cache-proof.cache-from=type=registry")
+            && verifier.contains("builder-wasm-deps-cache-proof.output=type=local")
+            && verifier.contains("builder-wasm-deps-cache-proof 2>&1")
+            && verifier.contains("hydrated-wasm-dependency-cache")
             && verifier.contains("nook-sccache-report chef-wasm-release")
             && verifier.contains("nook-sccache-report chef-wasm-clippy")
             && verifier.contains("nook-sccache-report wasm-release-test-dependencies"),
-        "runtime WASM proof must use a fresh docker-container builder and require chef CACHED markers"
+        "runtime WASM proof must use a fresh docker-container builder, hydrate its snapshots, and require chef CACHED markers"
     );
     Ok(())
 }
