@@ -218,16 +218,23 @@ only the matching SHA-256 fingerprint. It never trusts an unauthenticated
 The workflow then performs these operations:
 
 1. Verify the exact service, address, hardware range, datacenter, and current OS.
-2. Recheck the target immediately before any destructive reinstall.
-3. Install Debian only when the declared server is blank.
-4. Verify the pinned SSH host identity and apply the idempotent base contract.
-5. Require effective SSH hardening and a non-degraded two-member RAID1 array.
-6. Reconcile WireGuard, k0s, ARC storage, and runner placement.
+2. Cordon the exact existing node and wait for active ARC jobs to finish.
+3. Drain remaining workloads before the provider may reinstall the server.
+4. Recheck the target immediately before any destructive reinstall.
+5. Install Debian when the server is blank or recovery is explicitly forced.
+6. Verify the pinned SSH host identity and apply the idempotent base contract.
+7. Require effective SSH hardening and a non-degraded two-member RAID1 array.
+8. Reconcile WireGuard, k0s, ARC storage, and runner placement.
 
 Replacing an installed OS requires the explicit
 `INFRA_OVH_ALLOW_REINSTALL=true` disaster-recovery input.
-That path removes the old Kubernetes node, WireGuard peer, routes, and stale
-mesh SSH identities before onboarding the replacement.
+That input also forces a reinstall when the reported OS already matches. The
+recovery path removes the old Kubernetes node, WireGuard peer, routes, and
+stale mesh SSH identities before onboarding the replacement.
+
+An unchanged installed server must already have its matching host identity in
+the private store. The adapter refuses to invent an identity that was never
+installed. Restore the identity backup or explicitly reinstall the server.
 
 Cloud-init user-data is not used with the standard OVH image. OVH exposes that
 customization only for BYOI and BYOLinux. Owning a custom image pipeline would

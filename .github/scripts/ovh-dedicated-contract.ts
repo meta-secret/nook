@@ -57,6 +57,7 @@ for (const fragment of [
   "await rename(next, target)",
   ".nook/infra/ovh-host-identities",
   "postInstallationScript",
+  "missing trusted SSH host identity",
   "preSubmission",
   "approved US API endpoint",
   'currentOperatingSystem === "none_64"',
@@ -79,6 +80,10 @@ for (const fragment of [
 
 for (const fragment of [
   "ovh:server:deploy:",
+  "reinstall-required",
+  "kubectl cordon",
+  "actions.github.com/scale-set-name",
+  "kubectl drain",
   "ssh-keyscan -t ed25519 -T 3 -H",
   "expected_fingerprint",
   "CONTROLLER_RECOVERY",

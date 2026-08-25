@@ -40,6 +40,44 @@ tasks:
         ssh_target="$ssh_user@$public_address"
         controller_target='{{.INFRA_SSH_TARGET}}'
 
+        planned_reinstall="$(bun "$provider" reinstall-required --node "$node" \
+          --allow-reinstall "$allow_reinstall")"
+        if test "$planned_reinstall" = true; then
+          ssh -o BatchMode=yes "$controller_target" bash -s -- \
+            "$node" "$mesh_address" <<'CONTROLLER_QUIESCE'
+        set -euo pipefail
+        node="$1"
+        mesh_address="$2"
+        if ! sudo -n k0s kubectl get node "$node" >/dev/null 2>&1; then
+          exit 0
+        fi
+        actual_mesh_address="$(sudo -n k0s kubectl get node "$node" \
+          -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}')"
+        test "$actual_mesh_address" = "$mesh_address"
+        sudo -n k0s kubectl cordon "$node"
+        deadline="$(( $(date +%s) + 7200 ))"
+        while :; do
+          active_runners="$(sudo -n k0s kubectl get pods -n arc-runners \
+            --field-selector "spec.nodeName=$node" \
+            -l actions.github.com/scale-set-name -o json \
+            | jq '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+          if test "$active_runners" = 0; then
+            break
+          fi
+          if test "$(date +%s)" -ge "$deadline"; then
+            echo "Timed out waiting for $active_runners ARC runner(s) on $node" >&2
+            exit 1
+          fi
+          echo "Waiting for $active_runners ARC runner(s) to finish on $node" >&2
+          sleep 30
+        done
+        sudo -n k0s kubectl delete pod arc-worker-kata-smoke -n arc-runners \
+          --ignore-not-found --wait=true
+        sudo -n k0s kubectl drain "$node" --ignore-daemonsets \
+          --delete-emptydir-data --grace-period=120 --timeout=20m
+        CONTROLLER_QUIESCE
+        fi
+
         result="$(bun "$provider" provision --node "$node" \
           --allow-reinstall "$allow_reinstall")"
         case "$result" in
@@ -70,7 +108,12 @@ tasks:
         ssh-keygen -R "$node" >/dev/null 2>&1 || true
         CONTROLLER_RECOVERY
             ;;
-          unchanged) ;;
+          unchanged)
+            if test "$planned_reinstall" = true; then
+              ssh -o BatchMode=yes "$controller_target" \
+                "sudo -n k0s kubectl uncordon '$node'"
+            fi
+            ;;
           *) echo "Unexpected provider convergence result" >&2; exit 1 ;;
         esac
 

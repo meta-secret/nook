@@ -63,9 +63,15 @@ installs k0s, and qualifies ARC. It reads the OVH API credential from
 `~/.nook/ovh-api.json`. Credentials and host identities remain beneath
 mode-`0700` `~/.nook` directories with private files mode `0600`.
 
-An already-installed declared OS is reconciled without reinstalling it. A
-different installed OS is preserved unless the operator passes
-`INFRA_OVH_ALLOW_REINSTALL=true` for declared disaster recovery.
+An already-installed declared OS is reconciled without reinstalling it only
+when its matching host identity is present in the private store. The adapter
+never invents a local identity for an unchanged server. Restore that identity
+or pass `INFRA_OVH_ALLOW_REINSTALL=true` for declared disaster recovery.
+
+The recovery input forces a reinstall even when the OS name already matches.
+Before OVH can wipe the machine, the task authenticates the exact Kubernetes
+node, cordons it, waits up to two hours for active ARC jobs to finish, and
+drains its remaining workloads.
 
 Join or reconcile the compute node only through the Taskfile:
 

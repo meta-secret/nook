@@ -34,6 +34,7 @@ enum CliAction {
   HostFingerprint = "host-fingerprint",
   Inspect = "inspect",
   Provision = "provision",
+  ReinstallRequired = "reinstall-required",
 }
 
 enum HttpMethod {
@@ -145,6 +146,11 @@ interface HostIdentity {
   publicKey: string;
 }
 
+interface HostIdentityInput {
+  allowCreate: boolean;
+  hostname: string;
+}
+
 const repositoryRoot = resolve(import.meta.dir, "../..");
 const homeDirectory = process.env.HOME;
 if (!homeDirectory) throw new Error("HOME must be set for the private credential store");
@@ -195,14 +201,19 @@ async function runCommand(command: string[]): Promise<string> {
   return stdout.trim();
 }
 
-async function ensureHostIdentity(hostname: string): Promise<HostIdentity> {
-  const directory = resolve(hostIdentityRoot, hostname);
+async function loadHostIdentity(input: HostIdentityInput): Promise<HostIdentity> {
+  const directory = resolve(hostIdentityRoot, input.hostname);
   const privateKeyPath = resolve(directory, "ssh_host_ed25519_key");
   const publicKeyPath = `${privateKeyPath}.pub`;
   await mkdir(directory, { mode: 0o700, recursive: true });
   await chmod(hostIdentityRoot, 0o700);
   await chmod(directory, 0o700);
   if (!(await pathExists(privateKeyPath))) {
+    if (!input.allowCreate) {
+      throw new Error(
+        `missing trusted SSH host identity for ${input.hostname}; restore it or explicitly reinstall the server`,
+      );
+    }
     await runCommand([
       "ssh-keygen",
       "-q",
@@ -211,7 +222,7 @@ async function ensureHostIdentity(hostname: string): Promise<HostIdentity> {
       "-N",
       "",
       "-C",
-      `nook-host:${hostname}`,
+      `nook-host:${input.hostname}`,
       "-f",
       privateKeyPath,
     ]);
@@ -275,9 +286,9 @@ export function requiresReinstall(input: {
   currentOperatingSystem: string;
   desiredOperatingSystem: string;
 }): boolean {
+  if (input.allowReinstall) return true;
   if (input.currentOperatingSystem === input.desiredOperatingSystem) return false;
   if (input.currentOperatingSystem === "none_64") return true;
-  if (input.allowReinstall) return true;
   throw new Error(
     `refusing to replace ${input.currentOperatingSystem}; declare disaster recovery explicitly`,
   );
@@ -513,7 +524,10 @@ async function provision(input: ProvisionContext): Promise<ProvisionResult> {
   if (!/^ssh-(?:ed25519|rsa) [A-Za-z0-9+/=]+(?: .*)?$/.test(publicKey.trim())) {
     throw new Error("SSH public key must be an OpenSSH ed25519 or RSA key");
   }
-  const hostIdentity = await ensureHostIdentity(input.hostname);
+  const hostIdentity = await loadHostIdentity({
+    allowCreate: true,
+    hostname: input.hostname,
+  });
   const payload: ReinstallRequest = {
     customizations: {
       hostname: input.hostname,
@@ -565,7 +579,10 @@ async function main(): Promise<void> {
     return;
   }
   if (args.action === CliAction.HostFingerprint) {
-    const hostIdentity = await ensureHostIdentity(args.node);
+    const hostIdentity = await loadHostIdentity({
+      allowCreate: false,
+      hostname: args.node,
+    });
     process.stdout.write(`${hostIdentity.fingerprint}\n`);
     return;
   }
@@ -575,6 +592,16 @@ async function main(): Promise<void> {
     process.stdout.write(
       `${server.name}\t${server.ip}\t${server.commercialRange}\t${server.datacenter}\t${server.os}\t${server.state}\n`,
     );
+    return;
+  }
+  if (args.action === CliAction.ReinstallRequired) {
+    const server = await getServer({ credentials, definition });
+    const required = requiresReinstall({
+      allowReinstall: args.allowReinstall,
+      currentOperatingSystem: server.os,
+      desiredOperatingSystem: definition.operatingSystem,
+    });
+    process.stdout.write(`${required}\n`);
     return;
   }
   const context: ProvisionContext = {

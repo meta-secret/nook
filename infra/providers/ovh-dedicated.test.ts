@@ -45,6 +45,15 @@ describe("OVH dedicated provider", () => {
     expect(() => requiresReinstall(input)).toThrow("refusing to replace");
   });
 
+  test("honors an explicit same-OS disaster-recovery reinstall", () => {
+    const input = {
+      allowReinstall: true,
+      currentOperatingSystem: "debian13_64",
+      desiredOperatingSystem: "debian13_64",
+    };
+    expect(requiresReinstall(input)).toBeTrue();
+  });
+
   test("recognizes every OVH terminal reinstall failure", () => {
     expect(isTerminalTaskFailure(OvhTaskStatus.Cancelled)).toBeTrue();
     expect(isTerminalTaskFailure(OvhTaskStatus.CustomerError)).toBeTrue();
