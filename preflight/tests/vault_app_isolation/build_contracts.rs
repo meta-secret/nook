@@ -750,6 +750,8 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "nook-app/nook-web/nook-web-app/playwright.config.ts",
         "nook-app/nook-web/nook-web-app/playwright.isolation.config.ts",
         "nook-app/nook-web/nook-web-extension/e2e/helpers/extension-smoke-runtime.ts",
+        "nook-app/nook-web/nook-web-research/playwright.config.ts",
+        "agentic-ai/minds/hive-console/playwright.config.ts",
     ] {
         assert!(
             read(&root, config).contains("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"),
