@@ -228,6 +228,24 @@ type RuntimeReceiverResolution = {
   readonly seen: ReadonlySet<ts.Symbol>;
 };
 
+type RuntimeReceiverInitializerResolution = {
+  readonly checker: ts.TypeChecker;
+  readonly seen: ReadonlySet<ts.Symbol>;
+  readonly symbol: ts.Symbol;
+};
+
+type BindingElementInitializerResolution = {
+  readonly binding: ts.BindingElement;
+  readonly checker: ts.TypeChecker;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
+type BindingPatternInitializerResolution = {
+  readonly checker: ts.TypeChecker;
+  readonly pattern: ts.BindingPattern;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
 function isComputedCallableElementAccess(
   inspection: ComputedElementInspection,
 ): boolean {
@@ -260,19 +278,131 @@ function runtimeReceiverExpression(
   if (!ts.isIdentifier(expression)) return expression;
   const symbol = resolution.checker.getSymbolAtLocation(expression);
   if (!symbol || resolution.seen.has(symbol)) return expression;
-  const declaration = symbol.declarations?.find(
-    (candidate): candidate is ts.VariableDeclaration =>
-      ts.isVariableDeclaration(candidate) && Boolean(candidate.initializer),
-  );
-  if (!declaration?.initializer) return expression;
   const seen = new Set(resolution.seen);
   seen.add(symbol);
+  const initializerResolution: RuntimeReceiverInitializerResolution = {
+    checker: resolution.checker,
+    seen,
+    symbol,
+  };
+  const initializer = runtimeReceiverInitializer(initializerResolution);
+  if (initializer === false) return expression;
   const nested: RuntimeReceiverResolution = {
     checker: resolution.checker,
-    expression: declaration.initializer,
+    expression: initializer,
     seen,
   };
   return runtimeReceiverExpression(nested);
+}
+
+function runtimeReceiverInitializer(
+  resolution: RuntimeReceiverInitializerResolution,
+): ts.Expression | false {
+  for (const declaration of resolution.symbol.declarations ?? []) {
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      return declaration.initializer;
+    }
+    if (ts.isBindingElement(declaration)) {
+      const bindingResolution: BindingElementInitializerResolution = {
+        binding: declaration,
+        checker: resolution.checker,
+        seen: resolution.seen,
+      };
+      const initializer = bindingElementInitializer(bindingResolution);
+      if (initializer !== false) return initializer;
+    }
+  }
+  return false;
+}
+
+function bindingElementInitializer(
+  resolution: BindingElementInitializerResolution,
+): ts.Expression | false {
+  const pattern = resolution.binding.parent;
+  const patternResolution: BindingPatternInitializerResolution = {
+    checker: resolution.checker,
+    pattern,
+    seen: resolution.seen,
+  };
+  const patternInitializer = bindingPatternInitializer(patternResolution);
+  if (patternInitializer === false) return false;
+  const sourceResolution: RuntimeReceiverResolution = {
+    checker: resolution.checker,
+    expression: patternInitializer,
+    seen: resolution.seen,
+  };
+  const initializer = runtimeReceiverExpression(sourceResolution);
+  if (
+    ts.isArrayBindingPattern(pattern) &&
+    ts.isArrayLiteralExpression(initializer)
+  ) {
+    const index = pattern.elements.indexOf(resolution.binding);
+    const element = index >= 0 ? initializer.elements.at(index) : false;
+    return element &&
+      !ts.isSpreadElement(element) &&
+      !ts.isOmittedExpression(element)
+      ? element
+      : false;
+  }
+  if (
+    !ts.isObjectBindingPattern(pattern) ||
+    !ts.isObjectLiteralExpression(initializer)
+  ) {
+    return false;
+  }
+  const propertyName = bindingElementPropertyName(resolution.binding);
+  if (propertyName === false) return false;
+  for (const property of initializer.properties) {
+    if (
+      ts.isPropertyAssignment(property) &&
+      propertyNameText(property.name) === propertyName
+    ) {
+      return property.initializer;
+    }
+    if (
+      ts.isShorthandPropertyAssignment(property) &&
+      property.name.text === propertyName
+    ) {
+      return property.name;
+    }
+  }
+  return false;
+}
+
+function bindingPatternInitializer(
+  resolution: BindingPatternInitializerResolution,
+): ts.Expression | false {
+  const parent = resolution.pattern.parent;
+  if (
+    (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) &&
+    parent.name === resolution.pattern
+  ) {
+    return parent.initializer ?? false;
+  }
+  if (ts.isBindingElement(parent) && parent.name === resolution.pattern) {
+    const parentResolution: BindingElementInitializerResolution = {
+      binding: parent,
+      checker: resolution.checker,
+      seen: resolution.seen,
+    };
+    return bindingElementInitializer(parentResolution);
+  }
+  return false;
+}
+
+function bindingElementPropertyName(
+  binding: ts.BindingElement,
+): string | false {
+  if (binding.propertyName) return propertyNameText(binding.propertyName);
+  return ts.isIdentifier(binding.name) ? binding.name.text : false;
+}
+
+function propertyNameText(name: ts.PropertyName): string | false {
+  return ts.isIdentifier(name) ||
+    ts.isStringLiteralLike(name) ||
+    ts.isNumericLiteral(name)
+    ? name.text
+    : false;
 }
 
 function typeCanExposeEvaluator(type: ts.Type): boolean {
