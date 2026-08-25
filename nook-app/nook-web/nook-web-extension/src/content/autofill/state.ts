@@ -134,6 +134,7 @@ export class ScanState {
   }
   requestFollowUpIfRunning(): boolean {
     if (this.currentActivity === ScanActivityKind.Idle) return false
+    if (!this.followUpRequested) this.sequence += 1
     this.followUpRequested = true
     return true
   }

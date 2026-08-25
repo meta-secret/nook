@@ -15,8 +15,12 @@ import {
   renderEnrollmentActions,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
-import { continueWithAuthenticator } from './authenticator-actions'
 import {
+  cancelPendingAuthenticatorPickerRequest,
+  continueWithAuthenticator,
+} from './authenticator-actions'
+import {
+  cancelPendingLoginPickerRequest,
   continueWithNook,
   generatePasswordWithNook,
   proposePasskeyWithNook,
@@ -167,6 +171,8 @@ export function renderWidget({
     authentication_workflow_pilot_presentation_capability(snapshot) !==
     'propose-action'
   ) {
+    cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
     removeWidget()
     return
   }

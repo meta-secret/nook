@@ -128,6 +128,7 @@ export function routeExtensionLifecycleMessage({
     }
     invalidateAllLoginMatchAvailability()
     void closeExtensionSessionDocument()
+      .finally(invalidateAllLoginMatchAvailability)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))
     return true
@@ -142,9 +143,10 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     invalidateAllLoginMatchAvailability()
-    void closeExtensionSessionDocument().then(() =>
-      sendResponse(successResponse),
-    )
+    void closeExtensionSessionDocument()
+      .finally(invalidateAllLoginMatchAvailability)
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(sessionLockFailureResponse))
     return true
   }
 

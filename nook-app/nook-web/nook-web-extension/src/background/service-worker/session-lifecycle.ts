@@ -135,7 +135,10 @@ export async function openCompanionLauncher(
   const popupUrl = chrome.runtime.getURL('popup/index.html')
   if (intent === OpenCompanionLauncherIntent.Default) {
     const toolbarAction = chrome.action as ToolbarActionPopupApi
-    if (toolbarAction.openPopup) await toolbarAction.openPopup()
+    if (!toolbarAction.openPopup) {
+      throw new Error('toolbar popup unavailable')
+    }
+    await toolbarAction.openPopup()
     return
   }
   const launcherUrl = `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`

@@ -104,9 +104,12 @@ describe('service worker routing', () => {
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
-  test('invalidates login-match metadata before locking the session', async () => {
+  test('invalidates login-match metadata before and after locking the session', async () => {
     invalidateAllLoginMatchAvailability.mockClear()
-    const closeExtensionSessionDocument = mock(() => Promise.resolve())
+    const closeExtensionSessionDocument = mock(() => {
+      expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+      return Promise.resolve()
+    })
     const dependencies: ExtensionLifecycleRoutingDependencies = {
       ...lifecycleDependencies,
       closeExtensionSessionDocument,
@@ -130,6 +133,7 @@ describe('service worker routing', () => {
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
     await flushResponses()
     expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {

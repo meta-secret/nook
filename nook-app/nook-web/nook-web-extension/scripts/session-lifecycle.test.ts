@@ -75,4 +75,22 @@ describe('openCompanionLauncherBestEffort', () => {
     ).not.toThrow()
     await Promise.resolve()
   })
+
+  test('rejects when the browser cannot open the toolbar popup', async () => {
+    Object.assign(globalThis, {
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+    })
+    globalThis.chrome = {
+      runtime: {
+        getURL: () => 'chrome-extension://nook/popup/index.html',
+      },
+      action: {},
+    } as typeof chrome
+    const { openCompanionLauncher } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await expect(
+      openCompanionLauncher(OpenCompanionLauncherIntent.Default),
+    ).rejects.toThrow('toolbar popup unavailable')
+  })
 })
