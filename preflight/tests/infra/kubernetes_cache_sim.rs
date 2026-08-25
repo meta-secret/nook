@@ -86,6 +86,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
     let jobs = read("infra/sim/kubernetes-cache/jobs.ts");
     let proof = read("infra/sim/kubernetes-cache/prove.ts");
     let platform = read("infra/sim/kubernetes-cache/platform.ts");
+    let shard_services = read("infra/sim/kubernetes-cache/shard-services.yaml");
     for required in [
         "automountServiceAccountToken: false",
         "allowPrivilegeEscalation: false",
@@ -141,13 +142,27 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         );
     }
     for required in [
-        "nook-buildkit-0.nook-buildkit-headless",
-        "nook-buildkit-1.nook-buildkit-headless",
-        "nook-buildkit-2.nook-buildkit-headless",
+        "nook-buildkit-proof-0",
+        "nook-buildkit-proof-1",
+        "nook-buildkit-proof-2",
     ] {
         assert!(
             contracts.contains(required),
             "deterministic BuildKit shard address is missing: {required}"
+        );
+        assert!(
+            shard_services.contains(required),
+            "deterministic BuildKit shard Service is missing: {required}"
+        );
+    }
+    for required in [
+        "statefulset.kubernetes.io/pod-name: nook-buildkit-0",
+        "statefulset.kubernetes.io/pod-name: nook-buildkit-1",
+        "statefulset.kubernetes.io/pod-name: nook-buildkit-2",
+    ] {
+        assert!(
+            shard_services.contains(required),
+            "deterministic BuildKit shard selector is missing: {required}"
         );
     }
     let allowed = proof

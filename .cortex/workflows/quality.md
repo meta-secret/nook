@@ -371,7 +371,8 @@ Use this workflow for quality, CI, and deployment changes.
     - concurrent isolated refs remain separate; and
     - each isolated ref restores as CACHED on a different shard.
 
-    Exact-shard access and cache assertions use StatefulSet headless endpoints.
+    Exact-shard access and cache assertions use proof-only ordinal-selecting
+    Services.
     The production node-local Service remains unchanged in the rendered
     overlay. Its `internalTrafficPolicy` routing remains a k0s deployment proof.
 

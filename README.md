@@ -625,7 +625,7 @@ runner's Docker daemon creates only the k3d infrastructure containers.
 Kubernetes workloads receive no runtime socket, service-account token, host
 path, or privileged context. The proof covers cache persistence and
 cross-shard portability. It proves allowed and denied access against exact
-StatefulSet shards through their headless endpoints. The production node-local
+StatefulSet shards through proof-only ordinal-selecting Services. The production node-local
 Service remains unchanged but is not exercised by hosted k3d. The proof does
 not replace production evidence for k0s, node-local Service routing, WireGuard,
 Kata, ARC lifecycle, capacity, or performance.

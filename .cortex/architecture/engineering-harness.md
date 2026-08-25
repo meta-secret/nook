@@ -274,7 +274,7 @@ runner is not used.
 - Each simulated node retains one rootless BuildKit shard on node-local
   storage. In-cluster Zot remains the portable cache boundary between shards.
 - The proof first requires an authorized exact-shard BuildKit connection.
-- Cache assertions use exact StatefulSet headless endpoints so every local,
+- Cache assertions use proof-only ordinal-selecting Services so every local,
   restart, and cold-restore result belongs to a known shard.
 - The production node-local Service remains unchanged in the rendered overlay.
 - Hosted k3d clients do not exercise its `internalTrafficPolicy` path.
