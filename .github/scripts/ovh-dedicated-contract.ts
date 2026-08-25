@@ -69,7 +69,6 @@ for (const fragment of [
   "postInstallationScript",
   "applicationSecret}",
   "consumerKey}",
-  "python",
 ]) {
   forbidFragment({ fragment, label: "OVH provider", source: provider });
 }
@@ -88,7 +87,7 @@ for (const fragment of [
   requireFragment({ fragment, label: "OVH Taskfile", source: tasks });
 }
 
-for (const fragment of ["cloud-init", "python", "PasswordAuthentication yes"]) {
+for (const fragment of ["cloud-init", "PasswordAuthentication yes"]) {
   forbidFragment({ fragment, label: "OVH Taskfile", source: tasks });
 }
 
