@@ -540,10 +540,12 @@
   - [Executable scenarios](product-specs/file-attachments.md#executable-scenarios)
   - [Out of scope (for now)](product-specs/file-attachments.md#out-of-scope-for-now)
   - [Status](product-specs/file-attachments.md#status)
-- [Product Specifications Index](product-specs/index.md)
-  - [Overview](product-specs/index.md#overview)
-  - [Product catalog](product-specs/index.md#product-catalog)
-- [Product Spec: Monorepo & Toolchain Setup](product-specs/monorepo-setup.md): [1. Goal & Context](product-specs/monorepo-setup.md#1-goal--context); [2. Core Requirements](product-specs/monorepo-setup.md#2-core-requirements); [3. Toolchain & Runtime Specs](product-specs/monorepo-setup.md#3-toolchain--runtime-specs); [4. Docker & CI caching](product-specs/monorepo-setup.md#4-docker--ci-caching).
+- [Product Specifications Index](product-specs/index.md): [Overview](product-specs/index.md#overview); [Product catalog](product-specs/index.md#product-catalog).
+- [Product Spec: Monorepo & Toolchain Setup](product-specs/monorepo-setup.md)
+  - [1. Goal & Context](product-specs/monorepo-setup.md#1-goal--context)
+  - [2. Core Requirements](product-specs/monorepo-setup.md#2-core-requirements)
+  - [3. Toolchain & Runtime Specs](product-specs/monorepo-setup.md#3-toolchain--runtime-specs)
+  - [4. Docker & CI caching](product-specs/monorepo-setup.md#4-docker--ci-caching)
 - [Password Unlock & QR-Based Device Join](product-specs/password-envelope.md)
   - [Overview](product-specs/password-envelope.md#overview)
   - [1. Goals](product-specs/password-envelope.md#1-goals)
@@ -711,9 +713,7 @@
   - [Browser extension boundary](design-docs/identity-vault-architecture.md#browser-extension-boundary)
   - [Invariants](design-docs/identity-vault-architecture.md#invariants)
   - [Related records](design-docs/identity-vault-architecture.md#related-records)
-- [Design Docs Index](design-docs/index.md)
-  - [Overview](design-docs/index.md#overview)
-  - [Document catalog](design-docs/index.md#document-catalog)
+- [Design Docs Index](design-docs/index.md): [Overview](design-docs/index.md#overview); [Document catalog](design-docs/index.md#document-catalog).
 - [Website Passkey Manager](design-docs/passkey-manager.md)
   - [Overview](design-docs/passkey-manager.md#overview)
   - [Trust and ownership boundaries](design-docs/passkey-manager.md#trust-and-ownership-boundaries)
@@ -914,7 +914,9 @@
   - [Delivery owner](workflows/module-oriented-development.md#delivery-owner)
   - [Validation](workflows/module-oriented-development.md#validation)
   - [Non-goals](workflows/module-oriented-development.md#non-goals)
-- [Cross-Package Changes](workflows/monorepo.md): [Overview](workflows/monorepo.md#overview); [New vault item type checklist](workflows/monorepo.md#new-vault-item-type-checklist).
+- [Cross-Package Changes](workflows/monorepo.md)
+  - [Overview](workflows/monorepo.md#overview)
+  - [New vault item type checklist](workflows/monorepo.md#new-vault-item-type-checklist)
 - [Pull Request Workflow](workflows/pull-requests.md)
   - [Overview](workflows/pull-requests.md#overview)
   - [PR-first agent contract](workflows/pull-requests.md#pr-first-agent-contract)
@@ -991,9 +993,7 @@
 - [Reference: Svelte + Vite + Bun](references/bun-svelte.md): [1. Package Manager](references/bun-svelte.md#1-package-manager); [2. Dev Server and Build](references/bun-svelte.md#2-dev-server-and-build); [Blank page after WASM changes](references/bun-svelte.md#blank-page-after-wasm-changes); [3. E2e tests](references/bun-svelte.md#3-e2e-tests).
 - [Cloudflare Operations](references/cloudflare-operations.md): [Overview](references/cloudflare-operations.md#overview); [Operating contract](references/cloudflare-operations.md#operating-contract).
 - [Infrastructure Provider Operations](references/infrastructure-provider-operations.md): [Overview](references/infrastructure-provider-operations.md#overview); [Provider access order](references/infrastructure-provider-operations.md#provider-access-order); [Credential persistence hard rule](references/infrastructure-provider-operations.md#credential-persistence-hard-rule); [Mutation contract](references/infrastructure-provider-operations.md#mutation-contract).
-- [References Index](references/index.md)
-  - [Overview](references/index.md#overview)
-  - [Reference catalog](references/index.md#reference-catalog)
+- [References Index](references/index.md): [Overview](references/index.md#overview); [Reference catalog](references/index.md#reference-catalog).
 - [Reference: Application Logging](references/logging.md): [Overview](references/logging.md#overview); [Debugging, troubleshooting, and CI verification](references/logging.md#debugging-troubleshooting-and-ci-verification); [Architecture](references/logging.md#architecture); [Levels are persistence-gated](references/logging.md#levels-are-persistence-gated); [Setting the level](references/logging.md#setting-the-level); [Viewing logs](references/logging.md#viewing-logs); [Logging from code](references/logging.md#logging-from-code); [e2e integration (per-test log attachment)](references/logging.md#e2e-integration-per-test-log-attachment); [Agent rule: use app logs for Playwright debug and analysis](references/logging.md#agent-rule-use-app-logs-for-playwright-debug-and-analysis); [Milestone assertions in e2e specs](references/logging.md#milestone-assertions-in-e2e-specs).
 - [Reference: Loom tools and static agent workflows](references/loom-tools.md): [Overview](references/loom-tools.md#overview); [Static agent workflow boundary](references/loom-tools.md#static-agent-workflow-boundary); [Invoke a leaf tool](references/loom-tools.md#invoke-a-leaf-tool); [TypeScript domain structure](references/loom-tools.md#typescript-domain-structure); [Domain request rule](references/loom-tools.md#domain-request-rule); [Discover request kinds](references/loom-tools.md#discover-request-kinds); [dependencyPopularity](references/loom-tools.md#dependencypopularity); [Common requests](references/loom-tools.md#common-requests); [prePush](references/loom-tools.md#prepush); [cortexAudit](references/loom-tools.md#cortexaudit); [skillScaffold](references/loom-tools.md#skillscaffold); [agentStats](references/loom-tools.md#agentstats-assemble--validate--publish); [prLand](references/loom-tools.md#prland-status--validate--ready--mergecheck); [toolsCall](references/loom-tools.md#toolscall); [Response](references/loom-tools.md#response).
 - [Reference: Rust + WebAssembly (wasm-bindgen)](references/rust-wasm.md): [1. Wasm Bindgen Setup](references/rust-wasm.md#1-wasm-bindgen-setup); [2. Compiling for the web](references/rust-wasm.md#2-compiling-for-the-web); [3. Session state](references/rust-wasm.md#3-session-state-nookvaultmanager); [3a. Browser API boundaries](references/rust-wasm.md#3a-browser-api-boundaries); [4. Typed WASM boundary](references/rust-wasm.md#4-typed-wasm-boundary-nook-appnook-platformnook-wasmsrctypesrs); [5. Vault secrets at the JS boundary](references/rust-wasm.md#5-vault-secrets-at-the-js-boundary); [Adding a new secret type](references/rust-wasm.md#adding-a-new-secret-type); [6. Testing](references/rust-wasm.md#6-testing).

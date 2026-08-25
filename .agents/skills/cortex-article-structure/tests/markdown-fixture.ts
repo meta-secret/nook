@@ -27,6 +27,12 @@ function blockFromNode(node: RootContent): CortexArticleBlock {
       type: CortexArticleBlockKind.Heading,
     };
   }
+  if (
+    (node.type === 'blockquote' || node.type === 'list') &&
+    nodeText(node).trim().length === 0
+  ) {
+    return { line, type: CortexArticleBlockKind.Separator };
+  }
   if (node.type === 'paragraph' || node.type === 'definition') {
     return {
       line,

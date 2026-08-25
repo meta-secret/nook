@@ -191,6 +191,18 @@ test('does not count an empty fenced block as article content', () => {
   ]);
 });
 
+test('does not count empty container blocks as article content', () => {
+  for (const container of ['>', '-', '1.']) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/empty-container.md',
+      content: `# Empty container\n\n## Empty article\n\n${container}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((item) => item.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+  }
+});
+
 test('treats thematic breaks as invisible density-resetting separators', () => {
   const emptyArgs: MakeDocumentArgs = {
     path: '.cortex/break-only.md',

@@ -233,6 +233,12 @@ function auditArticle(args: AuditArticleArgs): void {
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
+  if (
+    (node.type === 'blockquote' || node.type === 'list') &&
+    nodeText(node).trim().length === 0
+  ) {
+    return false;
+  }
   return (
     node.type !== 'heading' &&
     node.type !== 'thematicBreak' &&
