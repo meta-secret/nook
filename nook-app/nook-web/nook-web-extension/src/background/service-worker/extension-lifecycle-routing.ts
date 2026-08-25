@@ -86,13 +86,43 @@ async function clearAuthorizationBoundSurfaces({
   clearPendingAccountPickers,
   closeExtensionSessionDocument,
 }: ClearAuthorizationBoundSurfacesArgs): Promise<void> {
-  await clearPendingAccountPickers()
+  let failed = false
+  try {
+    await clearPendingAccountPickers()
+  } catch {
+    failed = true
+  }
   try {
     await clearMountedAuthenticationSurfaces()
-    await closeExtensionSessionDocument()
-  } finally {
-    await clearPendingAccountPickers()
+  } catch {
+    failed = true
   }
+  try {
+    await closeExtensionSessionDocument()
+  } catch {
+    failed = true
+  }
+  try {
+    await clearPendingAccountPickers()
+  } catch {
+    failed = true
+  }
+  if (failed) throw new Error('authorization-bound surface cleanup failed')
+}
+
+type ClearRevokedAuthenticationSurfacesArgs = {
+  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
+  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
+}
+
+async function clearRevokedAuthenticationSurfaces({
+  clearMountedAuthenticationSurfaces,
+  clearPendingAccountPickers,
+}: ClearRevokedAuthenticationSurfacesArgs): Promise<void> {
+  await Promise.allSettled([
+    clearPendingAccountPickers(),
+    clearMountedAuthenticationSurfaces(),
+  ])
 }
 
 export enum ExtensionLifecycleRoutingResult {
@@ -233,9 +263,16 @@ export function routeExtensionLifecycleMessage({
           await refreshAuthenticationSurfaces()
         } else {
           if (response.reason === 'event-log-access-revoked') {
-            await clearPendingAccountPickers()
+            const clearArgs: Parameters<
+              typeof clearRevokedAuthenticationSurfaces
+            >[0] = {
+              clearMountedAuthenticationSurfaces,
+              clearPendingAccountPickers,
+            }
+            await clearRevokedAuthenticationSurfaces(clearArgs)
+          } else {
+            await clearMountedAuthenticationSurfaces()
           }
-          await clearMountedAuthenticationSurfaces()
         }
         return response
       })

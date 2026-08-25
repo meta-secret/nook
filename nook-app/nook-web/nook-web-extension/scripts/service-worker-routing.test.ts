@@ -169,6 +169,47 @@ describe('service worker routing', () => {
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
   })
 
+  test('closes the session and clears surfaces when picker cleanup fails', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    const rejectingPickerCleanup = mock(() =>
+      Promise.reject(new Error('session storage unavailable')),
+    )
+    const surfaceCleanup = mock(() => Promise.resolve())
+    const closeExtensionSessionDocument = mock(() => Promise.resolve())
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      clearMountedAuthenticationSurfaces: surfaceCleanup,
+      clearPendingAccountPickers: rejectingPickerCleanup,
+      closeExtensionSessionDocument,
+      isExtensionSessionLockMessage: () => true,
+      isExtensionSessionEnsureMessage: () => false,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: { type: 'test-session-lock' },
+      sender: {
+        id: 'nook-extension',
+        url: 'chrome-extension://nook-extension/popup/index.html',
+      },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    await flushResponses()
+    await flushResponses()
+    await flushResponses()
+    expect(rejectingPickerCleanup).toHaveBeenCalledTimes(2)
+    expect(surfaceCleanup).toHaveBeenCalledTimes(1)
+    expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'session-lock-failed',
+    })
+  })
+
   test('clears mounted authentication surfaces when the session expires', async () => {
     invalidateAllLoginMatchAvailability.mockClear()
     clearMountedAuthenticationSurfaces.mockClear()
@@ -250,6 +291,59 @@ describe('service worker routing', () => {
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
     expect(clearPendingAccountPickers).toHaveBeenCalledTimes(1)
     expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(sendResponse).toHaveBeenCalledWith({
+      ok: false,
+      reason: 'event-log-access-revoked',
+    })
+  })
+
+  test('clears revoked surfaces when picker persistence cleanup fails', async () => {
+    const rejectingPickerCleanup = mock(() =>
+      Promise.reject(new Error('session storage unavailable')),
+    )
+    const surfaceCleanup = mock(() => Promise.resolve())
+    const importLocalEventLogUpdate = mock(() =>
+      Promise.resolve({
+        ok: false as const,
+        reason: 'event-log-access-revoked' as const,
+      }),
+    )
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      clearMountedAuthenticationSurfaces: surfaceCleanup,
+      clearPendingAccountPickers: rejectingPickerCleanup,
+      importLocalEventLogUpdate,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: {
+        type: 'nook:extension-local-event-log-updated',
+        payload: {
+          vaultStoreId: 'vault-1',
+          eventLogRecords: [
+            {
+              eventId: 'event-1',
+              path: '/vault-1/event-1',
+              event: { schema_version: 1 },
+            },
+          ],
+        },
+      },
+      sender: {
+        id: 'nook-extension',
+        url: 'https://simple.example.test/',
+      },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    await flushResponses()
+    await flushResponses()
+    expect(rejectingPickerCleanup).toHaveBeenCalledTimes(1)
+    expect(surfaceCleanup).toHaveBeenCalledTimes(1)
     expect(sendResponse).toHaveBeenCalledWith({
       ok: false,
       reason: 'event-log-access-revoked',

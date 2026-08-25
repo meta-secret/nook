@@ -87,7 +87,10 @@ Nook Pilot may propose **Use passkey** when an unlocked vault has confident RP
 matches, or **Create passkey** when the page exposes a passkey control and no
 matches exist. Proposals require human approval in the Pilot gate, then only
 activate the site's own WebAuthn entry point so the existing consent chooser
-runs. Automatic submit/sign-up remains out of scope.
+runs. A confident match may use the accepted authentication-advance control in
+the same observed form scope when no passkey-labeled control exists. Create
+still requires an explicit passkey control. Automatic approval and silent
+sign-up remain out of scope.
 
 The extension prompt is visually Nook-owned but a website can imitate any
 in-page UI. It therefore never asks for recovery material, provider tokens, or

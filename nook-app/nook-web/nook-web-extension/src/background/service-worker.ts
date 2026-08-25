@@ -103,7 +103,6 @@ import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
 import {
   cancelWebsitePasskey,
   MatchingPasskeyAvailabilityKind,
-  type MatchingPasskeyAvailability,
   matchingPasskeyAvailabilityForOriginSafe,
   performWebsitePasskey,
   websitePasskeyOptions,
@@ -342,22 +341,13 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sendResponse(nookTypedArgs0_2)
       return false
     }
-    const needsPasskeyLookup = message.payload.observations.some(
-      (observation) => observation.authenticator.passkeyControl === 'present',
+    const passkeyLookup = matchingPasskeyAvailabilityForOriginSafe(
+      message.payload.origin,
     )
-    const noPasskeyLookup: MatchingPasskeyAvailability = {
-      kind: MatchingPasskeyAvailabilityKind.Unavailable,
-    }
-    const passkeyLookup = needsPasskeyLookup
-      ? matchingPasskeyAvailabilityForOriginSafe(message.payload.origin)
-      : Promise.resolve(noPasskeyLookup)
     void passkeyLookup
       .then(async (passkeyAvailability) => {
         const observations = message.payload.observations.map((observation) => {
-          const passkeyControlPresent =
-            observation.authenticator.passkeyControl === 'present'
           const passkeyVaultAvailable =
-            passkeyControlPresent &&
             passkeyAvailability.kind === MatchingPasskeyAvailabilityKind.Ready
           return {
             ...observation,

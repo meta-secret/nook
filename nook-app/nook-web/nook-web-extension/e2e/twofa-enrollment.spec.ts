@@ -125,6 +125,49 @@ async function listExtensionAuthenticators(
   }, grants)
 }
 
+type RefreshAuthenticationSurfacesArgs = {
+  context: Awaited<ReturnType<typeof launchPairedPinExtension>>['context']
+  origin: string
+}
+
+async function refreshAuthenticationSurfacesForOrigin({
+  context,
+  origin,
+}: RefreshAuthenticationSurfacesArgs): Promise<void> {
+  const serviceWorker =
+    context.serviceWorkers()[0] ??
+    (await context.waitForEvent('serviceworker', { timeout: 45_000 }))
+  await serviceWorker.evaluate(async (pageOrigin) => {
+    const [tab] = await new Promise<chrome.tabs.Tab[]>((resolve, reject) => {
+      globalThis.chrome.tabs.query({ url: `${pageOrigin}/*` }, (tabs) => {
+        const error = globalThis.chrome.runtime.lastError?.message
+        if (error) {
+          reject(new Error(error))
+          return
+        }
+        resolve(tabs)
+      })
+    })
+    if (typeof tab?.id !== 'number') {
+      throw new Error('Enrollment tab was not available for refresh.')
+    }
+    await new Promise<void>((resolve, reject) => {
+      globalThis.chrome.tabs.sendMessage(
+        tab.id,
+        { type: 'nook:refresh-authentication-surfaces' },
+        () => {
+          const error = globalThis.chrome.runtime.lastError?.message
+          if (error) {
+            reject(new Error(error))
+            return
+          }
+          resolve()
+        },
+      )
+    })
+  }, origin)
+}
+
 type MalformedBackupCodeReplaceAttemptArgs = {
   context: Awaited<ReturnType<typeof launchPairedPinExtension>>['context']
   account: string
@@ -407,40 +450,11 @@ test.describe('Browser 2FA enrollment', () => {
         enrollmentAction,
         'viewport rescans must not inert enrollment actions',
       ).toBeEnabled()
-      const serviceWorker =
-        paired.context.serviceWorkers()[0] ??
-        (await paired.context.waitForEvent('serviceworker'))
-      await serviceWorker.evaluate(async (origin) => {
-        const [tab] = await new Promise<chrome.tabs.Tab[]>(
-          (resolve, reject) => {
-            globalThis.chrome.tabs.query({ url: `${origin}/*` }, (tabs) => {
-              const error = globalThis.chrome.runtime.lastError?.message
-              if (error) {
-                reject(new Error(error))
-                return
-              }
-              resolve(tabs)
-            })
-          },
-        )
-        if (typeof tab?.id !== 'number') {
-          throw new Error('Enrollment tab was not available for refresh.')
-        }
-        await new Promise<void>((resolve, reject) => {
-          globalThis.chrome.tabs.sendMessage(
-            tab.id,
-            { type: 'nook:refresh-authentication-surfaces' },
-            () => {
-              const error = globalThis.chrome.runtime.lastError?.message
-              if (error) {
-                reject(new Error(error))
-                return
-              }
-              resolve()
-            },
-          )
-        })
-      }, mockAuth.origin)
+      const refreshArgs: RefreshAuthenticationSurfacesArgs = {
+        context: paired.context,
+        origin: mockAuth.origin,
+      }
+      await refreshAuthenticationSurfacesForOrigin(refreshArgs)
       await expect(
         enrollmentAction,
         'session refreshes must not inert enrollment actions',
@@ -455,6 +469,8 @@ test.describe('Browser 2FA enrollment', () => {
         widget.getByText(/Verification code filled|Complete verification/i),
       ).toBeVisible({ timeout: 20_000 })
       expect(await listExtensionAuthenticators(paired.context)).toEqual([])
+
+      await refreshAuthenticationSurfacesForOrigin(refreshArgs)
 
       await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
       await expect(

@@ -45,6 +45,10 @@ import {
   sendRuntimeMessageWithoutResponse,
 } from './runtime-message-adapter'
 import { GeneratePasswordRequestType } from '../../../../nook-web-shared/src/extension/runtime-messages'
+import {
+  PasskeyEntryPointKind,
+  passkeyEntryPointKind,
+} from '../../lib/passkey-entry-point'
 
 export {
   RuntimeMessageDeliveryKind,
@@ -584,7 +588,29 @@ export async function proposePasskeyWithNook({
         formScope: workflow.formScope,
       }
     const control = findPasskeyControlForScope(passkeyLookupArgs)
-    if (control.kind === PasskeyControlLookupKind.Absent) {
+    const entryPointArgs: Parameters<typeof passkeyEntryPointKind>[0] = {
+      action,
+      siteControlPresent: control.kind === PasskeyControlLookupKind.Found,
+    }
+    const entryPoint = passkeyEntryPointKind(entryPointArgs)
+    let activated = false
+    if (
+      entryPoint === PasskeyEntryPointKind.SiteControl &&
+      control.kind === PasskeyControlLookupKind.Found
+    ) {
+      control.control.click()
+      activated = true
+    } else if (
+      entryPoint === PasskeyEntryPointKind.ScopedAuthenticationAdvance
+    ) {
+      const submitArgs: Parameters<typeof submitLoginForm>[0] = {
+        kind: PasswordFormQueryKind.Scoped,
+        root: workflow.root,
+        formScope: workflow.formScope,
+      }
+      activated = submitLoginForm(submitArgs)
+    }
+    if (!activated) {
       const nookTypedArgs0_29: Parameters<typeof setStatus>[0] = {
         description,
         continueButton,
@@ -596,7 +622,6 @@ export async function proposePasskeyWithNook({
       setStatus(nookTypedArgs0_29)
       return
     }
-    control.control.click()
     const nookTypedArgs0_30: Parameters<typeof setStatus>[0] = {
       description,
       continueButton,

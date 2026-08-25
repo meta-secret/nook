@@ -180,7 +180,8 @@ jobs:
     needs: web-e2e-image
     name: Remote / web:e2e
     runs-on: nook-k0s-container
-    timeout-minutes: 30
+    # ci:pr:e2e owns the maximum routed task timeout.
+    timeout-minutes: 45
     container:
       image: registry.dev.nokey.sh/nook/remote-buildcache/nook-web-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
       credentials:
