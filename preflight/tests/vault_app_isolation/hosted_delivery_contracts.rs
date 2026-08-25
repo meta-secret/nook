@@ -718,9 +718,11 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  deploy:\n",
         "needs: [wasm]",
         "needs: [web, web-e2e, wasm-cache-proof]",
-        "task ci:main:e2e:web:artifacts",
-        "task ci:main:e2e:extension:artifacts",
-        "task ci:main:ui-demo:artifacts",
+        "task _ci:main:web:e2e-only",
+        "task _extension:test:e2e",
+        "task _web:test:ui-demo",
+        "runs-on: nook-k0s-container",
+        "nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
         "main-wasm-${{ github.run_id }}",
     ] {
         assert!(
