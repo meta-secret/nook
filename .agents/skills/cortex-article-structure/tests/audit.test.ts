@@ -427,6 +427,16 @@ ${container}
   }
 });
 
+test('implicitly closes an HTML paragraph before a root article', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/optional-html-close.md',
+    content: '# Optional close\n\n<p>\n\n## Recovery procedure\n\n- Prepare.\n',
+  };
+  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
 test('recovers root blocks after mismatched HTML container closes', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/html-mismatch.md',

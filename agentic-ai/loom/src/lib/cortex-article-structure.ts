@@ -107,6 +107,11 @@ type FindRawHtmlCloseArgs = {
   readonly value: string;
 };
 
+type CloseOptionalHtmlContainerArgs = {
+  readonly node: RootContent;
+  readonly starts: HtmlContainerStart[];
+};
+
 type HtmlTokenVisibilityArgs = {
   readonly nonRenderedContainers: string[];
   readonly tokens: readonly HtmlToken[];
@@ -462,8 +467,11 @@ function htmlContainerDepths(
   const depths = children.map(() => ({ all: 0, nonRendered: 0 }));
   const starts: HtmlContainerStart[] = [];
   for (let nodeIndex = 0; nodeIndex < children.length; nodeIndex += 1) {
-    const node = children[nodeIndex];
-    if (node?.type !== 'html') continue;
+    const node = children[nodeIndex] ?? false;
+    if (node === false) continue;
+    const closeArgs: CloseOptionalHtmlContainerArgs = { node, starts };
+    closeOptionalHtmlContainer(closeArgs);
+    if (node.type !== 'html') continue;
     for (const tag of htmlTags(node.value)) {
       const activeStart = starts.at(-1) ?? false;
       if (
@@ -512,6 +520,17 @@ function htmlContainerDepths(
     }
   }
   return depths;
+}
+
+function closeOptionalHtmlContainer(
+  args: CloseOptionalHtmlContainerArgs,
+): void {
+  const activeStart = args.starts.at(-1) ?? false;
+  if (activeStart === false || activeStart.name !== 'p') return;
+  const firstTag =
+    args.node.type === 'html' ? (htmlTags(args.node.value)[0] ?? false) : false;
+  if (firstTag !== false && firstTag.closing && firstTag.name === 'p') return;
+  args.starts.pop();
 }
 
 function lastHtmlContainerStartIndex(
