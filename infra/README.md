@@ -82,8 +82,10 @@ never copied to a checkout or GitHub.
 GitHub Actions secrets `NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`,
 `NOOK_REGISTRY_PASSWORD`, `NOOK_REGISTRY_REMOTE_USERNAME`, and
 `NOOK_REGISTRY_REMOTE_PASSWORD`. The Main identity administers the registry; the
-Remote identity may update only `nook/remote-buildcache/**` and can read but not
-update `nook/buildcache/**`.
+Remote identity may update only `nook/remote-buildcache/**`. It can read all
+public mirror repositories, including `nook/buildcache/**`, but cannot update
+them. This keeps authenticated CI pulls equivalent to anonymous mirror pulls
+without expanding the Remote identity's write boundary.
 
 DNS for `sccache.dev.nokey.sh` and `registry.dev.nokey.sh` must point at the
 Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can
