@@ -499,10 +499,14 @@ function applyPersistedProtectionStatus(
 async function refreshPersistedProtectionStatus(
   state: DeviceProtectionRecoveryState,
 ): Promise<void> {
-  const status = await state.enqueueExclusiveStorage(() =>
-    state.requireManager().device_protection_status(),
-  )
-  applyPersistedProtectionStatus(state, status)
+  try {
+    const status = await state.enqueueExclusiveStorage(() =>
+      state.requireManager().device_protection_status(),
+    )
+    applyPersistedProtectionStatus(state, status)
+  } finally {
+    state.adoptLocalDataStorageGeneration()
+  }
 }
 
 export async function resetDeviceProtectionForRecovery({

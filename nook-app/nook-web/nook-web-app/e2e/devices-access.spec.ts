@@ -11,6 +11,8 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
+  saveAuthProvidersInBrowser,
+  unselectedAuthProviderSeedScope,
 } from './helpers'
 
 type IdentityDirectorySnapshotRequestOwner = Pick<
@@ -228,6 +230,21 @@ test.describe('devices and access dashboard', () => {
   }) => {
     await connectLocalVault(page)
     await page.getByTestId('vault-devices-access-tab').click()
+    await saveAuthProvidersInBrowser(
+      page,
+      {
+        providers: [
+          {
+            id: 'personal-remote-provider',
+            type: 'github',
+            label: 'Personal remote provider',
+            githubRepo: 'personal-vault',
+            githubPat: 'github_pat_personal_identity',
+          },
+        ],
+      },
+      unselectedAuthProviderSeedScope(),
+    )
     const identityOptions = page.getByTestId('devices-access-identity-option')
     await expect(identityOptions).toHaveCount(1)
 
@@ -308,6 +325,20 @@ test.describe('devices and access dashboard', () => {
     await expect(
       page.getByTestId('devices-access-key-inventory'),
     ).toContainText('Passkey')
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            (
+              window as Window & {
+                __nookVault?: { providers: Array<{ id: string }> }
+              }
+            ).__nookVault?.providers.some(
+              (provider) => provider.id === 'personal-remote-provider',
+            ) ?? false,
+        ),
+      )
+      .toBe(true)
 
     await page.getByTestId('devices-access-rename-passkey').click()
     await page

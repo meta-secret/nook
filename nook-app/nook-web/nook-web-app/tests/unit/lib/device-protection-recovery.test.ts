@@ -66,5 +66,6 @@ describe('device protection recovery', () => {
     expect(state.deviceProtectionStatus).toBe(DeviceProtectionStatus.Pin)
     expect(state.deviceProtectionLockedStatus).toBe(DeviceProtectionStatus.Pin)
     expect(state.errorMsg).toBe('Recovery failed')
+    expect(state.adoptLocalDataStorageGeneration).toHaveBeenCalledTimes(2)
   })
 })

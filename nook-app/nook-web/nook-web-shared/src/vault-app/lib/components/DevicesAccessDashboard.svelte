@@ -85,7 +85,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     // but no catalog entry is active for the new identity until it authenticates
     // and explicitly opens one.
     vault.localVaultPresent = false
-    vault.providersLoaded = true
+    vault.providersLoaded = false
   }
 
   async function focusAfterProtectionReady(
@@ -99,6 +99,18 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     identityCreationOpen = false
     vault.devicesAccessIdentityProtectionOpen = false
+    const providerLoadOptions: Parameters<typeof vault.loadProviders>[0] = {
+      ensureLocalRow: true,
+    }
+    try {
+      await vault.loadProviders(providerLoadOptions)
+      vault.applyActiveProviderCredentials()
+    } catch (error) {
+      vault.errorMsg =
+        error instanceof Error
+          ? error.message
+          : vault.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired)
+    }
     directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
     await reloadSnapshots()
   }
