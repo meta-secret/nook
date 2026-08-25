@@ -69,6 +69,9 @@ It is never shown as stored on one physical laptop.
   - Select a new identity only after both records are durable.
   - Migrate legacy `app_id` and `app_key_wrapped` into the selected identity's
     keyring entry.
+  - If an older tab writes a new wrapper for the same app ID, adopt that wrapper
+    without replacing the entry's protected signing seed.
+  - Delete the legacy wrapper only after the reconciled keyring is durable.
   - Dual-read legacy `device_id` and `device_identity_wrapped` only during that
     migration.
   - Store descriptive dashboard data in a separately versioned access profile.
@@ -77,6 +80,9 @@ It is never shown as stored on one physical laptop.
   - Key identity-sealed sync-provider snapshots by local app ID.
   - Migrate the legacy singleton provider snapshot only when it belongs to the
     sole local keyring entry.
+  - Delete a competing legacy provider snapshot only when its normalized stored
+    value matches the identity-scoped snapshot.
+  - Preserve both provider snapshots and fail closed when their values differ.
   - A locked pre-sealed provider import must claim eligible legacy grants before
     it writes the first app-scoped snapshot.
   - An unlocked manager may write live provider grants only when its in-memory
@@ -198,6 +204,9 @@ It is never shown as stored on one physical laptop.
   - Never persist private app keys, PRF output, PIN/passphrases, vault DEKs,
     backup-password values, or plaintext vault contents.
   - Scope passkey metadata by app ID.
+  - Delete a competing legacy access profile only when it matches the
+    identity-scoped profile.
+  - Preserve both access profiles and fail closed when their values differ.
   - Validate each passkey metadata write against the wrapped credential owned
     by that app ID, not the directory selection shared by other tabs.
 - **Destructive local recovery:** Quiesce serialized storage work in every tab
@@ -258,6 +267,8 @@ Current dashboard requirements:
 
 - Login and authenticated **Access** share the same identity dashboard.
 - Login opens `/devices-access`.
+- Browser Back and Forward must update the locked dashboard from the current
+  workspace route.
 - `/vault` remains the secrets workspace only.
 - Create-vault flows require identity creation first when no identity exists.
 - The primary desktop layout uses a persistent identity rail.

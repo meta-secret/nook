@@ -4,6 +4,7 @@ use crate::{NookError, storage::indexed_db};
 
 use super::{load_directory_for_write, map_domain_error, write_identity_directory};
 
+mod legacy;
 mod signing;
 
 pub(crate) use signing::load_or_create_signing_seed_for_app_key;
@@ -126,82 +127,6 @@ pub(super) async fn write_keyring(
     Ok(())
 }
 
-async fn delete_legacy_active_key(store: &rexie::Store) -> Result<(), NookError> {
-    for key in [
-        indexed_db::APP_ID_KEY,
-        indexed_db::DEVICE_ID_KEY,
-        indexed_db::APP_KEY_WRAPPED_KEY,
-        indexed_db::WRAPPED_DEVICE_IDENTITY_KEY,
-    ] {
-        delete_key(store, key, "Legacy active app key").await?;
-    }
-    Ok(())
-}
-
-async fn migrate_legacy_active_key(
-    store: &rexie::Store,
-    directory: &nook_core::IdentityDirectory,
-    keyring: &mut nook_core::LocalIdentityKeyring,
-) -> Result<bool, NookError> {
-    let wrapped = indexed_db::read_string_preferring(
-        store,
-        indexed_db::APP_KEY_WRAPPED_KEY,
-        indexed_db::WRAPPED_DEVICE_IDENTITY_KEY,
-        "Legacy wrapped app key",
-    )
-    .await?;
-    let app_id = indexed_db::read_string_preferring(
-        store,
-        indexed_db::APP_ID_KEY,
-        indexed_db::DEVICE_ID_KEY,
-        "Legacy app id",
-    )
-    .await?;
-    let Some(wrapped) = wrapped else {
-        if app_id.is_some() {
-            return Err(NookError::IndexedDb(
-                "Legacy app id exists without a wrapped app key".to_owned(),
-            ));
-        }
-        return Ok(false);
-    };
-    let app_id = nook_core::AppId::parse(app_id.as_deref().unwrap_or_default())
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    if keyring
-        .entries()
-        .iter()
-        .any(|entry| entry.app_id() == &app_id)
-    {
-        validate_keyring_directory_binding(keyring, directory)?;
-        delete_legacy_active_key(store).await?;
-        return Ok(true);
-    }
-    let identity_id = directory
-        .identities()
-        .iter()
-        .find(|identity| identity.has_app_id(&app_id))
-        .map(|identity| identity.identity_id.clone());
-    let Some(identity_id) = identity_id else {
-        if directory.identities().is_empty() {
-            return Ok(false);
-        }
-        return Err(NookError::Database(
-            "Legacy protected app key has no identity owner".to_owned(),
-        ));
-    };
-    let wrapped = nook_core::parse_wrapped_device_identity(&wrapped)?;
-    keyring
-        .insert(nook_core::LocalIdentityKeyringEntry::legacy(
-            identity_id,
-            app_id,
-            wrapped,
-        ))
-        .map_err(|error| NookError::Database(error.to_string()))?;
-    write_keyring(store, keyring).await?;
-    delete_legacy_active_key(store).await?;
-    Ok(true)
-}
-
 pub(super) async fn load_keyring_for_store(
     store: &rexie::Store,
     directory: &nook_core::IdentityDirectory,
@@ -211,7 +136,7 @@ pub(super) async fn load_keyring_for_store(
             Some(raw) => decode_keyring(&raw)?,
             None => nook_core::LocalIdentityKeyring::empty(),
         };
-    let migrated = migrate_legacy_active_key(store, directory, &mut keyring).await?;
+    let migrated = legacy::migrate_legacy_active_key(store, directory, &mut keyring).await?;
     validate_keyring_directory_binding(&keyring, directory)?;
     if migrated {
         write_keyring(store, &keyring).await?;
@@ -374,7 +299,7 @@ async fn commit_protected_identity(
     validate_keyring_directory_binding(keyring, directory)?;
     write_keyring(store, keyring).await?;
     write_identity_directory(store, directory).await?;
-    delete_legacy_active_key(store).await?;
+    legacy::delete_legacy_active_key(store).await?;
     delete_key(
         store,
         crate::storage::event_db::SIGNING_SEED_KEY,
@@ -975,6 +900,42 @@ mod tests {
         .await?;
         super::clear_keyring_for_test().await?;
         super::super::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn newer_legacy_wrapper_reconciles_without_losing_signing_seed() -> Result<(), NookError>
+    {
+        let _ = rexie::Rexie::delete("nook_db").await;
+        let (app_key, _, protected) = create_pin_identity("Personal", "first-secret", None).await?;
+        let replacement_wrapped =
+            nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "new-protection")?;
+        crate::storage::indexed_db::save_wrapped_device_identity(
+            app_key.app_id().as_str(),
+            &replacement_wrapped,
+        )
+        .await?;
+
+        let reconciled = super::load_keyring().await?;
+        let entry = reconciled
+            .entries()
+            .first()
+            .ok_or_else(|| NookError::Database("Reconciled keyring entry is missing".to_owned()))?;
+
+        assert_eq!(entry.wrapped_app_key(), &replacement_wrapped);
+        assert_eq!(
+            entry
+                .open_signing_seed(&app_key)
+                .map_err(|error| NookError::Database(error.to_string()))?
+                .as_deref(),
+            Some(protected.signing_seed.as_str())
+        );
+        assert!(
+            crate::storage::indexed_db::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
+                .await?
+                .is_none()
+        );
+        let _ = rexie::Rexie::delete("nook_db").await;
+        Ok(())
     }
 
     #[wasm_bindgen_test]

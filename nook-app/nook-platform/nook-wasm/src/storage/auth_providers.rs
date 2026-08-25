@@ -166,6 +166,24 @@ async fn may_migrate_legacy_snapshot(app_id: &nook_core::AppId) -> Result<bool, 
                 .is_some_and(|entry| entry.app_id() == app_id)))
 }
 
+fn require_safe_legacy_deletion(
+    scoped: &serde_json::Value,
+    legacy: &serde_json::Value,
+) -> Result<(), NookError> {
+    if scoped.is_null() || legacy.is_null() {
+        return Ok(());
+    }
+    let scoped = nook_core::normalize_auth_snapshot(scoped).snapshot;
+    let legacy = nook_core::normalize_auth_snapshot(legacy).snapshot;
+    if scoped == legacy {
+        return Ok(());
+    }
+    Err(NookError::Database(
+        "Legacy auth providers conflict with the identity-scoped snapshot; both records were preserved"
+            .to_owned(),
+    ))
+}
+
 pub(crate) async fn migrate_legacy_auth_providers_for_identity(
     identity: &DeviceIdentity,
 ) -> Result<(), NookError> {
@@ -180,6 +198,7 @@ pub(crate) async fn migrate_legacy_auth_providers_for_identity(
         .map_err(|e| idb_err("nook_auth migration store error", e))?;
     let scoped = read_raw_snapshot_from_store(&store, &state_key).await?;
     let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
+    require_safe_legacy_deletion(&scoped, &legacy)?;
     if scoped.is_null() && !legacy.is_null() {
         let mut snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
         open_provider_credentials(identity, &mut snapshot)?;
@@ -214,6 +233,7 @@ pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Res
         .map_err(|e| idb_err("nook_auth locked migration store error", e))?;
     let scoped = read_raw_snapshot_from_store(&store, &state_key).await?;
     let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
+    require_safe_legacy_deletion(&scoped, &legacy)?;
     if scoped.is_null() {
         let snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
         if !legacy.is_null() && !provider_credentials_are_presealed(&snapshot) {
@@ -562,6 +582,29 @@ mod wasm_idb_tests {
     }
 
     #[wasm_bindgen_test]
+    async fn conflicting_legacy_and_scoped_snapshots_are_both_preserved() -> anyhow::Result<()> {
+        clear_auth_providers_db().await?;
+        let identity = DeviceIdentity::generate()?;
+        save_auth_providers(&identity, &github_snapshot("github_pat_scoped_newer")).await?;
+        let mut legacy = github_snapshot("github_pat_legacy_competing");
+        seal_provider_credentials(&identity, &mut legacy)?;
+        write_snapshot(&legacy).await?;
+
+        let result = migrate_legacy_auth_providers_for_identity(&identity).await;
+
+        assert!(result.is_err());
+        assert!(!read_raw_snapshot().await?.is_null());
+        assert_eq!(
+            load_auth_providers(&identity).await?.snapshot.providers[0]
+                .github_pat
+                .as_deref(),
+            Some("github_pat_scoped_newer")
+        );
+        clear_auth_providers_db().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     async fn corrupt_keyring_blocks_legacy_provider_migration_without_data_loss()
     -> anyhow::Result<()> {
         clear_auth_providers_db().await?;
@@ -614,6 +657,41 @@ mod wasm_idb_tests {
                 .github_pat
                 .as_deref(),
             Some("github_pat_locked_legacy")
+        );
+        clear_auth_providers_db().await?;
+        crate::storage::identity_record::clear_keyring_for_test().await?;
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn locked_migration_preserves_conflicting_provider_snapshots() -> anyhow::Result<()> {
+        clear_auth_providers_db().await?;
+        crate::storage::identity_record::clear_keyring_for_test().await?;
+        crate::storage::identity_record::clear_identity_directory_for_test().await?;
+        let identity = DeviceIdentity::generate()?;
+        let wrapped = nook_core::wrap_device_identity_with_pin(
+            &identity.secret_string(),
+            "provider conflict identity pin",
+        )?;
+        crate::storage::identity_record::save_new_protected_local_identity(
+            &identity, &wrapped, None, "Personal",
+        )
+        .await?;
+        save_auth_providers(&identity, &github_snapshot("github_pat_scoped_newer")).await?;
+        let mut legacy = github_snapshot("github_pat_legacy_competing");
+        seal_provider_credentials(&identity, &mut legacy)?;
+        write_snapshot(&legacy).await?;
+
+        let result = migrate_legacy_auth_providers_for_selected_identity().await;
+
+        assert!(result.is_err());
+        assert!(!read_raw_snapshot().await?.is_null());
+        assert_eq!(
+            load_auth_providers(&identity).await?.snapshot.providers[0]
+                .github_pat
+                .as_deref(),
+            Some("github_pat_scoped_newer")
         );
         clear_auth_providers_db().await?;
         crate::storage::identity_record::clear_keyring_for_test().await?;

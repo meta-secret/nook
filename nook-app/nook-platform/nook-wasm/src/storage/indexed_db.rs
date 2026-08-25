@@ -398,7 +398,24 @@ where
             "Atomic string migration target read error: {error:?}"
         ))
     })?;
-    if target.is_none_or(|value| value.is_undefined() || value.is_null()) {
+    if let Some(target) = target.filter(|value| !value.is_undefined() && !value.is_null()) {
+        let target_text: String = serde_wasm_bindgen::from_value(target).map_err(|error| {
+            NookError::IndexedDb(format!(
+                "Atomic string migration target decode error: {error:?}"
+            ))
+        })?;
+        if target_text != source_text {
+            transaction.done().await.map_err(|error| {
+                NookError::IndexedDb(format!(
+                    "Atomic string migration completion error: {error:?}"
+                ))
+            })?;
+            return Err(NookError::Database(
+                "Legacy and identity-scoped records conflict; both records were preserved"
+                    .to_owned(),
+            ));
+        }
+    } else {
         store
             .put(&source, Some(&target_id))
             .await
@@ -667,6 +684,29 @@ mod sentinel_genesis_storage_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn atomic_string_migration_preserves_conflicting_records()
+    -> Result<(), wasm_bindgen::JsError> {
+        const SOURCE_KEY: &str = "test-legacy-profile-conflict";
+        const TARGET_KEY: &str = "test-scoped-profile-conflict";
+        idb_put_string(SOURCE_KEY, "legacy-value").await?;
+        idb_put_string(TARGET_KEY, "scoped-value").await?;
+
+        let result = idb_migrate_string_if(SOURCE_KEY, TARGET_KEY, |_| true).await;
+
+        assert!(result.is_err());
+        assert_eq!(
+            idb_get_string(SOURCE_KEY).await?.as_deref(),
+            Some("legacy-value")
+        );
+        assert_eq!(
+            idb_get_string(TARGET_KEY).await?.as_deref(),
+            Some("scoped-value")
+        );
+        idb_delete_keys(&[SOURCE_KEY, TARGET_KEY]).await?;
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     async fn verified_sentinel_genesis_share_delivery_round_trips()

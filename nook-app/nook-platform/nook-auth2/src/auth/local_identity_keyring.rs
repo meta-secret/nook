@@ -110,6 +110,20 @@ impl LocalIdentityKeyringEntry {
         Ok(signing_public_key)
     }
 
+    pub fn replace_wrapped_app_key(
+        &mut self,
+        app_id: &AppId,
+        wrapped_app_key: WrappedDeviceIdentity,
+    ) -> MultiDeviceResult<()> {
+        if self.app_id != *app_id {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "cannot replace a wrapped app key owned by a different app id".to_owned(),
+            ));
+        }
+        self.wrapped_app_key = wrapped_app_key;
+        Ok(())
+    }
+
     fn require_matching_app_key(&self, app_key: &AppKey) -> MultiDeviceResult<()> {
         if self.app_id != *app_key.app_id() {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
@@ -301,6 +315,26 @@ mod tests {
         assert_eq!(
             decoded.entries()[0].signing_public_key(&app_key)?,
             signing_public_key
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn replacing_wrapped_app_key_preserves_protected_signing_seed() -> anyhow::Result<()> {
+        let (mut entry, app_key, signing_public_key) = entry()?;
+        let replacement = crate::wrap_device_identity_with_pin(
+            &app_key.secret_string(),
+            "replacement browser protection",
+        )?;
+
+        entry.replace_wrapped_app_key(app_key.app_id(), replacement.clone())?;
+
+        assert_eq!(entry.wrapped_app_key(), &replacement);
+        assert_eq!(entry.signing_public_key(&app_key)?, signing_public_key);
+        assert!(
+            entry
+                .replace_wrapped_app_key(AppKey::generate()?.app_id(), replacement)
+                .is_err()
         );
         Ok(())
     }

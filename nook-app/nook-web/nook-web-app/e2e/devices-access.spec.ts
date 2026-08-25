@@ -107,6 +107,24 @@ test.describe('devices and access dashboard', () => {
     await expect(page.getByTestId('login-devices-access')).toBeVisible()
   })
 
+  test('follows browser Back and Forward while locked', async ({ page }) => {
+    await page.goto('/app/')
+    await page.getByTestId('login-devices-access').click()
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+
+    await page.goBack()
+
+    await expect(page).toHaveURL(/\/app\/$/)
+    await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
+    await expect(page.getByTestId('login-devices-access')).toBeVisible()
+
+    await page.goForward()
+
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+  })
+
   test('after creating a passkey vault shows the access dependency graph', async ({
     page,
   }) => {
