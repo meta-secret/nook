@@ -35,11 +35,13 @@ describe("operator SSH configuration", () => {
 
   test("prepends the managed include exactly once", () => {
     const once = ensureInclude("Host existing\n  HostName example.invalid\n");
-    expect(once.startsWith("Include ~/.ssh/config.d/*.conf\n")).toBe(true);
+    expect(once.startsWith("Include ~/.ssh/config.d/nook-infra.conf\n")).toBe(
+      true,
+    );
     expect(ensureInclude(once)).toBe(once);
   });
 
-  test("moves an existing global include ahead of unsafe global options", () => {
+  test("loads the managed host before wildcard fragments and unsafe options", () => {
     const original = [
       "StrictHostKeyChecking no",
       "UserKnownHostsFile /dev/null",
@@ -47,20 +49,28 @@ describe("operator SSH configuration", () => {
       "",
     ].join("\n");
     const configured = ensureInclude(original);
-    expect(configured.startsWith("Include ~/.ssh/config.d/*.conf\n\n"))
-      .toBe(true);
-    expect(configured.match(/Include ~\/\.ssh\/config\.d\/\*\.conf/g)).toHaveLength(1);
+    expect(
+      configured.startsWith(
+        "Include ~/.ssh/config.d/nook-infra.conf\n\n",
+      ),
+    ).toBe(true);
+    expect(configured).toContain("Include ~/.ssh/config.d/*.conf");
   });
 
   test("does not treat a host-scoped include as global", () => {
     const original = [
       "Host existing",
       "  HostName example.invalid",
-      "  Include ~/.ssh/config.d/*.conf",
+      "  Include ~/.ssh/config.d/nook-infra.conf",
       "",
     ].join("\n");
-    expect(ensureInclude(original).startsWith("Include ~/.ssh/config.d/*.conf\n"))
-      .toBe(true);
+    const configured = ensureInclude(original);
+    expect(
+      configured.startsWith("Include ~/.ssh/config.d/nook-infra.conf\n"),
+    ).toBe(true);
+    expect(
+      configured.match(/Include ~\/\.ssh\/config\.d\/nook-infra\.conf/g),
+    ).toHaveLength(2);
   });
 
   test("resolves a symlink-managed SSH config to its target", async () => {

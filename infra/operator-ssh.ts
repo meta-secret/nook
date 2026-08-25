@@ -43,7 +43,7 @@ const inventoryPath = resolve(
   import.meta.dir,
   "k0s/config/operator-ssh.yaml",
 );
-const includeDirective = "Include ~/.ssh/config.d/*.conf";
+const includeDirective = "Include ~/.ssh/config.d/nook-infra.conf";
 
 export function renderManagedConfig(home: HomeSshDefinition): string {
   return [
@@ -66,9 +66,13 @@ export function renderManagedConfig(home: HomeSshDefinition): string {
 }
 
 export function ensureInclude(config: string): string {
+  let globalScope = true;
   const bodyWithoutManagedIncludes = config
     .split("\n")
-    .filter((line) => line.trim() !== includeDirective)
+    .filter((line) => {
+      if (/^\s*(?:Host|Match)\s+/i.test(line)) globalScope = false;
+      return !(globalScope && line.trim() === includeDirective);
+    })
     .join("\n")
     .replace(/^\n+/, "");
   const body =
