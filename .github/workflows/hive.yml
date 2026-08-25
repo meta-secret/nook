@@ -72,7 +72,7 @@ concurrency:
 jobs:
   console:
     name: Hive Control Center verification
-    runs-on: ubuntu-latest
+    runs-on: ${{ (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository) && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7

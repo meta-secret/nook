@@ -29,7 +29,7 @@ permissions:
 jobs:
   agent-implement:
     name: Implement and open PR
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 360
     env:
       GITHUB_REPOSITORY: ${{ github.repository }}

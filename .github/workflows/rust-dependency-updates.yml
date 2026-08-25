@@ -20,7 +20,7 @@ concurrency:
 jobs:
   audit:
     name: Audit direct Cargo dependencies
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     outputs:
       outdated: ${{ steps.audit.outputs.outdated }}
     steps:
@@ -47,7 +47,7 @@ jobs:
     name: AI update, full test, and PR
     needs: audit
     if: needs.audit.outputs.outdated == 'true'
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     timeout-minutes: 360
     permissions:
       contents: write

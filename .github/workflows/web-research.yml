@@ -38,7 +38,7 @@ jobs:
   deploy:
     name: Build and deploy research catalog
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
