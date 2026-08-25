@@ -389,6 +389,22 @@ test('recursively classifies blank tables and empty HTML containers', () => {
   }
 });
 
+test('treats non-rendered raw HTML containers as empty', () => {
+  for (const body of [
+    '<script>noop</script>',
+    '<style>.hidden { display: none; }</style>',
+    '<template><p>Hidden template content.</p></template>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/non-rendered-html.md',
+      content: `# Non-rendered HTML\n\n## Empty article\n\n${body}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((finding) => finding.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+  }
+});
+
 test('keeps article scope outside blank-line-terminated HTML containers', () => {
   for (const container of [
     '<div>\n\n## Example procedure\n\n1. fake\n\n</div>',
@@ -434,6 +450,34 @@ test('recovers root scope after mismatched HTML container closes', () => {
 - Prepare the input.
 
 </section>
+`,
+  };
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+  expect(findings[0]?.line).toBe(15);
+});
+
+test('ignores tag-looking text inside non-rendered HTML containers', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/raw-html-scope.md',
+    content: `# Raw HTML scope
+
+## Examples
+
+<div>
+
+<script>const close = "</div>";</script>
+
+## Fake procedure
+
+- fake
+
+</div>
+
+## Recovery procedure
+
+- Prepare the input.
 `,
   };
   const findings = audit([makeDocument(documentArgs)]);

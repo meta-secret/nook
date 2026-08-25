@@ -337,6 +337,24 @@ test('normalizes blank tables and empty HTML containers to separators', () => {
   }
 });
 
+test('normalizes non-rendered raw HTML containers to separators', () => {
+  for (const body of [
+    '<script>noop</script>',
+    '<style>.hidden { display: none; }</style>',
+    '<template><p>Hidden template content.</p></template>',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/non-rendered-html.md',
+      content: `# Non-rendered HTML\n\n## Empty article\n\n${body}\n`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(document.blocks.at(-1)?.type).toBe(CortexArticleBlockKind.Separator);
+    expect(audit([document]).map((finding) => finding.code)).toEqual([
+      CortexArticleFindingCode.EmptyArticle,
+    ]);
+  }
+});
+
 test('normalizes Markdown inside matched HTML containers as structure', () => {
   for (const container of [
     '<div>\n\n## Example procedure\n\n1. fake\n\n</div>',
@@ -393,6 +411,35 @@ test('recovers root blocks after mismatched HTML container closes', () => {
 - Prepare the input.
 
 </section>
+`,
+  };
+  const document = makeDocument(documentArgs);
+  const findings = audit([document]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
+  expect(findings[0]?.line).toBe(15);
+});
+
+test('ignores tag-looking raw text while normalizing HTML scope', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/raw-html-scope.md',
+    content: `# Raw HTML scope
+
+## Examples
+
+<div>
+
+<script>const close = "</div>";</script>
+
+## Fake procedure
+
+- fake
+
+</div>
+
+## Recovery procedure
+
+- Prepare the input.
 `,
   };
   const document = makeDocument(documentArgs);

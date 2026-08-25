@@ -75,6 +75,7 @@ type HtmlTag = {
 
 enum HtmlTokenKind {
   Comment = 'comment',
+  RawText = 'raw-text',
   Tag = 'tag',
   Text = 'text',
 }
@@ -92,6 +93,21 @@ type FindHtmlTagEndArgs = {
 type LastHtmlContainerStartIndexArgs = {
   readonly name: string;
   readonly starts: readonly HtmlContainerStart[];
+};
+
+type FindRawHtmlCloseArgs = {
+  readonly name: string;
+  readonly start: number;
+  readonly value: string;
+};
+
+type HtmlTokenVisibilityArgs = {
+  readonly nonRenderedContainers: string[];
+  readonly tokens: readonly HtmlToken[];
+};
+
+type VisibleSemanticChildrenInspection = {
+  readonly children: readonly Nodes[];
 };
 
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
@@ -308,10 +324,10 @@ function hasVisibleSemanticContent(
     return node.value.trim().length > 0;
   }
   if ('children' in node) {
-    return node.children.some((child) => {
-      const childInspection: VisibleSemanticContentInspection = { node: child };
-      return hasVisibleSemanticContent(childInspection);
-    });
+    const childInspection: VisibleSemanticChildrenInspection = {
+      children: node.children,
+    };
+    return childrenHaveVisibleSemanticContent(childInspection);
   }
   return node.type !== 'break';
 }
@@ -413,6 +429,14 @@ function htmlContainerDepths(children: readonly RootContent[]): number[] {
     const node = children[nodeIndex];
     if (node?.type !== 'html') continue;
     for (const tag of htmlTags(node.value)) {
+      const activeStart = starts.at(-1) ?? false;
+      if (
+        activeStart !== false &&
+        isNonRenderedHtmlContainer(activeStart.name) &&
+        (!tag.closing || tag.name !== activeStart.name)
+      ) {
+        continue;
+      }
       if (!tag.closing && !tag.selfClosing && !isVoidHtmlTag(tag.name)) {
         const start: HtmlContainerStart = { name: tag.name, nodeIndex };
         starts.push(start);
@@ -463,13 +487,58 @@ function htmlTags(value: string): readonly HtmlTag[] {
 }
 
 function hasVisibleHtmlContent(value: string): boolean {
-  for (const token of htmlTokens(value)) {
+  const visibilityArgs: HtmlTokenVisibilityArgs = {
+    nonRenderedContainers: [],
+    tokens: htmlTokens(value),
+  };
+  return htmlTokensHaveVisibleContent(visibilityArgs);
+}
+
+function childrenHaveVisibleSemanticContent(
+  inspection: VisibleSemanticChildrenInspection,
+): boolean {
+  const nonRenderedContainers: string[] = [];
+  for (const child of inspection.children) {
+    if (child.type === 'html') {
+      const visibilityArgs: HtmlTokenVisibilityArgs = {
+        nonRenderedContainers,
+        tokens: htmlTokens(child.value),
+      };
+      if (htmlTokensHaveVisibleContent(visibilityArgs)) return true;
+      continue;
+    }
+    if (nonRenderedContainers.length > 0) continue;
+    const childInspection: VisibleSemanticContentInspection = { node: child };
+    if (hasVisibleSemanticContent(childInspection)) return true;
+  }
+  return false;
+}
+
+function htmlTokensHaveVisibleContent(args: HtmlTokenVisibilityArgs): boolean {
+  for (const token of args.tokens) {
+    const activeName = args.nonRenderedContainers.at(-1) ?? false;
+    if (activeName !== false) {
+      if (token.kind !== HtmlTokenKind.Tag) continue;
+      const activeTag = htmlTags(token.value)[0] ?? false;
+      if (
+        activeTag !== false &&
+        activeTag.closing &&
+        activeTag.name === activeName
+      ) {
+        args.nonRenderedContainers.pop();
+      }
+      continue;
+    }
     if (token.kind === HtmlTokenKind.Text && token.value.trim().length > 0) {
       return true;
     }
     if (token.kind !== HtmlTokenKind.Tag) continue;
     const tag = htmlTags(token.value)[0] ?? false;
     if (tag === false) return true;
+    if (!tag.closing && isNonRenderedHtmlContainer(tag.name)) {
+      args.nonRenderedContainers.push(tag.name);
+      continue;
+    }
     if (!tag.closing && isVisibleHtmlElement(tag.name)) return true;
   }
   return false;
@@ -507,6 +576,24 @@ function htmlTokens(value: string): readonly HtmlToken[] {
         };
         tokens.push(token);
         cursor = tagEnd + 1;
+        const rawName = rawHtmlContainerName(token.value);
+        if (rawName !== false) {
+          const closeArgs: FindRawHtmlCloseArgs = {
+            name: rawName,
+            start: cursor,
+            value,
+          };
+          const closeStart = findRawHtmlClose(closeArgs);
+          const rawEnd = closeStart < 0 ? value.length : closeStart;
+          if (rawEnd > cursor) {
+            const rawToken: HtmlToken = {
+              kind: HtmlTokenKind.RawText,
+              value: value.slice(cursor, rawEnd),
+            };
+            tokens.push(rawToken);
+          }
+          cursor = rawEnd;
+        }
         continue;
       }
     }
@@ -520,6 +607,33 @@ function htmlTokens(value: string): readonly HtmlToken[] {
     cursor = textEnd;
   }
   return tokens;
+}
+
+function rawHtmlContainerName(token: string): string | false {
+  if (/\/\s*>$/u.test(token)) return false;
+  const parts = /^<\s*([A-Za-z][A-Za-z0-9:-]*)/u.exec(token);
+  const name = parts?.[1];
+  if (typeof name !== 'string') return false;
+  const normalizedName = name.toLowerCase();
+  return isNonRenderedHtmlContainer(normalizedName) ? normalizedName : false;
+}
+
+function findRawHtmlClose(args: FindRawHtmlCloseArgs): number {
+  const lowerValue = args.value.toLowerCase();
+  const prefix = `</${args.name}`;
+  let cursor = args.start;
+  while (cursor < lowerValue.length) {
+    const closeStart = lowerValue.indexOf(prefix, cursor);
+    if (closeStart < 0) return -1;
+    const boundary = lowerValue[closeStart + prefix.length] ?? '';
+    if (boundary === '>' || /\s/u.test(boundary)) return closeStart;
+    cursor = closeStart + prefix.length;
+  }
+  return -1;
+}
+
+function isNonRenderedHtmlContainer(name: string): boolean {
+  return ['script', 'style', 'template'].includes(name);
 }
 
 function findHtmlTagEnd(args: FindHtmlTagEndArgs): number {
