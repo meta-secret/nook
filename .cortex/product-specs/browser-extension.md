@@ -277,6 +277,9 @@ absent. The user continues those checkpoints manually.
 Pilot-guided 2FA enrollment stages an otpauth setup in extension memory after
 consent.
 It fills the verification code via Rust/WASM.
+An asynchronously returned verification code is consumed only while the same
+enrollment authorization generation remains current; stale code material is
+scrubbed without touching the page.
 It encrypts the authenticator only after Sufficient outcome evidence.
 Consented backup-code capture follows. When recovery codes appear while the
 setup QR remains visible, the recovery action takes precedence.

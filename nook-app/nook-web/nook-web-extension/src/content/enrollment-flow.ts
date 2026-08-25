@@ -500,8 +500,11 @@ async function beginEnrollmentCeremony({
   const nookTypedArgs0_15: Parameters<typeof fillStagedEnrollmentCode>[0] = {
     host,
     stageId,
+    authorizationIsCurrent: () =>
+      enrollmentCeremonyIsCurrent(authorizationGeneration),
   }
   const filled = await fillStagedEnrollmentCode(nookTypedArgs0_15)
+  if (!enrollmentCeremonyIsCurrent(authorizationGeneration)) return
   const nookTypedArgs0_16: Parameters<typeof setHostDescription>[0] = {
     host,
     text: host.translatedMessage(
