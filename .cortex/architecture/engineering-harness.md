@@ -273,11 +273,17 @@ runner is not used.
   NetworkPolicy resources. It does not maintain copied workload manifests.
 - Each simulated node retains one rootless BuildKit shard on node-local
   storage. In-cluster Zot remains the portable cache boundary between shards.
+- The proof first requires an authorized BuildKit Service connection.
+- Cache assertions use exact StatefulSet headless endpoints so every local,
+  restart, and cold-restore result belongs to a known shard.
+- The hosted overlay uses cluster-wide Service routing because k3d does not
+  reliably reproduce production's node-local `internalTrafficPolicy` path.
 - Proof clients mount no host runtime socket. They receive no Kubernetes
   service-account token and do not run privileged.
 - k3d proves portable Kubernetes workload behavior. It does not claim parity
-  for k0s lifecycle, WireGuard routing, Kata isolation, ARC control-plane
-  lifecycle, node capacity, or production performance.
+  for k0s lifecycle, node-local Service routing, WireGuard routing, Kata
+  isolation, ARC control-plane lifecycle, node capacity, or production
+  performance.
 
 ### CI Parity (`.github/actions/nook-docker-setup`)
 

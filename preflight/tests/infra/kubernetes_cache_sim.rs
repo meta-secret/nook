@@ -24,6 +24,7 @@ fn kubernetes_cache_proof_reuses_production_workloads() {
         "name: nook-buildkit-rise-s-2",
         "path: /spec/replicas\n        value: 3",
         "nook-zot.hive-data.svc.cluster.local:5000",
+        "path: /spec/internalTrafficPolicy\n        value: Cluster",
     ] {
         assert!(
             overlay.contains(required),
@@ -82,6 +83,7 @@ fn kubernetes_cache_cluster_is_pinned_isolated_and_bounded() {
 
 #[test]
 fn kubernetes_cache_clients_prove_security_and_portability() {
+    let contracts = read("infra/sim/kubernetes-cache/contracts.ts");
     let jobs = read("infra/sim/kubernetes-cache/jobs.ts");
     let proof = read("infra/sim/kubernetes-cache/prove.ts");
     let platform = read("infra/sim/kubernetes-cache/platform.ts");
@@ -94,6 +96,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         "registry-write-denied",
         "cache-proof-execution-marker",
         "cached RUN step executed",
+        "proveBuildkitServiceAccess",
     ] {
         assert!(
             jobs.contains(required),
@@ -112,6 +115,7 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
         );
     }
     for required in [
+        "cache-service-allowed",
         "cache-main-local-reuse",
         "cache-main-restart-reuse",
         "cache-main-fresh-shard",
@@ -134,6 +138,26 @@ fn kubernetes_cache_clients_prove_security_and_portability() {
             "cache restart identity proof is missing: {required}"
         );
     }
+    for required in [
+        "nook-buildkit-0.nook-buildkit-headless",
+        "nook-buildkit-1.nook-buildkit-headless",
+        "nook-buildkit-2.nook-buildkit-headless",
+    ] {
+        assert!(
+            contracts.contains(required),
+            "deterministic BuildKit shard address is missing: {required}"
+        );
+    }
+    let allowed = proof
+        .find("name: \"cache-service-allowed\"")
+        .expect("authorized BuildKit service proof is missing");
+    let denied = proof
+        .find("name: \"cache-network-denied\"")
+        .expect("denied BuildKit service proof is missing");
+    assert!(
+        allowed < denied,
+        "authorized service access must pass before denial"
+    );
 }
 
 #[test]

@@ -5,6 +5,8 @@ import {
   ADMIN_SECRET,
   K3D_BINARY,
   K3D_VERSION,
+  BUILDKIT_ADDRESS,
+  BUILDKIT_SHARD_ADDRESSES,
   REGISTRY_HOST,
   REMOTE_SECRET,
   assertContains,
@@ -15,6 +17,7 @@ import {
   type BuildJobResultRequest,
   finishBuildJob,
   podNode,
+  proveBuildkitServiceAccess,
   proveNetworkPolicy,
   restartBuildkitPod,
   restartZot,
@@ -95,6 +98,7 @@ function proveStableCache(request: {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-stable-write-denied",
     nodeName: request.buildkitNodes[2] ?? "",
+    buildkitAddress: BUILDKIT_ADDRESS,
     input: "forbidden-stable-write",
     dockerConfigSecret: REMOTE_SECRET,
     cacheImport: "",
@@ -112,6 +116,7 @@ function proveStableCache(request: {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-main-publish",
     nodeName: request.buildkitNodes[0] ?? "",
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[0],
     input: "main-cache-input",
     dockerConfigSecret: ADMIN_SECRET,
     cacheImport: "",
@@ -146,6 +151,7 @@ function proveStableCache(request: {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-main-fresh-shard",
     nodeName: request.buildkitNodes[1] ?? "",
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[1],
     input: "main-cache-input",
     dockerConfigSecret: REMOTE_SECRET,
     cacheImport: MAIN_CACHE_REF,
@@ -164,6 +170,7 @@ function proveIsolatedCache(request: {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-isolated-a-publish",
     nodeName: request.buildkitNodes[1] ?? "",
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[1],
     input: "isolated-cache-a",
     dockerConfigSecret: REMOTE_SECRET,
     cacheImport: MAIN_CACHE_REF,
@@ -174,6 +181,7 @@ function proveIsolatedCache(request: {
     kubeconfigPath: request.kubeconfigPath,
     name: "cache-isolated-b-publish",
     nodeName: request.buildkitNodes[2] ?? "",
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[2],
     input: "isolated-cache-b",
     dockerConfigSecret: REMOTE_SECRET,
     cacheImport: MAIN_CACHE_REF,
@@ -189,6 +197,7 @@ function proveIsolatedCache(request: {
     ...isolatedA,
     name: "cache-isolated-a-restore",
     nodeName: request.buildkitNodes[2] ?? "",
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[2],
     cacheImport: ISOLATED_A_CACHE_REF,
     cacheExport: "",
   };
@@ -196,6 +205,7 @@ function proveIsolatedCache(request: {
     ...isolatedB,
     name: "cache-isolated-b-restore",
     nodeName: request.buildkitNodes[0] ?? "",
+    buildkitAddress: BUILDKIT_SHARD_ADDRESSES[0],
     cacheImport: ISOLATED_B_CACHE_REF,
     cacheExport: "",
   };
@@ -230,6 +240,11 @@ function runProof(): void {
   if (new Set(buildkitNodes).size !== 3) {
     throw new Error(`BuildKit anti-affinity: expected 3 nodes, got ${buildkitNodes}`);
   }
+  proveBuildkitServiceAccess({
+    kubeconfigPath,
+    name: "cache-service-allowed",
+    nodeName: buildkitNodes[0] ?? "",
+  });
   proveNetworkPolicy({
     kubeconfigPath,
     name: "cache-network-denied",

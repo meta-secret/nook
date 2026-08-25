@@ -20,6 +20,7 @@ export interface BuildJobRequest {
   readonly kubeconfigPath: string;
   readonly name: string;
   readonly nodeName: string;
+  readonly buildkitAddress: string;
   readonly input: string;
   readonly dockerConfigSecret: string;
   readonly cacheImport: string;
@@ -82,7 +83,7 @@ export function podNode(request: PodNodeRequest): string {
 function buildCommandArguments(request: BuildJobRequest): readonly string[] {
   const args = [
     "--addr",
-    BUILDKIT_ADDRESS,
+    request.buildkitAddress,
     "build",
     "--progress=plain",
     "--frontend=dockerfile.v0",
@@ -262,6 +263,55 @@ function assertCacheStepDidNotExecute(request: {
   if (executionLine.test(request.logs)) {
     throw new Error(`build job ${request.jobName}: cached RUN step executed`);
   }
+}
+
+function serviceAccessJobYaml(request: NetworkPolicyJobRequest): string {
+  return `apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${request.name}
+  namespace: arc-runners
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 30
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nook-cache-proof-client
+        nook.nokey.sh/role: arc-buildkit-benchmark
+    spec:
+      nodeName: ${request.nodeName}
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: buildctl
+          image: ${BUILDKIT_IMAGE}
+          command: ["buildctl"]
+          args: ["--addr", "${BUILDKIT_ADDRESS}", "debug", "workers"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            seccompProfile:
+              type: RuntimeDefault
+`;
+}
+
+export function proveBuildkitServiceAccess(request: NetworkPolicyJobRequest): void {
+  applyYaml({
+    kubeconfigPath: request.kubeconfigPath,
+    label: "start authorized BuildKit service client",
+    yaml: serviceAccessJobYaml(request),
+  });
+  finishBuildJob({
+    kubeconfigPath: request.kubeconfigPath,
+    name: request.name,
+    expectCached: false,
+  });
 }
 
 function networkPolicyJobYaml(request: NetworkPolicyJobRequest): string {

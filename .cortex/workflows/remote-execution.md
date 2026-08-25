@@ -126,6 +126,9 @@ Security rules:
 - The harness does not start a Docker daemon or mount a runtime socket into a
   k3d node or Kubernetes workload.
 - Kubernetes proof clients remain unprivileged and tokenless.
+- The hosted overlay uses cluster-wide BuildKit Service routing. Exact-shard
+  cache assertions use StatefulSet headless endpoints. Production node-local
+  Service routing remains k0s evidence.
 - The controller refuses a pre-existing cluster name and deletes only the
   cluster that it created.
 

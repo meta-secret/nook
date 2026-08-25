@@ -624,8 +624,11 @@ production Zot, rootless BuildKit, and NetworkPolicy resources. The hosted
 runner's Docker daemon creates only the k3d infrastructure containers.
 Kubernetes workloads receive no runtime socket, service-account token, host
 path, or privileged context. The proof covers cache persistence and
-cross-shard portability. It does not replace production evidence for k0s,
-WireGuard, Kata, ARC lifecycle, capacity, or performance.
+cross-shard portability. It first proves authorized BuildKit Service access and
+then targets exact StatefulSet shards through their headless endpoints. Hosted
+k3d uses cluster-wide Service routing, so the proof does not replace production
+evidence for k0s, node-local Service routing, WireGuard, Kata, ARC lifecycle,
+capacity, or performance.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and

@@ -361,6 +361,7 @@ Use this workflow for quality, CI, and deployment changes.
     The proof requires these outcomes:
 
     - one rootless BuildKit shard runs on each distinct agent;
+    - a labeled client can reach the BuildKit service before denial is tested;
     - an unlabeled client cannot reach the BuildKit service;
     - the Remote registry identity cannot write a stable Main ref;
     - node-local cache remains CACHED after BuildKit Pod recreation;
@@ -368,6 +369,10 @@ Use this workflow for quality, CI, and deployment changes.
     - a cold shard restores the stable ref through Zot;
     - concurrent isolated refs remain separate; and
     - each isolated ref restores as CACHED on a different shard.
+
+    The hosted overlay uses cluster-wide Service routing. Exact-shard cache
+    assertions use StatefulSet headless endpoints. Production node-local
+    `internalTrafficPolicy` routing remains a k0s deployment proof.
 
     The hosted Remote task installs checksum-pinned k3d and runs this proof
     alone. The controller refuses to replace a pre-existing cluster with the

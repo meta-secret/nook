@@ -72,13 +72,17 @@ proof. It creates one isolated k3d server and three agents, then applies
 Kustomize patches to the production Zot, BuildKit, and NetworkPolicy manifests.
 The proof validates node-local cache retention, cross-node Zot restoration,
 stable-scope ACLs, isolated concurrent refs, and denied unlabeled clients. It
-cleans up only its exact cluster and uses an isolated kubeconfig. The hosted
+first proves an authorized BuildKit Service client, then uses StatefulSet
+headless endpoints to bind each cache assertion to one exact shard. It cleans
+up only its exact cluster and uses an isolated kubeconfig. The hosted
 Remote task installs checksum-pinned k3d automatically. A local caller needs
 k3d v5.9.0, Docker, Bun, and kubectl.
 
-This proof covers portable Kubernetes workload behavior. k0s lifecycle,
-WireGuard routing, Kata isolation, ARC controller lifecycle, node capacity, and
-production performance remain production-only evidence.
+This proof covers portable Kubernetes workload behavior. The overlay uses
+cluster-wide Service routing because hosted k3d does not reproduce production's
+node-local `internalTrafficPolicy` path reliably. k0s lifecycle, node-local
+Service routing, WireGuard routing, Kata isolation, ARC controller lifecycle,
+node capacity, and production performance remain production-only evidence.
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
 remote deployment directory. The default target is
