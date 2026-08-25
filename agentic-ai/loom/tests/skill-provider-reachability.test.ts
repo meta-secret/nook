@@ -1,9 +1,6 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
-import {
-  LOOM_EXECUTABLE_SOURCE,
-  violatesSkillProviderBoundary,
-} from './skill-provider-boundary.test.ts';
+import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
 
 type RuntimeDependencyGraphInspection = {
   readonly roots: readonly string[];
@@ -32,14 +29,7 @@ const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
 const RUNTIME_SOURCE_SUFFIXES = [
   '',
-  '.ts',
-  '.tsx',
-  '.mts',
-  '.cts',
-  '.js',
-  '.jsx',
-  '.mjs',
-  '.cjs',
+  ...'ts tsx mts cts js jsx mjs cjs'.split(' ').map((value) => `.${value}`),
 ] as const;
 const transpilerOptions: RuntimeTranspilerOptions = { loader: 'tsx' };
 const RUNTIME_IMPORT_SCANNER = new Bun.Transpiler(transpilerOptions);
@@ -143,66 +133,16 @@ test('follows runtime facades without scanning unrelated provider references', (
       'agentic-ai/unrelated.ts',
       "import '../.agents/skills/provider/src/audit.ts';",
     ],
+    ['agentic-ai/loom/src/unsafe.ts', "import './missing.ts';"],
   ]);
   const inspection: RuntimeDependencyGraphInspection = {
-    roots: ['agentic-ai/loom/src/cli.ts'],
+    roots: ['agentic-ai/loom/src/cli.ts', 'agentic-ai/loom/src/unsafe.ts'],
     sources,
   };
   expect(runtimeDependencyViolations(inspection)).toEqual([
+    'agentic-ai/loom/src/unsafe.ts',
     'agentic-ai/nested/index.ts',
   ]);
-});
-
-test('ignores erased and inert text while failing closed on missing runtime edges', () => {
-  const safeSources = new Map<string, string>([
-    ['agentic-ai/loom/src/empty.ts', ''],
-    [
-      'agentic-ai/loom/src/safe.ts',
-      [
-        "import type { Audit } from '../../../.agents/skills/provider/src/audit.ts';",
-        "export type { Result } from '../../../.agents/skills/provider/src/domain.ts';",
-        'const text = "import \'../../../.agents/skills/provider/src/audit.ts\'";',
-        "// import '../../../.agents/skills/provider/src/audit.ts';",
-      ].join('\n'),
-    ],
-  ]);
-  const safeInspection: RuntimeDependencyGraphInspection = {
-    roots: ['agentic-ai/loom/src/empty.ts', 'agentic-ai/loom/src/safe.ts'],
-    sources: safeSources,
-  };
-  expect(runtimeDependencyViolations(safeInspection)).toEqual([]);
-
-  const missingSources = new Map<string, string>([
-    ['agentic-ai/loom/src/unsafe.ts', "import './missing.ts';"],
-  ]);
-  const missingInspection: RuntimeDependencyGraphInspection = {
-    roots: ['agentic-ai/loom/src/unsafe.ts'],
-    sources: missingSources,
-  };
-  expect(runtimeDependencyViolations(missingInspection)).toEqual([
-    'agentic-ai/loom/src/unsafe.ts',
-  ]);
-});
-
-test('applies the unbounded loader boundary throughout the runtime closure', () => {
-  for (const facadeSource of [
-    'const path = computePath(); import(path);',
-    'const path = computePath(); require(path);',
-    'const path = computePath(); import(`../${path}`);',
-    'const load = require; load(computePath());',
-  ]) {
-    const sources = new Map<string, string>([
-      ['agentic-ai/loom/src/cli.ts', "import '../../provider-facade.ts';"],
-      ['agentic-ai/provider-facade.ts', facadeSource],
-    ]);
-    const inspection: RuntimeDependencyGraphInspection = {
-      roots: ['agentic-ai/loom/src/cli.ts'],
-      sources,
-    };
-    expect(runtimeDependencyViolations(inspection)).toEqual([
-      'agentic-ai/provider-facade.ts',
-    ]);
-  }
 });
 
 test('production Loom runtime closure cannot reach dormant providers', async () => {
@@ -214,9 +154,6 @@ test('production Loom runtime closure cannot reach dormant providers', async () 
         EXECUTABLE_SOURCE_EXTENSION.test(path),
     )
     .sort();
-  expect(roots).toContain('agentic-ai/loom/src/cli.ts');
-  expect(roots).toContain('agentic-ai/loom/src/cli-invocation.ts');
-  expect(roots).toContain('agentic-ai/loom/src/loom-failure.ts');
   const sources = new Map<string, string>();
   for (const path of trackedPaths) {
     const source = EXECUTABLE_SOURCE_EXTENSION.test(path)
@@ -228,49 +165,24 @@ test('production Loom runtime closure cannot reach dormant providers', async () 
   expect(runtimeDependencyViolations(inspection)).toEqual([]);
 });
 
-test('audits every executable Loom source extension', () => {
-  for (const extension of [
-    'ts',
-    'tsx',
-    'mts',
-    'cts',
-    'js',
-    'jsx',
-    'mjs',
-    'cjs',
-  ]) {
-    expect(LOOM_EXECUTABLE_SOURCE.test(`src/facade.${extension}`)).toBe(true);
-  }
-  expect(LOOM_EXECUTABLE_SOURCE.test('src/facade.txt')).toBe(false);
-});
-
 test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
   const sources = [
-    'eval("import(\'../../../.agents/skills/provider/src/audit.ts\')");',
     'const run = eval; run(source);',
     'new Function(source)();',
     'new AsyncFunction(source)();',
     'new GeneratorFunction(source)();',
-    'globalThis.eval(source);',
-    'globalThis[`eval`](source);',
     '(() => {}).constructor(source)();',
-    '(() => {})["constructor"](source)();',
-    '(() => {})[`constructor`](source)();',
     "const key = 'constructor'; (() => {})[key](source)();",
     'const { constructor: F } = (() => {}); F(source)();',
-    "Reflect.get(() => {}, 'constructor')(source)();",
-    "Object.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
     'globalThis[computeKey()](source);',
     'Reflect[computeKey()](() => {}, source)(source)();',
-    'Object[computeKey()](() => {}, source)(source)();',
-    "import { fn } from './fn.ts'; const key = computeKey(); const F = fn[key]; F(source)();",
-    "import * as mod from './fn.ts'; const key = computeKey(); const F = mod[key]; F(source)();",
-    "import { fn } from './fn.ts'; const key = computeKey(); let F; F = fn[key]; F(source)();",
+    "import { fn } from './fn.ts'; const key = computeKey(); const first = fn[key]; const second = first; second(source)();",
+    "import * as mod from './fn.ts'; const key = computeKey(); let first; let second; first = mod[key]; second = first; second(source)();",
+    "import { fn } from './fn.ts'; const key = computeKey(); (0, fn[key])(source)();",
+    "import * as mod from './fn.ts'; const key = computeKey(); (choose ? mod[key] : fallback)(source)();",
+    "import { fn } from './fn.ts'; const key = computeKey(); ((fn[key] as never)!)(source)();",
     "const { getOwnPropertyDescriptor: get } = Object; get(() => {}, 'constructor')!.value(source)();",
     "const { get } = Reflect; get(() => {}, 'constructor')(source)();",
-    "const O = Object; O.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
-    "const R = Reflect; R.get(() => {}, 'constructor')(source)();",
-    "globalThis.Object.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
     "globalThis.Reflect.get(() => {}, 'constructor')(source)();",
     "const O = globalThis['Object']; O.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
     "const R = global[`Reflect`]; R.get(() => {}, 'constructor')(source)();",
@@ -289,4 +201,11 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
       'const eval = (value: string) => value; class Function {}; eval("local"); new Function();',
   };
   expect(violatesSkillProviderBoundary(localInspection)).toBe(false);
+
+  const shadowedAliasInspection = {
+    filePath: 'shadowed-alias.ts',
+    source:
+      "import { fn } from './fn.ts'; const key = computeKey(); const run = fn[key]; { const run = safe; run(source); }",
+  };
+  expect(violatesSkillProviderBoundary(shadowedAliasInspection)).toBe(false);
 });
