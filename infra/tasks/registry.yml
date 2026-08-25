@@ -325,6 +325,11 @@ tasks:
           -u "$remote_username:$remote_password" \
           "https://$host/v2/")"
         test "$remote_auth" = 200
+        remote_mirror_read="$(curl -sS -o /dev/null -w '%{http_code}' \
+          -u "$remote_username:$remote_password" \
+          -H 'Accept: application/vnd.oci.image.index.v1+json, application/vnd.docker.distribution.manifest.list.v2+json' \
+          "https://$host/v2/moby/buildkit/manifests/buildx-stable-1")"
+        test "$remote_mirror_read" = 200
         remote_main_write="$(curl -sS -o /dev/null -w '%{http_code}' \
           -u "$remote_username:$remote_password" \
           -X POST \

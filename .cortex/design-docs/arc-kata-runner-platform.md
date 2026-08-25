@@ -142,12 +142,12 @@ unqualified `docker.io` pulls through `registry.dev.nokey.sh`.
 Zot is an on-demand Docker Hub mirror. It preserves upstream digests. A missing
 public blob is fetched centrally once and then retained.
 
-Main build producers run on ARC and publish from their persistent local shard.
-After WASM publication, one narrow GitHub-hosted clean-room job creates a fresh
-BuildKit builder and imports only the published Zot ref. An uncached child reads
-the restored WASM artifacts, which forces snapshot hydration and extraction.
-The job exports only a small marker and gates deployment. This hosted exception
-is intentional: reusing any persistent ARC shard could hide a missing Zot blob.
+Main build producers run on ARC and retain their persistent local graph. One
+narrow GitHub-hosted job creates a fresh BuildKit builder and alone publishes
+the portable WASM dependency ref. Zot then proves child manifest digest/size
+plus every declared blob's size and readability. A second fresh cache-only
+builder requires each expensive dependency vertex to hit. This hosted exception
+prevents a persistent ARC shard from masking missing registry data.
 
 ## Resource envelopes
 

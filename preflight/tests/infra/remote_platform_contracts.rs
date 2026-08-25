@@ -374,6 +374,7 @@ fn assert_zot_registry_contract() -> anyhow::Result<()> {
         "\"nook/buildcache/**\"",
         "\"nook/remote-buildcache/**\"",
         "\"users\": [\"__NOOK_REGISTRY_REMOTE_USERNAME__\"]",
+        "\"actions\": [\"read\"]",
         "\"actions\": [\"read\", \"create\", \"update\"]",
         "\"repositories\": [\"nook/remote-buildcache/**\"]",
         "\"pushedWithin\": \"168h\"",

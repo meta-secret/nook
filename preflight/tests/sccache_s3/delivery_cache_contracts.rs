@@ -146,9 +146,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let wasm_cache_verifier = read(".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
-            && wasm_cache_verifier.contains("nook/buildcache/$cache_scope:buildcache")
-            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
-        "Main WASM cache verify must require GHA_RUST_WASM_DEPS_SCOPE and import that buildcache ref"
+            && wasm_cache_verifier.contains("nook/buildcache/${cache_scope}:buildcache")
+            && !docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
+        "hosted Main WASM cache publication must require GHA_RUST_WASM_DEPS_SCOPE while ARC never invokes the verifier"
     );
     let root_tasks = read("Taskfile.yml");
     assert!(

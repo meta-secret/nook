@@ -78,6 +78,7 @@ tasks:
       VITE_SIMPLE_APP_URL: '{{.VITE_SIMPLE_APP_URL}}'
       VITE_SENTINEL_APP_URL: '{{.VITE_SENTINEL_APP_URL}}'
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
+      NOOK_E2E_SHARD: '{{.NOOK_E2E_SHARD}}'
       E2E_SPEC: '{{.E2E_SPEC}}'
       CHANNEL: '{{default "" .CHANNEL}}'
       PR: '{{default "" .PR}}'
@@ -113,6 +114,7 @@ tasks:
         -e VITE_SIMPLE_APP_URL="{{.VITE_SIMPLE_APP_URL}}" \
         -e VITE_SENTINEL_APP_URL="{{.VITE_SENTINEL_APP_URL}}" \
         -e VITE_VAULT_SYNC_INTERVAL_MS="{{.VITE_VAULT_SYNC_INTERVAL_MS}}" \
+        -e NOOK_E2E_SHARD \
         -e NOOK_GITHUB_PAT \
         -e CI=1 \
         -e NOOK_GITHUB_E2E_REPO \

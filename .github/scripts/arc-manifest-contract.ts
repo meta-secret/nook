@@ -112,6 +112,25 @@ const mainWorkflow = new TextContract({
   label: "Main workflow",
   source: await read(".github/workflows/main.yml"),
 });
+const prWorkflow = new TextContract({
+  label: "PR workflow",
+  source: await read(".github/workflows/pr.yml"),
+});
+const webTasks = new TextContract({
+  label: "web browser tasks",
+  source: await read("nook-app/nook-web/Taskfile.yml"),
+});
+const webDockerTasks = new TextContract({
+  label: "web Docker browser tasks",
+  source: await read("nook-app/nook-web/docker/Taskfile.yml"),
+});
+const wasmCacheProofSource = await read(
+  ".github/scripts/verify-wasm-gha-cache.sh",
+);
+const wasmCacheProof = new TextContract({
+  label: "portable WASM cache proof",
+  source: wasmCacheProofSource,
+});
 const remoteWorkflow = new TextContract({
   label: "Remote workflow",
   source: await read(".github/workflows/remote.yml"),
@@ -230,6 +249,12 @@ dockerSetup.forbidAll([
   "docker info >/dev/null",
   "docker-in-docker",
 ]);
+dockerSetup.requireAll([
+  "name: Login to Nook OCI registry",
+  "name: Preload hosted BuildKit from Zot",
+  'docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"',
+  "driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1",
+]);
 runtimeSmoke.requireAll([
   "NOOK_ARC_RUNNER",
   'type=local,dest=$shared_dir',
@@ -258,8 +283,10 @@ mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
 mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
-  "name: Fresh WASM cache restore proof",
-  "NOOK_DEFER_FRESH_WASM_CACHE_PROOF: \"1\"",
+  "name: Portable WASM cache publication proof",
+  "Install Bun for registry cache audit",
+  "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
+  "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
   "bash .github/scripts/verify-wasm-gha-cache.sh",
   "web-e2e:",
   "extension-e2e:",
@@ -268,6 +295,57 @@ mainWorkflow.requireAll([
   "This lane still invokes the sealed image through Docker",
   "This lane runs a browser container and therefore needs a general runtime.",
 ]);
+prWorkflow.requireAll([
+  "full-e2e-shard:",
+  "name: Full browser e2e shard (${{ matrix.shard }}/2)",
+  "fail-fast: false",
+  "shard: [1, 2]",
+  "NOOK_E2E_SHARD: ${{ matrix.shard }}/2",
+  "full-e2e:",
+  "name: Full browser e2e (main fix)",
+  "needs: [full-e2e-shard, wasm]",
+  "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
+  "artifact-suffix: shard-${{ matrix.shard }}",
+]);
+webTasks.requireAll([
+  "_web:test:e2e:run-groups:",
+  'set -- "--shard=$NOOK_E2E_SHARD"',
+  "PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable",
+  "PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable",
+  "bun x playwright test --config playwright.isolation.config.ts",
+]);
+webDockerTasks.requireAll([
+  "NOOK_E2E_SHARD: '{{.NOOK_E2E_SHARD}}'",
+  "-e NOOK_E2E_SHARD",
+]);
+wasmCacheProof.requireAll([
+  '--driver-opt "image=${registry_host}/moby/buildkit:buildx-stable-1"',
+  'if [ "$purpose" = "promote" ]',
+  "A repair solve must never import the ref it is replacing",
+  'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',
+  "nook-rust-wasm-source-v2:buildcache,ignore-error=true",
+  "compression=zstd,force-compression=true",
+  'builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${cache_ref}',
+]);
+const cacheRoutingStart = wasmCacheProofSource.indexOf(
+  'if [ "$purpose" = "promote" ]',
+);
+const cacheRoutingEnd = wasmCacheProofSource.indexOf(
+  "command+=(builder-wasm-deps-cache-proof)",
+  cacheRoutingStart,
+);
+const cacheRouting = wasmCacheProofSource.slice(
+  cacheRoutingStart,
+  cacheRoutingEnd,
+);
+const [promotionCacheRouting = "", verificationCacheRouting = ""] =
+  cacheRouting.split("  else\n");
+if (promotionCacheRouting.includes("ref=${cache_ref}")) {
+  throw new Error("portable WASM cache promotion must not import its destination");
+}
+if (!verificationCacheRouting.includes("ref=${cache_ref}")) {
+  throw new Error("portable WASM cache verification must import the destination");
+}
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

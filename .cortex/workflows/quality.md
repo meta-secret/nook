@@ -160,7 +160,8 @@ Use this workflow for quality, CI, and deployment changes.
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
       use ARC.
-    - Main's clean-room Zot hydration proof uses a fresh GitHub-hosted builder.
+    - Main's portable WASM dependency writer/proof uses two fresh
+      GitHub-hosted builders.
     - General ARC exposes only a Buildx client connected to the persistent
       rootless BuildKit shard on its selected node.
     - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
@@ -274,11 +275,14 @@ Use this workflow for quality, CI, and deployment changes.
       cannot rewrite apt while cooking chef.
     - ARC Native and ecosystem jobs do not export per-PR Rust target trees.
       Even `mode=min` can contain a result layer larger than 15 GiB.
-    - WASM publishers stage deps-publish and source export before rust-base.
-    - Staging rust-base first on WASM imports the shorter parent index and
-      orphans local chef cook layers for the next bake.
+    - ARC WASM publishers keep source state portable but never overwrite the
+      portable dependency ref with worker-specific metadata.
+    - A trusted hosted builder is the sole writer of the portable WASM
+      dependency ref. A second fresh hosted builder validates cache hits.
     - Publishers keep configured `cache-from` on every Bake.
-    - Main verifies published WASM fingerprints from a fresh builder.
+    - Main audits child manifest digest/size and every published blob's declared
+      size and SHA-256 by streaming the blob completely. It then verifies the WASM fingerprint from a
+      second fresh builder without hydrating its complete filesystem.
     - One CI job writes each shared ecosystem registry ref.
     - The WASM cargo-chef dependency scope is fingerprinted from cook-affecting
       inputs only.
@@ -307,7 +311,10 @@ Use this workflow for quality, CI, and deployment changes.
     - `theorem_wasm_and_native_publish_staging`
 
     Runtime CACHED proof for published WASM deps remains Main
-    `verify-wasm-gha-cache.sh` on a fresh builder.
+    `verify-wasm-gha-cache.sh`. One fresh hosted builder writes the portable
+    ref, and a second fresh builder verifies the three expensive vertices.
+    Both fresh builders bootstrap the authenticated Zot-qualified BuildKit
+    image and never resolve their runtime image from Docker Hub.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
     It reproduces the rejected three-linked-target nightly miss.
@@ -366,7 +373,10 @@ Use this workflow for quality, CI, and deployment changes.
     - Main serializes native → WASM → web publisher lanes.
     - ARC lanes verify first, then publish the lane's shared Zot refs.
     - Hosted fallback lanes use the same portable Zot contract.
-    - Hosted WASM dependency export uses no reimport and forces zstd compression.
+    - Hosted WASM dependency export never reimports its destination, so a
+      corrupted portable ref can heal on the next Main run. It may import only
+      independent input-fingerprint and Main source refs as optional seeds, and
+      it forces zstd compression.
     - Browser/UI validation remains read-only and receives no compiler-cache identity.
     - After UI-demo assertions pass, the producer publishes the verified browser
       graph.
@@ -378,7 +388,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Fork PR native Rust and every verified WASM producer remain GitHub-hosted.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
-    - Main-fix PRs carrying `ci:full-e2e` also feed separate local-provider web and extension browser jobs.
+    - Main-fix PRs carrying `ci:full-e2e` feed two deterministic local-provider web shards plus an independent extension browser job.
+    - A stable browser join requires both web shards without rebuilding a low-reuse exact-head browser cache afterward.
     - `Verify and preview` uses `always()`.
     - It fails explicitly when any required producer or consumer fails.
     - The established required check cannot be skipped by dependency failure.

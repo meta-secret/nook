@@ -78,6 +78,18 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
+    - name: Login to Nook OCI registry
+      uses: docker/login-action@v4
+      with:
+        registry: ${{ inputs.registry-host }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Preload hosted BuildKit from Zot
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      shell: bash
+      run: docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"
+
     # GitHub-hosted VMs use their job-scoped BuildKit container. ARC runners
     # use the persistent rootless BuildKit shard on their Kubernetes node.
     # The runner carries only client tooling and never receives a Docker daemon
@@ -87,6 +99,8 @@ runs:
       id: hosted-buildx
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
       uses: docker/setup-buildx-action@v4
+      with:
+        driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
 
     - name: Connect ARC Buildx to the node-local BuildKit shard
       id: arc-buildx
@@ -110,13 +124,6 @@ runs:
           "$NOOK_BUILDKIT_ADDR"
         docker buildx inspect "$builder" --bootstrap
         echo "name=$builder" >> "$GITHUB_OUTPUT"
-
-    - name: Login to Nook OCI registry
-      uses: docker/login-action@v4
-      with:
-        registry: ${{ inputs.registry-host }}
-        username: ${{ inputs.registry-username }}
-        password: ${{ inputs.registry-password }}
 
     - name: Connect SeaweedFS compiler cache
       uses: ./.github/actions/nook-cache-connect

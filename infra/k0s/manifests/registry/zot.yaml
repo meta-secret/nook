@@ -72,6 +72,12 @@ data:
               ]
             },
             "**": {
+              "policies": [
+                {
+                  "users": ["__NOOK_REGISTRY_REMOTE_USERNAME__"],
+                  "actions": ["read"]
+                }
+              ],
               "anonymousPolicy": ["read"]
             }
           },
