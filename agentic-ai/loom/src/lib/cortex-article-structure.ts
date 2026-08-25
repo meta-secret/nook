@@ -500,6 +500,17 @@ function htmlContainerDepths(
       starts.splice(startIndex);
     }
   }
+  for (const start of starts) {
+    for (let index = start.nodeIndex + 1; index < children.length; index += 1) {
+      const depth = depths[index] ?? false;
+      if (depth === false) continue;
+      depths[index] = {
+        all: depth.all + 1,
+        nonRendered:
+          depth.nonRendered + (isNonRenderedHtmlContainer(start.name) ? 1 : 0),
+      };
+    }
+  }
   return depths;
 }
 
@@ -709,7 +720,8 @@ function hasVisibleUnparsedHtmlMarkup(value: string): boolean {
   if (/^<\?[\s\S]*\?>$/u.test(value)) return false;
   const cdata = /^<!\[CDATA\[([\s\S]*)\]\]>$/u.exec(value);
   const cdataText = cdata?.[1] ?? false;
-  return cdataText === false || hasVisibleSemanticText(cdataText);
+  if (cdataText !== false) return hasVisibleSemanticText(cdataText);
+  return !/^<!/u.test(value);
 }
 
 function isCommentOnlyHtmlValue(value: string): boolean {

@@ -326,6 +326,7 @@ test('normalizes blank tables and empty HTML containers to separators', () => {
     '<!doctype html>',
     '<?xml version="1.0"?>',
     '<![CDATA[]]>',
+    '<!ENTITY foo>',
   ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/semantic-empty.md',
@@ -378,6 +379,7 @@ test('normalizes non-rendered raw HTML containers to separators', () => {
     '<template>\n\nHidden template content.\n\n</template>',
     '<template><template>Hidden inner.</template>Hidden outer.</template>',
     '<template>\n\n<template>\n\nHidden inner.\n\n</template>\n\nHidden outer.\n\n</template>',
+    '<template>\n\nHidden text',
   ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/non-rendered-html.md',
@@ -730,6 +732,7 @@ Multiline callout.
 
 <article>
 Unclosed block ends at the blank line.
+</article>
 
 ## Recovery procedure
 
@@ -739,7 +742,7 @@ Unclosed block ends at the blank line.
   const findings = audit([makeDocument(documentArgs)]);
   expect(findings).toHaveLength(1);
   expect(findings[0]?.code).toBe(CortexArticleFindingCode.UnorderedProcedure);
-  expect(findings[0]?.line).toBe(18);
+  expect(findings[0]?.line).toBe(19);
 });
 
 test('keeps multiline definitions transparent to dense prose', () => {
