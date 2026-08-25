@@ -4,6 +4,7 @@ import {
   registerRegistryDescriptor,
   type RegistryDescriptor,
   type RegistryDescriptorRegistration,
+  RegistryDescriptorKind,
 } from './registry-cache-descriptor'
 
 const digest = `sha256:${'a'.repeat(64)}`
@@ -20,7 +21,7 @@ function register(input: {
   const registration: RegistryDescriptorRegistration = {
     collection: input.collection,
     descriptor: input.descriptor,
-    kind: 'blob',
+    kind: RegistryDescriptorKind.Blob,
   }
   registerRegistryDescriptor(registration)
 }

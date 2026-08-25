@@ -4,10 +4,15 @@ export interface RegistryDescriptor {
   size: number
 }
 
+export enum RegistryDescriptorKind {
+  Blob = 'blob',
+  Manifest = 'manifest',
+}
+
 export interface RegistryDescriptorRegistration {
   collection: Map<string, RegistryDescriptor>
   descriptor: RegistryDescriptor
-  kind: 'blob' | 'manifest'
+  kind: RegistryDescriptorKind
 }
 
 export function registerRegistryDescriptor(input: RegistryDescriptorRegistration): void {

@@ -4,6 +4,7 @@ import {
   registerRegistryDescriptor,
   type RegistryDescriptor,
   type RegistryDescriptorRegistration,
+  RegistryDescriptorKind,
 } from './registry-cache-descriptor'
 
 interface RegistryDocument {
@@ -87,7 +88,7 @@ const registerBlobDescriptor = (descriptor: RegistryDescriptor): void => {
   const registration: RegistryDescriptorRegistration = {
     collection: descriptors,
     descriptor,
-    kind: 'blob',
+    kind: RegistryDescriptorKind.Blob,
   }
   registerRegistryDescriptor(registration)
 }
@@ -95,7 +96,7 @@ const registerManifestDescriptor = (descriptor: RegistryDescriptor): void => {
   const registration: RegistryDescriptorRegistration = {
     collection: manifestDescriptors,
     descriptor,
-    kind: 'manifest',
+    kind: RegistryDescriptorKind.Manifest,
   }
   registerRegistryDescriptor(registration)
 }
