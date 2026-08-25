@@ -443,17 +443,35 @@ tasks:
         vars:
           CI_AGENT_CMD: implement
 
+  pr:ci-agent:audit:
+    internal: true
+    requires:
+      vars: [PR, CI_AGENT_CMD]
+    vars:
+      PR_GH_TOKEN:
+        sh: >-
+          bash -c 'printf "%s" "${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}"'
+      PR_GITHUB_REPOSITORY:
+        sh: >-
+          bash -c 'printf "%s" "${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"'
+    env:
+      GH_TOKEN: '{{.PR_GH_TOKEN}}'
+      GITHUB_REPOSITORY: '{{.PR_GITHUB_REPOSITORY}}'
+      PR_NUMBER: '{{.PR}}'
+    cmds:
+      - task: ci-agent:host:run
+        vars:
+          CI_AGENT_CMD: '{{.CI_AGENT_CMD}}'
+
   pr:preflight:
     desc: Print a machine-readable PR audit before implementation or final validation (PR=<number>).
     requires:
       vars: [PR]
     cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:host:run CI_AGENT_CMD=pr-preflight'
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-preflight
 
   pr:ready:
     desc: Read-only assertion that the exact PR head is current, deployed, repository-green, and has no pending feedback (PR=<number>); never merges or waits for reviewers.
@@ -461,24 +479,20 @@ tasks:
       vars: [PR]
     cmds:
       - task loom:cortex-session-clean
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:host:run CI_AGENT_CMD=pr-ready'
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-ready
 
   pr:review:
     desc: Request exact-head Codex review, or Cursor Bugbot when Codex is unavailable (PR=<number>); never waits and is not required for readiness.
     requires:
       vars: [PR]
     cmds:
-      - >-
-        bash -c 'set -euo pipefail;
-        export GH_TOKEN="${NOOK_GITHUB_PAT:-${GITHUB_TOKEN:-${GH_TOKEN:-$(gh auth token)}}}";
-        export GITHUB_REPOSITORY="${GITHUB_REPOSITORY:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}";
-        export PR_NUMBER="{{.PR}}";
-        task ci-agent:host:run CI_AGENT_CMD=pr-review'
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-review
 
   pr:review-local:
     desc: Run an advisory local Codex review against origin/main; unavailable Codex access skips without blocking delivery.
