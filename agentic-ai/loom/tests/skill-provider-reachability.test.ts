@@ -263,6 +263,8 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     'const fn = () => {}; const { masked } = { masked: fn as never as Record<string, string> }; const key = computeKey(); (masked[key] as never as (source: string) => void)(source);',
     'const fn = () => {}; const holder = { masked: fn as never as Record<string, string> }; const { masked } = holder; const key = computeKey(); (masked[key] as never as (source: string) => void)(source);',
     'const fn = () => {}; const [{ masked }] = [{ masked: fn as never as Record<string, string> }]; const key = computeKey(); (masked[key] as never as (source: string) => void)(source);',
+    'const fn = () => {}; const [masked = fn as never as Record<string, string>] = []; const key = computeKey(); (masked[key] as never as (source: string) => void)(source);',
+    'const fn = () => {}; const { masked = fn as never as Record<string, string> } = {}; const key = computeKey(); (masked[key] as never as (source: string) => void)(source);',
     "import { fn } from './fn.ts'; const key = computeKey(); const holder = { evaluator: fn[key] }; holder.evaluator(source)();",
     "import * as mod from './fn.ts'; const key = computeKey(); const holder = [mod[key]]; holder.at(0)(source)();",
     "import { fn } from './fn.ts'; const key = computeKey(); const [evaluator] = [fn[key]]; evaluator(source)();",
@@ -296,6 +298,8 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     "const record = { label: 'safe' }; const { masked } = { masked: record as Record<string, string> }; const key = computeKey(); masked[key];",
     "const record = { label: 'safe' }; const holder = { masked: record as Record<string, string> }; const { masked } = holder; const key = computeKey(); masked[key];",
     "const record = { label: 'safe' }; const [{ masked }] = [{ masked: record as Record<string, string> }]; const key = computeKey(); masked[key];",
+    "const values = ['safe']; const [masked = values as never as Record<string, string>] = []; const key = computeKey(); masked[key];",
+    "const record = { label: 'safe' }; const { masked = record as Record<string, string> } = {}; const key = computeKey(); masked[key];",
   ]) {
     const localInspection = { filePath: 'local-evaluator.ts', source };
     expect(violatesSkillProviderBoundary(localInspection), source).toBe(false);

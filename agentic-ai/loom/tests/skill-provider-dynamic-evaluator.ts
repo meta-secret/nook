@@ -318,6 +318,8 @@ function runtimeReceiverInitializer(
 function bindingElementInitializer(
   resolution: BindingElementInitializerResolution,
 ): ts.Expression | false {
+  const defaultInitializer = callableBindingDefault(resolution);
+  if (defaultInitializer !== false) return defaultInitializer;
   const pattern = resolution.binding.parent;
   const patternResolution: BindingPatternInitializerResolution = {
     checker: resolution.checker,
@@ -367,6 +369,20 @@ function bindingElementInitializer(
     }
   }
   return false;
+}
+
+function callableBindingDefault(
+  resolution: BindingElementInitializerResolution,
+): ts.Expression | false {
+  if (!resolution.binding.initializer) return false;
+  const defaultResolution: RuntimeReceiverResolution = {
+    checker: resolution.checker,
+    expression: resolution.binding.initializer,
+    seen: resolution.seen,
+  };
+  const defaultInitializer = runtimeReceiverExpression(defaultResolution);
+  const defaultType = resolution.checker.getTypeAtLocation(defaultInitializer);
+  return typeCanExposeEvaluator(defaultType) ? defaultInitializer : false;
 }
 
 function bindingPatternInitializer(
