@@ -22,7 +22,6 @@ interface RegistryLocation {
 interface RegistryRequest {
   method?: string
   path: string
-  range?: string
 }
 
 interface ManifestInput {
@@ -65,8 +64,11 @@ const registryRequest = async (input: RegistryRequest): Promise<Response> => {
       'application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json',
     )
   }
-  if (input.range) headers.set('Range', input.range)
-  const init: RequestInit = { headers, method: input.method ?? 'GET' }
+  const init: RequestInit = {
+    headers,
+    method: input.method ?? 'GET',
+    signal: AbortSignal.timeout(5 * 60_000),
+  }
   const response = await fetch(`https://${location.host}/v2/${location.repository}/${input.path}`, init)
   if (!response.ok) {
     throw new Error(`registry ${init.method} ${input.path} failed with HTTP ${response.status}`)
@@ -82,8 +84,7 @@ const childManifestInput = (descriptor: RegistryDescriptor): ManifestInput => ({
   descriptor,
   reference: descriptor.digest,
 })
-const blobHeadRequest = (path: string): RegistryRequest => ({ method: 'HEAD', path })
-const blobByteRequest = (path: string): RegistryRequest => ({ path, range: 'bytes=0-0' })
+const blobRequest = (path: string): RegistryRequest => ({ path })
 const registerBlobDescriptor = (descriptor: RegistryDescriptor): void => {
   const registration: RegistryDescriptorRegistration = {
     collection: descriptors,
@@ -131,26 +132,47 @@ const verifyBlob = async (descriptor: RegistryDescriptor): Promise<void> => {
     throw new Error(`invalid registry descriptor: ${JSON.stringify(descriptor)}`)
   }
   const path = `blobs/${descriptor.digest}`
-  const head = await registryRequest(blobHeadRequest(path))
-  const contentLength = Number(head.headers.get('content-length'))
+  const response = await registryRequest(blobRequest(path))
+  const contentLengthHeader = response.headers.get('content-length')
+  const contentLength = contentLengthHeader ? Number(contentLengthHeader) : descriptor.size
   if (contentLength !== descriptor.size) {
     throw new Error(`${descriptor.digest} has ${contentLength} bytes; manifest requires ${descriptor.size}`)
   }
-  if (descriptor.size === 0) return
-  const firstByte = await registryRequest(blobByteRequest(path))
-  const reader = firstByte.body?.getReader()
+  const reader = response.body?.getReader()
   if (!reader) throw new Error(`${descriptor.digest} has no readable response body`)
-  const chunk = await reader.read()
-  await reader.cancel()
-  if (chunk.done || chunk.value.length === 0) {
-    throw new Error(`${descriptor.digest} did not return a readable byte`)
+  const hash = createHash('sha256')
+  let bytesRead = 0
+  for (;;) {
+    const chunk = await reader.read()
+    if (chunk.done) break
+    bytesRead += chunk.value.length
+    hash.update(chunk.value)
   }
+  const digest = `sha256:${hash.digest('hex')}`
+  if (bytesRead !== descriptor.size || digest !== descriptor.digest) {
+    throw new Error(
+      `${descriptor.digest} blob has digest ${digest} and ${bytesRead} bytes; expected ${descriptor.size}`,
+    )
+  }
+  console.log(`verified complete registry blob ${descriptor.digest} (${bytesRead} bytes)`)
 }
 
 const rootManifest: ManifestInput = { reference: location.reference }
 await collectManifest(rootManifest)
 if (descriptors.size === 0) throw new Error(`${registryRef} contains no cache blob descriptors`)
-for (const descriptor of descriptors.values()) await verifyBlob(descriptor)
+const pendingDescriptors = [...descriptors.values()]
+let nextDescriptor = 0
+const verifyNextBlob = async (): Promise<void> => {
+  for (;;) {
+    const index = nextDescriptor
+    nextDescriptor += 1
+    const descriptor = pendingDescriptors[index]
+    if (!descriptor) return
+    await verifyBlob(descriptor)
+  }
+}
+const verifierCount = Math.min(4, pendingDescriptors.length)
+await Promise.all(Array.from({ length: verifierCount }, verifyNextBlob))
 let totalBytes = 0
 for (const descriptor of descriptors.values()) totalBytes += descriptor.size
-console.log(`verified ${descriptors.size} readable registry blobs (${totalBytes} declared bytes) for ${registryRef}`)
+console.log(`verified ${descriptors.size} complete registry blobs (${totalBytes} hashed bytes) for ${registryRef}`)

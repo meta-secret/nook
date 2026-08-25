@@ -521,20 +521,22 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Adds `Full browser e2e (main fix)` and `Full extension e2e (main fix)` jobs to the PR workflow.
+- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and `Full extension e2e (main fix)` to the PR workflow.
 - **WASM artifact sharing:**
   - A dedicated producer verifies WASM once and uploads only its generated package.
   - Preview and both browser jobs download that artifact instead of recompiling Rust.
 - **Parallel browser jobs:**
-  - The two browser jobs build the Chromium image and run deterministic local-provider plus split-app tests and extension e2e on separate hosted runners.
+  - Two web shards run deterministic halves of every fully-parallel local-provider and split-app Playwright project.
+  - Extension e2e runs independently on a third hosted runner.
   - Commands: `task ci:pr:e2e:web:artifacts` and `task ci:pr:e2e:extension:artifacts`.
-  - Both tasks use the bounded BuildKit health and recovery wrapper.
+  - Both task families use the bounded BuildKit health and recovery wrapper.
 - **Exact-head cache policy:**
   - PR browser consumers publish only isolated exact-head cache refs.
   - Each consumer probes its exact browser ref.
   - An available exact ref is imported alone.
   - A missing exact ref falls back to the browser-image seed owned by trusted Main.
-  - The web full-e2e job publishes the verified exact-head browser graph after its assertions pass.
+  - Neither web shard writes the shared cache.
+  - The stable web join publishes the verified exact-head browser graph only after both shards pass.
   - The UI-demo publisher is suppressed in this mode to avoid concurrent ref writes.
 - **Readiness requirement:**
   - Adding or removing the label retriggers PR Actions for the current head.
@@ -846,7 +848,7 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
 - Main's portable WASM cache writer uses one fresh hosted builder rather than
   ARC-local metadata. Zot must prove child manifest digest/size plus every
-  declared blob's size and readability. A second fresh builder then requires the
+  declared blob's size and SHA-256 by streaming it completely. A second fresh builder then requires the
   dependency compiler vertices to be `CACHED`. The target stays in the same
   Rust Dockerfile and context lineage; a named-context wrapper is invalid
   because it changes BuildKit cache-key identity.

@@ -106,7 +106,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Trusted same-repository PR Rust jobs and Main build producers use ARC.
   - Main's portable WASM dependency writer/proof uses two fresh GitHub-hosted
     builders. Zot must prove child manifest digests and sizes plus every blob's
-    declared size and readability. Deployment then waits until the second
+    declared size and SHA-256 by streaming it completely. Deployment then waits until the second
     cache-only solve reports every expensive dependency vertex cached.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
@@ -145,8 +145,9 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `pr.yml` starts only for `ci:validate` or `ci:full-e2e` label events.
   - It then runs native Rust, shared Rust ecosystem gates, and one verified-WASM producer independently.
   - Its small generated artifact feeds parallel preview and optional Main-fix consumers.
-  - Main-fix web and extension e2e run as independent artifact consumers on separate hosted runners.
-  - Each Main-fix consumer builds only the browser image.
+  - Main-fix web e2e runs as two deterministic Playwright shards, while extension e2e remains an independent artifact consumer.
+  - Each Main-fix browser consumer builds only the browser image.
+  - A stable `Full browser e2e (main fix)` join requires both web shards before it publishes the shared exact-head browser cache.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.

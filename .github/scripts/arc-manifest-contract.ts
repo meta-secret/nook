@@ -112,6 +112,18 @@ const mainWorkflow = new TextContract({
   label: "Main workflow",
   source: await read(".github/workflows/main.yml"),
 });
+const prWorkflow = new TextContract({
+  label: "PR workflow",
+  source: await read(".github/workflows/pr.yml"),
+});
+const webTasks = new TextContract({
+  label: "web browser tasks",
+  source: await read("nook-app/nook-web/Taskfile.yml"),
+});
+const webDockerTasks = new TextContract({
+  label: "web Docker browser tasks",
+  source: await read("nook-app/nook-web/docker/Taskfile.yml"),
+});
 const wasmCacheProofSource = await read(
   ".github/scripts/verify-wasm-gha-cache.sh",
 );
@@ -276,6 +288,30 @@ mainWorkflow.requireAll([
   "deploy:",
   "This lane still invokes the sealed image through Docker",
   "This lane runs a browser container and therefore needs a general runtime.",
+]);
+prWorkflow.requireAll([
+  "full-e2e-shard:",
+  "name: Full browser e2e shard (${{ matrix.shard }}/2)",
+  "fail-fast: false",
+  "shard: [1, 2]",
+  "NOOK_E2E_SHARD: ${{ matrix.shard }}/2",
+  "full-e2e:",
+  "name: Full browser e2e (main fix)",
+  "needs: [full-e2e-shard, wasm]",
+  "SHARD_RESULT: ${{ needs.full-e2e-shard.result }}",
+  "Publish browser cache after both shards pass",
+  "artifact-suffix: shard-${{ matrix.shard }}",
+]);
+webTasks.requireAll([
+  "_web:test:e2e:run-groups:",
+  'set -- "--shard=$NOOK_E2E_SHARD"',
+  "PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable",
+  "PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable",
+  "bun x playwright test --config playwright.isolation.config.ts",
+]);
+webDockerTasks.requireAll([
+  "NOOK_E2E_SHARD: '{{.NOOK_E2E_SHARD}}'",
+  "-e NOOK_E2E_SHARD",
 ]);
 wasmCacheProof.requireAll([
   'if [ "$purpose" = "promote" ]',

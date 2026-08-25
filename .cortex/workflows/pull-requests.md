@@ -415,9 +415,10 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 
 **Main-fix browser jobs:**
 
-- PRs labeled `ci:full-e2e` additionally run independent web and extension jobs on separate hosted runners.
+- PRs labeled `ci:full-e2e` additionally run two deterministic web shards and one independent extension job on separate hosted runners.
 - Each builds the Chromium image from verified WASM.
-- The overall `PR` workflow cannot succeed until both jobs succeed.
+- The stable web join fails unless both shards succeed, and only that join may publish the shared browser cache.
+- The overall `PR` workflow cannot succeed until both web shards, the join, and extension e2e succeed.
 
 **Do not stop after opening the PR.** Wait only for applicable repository-owned workflows:
 

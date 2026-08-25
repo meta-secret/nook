@@ -357,7 +357,7 @@ tasks:
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
   _web:test:e2e:parallel:
-    desc: Full stub Playwright e2e, with stable specs at 3 workers and sync specs at 2.
+    desc: Full or deterministically sharded Playwright e2e, with stable specs at 3 workers and sync specs at 2.
     env:
       NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
       VITE_E2E_EXPOSE_VAULT: "true"
@@ -365,9 +365,26 @@ tasks:
       VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
       VITE_VAULT_IDLE_WARNING_MS: "0"
     cmds:
-      - echo "==> Playwright e2e groups (stable=3 workers, unstable=2 workers, CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
+      - echo "==> Playwright e2e groups (stable=3 workers, unstable=2 workers, shard=${NOOK_E2E_SHARD:-all}, CI=${CI:-}, provider=${NOOK_E2E_SYNC_PROVIDER:-github}, dist=$([ -d "{{.WEB_ROOT}}/dist" ] && echo yes || echo no))"
       - task: _web:e2e:build-if-needed
-      - cd "{{.WEB_ROOT}}" && bun run test:e2e
+      - task: _web:test:e2e:run-groups
+
+  _web:test:e2e:run-groups:
+    internal: true
+    desc: Run both local-provider Playwright projects, optionally selecting one NOOK_E2E_SHARD.
+    cmds:
+      - |
+        set -eu
+        set --
+        if [ -n "${NOOK_E2E_SHARD:-}" ]; then
+          case "$NOOK_E2E_SHARD" in
+            [1-9]*'/'[1-9]*) set -- "--shard=$NOOK_E2E_SHARD" ;;
+            *) echo "NOOK_E2E_SHARD must use Playwright's current/total form" >&2; exit 1 ;;
+          esac
+        fi
+        cd "{{.WEB_ROOT}}"
+        PLAYWRIGHT_WORKERS=3 bun x playwright test --project=stable "$@"
+        PLAYWRIGHT_WORKERS=2 bun x playwright test --project=unstable "$@"
 
   _web:e2e:build-if-needed:
     internal: true
@@ -433,9 +450,16 @@ tasks:
       - cd "{{.WEB_ROOT}}" && bun run test:e2e:pr
 
   _web:test:e2e:isolation:
-    desc: Run both isolated vault app dev servers and their Playwright boundary suite.
+    desc: Run both isolated vault app dev servers and their optionally sharded Playwright boundary suite.
     cmds:
-      - cd "{{.WEB_ROOT}}" && bun run test:e2e:isolation
+      - |
+        set -eu
+        set --
+        if [ -n "${NOOK_E2E_SHARD:-}" ]; then
+          set -- "--shard=$NOOK_E2E_SHARD"
+        fi
+        cd "{{.WEB_ROOT}}"
+        bun x playwright test --config playwright.isolation.config.ts "$@"
 
   _web:e2e:build-dist:
     desc: Build web dist with fast vault sync for CI e2e preview (skips when already fresh).
