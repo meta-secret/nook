@@ -274,7 +274,7 @@ function isTransparentArticleNode(node: RootContent): boolean {
 function isInvisibleHtml(node: RootContent): boolean {
   return (
     node.type === 'html' &&
-    /^\s*(?:(?:<!--[\s\S]*?-->)|(?:<(?:hr|br)\s*\/?\s*>))\s*$/iu.test(
+    /^\s*(?:(?:<!--[\s\S]*?-->)|(?:<(?:hr|br)\b(?:\s+[^<>]*?)?\s*\/?>)\s*)+$/iu.test(
       node.value,
     )
   );

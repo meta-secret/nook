@@ -39,7 +39,6 @@ enum AmbientLoaderMember {
   Require = 'require',
 }
 
-
 enum LoaderCapableModuleSpecifier {
   Module = 'module',
   NodeModule = 'node:module',
@@ -115,6 +114,7 @@ export function violatesSkillProviderBoundary(
     };
     const reference = runtimeModuleReference(nodeInspection);
     const evaluatorInspection: DynamicEvaluatorInspection = {
+      checker: context.checker,
       node,
       isAmbientGlobalRoot: (candidate) => {
         const candidateInspection: BoundaryNodeInspection = {

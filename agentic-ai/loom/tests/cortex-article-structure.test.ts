@@ -260,14 +260,23 @@ test('treats thematic breaks as invisible density-resetting separators', () => {
 });
 
 test('treats raw HTML void separators as empty but preserves visible HTML', () => {
-  for (const separator of ['<hr>', '<br>', '<hr />', '<BR/>']) {
+  for (const separator of [
+    '<hr>',
+    '<br>',
+    '<hr />',
+    '<BR/>',
+    '<hr>\n<br>',
+    '<hr class="rule">',
+    '<br id="gap"/>',
+    '<!-- spacer -->\n<hr>\n<br class="gap">',
+  ]) {
     const emptyArgs: MakeDocumentArgs = {
       path: '.cortex/html-separator.md',
       content: `# HTML separator\n\n## Empty article\n\n${separator}\n`,
     };
-    expect(audit([makeDocument(emptyArgs)]).map((finding) => finding.code)).toEqual(
-      [CortexArticleFindingCode.EmptyArticle],
-    );
+    expect(
+      audit([makeDocument(emptyArgs)]).map((finding) => finding.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
   }
   const visibleArgs: MakeDocumentArgs = {
     path: '.cortex/html-callout.md',

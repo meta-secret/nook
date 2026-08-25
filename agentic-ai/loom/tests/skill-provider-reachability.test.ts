@@ -69,7 +69,7 @@ function runtimeDependencyViolations(
     if (!path || visited.has(path)) continue;
     visited.add(path);
     const source = inspection.sources.get(path);
-    if (source === undefined) {
+    if (typeof source !== 'string') {
       violations.push(path);
       continue;
     }
@@ -252,9 +252,18 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     'new AsyncFunction(source)();',
     'new GeneratorFunction(source)();',
     'globalThis.eval(source);',
+    'globalThis[`eval`](source);',
     'global["Function"](source);',
     '(() => {}).constructor(source)();',
     '(() => {})["constructor"](source)();',
+    '(() => {})[`constructor`](source)();',
+    "const key = 'constructor'; (() => {})[key](source)();",
+    'const { constructor: F } = (() => {}); F(source)();',
+    "Reflect.get(() => {}, 'constructor')(source)();",
+    "Object.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
+    'globalThis[computeKey()](source);',
+    'Reflect[computeKey()](() => {}, source)(source)();',
+    'Object[computeKey()](() => {}, source)(source)();',
   ];
   for (const source of sources) {
     const inspection = {
