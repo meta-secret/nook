@@ -364,6 +364,7 @@ describe('runtime message adapters', () => {
           action: 'continue-with-nook',
           currentStep: 1,
           totalSteps: 3,
+          approvalRequirement: 'explicit-user-approval',
           observationIndex: 0,
         },
       },
@@ -387,6 +388,30 @@ describe('runtime message adapters', () => {
       }
       expect(delivery.response.loginMatches).toEqual(expectedLoginMatches)
     }
+  })
+
+  test('rejects a workflow snapshot without Rust approval policy', async () => {
+    const response = {
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 'login',
+          stage: 'credentials',
+          action: 'continue-with-nook',
+          currentStep: 1,
+          totalSteps: 3,
+          observationIndex: 0,
+        },
+      },
+      loginMatches: { kind: 'unavailable' },
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
+
+    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+      workflowSnapshotMessage,
+    )
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
   test('decodes a concrete authenticator preview through Rust', async () => {
@@ -641,6 +666,7 @@ describe('runtime message adapters', () => {
           action: 0,
           currentStep: -1,
           totalSteps: 300,
+          approvalRequirement: 'explicit-user-approval',
           observationIndex: -1,
         },
       },

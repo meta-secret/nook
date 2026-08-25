@@ -1,6 +1,7 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
+  authWidgetAllowsPilotAction,
   authWidgetStartsCollapsed,
   isTrustedAuthAction,
 } from '../../lib/auth-widget-policy'
@@ -128,6 +129,7 @@ export function renderWidget({
     snapshot.action,
     snapshot.currentStep,
     snapshot.totalSteps,
+    snapshot.approvalRequirement,
     snapshot.observationIndex,
     loginMatches.kind,
     loginMatches.kind === 'ready' && 'count' in loginMatches
@@ -172,12 +174,11 @@ export function renderWidget({
   const shell = createWidgetShell(nookTypedArgs0_3)
   const { body, step, title, description, continueButton, openVaultButton } =
     shell
-  const canContinueWithNook =
-    snapshot.action === 'continue-with-nook' ||
-    snapshot.action === 'fill-totp' ||
-    snapshot.action === 'generate-password' ||
-    snapshot.action === 'use-passkey' ||
-    snapshot.action === 'create-passkey'
+  const pilotActionInput: Parameters<typeof authWidgetAllowsPilotAction>[0] = {
+    action: snapshot.action,
+    approvalRequirement: snapshot.approvalRequirement,
+  }
+  const canContinueWithNook = authWidgetAllowsPilotAction(pilotActionInput)
   const continueMessageKey =
     snapshot.action === 'fill-totp'
       ? BROWSER_MESSAGE_KEYS.WidgetFillAuthenticator
