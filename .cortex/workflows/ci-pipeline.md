@@ -535,8 +535,8 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
   - Each consumer probes its exact browser ref.
   - An available exact ref is imported alone.
   - A missing exact ref falls back to the browser-image seed owned by trusted Main.
-  - Neither web shard writes the shared cache.
-  - The stable web join publishes the verified exact-head browser graph only after both shards pass.
+  - Neither web shard nor its join writes a low-reuse exact-head browser cache.
+  - Trusted Main remains the reusable browser-image seed.
   - The UI-demo publisher is suppressed in this mode to avoid concurrent ref writes.
 - **Readiness requirement:**
   - Adding or removing the label retriggers PR Actions for the current head.

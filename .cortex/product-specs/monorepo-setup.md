@@ -147,7 +147,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Its small generated artifact feeds parallel preview and optional Main-fix consumers.
   - Main-fix web e2e runs as two deterministic Playwright shards, while extension e2e remains an independent artifact consumer.
   - Each Main-fix browser consumer builds only the browser image.
-  - A stable `Full browser e2e (main fix)` join requires both web shards before it publishes the shared exact-head browser cache.
+  - A stable `Full browser e2e (main fix)` join requires both web shards and remains free of a low-reuse post-test cache rebuild.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.

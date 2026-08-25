@@ -64,6 +64,7 @@ fn assert_docker_setup_contract(root: &Path) {
     let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
+        "driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1",
         "docker/login-action@v4",
         "registry-username",
         "registry-password",
@@ -104,7 +105,7 @@ fn assert_docker_setup_contract(root: &Path) {
     assert_eq!(
         pr.matches("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
             .count(),
-        6,
+        5,
         "every general PR cache publisher must explicitly keep ARC verification graphs local"
     );
     for local_graph_message in [
@@ -112,7 +113,6 @@ fn assert_docker_setup_contract(root: &Path) {
         "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
         "ARC keeps the verified web graph local; Main remains reusable",
         "ARC keeps the verified browser graph local; Main remains reusable",
-        "ARC keeps the verified full-e2e graph local; Main remains reusable",
     ] {
         assert!(
             pr.contains(local_graph_message),
@@ -397,7 +397,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && !preview_job.contains("attempt $attempt/900"),
         "PR preview must deploy only after Native Rust, WASM, web verification, WASM Node tests, and the UI demo succeed"
     );
-    let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
+    let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
     assert!(
         coverage_job.contains("needs: rust")
@@ -411,7 +411,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && !coverage_workflow.contains("Waiting for native coverage artifact"),
         "coverage reporting must consume the completed native artifact directly without blocking preview or rebuilding the base revision"
     );
-    let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
+    let full_e2e_job = section(&pr, "  full-e2e-shard:\n", "  full-e2e:\n");
     assert!(
         full_e2e_job.contains("needs: [wasm, wasm-node-test]")
             && full_e2e_job.contains("Download verified WASM handoff")

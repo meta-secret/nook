@@ -926,15 +926,6 @@ jobs:
           SHARD_RESULT: ${{ needs.full-e2e-shard.result }}
         run: test "$SHARD_RESULT" = "success"
 
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Publish joined browser cache
-        uses: ./.github/actions/nook-pr-browser-cache-publish
-        with:
-          registry-username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
-
   full-extension-e2e:
     name: Full extension e2e (main fix)
     if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')

@@ -387,7 +387,7 @@ Use this workflow for quality, CI, and deployment changes.
     - The WASM producer uploads one small run-stable package.
     - That package is consumed by `PR / Verify and preview`.
     - Main-fix PRs carrying `ci:full-e2e` feed two deterministic local-provider web shards plus an independent extension browser job.
-    - A stable browser join requires both web shards before publishing their shared exact-head cache.
+    - A stable browser join requires both web shards without rebuilding a low-reuse exact-head browser cache afterward.
     - `Verify and preview` uses `always()`.
     - It fails explicitly when any required producer or consumer fails.
     - The established required check cannot be skipped by dependency failure.

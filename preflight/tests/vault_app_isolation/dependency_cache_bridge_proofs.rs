@@ -380,13 +380,16 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         "runtime WASM proof must publish on trusted Main with one fresh hosted builder and require CACHED markers from another"
     );
     assert!(
-        blob_verifier.contains("method: 'HEAD'")
+        !blob_verifier.contains("method: 'HEAD'")
+            && !blob_verifier.contains("Range")
             && blob_verifier.contains("content-length")
-            && blob_verifier.contains("range: 'bytes=0-0'")
+            && blob_verifier.contains("response.body?.getReader()")
             && blob_verifier.contains("createHash('sha256')")
+            && blob_verifier.contains("hash.update(chunk.value)")
+            && blob_verifier.contains("digest !== descriptor.digest")
             && blob_verifier.contains("bytes.length !== input.descriptor.size")
             && blob_verifier.contains("descriptor.size"),
-        "portable cache proof must validate child manifests and every declared Zot blob without hydrating its filesystem"
+        "portable cache proof must validate child manifests and stream every complete Zot blob through SHA-256 without hydrating its filesystem"
     );
     Ok(())
 }
