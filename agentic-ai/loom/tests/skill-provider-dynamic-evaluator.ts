@@ -22,16 +22,13 @@ enum ReflectEvaluatorMember {
   Get = 'get',
 }
 
-enum ReflectRoot {
+enum AmbientEvaluatorRoot {
+  Object = 'Object',
   Reflect = 'Reflect',
 }
 
 enum ObjectRecoveryMember {
   GetOwnPropertyDescriptor = 'getOwnPropertyDescriptor',
-}
-
-enum ObjectRoot {
-  Object = 'Object',
 }
 
 const AMBIENT_DYNAMIC_EVALUATORS = new Set<string>(
@@ -50,6 +47,7 @@ export function isAmbientDynamicEvaluator(
     node,
   };
   if (isConstructorBinding(bindingInspection)) return true;
+  if (isUnboundedAmbientCapabilityRoot(inspection)) return true;
   if (ts.isIdentifier(node) && AMBIENT_DYNAMIC_EVALUATORS.has(node.text)) {
     if (isNonRuntimeIdentifierPosition(node)) return false;
     return inspection.isAmbientIdentifier(node);
@@ -68,18 +66,12 @@ export function isAmbientDynamicEvaluator(
     return isComputedCallableElementAccess(computedInspection);
   }
   if (DYNAMIC_EVALUATOR_MEMBERS.has(member)) return true;
-  const reflectInspection: AmbientReflectGetInspection = {
+  const recoveryInspection: AmbientRecoveryInspection = {
     inspection,
     member,
     node,
   };
-  if (isAmbientReflectGet(reflectInspection)) return true;
-  const objectInspection: AmbientObjectRecoveryInspection = {
-    inspection,
-    member,
-    node,
-  };
-  if (isAmbientObjectRecovery(objectInspection)) return true;
+  if (isAmbientRecovery(recoveryInspection)) return true;
   if (!AMBIENT_DYNAMIC_EVALUATORS.has(member)) return false;
   if (
     !ts.isPropertyAccessExpression(node) &&
@@ -91,30 +83,32 @@ export function isAmbientDynamicEvaluator(
   return inspection.isAmbientGlobalRoot(root);
 }
 
-type AmbientObjectRecoveryInspection = {
+type AmbientRecoveryInspection = {
   readonly inspection: DynamicEvaluatorInspection;
   readonly member: string;
   readonly node: ts.Node;
 };
 
-function isAmbientObjectRecovery(
-  request: AmbientObjectRecoveryInspection,
-): boolean {
-  if (request.member !== ObjectRecoveryMember.GetOwnPropertyDescriptor) {
-    return false;
-  }
+function isAmbientRecovery(request: AmbientRecoveryInspection): boolean {
   if (
     !ts.isPropertyAccessExpression(request.node) &&
     !ts.isElementAccessExpression(request.node)
   ) {
     return false;
   }
-  const root = unwrapExpression(request.node.expression);
-  return (
-    ts.isIdentifier(root) &&
-    root.text === ObjectRoot.Object &&
-    request.inspection.isAmbientIdentifier(root)
-  );
+  const rootName =
+    request.member === ObjectRecoveryMember.GetOwnPropertyDescriptor
+      ? AmbientEvaluatorRoot.Object
+      : request.member === ReflectEvaluatorMember.Get
+        ? AmbientEvaluatorRoot.Reflect
+        : false;
+  if (rootName === false) return false;
+  const rootInspection: AmbientNamedRootInspection = {
+    expression: request.node.expression,
+    inspection: request.inspection,
+    rootName,
+  };
+  return isAmbientNamedRoot(rootInspection);
 }
 
 type DynamicEvaluatorMemberInspection = {
@@ -147,30 +141,66 @@ function isUnboundedAmbientElementAccess(
   if (inspection.isAmbientGlobalRoot(root)) return true;
   return (
     ts.isIdentifier(root) &&
-    (root.text === ReflectRoot.Reflect || root.text === ObjectRoot.Object) &&
+    (root.text === AmbientEvaluatorRoot.Reflect ||
+      root.text === AmbientEvaluatorRoot.Object) &&
     inspection.isAmbientIdentifier(root)
   );
 }
 
-type AmbientReflectGetInspection = {
+type AmbientNamedRootInspection = {
+  readonly expression: ts.Expression;
   readonly inspection: DynamicEvaluatorInspection;
-  readonly member: string;
-  readonly node: ts.Node;
+  readonly rootName: AmbientEvaluatorRoot;
 };
 
-function isAmbientReflectGet(request: AmbientReflectGetInspection): boolean {
-  if (request.member !== ReflectEvaluatorMember.Get) return false;
+function isAmbientNamedRoot(request: AmbientNamedRootInspection): boolean {
+  const root = unwrapExpression(request.expression);
+  if (ts.isIdentifier(root) && root.text === request.rootName) {
+    return request.inspection.isAmbientIdentifier(root);
+  }
+  return (
+    ts.isPropertyAccessExpression(root) &&
+    root.name.text === request.rootName &&
+    request.inspection.isAmbientGlobalRoot(root.expression)
+  );
+}
+
+function isUnboundedAmbientCapabilityRoot(
+  inspection: DynamicEvaluatorInspection,
+): boolean {
+  const node = inspection.node;
+  let ambient = false;
   if (
-    !ts.isPropertyAccessExpression(request.node) &&
-    !ts.isElementAccessExpression(request.node)
+    ts.isIdentifier(node) &&
+    (node.text === AmbientEvaluatorRoot.Object ||
+      node.text === AmbientEvaluatorRoot.Reflect) &&
+    !isNonRuntimeIdentifierPosition(node)
+  ) {
+    ambient = inspection.isAmbientIdentifier(node);
+  } else if (
+    ts.isPropertyAccessExpression(node) &&
+    (node.name.text === AmbientEvaluatorRoot.Object ||
+      node.name.text === AmbientEvaluatorRoot.Reflect)
+  ) {
+    ambient = inspection.isAmbientGlobalRoot(node.expression);
+  }
+  if (!ambient) return false;
+  const parent = node.parent;
+  if (
+    ts.isIdentifier(node) &&
+    node.text === AmbientEvaluatorRoot.Object &&
+    (((ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+      parent.expression === node) ||
+      (ts.isBinaryExpression(parent) &&
+        parent.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
+        parent.right === node))
   ) {
     return false;
   }
-  const root = unwrapExpression(request.node.expression);
-  return (
-    ts.isIdentifier(root) &&
-    root.text === ReflectRoot.Reflect &&
-    request.inspection.isAmbientIdentifier(root)
+  return !(
+    (ts.isPropertyAccessExpression(parent) ||
+      ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
   );
 }
 
@@ -274,6 +304,7 @@ function isNonRuntimeIdentifierPosition(node: ts.Identifier): boolean {
       ts.isInterfaceDeclaration(parent) ||
       ts.isTypeAliasDeclaration(parent) ||
       ts.isEnumDeclaration(parent) ||
+      ts.isEnumMember(parent) ||
       ts.isModuleDeclaration(parent) ||
       ts.isImportClause(parent) ||
       ts.isImportSpecifier(parent) ||

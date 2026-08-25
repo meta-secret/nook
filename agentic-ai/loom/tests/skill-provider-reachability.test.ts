@@ -264,6 +264,12 @@ test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
     'globalThis[computeKey()](source);',
     'Reflect[computeKey()](() => {}, source)(source)();',
     'Object[computeKey()](() => {}, source)(source)();',
+    "const { getOwnPropertyDescriptor: get } = Object; get(() => {}, 'constructor')!.value(source)();",
+    "const { get } = Reflect; get(() => {}, 'constructor')(source)();",
+    "const O = Object; O.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
+    "const R = Reflect; R.get(() => {}, 'constructor')(source)();",
+    "globalThis.Object.getOwnPropertyDescriptor(() => {}, 'constructor')!.value(source)();",
+    "globalThis.Reflect.get(() => {}, 'constructor')(source)();",
   ];
   for (const source of sources) {
     const inspection = {
