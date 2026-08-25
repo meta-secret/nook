@@ -234,6 +234,7 @@ pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) extension_handoff_private_key: String,
     pub(in crate::manager) pending_extension_handoff:
         Option<super::device_protection::PendingExtensionIdentityHandoff>,
+    pub(in crate::manager) pending_local_identity_label: Option<String>,
 }
 
 impl DeviceSessionState {

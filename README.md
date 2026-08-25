@@ -19,10 +19,9 @@ the browser, replicated only through storage you choose, and opened only by
 identities you authorize.
 
 There is no centrally hosted Nook account and no master password. The shipped
-applications authorize vault access with protected device identities. Nook's
-target architecture adds local-first virtual identities as durable
-authorization subjects; those identity records are encrypted and replicated
-through storage you choose, not owned by a Nook account service. See the
+applications keep multiple local identities in an independently protected
+browser keyring. Replicated identity control remains target architecture;
+identity records are not owned by a Nook account service. See the
 [identity and vault architecture](.cortex/design-docs/identity-vault-architecture.md)
 for the implemented/target boundary.
 
@@ -50,10 +49,10 @@ can be phished. Lose it, and you may lose the vault.
 
 Nook replaces that with device keys and deliberate consent:
 
-- **Locally controlled.** Today authority lives with approved device keys; the
-  target identity model groups installation-specific device keys under
-  encrypted virtual identities. Neither model depends on a central account
-  database.
+- **Locally controlled.** Each local identity owns a distinct protected app key.
+  The target replicated identity model will group installation-specific app
+  keys under encrypted identity control records. Neither layer depends on a
+  central account database.
 - **Ciphertext outside.** Secrets are encrypted before leaving the client.
   Providers carry data without owning access.
 - **Consent required.** New devices and sensitive operations need visible,
@@ -179,12 +178,13 @@ passwords stay as separate items instead of being overwritten.
 ### Devices & access
 
 Open **Devices & access** from the login screen or the authenticated **Access**
-tab. The page shows the access chain: what unlocks this browser, the device key
-that protection unlocks, and which vaults that key has opened. Local identity
-state stays visible but is not treated as membership created by the passkey.
-Privacy-safe passkey evidence and vault-access details remain available below
-the graph. Unknown and last-known facts stay explicit. The page remains useful
-before a vault exists and while every vault is locked. See the [product
+tab. The identity rail lists every independently protected local identity.
+**Add identity** opens the browser-protection widget and atomically adds a new
+passkey- or PIN-protected app key. Selecting another local identity clears the
+prior vault and provider session, then requires that identity to authenticate.
+The passkey row owns its inline rename action; browser ceremony diagnostics are
+not part of the primary page. The page remains useful before a vault exists and
+while every vault is locked. See the [product
 specification](PRODUCT.md) for the access model and honest limits on
 passkey-provider visibility.
 
@@ -197,20 +197,20 @@ passkey-provider visibility.
 
 ### Current shipped architecture layers
 
-| Layer           | What it does                                                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Device identity | Each authorized device holds a protected X25519 identity. Plaintext identity material exists only in an unlocked session. |
-| Key envelopes   | Vault keys are wrapped per device so authorized identities unlock secrets without a central authority.                    |
-| Sync transport  | Optional providers move encrypted vault events; they see ciphertext and storage ops, not secrets.                         |
-| Event log       | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer.                      |
+| Layer                  | What it does                                                                                                                                     |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Local identity keyring | Each local identity owns one independently wrapped X25519 app key and an app-key-sealed event-signing seed. Plaintext exists only while unlocked. |
+| Identity directory     | Records local identities, the selected identity, public app-key membership, and locally known vault grants.                                             |
+| Key envelopes          | Vault keys are wrapped per authorized app key so approved installations unlock secrets without a central authority.                                    |
+| Sync transport         | Optional providers move encrypted vault events; app-ID-scoped credentials cannot cross an identity transition.                                          |
+| Event log              | Content-addressed, signed events form a causal DAG so replicas converge without a central sequencer.                                                     |
 
-The target architecture keeps these vault and event-log boundaries while
-introducing virtual identity records and explicit identity-to-vault grants.
-The browser now stores a local identity directory and selected identity.
-It migrates the former singleton identity record on first read.
+The shipped browser stores a local identity directory, selected identity, and
+`local_identity_keyring_v1`. It migrates the former singleton wrapped app key
+and event-signing seed into the selected identity on first use.
 Local encrypted identity-to-vault grants are implemented for Simple vaults.
-Virtual-identity association for quorum-protected Sentinel vaults, replicated
-grant enforcement, and identity-control logs remain future work.
+Replicated identity control, replicated grant enforcement, and virtual-identity
+association for quorum-protected Sentinel vaults remain future work.
 
 ```text
 local command
@@ -255,13 +255,13 @@ nook-auth2 ─┬─> nook-authenticator-domain
 | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `nook-app-common`           | Dependency-light shared Rust primitives, locale catalogs, translation behavior, and the single generated Rust i18n key registry                                   |
 | `nook-authenticator-domain` | Dependency-light closed values for passkey protection, TOTP metadata, and backup-code update policy shared across authentication, vault, and extension boundaries |
-| `nook-auth2`                | Portable key access: device identities, age envelopes, recovery helpers                                                                                           |
+| `nook-auth2`                | Portable identity and key access: identity directories, local keyring invariants, app keys, age envelopes, and recovery helpers                                  |
 | `nook-replication`          | Portable replication: causal DAG indexing, append-only replica sets, outbox and repair planning                                                                   |
 | `nook-event-log`            | Portable vault history: canonical signed events, actor authorization, deterministic projection, key epochs                                                        |
 | `nook-core`                 | Vault application domain: typed plaintext secrets, encryption workflows, provider-neutral sync and session policy                                                 |
 | `nook-companion-core`       | Portable extension policy: authentication workflow, pairing records and migration, host and field classification                                                  |
 | `nook-companion-wasm`       | Small `wasm-bindgen` bridge exposing companion policy to extension contexts                                                                                       |
-| `nook-wasm`                 | Full `wasm-bindgen` bridge, IndexedDB / GitHub I/O, session manager; depends on both vault and companion domain crates                                            |
+| `nook-wasm`                 | Full `wasm-bindgen` bridge, IndexedDB keyring/provider persistence, remote-provider I/O, and identity-scoped session manager                                      |
 | `nook-vault-simple`         | Independent Svelte 5 Simple Vault application                                                                                                                     |
 | `nook-vault-sentinel`       | Independent Svelte 5 Sentinel Vault application                                                                                                                   |
 | `nook-web-app`              | Public site and unified local e2e harness                                                                                                                         |

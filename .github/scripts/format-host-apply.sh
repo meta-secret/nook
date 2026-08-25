@@ -24,6 +24,7 @@ formatter_hash="$(
       package.json \
       bun.lock \
       prettier-default.json \
+      prettier-shared-typescript.json \
       prettier-web.json \
       format.sh) \
     | shasum -a 256 \

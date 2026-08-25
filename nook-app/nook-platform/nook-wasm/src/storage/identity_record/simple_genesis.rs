@@ -482,11 +482,17 @@ pub(crate) async fn pending_simple_genesis_for_store(
     }
     let store_id = nook_core::StoreId::parse(store_id)
         .map_err(|error| NookError::Database(error.to_string()))?;
-    let Some(raw) = idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await? else {
+    let Some(pending) = pending_simple_genesis().await? else {
         return Ok(None);
     };
-    let pending = decode_pending_simple_genesis(&raw)?;
     Ok((pending.store_id == store_id).then_some(pending))
+}
+
+pub(crate) async fn pending_simple_genesis() -> Result<Option<PendingSimpleGenesis>, NookError> {
+    idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+        .await?
+        .map(|raw| decode_pending_simple_genesis(&raw))
+        .transpose()
 }
 
 #[cfg(test)]

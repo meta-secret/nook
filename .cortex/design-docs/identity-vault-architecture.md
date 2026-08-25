@@ -89,6 +89,29 @@ The identity control log owns:
 - zero or more sync-provider mounts for the control log.
 
 Private app keys never enter the replicated identity record.
+Local private app keys live in `local_identity_keyring_v1`.
+Each entry binds one identity ID to one wrapped app key.
+Each entry also stores an app-key-sealed event-signing seed.
+The browser writes the keyring and directory in one IndexedDB transaction.
+Identity-sealed sync-provider snapshots use the same app ID as their storage
+scope. Switching identities cannot attempt to open another identity's provider
+credentials or overwrite them.
+After an Add identity protection action persists and adopts another app key,
+the browser clears the prior decrypted provider grants and provider drafts.
+Cancellation or failure preserves the prior session. A committed local identity
+transition also clears pending extension-handoff secrets.
+An authenticated legacy wrapped key is promoted into the directory and keyring
+with its singleton signing seed before the unlocked session is adopted.
+When a pre-vault legacy identity has no signing seed or signing public key, that
+promotion mints its first signer. Existing signing evidence without its seed
+fails closed instead of silently changing signer identity.
+Locked pre-sealed provider imports preserve eligible legacy grants before they
+publish the first app-scoped provider snapshot.
+Extension import binds the grant's protected local identity before importing
+event bytes or provider state. A blocked activation leaves both untouched.
+An extension grant imported for another app ID becomes the persisted local
+selection. Any different unlocked app-key session is cleared before import
+success so extension status cannot claim a usable session for the wrong grant.
 
 ### Local directory phase
 
@@ -125,19 +148,51 @@ signing public key. Older records decode a missing signing key as unavailable.
 They cannot enter a new signed Simple-vault genesis roster until an authenticated
 handoff or the local signer supplies that public key.
 
-Destructive device recovery retires only the persisted app identity whose local
-protection became inaccessible. It does not retire paired website, extension,
-or peer installation identities. Recovery deletes the inaccessible
-installation's durable event-signing seed in the same IndexedDB transaction. A
-malformed retired-app ledger cannot block recovery; recovery replaces it with
-valid retirement evidence before a replacement identity may enroll.
+Destructive device recovery retires only the explicitly targeted local app key
+whose protection became inaccessible.
+The target comes from the initiating tab's rendered protected-identity snapshot,
+not the directory selection shared by concurrent tabs.
+It removes that keyring entry and its sealed signing seed in one transaction.
+It preserves unrelated local identities.
+It fails before writing when the versioned keyring is malformed, unsupported,
+or inconsistent with the directory.
+If the directory is unreadable but the independently validated keyring remains
+valid, recovery performs a safe full local-identity reset because scoped
+identity ownership cannot be established.
+It preserves a Simple genesis marker owned by a surviving keyring entry.
+It rejects scoped recovery when a pending Sentinel finalization marker cannot
+be attributed to one identity safely.
+When another local identity remains, recovery removes only the retired app
+key's provider snapshot.
+If later provider cleanup fails, a retry resumes the app ID recorded by the
+durable recovery marker. It does not reinterpret the new directory selection as
+the recovery target.
+Identity creation and activation remain blocked until that marker is removed,
+so a stale cleanup cannot delete a replacement identity's provider credentials.
+The locked recovery entry point uses the initiating manager's retained app ID
+first. Only a new manager without retained scope consults persisted selection.
+It does not retire paired website, extension, or peer installation identities.
+A malformed retired-app ledger cannot block recovery.
+Recovery replaces it with valid retirement evidence before a replacement
+identity may enroll.
 
 - **Directory concurrency:**
   - Apply every directory update in one IndexedDB read-write transaction.
   - Prevent concurrent tabs from overwriting identity creation, selection,
     membership, or DEK changes.
+  - Treat persisted selection as a new-session default, not live-session
+    authority.
+  - Resolve an already-open manager's vault creation and identity mutations
+    from its authenticated app key when another tab changes selection.
+  - Carry the manager's actual private-key unlock state into combined directory
+    snapshots. A retained public app ID is identity scope, not unlock proof.
+  - Load each local identity's vault-access rows from only its own app-scoped
+    descriptive profiles.
 - **Fresh-vault extension adoption:**
   - Stage extension identity adoption through vault initialization.
+  - Bind the staged identity to the live authorizer app key.
+  - If no authorizer exists, bind it to the handed-off extension app key.
+  - Ignore another tab's persisted selection when deriving staged ownership.
   - Keep fresh-vault membership, signing keys, and per-vault DEK envelopes only
     in the resumable genesis marker until verified connect succeeds.
   - Compare the marker's base directory with the current directory during
@@ -186,6 +241,8 @@ Simple vault creation uses the following marker contract:
     tabs.
   - Reject conflicting current and legacy staged state.
 - Resume the same store and identity binding after a reload.
+- Block local identity creation and activation while a Simple or Sentinel
+  genesis transition or local recovery cleanup remains pending.
 - Remove the marker with a compare-and-delete transaction after verified
   connect completes.
   - An older tab cannot delete a newer genesis marker.

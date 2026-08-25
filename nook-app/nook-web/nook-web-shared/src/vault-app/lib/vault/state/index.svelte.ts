@@ -55,6 +55,7 @@ const runtimeKeys = [
 const uiKeys = [
   "settingsOpen",
   "settingsSection",
+  "devicesAccessIdentityProtectionOpen",
   "settingsAccordionSection",
   "adminAccordionSection",
   "helpOpen",
@@ -104,6 +105,7 @@ const providerKeys = [
   "oauthSetupSelection",
   "selectOauthSetupPreset",
   "clearOauthSetupPreset",
+  "clearIdentityProviderSession",
   "googleOAuthBusy",
   "icloudOAuthPreparing",
   "icloudOAuthReady",

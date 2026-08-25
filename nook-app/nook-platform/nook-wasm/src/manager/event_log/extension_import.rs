@@ -62,14 +62,15 @@ impl NookVaultManager {
         let device_public_key = nook_core::DevicePublicKey::parse(expected_device_public_key)?;
         let device_signing_public_key =
             nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let (stored_device_id, _) = crate::storage::indexed_db::load_wrapped_device_identity()
-            .await?
-            .ok_or_else(|| {
-                NookError::IndexedDb(
-                    "Extension device protection must be configured before vault import."
-                        .to_owned(),
-                )
-            })?;
+        let (stored_device_id, _) =
+            crate::storage::indexed_db::load_wrapped_device_identity_for_app_id(device_id.as_str())
+                .await?
+                .ok_or_else(|| {
+                    NookError::IndexedDb(
+                        "Extension device protection must be configured before vault import."
+                            .to_owned(),
+                    )
+                })?;
         if stored_device_id != device_id.as_str() {
             return Err(NookError::Decryption(
                 "Approved extension device does not match the protected local identity.".to_owned(),
@@ -180,6 +181,12 @@ impl NookVaultManager {
             expected_device_signing_public_key,
         )
         .await?;
+        if self.device.public_app_id() != targets.device_id.as_str() {
+            return Err(NookError::Decryption(
+                "Approved extension device does not match the active protected local identity."
+                    .to_owned(),
+            ));
+        }
         Self::validate_extension_import_records(&targets.store_id, &records)?;
 
         let previous_active_store_id = crate::storage::indexed_db::get_active_vault_id().await?;
