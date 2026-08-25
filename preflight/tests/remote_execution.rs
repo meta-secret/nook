@@ -332,7 +332,7 @@ fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<(
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in ["web:e2e", "rust:test,extension:e2e", "web:test,ci:pr"] {
+    for tasks in ["web:e2e", "extension:e2e", "web:test,ci:pr"] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status
