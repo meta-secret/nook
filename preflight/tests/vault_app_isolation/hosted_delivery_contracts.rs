@@ -288,13 +288,15 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         !verify_job.contains("Record headless UI demo")
-            && ui_demo_job.contains("needs: [validation-request, wasm]")
+            && ui_demo_job.contains("needs: [validation-request, verify]")
+            && ui_demo_job.contains("runs-on: nook-k0s-container")
+            && ui_demo_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && ui_demo_job.contains("Enforce the UI demo contract")
-            && ui_demo_job.contains("task ci:pr:ui-demo")
-            && ui_demo_job.contains("name: pr-wasm-${{ github.run_id }}")
-            && ui_demo_job.contains("isolated-cache-write: \"true\"")
+            && ui_demo_job.contains("task _web:test:ui-demo")
+            && !ui_demo_job.contains("nook-docker-setup")
             && ui_demo_job.contains("steps.ui-demo-contract.outputs.required == 'true'"),
-        "changed PR demos must consume the WASM handoff in a sibling job without serializing web verification"
+        "changed PR demos must consume the exact browser image on container ARC without serializing web verification"
     );
     assert!(
         !pr.contains("actions/cache/"),
