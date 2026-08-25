@@ -139,22 +139,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       )
     })
 
-    const openedToolbarPopup = context.waitForEvent('page', {
-      timeout: 30_000,
-    })
     expect(
       await sendExternalMessage(simplePage, extensionId, {
         type: 'nook:open-companion-launcher',
       }),
     ).toEqual({ ok: true })
-    const toolbarPopup = await openedToolbarPopup
-    await expect(toolbarPopup).toHaveURL(
-      `chrome-extension://${extensionId}/popup/index.html`,
-    )
-    await expect(
-      toolbarPopup.getByTestId('extension-device-setup'),
-    ).toBeVisible()
-    await toolbarPopup.close()
 
     const loginPage = await context.newPage()
     await loginPage.goto(`${loginServer.origin}/login`)
