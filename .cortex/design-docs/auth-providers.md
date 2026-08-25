@@ -58,6 +58,10 @@ Keeping schema 1 on disk is intentional rollback compatibility.
 - The app-scoped row is authoritative for the current build.
 - The singleton row remains readable by the prior deployed build.
 - A sole local identity refreshes both rows in one `nook_auth` transaction.
+- Equality with the app-scoped row proves ownership even when a projection has
+  no credential ciphertext to open.
+- Retiring an identity deletes the singleton row only when it still equals that
+  identity's app-scoped row; a competing singleton remains untouched.
 - Initial migration refreshes the rollback row after credentials are opened
   and resealed successfully.
 - A competing singleton row is preserved and fails migration closed.
