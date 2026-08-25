@@ -141,7 +141,7 @@ export async function clearMountedAuthenticationSurfaces(): Promise<void> {
     }
     await Promise.allSettled(
       tabs.map(async (tab) => {
-        if (tab.id === undefined) return
+        if (typeof tab.id !== 'number') return
         await chrome.tabs.sendMessage(tab.id, message)
       }),
     )
