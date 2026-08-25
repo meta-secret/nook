@@ -8,7 +8,7 @@ vars:
   INFRA_WORKER_ARC_TIER: '{{default "secondary" .INFRA_WORKER_ARC_TIER}}'
   INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
   INFRA_WORKER_REMOTE_DIR: '{{default .INFRA_REMOTE_DIR .INFRA_WORKER_REMOTE_DIR}}'
-  INFRA_MESH_SSH_TARGET: '{{default "ssh.bynull.link" .INFRA_MESH_SSH_TARGET}}'
+  INFRA_MESH_SSH_TARGET: '{{default "nook-home-lan" .INFRA_MESH_SSH_TARGET}}'
   INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'
   INFRA_CLOUDFLARE_ACCOUNT_ID: '{{default "8a84df74d5bcf7b212980e6f51979731" .INFRA_CLOUDFLARE_ACCOUNT_ID}}'
   K0S_VERSION: v1.36.2+k0s.0
@@ -36,6 +36,10 @@ includes:
     flatten: true
   mesh:
     taskfile: tasks/mesh.yml
+    dir: ..
+    flatten: true
+  operator-ssh:
+    taskfile: tasks/operator-ssh.yml
     dir: ..
     flatten: true
   host-services:

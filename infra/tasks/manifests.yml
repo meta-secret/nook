@@ -5,6 +5,8 @@ tasks:
   k0s:manifests:check:
     desc: Validate Hive isolation and TLS invariants in repository manifests.
     cmds:
+      - bun test infra/operator-ssh.test.ts
+      - bun .github/scripts/home-ssh-contract.ts
       - bun test infra/providers/ovh-dedicated.test.ts
       - bun .github/scripts/ovh-dedicated-contract.ts
       - ruby .github/scripts/hive-manifest-contract.rb
