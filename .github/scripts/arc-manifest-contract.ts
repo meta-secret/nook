@@ -251,6 +251,8 @@ dockerSetup.forbidAll([
 ]);
 dockerSetup.requireAll([
   "name: Login to Nook OCI registry",
+  "name: Preload hosted BuildKit from Zot",
+  'docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"',
   "driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1",
 ]);
 runtimeSmoke.requireAll([

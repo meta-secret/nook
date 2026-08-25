@@ -85,6 +85,11 @@ runs:
         username: ${{ inputs.registry-username }}
         password: ${{ inputs.registry-password }}
 
+    - name: Preload hosted BuildKit from Zot
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      shell: bash
+      run: docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"
+
     # GitHub-hosted VMs use their job-scoped BuildKit container. ARC runners
     # use the persistent rootless BuildKit shard on their Kubernetes node.
     # The runner carries only client tooling and never receives a Docker daemon

@@ -64,6 +64,8 @@ fn assert_docker_setup_contract(root: &Path) {
     let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
+        "Preload hosted BuildKit from Zot",
+        "docker pull \"${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1\"",
         "driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1",
         "docker/login-action@v4",
         "registry-username",

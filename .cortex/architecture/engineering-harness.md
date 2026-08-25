@@ -261,8 +261,9 @@ remains maintenance-only.
 
 - Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder (`desktop-linux` or `default`).
 - GitHub-hosted Actions creates an ephemeral job-scoped `docker-container`
-  builder with `docker/setup-buildx-action`; its BuildKit image resolves through
-  authenticated Zot instead of Docker Hub.
+  builder with `docker/setup-buildx-action`; the authenticated setup preloads
+  its BuildKit image from Zot before builder creation instead of resolving
+  Docker Hub.
 - ARC Actions registers the node-local persistent BuildKit service as a remote
   Buildx builder.
 - Zot refs carry cache state between nodes and hosted runners.
