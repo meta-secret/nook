@@ -24,6 +24,11 @@ type RuntimeTranspilerOptions = {
   readonly loader: 'tsx';
 };
 
+type TrackedRepositoryInventory = {
+  readonly executableSymlinks: readonly string[];
+  readonly paths: readonly string[];
+};
+
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
@@ -34,9 +39,9 @@ const RUNTIME_SOURCE_SUFFIXES = [
 const transpilerOptions: RuntimeTranspilerOptions = { loader: 'tsx' };
 const RUNTIME_IMPORT_SCANNER = new Bun.Transpiler(transpilerOptions);
 
-function trackedRepositoryPaths(): readonly string[] {
+function trackedRepositoryInventory(): TrackedRepositoryInventory {
   const spawnOptions: TrackedSourcesSpawnOptions = {
-    cmd: ['git', 'ls-files', '-z'],
+    cmd: ['git', 'ls-files', '--stage', '-z'],
     cwd: REPOSITORY_ROOT,
     stderr: 'pipe',
     stdout: 'pipe',
@@ -45,7 +50,31 @@ function trackedRepositoryPaths(): readonly string[] {
   if (result.exitCode !== 0) {
     throw new Error(`Unable to enumerate tracked sources: ${result.stderr}`);
   }
-  return result.stdout.toString().split('\0').filter(Boolean);
+  return parseTrackedRepositoryInventory(result.stdout.toString());
+}
+
+function parseTrackedRepositoryInventory(
+  source: string,
+): TrackedRepositoryInventory {
+  const paths: string[] = [];
+  const executableSymlinks: string[] = [];
+  for (const entry of source.split('\0').filter(Boolean)) {
+    const separator = entry.indexOf('\t');
+    if (separator < 0) throw new Error('Tracked source record has no path');
+    const metadata = entry.slice(0, separator);
+    const path = entry.slice(separator + 1);
+    paths.push(path);
+    if (
+      metadata.startsWith('120000 ') &&
+      EXECUTABLE_SOURCE_EXTENSION.test(path)
+    ) {
+      executableSymlinks.push(path);
+    }
+  }
+  return {
+    executableSymlinks: executableSymlinks.sort(),
+    paths,
+  };
 }
 
 function runtimeDependencyViolations(
@@ -146,7 +175,9 @@ test('follows runtime facades without scanning unrelated provider references', (
 });
 
 test('production Loom runtime closure cannot reach dormant providers', async () => {
-  const trackedPaths = trackedRepositoryPaths();
+  const inventory = trackedRepositoryInventory();
+  expect(inventory.executableSymlinks).toEqual([]);
+  const trackedPaths = inventory.paths;
   const roots = trackedPaths
     .filter(
       (path) =>
@@ -163,6 +194,20 @@ test('production Loom runtime closure cannot reach dormant providers', async () 
   }
   const inspection: RuntimeDependencyGraphInspection = { roots, sources };
   expect(runtimeDependencyViolations(inspection)).toEqual([]);
+});
+
+test('rejects tracked executable symlink facades', () => {
+  const inventory = parseTrackedRepositoryInventory(
+    [
+      '100644 aaaa 0\tagentic-ai/loom/src/cli.ts',
+      '120000 bbbb 0\tagentic-ai/loom/src/provider-facade.ts',
+      '120000 cccc 0\tdocs/provider-facade.md',
+    ].join('\0'),
+  );
+  expect(inventory.paths).toContain('agentic-ai/loom/src/provider-facade.ts');
+  expect(inventory.executableSymlinks).toEqual([
+    'agentic-ai/loom/src/provider-facade.ts',
+  ]);
 });
 
 test('rejects ambient dynamic-code evaluators and constructor recovery', () => {
