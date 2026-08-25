@@ -88,6 +88,514 @@ async fn passkey_protection_bootstraps_the_initial_identity() -> anyhow::Result<
     Ok(())
 }
 
+#[wasm_bindgen_test]
+async fn authenticated_legacy_key_bootstraps_keyring_and_preserves_signer() -> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    let app_key = nook_core::AppKey::generate()?;
+    let wrapped =
+        nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "legacy identity pin")?;
+    let (legacy_signing, legacy_seed) = nook_core::SigningIdentity::generate()?;
+    crate::storage::indexed_db::save_wrapped_device_identity(app_key.app_id().as_str(), &wrapped)
+        .await?;
+    crate::storage::event_db::save_signing_seed(legacy_seed.as_str()).await?;
+
+    manager
+        .unlock_pin_device_identity("legacy identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("unlock legacy identity: {error:?}"))?;
+
+    let keyring = crate::storage::identity_record::load_keyring().await?;
+    assert_eq!(keyring.entries().len(), 1);
+    assert_eq!(keyring.entries()[0].app_id(), app_key.app_id());
+    assert!(keyring.entries()[0].has_signing_seed());
+    assert_eq!(
+        manager.ensure_signing_identity().await?.public_key(),
+        legacy_signing.public_key()
+    );
+    assert!(
+        crate::storage::event_db::load_signing_seed()
+            .await?
+            .is_none()
+    );
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    manager
+        .finish_pin_device_protection("first identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
+    let first_request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build first identity snapshot: {error:?}"))?;
+    let first_snapshot = first_request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve first identity snapshot: {error:?}"))?;
+    let first_identity_id = first_snapshot
+        .identity(0)
+        .map_err(|error| anyhow::anyhow!("read first identity: {error:?}"))?
+        .identity_id();
+    let first_app_id = manager.device_id();
+    let first_signing_public_key = manager.ensure_signing_identity().await?.public_key();
+    assert!(
+        crate::storage::event_db::load_signing_seed()
+            .await?
+            .is_none()
+    );
+
+    manager
+        .begin_local_identity_creation("Work")
+        .await
+        .map_err(|error| anyhow::anyhow!("begin second identity: {error:?}"))?;
+    manager
+        .finish_pin_device_protection("second identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect second identity: {error:?}"))?;
+    let second_request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build second identity snapshot: {error:?}"))?;
+    let second_snapshot = second_request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve second identity snapshot: {error:?}"))?;
+    let second_identity_id = second_snapshot
+        .selected_identity_id()
+        .map_err(|error| anyhow::anyhow!("read second identity: {error:?}"))?;
+    let second_app_id = manager.device_id();
+
+    let observer = NookVaultManager::new();
+    let observer_request = observer
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build observer identity snapshot: {error:?}"))?;
+    let observer_snapshot = observer_request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve observer identity snapshot: {error:?}"))?;
+    assert_eq!(
+        observer_snapshot
+            .selected_identity_id()
+            .map_err(|error| anyhow::anyhow!("read observer identity: {error:?}"))?,
+        second_identity_id
+    );
+    assert_eq!(
+        observer_snapshot
+            .device_access()
+            .device_id()
+            .value()
+            .map_err(|error| anyhow::anyhow!("read observer app id: {error:?}"))?,
+        second_app_id
+    );
+    let second_signing_public_key = manager.ensure_signing_identity().await?.public_key();
+    assert_ne!(first_signing_public_key, second_signing_public_key);
+    assert!(
+        crate::storage::event_db::load_signing_seed()
+            .await?
+            .is_none()
+    );
+
+    manager
+        .activate_local_identity(first_identity_id.clone())
+        .await
+        .map_err(|error| anyhow::anyhow!("select first identity: {error:?}"))?;
+    assert_eq!(manager.device_id(), first_app_id);
+    crate::storage::identity_record::select_local_identity(nook_core::IdentityId::parse(
+        &second_identity_id,
+    )?)
+    .await?;
+    assert_eq!(
+        manager
+            .local_identity_recovery_app_id()
+            .await
+            .map_err(|error| anyhow::anyhow!("read first recovery app id: {error:?}"))?,
+        first_app_id
+    );
+    manager
+        .unlock_pin_device_identity("first identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("unlock first identity: {error:?}"))?;
+    assert_eq!(
+        manager.ensure_signing_identity().await?.public_key(),
+        first_signing_public_key
+    );
+    assert!(
+        crate::storage::event_db::load_signing_seed()
+            .await?
+            .is_none()
+    );
+    manager.lock_device_identity();
+    assert_eq!(manager.device_id(), first_app_id);
+    assert_eq!(
+        manager
+            .local_identity_recovery_app_id()
+            .await
+            .map_err(|error| anyhow::anyhow!("read retained recovery app id: {error:?}"))?,
+        first_app_id
+    );
+    manager
+        .unlock_pin_device_identity("first identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("unlock retained first identity: {error:?}"))?;
+    assert_eq!(manager.device_id(), first_app_id);
+
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn simple_genesis_uses_the_tabs_app_key_after_another_tab_switches_identity()
+-> anyhow::Result<()> {
+    let mut first_tab = NookVaultManager::new();
+    first_tab
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    first_tab
+        .finish_pin_device_protection("first identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
+    let first_key = first_tab.device_identity()?;
+    let first_identity_id = crate::storage::identity_record::load_identity_directory()
+        .await?
+        .identity_for_app_key(&first_key)?
+        .ok_or_else(|| anyhow::anyhow!("first identity is missing"))?;
+
+    let mut second_tab = NookVaultManager::new();
+    second_tab
+        .begin_local_identity_creation("Work")
+        .await
+        .map_err(|error| anyhow::anyhow!("begin second identity: {error:?}"))?;
+    second_tab
+        .finish_pin_device_protection("second identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect second identity: {error:?}"))?;
+    let selected_by_second_tab = crate::storage::identity_record::load_identity_directory()
+        .await?
+        .selected()?
+        .identity_id
+        .clone();
+    assert_ne!(selected_by_second_tab, first_identity_id);
+
+    let pending = first_tab
+        .initialize_genesis_vault_with_identity(&first_key)
+        .await?;
+
+    assert_eq!(pending.identity_id, first_identity_id);
+    assert_eq!(
+        crate::storage::identity_record::load_identity_directory()
+            .await?
+            .selection(),
+        &nook_core::IdentitySelection::Selected(selected_by_second_tab),
+    );
+    first_tab
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_identity()
+-> anyhow::Result<()> {
+    let mut first_tab = NookVaultManager::new();
+    first_tab
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    first_tab
+        .finish_pin_device_protection("first identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
+    let first_key = first_tab.device_identity()?;
+    let first_identity_id = crate::storage::identity_record::load_identity_directory()
+        .await?
+        .identity_for_app_key(&first_key)?
+        .ok_or_else(|| anyhow::anyhow!("first identity is missing"))?;
+
+    let mut second_tab = NookVaultManager::new();
+    second_tab
+        .begin_local_identity_creation("Work")
+        .await
+        .map_err(|error| anyhow::anyhow!("begin second identity: {error:?}"))?;
+    second_tab
+        .finish_pin_device_protection("second identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect second identity: {error:?}"))?;
+    let selected_by_second_tab = crate::storage::identity_record::load_identity_directory()
+        .await?
+        .selected()?
+        .identity_id
+        .clone();
+    assert_ne!(selected_by_second_tab, first_identity_id);
+
+    let extension_key = nook_core::AppKey::generate()?;
+    let (extension_signer, extension_signing_seed) = nook_core::SigningIdentity::generate()?;
+    let (authorizer_signer, _) = nook_core::SigningIdentity::generate()?;
+    first_tab.device.id = extension_key.app_id().as_str().to_owned();
+    first_tab.device.identity_private_key = extension_key.secret_string().into_inner();
+    first_tab.device.pending_extension_handoff = Some(
+        super::super::device_protection::PendingExtensionIdentityHandoff {
+            enrollment: super::super::PendingExtensionIdentityEnrollment::VaultCreation {
+                authorizer: Some(first_key.clone()),
+            },
+            authorizer_signing: Some((first_key.app_id().clone(), authorizer_signer.public_key())),
+            signing_public_key: extension_signer.public_key(),
+            handoff_signing_seed: extension_signing_seed.as_str().to_owned(),
+            persist_signing_seed: true,
+            previous_session_signing_seed: String::new(),
+        },
+    );
+
+    let pending = first_tab
+        .initialize_genesis_vault_with_identity(&extension_key)
+        .await?;
+
+    assert_eq!(pending.identity_id, first_identity_id);
+    let staged = pending
+        .staged_identity()
+        .ok_or_else(|| anyhow::anyhow!("staged identity is missing"))?;
+    assert_eq!(
+        staged.directory.identity_for_app_key(&extension_key)?,
+        Some(first_identity_id),
+    );
+    assert_eq!(
+        crate::storage::identity_record::load_identity_directory()
+            .await?
+            .selection(),
+        &nook_core::IdentitySelection::Selected(selected_by_second_tab),
+    );
+    first_tab
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn locked_passkey_tab_ignores_another_tabs_selection() -> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    let first_credential = vec![7u8; 32];
+    let first_user_handle = vec![8u8; 32];
+    let first_prf_input = vec![9u8; 32];
+    let first_prf_output = vec![10u8; 32];
+    manager
+        .finish_device_protection(
+            first_credential.clone(),
+            first_user_handle,
+            first_prf_input.clone(),
+            first_prf_output.clone(),
+        )
+        .await
+        .map_err(|error| anyhow::anyhow!("protect first passkey identity: {error:?}"))?;
+    let first_app_id = manager.device_id();
+    let first_request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build first identity snapshot: {error:?}"))?;
+    let first_snapshot = first_request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve first identity snapshot: {error:?}"))?;
+    let first_identity_id = first_snapshot
+        .selected_identity_id()
+        .map_err(|error| anyhow::anyhow!("read first identity: {error:?}"))?;
+
+    manager
+        .begin_local_identity_creation("Work")
+        .await
+        .map_err(|error| anyhow::anyhow!("begin second identity: {error:?}"))?;
+    manager
+        .finish_pin_device_protection("second identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect second PIN identity: {error:?}"))?;
+    let second_request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build second identity snapshot: {error:?}"))?;
+    let second_snapshot = second_request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve second identity snapshot: {error:?}"))?;
+    let second_identity_id = second_snapshot
+        .selected_identity_id()
+        .map_err(|error| anyhow::anyhow!("read second identity: {error:?}"))?;
+
+    manager
+        .activate_local_identity(first_identity_id.clone())
+        .await
+        .map_err(|error| anyhow::anyhow!("select first passkey identity: {error:?}"))?;
+    manager
+        .unlock_device_identity(first_prf_output.clone())
+        .await
+        .map_err(|error| anyhow::anyhow!("unlock first passkey identity: {error:?}"))?;
+    crate::storage::identity_record::select_local_identity(nook_core::IdentityId::parse(
+        &second_identity_id,
+    )?)
+    .await?;
+    manager.lock_device_identity();
+    let retained_request = manager
+        .identity_directory_snapshot_request()
+        .map_err(|error| anyhow::anyhow!("build retained identity snapshot: {error:?}"))?;
+    let retained_snapshot = retained_request
+        .resolve()
+        .await
+        .map_err(|error| anyhow::anyhow!("resolve retained identity snapshot: {error:?}"))?;
+    assert_eq!(
+        retained_snapshot
+            .selected_identity_id()
+            .map_err(|error| anyhow::anyhow!("read retained identity: {error:?}"))?,
+        first_identity_id
+    );
+    assert_eq!(
+        retained_snapshot
+            .device_access()
+            .device_id()
+            .value()
+            .map_err(|error| anyhow::anyhow!("read retained app id: {error:?}"))?,
+        first_app_id
+    );
+    assert_eq!(
+        retained_snapshot.device_access().identity_state(),
+        nook_core::DeviceAccessIdentityState::Locked
+    );
+
+    assert_eq!(
+        manager
+            .device_protection_status()
+            .await
+            .map_err(|error| anyhow::anyhow!("read retained protection: {error:?}"))?,
+        nook_core::DeviceProtectionStatus::Passkey
+    );
+    assert_eq!(
+        manager
+            .device_protection_device_mode()
+            .await
+            .map_err(|error| anyhow::anyhow!("read retained device mode: {error:?}"))?,
+        crate::DeviceProtectionDeviceModeState::Standard
+    );
+    let options = manager
+        .passkey_unlock_options()
+        .await
+        .map_err(|error| anyhow::anyhow!("read retained passkey options: {error:?}"))?;
+    assert_eq!(options.credential_id(), first_credential);
+    assert_eq!(options.prf_input(), first_prf_input);
+    assert_eq!(
+        manager
+            .local_identity_recovery_app_id()
+            .await
+            .map_err(|error| anyhow::anyhow!("read retained recovery app id: {error:?}"))?,
+        first_app_id
+    );
+    manager
+        .unlock_device_identity(first_prf_output)
+        .await
+        .map_err(|error| anyhow::anyhow!("unlock retained passkey identity: {error:?}"))?;
+    assert_eq!(manager.device_id(), first_app_id);
+
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn keyring_backed_simple_genesis_keeps_the_signer_out_of_the_singleton_seed()
+-> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    manager
+        .finish_pin_device_protection("identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect identity: {error:?}"))?;
+    let identity = manager.device_identity()?;
+    let pending = manager
+        .initialize_genesis_vault_with_identity(&identity)
+        .await?;
+
+    manager.bootstrap_simple_event_log_genesis(&pending).await?;
+
+    assert!(
+        crate::storage::event_db::load_signing_seed()
+            .await?
+            .is_none(),
+        "keyring-backed genesis must not recreate the plaintext singleton signer"
+    );
+    let entry = crate::storage::identity_record::load_entry_for_app_id(identity.app_id())
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("protected identity keyring entry is missing"))?;
+    assert!(entry.has_signing_seed());
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn failed_reprotection_zeroizes_the_existing_local_app_key() -> anyhow::Result<()> {
+    let mut manager = NookVaultManager::new();
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    manager
+        .finish_pin_device_protection("first identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect identity: {error:?}"))?;
+    crate::storage::indexed_db::idb_put_string(
+        crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
+        "pending",
+    )
+    .await?;
+
+    let result = manager
+        .finish_pin_device_protection("replacement pin".to_owned())
+        .await;
+
+    assert!(result.is_err());
+    assert_eq!(
+        manager
+            .device_protection_status()
+            .await
+            .map_err(|error| anyhow::anyhow!(
+                "read protection after failed replacement: {error:?}"
+            ))?,
+        nook_core::DeviceProtectionStatus::Pin
+    );
+    crate::storage::indexed_db::idb_delete_key(
+        crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
+    )
+    .await?;
+    manager
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+    Ok(())
+}
+
 struct ImportFixture {
     records: Vec<ExternalEventLogRecord>,
     store_id: String,
@@ -231,6 +739,49 @@ async fn extension_repair_import_replaces_sentinel_vault_and_preserves_device() 
         replacement.device.identity_private_key,
         fixture.device_secret
     );
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+async fn extension_import_rejects_a_grant_for_an_inactive_identity() -> anyhow::Result<()> {
+    let fixture = import_fixture(false).await?;
+    let mut other_identity = NookVaultManager::new();
+    other_identity
+        .begin_local_identity_creation("Other")
+        .await
+        .map_err(|error| anyhow::anyhow!("begin other identity: {error:?}"))?;
+    other_identity
+        .finish_pin_device_protection("other identity pin".to_owned())
+        .await
+        .map_err(|error| anyhow::anyhow!("protect other identity: {error:?}"))?;
+    let selected_device_id = other_identity.device.id.clone();
+    let selected_device_secret = other_identity.device.identity_private_key.clone();
+    assert_ne!(selected_device_id, fixture.device_id);
+
+    let (mut importer, _) = replacement_manager(&fixture).await?;
+    importer.device.id.clone_from(&selected_device_id);
+    importer
+        .device
+        .identity_private_key
+        .clone_from(&selected_device_secret);
+
+    let result = importer
+        .import_extension_event_log_records(
+            &fixture.store_id,
+            &fixture.device_id,
+            fixture.device_public_key.as_str(),
+            fixture.signing_public_key.as_str(),
+            fixture.records,
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert_eq!(importer.device.id, selected_device_id);
+    assert_eq!(importer.device.identity_private_key, selected_device_secret);
+    importer
+        .delete_local_browser_data()
+        .await
+        .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
     Ok(())
 }
 

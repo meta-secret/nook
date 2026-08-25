@@ -24,8 +24,8 @@ Product specifications are the living system of record for user-facing and syste
   - Description: Website-owned vault UI, extension authorization, and contextual authentication widget
   - Status: Active
 - **[devices-and-access.md](devices-and-access.md)**
-  - Description: Identity management, device protection evidence, onboarding, and verified vault grants
-  - Status: Implemented dashboard; broader identity model is an architecture decision
+  - Description: Multi-identity management, local key protection, onboarding, and verified vault grants
+  - Status: Local multi-identity keyring implemented; replicated identity control remains active
 - **[vault-app-isolation.md](vault-app-isolation.md)**
   - Description: Separate Simple and Sentinel projects, origins, capabilities, and deployment
   - Status: Implemented

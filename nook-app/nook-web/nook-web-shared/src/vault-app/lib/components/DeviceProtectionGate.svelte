@@ -1,6 +1,7 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../generated/i18n-keys'
   import { CircleHelp, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { untrack } from 'svelte'
   import { DeviceProtectionStatus } from '$app-wasm'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import type { VaultState } from '$lib/vault.svelte'
@@ -22,19 +23,36 @@
   let {
     vault,
     frame,
+    creationOnly,
+    initializeSession,
+    recoveryAppId,
+    onBeforeProtectionAction,
+    onProtectionActionSettled,
     onProtectionReady,
   }: {
     vault: VaultState
     frame: DeviceProtectionGateFrame
+    creationOnly: boolean
+    initializeSession: boolean
+    recoveryAppId: string
+    onBeforeProtectionAction: () => void
+    onProtectionActionSettled?: () => void
     onProtectionReady: () => void
   } = $props()
   let pin = $state('')
   let pinConfirm = $state('')
   let passkeyLabel = $state('')
-  let setupWorkflow = $state(DeviceProtectionSetupWorkflow.Authenticate)
+  let setupWorkflow = $state(
+    untrack(() =>
+      creationOnly
+        ? DeviceProtectionSetupWorkflow.Create
+        : DeviceProtectionSetupWorkflow.Authenticate,
+    ),
+  )
 
   const needsSetup = $derived(
-    vault.deviceProtectionStatus === DeviceProtectionStatus.Missing ||
+    creationOnly ||
+      vault.deviceProtectionStatus === DeviceProtectionStatus.Missing ||
       vault.deviceProtectionStatus === DeviceProtectionStatus.Plaintext ||
       vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup,
   )
@@ -43,15 +61,28 @@
     if (!confirm(vault.t(I18N_KEYS.DeviceProtectionRecoveryConfirm))) {
       return
     }
-    void deviceProtectionActions.resetDeviceProtectionForRecovery(vault)
+    const recoveryRequest: Parameters<
+      typeof deviceProtectionActions.resetDeviceProtectionForRecovery
+    >[0] = { state: vault, expectedAppId: recoveryAppId }
+    void deviceProtectionActions.resetDeviceProtectionForRecovery(
+      recoveryRequest,
+    )
   }
 
   async function completeProtectionAction(
     action: () => Promise<void>,
   ): Promise<void> {
-    await action()
-    if (vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked) {
-      onProtectionReady()
+    onBeforeProtectionAction()
+    try {
+      await action()
+      if (
+        !vault.errorMsg &&
+        vault.deviceProtectionStatus === DeviceProtectionStatus.Unlocked
+      ) {
+        onProtectionReady()
+      }
+    } finally {
+      onProtectionActionSettled?.()
     }
   }
 </script>
@@ -101,7 +132,9 @@
   </CardHeader>
 
   <CardContent class="space-y-3">
-    <ExistingVaultRecoverySummary {vault} />
+    {#if !creationOnly}
+      <ExistingVaultRecoverySummary {vault} />
+    {/if}
 
     {#if vault.deviceProtectionStatus === DeviceProtectionStatus.PinSetup}
       <div class="space-y-2">
@@ -146,8 +179,15 @@
           void completeProtectionAction(() => {
             const setupRequest: Parameters<
               typeof deviceProtectionActions.setupPinDeviceProtection
-            >[0] = { state: vault, pin, confirmPin: pinConfirm }
-            return deviceProtectionActions.setupPinDeviceProtection(setupRequest)
+            >[0] = {
+              state: vault,
+              pin,
+              confirmPin: pinConfirm,
+              initializeSession: initializeSession && !creationOnly,
+            }
+            return deviceProtectionActions.setupPinDeviceProtection(
+              setupRequest,
+            )
           })}
       >
         {vault.isVerifying
@@ -241,39 +281,44 @@
                   state: vault,
                   passkeyLabel,
                   deviceMode: vault.draftDeviceMode,
+                  initializeSession: initializeSession && !creationOnly,
                 }
-                return deviceProtectionActions.setupDeviceProtection(setupRequest)
+                return deviceProtectionActions.setupDeviceProtection(
+                  setupRequest,
+                )
               })}
           >
             {vault.isVerifying
               ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
               : vault.t(I18N_KEYS.DeviceProtectionSetupAction)}
           </Button>
-          <div class="flex items-center gap-3 pt-1">
-            <div class="h-px flex-1 bg-border"></div>
-            <span class="text-xs text-muted-foreground">
-              {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAlternative)}
-            </span>
-            <div class="h-px flex-1 bg-border"></div>
-          </div>
-          <Button
-            class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
-            variant="ghost"
-            size="sm"
-            disabled={vault.isVerifying}
-            data-testid="device-protection-use-existing-choice"
-            onclick={() =>
-              void completeProtectionAction(() =>
-                deviceProtectionActions.recoverDeviceProtectionWithPasskey(
-                  vault,
-                ),
-              )}
-          >
-            <KeyRound class="size-4" />
-            {vault.isVerifying
-              ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
-              : vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
-          </Button>
+          {#if !creationOnly}
+            <div class="flex items-center gap-3 pt-1">
+              <div class="h-px flex-1 bg-border"></div>
+              <span class="text-xs text-muted-foreground">
+                {vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAlternative)}
+              </span>
+              <div class="h-px flex-1 bg-border"></div>
+            </div>
+            <Button
+              class="mx-auto flex text-foreground/80 hover:bg-accent/50 hover:text-foreground"
+              variant="ghost"
+              size="sm"
+              disabled={vault.isVerifying}
+              data-testid="device-protection-use-existing-choice"
+              onclick={() =>
+                void completeProtectionAction(() =>
+                  deviceProtectionActions.recoverDeviceProtectionWithPasskey(
+                    vault,
+                  ),
+                )}
+            >
+              <KeyRound class="size-4" />
+              {vault.isVerifying
+                ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
+                : vault.t(I18N_KEYS.DeviceProtectionExistingPasskeyAction)}
+            </Button>
+          {/if}
         </div>
       {/if}
     {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Pin}
@@ -295,12 +340,15 @@
         class="w-full"
         disabled={vault.isVerifying}
         data-testid="device-protection-pin-unlock-btn"
-        onclick={() => {
-          const unlockRequest: Parameters<
-            typeof deviceProtectionActions.unlockPinDeviceProtection
-          >[0] = { state: vault, pin }
-          return deviceProtectionActions.unlockPinDeviceProtection(unlockRequest)
-        }}
+        onclick={() =>
+          void completeProtectionAction(() => {
+            const unlockRequest: Parameters<
+              typeof deviceProtectionActions.unlockPinDeviceProtection
+            >[0] = { state: vault, pin, initializeSession }
+            return deviceProtectionActions.unlockPinDeviceProtection(
+              unlockRequest,
+            )
+          })}
       >
         {vault.isVerifying
           ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
@@ -327,7 +375,13 @@
         class="w-full"
         disabled={vault.isVerifying}
         data-testid="device-protection-unlock-btn"
-        onclick={() => deviceProtectionActions.unlockDeviceProtection(vault)}
+        onclick={() =>
+          void completeProtectionAction(() => {
+            const unlockRequest: Parameters<
+              typeof deviceProtectionActions.unlockDeviceProtection
+            >[0] = { state: vault, initializeSession }
+            return deviceProtectionActions.unlockDeviceProtection(unlockRequest)
+          })}
       >
         {vault.isVerifying
           ? vault.t(I18N_KEYS.DeviceProtectionAuthorizing)
@@ -347,6 +401,24 @@
           onclick={recover}
         >
           {vault.t(I18N_KEYS.DeviceProtectionRecoveryAction)}
+        </Button>
+      </div>
+    {:else if vault.deviceProtectionStatus === DeviceProtectionStatus.Error && !creationOnly}
+      <div class="rounded-md border border-border/60 bg-muted/20 p-3">
+        <div class="flex gap-2 text-xs text-muted-foreground">
+          <CircleHelp class="mt-0.5 size-4 shrink-0" />
+          <p>
+            {vault.t(I18N_KEYS.DeviceProtectionUnavailableRecoveryWarning)}
+          </p>
+        </div>
+        <Button
+          class="mt-2 h-auto px-0 text-xs"
+          variant="link"
+          disabled={vault.isVerifying}
+          data-testid="device-protection-recovery-btn"
+          onclick={recover}
+        >
+          {vault.t(I18N_KEYS.DeviceProtectionUnavailableRecoveryAction)}
         </Button>
       </div>
     {/if}

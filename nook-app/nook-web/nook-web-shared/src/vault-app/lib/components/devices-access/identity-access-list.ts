@@ -1,15 +1,18 @@
 import { I18N_KEYS } from "../../../../generated/i18n-keys";
-import { DeviceAccessProtectionKind, PasskeyKeeperKind } from "$app-wasm";
+import { DeviceAccessProtectionKind } from "$app-wasm";
 import type { VaultState } from "$lib/vault.svelte";
 import { type DashboardView } from "../devices-access-dashboard-state";
 import {
   AccessChainStage,
   isPasskeyProtection,
-  knownText,
   lastUsedLabel,
-  textValue,
 } from "./access-chain";
-import { keeperLabel, keeperStorageNote } from "./passkey-evidence-labels";
+import {
+  buildPasskeyCardSummary,
+  PASSKEY_CARD_SUMMARY_ABSENT,
+  PasskeyCardSummaryKind,
+  type PasskeyCardSummaryState,
+} from "./passkey-card";
 
 export enum IdentityAccessKeyKind {
   Passkey = "passkey",
@@ -25,7 +28,7 @@ export type IdentityAccessCard = {
   readonly title: string;
   readonly typeLabel: string;
   readonly lastUsedLabel: string;
-  readonly description: string;
+  readonly passkeySummary: PasskeyCardSummaryState;
 };
 
 type IdentityAccessCardsRequest = {
@@ -44,28 +47,22 @@ export function buildIdentityAccessCards({
   };
   const lastUsed = lastUsedLabel(lastUsedLabelArgs);
   if (isPasskeyProtection(view.protection)) {
-    const keeperLabelArgs: Parameters<typeof keeperLabel>[0] = {
+    const summaryArgs: Parameters<typeof buildPasskeyCardSummary>[0] = {
       vault,
-      value: view.keeper,
+      view,
     };
-    const keeperStorageNoteArgs: Parameters<typeof keeperStorageNote>[0] = {
-      vault,
-      value: view.keeper,
-    };
-    const namedPasskey = knownText(view.passkeyName)
-      ? textValue(view.passkeyName)
-      : vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed);
+    const summary = buildPasskeyCardSummary(summaryArgs);
     const passkeyCard: IdentityAccessCard = {
       key: "passkey",
       kind: IdentityAccessKeyKind.Passkey,
       stage: AccessChainStage.Unlock,
-      title:
-        view.keeper === PasskeyKeeperKind.Unknown
-          ? namedPasskey
-          : keeperLabel(keeperLabelArgs),
-      typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey),
+      title: summary.title,
+      typeLabel: summary.typeLabel,
       lastUsedLabel: lastUsed,
-      description: keeperStorageNote(keeperStorageNoteArgs),
+      passkeySummary: {
+        kind: PasskeyCardSummaryKind.Present,
+        summary,
+      },
     };
     cards.push(passkeyCard);
   } else if (view.protection === DeviceAccessProtectionKind.PinOrPassphrase) {
@@ -76,7 +73,7 @@ export function buildIdentityAccessCards({
       title: vault.t(I18N_KEYS.DevicesAccessPinOrPassphrase),
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePin),
       lastUsedLabel: lastUsed,
-      description: vault.t(I18N_KEYS.DevicesAccessPinPanelDesc),
+      passkeySummary: PASSKEY_CARD_SUMMARY_ABSENT,
     };
     cards.push(pinCard);
   } else if (view.protection === DeviceAccessProtectionKind.CompanionSession) {
@@ -87,7 +84,7 @@ export function buildIdentityAccessCards({
       title: vault.t(I18N_KEYS.DevicesAccessCompanionSession),
       typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeCompanion),
       lastUsedLabel: lastUsed,
-      description: vault.t(I18N_KEYS.DevicesAccessThisBrowserCompanionDesc),
+      passkeySummary: PASSKEY_CARD_SUMMARY_ABSENT,
     };
     cards.push(companionCard);
   }
@@ -103,7 +100,7 @@ export function buildIdentityAccessCards({
     title: vault.t(I18N_KEYS.DevicesAccessDeviceAgeKey),
     typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypeAppKey),
     lastUsedLabel: lastUsed,
-    description: vault.t(I18N_KEYS.DevicesAccessDeviceKeyPanelDesc),
+    passkeySummary: PASSKEY_CARD_SUMMARY_ABSENT,
   };
   cards.push(appKeyCard);
   return cards;

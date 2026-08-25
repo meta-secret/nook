@@ -236,6 +236,7 @@ export async function importExtensionEventLog({
   await ensureExtensionWasm()
   const manager = new NookVaultManager()
   try {
+    await manager.activate_local_identity_for_app_id(grant.deviceId)
     const recordValues = NookExternalEventLogRecords.from_array(records)
     const statusValue = await manager.import_extension_event_log_records_js(
       grant.vaultStoreId,

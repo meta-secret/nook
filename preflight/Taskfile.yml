@@ -72,7 +72,7 @@ tasks:
     desc: Verify the shared source formatter and sealed changed-path contract.
     dir: '{{.REPO_ROOT}}'
     cmds:
-      - bash .github/scripts/format-host-apply.test.sh
+      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.test.sh"
 
   preflight:export:
     desc: Export the static Rust preflight reporter for downstream CI jobs.

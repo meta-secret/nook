@@ -10,6 +10,7 @@ cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"
 cargo fmt --manifest-path "$repo_root/agentic-ai/minds/Cargo.toml" --all
 
 web_app_files=()
+web_shared_typescript_files=()
 extension_files=()
 research_files=()
 hive_console_files=()
@@ -21,6 +22,9 @@ while IFS= read -r -d '' path; do
     continue
   fi
   case "$path" in
+    nook-app/nook-web/nook-web-shared/src/vault-app/*.ts)
+      web_shared_typescript_files+=("../${path#nook-app/nook-web/}")
+      ;;
     nook-app/nook-web/nook-web-app/*)
       web_app_files+=("${path#nook-app/nook-web/nook-web-app/}")
       ;;
@@ -70,7 +74,12 @@ format_changed_files() {
 web_app="$repo_root/nook-app/nook-web/nook-web-app"
 web_config=/opt/nook-formatter/prettier-web.json
 default_config=/opt/nook-formatter/prettier-default.json
+shared_typescript_config=/opt/nook-formatter/prettier-shared-typescript.json
 format_changed_files "$web_config" "$web_app" "${web_app_files[@]}"
+format_changed_files \
+  "$shared_typescript_config" \
+  "$web_app" \
+  "${web_shared_typescript_files[@]}"
 format_changed_files \
   "$web_config" \
   "$repo_root/nook-app/nook-web/nook-web-extension" \

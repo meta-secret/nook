@@ -21,7 +21,7 @@ guest_formatter="$(
 
 printf '%s\n' "$script" | grep -q 'formatter_image="nook-source-formatter:' \
   || { echo 'format-host-apply test: expected shared content-addressed image' >&2; exit 1; }
-for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-web.json format.sh; do
+for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-shared-typescript.json prettier-web.json format.sh; do
   printf '%s\n' "$script" | grep -Fq "$hash_input" \
     || { echo "format-host-apply test: formatter hash misses $hash_input" >&2; exit 1; }
 done
@@ -69,6 +69,14 @@ for manifest in \
 done
 printf '%s\n' "$formatter" | grep -Fq 'prettier-plugin-svelte' \
   || { echo 'format-host-apply test: missing Svelte formatter' >&2; exit 1; }
+for required in \
+  'nook-app/nook-web/nook-web-shared/src/vault-app/*.ts' \
+  'web_shared_typescript_files+=' \
+  'prettier-shared-typescript.json' \
+  '"${web_shared_typescript_files[@]}"'; do
+  printf '%s\n' "$formatter" | grep -Fq "$required" \
+    || { echo "format-host-apply test: missing shared TypeScript formatter contract: $required" >&2; exit 1; }
+done
 for required in \
   '.agents/skills/*' \
   'executable_skill_files+=' \

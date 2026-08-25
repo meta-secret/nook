@@ -147,7 +147,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     let preflight = read(&root, "preflight/Taskfile.yml");
     let format_contract = task_body(&preflight, "preflight:format-contract", "preflight:export");
     assert!(
-        format_contract.contains("bash .github/scripts/format-host-apply.test.sh")
+        format_contract
+            .contains("bash \"{{.REPO_ROOT}}/.github/scripts/format-host-apply.test.sh\"")
             && !format_contract.contains("deps:")
             && !format_contract.contains("install")
             && !format_contract.contains("loom:"),

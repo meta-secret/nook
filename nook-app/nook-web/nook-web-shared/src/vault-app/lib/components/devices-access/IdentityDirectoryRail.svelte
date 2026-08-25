@@ -8,24 +8,22 @@ creation as the primary interactions.
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { Button } from '$lib/components/ui/button'
   import type { VaultState } from '$lib/vault.svelte'
-  import type { DashboardView } from '../devices-access-dashboard-state'
   import type { IdentityDirectoryEntry } from './identity-directory-view'
-  import { buildIdentityKeyInventory } from './identity-key-inventory'
 
   type IdentityDirectoryRailProps = {
     vault: VaultState
-    view: DashboardView
     identities: readonly IdentityDirectoryEntry[]
     selectedIdentityId: string
     onSelectIdentity: (identityId: string) => void
+    onAddIdentity: () => void
   }
 
   let {
     vault,
-    view,
     identities,
     selectedIdentityId,
     onSelectIdentity,
+    onAddIdentity,
   }: IdentityDirectoryRailProps = $props()
 
   type CountLabelRequest = {
@@ -47,13 +45,8 @@ creation as the primary interactions.
   }
 
   function summary(identity: IdentityDirectoryEntry): string {
-    const inventoryArgs: Parameters<typeof buildIdentityKeyInventory>[0] = {
-      vault,
-      identity,
-      view,
-    }
     const keyCountArgs: CountLabelRequest = {
-      count: buildIdentityKeyInventory(inventoryArgs).length,
+      count: identity.members.length,
       singularKey: I18N_KEYS.DevicesAccessIdentityKeyCountSingular,
       pluralKey: I18N_KEYS.DevicesAccessIdentityKeyCountPlural,
     }
@@ -71,7 +64,6 @@ creation as the primary interactions.
     }
     return vault.t(summaryArgs)
   }
-
 </script>
 
 <aside
@@ -123,13 +115,10 @@ creation as the primary interactions.
     type="button"
     variant="outline"
     class="mt-4 w-full"
-    disabled
     data-testid="devices-access-add-identity"
+    onclick={onAddIdentity}
   >
     <Plus class="size-4" />
     {vault.t(I18N_KEYS.DevicesAccessAddIdentity)}
   </Button>
-  <p class="mt-2 text-xs leading-relaxed text-muted-foreground">
-    {vault.t(I18N_KEYS.DevicesAccessAddIdentityUnavailable)}
-  </p>
 </aside>
