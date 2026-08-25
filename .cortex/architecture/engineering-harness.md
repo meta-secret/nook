@@ -110,10 +110,13 @@ build producers execute in disposable ordinary Pods through ARC. Focused
 Docker CLI connects only to the persistent rootless BuildKit shard on its node.
 It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
 and non-Main runtime-dependent, browser, WASM, and deployment validation execute
-on ephemeral GitHub-hosted runners. Main's post-publication cache proof is the
-narrow hosted exception. Its fresh builder hydrates Zot snapshots and exports
-only a marker before deployment. The self-hosted `nook` pool remains
-maintenance-only.
+on ephemeral GitHub-hosted runners. Main's portable WASM dependency-cache writer
+and proof is the narrow hosted exception. One fresh hosted builder publishes the
+portable Zot metadata. A registry audit verifies child manifest digest/size and
+streams every complete blob to verify its declared size and SHA-256. Another cache-only builder then
+requires every expensive dependency vertex to hit before deployment without
+hydrating the complete dependency filesystem. The self-hosted `nook` pool
+remains maintenance-only.
 
 ---
 
@@ -258,7 +261,9 @@ maintenance-only.
 
 - Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder (`desktop-linux` or `default`).
 - GitHub-hosted Actions creates an ephemeral job-scoped `docker-container`
-  builder with `docker/setup-buildx-action`.
+  builder with `docker/setup-buildx-action`; the authenticated setup preloads
+  its BuildKit image from Zot before builder creation instead of resolving
+  Docker Hub.
 - ARC Actions registers the node-local persistent BuildKit service as a remote
   Buildx builder.
 - Zot refs carry cache state between nodes and hosted runners.

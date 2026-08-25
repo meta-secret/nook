@@ -104,8 +104,10 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `task rust:coverage:update` still prints a host-applicable diff.
 - **CI runners:**
   - Trusted same-repository PR Rust jobs and Main build producers use ARC.
-  - Main's clean-room Zot hydration proof uses a fresh GitHub-hosted builder.
-    Deployment waits for its exported hydration marker.
+  - Main's portable WASM dependency writer/proof uses two fresh GitHub-hosted
+    builders. Zot must prove child manifest digests and sizes plus every blob's
+    declared size and SHA-256 by streaming it completely. Deployment then waits until the second
+    cache-only solve reports every expensive dependency vertex cached.
   - Focused `preflight`, `rust:ci`, and `arc:runtime` jobs may use general ARC.
   - Focused `hive:verify` jobs use the dedicated Hive ARC scale set.
   - Every ARC job receives a fresh ordinary Pod.
@@ -143,20 +145,23 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - `pr.yml` starts only for `ci:validate` or `ci:full-e2e` label events.
   - It then runs native Rust, shared Rust ecosystem gates, and one verified-WASM producer independently.
   - Its small generated artifact feeds parallel preview and optional Main-fix consumers.
-  - Main-fix web and extension e2e run as independent artifact consumers on separate hosted runners.
-  - Each Main-fix consumer builds only the browser image.
+  - Main-fix web e2e runs as two deterministic Playwright shards, while extension e2e remains an independent artifact consumer.
+  - Each Main-fix browser consumer builds only the browser image.
+  - A stable `Full browser e2e (main fix)` join requires both web shards and remains free of a low-reuse post-test cache rebuild.
   - Main-fix consumers do not repeat Rust/WASM or web verification.
   - **`main.yml`** serializes the cache-writing native → WASM → web → UI-demo lanes.
   - Main build producers select the general scale set through `NOOK_RUNS_ON`.
-  - The fresh Zot hydration proof selects `ubuntu-latest` explicitly.
+  - The portable WASM cache writer/proof selects `ubuntu-latest` explicitly.
   - `ubuntu-latest` remains the configuration fallback.
   - Each producer publishes its already-solved registry graph only after its
     lane-specific check succeeds.
-  - The hosted fallback WASM dependency export keeps its no-import,
-    forced-zstd behavior.
+  - The hosted fallback WASM dependency export never imports its destination.
+    It may use independent input-fingerprint and Main source refs as optional
+    seeds, so a corrupted portable ref heals without manual deletion, and it
+    keeps forced-zstd behavior.
   - Later browser/UI consumers remain read-only.
-  - Development deploy waits on web verify, web e2e, and the fresh Zot hydration
-    proof.
+  - Development deploy waits on web verify, web e2e, and the portable WASM
+    cache publication proof.
   - Every actionable unsuccessful Main run creates or refreshes a Hive repair incident.
   - That includes browser E2E and UI-demo failures.
   - Real-provider sync-live checks run only through explicit manual validation.

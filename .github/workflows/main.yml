@@ -5,7 +5,7 @@
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on hosted
 # runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
-# Pages only after web verify, web e2e, and the fresh Zot hydration proof succeed.
+# Pages only after web verify, web e2e, and the portable WASM cache proof succeed.
 # Extension e2e and UI demos remain required for the workflow but do not gate the development
 # deploy. Immutable releases remain
 # responsible for production wasm optimization.
@@ -239,13 +239,12 @@ jobs:
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes from its persistent shard. A separate clean hosted
-          # builder proves that Zot received every required dependency layer.
-          NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"
+          # ARC publishes source state from its persistent shard. The portable
+          # dependency ref is owned by the separate hosted writer/proof job.
           WASM_BUILD_MODE: dev
 
   wasm-cache-proof:
-    name: Fresh WASM cache restore proof
+    name: Portable WASM cache publication proof
     needs: [wasm]
     runs-on: ubuntu-latest
     permissions:
@@ -261,11 +260,22 @@ jobs:
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          cache-write: "false"
-          main-cache-only: "true"
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
 
-      - name: Prove fresh hosted restore from Zot
+      - name: Install Bun for registry cache audit
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Publish and prove portable WASM dependency cache
         run: bash .github/scripts/verify-wasm-gha-cache.sh
+        env:
+          NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"
+          NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          NOOK_REGISTRY_PASSWORD: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
 
   web:
     name: Verify web build

@@ -54,16 +54,18 @@ target "builder-wasm-deps-restore" {
   cache-from = rust_wasm_deps_cache_from
 }
 
-// Clean hosted proof target. Keep it in product.Dockerfile's frontend/context
-// lineage so a fresh BuildKit worker verifies the exact cache keys published by
-// builder-wasm-deps instead of rebuilding them through a named-context graph.
+// Portable hosted writer/proof target. The trusted hosted job owns this cache
+// ref because ARC's persistent BuildKit metadata is not portable across the
+// hosted BuildKit worker boundary. A cache-only solve avoids hydrating hundreds
+// of megabytes merely to prove that every dependency vertex is reusable.
 target "builder-wasm-deps-cache-proof" {
   inherits   = ["builder-wasm-deps-restore"]
-  target     = "builder-wasm-deps-cache-proof"
+  target     = "builder-wasm-deps"
 }
 
-// Explicit writer for the WASM deps Zot scope. Main writes
-// GHA_RUST_WASM_DEPS_SCOPE; isolated writes use the exact git scope.
+// Explicit non-Main writer retained for isolated/local cache candidates. The
+// trusted portable Main ref is written only by verify-wasm-gha-cache.sh on a
+// hosted BuildKit worker.
 target "builder-wasm-deps-publish" {
   inherits = ["builder-wasm-deps-restore"]
   cache-to   = rust_wasm_deps_cache_to

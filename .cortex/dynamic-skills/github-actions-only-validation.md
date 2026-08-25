@@ -6,9 +6,10 @@ Keep agent machines on the lightest possible local work.
 
 Use the configured GitHub Actions runner for iterative builds and tests.
 Trusted native Rust and Rust ecosystem PR gates plus Main build producers use
-ARC. Main's clean-room Zot hydration proof stays GitHub-hosted so a persistent
-ARC shard cannot mask missing registry data. Fork PRs, Dependabot PRs, releases,
-and other non-Main runtime-dependent gates also stay GitHub-hosted.
+ARC. Main's portable WASM dependency writer/proof stays GitHub-hosted so a
+persistent ARC shard cannot publish worker-specific metadata or mask missing
+registry records. Fork PRs, Dependabot PRs, releases, and other non-Main
+runtime-dependent gates also stay GitHub-hosted.
 
 ## Problem Pattern
 
@@ -32,8 +33,10 @@ Validation has three layers:
     build producers select ARC.
   - General ARC provides Main's job-scoped image runtime inside the disposable
     ARC runner Pod.
-  - Main's small post-publication Zot proof uses a fresh hosted builder. It
-    hydrates cached snapshots and exports only a marker before deployment.
+  - Main's portable WASM dependency job writes from one fresh hosted builder.
+    Zot verifies child manifest digest/size and every blob's readability. A second
+    cache-only builder requires the expensive dependency vertices to hit before
+    deployment without hydrating their full snapshots.
   - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent,
     browser, WASM, and deployment jobs stay on GitHub-hosted workers.
 

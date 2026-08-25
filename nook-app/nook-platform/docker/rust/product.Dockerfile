@@ -192,18 +192,6 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo build --tests --release --target wasm32-unknown-unknown -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-test-dependencies
 
-# A fresh hosted BuildKit proof reaches this stage through the same Dockerfile
-# frontend and context as the publisher. The uncached read forces hydration of
-# the restored dependency snapshot while the final export remains tiny.
-FROM builder-wasm-deps AS builder-wasm-deps-cache-proof-hydrated
-
-RUN test -n "$(find target/wasm32-unknown-unknown/release/deps -type f -name '*.wasm' -size +0c -print -quit)" \
-    && printf '%s\n' 'hydrated-wasm-dependency-cache' >/tmp/nook-wasm-cache-proof.txt
-
-FROM scratch AS builder-wasm-deps-cache-proof
-
-COPY --from=builder-wasm-deps-cache-proof-hydrated /tmp/nook-wasm-cache-proof.txt /nook-wasm-cache-proof.txt
-
 FROM builder-wasm-deps AS builder-core-deps
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
