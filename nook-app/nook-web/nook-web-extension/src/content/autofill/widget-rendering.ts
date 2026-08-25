@@ -30,6 +30,7 @@ import {
   WidgetWorkflowRootKind,
   authenticationActionState,
   invalidateAuthenticationActionContext,
+  scanState,
   widgetState,
 } from './state'
 import {
@@ -120,6 +121,9 @@ export function renderEnrollmentWidget({
     title,
     description,
     continueButton,
+    requestWorkflowReclassification: () => {
+      scanState.schedule()
+    },
   }
   const nookTypedArgs1_0: Parameters<typeof renderEnrollmentActions>[0] = {
     host: buildEnrollmentFlowHost(nookTypedArgs0_2),

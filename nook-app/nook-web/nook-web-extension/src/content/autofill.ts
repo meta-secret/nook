@@ -58,12 +58,18 @@ import { loadPilotVaultConnection, remountWidget } from './autofill/workflow-ui'
 import {
   detectEnrollmentHints,
   enrollmentCeremonyActive,
+  enrollmentWidgetHeldAfterSave,
+  releaseEnrollmentWidgetHold,
 } from './enrollment-flow'
 
 async function performScanAndRender(): Promise<void> {
   if (widgetState.dismissed) return
   if (saveOfferState.confirmationActive) return
   if (enrollmentCeremonyActive()) return
+  const preservePostSaveWidget = enrollmentWidgetHeldAfterSave()
+  const removeUnavailableWidget = (): void => {
+    if (!preservePostSaveWidget) removeScannedWidget()
+  }
   const sequence = ++scanState.sequence
   if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
     const { offer } = saveOfferState.display
@@ -126,12 +132,12 @@ async function performScanAndRender(): Promise<void> {
       await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
     if (sequence !== scanState.sequence) return
     if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-      removeScannedWidget()
+      removeUnavailableWidget()
       return
     }
     const { workflow: response } = delivery.response
     if (response.kind !== 'matched' || !('snapshot' in response)) {
-      removeScannedWidget()
+      removeUnavailableWidget()
       return
     }
     const vaultConnection = await loadPilotVaultConnection()
@@ -141,11 +147,12 @@ async function performScanAndRender(): Promise<void> {
       snapshot: response.snapshot,
       vaultConnection,
     }
+    releaseEnrollmentWidgetHold()
     renderEnrollmentWidget(nookTypedArgs0_0)
     return
   }
   if (workflowForms.length === 0) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
 
@@ -175,14 +182,14 @@ async function performScanAndRender(): Promise<void> {
     await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
   if (sequence !== scanState.sequence) return
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
   const runtimeResponse: AuthenticationWorkflowRuntimeResponse =
     delivery.response
   const { workflow: response, loginMatches } = runtimeResponse
   if (response.kind !== 'matched' || !('snapshot' in response)) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
   const { snapshot } = response
@@ -197,12 +204,13 @@ async function performScanAndRender(): Promise<void> {
       snapshot,
       vaultConnection,
     }
+    releaseEnrollmentWidgetHold()
     renderEnrollmentWidget(nookTypedArgs0_1)
     return
   }
   const selected = workflowForms[snapshot.observationIndex]
   if (!selected) {
-    removeScannedWidget()
+    removeUnavailableWidget()
     return
   }
   const vaultConnection = await loadPilotVaultConnection()
@@ -213,6 +221,7 @@ async function performScanAndRender(): Promise<void> {
     vaultConnection,
     loginMatches,
   }
+  releaseEnrollmentWidgetHold()
   renderWidget(nookTypedArgs0_2)
 }
 
@@ -329,6 +338,39 @@ function mutationTouchesRenderedWorkflow(record: MutationRecord): boolean {
   )
 }
 
+const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
+  'form',
+  'input',
+  'button',
+  'select',
+  'textarea',
+  '[role="button"]',
+  '[data-nook-manual-checkpoint]',
+  '[data-nook-passkey-control]',
+].join(',')
+
+function mutationCanIntroduceCompetingWorkflow(
+  record: MutationRecord,
+): boolean {
+  const containsAuthenticationControl = (node: Node): boolean =>
+    node instanceof Element &&
+    (node.matches(AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR) ||
+      Boolean(node.querySelector(AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR)))
+  if (record.type === 'childList') {
+    return [...record.addedNodes, ...record.removedNodes].some(
+      containsAuthenticationControl,
+    )
+  }
+  if (record.type === 'attributes') {
+    return containsAuthenticationControl(record.target)
+  }
+  return Boolean(
+    record.target.parentElement?.closest(
+      AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR,
+    ),
+  )
+}
+
 function handleAuthenticationMutations(
   records: AuthenticationMutationRecords,
 ): void {
@@ -356,7 +398,11 @@ function handleAuthenticationMutations(
   if (pageMutations.length === 0) return
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
-    pageMutations.some(mutationTouchesRenderedWorkflow)
+    pageMutations.some(
+      (record) =>
+        mutationTouchesRenderedWorkflow(record) ||
+        mutationCanIntroduceCompetingWorkflow(record),
+    )
   ) {
     authenticationActionState.invalidate()
     widgetState.busy = false

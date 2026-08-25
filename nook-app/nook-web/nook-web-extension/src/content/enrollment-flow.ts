@@ -124,6 +124,7 @@ export type EnrollmentFlowHost = EnrollmentFlowViewHost & {
       typeof import('./autofill/login-passkey-actions').sendRuntimeMessageWithoutResponse
     >[0],
   ) => void
+  requestWorkflowReclassification: () => void
   translatedMessage: (key: BrowserMessageKey) => string
   translatedMessageWithSubstitution: (
     args: TranslatedMessageWithSubstitutionArgs,
@@ -281,13 +282,7 @@ async function commitStagedEnrollment({
       text: host.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetEnrollSaved),
     }
     setHostDescription(nookTypedArgs0_1)
-    if (detectEnrollmentHints().backupCodes) {
-      const nookTypedArgs0_2: Parameters<typeof renderEnrollmentActions>[0] = {
-        host,
-        hints: detectEnrollmentHints(),
-      }
-      renderEnrollmentActions(nookTypedArgs0_2)
-    }
+    host.requestWorkflowReclassification()
   } else if (
     confirmDelivery.kind === RuntimeMessageDeliveryKind.Delivered &&
     confirmDelivery.response.kind ===
@@ -837,7 +832,11 @@ async function startQrEnrollment({
 }
 
 export function enrollmentCeremonyActive(): boolean {
-  return enrollmentEvidenceWatchActive() || holdEnrollmentWidgetAfterSave
+  return enrollmentEvidenceWatchActive()
+}
+
+export function enrollmentWidgetHeldAfterSave(): boolean {
+  return holdEnrollmentWidgetAfterSave
 }
 
 export function releaseEnrollmentWidgetHold(): void {
