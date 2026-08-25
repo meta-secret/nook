@@ -4,6 +4,7 @@ use super::control_identity::{
     looks_like_alternate_authentication_route_control_label,
     looks_like_auxiliary_authentication_control_label,
     looks_like_explicit_authentication_advance_control_label,
+    looks_like_one_time_code_resend_control_label,
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
 };
 use super::form_identity::{
@@ -150,7 +151,14 @@ pub fn classify_authentication_advance_control(
     if looks_like_auxiliary_authentication_control_label(&observation.label) {
         return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
     }
-    if looks_like_password_recovery_route_control_label(&observation.label) {
+    if observation.one_time_code_field_count > 0
+        && looks_like_one_time_code_resend_control_label(&observation.label)
+    {
+        return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+    }
+    if observation.new_password_field_count == 0
+        && looks_like_password_recovery_route_control_label(&observation.label)
+    {
         return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
     }
     if control_destination_indicates_non_authentication_route(&observation.destination_identity) {
@@ -275,6 +283,12 @@ mod tests {
             ..password_update.clone()
         };
         assert!(advances_authentication(&save_changes_password_update));
+
+        let reset_password_update = AuthenticationAdvanceControlObservation {
+            label: "Reset password".to_owned(),
+            ..password_update.clone()
+        };
+        assert!(advances_authentication(&reset_password_update));
 
         let registration_submit = AuthenticationAdvanceControlObservation {
             label: "Create account".to_owned(),
@@ -418,6 +432,20 @@ mod tests {
             ..password_recovery_activation
         };
         assert!(!advances_authentication(&password_recovery_submit));
+
+        let resend_one_time_code_submit = AuthenticationAdvanceControlObservation {
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            one_time_code_field_count: 1,
+            label: "Resend code".to_owned(),
+            ..localized_identity_submit.clone()
+        };
+        assert!(!advances_authentication(&resend_one_time_code_submit));
+
+        let request_new_one_time_code_submit = AuthenticationAdvanceControlObservation {
+            label: "Request new code".to_owned(),
+            ..resend_one_time_code_submit
+        };
+        assert!(!advances_authentication(&request_new_one_time_code_submit));
 
         let destructive_confirmation = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Absent,

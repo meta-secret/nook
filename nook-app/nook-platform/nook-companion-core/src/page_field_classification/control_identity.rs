@@ -54,6 +54,19 @@ pub(super) fn looks_like_auxiliary_authentication_control_label(label: &str) -> 
         )
 }
 
+pub(super) fn looks_like_one_time_code_resend_control_label(label: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(label),
+        &[
+            "resend",
+            "send again",
+            "request new code",
+            "send new code",
+            "another code",
+        ],
+    )
+}
+
 pub(super) fn looks_like_password_recovery_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     contains_any_word(&identity, &["password"])
@@ -79,7 +92,9 @@ pub(super) fn looks_like_registration_route_control_label(label: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::looks_like_registration_route_control_label;
+    use super::{
+        looks_like_one_time_code_resend_control_label, looks_like_registration_route_control_label,
+    };
 
     #[test]
     fn recognizes_registration_routes_without_matching_login_actions() {
@@ -89,5 +104,16 @@ mod tests {
         assert!(looks_like_registration_route_control_label("Sign up"));
         assert!(looks_like_registration_route_control_label("Register"));
         assert!(!looks_like_registration_route_control_label("Sign in"));
+    }
+
+    #[test]
+    fn recognizes_one_time_code_resend_controls() {
+        assert!(looks_like_one_time_code_resend_control_label("Resend code"));
+        assert!(looks_like_one_time_code_resend_control_label(
+            "Request new code"
+        ));
+        assert!(!looks_like_one_time_code_resend_control_label(
+            "Verify code"
+        ));
     }
 }
