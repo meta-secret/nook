@@ -33,7 +33,6 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     deviceKeyTitle,
     formatAccessDate,
     identityStateLabel,
-    isPasskeyProtection,
     protectionLabel,
     type VaultAccessView,
   } from './devices-access/access-chain'
