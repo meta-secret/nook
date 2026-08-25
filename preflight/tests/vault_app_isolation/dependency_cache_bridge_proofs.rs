@@ -312,6 +312,10 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
     let blob_verifier = read(&root, ".github/scripts/verify-registry-cache-blobs.ts");
     let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let product_dockerfile = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
 
     let native = docker_tasks
         .split("docker:ci:cache:publish:native:")
@@ -377,6 +381,16 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
             && verifier.contains("repair solve never imports the ref it is replacing"),
         "runtime WASM proof must publish through ARC BuildKit on trusted Main and verify every Zot blob"
     );
+    for marker in [
+        "nook-sccache-report chef-wasm-release",
+        "nook-sccache-report chef-wasm-clippy",
+        "nook-sccache-report wasm-release-test-dependencies",
+    ] {
+        assert!(
+            product_dockerfile.contains(marker),
+            "portable WASM publication target lost required dependency vertex: {marker}"
+        );
+    }
     assert!(
         !blob_verifier.contains("method: 'HEAD'")
             && !blob_verifier.contains("Range")

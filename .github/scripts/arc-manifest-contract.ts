@@ -425,6 +425,10 @@ hiveWorkflow.requireAll([
   "nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}",
   "needs: console-image",
   "runs-on: nook-k0s-container",
+  "console-untrusted:",
+  "Validate untrusted Hive Control Center source",
+  "task hive:console:verify",
+  "without private credentials",
 ]);
 hiveWorkflow.forbid("task hive:console:e2e:prepare");
 webResearchWorkflow.requireAll([
@@ -488,6 +492,7 @@ await assertHiveRenderContract({ root });
 
 const hostedTrustBoundary = new Set([
   "hive.yml#verify-fork",
+  "hive.yml#console-untrusted",
   "web-research.yml#validate-untrusted",
 ]);
 const workflowsDir = resolve(root, ".github/workflows");

@@ -148,6 +148,8 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         "rust:test,rust:test",
         "rust:test,arbitrary:command",
         "rust:test, web:check",
+        "rust:test,web:e2e",
+        "rust:test,extension:e2e",
         "preflight,rust:test,rust:lint,rust:coverage,wasm:build,wasm:test,web:check,web:test,web:build",
     ] {
         assert!(

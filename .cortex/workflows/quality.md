@@ -310,7 +310,9 @@ Use this workflow for quality, CI, and deployment changes.
     Runtime publication proof for WASM dependencies remains Main
     `verify-wasm-gha-cache.sh`. It publishes through the selected persistent
     ARC BuildKit shard, then reads every exported Zot manifest and blob to
-    verify its size and SHA-256.
+    verify its size and SHA-256. Static preflight contracts require all three
+    expensive dependency vertices in the published target. The separate
+    Bake+Zot simulation owns clean-builder import proof.
     Runtime Bake+Zot parent/leaf proof is `task infra:bake-cache:prove`.
     That sim complements the static `bake_cache_proofs.rs` theorems.
     It reproduces the rejected three-linked-target nightly miss.

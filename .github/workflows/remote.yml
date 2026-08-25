@@ -57,7 +57,8 @@ jobs:
   batch:
     if: >-
       (inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
-      (inputs.tasks || inputs.task) != 'web:e2e'
+      (inputs.tasks || inputs.task) != 'web:e2e' &&
+      (inputs.tasks || inputs.task) != 'extension:e2e'
     name: Remote / ${{ inputs.tasks || inputs.task }}
     # Focused ARC selections use the persistent BuildKit shard on their node.
     runs-on: ${{ (inputs.runner_label == 'nook-k0s-hive' || contains(format(',{0},', inputs.tasks || inputs.task), ',hive:verify,')) && (vars.NOOK_HIVE_RUNS_ON || 'nook-k0s-hive') || (vars.NOOK_RUNS_ON || 'nook-k0s') }}

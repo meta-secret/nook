@@ -57,4 +57,4 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
 fi
 
 bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts" "$cache_ref"
-echo "verified complete ARC-published WASM dependency cache from $cache_scope"
+echo "verified ARC-published WASM dependency cache blob integrity for $cache_scope"

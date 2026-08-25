@@ -104,6 +104,16 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && research.contains("without deployment credentials"),
         "untrusted research PRs must retain secret-free hosted validation"
     );
+    assert!(
+        hive.contains("console-untrusted:")
+            && hive.contains("name: Validate untrusted Hive Control Center source")
+            && hive.contains("runs-on: ubuntu-latest")
+            && hive.contains("github.event.pull_request.head.repo.full_name != github.repository")
+            && hive.contains("github.event.pull_request.user.login == 'dependabot[bot]'")
+            && hive.contains("run: task hive:console:verify")
+            && hive.contains("without private credentials"),
+        "untrusted Hive console PRs must retain complete secret-free hosted validation"
+    );
 }
 
 fn assert_docker_setup_contract(root: &Path) {

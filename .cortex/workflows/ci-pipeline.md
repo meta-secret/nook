@@ -175,6 +175,8 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 **`hive.yml`**
 
 - Installs, checks, and browser-tests the Hive Control Center.
+- Fork and Dependabot console changes receive the same install, check, build,
+  and browser journey on a secret-free GitHub-hosted runner.
 - Runs pinned Docker format/Clippy and behavior tests against Neo4j.
 - Checks k0s manifests and the Taskfile command surface.
 - Main alone publishes the shared Hive dependency cache.
@@ -413,8 +415,10 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   on its selected node.
 - `arc:runtime` proves a remote BuildKit result can be exported without a
   Docker daemon, Podman, DinD, or host socket.
-- `web:e2e` builds its run-scoped image on the general ARC set, then executes
-  Playwright inside an ordinary Pod created by `nook-k0s-container` hooks.
+- `web:e2e` and `extension:e2e` each build a run-scoped image on the general ARC
+  set, then execute Playwright inside an ordinary Pod created by
+  `nook-k0s-container` hooks. Each must be dispatched alone; mixed batches are
+  rejected before repository commands execute.
 - Other `remote.yml` selections use the general or Hive ARC scale set. Browser
   tasks use the container scale set.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
@@ -820,11 +824,12 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
   pushes the exact-source image. ARC lifecycle hooks then create an ordinary
   job Pod from that immutable run tag on `nook-k0s-container`.
-- Main's portable WASM cache writer uses the verified ARC solve. Zot must prove
-  child manifest digest/size plus every declared blob's size and SHA-256 by
-  streaming it completely. The target stays in the same Rust Dockerfile and
-  context lineage; a named-context wrapper is invalid because it changes
-  BuildKit cache-key identity.
+- Main's portable WASM cache writer uses the verified ARC solve. Static
+  contracts require the release, clippy, and test dependency vertices in its
+  exact Dockerfile lineage. Zot then proves child manifest digest/size plus
+  every declared blob's size and SHA-256 by streaming it completely. The
+  separate Bake+Zot simulation proves clean-builder import behavior. Main does
+  not create an ephemeral BuildKit daemon merely to repeat that simulation.
 - Cold nodes restore separate Zot scopes for stable and source-sensitive
   Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
   reuse their node-local persistent BuildKit shard.
