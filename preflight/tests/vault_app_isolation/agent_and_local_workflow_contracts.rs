@@ -38,20 +38,17 @@ fn agent_prs_cannot_be_merged_automatically() -> anyhow::Result<()> {
 }
 
 #[test]
-fn ci_agent_docker_builds_are_not_hidden_by_image_existence() -> anyhow::Result<()> {
+fn ci_agent_runs_directly_without_a_nested_runtime() -> anyhow::Result<()> {
     let root = repository_root();
     let tasks = read(&root, ".task/agentic-ai.yml");
-    let docker_build = section(
-        &tasks,
-        "  ci-agent:docker:build:\n",
-        "  ci-agent:docker:run:\n",
-    );
+    let host_run = section(&tasks, "  ci-agent:host:run:\n", "  ci-agent:run:\n");
 
-    assert!(docker_build.contains("agentic-ai/ci-agent/src/**/*"));
-    assert!(docker_build.contains("{{.DOCKER}} build"));
     assert!(
-        !docker_build.contains("status:"),
-        "an existing image must not suppress rebuilds after ci-agent source changes"
+        host_run.contains("ci-agent:prepare")
+            && host_run.contains("node '{{.CI_AGENT_DIR}}/dist/main/main.js'")
+            && !tasks.contains("ci-agent:docker:run")
+            && !tasks.contains("/var/run/docker.sock"),
+        "CI agents must run directly on the provisioned runner without Docker runtime or socket nesting"
     );
     Ok(())
 }

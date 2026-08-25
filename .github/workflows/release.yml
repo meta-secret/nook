@@ -40,6 +40,9 @@ jobs:
   prepare:
     name: Prepare production browser image
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    outputs:
+      release-sha: ${{ steps.release.outputs.sha }}
+      release-version: ${{ steps.release.outputs.version }}
     steps:
       - name: Checkout release source
         uses: actions/checkout@v7
@@ -102,14 +105,15 @@ jobs:
       - name: Checkout release source
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          ref: ${{ needs.prepare.outputs.release-sha }}
           fetch-depth: 0
 
       - name: Resolve and validate release
         id: release
         shell: bash
         env:
-          REQUESTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          REQUESTED_VERSION: ${{ needs.prepare.outputs.release-version }}
+          PREPARED_RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}
           RELEASE_EVENT: ${{ github.event_name }}
           SOURCE_REF: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
@@ -123,6 +127,10 @@ jobs:
 
           tag="v$version"
           sha="$(git rev-parse HEAD)"
+          if [[ "$sha" != "$PREPARED_RELEASE_SHA" ]]; then
+            echo "Prepared release SHA $PREPARED_RELEASE_SHA does not match checkout $sha" >&2
+            exit 1
+          fi
           git fetch --force --tags origin
 
           tag_exists=false

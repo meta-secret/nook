@@ -547,6 +547,8 @@ fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> 
         "cargo install cargo-outdated --version 0.19.0 --locked",
         "task rust:deps:outdated",
         "CI_AGENT_PROMPT_FILE: .github/prompts/rust-dependency-update-agent.md",
+        "uses: ./.github/actions/nook-node-setup",
+        "uses: go-task/setup-task@v2",
         "task ci-agent:fix",
     ] {
         assert!(

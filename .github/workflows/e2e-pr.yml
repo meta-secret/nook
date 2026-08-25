@@ -60,6 +60,14 @@ jobs:
               repo: context.repo.repo,
               pull_number: prNumber,
             })
+            if (pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`) {
+              core.setFailed(`PR #${prNumber} is a fork and cannot run on private ARC`)
+              return
+            }
+            if (pr.user.login === 'dependabot[bot]') {
+              core.setFailed(`PR #${prNumber} is authored by Dependabot and cannot run on private ARC`)
+              return
+            }
             core.setOutput('ref', pr.head.sha)
             core.setOutput('branch', pr.head.ref)
             core.info(`PR #${prNumber}: ${pr.head.ref} @ ${pr.head.sha}`)

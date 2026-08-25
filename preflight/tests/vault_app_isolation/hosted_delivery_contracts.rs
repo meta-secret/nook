@@ -68,6 +68,34 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
         "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
     );
+
+    for workflow in [
+        ".github/workflows/repository-policy.yml",
+        ".github/workflows/hive.yml",
+        ".github/workflows/web-research.yml",
+    ] {
+        let source = read(root, workflow);
+        assert!(
+            source.contains(
+                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}",
+            ) && !source.contains("isolated-cache-write: \"true\""),
+            "{workflow} must not request PR-isolated cache writes for push or input-free manual events"
+        );
+    }
+    let hive = read(root, ".github/workflows/hive.yml");
+    let research = read(root, ".github/workflows/web-research.yml");
+    let repository_policy = read(root, ".github/workflows/repository-policy.yml");
+    for (workflow, source) in [
+        ("Hive", hive),
+        ("web research", research),
+        ("repository policy", repository_policy),
+    ] {
+        assert!(
+            source.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+                || source.contains("github.event.pull_request.user.login == 'dependabot[bot]'"),
+            "{workflow} must preserve the Dependabot trust boundary"
+        );
+    }
 }
 
 fn assert_docker_setup_contract(root: &Path) {
@@ -666,8 +694,13 @@ fn assert_artifact_backed_e2e_contract(root: &Path) -> anyhow::Result<()> {
     );
     let e2e_pr = read(root, ".github/workflows/e2e-pr.yml");
     assert!(
-        e2e_pr.contains("cache-write: \"false\""),
-        "manual PR-head e2e may restore shared caches but must not overwrite default-branch scopes"
+        e2e_pr.contains("cache-write: \"false\"")
+            && e2e_pr.contains(
+                "pr.head.repo.full_name !== `${context.repo.owner}/${context.repo.repo}`"
+            )
+            && e2e_pr.contains("pr.user.login === 'dependabot[bot]'")
+            && e2e_pr.contains("cannot run on private ARC"),
+        "manual PR-head e2e must reject untrusted sources and must not overwrite default-branch scopes"
     );
     Ok(())
 }
@@ -730,6 +763,15 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
     assert!(release.contains(
         "ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}"
     ));
+    assert!(
+        release.contains("release-sha: ${{ steps.release.outputs.sha }}")
+            && release.contains("release-version: ${{ steps.release.outputs.version }}")
+            && release.contains("ref: ${{ needs.prepare.outputs.release-sha }}")
+            && release.contains("PREPARED_RELEASE_SHA: ${{ needs.prepare.outputs.release-sha }}")
+            && release.contains("if [[ \"$sha\" != \"$PREPARED_RELEASE_SHA\" ]]")
+            && release.matches("inputs.ref || github.ref }}").count() == 1,
+        "release deployment must consume the immutable SHA prepared with its browser image"
+    );
     assert!(!release.contains("path: .nook/release-workflow"));
     let main = read(root, ".github/workflows/main.yml");
     for required in [
