@@ -1,5 +1,7 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
+import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
+import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 
 type TrackedPathsRequest = {
   readonly pathspecs: readonly string[];
@@ -40,6 +42,11 @@ type ActionDependencyResolution = {
 
 type ActionTranspilerOptions = {
   readonly loader: 'tsx';
+};
+
+type ActionLoaderFixture = {
+  readonly path: string;
+  readonly source: string;
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
@@ -226,6 +233,13 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
     if (typeof source !== 'string') {
       throw new Error(`Action source is unreadable: ${importer}`);
     }
+    const boundaryInspection: SkillProviderSourceInspection = {
+      filePath: posix.extname(importer) === '' ? `${importer}.js` : importer,
+      source,
+    };
+    if (violatesSkillProviderBoundary(boundaryInspection)) {
+      throw new Error(`Action source violates runtime boundary: ${importer}`);
+    }
     for (const imported of ACTION_IMPORT_SCANNER.scanImports(source)) {
       if (!imported.path.startsWith('.')) continue;
       const resolution: ActionDependencyResolution = {
@@ -395,10 +409,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
       'runs:\n  using: node24\n  main: main\n  pre: pre.js\n  post: post.js',
     ],
     ['.github/actions/nested/main', "import './neutral.js'; main();"],
-    [
-      '.github/actions/nested/neutral.js',
-      "export { audit } from '../../../.agents/skills/cortex-article-structure/src/audit.ts';",
-    ],
+    ['.github/actions/nested/neutral.js', 'export const safe = true;'],
     ['.github/actions/nested/pre.js', 'prepare();'],
     ['.github/actions/nested/post.js', 'cleanup();'],
     [
@@ -413,7 +424,6 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   };
   expect(actionSourceRequiresContent('.github/actions/nested/main')).toBe(true);
   expect(actionRuntimePaths(graph)).toEqual([
-    '.agents/skills/cortex-article-structure/src/audit.ts',
     '.github/actions/nested/action.yaml',
     '.github/actions/nested/main',
     '.github/actions/nested/neutral.js',
@@ -421,6 +431,20 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     '.github/actions/nested/pre.js',
     '.github/actions/root/action.yml',
   ]);
+
+  const providerSources = new Map(sources);
+  providerSources.set(
+    '.github/actions/nested/neutral.js',
+    "export { audit } from '../../../.agents/skills/cortex-article-structure/src/audit.ts';",
+  );
+  const providerGraph: ActionRuntimeGraph = {
+    roots: ['.github/actions/root/action.yml'],
+    sources: providerSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(() => actionRuntimePaths(providerGraph)).toThrow(
+    'Action source violates runtime boundary',
+  );
 
   const unresolvedSources = new Map(sources);
   unresolvedSources.delete('.github/actions/nested/main');
@@ -446,6 +470,37 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   expect(() => actionRuntimePaths(unresolvedImportGraph)).toThrow(
     'Action relative import is unresolved',
   );
+
+  const loaderFixtures: readonly ActionLoaderFixture[] = [
+    {
+      path: '.github/actions/nested/main',
+      source: 'module.require(modulePath);',
+    },
+    {
+      path: '.github/actions/nested/pre.js',
+      source: 'require.call(undefined, modulePath);',
+    },
+    {
+      path: '.github/actions/nested/post.js',
+      source: 'require.resolve(modulePath);',
+    },
+    {
+      path: '.github/actions/nested/neutral.js',
+      source: 'process.mainModule.require(modulePath);',
+    },
+  ];
+  for (const fixture of loaderFixtures) {
+    const loaderSources = new Map(sources);
+    loaderSources.set(fixture.path, fixture.source);
+    const loaderGraph: ActionRuntimeGraph = {
+      roots: ['.github/actions/root/action.yml'],
+      sources: loaderSources,
+      symlinkPaths: new Set<string>(),
+    };
+    expect(() => actionRuntimePaths(loaderGraph), fixture.path).toThrow(
+      'Action source violates runtime boundary',
+    );
+  }
 
   for (const path of [
     '.github/actions/root/action.yml',
