@@ -319,6 +319,15 @@ jobs:
           NOOK_EXTENSION_CHANNEL: development
           NOOK_EXTENSION_COMMIT: ${{ github.sha }}
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+          WEB_DEPLOY_ARTIFACT_DIR: ${{ runner.temp }}/nook-ci-artifacts/web-deploy
+
+      - name: Upload verified development deployment handoff
+        uses: actions/upload-artifact@v7
+        with:
+          name: main-web-deploy-${{ github.run_id }}
+          path: ${{ runner.temp }}/nook-ci-artifacts/web-deploy/nook-app
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Preserve cache telemetry
         if: always()
@@ -575,10 +584,7 @@ jobs:
   deploy:
     name: Deploy development
     needs: [web, web-e2e, wasm-cache-proof]
-    # This lane still invokes the sealed image through Docker while direct
-    # BuildKit artifact deployment is migrated separately. Keep that runtime
-    # boundary on a fresh hosted VM; daemon-free ARC owns build producers only.
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}
     environment:
       name: development
       url: https://dev.nokey.sh/
@@ -590,37 +596,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          cache-write: "false"
-
-      - name: Download verified WASM handoff
+      - name: Download verified development deployment handoff
         uses: actions/download-artifact@v8
         with:
-          name: main-wasm-${{ github.run_id }}
-          path: ${{ runner.temp }}/nook-ci-artifacts/joined/nook-wasm
-
-      - name: Build sealed web image for development deploy
-        run: >-
-          task ci:main:web:artifacts
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=${{ env.CI_MAIN_VITE_BASE }}
-          VITE_SITE_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_PUBLIC_APP_URL=${{ env.CI_MAIN_DEV_URL }}
-          VITE_SIMPLE_APP_URL=${{ env.CI_MAIN_SIMPLE_URL }}
-          VITE_SENTINEL_APP_URL=${{ env.CI_MAIN_SENTINEL_URL }}
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GIT_COMMIT_ID: ${{ github.sha }}
-          NOOK_SIMPLE_VAULT_URL: ${{ env.CI_MAIN_SIMPLE_URL }}/
-          NOOK_EXTENSION_CHANNEL: development
-          NOOK_EXTENSION_COMMIT: ${{ github.sha }}
-          NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
+          name: main-web-deploy-${{ github.run_id }}
+          path: nook-app
 
       - name: Deploy isolated development applications to Cloudflare Pages
         id: deploy-dev
@@ -689,6 +669,3 @@ jobs:
               description: 'Development channel deployed to Cloudflare Pages',
               auto_inactive: false,
             })
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry

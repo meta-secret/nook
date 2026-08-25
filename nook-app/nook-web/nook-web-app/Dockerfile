@@ -114,6 +114,15 @@ RUN cd nook-app/nook-web/nook-web-extension \
 
 FROM nook-web-build AS nook-web
 
+# Export the already-built static applications without requiring a container
+# runtime. Main uploads this filesystem as the deployment handoff, so the
+# Pages job never repeats verification or recompiles the web applications.
+FROM scratch AS nook-web-deploy-artifacts
+
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-web-app/dist /nook-app/nook-web/nook-web-app/dist
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-simple/dist /nook-app/nook-web/nook-vault-simple/dist
+COPY --from=nook-web-build /meta-secret/nook/nook-app/nook-web/nook-vault-sentinel/dist /nook-app/nook-web/nook-vault-sentinel/dist
+
 # Hosted PR CI selects this target. Copying the marker creates an explicit BuildKit dependency on
 # the sibling verification stage while preserving the same sealed runtime image and build outputs.
 FROM nook-web-build AS nook-web-ci

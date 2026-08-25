@@ -331,7 +331,7 @@ tasks.requireAll([
   "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
 ]);
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
-mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 5 });
+mainWorkflow.count({ fragment: "    runs-on: ubuntu-latest", expected: 4 });
 mainWorkflow.requireAll([
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
@@ -343,9 +343,12 @@ mainWorkflow.requireAll([
   "extension-e2e:",
   "ui-demos:",
   "deploy:",
-  "This lane still invokes the sealed image through Docker",
+  "Upload verified development deployment handoff",
+  "main-web-deploy-${{ github.run_id }}",
+  "runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}",
   "This lane runs a browser container and therefore needs a general runtime.",
 ]);
+mainWorkflow.forbid("Build sealed web image for development deploy");
 prWorkflow.requireAll([
   "full-e2e-shard:",
   "name: Full browser e2e shard (${{ matrix.shard }}/2)",
