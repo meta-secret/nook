@@ -161,6 +161,24 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         2,
         "executable-skill format and format:check must both own eslint.config.js"
     );
+    assert_eq!(
+        skills_manifest.matches("*/SKILL.md").count(),
+        2,
+        "executable-skill format and format:check must both own nested skill cards"
+    );
+
+    let skills_eslint = read(&root, ".agents/skills/eslint.config.js");
+    for required in [
+        "ExternalValue:",
+        "ExternalObject:",
+        "JsonValue:",
+        "GenericValue:",
+    ] {
+        assert!(
+            skills_eslint.contains(required),
+            "executable-skill ESLint config must retain `{required}`"
+        );
+    }
 }
 
 #[test]

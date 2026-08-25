@@ -51,6 +51,7 @@ const CODE_REFACTORING_FILES = [
   '.agents/skills/bun.lock',
   '.agents/skills/.prettierrc',
   '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
+  '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
 ] as const;
 
 const CODE_REFACTORING_DESCENDANT_ROOTS = [

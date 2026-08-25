@@ -109,6 +109,7 @@ test('materializes only exact shared formatter and lint tooling', async () => {
     '.agents/skills/bun.lock',
     '.agents/skills/.prettierrc',
     '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
+    '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
   ];
   for (const relativePath of exactRefactoringFiles) {
     expect(profile.allowedEvidenceFiles).toContain(relativePath);
@@ -167,6 +168,7 @@ test('materializes only exact shared formatter and lint tooling', async () => {
           'package.json',
           'tsconfig.json',
           'typescript-named-args',
+          'typescript-no-unknown',
         ].sort(),
       );
       await expect(

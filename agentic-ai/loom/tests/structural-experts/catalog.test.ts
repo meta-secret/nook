@@ -52,6 +52,7 @@ test('grants shared formatter and skill lint tooling through exact files', () =>
     '.agents/skills/bun.lock',
     '.agents/skills/.prettierrc',
     '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
+    '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
   ]);
   expect(profile.allowedEvidenceFiles).toContain(
     'tooling/eslint-rules/no-raw-object-arguments.js',

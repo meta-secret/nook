@@ -25,6 +25,18 @@ export default tseslint.config({
       'error',
       {
         types: {
+          ExternalValue: {
+            message: 'Executable skills require concrete domain values.',
+          },
+          ExternalObject: {
+            message: 'Executable skills require concrete domain values.',
+          },
+          JsonValue: {
+            message: 'Executable skills require concrete domain values.',
+          },
+          GenericValue: {
+            message: 'Executable skills require concrete domain values.',
+          },
           unknown: {
             message: 'Executable skills require concrete domain values.',
           },

@@ -56,6 +56,7 @@ const EXPECTED_PROFILES = [
       '.agents/skills/bun.lock',
       '.agents/skills/.prettierrc',
       '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
+      '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
     ],
     allowedEvidenceDescendantRoots: [
       '.github/scripts',
