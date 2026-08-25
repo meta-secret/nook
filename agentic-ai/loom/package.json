@@ -23,6 +23,7 @@
     "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"../../tooling/eslint-rules/**/*.js\" \"*.{ts,json,md}\" .prettierrc",
     "format:check": "prettier --config .prettierrc --check \"src/**/*.ts\" \"tests/**/*.ts\" \"../../tooling/eslint-rules/**/*.js\" \"*.{ts,json,md}\" .prettierrc",
     "test": "bun test",
+    "test:source-analysis-containment": "bun test ./tests/executable-skills/source-analysis-containment.acceptance.ts",
     "verify": "bun run format:check && bun run lint && bun run check && bun test"
   },
   "devDependencies": {
