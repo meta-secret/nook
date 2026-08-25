@@ -554,8 +554,8 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     assert!(
         deploy.starts_with(
             "    name: Deploy development\n    needs: [web, web-e2e, wasm-cache-proof]"
-        ) && deploy.contains("\n    runs-on: ubuntu-latest\n"),
-        "the remaining Docker-runtime deployment lane must stay on a fresh hosted runner"
+        ) && deploy.contains("\n    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}\n"),
+        "the development deployment lane must use the general ARC scale set"
     );
     let coverage_export = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl")
         .split("target \"coverage-export\" {")

@@ -34,8 +34,9 @@ fn assert_workflow_runtime_contract(root: &Path) {
     let release = read(root, ".github/workflows/release.yml");
     let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
     assert!(
-        pr.contains("runs-on: ubuntu-latest")
-            && release.contains("runs-on: ubuntu-latest")
+        pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
+            && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
+            && release.contains("runs-on: nook-k0s-container")
             && pr
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
@@ -44,17 +45,18 @@ fn assert_workflow_runtime_contract(root: &Path) {
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
                 == 5,
-        "trusted PR Rust jobs must select configured ARC and preserve hosted fork and release capacity"
+        "trusted PR and release jobs must select ARC while forks retain hosted isolation"
     );
     assert!(
-        main.matches("runs-on: ubuntu-latest").count() == 5
+        !main.contains("runs-on: ubuntu-latest")
             && main
-                .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
+                .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
                 .count()
-                == 4
+                >= 5
+            && main.matches("runs-on: nook-k0s-container").count() >= 3
             && main.contains("name: Portable WASM cache publication proof")
             && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
-        "daemon-free Main jobs must use ARC while browser, deploy, and clean Zot cache-proof jobs stay hosted"
+        "Main build, browser, deployment, and portable cache-proof jobs must all use ARC"
     );
 }
 
