@@ -1,0 +1,109 @@
+version: '3'
+
+vars:
+  ARC_RUNNER_LABEL: nook-k0s
+  ARC_HIVE_RUNNER_LABEL: nook-k0s-hive
+  ARC_SMOKE_TASK: '{{default "preflight" .ARC_SMOKE_TASK}}'
+  ARC_SMOKE_RUNNER_LABEL: '{{default "nook-k0s" .ARC_SMOKE_RUNNER_LABEL}}'
+
+# ARC GitHub routing and exact-run operational smoke controls.
+tasks:
+  arc:activate:
+    desc: Route trusted workflows to the Nook ARC scale sets.
+    preconditions:
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body "{{.ARC_RUNNER_LABEL}}"
+      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body "{{.ARC_HIVE_RUNNER_LABEL}}"
+      - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
+      - echo "Trusted workflows now target {{.ARC_RUNNER_LABEL}} and {{.ARC_HIVE_RUNNER_LABEL}}"
+
+  arc:fallback:
+    desc: Route trusted workflows back to GitHub-hosted capacity.
+    preconditions:
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - gh variable set NOOK_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
+      - gh variable set NOOK_HIVE_RUNS_ON --repo meta-secret/nook --body ubuntu-latest
+      - gh variable delete NOOK_CACHE_RUNS_ON --repo meta-secret/nook >/dev/null 2>&1 || true
+      - echo "Trusted workflows now target ubuntu-latest"
+
+  arc:smoke:
+    desc: Run a trusted exact-branch task and verify its ARC runner assignment.
+    preconditions:
+      - sh: gh auth status >/dev/null 2>&1
+        msg: GitHub CLI must be authenticated.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        smoke_task='{{.ARC_SMOKE_TASK}}'
+        smoke_runner_label='{{.ARC_SMOKE_RUNNER_LABEL}}'
+        case "$smoke_runner_label" in
+          "{{.ARC_RUNNER_LABEL}}") route_variable=NOOK_RUNS_ON ;;
+          "{{.ARC_HIVE_RUNNER_LABEL}}") route_variable=NOOK_HIVE_RUNS_ON ;;
+          *)
+            echo "Unsupported ARC runner label: $smoke_runner_label" >&2
+            exit 2
+            ;;
+        esac
+        selected_runner="$(gh variable get "$route_variable" --repo meta-secret/nook)"
+        test "$selected_runner" = "$smoke_runner_label"
+
+        smoke_ref="$(git branch --show-current)"
+        test -n "$smoke_ref"
+        head_sha="$(git rev-parse HEAD)"
+        remote_sha="$(git ls-remote --refs origin "refs/heads/$smoke_ref" | awk 'NR == 1 { print $1 }')"
+        if test "$remote_sha" != "$head_sha"; then
+          echo "ARC smoke requires the current branch to be pushed at $head_sha" >&2
+          exit 2
+        fi
+
+        dispatch_nonce="$(openssl rand -hex 16)"
+        title="Remote / $smoke_task / $dispatch_nonce"
+        gh workflow run remote.yml \
+          --repo meta-secret/nook \
+          --ref "$smoke_ref" \
+          --raw-field "tasks=$smoke_task" \
+          --raw-field "dispatch_nonce=$dispatch_nonce" \
+          --raw-field "runner_label=$smoke_runner_label"
+        run_id=""
+        for _ in $(seq 1 30); do
+          run_id="$(gh run list \
+            --repo meta-secret/nook \
+            --workflow remote.yml \
+            --branch "$smoke_ref" \
+            --event workflow_dispatch \
+            --limit 100 \
+            --json databaseId,displayTitle,headSha \
+            --jq ".[] | select(.displayTitle == \"$title\" and .headSha == \"$head_sha\") | .databaseId" |
+            head -n 1)"
+          test -n "$run_id" && break
+          sleep 2
+        done
+        test -n "$run_id"
+        gh run watch "$run_id" --repo meta-secret/nook --exit-status
+        runner_names="$(gh run view "$run_id" --repo meta-secret/nook --json jobs \
+          --jq '[.jobs[] | select(.conclusion == "success") | .runnerName] | unique | .[]')"
+        test -n "$runner_names"
+        printf 'ARC smoke passed: run=%s label=%s runners=%s\n' \
+          "$run_id" "$smoke_runner_label" "$(tr '\n' ',' <<<"$runner_names" | sed 's/,$//')"
+        BASH
+
+  arc:smoke:general:
+    desc: Validate the general ARC route.
+    cmds:
+      - task: arc:smoke
+        vars:
+          ARC_SMOKE_TASK: arc:runtime
+          ARC_SMOKE_RUNNER_LABEL: nook-k0s
+
+  arc:smoke:hive:
+    desc: Validate the Hive ARC route.
+    cmds:
+      - task: arc:smoke
+        vars:
+          ARC_SMOKE_TASK: hive:verify
+          ARC_SMOKE_RUNNER_LABEL: nook-k0s-hive

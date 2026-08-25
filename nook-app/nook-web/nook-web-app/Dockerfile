@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 # Slim nook-web image: web-base (Bun/Node/Task, no browser), cached node_modules, and the tiny
 # host-exported WASM/coverage artifact directory. It never inherits the Rust toolchain or target/.

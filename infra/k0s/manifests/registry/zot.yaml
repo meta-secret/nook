@@ -38,8 +38,8 @@ data:
         "address": "0.0.0.0",
         "port": "5000",
         "compat": ["docker2s2"],
-        "readTimeout": "5m",
-        "writeTimeout": "5m",
+        "readTimeout": "15m",
+        "writeTimeout": "15m",
         "auth": {
           "htpasswd": {
             "path": "/etc/zot/htpasswd"
@@ -62,6 +62,23 @@ data:
                   "actions": ["read", "create", "update"]
                 }
               ]
+            },
+            "nook-hive": {
+              "policies": [
+                {
+                  "users": ["__NOOK_REGISTRY_USERNAME__"],
+                  "actions": ["read", "create", "update", "delete"]
+                }
+              ]
+            },
+            "**": {
+              "policies": [
+                {
+                  "users": ["__NOOK_REGISTRY_REMOTE_USERNAME__"],
+                  "actions": ["read"]
+                }
+              ],
+              "anonymousPolicy": ["read"]
             }
           },
           "adminPolicy": {
@@ -72,6 +89,23 @@ data:
       },
       "log": {
         "level": "info"
+      },
+      "extensions": {
+        "sync": {
+          "enable": true,
+          "registries": [
+            {
+              "urls": ["https://index.docker.io"],
+              "onDemand": true,
+              "tlsVerify": true,
+              "preserveDigest": true,
+              "maxRetries": 6,
+              "retryDelay": "5s",
+              "maxRetryDelay": "30s",
+              "syncTimeout": "15m"
+            }
+          ]
+        }
       }
     }
 ---
@@ -173,7 +207,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: zot
-          image: ghcr.io/project-zot/zot-linux-amd64@sha256:34f18f783037f967dba10df02f9d4086c4d626f5643ef9f5e51e4a4547280a0b
+          image: ghcr.io/project-zot/zot-linux-amd64@sha256:95a837a0afacf5b7edc0c92493f04beee6891989b8d2fd50a00cf65a1e6d4fd5
           imagePullPolicy: IfNotPresent
           securityContext:
             allowPrivilegeEscalation: false
@@ -207,11 +241,11 @@ spec:
             failureThreshold: 4
           resources:
             requests:
-              cpu: "1"
-              memory: 2Gi
+              cpu: "2"
+              memory: 4Gi
             limits:
-              cpu: "4"
-              memory: 8Gi
+              cpu: "8"
+              memory: 12Gi
           volumeMounts:
             - name: config
               mountPath: /etc/zot/config.json

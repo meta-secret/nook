@@ -38,6 +38,16 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:wasm:node-test:host }
 
+  ci:main:wasm-node-test:
+    desc: Verify WASM Node output without exporting registry cache from ARC runners.
+    cmds:
+      - |
+        if test "${NOOK_ARC_RUNNER:-}" = "1"; then
+          GHA_CACHE_WRITE_ENABLED= task ci:wasm:node-test
+        else
+          GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test
+        fi
+
   _ci:wasm:node-test:host:
     cmds:
       - task: docker:ci:wasm:node-test
@@ -157,28 +167,36 @@ tasks:
         vars: { BUILD_TASK: _ci:main:prepare-images:host }
 
   ci:main:publish-native-cache:
-    desc: Publish verified native cache scopes from the current job-scoped builder.
+    desc: Publish verified native cache scopes to the portable Zot fallback.
     cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:publish-native-cache:host }
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-native-cache:host }
 
   ci:main:publish-wasm-cache:
-    desc: Publish verified WASM cache scopes from the current job-scoped builder.
+    desc: Publish verified WASM cache scopes to the portable Zot fallback.
     cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:publish-wasm-cache:host }
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-wasm-cache:host }
 
   ci:main:publish-web-cache:
-    desc: Publish verified web cache scopes from the current job-scoped builder.
+    desc: Publish verified web cache scopes to the portable Zot fallback.
     cmds:
-      - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:publish-web-cache:host }
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-web-cache:host }
 
   ci:main:publish-web-e2e-cache:
-    desc: Publish the verified browser web cache from the current job-scoped builder.
+    desc: Publish verified browser cache scopes to the portable Zot fallback.
+    cmds:
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-web-e2e-cache:host }
+
+  _ci:main:publish-cache:
+    internal: true
+    requires:
+      vars: [HOST_TASK]
     cmds:
       - task: _buildx:healthy
-        vars: { BUILD_TASK: _ci:main:publish-web-e2e-cache:host }
+        vars: { BUILD_TASK: '{{.HOST_TASK}}' }
 
   ci:main:web-e2e:
     desc: Main web gate without extension e2e — prepare images then run web e2e alone (manual/debug).

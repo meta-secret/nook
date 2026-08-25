@@ -2,8 +2,9 @@
 
 ## Overview
 
-Status: Implemented in the repository; deployment and live-state verification
-are performed through the infrastructure Taskfile.
+Status: Paused. Every Hive deployment declares zero replicas after duplicate
+repair PRs were generated for one ARC cache incident. Re-enabling Hive requires
+a verified single-incident and single-repair invariant.
 
 Hive is Nook's self-hosted, stateful AI-agent platform. Its control and storage
 services run on the dedicated Linux machine addressed by the default
@@ -72,9 +73,9 @@ flowchart TB
     end
     end
 
-    subgraph compute["NVMe compute node"]
-      arc["Ephemeral ARC runner Pods (Kata QEMU)"]
-      buildkit["Per-job BuildKit + reflink cache"]
+    subgraph compute["Preferred NVMe compute nodes"]
+      arc["Ephemeral ordinary ARC runner Pods"]
+      buildkit["Persistent node-local rootless BuildKit"]
     end
   end
 
@@ -96,16 +97,24 @@ flowchart TB
 The cluster separates durable control and storage from disposable build
 compute. The control node is labeled
 `nook.nokey.sh/node-role=control-storage`. Neo4j, Zot, Hive, ARC controllers,
-and ARC listeners remain there. Compute nodes are labeled
-`nook.nokey.sh/arc-build=true`; both ARC runner scale sets select only those
-nodes. Node and Pod traffic crosses an authenticated WireGuard mesh on
-`10.202.0.0/24`. The Kubernetes API retains its stable `10.201.0.1` address.
+and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
+qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
+select those nodes. They enforce a maximum hostname skew of five, then use the
+primary, secondary, and overflow tiers to assign the extra slots. Container
+CPU requests provide the aggregate capacity boundary across scale sets. Each
+ARC build node owns one persistent BuildKit shard. Node and Pod traffic crosses
+an authenticated WireGuard mesh on `10.202.0.0/24`. Each worker address has one
+owner. Before
+mutating a controller peer, deployment verifies that any persisted peer key
+and Kubernetes `InternalIP` assignment identify that same worker. Address collisions fail
+closed. The Kubernetes API retains its stable `10.201.0.1` address.
 
 Neo4j runs with the normal container runtime because it is a persistent
-infrastructure service. The dispatcher and every task worker use
-`kata-dragonball`. Dragonball is the Rust-based VMM built into Kata runtime-rs;
-it provides the full CRI and virtio-fs behavior required by Hive with lower
-startup and memory overhead than QEMU. The authoritative
+infrastructure service. Task workers use `kata-dragonball`. The dispatcher uses
+Kata QEMU because it does not share the worker sidecar socket and must avoid the
+Dragonball network churn observed on KS-6. Dragonball is the Rust-based VMM
+built into Kata runtime-rs. It provides the full CRI and virtio-fs behavior
+required by Hive workers with lower startup and memory overhead than QEMU. The authoritative
 version pins for k0s, Helm, Kata, Neo4j, and the Hive image are in the
 [`infra/Taskfile.yml`](../../infra/Taskfile.yml) composition root and its
 reachable [`infra/tasks/`](../../infra/tasks/) domain modules; manifests live
@@ -525,9 +534,10 @@ That command:
 
 ### Kata boundary
 
-Every dispatcher and worker Pod selects `kata-dragonball`. There is no
-fallback to `runc`. The host, KVM support, runtime class, and guest-kernel
-identity are verified by infrastructure tasks before Hive deploys.
+Every worker Pod selects `kata-dragonball`. The dispatcher selects Kata QEMU.
+Neither workload falls back to `runc`. The host, KVM support, runtime class,
+and guest-kernel identity are verified by infrastructure tasks before Hive
+deploys.
 
 The worker container alone uses the pinned, node-local
 `nook/hive-bubblewrap.json` seccomp profile. Rootless Bubblewrap must create and
@@ -567,117 +577,9 @@ Deployment verification:
 
 ### ARC trusted-build boundary
 
-Actions Runner Controller runs focused, trusted GitHub Actions jobs as
-single-use Pods in the `kata-qemu-runtime-rs` RuntimeClass. The runner has no
-Kubernetes service-account token, host runtime socket, or Docker daemon.
-
-The Kata runner contains Docker client tooling but no Docker daemon. Buildx
-connects over Pod loopback to a private BuildKit sidecar in the same microVM.
-The general scale set also exposes a rootful Podman Docker-compatible API over
-Pod loopback. It executes images loaded by Main browser and runtime jobs inside
-that job's disposable Kata guest. BuildKit and Podman are privileged inside the
-guest. The Pod has no Kubernetes service-account token or host runtime socket.
-
-Each qualified ARC compute node maintains one loop-backed Btrfs pool on its
-local NVMe-backed ext4 filesystem. The sparse pool has 768 GiB of logical
-capacity for twenty fully allocated 32 GiB job images, one trusted 32 GiB ext4
-seed image, Btrfs metadata, and operational headroom. The 24 GB BuildKit
-garbage-collection target normally keeps physical use below that hard capacity
-envelope. Durable Hive and registry data never depend on this disposable pool.
-
-Runner startup follows this ordered storage boundary:
-
-1. A trusted init container mounts only the request directory.
-2. It submits the Pod UID.
-3. A root-owned host helper validates the UID.
-4. The helper creates a metadata-only reflink clone of the seed.
-5. The private BuildKit sidecar receives only `jobs/<Pod UID>`.
-6. The sidecar loop-mounts that ext4 file inside the guest.
-7. BuildKit uses overlayfs on the guest-mounted ext4 filesystem.
-
-The runner container never mounts the pool. Concurrent jobs use different
-writable ext4 files and different BuildKit daemons. Unchanged blocks remain
-shared through Btrfs copy-on-write. Changed blocks consume physical storage
-only in the job clone. Each job directory is a Btrfs subvolume with a 32 GiB
-exclusive quota, so a compromised guest cannot consume the rest of the shared
-pool through files beside its state image. The garbage-collection target is
-24 GB.
-
-A successful trusted ARC smoke run may refresh the seed after its Pod stops.
-The promotion waits for API removal, kubelet volume teardown, containerd task
-removal, and Kata shim exit. It validates only the root-owned regular backing
-inode on the host, then replaces the seed atomically under the same lock used
-by clone creation. The host never parses guest-controlled ext4 metadata;
-journal recovery occurs when a later Kata guest mounts its private clone.
-Failed or active jobs cannot refresh the seed. `task infra:arc:hive:smoke`
-applies the same promotion gate to the dedicated Hive scale set.
-Every smoke dispatch carries a unique nonce in the workflow run name. The
-operator matches both that nonce and the exact head SHA before monitoring or
-cancelling a run, so concurrent smoke tasks cannot claim each other's jobs.
-
-Kata 4.0.0 is the current stable release installed on the node. Its Dragonball
-guest lost its ttrpc sandbox when ARC jobs exercised private BuildKit and again
-when the dedicated Hive scale set ran its normal multi-sidecar verification.
-Both ARC scale sets therefore use the same release's QEMU runtime-rs backend.
-Persistent Hive workers remain on Dragonball, and QEMU is not the cluster
-default.
-
-Neither scale set keeps warm runners. ARC creates a new Pod and microVM for
-each job and removes it afterward. `nook-k0s` serves ordinary trusted Rust
-jobs. `nook-k0s-hive` serves Hive Rust verification with a pinned Neo4j
-native sidecar in the same Pod. Both set `maxRunners: 10`; this is concurrency,
-not a retained pool. A preparation taint prevents a new compute node from
-receiving jobs until Kata, its cache pool, its local BuildKit image, and the ARC
-node selectors are all qualified.
-
-The ordinary Pod requests 1 CPU and 4 GiB. The Hive Pod requests about 2 CPUs
-and 4 GiB. Ordinary containers are capped at 4 GiB in aggregate. Hive
-containers are capped at about 6.75 GiB. The QEMU RuntimeClass adds 1792 MiB of
-Pod overhead. This leaves host-cgroup headroom for QEMU and virtiofs after a
-guest touches its memory. These
-caps are Kata VM sizing boundaries. They keep ten concurrent ordinary
-microVMs at 57.5 GiB of limit memory within the worker's 62.3 GiB
-allocatable envelope instead of multiplying the
-former 12-vCPU and 16-GiB envelope across every job. The dedicated Hive set
-keeps Neo4j out of ordinary runners and replaces GitHub's Docker-managed
-service container with a Kubernetes-native sidecar. A second non-root sidecar
-executes exported Hive test binaries in their pinned Debian Trixie runtime.
-One 64 GiB compute node safely sustains ten ordinary VMs or seven Hive VMs at
-their full limits. ARC may advertise ten Hive runners, but another compute node
-is required before ten memory-saturated Hive jobs can run without overcommit.
-Both helpers are restartable init sidecars, so Kubernetes stops them when the
-runner exits and the single-use Pod can terminate. The exchange directory is
-private to the job Pod. The Hive scale set omits Podman. No Docker daemon is
-introduced in either scale set.
-
-The ARC deployment contract explicitly prohibits:
-
-- Docker-in-Docker and any `dockerd` process;
-- Sysbox;
-- host Docker or containerd sockets; and
-- broad hostPath volumes.
-
-The only image runtime is the general scale set's job-scoped Podman API. It is
-reachable only on Pod loopback inside the Kata guest and uses disposable
-`emptyDir` state. It is not Docker-in-Docker and it cannot reach a host engine.
-
-Two narrow hostPaths are permitted for the Task-managed BuildKit pool. The
-trusted preparation container sees only the request directory. The BuildKit
-sidecar sees only its Pod UID job subpath. The runner sees neither path.
-
-The runner image and its Docker CLI remain separate from BuildKit and Podman.
-The CLI does not create an engine. A chart-render check verifies the final Helm
-output before deployment so chart defaults cannot silently weaken these
-boundaries.
-
-Hive worker Pods have no hostPath volume and never mount the host repository,
-host `CODEX_HOME`, or host Docker socket. They contain no privileged containers
-and run no Docker daemon. The Hive worker image carries the pinned Rust, Bun,
-Node, and Task tools required by the repository. When `task format` detects the
-sealed guest marker it selects the native `hive:guest:format` Taskfile path,
-operating only on that task's disposable checkout. The image also carries npm
-so `hive:guest:pr:ready` can install and run the repository's existing read-only
-TypeScript PR audit without Docker.
+The dedicated [ARC Persistent BuildKit Runner Platform](arc-kata-runner-platform.md)
+owns disposable runner Pods, compute placement, persistent node-local BuildKit
+state, cache distribution, and ARC credential boundaries.
 
 ### Credential ownership
 
@@ -688,24 +590,9 @@ TypeScript PR audit without Docker.
   - Expose only short-lived tokens on one pre-established private channel.
 - **Repository-scoped GitHub token:** Mount into the Main-repair worker.
   - Expose it as `GH_TOKEN` for standard `git` and `gh` operations.
-- **ARC GitHub token:** Store in `arc-runners/nook-arc-github` for the ARC
-  controller and listener.
+- **ARC GitHub token:** Follow the credential ownership and rotation contract
+  in [ARC Persistent BuildKit Runner Platform](arc-kata-runner-platform.md#credential-ownership).
   - Never mount it into an ephemeral runner Pod.
-  - Use a fine-grained personal access token limited to `meta-secret/nook`.
-  - Grant only repository Administration read/write, which ARC needs to create
-    registration and just-in-time runner configuration tokens.
-  - Grant no organization permissions.
-  - The infrastructure operator owns rotation and revocation.
-  - On the first deployment, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file
-    outside the checkout and run `task infra:deploy` to bootstrap the Secret.
-  - Routine `infra:deploy` retains the installed Secret.
-  - To rotate it, set `ARC_GITHUB_TOKEN_FILE` to a nonempty file outside the
-    checkout and run `task infra:arc:deploy`.
-  - Verify `task infra:arc:status` and `task infra:arc:smoke`, then revoke the
-    replaced token.
-  - For emergency revocation, run `task infra:arc:fallback`. It routes both
-    ordinary and Hive verification to hosted capacity. Then revoke the token
-    on GitHub and delete `nook-arc-github` from the `arc-runners` namespace.
 - **Reaper controller credential:** Mount into the Pod reaper, Workbench
   dispatcher, and dedicated controller only.
   - Do not expose it to workers or Codex.
@@ -826,11 +713,18 @@ The Dockerfile follows Nook's cargo-chef boundary:
 5. run format/Clippy and behavior tests; and
 6. publish both already-verified BuildKit graphs only from `main`.
 
-Pull requests restore the `nook-hive-linux-amd64-v1` GitHub Actions BuildKit
-scope read-only. Only Main publishes it after both Hive checks and Neo4j-backed
-behavior tests pass. SeaweedFS S3 compiler hits avoid recompilation, while the
-parallel BuildKit stages also remove Cargo metadata and linking work from the
-serial critical path.
+Each parallel Cargo branch uses two build jobs. Together, the test and Clippy
+branches consume the runner's four-CPU BuildKit envelope without launching
+eight competing compiler processes. BuildKit requests 4 GiB and may burst to
+6 GiB for rustc and linker peaks.
+
+Pull requests restore the `nook-hive-linux-amd64-v2` GitHub Actions BuildKit
+scope read-only. After the BuildKit verification target succeeds, an internal
+pull request may publish only a quarantined exact-head cache under
+`remote-buildcache`. Only Main publishes the shared scope, after both Hive
+checks and Neo4j-backed behavior tests pass. SeaweedFS S3 compiler hits avoid
+recompilation, while the parallel BuildKit stages also remove Cargo metadata
+and linking work from the serial critical path.
 
 Trusted same-repository Hive runs also use the remote SeaweedFS S3 compiler
 cache:
@@ -860,11 +754,11 @@ SeaweedFS S3 `sccache` and registry BuildKit are separate layers:
   changes and rely on repository-owned GitHub verification, where the same
   SeaweedFS cache is attached by the workflow.
 
-ARC runners reach `registry.dev.nokey.sh` on the k0s node's local TLS ingress
-path. Buildx imports and exports the same authenticated Zot registry-cache refs
-as hosted runners. Zot remains the authoritative cross-host cache. The local
-reflink seed avoids reconstructing unchanged snapshots for every new guest.
-Each job's writable clone is private and is removed after it becomes inactive.
+ARC runners reach `registry.dev.nokey.sh` on the k0s TLS ingress path. Buildx
+imports authenticated Zot refs when the selected node-local shard is cold.
+Later jobs on that node reuse the persistent BuildKit state. Hive keeps its
+independent exact-head registry lineage. Main producers retain dependency order
+and publish shared refs only after verification.
 
 ## 10. Taskfile operations
 
@@ -920,7 +814,8 @@ task infra:deploy
   platform rollout.
   - It syncs repository-owned k0s configuration.
   - It installs and verifies k0s and Kata.
-  - It deploys ARC and the bounded Kata runner scale set.
+  - It deploys ARC, disposable regular runner Pods, and three persistent
+    rootless BuildKit shards.
   - It deploys Neo4j and preserves cluster-rotated credentials.
   - It publishes the exact Hive image, deploys the warm pool, and verifies Pod
     replacement.
@@ -997,20 +892,37 @@ Destructive k0s uninstall requires `K0S_UNINSTALL_FORCE=1` and preserves
 encrypted Neo4j recovery material by default. It removes the owned live k0s
 firewall rules, persisted fragment, and nftables include without reloading the
 global ruleset.
+Worker admission rejects a mesh address or Kubernetes node name already owned
+by a different node before controller mutation. Reconciliation replaces only
+the comment-owned mesh rules in one checked nftables transaction. Docker and
+unrelated dynamic firewall state remain live on both the controller and worker.
+The ARC cache verifier binds every claimed runner name to host-observed CRI
+metadata for that request lane's Pod UID before creating a promotion intent.
+Every writable request lane is a host-created Btrfs subvolume with a 1 MiB
+exclusive quota. Acceptance must reach the lane before an intent is installed,
+and exclusive intent creation prevents retries from refreshing its deadline.
 
 ## 11. Source map
 
-| Concern                                | Source of truth                                                                                                                 |
-| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| Rust platform implementation           | [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/)                                                                |
-| Task dependencies and artifact lineage | [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs) |
-| Worker image and cache stages          | [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile)                                                    |
-| Hive developer commands                | [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml)                                                |
-| Infrastructure command composition     | [`infra/Taskfile.yml`](../../infra/Taskfile.yml)                                                                                |
-| Infrastructure operations and pins     | [`infra/tasks/`](../../infra/tasks/)                                                                                            |
-| k0s, Kata, Neo4j, and Hive manifests   | [`infra/k0s/`](../../infra/k0s/)                                                                                                |
-| Main failure handoff                   | [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)                                |
-| Hive verification workflow             | [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml)                                                                |
-| Main coalescing and delivery           | [`.github/workflows/main.yml`](../../.github/workflows/main.yml)                                                                |
-| Workbench issue contract               | [`workflows/issues.md`](../workflows/issues.md)                                                                                 |
-| Pull-request ownership contract        | [`workflows/pull-requests.md`](../workflows/pull-requests.md)                                                                   |
+- **Rust platform implementation:**
+  [`agentic-ai/minds/hive/src/`](../../agentic-ai/minds/hive/src/)
+- **Task dependencies and artifact lineage:**
+  [`neo4j.rs`](../../agentic-ai/minds/hive/src/neo4j.rs) and
+  [`migration.rs`](../../agentic-ai/minds/hive/src/neo4j/migration.rs)
+- **Worker image and cache stages:**
+  [`agentic-ai/minds/hive/Dockerfile`](../../agentic-ai/minds/hive/Dockerfile)
+- **Hive developer commands:**
+  [`agentic-ai/minds/hive/Taskfile.yml`](../../agentic-ai/minds/hive/Taskfile.yml)
+- **Infrastructure command composition:**
+  [`infra/Taskfile.yml`](../../infra/Taskfile.yml)
+- **Infrastructure operations and pins:** [`infra/tasks/`](../../infra/tasks/)
+- **k0s, Kata, Neo4j, and Hive manifests:** [`infra/k0s/`](../../infra/k0s/)
+- **Main failure handoff:**
+  [`.github/workflows/main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml)
+- **Hive verification workflow:**
+  [`.github/workflows/hive.yml`](../../.github/workflows/hive.yml)
+- **Main coalescing and delivery:**
+  [`.github/workflows/main.yml`](../../.github/workflows/main.yml)
+- **Workbench issue contract:** [`workflows/issues.md`](../workflows/issues.md)
+- **Pull-request ownership contract:**
+  [`workflows/pull-requests.md`](../workflows/pull-requests.md)

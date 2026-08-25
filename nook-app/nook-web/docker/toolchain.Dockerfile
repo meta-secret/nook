@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 # Web dependency cache branch. Rust/WASM lives in a separate Dockerfile and local BuildKit lineage;
 # there is intentionally no stage that merges the two filesystems.

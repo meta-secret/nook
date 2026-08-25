@@ -1,65 +1,55 @@
 #!/usr/bin/env bash
-# Unit test for sealed-image format patch extraction (no Docker).
+# Contract test for the shared tool-only formatter image.
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
-extract_awk="$scripts_dir/format-host-apply-extract.awk"
-
-sample="$(
-  printf '%s\n' \
-    'task: [docker:rust:task]' \
-    '==> Rust formatting changes (host apply via task format):' \
-    'diff --git a/nook-app/nook-platform/nook-core/src/foo.rs b/nook-app/nook-platform/nook-core/src/foo.rs' \
-    'index 1111111..2222222 100644' \
-    '--- a/nook-app/nook-platform/nook-core/src/foo.rs' \
-    '+++ b/nook-app/nook-platform/nook-core/src/foo.rs' \
-    '@@ -1,3 +1,3 @@' \
-    ' fn main() {' \
-    '-    let x=1;' \
-    '+    let x = 1;' \
-    ' }' \
-    'task: [setup]' \
-    'building image...' \
-    '==> Web/extension formatting changes (host apply via task format):' \
-    'diff --git a/nook-app/nook-web/nook-web-app/src/x.ts b/nook-app/nook-web/nook-web-app/src/x.ts' \
-    'index aaa..bbb 100644' \
-    '--- a/nook-app/nook-web/nook-web-app/src/x.ts' \
-    '+++ b/nook-app/nook-web/nook-web-app/src/x.ts' \
-    '@@ -1 +1 @@' \
-    '-const a=1' \
-    '+const a = 1'
-)"
-
-patch="$(printf '%s\n' "$sample" | awk -f "$extract_awk")"
-
-printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-platform/nook-core/src/foo.rs' \
-  || { echo 'format-host-apply test: missing rust diff' >&2; exit 1; }
-printf '%s\n' "$patch" | grep -q 'diff --git a/nook-app/nook-web/nook-web-app/src/x.ts' \
-  || { echo 'format-host-apply test: missing web diff' >&2; exit 1; }
-printf '%s\n' "$patch" | grep -q 'building image' \
-  && { echo 'format-host-apply test: docker chatter leaked into patch' >&2; exit 1; }
-printf '%s\n' "$patch" | grep -q '^task: ' \
-  && { echo 'format-host-apply test: task chatter leaked into patch' >&2; exit 1; }
-
-empty="$(printf '%s\n' '==> Already formatted; no changes.' | awk -f "$extract_awk")"
-[[ -z "$empty" ]] || {
-  echo 'format-host-apply test: expected empty patch when already formatted' >&2
-  exit 1
-}
-
-# Guard the known failure mode: CLI invocation of internal docker:task exits 202.
 script="$(cat "$scripts_dir/format-host-apply.sh")"
-printf '%s\n' "$script" | grep -q 'task format:diff' \
-  || { echo 'format-host-apply test: expected task format:diff entrypoint' >&2; exit 1; }
-printf '%s\n' "$script" | grep -q 'task hive:format' \
-  || { echo 'format-host-apply test: expected sealed Hive formatter' >&2; exit 1; }
-printf '%s\n' "$script" | grep -q 'cargo fmt --manifest-path "$repo_root/preflight/Cargo.toml"' \
-  || { echo 'format-host-apply test: expected standalone preflight formatter' >&2; exit 1; }
+formatter_dir="$scripts_dir/../formatting"
+dockerfile="$(cat "$formatter_dir/Dockerfile")"
+formatter="$(cat "$formatter_dir/format.sh")"
+
+printf '%s\n' "$script" | grep -q 'formatter_image="nook-source-formatter:' \
+  || { echo 'format-host-apply test: expected shared content-addressed image' >&2; exit 1; }
+for hash_input in Dockerfile package.json bun.lock prettier-default.json prettier-web.json format.sh; do
+  printf '%s\n' "$script" | grep -Fq "$hash_input" \
+    || { echo "format-host-apply test: formatter hash misses $hash_input" >&2; exit 1; }
+done
+printf '%s\n' "$script" | grep -Fq '(cd "$formatter_dir" && \' \
+  || { echo 'format-host-apply test: formatter hash must be worktree-independent' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'docker image inspect "$formatter_image"' \
+  || { echo 'format-host-apply test: expected warm image reuse' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q '"$formatter_dir"' \
+  || { echo 'format-host-apply test: build context must be formatter-only' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q 'docker run' \
+  || { echo 'format-host-apply test: expected formatter container' >&2; exit 1; }
+printf '%s\n' "$script" | grep -q '/tmp/nook-format-files:ro' \
+  || { echo 'format-host-apply test: expected bounded changed-file input' >&2; exit 1; }
 printf '%s\n' "$script" | grep -q 'task hive:guest:format' \
   || { echo 'format-host-apply test: expected native Hive guest formatter' >&2; exit 1; }
-printf '%s\n' "$script" | grep -Eq 'task docker:task( |$)' \
-  && { echo 'format-host-apply test: must not CLI-invoke internal docker:task' >&2; exit 1; }
-printf '%s\n' "$script" | grep -Eq 'task docker:rust:task( |$)' \
-  && { echo 'format-host-apply test: must not CLI-invoke internal docker:rust:task' >&2; exit 1; }
+
+for forbidden in buildx registry-cache format:diff setup:rust cargo\ fmt bun\ install; do
+  printf '%s\n' "$script" | grep -Fq "$forbidden" \
+    && { echo "format-host-apply test: forbidden heavy path: $forbidden" >&2; exit 1; }
+done
+
+for required in \
+  'rustup component add rustfmt' \
+  'bun install --frozen-lockfile --ignore-scripts'; do
+  printf '%s\n' "$dockerfile" | grep -Fq "$required" \
+    || { echo "format-host-apply test: missing formatter image contract: $required" >&2; exit 1; }
+done
+for prohibited in 'COPY .' 'nook-app/' 'agentic-ai/' 'cargo build' 'cargo test'; do
+  printf '%s\n' "$dockerfile" | grep -Fq "$prohibited" \
+    && { echo "format-host-apply test: product work in formatter image: $prohibited" >&2; exit 1; }
+done
+for manifest in \
+  nook-app/nook-platform/Cargo.toml \
+  preflight/Cargo.toml \
+  agentic-ai/minds/Cargo.toml; do
+  printf '%s\n' "$formatter" | grep -Fq "$manifest" \
+    || { echo "format-host-apply test: missing Rust formatter: $manifest" >&2; exit 1; }
+done
+printf '%s\n' "$formatter" | grep -Fq 'prettier-plugin-svelte' \
+  || { echo 'format-host-apply test: missing Svelte formatter' >&2; exit 1; }
 
 echo 'format-host-apply test: ok'

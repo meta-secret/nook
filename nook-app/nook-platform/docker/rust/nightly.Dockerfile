@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 FROM rust-base AS rust-ecosystem-nightly
 

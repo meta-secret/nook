@@ -6,7 +6,7 @@ metadata:
   labels:
     app.kubernetes.io/name: hive-observer
 spec:
-  replicas: 1
+  replicas: 0
   revisionHistoryLimit: 2
   strategy:
     type: Recreate
@@ -95,11 +95,11 @@ spec:
               mountPath: /run/hive-coordinator
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 200m
-              memory: 128Mi
+              cpu: "1"
+              memory: 512Mi
         - name: coordinator
           image: HIVE_IMAGE
           imagePullPolicy: Always
@@ -131,11 +131,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              cpu: 10m
-              memory: 32Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: 100m
-              memory: 128Mi
+              cpu: "1"
+              memory: 512Mi
       volumes:
         - name: coordinator-channel
           emptyDir:

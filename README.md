@@ -376,7 +376,7 @@ macOS has no inotify; Docker workloads use the inotify implementation in Docker
 Desktop's Linux VM. Reapply after Docker Desktop restarts:
 
 ```sh
-docker run --rm --privileged --pid=host busybox:1.37.0 \
+docker run --rm --privileged --pid=host registry.dev.nokey.sh/library/busybox:1.37.0 \
   sysctl -w \
   fs.inotify.max_user_instances=2500 \
   fs.inotify.max_user_watches=10485760
@@ -413,7 +413,7 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
 with **`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`,
-and `arc:runtime` selections use ephemeral Kata-isolated ARC runners in k0s;
+and `arc:runtime` selections use disposable ARC runner Pods in k0s;
 other selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
 **`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
 not start the complete pipeline. Local Task mirrors below remain available for
@@ -515,9 +515,11 @@ task pr:ready PR=410       # read-only exact-head readiness assertion; never mer
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence
 task infra:deploy           # deploy SeaweedFS/registry plus k0s, Kata, ARC, Neo4j, and Hive
-task infra:arc:deploy       # targeted redeploy of the Kata-isolated ARC scale sets
+task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2 # install/reconcile a declared OVH worker and join k0s/ARC
+task infra:arc:deploy       # deploy ARC plus one persistent BuildKit shard per build node
 task infra:arc:activate     # route opted-in trusted Rust and remote jobs to ARC
 task infra:arc:fallback     # route opted-in Rust and remote jobs to GitHub-hosted capacity
+task infra:kubernetes-cache:prove # prove production-derived Zot and BuildKit behavior on ephemeral k3d
 task infra:kubernetes:console:install # install kubectl, Helm, k9s, and SSH-user access
 task infra:kubernetes:tools:status  # verify the remote operator console
 task infra:k0s:status       # inspect the remote Hive cluster and workloads
@@ -597,23 +599,43 @@ change, update this README in the same change (see
 
 Docker builds use [cargo-chef](https://github.com/LukeMathWalker/cargo-chef)
 and independent **linux/amd64** Rust, web dependency, and browser lineages.
-Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-explicit Main job run in fresh ARC Kata microVMs. The general set provides a
-job-scoped Podman API on guest loopback for runtime jobs, without Docker-in-
-Docker or a host socket. Hive Rust uses a dedicated ARC set with private Neo4j
-and pinned Trixie test-runtime native sidecars; its browser lane stays hosted.
-Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
-WASM, and deployment jobs run on fresh GitHub-hosted VMs. Each ARC runner
-starts from a private 32 GiB reflinked BuildKit seed and restores distinct
-cache refs from the authenticated OCI registry at
-`registry.dev.nokey.sh`. The seed is copy-on-write, so runner startup does not
-copy its full logical capacity. Main refreshes the shared refs after lane
-verification. Same-repository PR jobs may publish only exact-SHA generations
-under `nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM
-producer restores Main's dedicated, complete WASM dependency boundary so it
-does not compete with the larger native dependency lineage. Main explicitly
-publishes the native source target as well as both dependency targets; merely
-consuming those targets as BuildKit contexts does not run their cache exporters.
+Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
+producers run in disposable ordinary ARC Pods. The Docker CLI connects to the
+persistent rootless BuildKit shard on the selected node. ARC runners receive no
+Docker daemon, Podman API, DinD process, host runtime socket, host path, or Kata
+runtime. ARC keeps its warm WASM source graph, while one narrow GitHub-hosted
+job alone publishes the portable WASM dependency ref. Zot proves child manifest
+digests and sizes, then streams every declared blob to verify its size and SHA-256 before a fresh
+builder verifies dependency-vertex hits. Development deployment waits for both.
+
+The `nook-buildkit` StatefulSet keeps one 64 GiB local shard on each qualified
+node. A node-local Service prevents cross-node BuildKit traffic. Concurrent jobs
+share BuildKit's content-addressed store. Zot carries portable cache refs between
+nodes and hosted runners. A cold node imports referenced blobs once. Later jobs
+reuse the hydrated local state.
+
+Hive Rust uses the dedicated `nook-k0s-hive` ARC set with pinned Neo4j and
+Trixie test-runtime sidecars. Fork PRs, Dependabot PRs, releases, and unsupported
+runtime lanes remain on fresh GitHub-hosted VMs. Main publishes shared Zot refs.
+Pull requests use exact-SHA refs under `nook/remote-buildcache`.
+Same-repository PR jobs may publish only exact-SHA generations under
+`nook/remote-buildcache`; fork jobs remain secret-free. The hosted WASM writer
+publishes Main's dedicated, complete WASM dependency boundary so it does not
+compete with the larger native dependency lineage. ARC publishes verified
+native/WASM source state and the native dependency ref. Merely consuming those
+targets as BuildKit contexts does not run their cache exporters.
+
+`task infra:kubernetes-cache:prove` is the local portable Kubernetes integration
+proof. It creates three k3d agents and patches the production Zot, rootless
+BuildKit, and NetworkPolicy resources. Docker creates only the k3d
+infrastructure containers.
+Kubernetes workloads receive no runtime socket, service-account token, host
+path, or privileged context. The proof covers cache persistence and
+cross-shard portability. Clients run on their selected shard's node through the
+production node-local Service. The proof does
+not replace production evidence for k0s, node-local Service routing, WireGuard,
+Kata, ARC lifecycle, capacity, or performance. CI checks the static proof
+contracts but does not run k3d.
 
 Workspace source is copied into the slim `nook-web:local` image (sealed image;
 no runtime bind mount except `task web:dev`). Explicit `task rust:*` and
@@ -647,9 +669,10 @@ run is promoted only after the whole workflow succeeds.
 Measure that budget from the first required job start through the last required
 job completion, with GitHub-hosted runner queue time reported separately.
 The authenticated Zot registry in [`infra/`](infra/) publishes the exact Hive
-worker image and BuildKit cache manifests. ARC jobs and their private microVM
-builders run on the same k0s node, so cache traffic avoids an external data path
-while retaining the public TLS registry identity. Details:
+worker image and BuildKit cache manifests. ARC jobs connect to the persistent
+rootless BuildKit shard on the same k0s node, so warm solves avoid an external
+data path while retaining the public TLS registry identity for portable cache
+fallback. Details:
 [`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:

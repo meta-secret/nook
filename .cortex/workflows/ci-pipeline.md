@@ -75,17 +75,12 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
   - Trigger: Manual
   - Purpose: Debug e2e on a PR branch
   - GitHub PAT: Only for `sync-live`
-- **[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml)**
-  - Trigger: Cron 13:00 UTC + manual
-  - Purpose: Docker prune on self-hosted `nook` runner
-  - GitHub PAT: No
-
 ### Workflow details
 
 **`remote.yml`**
 
 - One or more selected Taskfile commands on one configured GitHub Actions
-  runner. Single `preflight` and `rust:ci` selections use the ephemeral ARC Kata
+  runner. Single `preflight` and `rust:ci` selections use the disposable ARC
   scale set. The repository variable can fall back to `ubuntu-latest`.
 - Checkout, Docker setup, and cache connection happen once per batch.
 - Selected tasks run sequentially and report individual results.
@@ -158,14 +153,15 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Includes `agentic-ai/minds/**` so product-only, minds-only, and mixed pushes use one merged-head ecosystem orchestrator.
 - Classifies changed paths and skips the product job chain for minds-only pushes.
 - Owns merged-head ecosystem cache seeding, statistics, and failure handoff.
-- Native Rust uses the configured ARC scale set. WASM and browser-free web
-  verification use fresh `ubuntu-latest` runners.
+- Native Rust and WASM producers use the configured ARC scale set. Browser-free
+  web verification uses a fresh `ubuntu-latest` runner.
 - Each lane serially exports its already-solved local BuildKit graph after validation.
 - Local-provider web e2e, extension e2e, and headless UI demos consume verified WASM on separate runners.
 - Each browser solve is read-only.
 - The successful UI-demo lane publishes the warm browser-image graph.
 - 90-day artifact + 10 largest recordings on the merged PR's Linear issue.
-- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify + web e2e.
+- Deploy to `dev.nokey.sh` / `*.dev.nokey.sh` after web verify, web e2e, and
+  the portable WASM cache publication proof.
 
 **`main-build-stats.yml`**
 
@@ -215,10 +211,6 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 
 - Debug e2e on a PR branch (`e2e-pr` / `e2e` / `sync-live`).
 
-**`runner-cleanup.yml`**
-
-- Prunes unused Docker data and anonymous volumes on self-hosted Nook runners (`runs-on: nook` only).
-
 ```mermaid
 flowchart LR
   branch[Exact pushed branch head] --> remote_yml[remote.yml focused task batch]
@@ -244,8 +236,6 @@ flowchart LR
 
   manual_e2e[Manual PR e2e] --> e2e_live[sync-live e2e]
 
-  cleanup_cron[Daily 13:00 UTC] --> cleanup[runner-cleanup.yml]
-  cleanup --> docker_prune["docker system prune --volumes"]
 ```
 
 ## Workflow concurrency policy
@@ -295,11 +285,6 @@ Cancellation is scoped to work that a newer run actually supersedes:
   - Scope: Global production release group
   - Cancel active run: No
   - Reason: Serialize stateful publication without interrupting a deployment.
-- **Runner cleanup (`runner-cleanup.yml`)**
-  - Scope: Global cleanup group
-  - Cancel active run: No
-  - Reason: Let an active Docker prune finish safely.
-
 ## Production release strategy
 
 Production releases use immutable semantic-version tags. The tag records the
@@ -381,8 +366,8 @@ provider, those handlers read and write real event files under a temp directory.
 
 ## Runner placement
 
-Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-explicit Main job use the configured ARC Kata scale set. Focused `preflight`,
+Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
+producers use the configured ARC scale set. Focused `preflight`,
 `rust:ci`, and `arc:runtime` selections use the same scale set. Trusted
 `hive:verify` uses the dedicated
 `nook-k0s-hive` scale set with private native Neo4j and test-runtime sidecars.
@@ -391,17 +376,18 @@ PRs, release jobs, and non-Main runtime-dependent, browser, WASM, deployment,
 AI, scheduled, manual e2e, and research jobs use GitHub-hosted `ubuntu-latest`.
 ARC scales single-use Pods instead of queueing work on one persistent Docker
 host.
+Main's portable WASM cache writer/proof also uses `ubuntu-latest`. This narrow
+job must not reuse an ARC node-local cache.
 
 **Zot cache policy:**
 
-- Delivery builds restore distinct private Zot BuildKit cache refs.
-- Main refreshes the default-branch scopes that new PRs may access.
+- Hosted delivery builds restore distinct private Zot BuildKit cache refs.
+- Main ARC producers publish shared Zot refs after verification. Persistent
+  node-local BuildKit shards accelerate repeated solves.
 - Hosted PR jobs that publish registry cache write only immutable git-commit scopes
   and cannot replace Main.
-- Trusted ARC PR verification reuses a private node-local COW seed for the full
-  writable graph.
-- It exports only a `mode=min` exact-SHA handoff for retries after the disposable
-  guest is removed.
+- Trusted ARC PR verification reuses the persistent BuildKit shard on its node.
+- Exact-SHA handoffs retain commit-scoped registry identity.
 - Native ARC exports that handoff during the verified solves. A second
   post-verification solve is prohibited because it reconstructs the same Rust
   graphs before exporting them.
@@ -409,34 +395,33 @@ host.
 - Once an exact PR scope exists, setup imports that scope alone.
 - BuildKit merges cache importers; list order is not fallback precedence.
 - Exact-input handoffs own repeat-run acceleration without mutable branch refs.
-- The WASM dependency target reads Main's dedicated, complete WASM dependency export instead of competing with the larger native dependency lineage.
-- Main's preparation selects both dependency targets and the native source target as explicit cache-only outputs.
-- Consuming them as named build contexts is not sufficient to run their dedicated exporters.
+- WASM consumers read the hosted-published dependency ref instead of competing with the larger native dependency lineage.
+- Main ARC prepares native dependency/source and WASM source targets as cache-only outputs.
+- A fresh hosted builder selects the WASM dependency target and owns its exporter.
 - Only a `push` event on `refs/heads/main` may write the shared scopes.
 - Release, agent, and manual workflows are read-only unless they use an
   explicitly isolated git-commit publisher.
 - Cache-publishing PR and Remote jobs write git-commit refs, use Main only while
   their exact scope is absent, and cannot replace shared Main manifests.
-- Hive ARC PR jobs use the local COW seed and may import Main when needed. Main
+- Hive ARC PR jobs use the local shard and may import Main when needed. Main
   remains the only workflow writer of the shared Hive registry seed.
-- The self-hosted `nook` label is reserved for runner cleanup while that machine remains registered.
+- The legacy registered `nook` runner is not used.
 
 **Focused remote jobs:**
 
-- `preflight`, `rust:ci`, and `arc:runtime` may use fresh Kata QEMU microVMs in
+- `preflight`, `rust:ci`, and `arc:runtime` may use disposable ordinary Pods in
   the configured general ARC scale set. Trusted `hive:verify` may use the
-  dedicated Hive ARC scale set. Each job owns a private BuildKit sidecar and
-  writable COW clone.
-- The general scale set's Podman API is reachable only inside the disposable
-  Kata guest. `arc:runtime` proves a remote BuildKit image can be loaded and
-  executed through that API without Docker-in-Docker or a host socket.
+  dedicated Hive ARC scale set. Each job reaches the persistent BuildKit shard
+  on its selected node.
+- `arc:runtime` proves a remote BuildKit result can be exported without a
+  Docker daemon, Podman, DinD, or host socket.
 - Every other `remote.yml` selection retains GitHub-hosted placement.
 - Common Rust test and web/extension check routes use smaller source-sealed image targets.
 - Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
 - These remote-only routes preserve the exact check command while reducing preparation work.
-- Complete PR graphs place only their trusted native Rust jobs on ARC. Every
-  explicit Main job uses ARC. Remaining PR jobs and the release graph stay
-  hosted.
+- Complete PR graphs place only their trusted native Rust jobs on ARC. Main
+  build producers use ARC. The portable WASM cache writer/proof, remaining PR
+  jobs, and the release graph stay hosted.
 
 **BuildKit cache propagation:**
 
@@ -462,7 +447,7 @@ host.
 - Loadable `nook-rust*` tags live in the platform core/wasm bake files.
 - `nook-app/docker-bake.hcl` stays thin: shared GHA/registry/sccache
   variables, `_sccache`, and cross-lineage prepare groups.
-- Main verifies the published WASM dependency fingerprint from a fresh BuildKit builder.
+- Main publishes the portable WASM dependency fingerprint from one fresh hosted builder, then verifies it from a second fresh cache-only builder.
 - Repository invariants in `preflight/tests/sccache_s3.rs` and `preflight/tests/vault_app_isolation.rs` enforce the topology and proof.
 
 **Exact-input handoffs:**
@@ -520,20 +505,22 @@ timeout. Later build vertices and genuine S3 health failures fail closed.
 
 PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 
-- **Label effect:** Adds `Full browser e2e (main fix)` and `Full extension e2e (main fix)` jobs to the PR workflow.
+- **Label effect:** Adds two `Full browser e2e shard (N/2)` jobs, the stable `Full browser e2e (main fix)` join, and `Full extension e2e (main fix)` to the PR workflow.
 - **WASM artifact sharing:**
   - A dedicated producer verifies WASM once and uploads only its generated package.
   - Preview and both browser jobs download that artifact instead of recompiling Rust.
 - **Parallel browser jobs:**
-  - The two browser jobs build the Chromium image and run deterministic local-provider plus split-app tests and extension e2e on separate hosted runners.
+  - Two web shards run deterministic halves of every fully-parallel local-provider and split-app Playwright project.
+  - Extension e2e runs independently on a third hosted runner.
   - Commands: `task ci:pr:e2e:web:artifacts` and `task ci:pr:e2e:extension:artifacts`.
-  - Both tasks use the bounded BuildKit health and recovery wrapper.
+  - Both task families use the bounded BuildKit health and recovery wrapper.
 - **Exact-head cache policy:**
   - PR browser consumers publish only isolated exact-head cache refs.
   - Each consumer probes its exact browser ref.
   - An available exact ref is imported alone.
   - A missing exact ref falls back to the browser-image seed owned by trusted Main.
-  - The web full-e2e job publishes the verified exact-head browser graph after its assertions pass.
+  - Neither web shard nor its join writes a low-reuse exact-head browser cache.
+  - Trusted Main remains the reusable browser-image seed.
   - The UI-demo publisher is suppressed in this mode to avoid concurrent ref writes.
 - **Readiness requirement:**
   - Adding or removing the label retriggers PR Actions for the current head.
@@ -546,8 +533,11 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 ### Runner allocation
 
 - **`pr.yml`, `main.yml`, `release.yml`**
-  - Runner: `ubuntu-latest`
-  - Purpose: Elastic delivery capacity with Main-seeded private Zot caches
+  - Runner: trusted same-repository PR and Main native jobs use ARC. Hosted
+    capacity remains for releases, forks, Dependabot, browser, WASM, and
+    runtime-dependent gates.
+  - Purpose: Elastic delivery with a node-local ARC seed and private Zot as the
+    hosted fallback.
 - **`repository-policy.yml`, `hive.yml`**
   - Runner: `ubuntu-latest`
   - Purpose: Independent architecture and package verification
@@ -557,14 +547,6 @@ PRs that fix a failure observed on `main` must carry the `ci:full-e2e` label.
 - **`e2e-pr.yml`, `web-research.yml`**
   - Runner: `ubuntu-latest`
   - Purpose: Manual and research work scales independently
-- **`runner-cleanup.yml`**
-  - Runner: `nook`
-  - Purpose: Maintain the registered self-hosted Docker host and disk
-
-The runner-cleanup workflow runs its age-filtered system prune separately from
-its unused-volume prune: Docker does not support its `until` filter together
-with `docker system prune --volumes`.
-
 ## Why local-provider e2e vs sync-live
 
 Real provider API calls are slow and brittle at CI scale. Nook therefore:
@@ -717,9 +699,16 @@ Defined in `nook-app/nook-web/playwright.config.ts`:
 
 The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
 
-## Task commands (Docker)
+## Task commands
 
-All commands run containerized via Taskfile. The root `Taskfile.yml` is the repo entrypoint; app commands are included through `nook-app/Taskfile.yml`, with cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in `nook-app/nook-platform/docker/Taskfile.yml`, and web-family tasks in `nook-app/nook-web/Taskfile.yml` and package Taskfiles under `nook-web-extension/` / `nook-platform/`:
+Product checks run remotely in containerized jobs. The mandatory local format
+command reuses one content-addressed tool-only image across worktrees. The root
+`Taskfile.yml` is the repo entrypoint; app commands are included through
+`nook-app/Taskfile.yml`, with
+cross-package app tasks in `nook-app/ci/Taskfile.yml`, Docker tasks in
+`nook-app/nook-platform/docker/Taskfile.yml`, and web-family tasks in
+`nook-app/nook-web/Taskfile.yml` and package Taskfiles under
+`nook-web-extension/` / `nook-platform/`:
 
 ```bash
 # Agent-required local action before every push
@@ -795,8 +784,12 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Main serialization:**
 
-- Main deliberately serializes its native, WASM, and web publisher lanes because they write the shared default-branch scopes.
-- Each lane verifies read-only first and exports from the same warm builder afterward.
+- Main serializes native, WASM, and web producer lanes so they advance one
+  verified default-branch lineage.
+- ARC jobs reuse the persistent BuildKit content store on their selected node.
+- Verified Main ARC jobs publish portable source and tool cache refs. One fresh hosted
+  builder alone publishes the WASM dependency ref so ARC-local metadata cannot replace the consumer lineage.
+- Hosted fallback jobs export their verified graph to Zot for cold-node recovery.
 - `task docker:extract:coverage` remains a copy-only path that invokes neither BuildKit nor Rust tests.
 - It also serves workflows that already have a sealed `nook-web:local` image, including main's commit-keyed coverage artifact.
 - `task setup` gets those files into the slim web image through the same temporary host artifact directory as generated WASM.
@@ -822,17 +815,22 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Delivery CI uses isolated ARC or GitHub-hosted runners with remote BuildKit layers.**
 
-- Trusted same-repository PR native Rust plus Rust ecosystem jobs and every
-  explicit Main job run in fresh ARC Kata microVMs.
+- Trusted same-repository PR native Rust plus Rust ecosystem jobs and Main build
+  producers run in disposable ARC Pods.
 - Fork PRs, Dependabot PRs, releases, and non-Main runtime-dependent, browser,
   WASM, and deployment jobs run on fresh `ubuntu-latest` VMs.
-- On ARC, the shared setup creates a `remote` Buildx builder connected to that
-  microVM's private BuildKit sidecar over Pod loopback.
-- General ARC jobs execute loaded images through a job-scoped Podman API on Pod
-  loopback inside the same Kata guest. Hive ARC omits this runtime.
+- On ARC, the shared setup creates a `remote` Buildx builder connected to the
+  persistent rootless BuildKit shard on the selected node.
 - On GitHub-hosted VMs, it creates a job-scoped `docker-container` builder.
-- Both placements restore separate Zot scopes for stable and source-sensitive
-  Rust/WASM layers, web dependencies, browser-free web, and e2e web.
+- Main's portable WASM cache writer uses one fresh hosted builder rather than
+  ARC-local metadata. Zot must prove child manifest digest/size plus every
+  declared blob's size and SHA-256 by streaming it completely. A second fresh builder then requires the
+  dependency compiler vertices to be `CACHED`. The target stays in the same
+  Rust Dockerfile and context lineage; a named-context wrapper is invalid
+  because it changes BuildKit cache-key identity.
+- Hosted placements restore separate Zot scopes for stable and source-sensitive
+  Rust/WASM layers, web dependencies, browser-free web, and e2e web. ARC jobs
+  reuse their node-local persistent BuildKit shard.
 - Neither placement uses GitHub Actions cache storage for BuildKit layers.
 - PR CI assigns native Rust to one runner and WASM to another.
 - The small generated WASM package feeds parallel browser-free preview validation as soon as clippy/build finishes.
@@ -871,13 +869,14 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 **Ephemeral but cache-aware delivery jobs:**
 
-- Trusted same-repository PR jobs and every explicit Main job use ARC. Fork PRs,
-  other PR jobs, and release jobs use GitHub-hosted runners.
-- Main verifies each native/WASM/web lane read-only, then serially exports its already-solved graph from the same job-scoped builder.
-- WASM deps publish through `builder-wasm-deps-publish` with scoped `mode=max` refs.
-- Main then verifies the fingerprint from a fresh builder.
+- Trusted same-repository PR jobs and Main build producers use ARC. Main's WASM
+  cache writer/proof, fork PRs, other PR jobs, and releases use hosted runners.
+- Main verifies each lane. ARC publishes source/tool refs; the hosted writer
+  alone publishes the portable WASM dependency ref.
+- Hosted fallback jobs use the same portable Zot contract.
 - Empty `cache-from=` and `cache-to=` overrides are prohibited across Taskfiles and scripts.
-- Main thereby exports protected default-branch refs that PR jobs restore from private Zot.
+- Protected default-branch Zot refs remain available to every node and hosted
+  job. ARC jobs reuse a warm local shard before registry transfer.
 - Same-repository PR jobs authenticate with the Remote registry identity; Zot ACLs deny that identity write access to `nook/buildcache/**`.
 - PR Bake exporters write only git-commit refs under `nook/remote-buildcache/**`.
 - Docker setup probes each full-graph exact ref separately.
@@ -902,10 +901,15 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 **Hive workflow cache:**
 
 - Manual e2e, research, and every AI-agent job also use isolated GitHub-hosted runners and may restore the same scoped BuildKit layers.
-- The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v1` scope.
+- The path-filtered Hive workflow uses its own `nook-hive-linux-amd64-v2` scope.
 - Its pinned cargo-chef planner/recipe/cook stages match the `nook-app` strategy, then warm real-lock test and Clippy profiles in independent BuildKit stages before authored sources are copied.
 - The stages execute in parallel, so Cargo metadata and linking for the two verification graphs do not form one serial critical path.
-- Pull requests restore Main's scope read-only; only Main exports both graphs, in a final step after check and behavior tests pass.
+- Each parallel Cargo branch is capped at two jobs, matching the shared
+  four-CPU Hive BuildKit envelope. BuildKit requests 4 GiB and may burst to
+  6 GiB for compiler and linker peaks.
+- Pull requests restore Main's scope read-only and may publish only a
+  quarantined exact-head cache. Only Main exports both shared graphs, in a
+  final step after check and behavior tests pass.
 - Hive check and test tasks use the same job-scoped Buildx builder, so the behavior image reuses the dependency graph produced earlier in the run without allowing parallel PRs or failed validation to replace the trusted cache.
 - Unlike the product delivery graph, trusted same-repository Hive runs also mount `NOOK_SCCACHE_ACCESS_KEY` / `NOOK_SCCACHE_SECRET_KEY` into compiler steps and use SeaweedFS S3 `sccache` with the isolated `nook-hive` key prefix.
 - GitHub withholds those secrets from forked pull requests, and the shared wrapper then falls back to direct compilation.
@@ -921,8 +925,9 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 
 - Delivery BuildKit caches use authenticated `type=registry` refs on `registry.dev.nokey.sh` (Zot behind Traefik HTTPS + htpasswd), not GitHub Actions cache storage.
 - Local Task Bake restores git-commit remote-buildcache scopes when remote registry credentials exist.
-- The sealed local formatter uploads source-free Rust/WASM dependency stages to
-  unique candidate tags.
+- Explicit local build tasks may upload source-free Rust/WASM dependency stages
+  to unique candidate tags. The shared formatter never reads or writes those
+  caches.
 - The Main-defined allowlisted Remote workflow completely downloads each
   candidate.
 - It uploads and downloads a hosted-normalized tag before atomically assigning
@@ -944,13 +949,15 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   unchanged and PR jobs fall back to Main.
 - Opt out with `NOOK_REGISTRY_CACHE=0`.
 - Cache restoration is an optimization: an unavailable cache falls back to a correct cold build.
-- Main publishes shared cache manifests after lane verification.
+- Main ARC producers publish shared Zot cache manifests after lane verification.
 - Explicit Remote tasks import a present git-commit ref alone.
 - If that scope is absent, they seed it from source-free dependencies and Main.
 - They export only Remote refs.
-- The Remote credential can update only `nook/remote-buildcache/**` and has read-only access to Main's `nook/buildcache/**` repository path.
-- Same-repository pull requests use that same Remote registry identity for
+- The Remote credential can update only `nook/remote-buildcache/**`. It has read-only access to Zot's public mirror repositories, including Main's `nook/buildcache/**` path and mirrored tool images used to bootstrap hosted BuildKit.
+- Hosted same-repository pull requests use that Remote registry identity for
   git-commit exporters under `nook/remote-buildcache/**`.
+- General ARC pull requests remain registry-read-only and reuse Main plus
+  SeaweedFS sccache. Hive keeps its small minimal exact-SHA handoff.
 - Release and label-gated browser e2e jobs remain BuildKit-read-only.
 - Fork pull requests do not receive credentials.
 - Hive images also publish and pull through Zot.
@@ -966,252 +973,6 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Extension metadata, ZIP, and checksum verification adds an attempt-specific exact-commit query to every mutable artifact URL and retries convergence on PR, main, and release.
 - This prevents a fresh metadata response from being paired with an older edge-cached archive that reused the same channel filename.
 
-**Agent execution rules:**
-
-- GitHub Actions is both the agent build/test environment and the sole merge validation pipeline.
-- A coherent experiment must be formatted, committed, and pushed before `task remote` dispatches it.
-- Complete `pr.yml` validation starts only when `task pr:validate` toggles a validation label.
-- Local Docker product execution is not the agent path.
-- Agents do not run Task mirrors (`task check`, `task ci:pr`, builds, tests, or e2e) locally.
-- Interactive development servers and browser sessions remain local when their persistent state is intrinsic to the investigation.
-
-**Agent efficiency rules:**
-
-1. **Before product validation** — run `task loom:pre-push`, then commit and
-   push/open/update the PR so the exact head can run remotely.
-2. **Focused hosted iteration** — batch useful allowlisted tasks when they need
-   the same head. Use separate dispatches when parallel compute is worth another
-   runner.
-3. **After any remote CI failure** — read test output and static-analysis errors.
-   Then read persisted app logs when applicable. Fix the problem, run
-   `task loom:pre-push`, and push the completed fix. Use focused work for
-   diagnosis. Repeat complete validation only when replacing a failed final
-   gate.
-4. **Complete gate only when ready** — run `task pr:validate`; a push never refreshes that gate automatically.
-
-## Runner cleanup
-
-[`runner-cleanup.yml`](../../.github/workflows/runner-cleanup.yml) runs daily on
-the self-hosted `nook` runner label and can also be triggered manually. It runs
-`docker system prune --all --force --volumes` to reclaim unused containers,
-networks, build cache, tagged and dangling images, and anonymous volumes without
-touching the Docker daemon itself. `--all` is required because the default prune
-only removes dangling images while `docker system df` includes tagged images
-that no container uses in its reclaimable estimate. That estimate can exceed
-the image-store total because shared image layers are counted for each image; it
-is not a physical-byte reclamation guarantee.
-The compiler cache is remote and is unaffected by runner pruning. SeaweedFS S3
-disk usage on Borg is controlled independently of BuildKit cleanup.
-
-### CI verification — always check app logs
-
-After tests and static analysis (`task check`, clippy, Playwright report), **app
-logs are the most important remaining signal.** They record vault session
-lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
-
-- **Remote e2e failure:** read Playwright attachment `nook-app-logs.json` from
-  the CI artifact/report before changing code. The attachment is created for
-  every e2e result; failures also print the same entries to test output.
-- **Human local repro:** `E2E_SPEC=… task web:test:e2e:file`, then
-  `fetchAppLogs(page)` or open `/app-logs?minLevel=debug&limit=1000`. Agents use
-  the hosted remote catalog.
-- **Human inspection:** `/logs` in the running app.
-
-Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../references/logging.md#debugging-troubleshooting-and-ci-verification).
-
-Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation)
-and [coding-bro.md](coding-bro.md).
-
-E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
-
-## Secrets and env
-
-- **`NOOK_GITHUB_PAT`**
-  - Used by: `sync-live` e2e; `agent-implement` PR/push
-  - Scope: Classic with `repo` scope or fine-grained with contents and pull requests write on this repository.
-  - Requirement: PR creation must act as a user so normal workflows fire.
-- **`NOOK_GITHUB_E2E_REPO`**
-  - Used by: CI sets per run for live suites (one repo per container)
-- **`CLOUD_FLARE_PAGES_TOKEN`, `CLOUD_FLARE_ACCOUNT_ID`**
-  - Used by: PR preview deploy; main development deploy and domain verification
-  - Scope: Account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`.
-- **`GITHUB_TOKEN`**
-  - Used by: PR comments, deployment records, portable Rust coverage comment
-- **`CURSOR_API_KEY`**
-  - Used by: `agent-implement.yml`
-
-**Cloudflare credentials**
-
-- Token requires account `Cloudflare Pages: Edit` plus `nokey.sh` zone `Zone: Read`, `DNS: Read`, and `Cache Purge`.
-- Main purges stale development routes before live verification.
-- PR CI records its preview as a successful `github-pages` deployment for ruleset enforcement.
-
-Local live e2e: copy `nook-app/nook-web/.env.test.local.example` → `.env.test.local` with your PAT.
-
-## Google Cloud operations
-
-The local Codex machine has Google Cloud CLI 575.0.0 installed at
-`/Users/bynull/google-cloud-sdk/bin/gcloud`. It is authenticated as
-`bynull@meta-secret.org` with active project `nook-500604` (`name: nook`,
-`projectNumber: 327685619872`). New interactive shells should resolve `gcloud`
-from `.zshrc`; non-interactive agent commands may use the full binary path.
-
-Use this CLI for Nook Google Cloud project inspection and safe operational
-changes. OAuth browser-origin changes still require the Google Auth Platform
-client configuration to contain exact origins; do not commit client secrets, and
-do not assume per-PR Cloudflare preview hosts can be covered by wildcards. See
-[auth-providers.md §7](../design-docs/auth-providers.md#7-oauth-origins-and-pr-previews).
-
-## CI agent (dependency updates / implementation)
-
-[`agent-implement.yml`](../../.github/workflows/agent-implement.yml) uses the CI-agent harness via **`task ci-agent:implement`** for ready Workbench issues or manual prompts (see below).
-
-**Main failure handoff:**
-
-- An unsuccessful Main run is handled separately by [`main-failure-handoff.yml`](../../.github/workflows/main-failure-handoff.yml).
-- Trusted default-branch code writes a deduplicated `status: ready`, `automation: hive` Workbench incident without copying raw logs.
-- The token-free k0s dispatcher reconciles it into Neo4j.
-- One isolated logical task owns diagnosis through exact-head checks, review resolution, squash merge, and replacement Main verification.
-- The explicitly dispatched implementation worker does not claim Hive
-  incidents.
-- Browser E2E and UI-demo failures enter the same durable repair queue as native, WASM, build, deployment, mixed, and unknown failures.
-
-**Hive delivery generations:**
-
-- Each rerun is recorded on the Workbench issue keyed by source SHA.
-- Its publication branch, plan, and worklog are generation-specific.
-- A later failed rerun supersedes and cancels an active delivery before its new generation is enqueued.
-- The failed reconciliation retries only after a poll interval longer than the worker heartbeat.
-- Elapsed time is not the termination barrier.
-- The old generation remains `CANCELLING` until its worker durably acknowledges that Codex execution stopped or Kubernetes confirms deletion of the exact recorded worker Pod.
-- Cancelling exclusive blocker Pods participate in the same barrier.
-- Only then can the replacement become claimable.
-- A successful rerun retires an existing incident and terminates any active delivery.
-- Run IDs and attempts are ordered across the incident so older workflow runs are ignored.
-- Reconciliation of the already-current generation is idempotent and never cancels it.
-- Any mixed, unknown, native, WASM, build, deployment, or cancelled non-E2E job still queues Hive.
-
-**Rust dependency updates:**
-
-- The weekly Rust dependency workflow uses the same harness through **`task ci-agent:fix`** for its bounded update job.
-
-**Why `NOOK_GITHUB_PAT` (not `GITHUB_TOKEN`)?** GitHub does not fire
-`pull_request` workflows for PRs opened with the default Actions token
-(`github-actions[bot]`). The implementation job checks out and pushes with
-`NOOK_GITHUB_PAT` so the PR is attributed to the PAT owner and `pr.yml` runs.
-Merge still requires the standard exact-head readiness audit.
-
-- **Required secrets:** `CURSOR_API_KEY` and `NOOK_GITHUB_PAT`.
-  - The PAT is classic with `repo` scope or fine-grained with contents and pull
-    requests write on this repository.
-- **Execution:**
-  1. Run `task setup` to bake sealed `nook-web:local`.
-  2. Run `task ci-agent:implement` to build and start `nook-ci-agent:local`.
-  3. Use Docker CLI and Buildx in the container for repository Task targets.
-  4. Start with `docker run --init`, bind-mount the checkout, and mount
-     `/var/run/docker.sock` for sibling containers on the host daemon.
-- **Runner:** `agent-implement.yml` uses GitHub-hosted `ubuntu-latest`.
-  - Concurrent work scales across hosted capacity.
-  - Host Node is not required.
-- **Teardown:** await `agent[Symbol.asyncDispose]()`, call `process.exit`, and
-  best-effort kill direct child PIDs.
-- **Optional environment:** `CI_AGENT_PROMPT_FILE`, `CI_FIX_LABEL`, and
-  `DOCKER_SOCK` with default `/var/run/docker.sock`.
-
-### Logging
-
-The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** lines so GitHub Actions logs are easy to scan:
-
-```
-2026-06-29 20:14:32,879 INFO  [ci-agent/agent-wait] Agent still running (20m 0s)
-2026-06-29 20:14:32,879 INFO  [ci-agent/run-agent] Running Cursor SDK agent (run 123, …)
-2026-06-29 20:14:33,102 INFO  [ci-agent/cursor] shell grep waitForPendingJoin
-2026-06-29 20:14:33,450 INFO  [ci-agent/cursor/agent] agent output
-    The agent's streamed reply is indented under the header.
-2026-06-29 20:14:34,120 INFO  [ci-agent/cursor/shell] output
-    | task: ci:verify:parallel
-    | error: test failed
-2026-06-29 20:14:35,001 INFO  [ci-agent/cursor] --- stdout ---
-2026-06-29 20:14:35,001 INFO  [ci-agent/cursor] shell exit 1
-```
-
-### Log fields
-
-- **Timestamp:** UTC, `yyyy-MM-dd HH:mm:ss,SSS`
-- **Level:** `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR`
-- **Component:** `ci-agent/<module>` (e.g. `fix`, `run-agent`, `agent-wait`, `git`, `github`, `cursor`, `cursor/agent`, `cursor/shell`)
-
-- Set `CI_AGENT_LOG_LEVEL=DEBUG` for step and turn traces.
-- Log tool starts, shell output, and command results at **INFO**.
-- Set heartbeat with `CI_AGENT_HEARTBEAT_MS` (default 60 seconds).
-- The local/default agent timeout is 90 minutes.
-
-`agent-implement.yml` sets:
-
-- `timeout-minutes: 360` for the complete job;
-- `CI_AGENT_TIMEOUT_MS=18000000` for a five-hour agent run.
-
-- The remaining hour covers setup and result publication.
-- The job exits after opening the PR and publishing its bounded handoff.
-- `task pr:preflight` and `task pr:ready` are read-only audits.
-  - No hosted continuation or CLI command merges from their result.
-- The ci-agent entrypoint calls `process.exit` after `runCiFix()` completes.
-  - Without it, Cursor SDK child processes and open handles can retain the Node
-    event loop after PR creation.
-- [CI agent smoke](../../.github/workflows/ci-agent-smoke.yml) runs unit tests
-  and an `exitCiAgent` open-handle check on `ubuntu-latest` through
-  `workflow_dispatch`.
-
-## Agent implement (Workbench issue / manual prompt)
-
-[`agent-implement.yml`](../../.github/workflows/agent-implement.yml) runs the same Cursor SDK harness (`task ci-agent:implement`) for intentional implementation work — not CI failure recovery.
-
-### Agent implement triggers
-
-- **`workflow_dispatch.issue_path`**
-  - Behavior: Claims that exact eligible Workbench issue
-- **`workflow_dispatch.prompt`**
-  - Behavior: Runs the explicit prompt without claiming an issue
-
-Exactly one of `issue_path` or `prompt` is required. Empty or ambiguous
-dispatches fail before checkout. Issue eligibility requires `status: ready`,
-`automation: agent`, and an owner who is a Nook GitHub collaborator with write
-access. The workflow resolves only the requested path. It commits `status:
-in_progress` atomically before Docker setup. Prompt mode requires a valid
-`continuing_owner` with Nook write access. Each explicit dispatch has an
-independent run. A blob-SHA conflict rejects a duplicate claim of the same
-issue without collapsing unrelated pending dispatches.
-
-The workflow publishes a Workbench progress update and worklog whether
-implementation opens a PR or blocks. Drafts, manually owned issues, and
-historical imports cannot trigger it.
-
-Loop: claim Workbench record → `task setup` → **`task ci-agent:implement`**
-(nook-ci-agent container + docker.sock) → push branch → open a Nook PR →
-assign and directly mention the continuing owner → publish Workbench
-progress/worklog → exit. The assigned owner then follows the standard
-failure/comment/conflict loop, exact-head readiness audit, squash merge, and
-final Workbench completion update. Agent secrets:
-`CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
-[`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
-
-## Agent checklist when touching CI or e2e
-
-1. **Do not** move real GitHub API tests back into `main.yml` — extend stub coverage instead.
-2. **Do** add new sync-provider integration tests to the `e2e` spec list first; add a small live smoke under `e2e/live/` if the provider has a real backend.
-3. **Do** format, commit, push, use focused `task remote` jobs, and explicitly
-   trigger complete validation with `task pr:validate`; never run heavy agent
-   product work locally.
-4. **Do** update this doc and [`pull-requests.md`](pull-requests.md) when workflow behavior changes.
-5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
-   - UI-changing PRs additionally record only their changed headless demo specs.
-   - Main-fix validation uses `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent deterministic browser suites before merge.
-   - Main runs the same local-provider and extension **e2e**.
-   - Every actionable unsuccessful Main run, including browser E2E and UI-demo failures, is reconciled through one `automation: hive` Workbench incident into an isolated task that owns the repair PR, review loop, squash merge, and replacement Main verification.
-   - Credentialed **sync-live** checks are explicit manual runs.
-6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
-
-See also: [ARCHITECTURE.md §7](../ARCHITECTURE.md#7-the-engineering-harness), [pull-requests.md](pull-requests.md).
-
-<!-- agent-implement docker smoke -->
+## CI operator and agent operations
+[CI Operator and Agent Operations](ci-operations.md) owns cleanup, logs,
+secrets, providers, automation agents, and the remote-only execution rules.

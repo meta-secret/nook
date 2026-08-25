@@ -175,14 +175,14 @@ tasks:
           -e AWS_ACCESS_KEY_ID="$access_key" \
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
           -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          docker.io/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url http://127.0.0.1:8333 \
           s3api create-bucket --bucket "$bucket" >/dev/null 2>&1 || true
         docker run --rm --network host \
           -e AWS_ACCESS_KEY_ID="$access_key" \
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
           -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          docker.io/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url http://127.0.0.1:8333 \
           s3api head-bucket --bucket "$bucket"
         REMOTE
@@ -229,7 +229,7 @@ tasks:
           -e AWS_ACCESS_KEY_ID="$access_key" \
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
           -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api head-bucket --bucket "$bucket"
         probe_key="health/build-identity-write-probe-$(openssl rand -hex 12)"
@@ -238,21 +238,21 @@ tasks:
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
           -e AWS_DEFAULT_REGION=auto \
           -v "$probe_file:/tmp/empty:ro" \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api put-object --bucket "$bucket" --key "$probe_key" --body /tmp/empty >/dev/null
         docker run --rm --network host \
           -e AWS_ACCESS_KEY_ID="$access_key" \
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
           -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api head-object --bucket "$bucket" --key "$probe_key" >/dev/null
         docker run --rm --network host \
           -e AWS_ACCESS_KEY_ID="$access_key" \
           -e AWS_SECRET_ACCESS_KEY="$secret_key" \
           -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api delete-object --bucket "$bucket" --key "$probe_key" >/dev/null
 
@@ -260,7 +260,7 @@ tasks:
           -e AWS_ACCESS_KEY_ID="$remote_access_key" \
           -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
           -e AWS_DEFAULT_REGION=auto \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api head-bucket --bucket "$bucket" >/dev/null
         remote_probe_key="health/remote-build-identity-write-probe-$(openssl rand -hex 12)"
@@ -269,7 +269,7 @@ tasks:
           -e AWS_SECRET_ACCESS_KEY="$remote_secret_key" \
           -e AWS_DEFAULT_REGION=auto \
           -v "$probe_file:/tmp/empty:ro" \
-          amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
+          registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab \
           --endpoint-url "https://$host" \
           s3api put-object --bucket "$bucket" --key "$remote_probe_key" --body /tmp/empty >/dev/null 2>&1; then
           echo "Remote compiler identity must not write Main's bucket" >&2

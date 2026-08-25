@@ -558,7 +558,12 @@ tasks:
           fi
           sleep 2
         done
-        hive_wait_for_ready_pool 60 2 3
+        desired_hive_replicas="$(kubectl get deployment hive \
+          --namespace hive-system \
+          -o jsonpath='{.spec.replicas}')"
+        if test "$desired_hive_replicas" != 0; then
+          hive_wait_for_ready_pool 60 2 3
+        fi
         test "$(kubectl get deployment hive \
           --namespace hive-system \
           -o jsonpath='{.spec.template.spec.runtimeClassName}')" = kata-dragonball
@@ -595,6 +600,23 @@ tasks:
               | .env[]
               | select(.name | startswith("NEO4J_"))] | length'
         )" = 0
+
+        if test "$desired_hive_replicas" = 0; then
+          for deployment in \
+            hive \
+            hive-workbench-dispatcher \
+            hive-observer \
+            hive-reaper-controller; do
+            test "$(kubectl get deployment "$deployment" \
+              --namespace hive-system \
+              -o jsonpath='{.spec.replicas}')" = 0
+            test "$(kubectl get deployment "$deployment" \
+              --namespace hive-system \
+              -o json | jq '.status.readyReplicas // 0')" = 0
+          done
+          echo "Hive workloads are intentionally paused at zero replicas"
+          exit 0
+        fi
 
         old_pod="$(
           kubectl get pods \
@@ -665,23 +687,64 @@ tasks:
         REMOTE
 
   hive:seccomp:install:
-    desc: Install the Restricted-compatible Hive Bubblewrap profile on k0s.
+    desc: Install the Restricted-compatible Hive Bubblewrap profile on every compute node.
     silent: true
     cmds:
       - |
-        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        bash <<'BASH'
         set -euo pipefail
-        remote_dir="{{.INFRA_REMOTE_DIR}}"
-        source_profile="$remote_dir/infra/k0s/seccomp/hive-bubblewrap.json"
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        source_profile="$(git rev-parse --show-toplevel)/infra/k0s/seccomp/hive-bubblewrap.json"
+        test "$(jq -r '.defaultAction' "$source_profile")" = SCMP_ACT_ERRNO
+        inventory="$(ssh -o BatchMode=yes "$controller_target" \
+          'sudo -n k0s kubectl get nodes -l nook.nokey.sh/node-role=compute -o json' |
+          jq -r '.items | sort_by(.metadata.name)[] |
+            [.metadata.name, .metadata.annotations["nook.nokey.sh/ssh-target"]] | @tsv')"
+        if test -z "$inventory"; then
+          echo "No compute nodes require the Hive seccomp profile yet"
+          exit 0
+        fi
+        while IFS=$'\t' read -r node target; do
+          if test -z "$target" || test "$target" = null; then
+            echo "Hive compute node $node lacks nook.nokey.sh/ssh-target" >&2
+            exit 1
+          fi
+          ssh_user="${target%%@*}"
+          ssh_host="${target#*@}"
+          if test "$ssh_user" = "$target" ||
+             ! [[ "$ssh_user" =~ ^[A-Za-z0-9_.-]+$ ]] ||
+             ! [[ "$ssh_host" =~ ^[A-Za-z0-9_.:-]+$ ]]; then
+            echo "Hive compute node $node has an unsafe SSH target" >&2
+            exit 1
+          fi
+          if ! ssh -n -o BatchMode=yes -o ConnectTimeout=5 \
+            -o StrictHostKeyChecking=accept-new -J "$controller_target" "$target" true; then
+            ssh -n -o BatchMode=yes "$controller_target" \
+              "sudo -n k0s kubectl taint node '$node' 'nook.nokey.sh/arc-build=preparing:NoSchedule' --overwrite >/dev/null"
+            echo "Deferred Hive seccomp on offline compute node $node ($target)" >&2
+            continue
+          fi
+          echo "Installing Hive seccomp profile on $node"
+          profile_temp="$(ssh -n -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$target" mktemp)"
+          case "$profile_temp" in
+            /tmp/tmp.*) ;;
+            *) echo "Hive compute node $node returned an unsafe temporary path" >&2; exit 1 ;;
+          esac
+          scp -q -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -o ProxyJump="$controller_target" "$source_profile" "$target:$profile_temp"
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new \
+            -J "$controller_target" "$target" 'bash -s' -- "$profile_temp" <<'REMOTE'
+        set -euo pipefail
+        source_profile="$1"
         profile_dir=/var/lib/k0s/kubelet/seccomp/nook
-        test "$(
-          jq -r '.defaultAction' "$source_profile"
-        )" = SCMP_ACT_ERRNO
+        trap 'rm -f "$source_profile"' EXIT
+        test "$(jq -r '.defaultAction' "$source_profile")" = SCMP_ACT_ERRNO
         sudo -n install -d -m 0755 "$profile_dir"
-        sudo -n install -m 0644 \
-          "$source_profile" \
-          "$profile_dir/hive-bubblewrap.json"
+        sudo -n install -m 0644 "$source_profile" "$profile_dir/hive-bubblewrap.json"
         REMOTE
+        done <<< "$inventory"
+        BASH
 
   hive:diagnose:
     desc: Show bounded Hive worker and controller diagnostics.

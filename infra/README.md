@@ -10,32 +10,38 @@ This directory owns Nook's stateful server infrastructure:
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
-- Pinned Actions Runner Controller scale sets run focused and opted-in trusted
-  Rust merge jobs in single-use `kata-qemu-runtime-rs` Pods. Each 4 GiB microVM
-  carries Docker client tooling and its own privileged BuildKit sidecar on Pod
-  loopback. Its overlayfs builder state uses a private 32 GiB ext4 image.
-  General runners also give Podman a sparse, private 24 GiB ext4 image so its
-  native overlay driver does not depend on FUSE over the Kata shared volume.
-  The image is a metadata-only reflink clone of a trusted seed in the
-  Task-managed Btrfs pool. There is no full-size copy at runner startup. There
-  is no Docker daemon, DinD, Sysbox, shared builder, or host runtime socket.
-  The runner container cannot mount the pool or another job's writable state.
-  No runners stay warm: ARC creates one fresh microVM per job. Both `nook-k0s`
-  and the dedicated `nook-k0s-hive` set permit ten concurrent jobs. Hive adds
-  pinned Neo4j and non-root Trixie test-runtime native sidecars. Kubernetes
-  stops both helpers when the runner exits. The runtime executes exported tests
-  through a private exchange volume. It does not introduce a Docker daemon.
+- Pinned Actions Runner Controller scale sets run trusted jobs in disposable
+  ordinary Pods. Each qualified node owns one retained 64 GiB rootless BuildKit
+  shard. The node-local Service keeps a runner on its selected shard. There is
+  no Docker daemon, Podman, DinD, Sysbox, host runtime socket, runner host path,
+  privileged runner, or Kata runtime.
+- Rootless BuildKit uses its required no-process-sandbox mode because ordinary
+  unprivileged Pods cannot mount the nested `/proc` used by the OCI sandbox.
+  Therefore only trusted same-repository jobs use ARC. Fork and Dependabot jobs
+  remain hosted.
+- The general `nook-k0s` set permits 35 concurrent jobs. The dedicated
+  `nook-k0s-hive` set permits ten. Hive adds pinned Neo4j and non-root Trixie
+  test-runtime sidecars.
+- Kubernetes prefers either Rise-S worker, then the home 7950X3D node, then
+  KS-6. Topology spreading expands the burst envelope across both primary
+  NVMe workers without concentrating the queue on one machine.
 
-Both public edge services live under the `*.dev.nokey.sh` namespace. Do not
-expose anonymous S3 or registry access; every client authenticates with the
-generated credentials.
+Both public edge services live under the `*.dev.nokey.sh` namespace. SeaweedFS
+and private `nook/**` Zot repositories require generated credentials. Zot's
+pull-through `library/**` mirror is intentionally anonymous for read-only
+upstream image pulls by kubelet, BuildKit, and Actions service containers.
+Anonymous mirror writes and every private-repository read or write remain
+denied.
 
 Deploy and inspect the stack from the repository root:
 
 ```sh
-# First deployment only: create a repository-scoped fine-grained token file
-# with Administration read/write, then bootstrap the controller Secret.
-ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token task infra:deploy
+# First deployment only: create separate repository-scoped fine-grained token
+# files. The controller needs Administration read/write. The host verifier
+# needs Actions read only. Both are persisted automatically under ~/.nook.
+ARC_GITHUB_TOKEN_FILE=/secure/path/nook-arc-token \
+  ARC_CACHE_VERIFIER_TOKEN_FILE=/secure/path/nook-arc-verifier-token \
+  task infra:deploy
 
 # Routine deployments retain the installed Secret.
 task infra:deploy
@@ -54,7 +60,28 @@ task infra:arc:activate
 task infra:arc:fallback
 task infra:arc:smoke
 task infra:arc:hive:smoke
+task infra:kubernetes-cache:prove
+
+# Install or reconcile one reviewed OVH worker through provider API, host
+# bootstrap, authenticated mesh, k0s, BuildKit, and ARC readiness.
+task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
 ```
+
+`task infra:kubernetes-cache:prove` runs the portable Kubernetes integration
+proof. It creates one isolated k3d server and three agents, then applies
+Kustomize patches to the production Zot, BuildKit, and NetworkPolicy manifests.
+The proof validates node-local cache retention, cross-node Zot restoration,
+stable-scope ACLs, isolated concurrent refs, and denied unlabeled clients. It
+first proves an authorized same-node BuildKit client. Every cache client runs on
+its selected shard's node and uses the production node-local Service. The denied
+client waits for the K3s policy-controller sync window. The proof cleans up only
+its exact cluster and uses an isolated kubeconfig. It requires k3d v5.9.0,
+Docker, Bun, and kubectl.
+
+This local proof covers portable Kubernetes workload behavior. CI checks its
+static contracts but does not create a k3d cluster. k0s lifecycle, multi-host
+WireGuard routing, Kata isolation, ARC controller lifecycle, node capacity, and
+production performance remain production-only evidence.
 
 `INFRA_SSH_TARGET` and `INFRA_REMOTE_DIR` override the default server target and
 remote deployment directory. The default target is
@@ -77,8 +104,10 @@ never copied to a checkout or GitHub.
 GitHub Actions secrets `NOOK_REGISTRY_HOST`, `NOOK_REGISTRY_USERNAME`,
 `NOOK_REGISTRY_PASSWORD`, `NOOK_REGISTRY_REMOTE_USERNAME`, and
 `NOOK_REGISTRY_REMOTE_PASSWORD`. The Main identity administers the registry; the
-Remote identity may update only `nook/remote-buildcache/**` and can read but not
-update `nook/buildcache/**`.
+Remote identity may update only `nook/remote-buildcache/**`. It can read all
+public mirror repositories, including `nook/buildcache/**`, but cannot update
+them. This keeps authenticated CI pulls equivalent to anonymous mirror pulls
+without expanding the Remote identity's write boundary.
 
 DNS for `sccache.dev.nokey.sh` and `registry.dev.nokey.sh` must point at the
 Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can
@@ -87,8 +116,8 @@ succeed. Host-network Traefik requires an nftables INPUT accept for TCP `443`
 after k0s firewall updates. Public Redis `:6380` is retired.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
-`registry.dev.nokey.sh`. Main publishes shared cache manifests; pull requests
-restore them read-only after `docker login`. Explicit Remote tasks use
+`registry.dev.nokey.sh`. Hosted fallback jobs publish shared cache manifests;
+hosted pull requests restore them read-only after `docker login`. Explicit Remote tasks use
 branch-and-task Zot refs with Main fallback and write only those Remote refs in
 the separately authorized `nook/remote-buildcache/**` repository path. Zot
 deduplicates identical layer blobs shared with Main. Remote Rust compiler vertices
@@ -96,27 +125,33 @@ read trusted Main SeaweedFS objects through a separate read-only identity and
 stable BuildKit secret IDs; secret contents
 never enter image layers or cache checksums.
 
-`preflight`, `rust:ci`, and `arc:runtime` Remote selections use `nook-k0s`
-through the repository variable `NOOK_RUNS_ON`. Trusted Main jobs also select
-that scale set. Each general Kata guest has private loopback BuildKit and
-Podman services plus a shared runner work volume, so `type=docker`, `docker
-run`, and bind-mounted artifacts stay job-scoped without DinD or a host runtime
-socket. The Podman image is sparse, grows only with runtime data, and is
-discarded with the job. Trusted Hive Rust verification uses `nook-k0s-hive` through
-`NOOK_HIVE_RUNS_ON`; its browser job stays hosted. Unsupported focused tasks,
-forks, and Dependabot retain hosted routing.
-`task infra:arc:activate` sets the ARC route;
-`task infra:arc:fallback` immediately restores both routes to `ubuntu-latest`.
-ARC Buildx uses
-the remote driver against the private BuildKit sidecar. Each job starts from
-the reusable local seed but writes only to its own Pod UID clone. Zot remains
-the authoritative cache shared with hosted builders. Its
-authenticated Zot traffic resolves through the same node's TLS ingress,
-avoiding an external registry data path while preserving the public certificate
-and registry host.
+`preflight`, `rust:ci`, and `arc:runtime` Remote selections use
+`nook-k0s` through `NOOK_RUNS_ON`. Trusted Hive Rust uses `nook-k0s-hive`
+through `NOOK_HIVE_RUNS_ON`. Unsupported tasks, forks, and Dependabot retain
+hosted routing.
+
+`task infra:arc:activate` configures both ARC routes.
+`task infra:arc:fallback` restores both routes to `ubuntu-latest`.
+
+ARC Buildx uses the remote driver against
+`tcp://nook-buildkit.arc-runners.svc.cluster.local:1234`. BuildKit's local state
+persists across runner and builder Pod recreation. Zot remains the authenticated
+portable boundary for cold nodes and hosted builders.
+
+Every qualified build node owns one local PV and one BuildKit Pod. Rise-S has
+placement tier `primary`. The home 7950X3D node is `secondary`. KS-6 is
+`overflow`. These tiers are preferences, so node pressure exposes the next
+eligible node.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.
+
+Each node's shared BuildKit Pod requests 4 CPU and 8 GiB, has no CPU limit, and
+may use 48 GiB during a large parallel solve. Each disposable runner requests
+0.5 CPU and 1 GiB and may use 4 CPU and 6 GiB, with a 32 GiB ephemeral work
+volume. These are ordinary Pods, not per-job microVMs. Kubernetes admits work
+from requests and live node pressure; the scale-set ceilings are queue limits,
+not promises that one node can run every runner simultaneously.
 
 Add and inspect a distinct Linux Mesh node through the repository Taskfile:
 

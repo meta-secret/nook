@@ -36,7 +36,10 @@ fn assert_workflow_runtime_contract(root: &Path) {
     assert!(
         pr.contains("runs-on: ubuntu-latest")
             && release.contains("runs-on: ubuntu-latest")
-            && pr.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && pr
+                .matches("github.event.pull_request.head.repo.full_name == github.repository")
+                .count()
+                >= 3
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
@@ -44,12 +47,14 @@ fn assert_workflow_runtime_contract(root: &Path) {
         "trusted PR Rust jobs must select configured ARC and preserve hosted fork and release capacity"
     );
     assert!(
-        !main.contains("runs-on: ubuntu-latest")
+        main.matches("runs-on: ubuntu-latest").count() == 5
             && main
                 .matches("runs-on: ${{ vars.NOOK_RUNS_ON || 'ubuntu-latest' }}")
                 .count()
-                == 8,
-        "every explicit trusted Main job must select configured ARC with a hosted fallback"
+                == 4
+            && main.contains("name: Portable WASM cache publication proof")
+            && main.contains("bash .github/scripts/verify-wasm-gha-cache.sh"),
+        "daemon-free Main jobs must use ARC while browser, deploy, and clean Zot cache-proof jobs stay hosted"
     );
 }
 
@@ -59,6 +64,9 @@ fn assert_docker_setup_contract(root: &Path) {
     let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
+        "Preload hosted BuildKit from Zot",
+        "docker pull \"${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1\"",
+        "driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1",
         "docker/login-action@v4",
         "registry-username",
         "registry-password",
@@ -70,8 +78,7 @@ fn assert_docker_setup_contract(root: &Path) {
         "GHA_CACHE_ENABLED=1",
         "NOOK_REGISTRY_CACHE_HOST=${{ inputs.registry-host }}",
         "cache_write_enabled=1",
-        "GHA_CACHE_EXPORT_MODE=min",
-        "ARC publishes a minimal exact-SHA handoff",
+        "ARC skips general exact-SHA registry export; Main and sccache remain reusable",
         "${NOOK_ARC_RUNNER:-}",
         "GHA_CACHE_WRITE_ENABLED=$cache_write_enabled",
         "event_name=\"${{ github.event_name }}\"",
@@ -79,9 +86,9 @@ fn assert_docker_setup_contract(root: &Path) {
         "[ \"$event_name\" != \"push\" ] || [ \"$git_ref\" != \"refs/heads/main\" ]",
         "main-cache-only",
         "main-cache-only requires cache-write=false",
-        "Verify ARC container runtime",
-        "tcp://127.0.0.1:2375",
-        "docker info >/dev/null",
+        "Connect ARC Buildx to the node-local BuildKit shard",
+        "--driver remote",
+        "tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
     ] {
         assert!(
             setup.contains(required),
@@ -91,11 +98,29 @@ fn assert_docker_setup_contract(root: &Path) {
     assert!(
         pr.contains("name: Publish git-scoped native BuildKit cache")
             && pr.contains("task ci:main:publish-native-cache")
-            && pr.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust")
-            && pr
-                .contains("ARC verified solves already published their minimal exact-SHA handoffs"),
-        "trusted ARC PR native verification must publish during verified solves without a redundant reconstruction pass"
+            && pr.contains("GHA_CACHE_WRITE_ENABLED=\"\"")
+            && pr.contains(
+                "ARC keeps the verified native graph local; Main and sccache remain reusable"
+            ),
+        "trusted ARC PR native verification must remain read-only while hosted fallback can publish its exact cache"
     );
+    assert_eq!(
+        pr.matches("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
+            .count(),
+        5,
+        "every general PR cache publisher must explicitly keep ARC verification graphs local"
+    );
+    for local_graph_message in [
+        "ARC keeps the verified native graph local; Main and sccache remain reusable",
+        "ARC keeps the verified WASM graph local; Main and sccache remain reusable",
+        "ARC keeps the verified web graph local; Main remains reusable",
+        "ARC keeps the verified browser graph local; Main remains reusable",
+    ] {
+        assert!(
+            pr.contains(local_graph_message),
+            "PR CI is missing the ARC-local cache contract: {local_graph_message}"
+        );
+    }
     assert!(
         !setup.contains("crazy-max/ghaction-github-runtime")
             && !setup.contains("systemctl restart docker")
@@ -103,13 +128,13 @@ fn assert_docker_setup_contract(root: &Path) {
         "delivery setup must login to registry.dev.nokey.sh and must not reconfigure or restart Docker"
     );
     for required in [
-        "name: container-runtime",
-        "quay.io/podman/stable:v5.8.4@sha256:",
-        "- /usr/bin/podman\n              - --url\n              - tcp://127.0.0.1:2375\n              - info",
-        "name: NOOK_CONTAINER_RUNTIME",
-        "value: podman",
-        "value: tcp://127.0.0.1:2375",
-        "sizeLimit: 24Gi",
+        "automountServiceAccountToken: false",
+        "name: install-docker-client",
+        "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
+        "name: NOOK_BUILDKIT_REMOTE",
+        "name: NOOK_BUILDKIT_ADDR",
+        "value: tcp://nook-buildkit.arc-runners.svc.cluster.local:1234",
+        "sizeLimit: 32Gi",
     ] {
         assert!(
             arc_values.contains(required),
@@ -122,6 +147,10 @@ fn assert_docker_setup_contract(root: &Path) {
         "docker.sock",
         "containerd.sock",
         "sysbox",
+        "podman",
+        "runtimeClassName:",
+        "privileged: true",
+        "hostPath:",
     ] {
         assert!(
             !arc_values.contains(prohibited),
@@ -241,9 +270,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         wasm_node_job.contains("needs: wasm")
             && wasm_node_job.contains("task ci:wasm:node-test")
             && wasm_node_job.contains("needs.wasm.outputs.run-node-tests == 'true'")
-            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:wasm:node-test")
+            && wasm_node_job.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test")
             && wasm_node_job.contains("Trusted handoff already covered Node tests"),
-        "PR CI must finish WASM Node tests and publish its isolated exact cache in a dependent job after the build handoff"
+        "PR CI must finish WASM Node tests without exporting ARC graphs while preserving hosted exact-cache publication"
     );
     assert!(
         native_job.contains("cache-write: \"false\"")
@@ -369,7 +399,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && !preview_job.contains("attempt $attempt/900"),
         "PR preview must deploy only after Native Rust, WASM, web verification, WASM Node tests, and the UI demo succeed"
     );
-    let coverage_job = section(&pr, "  coverage:\n", "  full-e2e:\n");
+    let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");
     assert!(
         coverage_job.contains("needs: rust")
@@ -383,7 +413,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && !coverage_workflow.contains("Waiting for native coverage artifact"),
         "coverage reporting must consume the completed native artifact directly without blocking preview or rebuilding the base revision"
     );
-    let full_e2e_job = section(&pr, "  full-e2e:\n", "  full-extension-e2e:\n");
+    let full_e2e_job = section(&pr, "  full-e2e-shard:\n", "  full-e2e:\n");
     assert!(
         full_e2e_job.contains("needs: [wasm, wasm-node-test]")
             && full_e2e_job.contains("Download verified WASM handoff")
@@ -683,7 +713,7 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
         "\n  ui-demos:\n",
         "\n  deploy:\n",
         "needs: [wasm]",
-        "needs: [web, web-e2e]",
+        "needs: [web, web-e2e, wasm-cache-proof]",
         "task ci:main:e2e:web:artifacts",
         "task ci:main:e2e:extension:artifacts",
         "task ci:main:ui-demo:artifacts",
@@ -720,10 +750,9 @@ fn assert_release_and_main_delivery_contract(root: &Path) -> anyhow::Result<()> 
             && web_e2e_artifacts.contains("TASK: _ci:main:web:e2e-only"),
         "Main web e2e artifact consumer must bake the Chromium image then run e2e-only"
     );
-    let cleanup = read(root, ".github/workflows/runner-cleanup.yml");
     assert!(
-        cleanup.contains("task docker:prune:stale"),
-        "runner cleanup must invoke the Taskfile prune entry"
+        !root.join(".github/workflows/runner-cleanup.yml").exists(),
+        "legacy registered-runner Docker cleanup must not return after ARC migration"
     );
     let prune_script = read(root, ".github/scripts/docker-prune-stale.sh");
     assert!(

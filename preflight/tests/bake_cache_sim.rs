@@ -23,6 +23,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         format!("{sim}/parent.Dockerfile"),
         format!("{sim}/parent-nested.Dockerfile"),
         format!("{sim}/combined-nightly.Dockerfile"),
+        format!("{sim}/hive.Dockerfile"),
         format!("{sim}/platform-nested.Dockerfile"),
         format!("{sim}/leaf.Dockerfile"),
         format!("{sim}/leaf-platform.Dockerfile"),
@@ -64,6 +65,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"leaf-via-platform-broken\"")
             && bake.contains("target \"combined-leaf\"")
             && bake.contains("target \"combined-consumer\"")
+            && bake.contains("target \"hive\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
@@ -148,10 +150,20 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && tasks
                 .contains("Scenario W: independent Node consumer owns and replays its exact leaf",)
             && tasks.contains("Scenario X: later crate edit keeps earlier crate CACHED")
+            && tasks.contains("Scenario Y: concurrent Hive ARC jobs replay isolated Zot graphs",)
+            && tasks.contains("Scenario Z: persistent ARC-shaped shard survives daemon restart")
+            && tasks.contains("buildx inspect \"$builder\" --bootstrap")
             && tasks.contains("bake-sim-crate-a-expensive")
             && tasks.contains("bake-sim-crate-b-expensive")
             && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-a")
             && read(&format!("{sim}/combined-nightly.Dockerfile")).contains("AS crate-b")
+            && read(&format!("{sim}/hive.Dockerfile")).contains("AS fetched-dependencies")
+            && read(&format!("{sim}/hive.Dockerfile")).contains("AS test-dependencies")
+            && read(&format!("{sim}/hive.Dockerfile")).contains("AS clippy-dependencies")
+            && tasks.contains("bake-sim-hive-cargo-fetch")
+            && tasks.contains("nook-bake-sim-y-pr-a-retry")
+            && tasks.contains("nook-bake-sim-y-pr-b-retry")
+            && bake.contains("nook-bake-sim-hive-v2")
             && tasks.contains("promote_registry_tag")
             && tasks.contains("bake-sim-base-layer")
             && tasks.contains("leaf-via-platform-broken")
@@ -163,7 +175,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("PARENT_OWN_CACHE_ENABLED")
             && bake.contains("BASE_OWN_CACHE_ENABLED")
             && bake.contains("write_cache_repository"),
-        "infra proof must cover FALLBACK, base orphan, PR isolation, local-to-PR reuse, Kani, Node consumer ownership, sequential crates, and the broken/fixed nightly leaf graph"
+        "infra proof must cover fallback, PR isolation, concurrent graphs, persistent shard restart reuse, and the broken/fixed nightly leaf graph"
     );
     let parent_from = assignment_body(&bake, "parent_cache_from");
     assert!(
@@ -175,7 +187,8 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
         quality.contains("task infra:bake-cache:prove")
             && quality.contains("bake_cache_proofs.rs")
             && quality.contains("parallel PR git-scope isolation")
-            && quality.contains("Scenario X proves sequential crate COPY+RUN layers"),
+            && quality.contains("Scenario X proves sequential crate COPY+RUN layers")
+            && quality.contains("Scenario Y mirrors Hive's Cargo dependency graph"),
         "cortex quality must document the runtime sim beside static theorems"
     );
 }

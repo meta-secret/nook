@@ -18,5 +18,22 @@
   },
   "log": {
     "level": "warn"
+  },
+  "extensions": {
+    "sync": {
+      "enable": true,
+      "registries": [
+        {
+          "urls": ["https://index.docker.io"],
+          "onDemand": true,
+          "tlsVerify": true,
+          "preserveDigest": true,
+          "maxRetries": 6,
+          "retryDelay": "1s",
+          "maxRetryDelay": "5s",
+          "syncTimeout": "5m"
+        }
+      ]
+    }
   }
 }

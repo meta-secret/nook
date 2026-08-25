@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
 
 # Reuses the shared rust-base Bake target (pinned Rust, sccache, cargo-chef).
 # Dependency cooks stay cacheable across source-only preflight edits.

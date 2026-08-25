@@ -87,7 +87,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(setup.contains("HIVE_CACHE_FROM=$hive_remote_ref"));
     assert!(setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed"));
     assert!(setup.contains("docker buildx imagetools inspect"));
-    assert!(setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m"));
+    assert!(setup.contains("hive_export_mode=min"));
+    assert!(setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m"));
     assert!(!setup.contains("cache_total_count()"));
 
     assert_release_cache_fingerprint_contract()?;
@@ -145,9 +146,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     let wasm_cache_verifier = read(".github/scripts/verify-wasm-gha-cache.sh");
     assert!(
         wasm_cache_verifier.contains("GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE")
-            && wasm_cache_verifier.contains("nook/buildcache/$cache_scope:buildcache")
-            && docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
-        "Main WASM cache verify must require GHA_RUST_WASM_DEPS_SCOPE and import that buildcache ref"
+            && wasm_cache_verifier.contains("nook/buildcache/${cache_scope}:buildcache")
+            && !docker_tasks.contains(".github/scripts/verify-wasm-gha-cache.sh"),
+        "hosted Main WASM cache publication must require GHA_RUST_WASM_DEPS_SCOPE while ARC never invokes the verifier"
     );
     let root_tasks = read("Taskfile.yml");
     assert!(
@@ -177,7 +178,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(
         platform_tasks.contains("${GITHUB_ACTIONS:-}")
             && platform_tasks.contains("${NOOK_ARC_RUNNER:-}")
-            && platform_tasks.contains("tcp://127.0.0.1:1234")
+            && platform_tasks.contains("tcp://nook-buildkit.arc-runners.svc.cluster.local:1234")
             && platform_tasks.contains("docker/sccache-health.Dockerfile")
             && platform_tasks.contains("--output type=cacheonly")
             && arc_sccache_health.contains("s3api head-bucket")

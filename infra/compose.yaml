@@ -46,6 +46,10 @@ services:
     image: traefik:v3.7.1@sha256:6b9cbca6fac42ab0075f5437d8dc1685cfd188626d8d515839ea94f8b6271c42
     command:
       - --entryPoints.websecure.address=:443
+      # BuildKit can spend more than Traefik's default 60 seconds uploading one
+      # large cache layer. Match the CI cache-export envelope instead of
+      # terminating a healthy request mid-upload.
+      - --entryPoints.websecure.transport.respondingTimeouts.readTimeout=15m
       - --providers.file.filename=/etc/traefik/dynamic.yaml
       - --providers.file.watch=true
       - --certificatesResolvers.letsencrypt.acme.email=admin@bynull.link

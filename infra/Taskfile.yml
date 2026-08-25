@@ -3,8 +3,11 @@ version: '3'
 vars:
   INFRA_SSH_TARGET: '{{default "debian@ssh-ovh-borg-1.bynull.link" .INFRA_SSH_TARGET}}'
   INFRA_WORKER_SSH_TARGET: '{{default "" .INFRA_WORKER_SSH_TARGET}}'
-  ARC_BUILD_SSH_TARGET: '{{default .INFRA_SSH_TARGET .INFRA_WORKER_SSH_TARGET}}'
+  INFRA_WORKER_MESH_ADDRESS: '{{default "" .INFRA_WORKER_MESH_ADDRESS}}'
+  INFRA_WORKER_ENDPOINT_MODE: '{{default "direct" .INFRA_WORKER_ENDPOINT_MODE}}'
+  INFRA_WORKER_ARC_TIER: '{{default "secondary" .INFRA_WORKER_ARC_TIER}}'
   INFRA_REMOTE_DIR: '{{default "/home/debian/.local/share/nook-infra" .INFRA_REMOTE_DIR}}'
+  INFRA_WORKER_REMOTE_DIR: '{{default .INFRA_REMOTE_DIR .INFRA_WORKER_REMOTE_DIR}}'
   INFRA_MESH_SSH_TARGET: '{{default "ssh.bynull.link" .INFRA_MESH_SSH_TARGET}}'
   INFRA_MESH_NODE_NAME: '{{default "nook-servo" .INFRA_MESH_NODE_NAME}}'
   INFRA_CLOUDFLARE_ACCOUNT_ID: '{{default "8a84df74d5bcf7b212980e6f51979731" .INFRA_CLOUDFLARE_ACCOUNT_ID}}'
@@ -23,6 +26,10 @@ vars:
   NEO4J_CHART_SHA256: 62de9ecce52cc0078742a7b98649719cdb55c0458df69ee16230e26b010aedd9
 
 includes:
+  providers:
+    taskfile: tasks/providers.yml
+    dir: ..
+    flatten: true
   manifests:
     taskfile: tasks/manifests.yml
     dir: ..
@@ -47,6 +54,10 @@ includes:
     taskfile: tasks/k0s-workers.yml
     dir: ..
     flatten: true
+  k0s-worker-mesh:
+    taskfile: tasks/k0s-worker-mesh.yml
+    dir: ..
+    flatten: true
   kata:
     taskfile: tasks/kata.yml
     dir: ..
@@ -67,6 +78,10 @@ includes:
     taskfile: tasks/arc-operations.yml
     dir: ..
     flatten: true
+  arc-smoke:
+    taskfile: tasks/arc-smoke.yml
+    dir: ..
+    flatten: true
   sccache:
     taskfile: tasks/sccache.yml
     dir: ..
@@ -85,5 +100,9 @@ includes:
     flatten: true
   bake-cache:
     taskfile: tasks/bake-cache.yml
+    dir: ..
+    flatten: true
+  kubernetes-cache:
+    taskfile: tasks/kubernetes-cache.yml
     dir: ..
     flatten: true

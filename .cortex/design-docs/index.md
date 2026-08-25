@@ -13,6 +13,9 @@
 - **[hive-isolated-agent-platform.md](hive-isolated-agent-platform.md)**
   - Description: Stateful k0s/Kata Hive architecture, components, trust boundaries, task DAG, Main repair delivery, caching, and Taskfile operations
   - Status: Implemented
+- **[arc-kata-runner-platform.md](arc-kata-runner-platform.md)**
+  - Description: Disposable regular ARC runners, one persistent rootless BuildKit shard per node, cache distribution, and credential ownership
+  - Status: Implemented
 - **[identity-vault-architecture.md](identity-vault-architecture.md)**
   - Description: Identity and vault ownership boundaries
   - Status: Local directory implemented

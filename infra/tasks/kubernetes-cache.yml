@@ -1,0 +1,16 @@
+version: '3'
+
+tasks:
+  kubernetes-cache:prove:
+    desc: Prove production-shaped Zot and rootless BuildKit behavior on ephemeral k3d.
+    preconditions:
+      - sh: command -v bun >/dev/null 2>&1
+        msg: Bun is required.
+      - sh: command -v docker >/dev/null 2>&1
+        msg: Docker is required.
+      - sh: command -v "${NOOK_K3D_BIN:-k3d}" >/dev/null 2>&1
+        msg: k3d v5.9.0 is required.
+      - sh: command -v kubectl >/dev/null 2>&1
+        msg: kubectl is required.
+    cmds:
+      - bun run infra/sim/kubernetes-cache/prove.ts

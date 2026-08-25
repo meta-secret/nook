@@ -1,0 +1,173 @@
+use std::{fs, path::PathBuf};
+
+fn repository_root() -> PathBuf {
+    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
+    )
+}
+
+fn read(path: &str) -> String {
+    fs::read_to_string(repository_root().join(path))
+        .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
+}
+
+#[test]
+fn kubernetes_cache_proof_reuses_production_workloads() {
+    let overlay = read("infra/sim/kubernetes-cache/kustomization.yaml");
+    for required in [
+        "../../k0s/manifests/namespaces.yaml",
+        "../../k0s/manifests/registry/zot.yaml",
+        "../../k0s/manifests/arc/buildkit.yaml",
+        "../../k0s/manifests/arc/network-policy.yaml",
+        "$patch: delete",
+        "name: nook-buildkit-rise-s-2",
+        "path: /spec/replicas\n        value: 3",
+        "nook-zot.hive-data.svc.cluster.local:5000",
+    ] {
+        assert!(
+            overlay.contains(required),
+            "Kubernetes cache overlay is missing its production-derived contract: {required}"
+        );
+    }
+    assert!(
+        !overlay.contains("apiVersion: apps/v1"),
+        "the simulation must patch production workloads instead of copying them"
+    );
+}
+
+#[test]
+fn kubernetes_cache_cluster_is_pinned_isolated_and_bounded() {
+    let contracts = read("infra/sim/kubernetes-cache/contracts.ts");
+    let runtime = read("infra/sim/kubernetes-cache/runtime.ts");
+    let proof = read("infra/sim/kubernetes-cache/prove.ts");
+    for required in [
+        "k3d version ${K3D_VERSION}",
+        "refusing to replace existing k3d cluster",
+        "nook-cache-proof",
+        "createCluster();\n  activeClusterCreated = true;",
+    ] {
+        assert!(
+            proof.contains(required) || contracts.contains(required),
+            "Kubernetes cache proof is missing: {required}"
+        );
+    }
+    for required in [
+        "rancher/k3s:v1.36.2-k3s1@sha256:6a47cea22c4b834d4ba72c89d291696b79ebe406251f90b446e4dff03513dd87",
+        "--agents",
+        "\"3\"",
+        "--service-cidr=10.96.0.0/12@server:0",
+        "--cluster-dns=10.96.0.10@server:0",
+        "--kubeconfig-update-default=false",
+        "delete exact k3d proof cluster",
+    ] {
+        assert!(
+            runtime.contains(required) || contracts.contains(required),
+            "isolated k3d lifecycle is missing: {required}"
+        );
+    }
+    for forbidden in [
+        "sh\", \"-c",
+        "--volume /var/run/docker.sock",
+        "-v /var/run/docker.sock",
+        "docker:dind",
+        "--privileged",
+        "--kubeconfig-update-default=true",
+    ] {
+        assert!(
+            !runtime.contains(forbidden) && !proof.contains(forbidden),
+            "k3d proof must not broaden its runtime authority: {forbidden}"
+        );
+    }
+}
+
+#[test]
+fn kubernetes_cache_clients_prove_security_and_portability() {
+    let contracts = read("infra/sim/kubernetes-cache/contracts.ts");
+    let jobs = read("infra/sim/kubernetes-cache/jobs.ts");
+    let proof = read("infra/sim/kubernetes-cache/prove.ts");
+    let platform = read("infra/sim/kubernetes-cache/platform.ts");
+    for required in [
+        "automountServiceAccountToken: false",
+        "allowPrivilegeEscalation: false",
+        "readOnlyRootFilesystem: true",
+        "capabilities:\n              drop: [\"ALL\"]",
+        "network-policy-denied",
+        "registry-write-denied",
+        "grep -Fq \"exporting cache to registry\"",
+        "cache-proof-execution-marker",
+        "cached RUN step executed",
+        "proveBuildkitShardAccess",
+        "sleep 10",
+        "conditions.includes(\"Failed\")",
+    ] {
+        assert!(
+            jobs.contains(required),
+            "Kubernetes cache client boundary is missing: {required}"
+        );
+    }
+    for required in [
+        "privileged: true",
+        "/var/run/docker.sock",
+        "/run/containerd/containerd.sock",
+        "hostPath:",
+    ] {
+        assert!(
+            platform.contains(required) && platform.contains("assertExcludes"),
+            "runtime manifest assertion is missing: {required}"
+        );
+    }
+    for required in [
+        "cache-shard-allowed",
+        "nodeName: buildkitNodes[0]",
+        "cache-main-local-reuse",
+        "cache-main-restart-reuse",
+        "cache-main-fresh-shard",
+        "cache-isolated-a-publish",
+        "cache-isolated-b-publish",
+        "cache-isolated-a-restore",
+        "cache-isolated-b-restore",
+        "restartBuildkitPod",
+        "restartZot",
+        "kubernetes cache runtime proof passed",
+    ] {
+        assert!(
+            proof.contains(required),
+            "cache proof scenario is missing: {required}"
+        );
+    }
+    for required in ["--for=create", ".metadata.uid"] {
+        assert!(
+            jobs.contains(required),
+            "cache restart identity proof is missing: {required}"
+        );
+    }
+    assert!(
+        contracts.contains("nook-buildkit.arc-runners.svc.cluster.local:1234"),
+        "the proof must use the production node-local BuildKit Service"
+    );
+    let allowed = proof
+        .find("name: \"cache-shard-allowed\"")
+        .expect("authorized BuildKit shard proof is missing");
+    let denied = proof
+        .find("name: \"cache-network-denied\"")
+        .expect("denied BuildKit service proof is missing");
+    assert!(
+        allowed < denied,
+        "authorized service access must pass before denial"
+    );
+}
+
+#[test]
+fn kubernetes_cache_proof_has_one_local_entrypoint() {
+    let task = read("infra/tasks/kubernetes-cache.yml");
+    let batch = read(".github/scripts/remote-task-batch.sh");
+    let workflow = read(".github/workflows/remote.yml");
+    let root_readme = read("README.md");
+    assert!(task.contains("bun run infra/sim/kubernetes-cache/prove.ts"));
+    assert!(root_readme.contains("task infra:kubernetes-cache:prove"));
+    assert!(
+        !batch.contains("kubernetes-cache:prove") && !workflow.contains("Kubernetes cache proof"),
+        "the local k3d runtime proof must not change hosted or ARC execution"
+    );
+}

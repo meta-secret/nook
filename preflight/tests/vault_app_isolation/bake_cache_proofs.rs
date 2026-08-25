@@ -629,7 +629,7 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
 }
 
 #[test]
-fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Result<()> {
+fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()> {
     let root = repository_root();
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let workflow = read(&root, ".github/workflows/hive.yml");
@@ -638,7 +638,8 @@ fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Resu
     assert!(
         setup.contains("HIVE_CACHE_FROM=$hive_remote_ref")
             && setup.contains("HIVE_CACHE_SEED_FROM=$hive_seed")
-            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m")
+            && setup.contains("hive_export_mode=min")
+            && setup.contains("HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m")
             && setup.contains("Exact Hive cache available; Main seed suppressed")
             && !setup.contains("if [ \"$event_name\" != \"pull_request\" ]; then"),
         "isolated PR setup must use exact Hive alone when present, otherwise Main, and publish only the exact SHA"
@@ -649,9 +650,11 @@ fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Resu
             && workflow.contains(
                 "main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
             )
-            && workflow.contains("isolated-cache-write: \"false\"")
+            && workflow.contains(
+                "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+            )
             && tasks.contains("${NOOK_ARC_HIVE:-}"),
-        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and avoid per-PR registry export"
+        "trusted Hive verification must use its ARC scale set, restore Main only as a fallback, and publish only its isolated exact cache"
     );
     let verify = taskfile_task_body(&tasks, "verify")?;
     assert!(
@@ -662,7 +665,7 @@ fn theorem_hive_arc_pr_reuses_local_state_without_exact_export() -> anyhow::Resu
     );
     assert!(
         workflow.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
-            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v1")
+            && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
             && workflow.matches("Publish verified Hive cache").count() == 2
             && workflow.contains("verify-hosted:")
             && workflow.contains("Connect hosted BuildKit cache")

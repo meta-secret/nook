@@ -12,8 +12,9 @@ inputs:
     default: "false"
   isolated-cache-write:
     description: >-
-      Publish only an isolated remote-buildcache ref keyed by git commit SHA
-      (-git-<sha>) while using Main when that exact ref is absent. Never writes Main's
+      Allow hosted runners to publish only an isolated remote-buildcache ref keyed by
+      git commit SHA (-git-<sha>) while using Main when that exact ref is absent. ARC
+      keeps large graphs in its node-local persistent shard. Never writes Main's
       nook/buildcache refs.
     required: false
     default: "false"
@@ -77,26 +78,40 @@ runs:
         ensure_minimum fs.inotify.max_user_instances 2500
         ensure_minimum fs.inotify.max_user_watches 10485760
 
-    # GitHub-hosted VMs use their job-scoped BuildKit container. Each general
-    # ARC microVM has native BuildKit and Podman API sidecars on Pod loopback.
-    # The runner carries only Docker client tooling and never receives a
-    # Docker daemon or host runtime socket.
+    - name: Login to Nook OCI registry
+      uses: docker/login-action@v4
+      with:
+        registry: ${{ inputs.registry-host }}
+        username: ${{ inputs.registry-username }}
+        password: ${{ inputs.registry-password }}
+
+    - name: Preload hosted BuildKit from Zot
+      if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
+      shell: bash
+      run: docker pull "${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1"
+
+    # GitHub-hosted VMs use their job-scoped BuildKit container. ARC runners
+    # use the persistent rootless BuildKit shard on their Kubernetes node.
+    # The runner carries only client tooling and never receives a Docker daemon
+    # or host runtime socket.
     # Taskfiles never pass --builder; the health wrapper selects it.
     - name: Setup hosted Buildx
       id: hosted-buildx
       if: ${{ !startsWith(runner.name, 'nook-k0s-') }}
       uses: docker/setup-buildx-action@v4
+      with:
+        driver-opts: image=${{ inputs.registry-host }}/moby/buildkit:buildx-stable-1
 
-    - name: Connect ARC Buildx to the private BuildKit sidecar
+    - name: Connect ARC Buildx to the node-local BuildKit shard
       id: arc-buildx
       if: ${{ startsWith(runner.name, 'nook-k0s-') }}
       shell: bash
       run: |
         set -euo pipefail
         case "${NOOK_BUILDKIT_ADDR:-}" in
-          tcp://127.0.0.1:1234) ;;
+          tcp://nook-buildkit.arc-runners.svc.cluster.local:1234) ;;
           *)
-            echo "ARC BuildKit must use the private Pod loopback endpoint" >&2
+            echo "ARC BuildKit must use the node-local Kubernetes service" >&2
             exit 2
             ;;
         esac
@@ -109,22 +124,6 @@ runs:
           "$NOOK_BUILDKIT_ADDR"
         docker buildx inspect "$builder" --bootstrap
         echo "name=$builder" >> "$GITHUB_OUTPUT"
-
-    - name: Verify ARC container runtime
-      if: ${{ startsWith(runner.name, 'nook-k0s-') && env.NOOK_CONTAINER_RUNTIME == 'podman' }}
-      shell: bash
-      run: |
-        set -euo pipefail
-        test "${DOCKER_HOST:-}" = tcp://127.0.0.1:2375
-        test "$(docker version --format '{{.Server.Version}}')" = 5.8.4
-        docker info >/dev/null
-
-    - name: Login to Nook OCI registry
-      uses: docker/login-action@v4
-      with:
-        registry: ${{ inputs.registry-host }}
-        username: ${{ inputs.registry-username }}
-        password: ${{ inputs.registry-password }}
 
     - name: Connect SeaweedFS compiler cache
       uses: ./.github/actions/nook-cache-connect
@@ -213,7 +212,7 @@ runs:
             exit 1
           fi
           scope_suffix="-git-$scope_sha"
-          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v1$scope_suffix:buildcache"
+          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
           echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
@@ -316,7 +315,15 @@ runs:
 
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
-          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v1:buildcache"
+          hive_seed="type=registry,ref=$registry_host/nook/buildcache/nook-hive-linux-amd64-v2:buildcache"
+          hive_export_mode=max
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            # The selected node retains the full graph in its persistent
+            # BuildKit shard. Export only the minimal exact-SHA
+            # handoff; exporting the full graph added minutes after a green
+            # Hive build while sccache already preserves compiler artifacts.
+            hive_export_mode=min
+          fi
           hive_probe_status=0
           cache_ref_status "$hive_ref" || hive_probe_status=$?
           case "$hive_probe_status" in
@@ -331,15 +338,19 @@ runs:
           esac
           echo "HIVE_CACHE_FROM=$hive_remote_ref" >> "$GITHUB_ENV"
           echo "HIVE_CACHE_SEED_FROM=$hive_seed" >> "$GITHUB_ENV"
-          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=max,timeout=15m" >> "$GITHUB_ENV"
+          echo "HIVE_CACHE_TO=$hive_remote_ref,mode=$hive_export_mode,timeout=15m" >> "$GITHUB_ENV"
         fi
         cache_write_enabled=""
         if [ "$isolated_cache_write" = "true" ]; then
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "GHA_CACHE_EXPORT_MODE=min" >> "$GITHUB_ENV"
-            echo "ARC publishes a minimal exact-SHA handoff; full graph remains in private BuildKit state"
+            # Even mode=min includes the final result layer. Rust dependency
+            # targets can exceed 15 GiB, so parallel PR uploads overload Zot's
+            # HDD and turn a successful verification into a cache failure.
+            # ARC keeps this node-local and reads Main plus sccache instead.
+            echo "ARC skips general exact-SHA registry export; Main and sccache remain reusable"
+          else
+            cache_write_enabled=1
           fi
-          cache_write_enabled=1
         elif [ -z "$read_only" ] && [ "${{ inputs.cache-write }}" = "true" ]; then
           cache_write_enabled=1
         fi
@@ -355,10 +366,14 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        if ! command -v node >/dev/null 2>&1; then
-          echo "Host Node.js is unavailable; skipping cache telemetry on this runner."
+        node_bin="$(command -v node || true)"
+        if [ -z "$node_bin" ] && [ -x /home/runner/externals/node24/bin/node ]; then
+          node_bin=/home/runner/externals/node24/bin/node
+        fi
+        if [ -z "$node_bin" ]; then
+          echo "Actions Node.js runtime is unavailable; skipping cache telemetry on this runner."
           exit 0
         fi
         baseline="$RUNNER_TEMP/nook-cache-telemetry-baseline.json"
-        node .github/scripts/cache-telemetry.cjs start --output "$baseline"
+        timeout 15s "$node_bin" .github/scripts/cache-telemetry.cjs start --output "$baseline"
         echo "NOOK_CACHE_TELEMETRY_BASELINE=$baseline" >> "$GITHUB_ENV"

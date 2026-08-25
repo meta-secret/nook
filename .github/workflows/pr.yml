@@ -174,18 +174,10 @@ jobs:
 
       - name: Rust format, clippy, tests, and coverage
         if: steps.trusted-native.outputs.found != 'true'
-        run: |
-          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            # ARC's private builder starts from a complete COW seed. Publish the
-            # mode=min handoff from each verified solve instead of reconstructing
-            # four graphs after verification only to export them.
-            GHA_CACHE_WRITE_ENABLED=1 task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
-          else
-            # Hosted verification stays read-only, then publishes mode=max from
-            # local layers so a CACHED solve cannot replace the exact index with
-            # a thin export.
-            GHA_CACHE_WRITE_ENABLED="" task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
-          fi
+        run: >-
+          GHA_CACHE_WRITE_ENABLED=""
+          task ci:pr:rust
+          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
 
@@ -193,7 +185,7 @@ jobs:
         if: steps.trusted-native.outputs.found != 'true'
         run: |
           if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
-            echo "ARC verified solves already published their minimal exact-SHA handoffs"
+            echo "ARC keeps the verified native graph local; Main and sccache remain reusable"
             exit 0
           fi
           task ci:main:publish-native-cache
@@ -219,7 +211,7 @@ jobs:
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: validation-request
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     outputs:
       run-node-tests: ${{ steps.decide-node-tests.outputs.run-node-tests }}
     steps:
@@ -332,7 +324,12 @@ jobs:
 
       - name: Publish git-scoped WASM BuildKit cache
         if: steps.trusted-wasm.outputs.found != 'true'
-        run: task ci:main:publish-wasm-cache
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            echo "ARC keeps the verified WASM graph local; Main and sccache remain reusable"
+            exit 0
+          fi
+          task ci:main:publish-wasm-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
@@ -360,7 +357,7 @@ jobs:
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: wasm
-    runs-on: ubuntu-latest
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'ubuntu-latest') || 'ubuntu-latest' }}
     steps:
       - name: Checkout
         if: needs.wasm.outputs.run-node-tests == 'true'
@@ -383,11 +380,14 @@ jobs:
 
       - name: WASM Node tests
         if: needs.wasm.outputs.run-node-tests == 'true'
-        run: task ci:wasm:node-test
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            GHA_CACHE_WRITE_ENABLED="" task ci:wasm:node-test
+          else
+            GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test
+          fi
         env:
           CI: true
-          # Docker setup restricts this writer to the exact PR-head Node scope.
-          GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
       - name: Trusted handoff already covered Node tests
@@ -423,6 +423,14 @@ jobs:
 
       - name: Test cache telemetry collector
         run: node --test .github/scripts/cache-telemetry.test.cjs
+
+      - name: Install Bun for registry cache descriptor tests
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Test registry cache descriptor integrity
+        run: bun test ./.github/scripts/registry-cache-descriptor.test.ts
 
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
@@ -469,7 +477,12 @@ jobs:
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
 
       - name: Publish git-scoped web BuildKit cache
-        run: task ci:main:publish-web-cache
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            echo "ARC keeps the verified web graph local; Main remains reusable"
+            exit 0
+          fi
+          task ci:main:publish-web-cache
         env:
           GHA_CACHE_WRITE_ENABLED: "1"
 
@@ -560,15 +573,19 @@ jobs:
         if: >-
           steps.ui-demo-contract.outputs.required == 'true' &&
           !contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
-        run: >-
-          task ci:main:publish-web-e2e-cache
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=/
-          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
-          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-          WASM_BUILD_MODE=dev
+        run: |
+          if [ "${NOOK_ARC_RUNNER:-}" = "1" ]; then
+            echo "ARC keeps the verified browser graph local; Main remains reusable"
+            exit 0
+          fi
+          task ci:main:publish-web-e2e-cache \
+            CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined \
+            VITE_BASE=/ \
+            VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev \
+            VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev \
+            VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev \
+            VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev \
+            WASM_BUILD_MODE=dev
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
@@ -839,11 +856,15 @@ jobs:
     uses: ./.github/workflows/pr-coverage.yml
     secrets: inherit
 
-  full-e2e:
-    name: Full browser e2e (main fix)
+  full-e2e-shard:
+    name: Full browser e2e shard (${{ matrix.shard }}/2)
     if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: [wasm, wasm-node-test]
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -879,26 +900,9 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: ""
           GIT_COMMIT_ID: ${{ github.event.pull_request.head.sha }}
+          NOOK_E2E_SHARD: ${{ matrix.shard }}/2
           NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_E2E_SIMPLE_VAULT_URL: http://127.0.0.1:5174/
-          NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
-          NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
-          NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
-
-      - name: Publish verified full-e2e browser BuildKit cache
-        run: >-
-          task ci:main:publish-web-e2e-cache
-          CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
-          VITE_BASE=/
-          VITE_SITE_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
-          VITE_PUBLIC_APP_URL=https://pr-${{ github.event.pull_request.number }}.nook-1n8.pages.dev
-          VITE_SIMPLE_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
-          VITE_SENTINEL_APP_URL=https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
-          WASM_BUILD_MODE=dev
-        env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          NOOK_SIMPLE_VAULT_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev/
           NOOK_EXTENSION_CHANNEL: pr-${{ github.event.pull_request.number }}
           NOOK_EXTENSION_COMMIT: ${{ github.event.pull_request.head.sha }}
           NOOK_EXTENSION_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev/
@@ -906,6 +910,21 @@ jobs:
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
+        with:
+          artifact-suffix: shard-${{ matrix.shard }}
+
+  full-e2e:
+    name: Full browser e2e (main fix)
+    if: >-
+      always() &&
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    needs: [full-e2e-shard, wasm]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require both browser shards
+        env:
+          SHARD_RESULT: ${{ needs.full-e2e-shard.result }}
+        run: test "$SHARD_RESULT" = "success"
 
   full-extension-e2e:
     name: Full extension e2e (main fix)

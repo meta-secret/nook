@@ -273,10 +273,10 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
 
     let main = read(".github/workflows/main.yml");
     assert!(
-        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 2
-            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 2
+        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 3
+            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 3
             && !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
-        "trusted Main Rust and WASM producers must populate SeaweedFS compiler objects"
+        "trusted Main Rust, WASM, and portable-cache producers must populate SeaweedFS compiler objects"
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 
@@ -370,7 +370,9 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
     assert!(hive.contains("NOOK_SCCACHE_SECRET_KEY"));
     assert!(hive.contains("uses: ./.github/actions/nook-docker-setup"));
     assert!(hive.contains("runs-on: nook-k0s-hive"));
-    assert!(hive.contains("isolated-cache-write: \"false\""));
+    assert!(hive.contains(
+        "isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}"
+    ));
     assert!(!hive.contains("NOOK_CACHE_REDIS_PASSWORD"));
     Ok(())
 }

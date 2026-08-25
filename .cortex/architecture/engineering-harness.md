@@ -104,14 +104,19 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Web checks consume only web dependencies plus the generated WASM package.
 - They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
 
-Trusted same-repository PR native Rust plus Rust ecosystem validation and every
-explicit Main job execute in fresh Kata QEMU microVMs through ARC. Focused
+Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
+build producers execute in disposable ordinary Pods through ARC. Focused
 `preflight`, `rust:ci`, and `arc:runtime` jobs may use the same scale set. The
-general set's job-scoped Podman API supplies Main's image-runtime boundary
-inside the disposable guest. Fork PRs, Dependabot PRs, releases, and non-Main
-runtime-dependent, browser, WASM, and deployment validation execute on
-ephemeral GitHub-hosted runners. The self-hosted `nook` pool remains
-maintenance-only.
+Docker CLI connects only to the persistent rootless BuildKit shard on its node.
+It is not a general container-runtime API. Fork PRs, Dependabot PRs, releases,
+and non-Main runtime-dependent, browser, WASM, and deployment validation execute
+on ephemeral GitHub-hosted runners. Main's portable WASM dependency-cache writer
+and proof is the narrow hosted exception. One fresh hosted builder publishes the
+portable Zot metadata. A registry audit verifies child manifest digest/size and
+streams every complete blob to verify its declared size and SHA-256. Another cache-only builder then
+requires every expensive dependency vertex to hit before deployment without
+hydrating the complete dependency filesystem. The legacy registered `nook`
+runner is not used.
 
 ---
 
@@ -156,8 +161,11 @@ maintenance-only.
 - Every PR job restores Main's complete lineage plus any existing PR remote-buildcache scope.
 - Hosted PR jobs and local Task Bake export only isolated remote-buildcache refs.
 - Trusted ARC PR jobs reuse their full private node-local BuildKit state.
-- They publish a minimal exact-SHA registry handoff so retries remain reusable
-  after the disposable VM state is removed.
+- They do not export general Rust target trees to Zot. Even minimal result
+  layers can exceed 15 GiB and concurrent uploads overload the registry HDD.
+- They restore Main's registry lineage and reuse compiler objects through
+  SeaweedFS sccache.
+- Hive retains a small minimal exact-SHA handoff for fast retries.
 - Explicit Remote tasks may update only their deterministic branch refs with Main fallback.
 
 ### SeaweedFS Reuse
@@ -252,24 +260,51 @@ maintenance-only.
 ### Builder Selection
 
 - Normal local `task setup` and optional local `task ci:*` callers use the active Docker-context daemon builder (`desktop-linux` or `default`).
-- GitHub Actions creates an ephemeral job-scoped `docker-container` builder with `docker/setup-buildx-action`.
-- Warm layers come from authenticated registry cache refs, not from reusing one host container.
+- GitHub-hosted Actions creates an ephemeral job-scoped `docker-container`
+  builder with `docker/setup-buildx-action`; the authenticated setup preloads
+  its BuildKit image from Zot before builder creation instead of resolving
+  Docker Hub.
+- ARC Actions registers the node-local persistent BuildKit service as a remote
+  Buildx builder.
+- Zot refs carry cache state between nodes and hosted runners.
+- `task infra:kubernetes-cache:prove` creates an isolated three-agent local k3d
+  cluster.
+- The proof applies Kustomize patches to the production Zot, BuildKit, and
+  NetworkPolicy resources. It does not maintain copied workload manifests.
+- Each simulated node retains one rootless BuildKit shard on node-local
+  storage. In-cluster Zot remains the portable cache boundary between shards.
+- The proof first requires an authorized node-local BuildKit connection.
+- Each client runs on its selected shard's node and uses the production
+  node-local Service.
+- Proof clients mount no host runtime socket. They receive no Kubernetes
+  service-account token and do not run privileged.
+- Local k3d proves portable Kubernetes workload behavior. It does not claim parity
+  for k0s lifecycle, node-local Service routing, WireGuard routing, Kata
+  isolation, ARC control-plane lifecycle, node capacity, or production
+  performance.
 
 ### CI Parity (`.github/actions/nook-docker-setup`)
 
 - Raises Linux watcher limits.
-- Exports the hosted `docker-container` builder for Task callers.
+- Exports either the hosted `docker-container` builder or the ARC remote
+  builder for Task callers.
 - Logs into `registry.dev.nokey.sh` and enables Bake registry cache refs.
 - Trusted Main and PR Rust producers receive SeaweedFS writer identity; Remote receives read-only identity.
 
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
-- ARC keeps Zot as the authoritative cache and also starts each fresh Kata guest
-  from a private reflink clone of a trusted 32 GiB BuildKit seed.
+- Every qualified node owns one retained 64 GiB rootless BuildKit shard.
+- The node-local Service routes each runner only to the shard on its own node.
+- BuildKit requests 4 CPU and 8 GiB. It has no CPU limit and may use up to
+  48 GiB during large parallel web and Rust builds.
+- Concurrent jobs share BuildKit's content-addressed store on that node.
+- Main and pull requests retain separate registry publication refs.
+- Zot remains the cross-node bootstrap and recovery source.
 - Trusted Hive Rust verification uses the dedicated `nook-k0s-hive` scale set.
   Its Neo4j dependency and Trixie test runtime are Kubernetes native sidecars,
-  so ARC remains daemon-free and the helpers stop with the runner.
+  so ARC remains daemon-free and the helpers stop with the runner. Hive keeps
+  its independent Zot cache publication because its workflow may overlap Main.
 - Registry transfer time and local snapshot materialization time are separate
   performance dimensions.
 - A manifest lookup proves index availability. It does not prove that a fresh
@@ -278,6 +313,8 @@ maintenance-only.
 - Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
 - Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
+- Traefik allows 15 minutes to read an incoming registry request so one large
+  BuildKit layer upload is not cut off by Traefik's 60-second default.
 
 ### Rust Compiler Cache (`sccache`)
 
@@ -291,8 +328,10 @@ maintenance-only.
 - Main alone refreshes shared refs under `nook/buildcache/**`.
 - Hosted PR jobs and Remote write only to isolated refs under `nook/remote-buildcache/**`.
 - Trusted ARC PR jobs read Main and exact-SHA refs.
-- They may write only minimal exact-SHA refs under `nook/remote-buildcache/**`.
-- Their fresh Kata guests start from the private node-local COW seed.
+- General trusted ARC PR jobs do not write registry cache refs.
+- Trusted Hive ARC jobs may write only their minimal exact-SHA ref under
+  `nook/remote-buildcache/**`.
+- Their runner Pods reuse the persistent BuildKit shard on the selected node.
 - Inactive Remote refs expire after seven days; Zot deduplicates identical content-addressed layer blobs across both paths.
 
 ### Docker Bake Orchestration
@@ -319,10 +358,13 @@ maintenance-only.
 
 ---
 
-## 10. Sealed-Image Consequences
+## 10. Execution Consequences
 
 - **Diff emission:** Source-sealed images emit `git diff` outputs instead of directly mutating host files.
-- **`task format` host application:** The agent/developer entrypoint runs sealed format and unconditionally applies the unified diff to the working tree before commit/push.
+- **`task format` host application:** The agent/developer entrypoint runs one
+  content-addressed, tool-only Docker image shared by all worktrees. The image
+  formats the mounted working tree but must never contain project source,
+  compile products, run tests, or use registry-cache paths.
 - **`dist` hand-off:** CI deploys isolated `dist/site`, Simple, and Sentinel artifacts to respective Cloudflare Pages branch aliases.
 
 ---
