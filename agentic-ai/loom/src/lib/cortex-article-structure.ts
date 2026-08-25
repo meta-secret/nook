@@ -233,7 +233,11 @@ function auditArticle(args: AuditArticleArgs): void {
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
-  if (node.type === 'blockquote' || node.type === 'list') {
+  if (
+    node.type === 'blockquote' ||
+    node.type === 'list' ||
+    node.type === 'paragraph'
+  ) {
     const inspection: VisibleSemanticContentInspection = { node };
     return hasVisibleSemanticContent(inspection);
   }

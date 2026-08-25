@@ -27,7 +27,11 @@ function blockFromNode(node: RootContent): CortexArticleBlock {
       type: CortexArticleBlockKind.Heading,
     };
   }
-  if (node.type === 'blockquote' || node.type === 'list') {
+  if (
+    node.type === 'blockquote' ||
+    node.type === 'list' ||
+    node.type === 'paragraph'
+  ) {
     const inspection: VisibleSemanticContentInspection = { node };
     if (!hasVisibleSemanticContent(inspection)) {
       return { line, type: CortexArticleBlockKind.Separator };

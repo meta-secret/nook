@@ -212,6 +212,28 @@ test('does not count empty container blocks as article content', () => {
   }
 });
 
+test('does not count paragraphs with only empty inline content', () => {
+  for (const paragraph of ['` `', '[ ](https://example.com)']) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/empty-inline.md',
+      content: `# Empty inline\n\n## Empty article\n\n${paragraph}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((item) => item.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+  }
+  for (const paragraph of [
+    '![](image.png)',
+    '[Visible](https://example.com)',
+  ]) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/visible-inline.md',
+      content: `# Visible inline\n\n## Visible article\n\n${paragraph}\n`,
+    };
+    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+  }
+});
+
 test('treats thematic breaks as invisible density-resetting separators', () => {
   const emptyArgs: MakeDocumentArgs = {
     path: '.cortex/break-only.md',
