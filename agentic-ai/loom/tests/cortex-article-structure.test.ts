@@ -268,7 +268,12 @@ test('does not count empty container blocks as article content', () => {
 });
 
 test('does not count paragraphs with only empty inline content', () => {
-  for (const paragraph of ['` `', '[ ](https://example.com)']) {
+  for (const paragraph of [
+    '` `',
+    '[ ](https://example.com)',
+    '&ZeroWidthSpace;',
+    '&#8203;',
+  ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/empty-inline.md',
       content: `# Empty inline\n\n## Empty article\n\n${paragraph}\n`,
@@ -367,6 +372,17 @@ test('recursively classifies blank tables and empty HTML containers', () => {
     '<div></div>',
     '<div><section><span></span></section></div>',
     '<div><!-- hidden --><hr><br></div>',
+    '<div>&nbsp;</div>',
+    '<p>&#x20;</p>',
+    '<div>&Tab;</div>',
+    '<div>&ZeroWidthSpace;</div>',
+    '<div>&#8203;</div>',
+    '<!doctype html>',
+    '<?xml version="1.0"?>',
+    '<![CDATA[]]>',
+    '<!-- hidden',
+    '<!-- hidden --!>',
+    '<!-->',
   ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/semantic-empty.md',
@@ -380,6 +396,8 @@ test('recursively classifies blank tables and empty HTML containers', () => {
     '| Name |\n| --- |\n| Visible |',
     '<div><span>Visible</span></div>',
     '<div><img src="visible.png"></div>',
+    '<div>&copy;</div>',
+    '<broken',
   ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/semantic-visible.md',
@@ -395,6 +413,8 @@ test('treats non-rendered raw HTML containers as empty', () => {
     '<style>.hidden { display: none; }</style>',
     '<template><p>Hidden template content.</p></template>',
     '<template>\n\nHidden template content.\n\n</template>',
+    '<template><template>Hidden inner.</template>Hidden outer.</template>',
+    '<template>\n\n<template>\n\nHidden inner.\n\n</template>\n\nHidden outer.\n\n</template>',
   ]) {
     const documentArgs: MakeDocumentArgs = {
       path: '.cortex/non-rendered-html.md',
@@ -532,6 +552,29 @@ Fourth paragraph.
   expect(audit([document]).map((finding) => finding.code)).toContain(
     CortexArticleFindingCode.DenseArticle,
   );
+});
+
+test('treats browser-terminated comments as transparent to prose density', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/browser-commented-prose.md',
+    content: `# Browser comments
+
+## Explanation
+
+First paragraph.
+
+Second paragraph.
+
+<!-- hidden --!>
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  expect(
+    audit([makeDocument(documentArgs)]).map((finding) => finding.code),
+  ).toContain(CortexArticleFindingCode.DenseArticle);
 });
 
 test('treats a GFM table as visible article structure', () => {

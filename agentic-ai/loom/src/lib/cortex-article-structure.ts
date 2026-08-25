@@ -147,11 +147,39 @@ export function auditCortexArticleStructure(
 }
 
 function parseDocument(document: CortexDocumentSource): ParsedArticleDocument {
+  const normalizedContent = normalizeBrowserCommentTerminators(
+    document.content,
+  );
   const root = unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .parse(document.content);
+    .parse(normalizedContent);
   return { ...document, root };
+}
+
+function normalizeBrowserCommentTerminators(value: string): string {
+  let cursor = 0;
+  let normalized = '';
+  while (cursor < value.length) {
+    const commentStart = value.indexOf('<!--', cursor);
+    if (commentStart < 0) return normalized + value.slice(cursor);
+    normalized += value.slice(cursor, commentStart);
+    const standardEnd = value.indexOf('-->', commentStart + 4);
+    const browserEnd = value.indexOf('--!>', commentStart + 4);
+    if (standardEnd >= 0 && (browserEnd < 0 || standardEnd < browserEnd)) {
+      const standardTokenEnd = standardEnd + 3;
+      normalized += value.slice(commentStart, standardTokenEnd);
+      cursor = standardTokenEnd;
+      continue;
+    }
+    if (browserEnd < 0) {
+      normalized += value.slice(commentStart);
+      return normalized;
+    }
+    normalized += `${value.slice(commentStart, browserEnd)}--> `;
+    cursor = browserEnd + 4;
+  }
+  return normalized;
 }
 
 function readMigrationExemptions(
@@ -328,7 +356,7 @@ function hasVisibleSemanticContent(
     node.type === 'inlineCode' ||
     node.type === 'text'
   ) {
-    return node.value.trim().length > 0;
+    return hasVisibleSemanticText(node.value);
   }
   if ('children' in node) {
     const childInspection: VisibleSemanticChildrenInspection = {
@@ -380,10 +408,7 @@ function isTransparentDensityNode(node: RootContent): boolean {
 }
 
 function isCommentOnlyHtml(node: RootContent): boolean {
-  return (
-    node.type === 'html' &&
-    /^\s*(?:<!--(?:(?!-->)[\s\S])*-->\s*)+$/u.test(node.value)
-  );
+  return node.type === 'html' && isCommentOnlyHtmlValue(node.value);
 }
 
 function isInvisibleHtml(node: RootContent): boolean {
@@ -443,7 +468,7 @@ function htmlContainerDepths(
       const activeStart = starts.at(-1) ?? false;
       if (
         activeStart !== false &&
-        isNonRenderedHtmlContainer(activeStart.name) &&
+        isRawTextHtmlContainer(activeStart.name) &&
         (!tag.closing || tag.name !== activeStart.name)
       ) {
         continue;
@@ -544,15 +569,25 @@ function htmlTokensHaveVisibleContent(args: HtmlTokenVisibilityArgs): boolean {
         activeTag.name === activeName
       ) {
         args.nonRenderedContainers.pop();
+      } else if (
+        activeTag !== false &&
+        !activeTag.closing &&
+        isNonRenderedHtmlContainer(activeTag.name)
+      ) {
+        args.nonRenderedContainers.push(activeTag.name);
       }
       continue;
     }
-    if (token.kind === HtmlTokenKind.Text && token.value.trim().length > 0) {
-      return true;
+    if (token.kind === HtmlTokenKind.Text) {
+      const decodedText = decodeHtmlText(token.value);
+      if (hasVisibleSemanticText(decodedText)) return true;
     }
     if (token.kind !== HtmlTokenKind.Tag) continue;
     const tag = htmlTags(token.value)[0] ?? false;
-    if (tag === false) return true;
+    if (tag === false) {
+      if (hasVisibleUnparsedHtmlMarkup(token.value)) return true;
+      continue;
+    }
     if (!tag.closing && isNonRenderedHtmlContainer(tag.name)) {
       args.nonRenderedContainers.push(tag.name);
       continue;
@@ -567,21 +602,23 @@ function htmlTokens(value: string): readonly HtmlToken[] {
   let cursor = 0;
   while (cursor < value.length) {
     if (value.startsWith('<!--', cursor)) {
-      const commentEnd = value.indexOf('-->', cursor + 4);
-      if (commentEnd < 0) {
-        const token: HtmlToken = {
-          kind: HtmlTokenKind.Text,
-          value: value.slice(cursor),
-        };
-        tokens.push(token);
-        break;
-      }
+      const standardEnd = value.indexOf('-->', cursor + 4);
+      const browserEnd = value.indexOf('--!>', cursor + 4);
+      const commentEnd =
+        standardEnd < 0
+          ? browserEnd
+          : browserEnd < 0
+            ? standardEnd
+            : Math.min(standardEnd, browserEnd);
+      const terminatorLength = commentEnd === browserEnd ? 4 : 3;
+      const tokenEnd =
+        commentEnd < 0 ? value.length : commentEnd + terminatorLength;
       const token: HtmlToken = {
         kind: HtmlTokenKind.Comment,
-        value: value.slice(cursor, commentEnd + 3),
+        value: value.slice(cursor, tokenEnd),
       };
       tokens.push(token);
-      cursor = commentEnd + 3;
+      cursor = tokenEnd;
       continue;
     }
     if (value[cursor] === '<') {
@@ -633,7 +670,7 @@ function rawHtmlContainerName(token: string): string | false {
   const name = parts?.[1];
   if (typeof name !== 'string') return false;
   const normalizedName = name.toLowerCase();
-  return isNonRenderedHtmlContainer(normalizedName) ? normalizedName : false;
+  return isRawTextHtmlContainer(normalizedName) ? normalizedName : false;
 }
 
 function findRawHtmlClose(args: FindRawHtmlCloseArgs): number {
@@ -652,6 +689,36 @@ function findRawHtmlClose(args: FindRawHtmlCloseArgs): number {
 
 function isNonRenderedHtmlContainer(name: string): boolean {
   return ['script', 'style', 'template'].includes(name);
+}
+
+function isRawTextHtmlContainer(name: string): boolean {
+  return ['script', 'style'].includes(name);
+}
+
+function decodeHtmlText(value: string): string {
+  const root = unified().use(remarkParse).parse(value);
+  return root.children.map(nodeText).join('');
+}
+
+function hasVisibleSemanticText(value: string): boolean {
+  return value.replace(/[\s\p{Default_Ignorable_Code_Point}]/gu, '').length > 0;
+}
+
+function hasVisibleUnparsedHtmlMarkup(value: string): boolean {
+  if (/^<!doctype(?:\s|>)/iu.test(value)) return false;
+  if (/^<\?[\s\S]*\?>$/u.test(value)) return false;
+  const cdata = /^<!\[CDATA\[([\s\S]*)\]\]>$/u.exec(value);
+  const cdataText = cdata?.[1] ?? false;
+  return cdataText === false || hasVisibleSemanticText(cdataText);
+}
+
+function isCommentOnlyHtmlValue(value: string): boolean {
+  return htmlTokens(value).every(
+    (token) =>
+      token.kind === HtmlTokenKind.Comment ||
+      (token.kind === HtmlTokenKind.Text &&
+        !hasVisibleSemanticText(decodeHtmlText(token.value))),
+  );
 }
 
 function findHtmlTagEnd(args: FindHtmlTagEndArgs): number {
