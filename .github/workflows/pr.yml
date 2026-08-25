@@ -528,6 +528,8 @@ jobs:
   ui-demo:
     name: Headless UI demo
     if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
       (github.event.label.name == 'ci:validate' ||
       github.event.label.name == 'ci:full-e2e')
     needs: [validation-request, verify]
@@ -810,7 +812,10 @@ jobs:
 
   full-e2e-shard:
     name: Full browser e2e shard (${{ matrix.shard }}/2)
-    if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
     container:
@@ -834,6 +839,8 @@ jobs:
     name: Full browser e2e (main fix)
     if: >-
       always() &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
       contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: [full-e2e-shard, wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
@@ -845,7 +852,10 @@ jobs:
 
   full-extension-e2e:
     name: Full extension e2e (main fix)
-    if: contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      contains(github.event.pull_request.labels.*.name, 'ci:full-e2e')
     needs: [verify, wasm-node-test]
     runs-on: nook-k0s-container
     container:

@@ -33,6 +33,7 @@ fn assert_workflow_runtime_contract(root: &Path) {
     let main = read(root, ".github/workflows/main.yml");
     let release = read(root, ".github/workflows/release.yml");
     let ecosystem = read(root, ".github/workflows/rust-ecosystem-checks.yml");
+    let ecosystem_entry = read(root, ".github/workflows/rust-ecosystem.yml");
     assert!(
         pr.contains("(vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest'")
             && release.contains("runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}")
@@ -44,7 +45,16 @@ fn assert_workflow_runtime_contract(root: &Path) {
             && ecosystem
                 .matches("github.event.pull_request.head.repo.full_name == github.repository")
                 .count()
-                == 5,
+                == 5
+            && ecosystem.matches("github.event_name == 'schedule'").count() == 5
+            && ecosystem
+                .matches("github.event_name == 'workflow_dispatch'")
+                .count()
+                == 5
+            && ecosystem_entry.contains("github.event_name == 'schedule'")
+            && ecosystem_entry.contains("github.event_name == 'workflow_dispatch'")
+            && ecosystem_entry
+                .contains("github.event.pull_request.user.login != 'dependabot[bot]'"),
         "trusted PR and release jobs must select ARC while forks retain hosted isolation"
     );
     assert!(
@@ -292,6 +302,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
                 .contains("ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}")
             && verify_job.contains("ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}")
             && !verify_job.contains("Record headless UI demo")
+            && ui_demo_job
+                .contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && ui_demo_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
             && ui_demo_job.contains("needs: [validation-request, verify]")
             && ui_demo_job.contains("runs-on: nook-k0s-container")
             && ui_demo_job
@@ -424,7 +437,9 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     let full_e2e_job = section(&pr, "  full-e2e-shard:\n", "  full-e2e:\n");
     assert!(
-        full_e2e_job.contains("needs: [verify, wasm-node-test]")
+        full_e2e_job.contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && full_e2e_job.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && full_e2e_job.contains("needs: [verify, wasm-node-test]")
             && full_e2e_job.contains("runs-on: nook-k0s-container")
             && full_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
@@ -439,7 +454,11 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         .context("PR workflow must define full extension E2E")?
         .1;
     assert!(
-        extension_e2e_job.contains("needs: [verify, wasm-node-test]")
+        extension_e2e_job
+            .contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && extension_e2e_job
+                .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && extension_e2e_job.contains("needs: [verify, wasm-node-test]")
             && extension_e2e_job.contains("runs-on: nook-k0s-container")
             && extension_e2e_job
                 .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
