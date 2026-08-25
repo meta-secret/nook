@@ -99,7 +99,7 @@ fn development_and_release_wasm_build_modes_stay_separate() -> anyhow::Result<()
     );
 
     let release = read(&root, ".github/workflows/release.yml");
-    assert!(release.contains("WASM_BUILD_MODE=prod"));
+    assert!(release.contains("WASM_BUILD_MODE: prod"));
     assert!(
         !release.contains("WASM_BUILD_MODE=dev"),
         "release artifacts must remain production-optimized"

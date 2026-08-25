@@ -666,14 +666,13 @@ fn theorem_hive_arc_pr_publishes_an_isolated_exact_cache() -> anyhow::Result<()>
     assert!(
         workflow.contains("if: github.event_name == 'push' && github.ref == 'refs/heads/main'")
             && workflow.contains("nook/buildcache/nook-hive-linux-amd64-v2")
-            && workflow.matches("Publish verified Hive cache").count() == 2
-            && workflow.contains("verify-hosted:")
-            && workflow.contains("Connect hosted BuildKit cache")
+            && workflow.matches("Publish verified Hive cache").count() == 1
+            && !workflow.contains("verify-hosted:")
             && workflow.contains("verify-fork:")
             && workflow.contains("Set up untrusted cache-free BuildKit")
-            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 3
+            && workflow.matches("uses: oven-sh/setup-bun@v2").count() == 2
             && workflow.matches("HIVE_CACHE_FROM: \"\"").count() == 1,
-        "trusted Main must publish from ARC or hosted fallback, while untrusted PRs remain cache-free"
+        "trusted Main must publish from ARC, while untrusted PRs remain cache-free on the hosted boundary"
     );
     Ok(())
 }

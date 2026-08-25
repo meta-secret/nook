@@ -312,7 +312,7 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
     assert!(
         manual_e2e.contains("- sync-live")
             && manual_e2e.contains("NOOK_E2E_SYNC_PROVIDER: github")
-            && manual_e2e.contains("task web:test:e2e:sync-live:parallel")
+            && manual_e2e.contains("task _web:test:e2e:sync-live:parallel")
             && manual_e2e.contains("- name: Clean up live-sync test repository")
             && manual_e2e.contains("if: >-\n          always() &&")
             && manual_e2e.contains("github.rest.users.getAuthenticated()")
@@ -663,7 +663,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
     let root = repository_root();
     let release = read(&root, ".github/workflows/release.yml");
     assert_eq!(
-        release.matches("WASM_BUILD_MODE=prod").count(),
+        release.matches("WASM_BUILD_MODE: prod").count(),
         1,
         "release must perform one optimized WASM artifact batch"
     );
@@ -672,9 +672,9 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "release must extract the already-tested sealed image instead of running setup twice"
     );
     for required in [
-        "VITE_SITE_URL=${{ env.CI_RELEASE_URL }}",
-        "VITE_PUBLIC_APP_URL=${{ env.CI_RELEASE_URL }}",
-        "VITE_VAULT_SYNC_INTERVAL_MS=${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}",
+        "VITE_SITE_URL: ${{ env.CI_RELEASE_URL }}",
+        "VITE_PUBLIC_APP_URL: ${{ env.CI_RELEASE_URL }}",
+        "VITE_VAULT_SYNC_INTERVAL_MS: ${{ env.CI_RELEASE_VITE_VAULT_SYNC_INTERVAL_MS }}",
     ] {
         assert!(
             release.contains(required),

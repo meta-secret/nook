@@ -109,7 +109,7 @@ fn assert_docker_setup_contract(root: &Path) {
     assert_eq!(
         pr.matches("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")
             .count(),
-        5,
+        4,
         "every general PR cache publisher must explicitly keep ARC verification graphs local"
     );
     for local_graph_message in [

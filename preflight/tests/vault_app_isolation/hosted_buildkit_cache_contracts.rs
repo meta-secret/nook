@@ -338,15 +338,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let web_publish = web
         .find("task ci:main:publish-web-cache")
         .context("Main web job must publish its cache")?;
+    let web_browser_image = web
+        .find("- name: Publish exact-source browser job image")
+        .context("Main web producer must publish the exact browser image")?;
     let ui_demo_step = ui_demo
         .find("- name: Headless UI demos")
         .context("Main UI demo job must declare its verification step")?;
-    let ui_demo_verify = ui_demo
-        .find("task ci:main:ui-demo:artifacts")
-        .context("Main UI demo job must verify the browser image")?;
-    let ui_demo_publish = ui_demo
-        .find("task ci:main:publish-web-e2e-cache")
-        .context("Main UI demo job must publish its verified browser cache")?;
     assert!(
         rust_verify < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -357,16 +354,19 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && web_verify < web_publish
+            && web_verify < web_browser_image
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && web[web_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && ui_demo_step < ui_demo_verify
-            && ui_demo_verify < ui_demo_publish
-            && ui_demo[ui_demo_step..ui_demo_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && ui_demo[ui_demo_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && ui_demo.contains("needs: [web]")
+            && ui_demo.contains("runs-on: nook-k0s-container")
+            && ui_demo.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && ui_demo[ui_demo_step..].contains("task _web:test:ui-demo")
+            && !ui_demo.contains("nook-docker-setup")
+            && !ui_demo.contains("publish-web-e2e-cache")
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
-        "Main producers must verify read-only, serialize native before WASM, and publish from their warm builders only after all lane validation succeeds"
+        "Main producers must verify read-only, publish from warm builders, and hand the exact browser image to container ARC consumers"
     );
     let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     assert!(
