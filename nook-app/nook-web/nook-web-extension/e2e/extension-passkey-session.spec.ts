@@ -157,6 +157,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     testInfo.outputPath('chromium-profile')
   const context = await launchExtensionContext(userDataDir)
   const loginServer = await startLoginServer()
+  const passwordLoginUrl = new URL(loginServer.origin)
+  passwordLoginUrl.hostname = '127.0.0.1'
+  const passwordLoginOrigin = passwordLoginUrl.origin
   const website: WebsitePageState = isHostedSmoke
     ? { kind: WebsitePageStateKind.Skipped }
     : { kind: WebsitePageStateKind.Opened, page: await context.newPage() }
@@ -453,7 +456,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
 
     await reopenedVaultPage.getByTestId('add-secret-btn').click()
     await reopenedVaultPage.getByTestId('item-type-login').click()
-    await reopenedVaultPage.getByTestId('secret-label').fill(loginServer.origin)
+    await reopenedVaultPage
+      .getByTestId('secret-label')
+      .fill(passwordLoginOrigin)
     await reopenedVaultPage
       .getByTestId('login-username')
       .fill('alice@nook.test')
@@ -469,7 +474,9 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
 
     await reopenedVaultPage.getByTestId('add-secret-btn').click()
     await reopenedVaultPage.getByTestId('item-type-login').click()
-    await reopenedVaultPage.getByTestId('secret-label').fill(loginServer.origin)
+    await reopenedVaultPage
+      .getByTestId('secret-label')
+      .fill(passwordLoginOrigin)
     await reopenedVaultPage.getByTestId('login-username').fill('bob@nook.test')
     await reopenedVaultPage
       .getByTestId('secret-value')
@@ -500,7 +507,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     ).toBeVisible({ timeout: 15_000 })
 
     const fillLoginPage = await context.newPage()
-    await fillLoginPage.goto(`${loginServer.origin}/login`)
+    await fillLoginPage.goto(`${passwordLoginOrigin}/login`)
     const fillWidget = fillLoginPage.locator('#nook-auth-widget')
     await expect(fillWidget).toBeVisible()
     const compactLauncher = fillWidget.getByTestId('nook-auth-gate-expand')
