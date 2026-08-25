@@ -535,7 +535,11 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task ci:pr:rust")
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
-            && main.contains("task ci:main:e2e:web:artifacts")
+            && main.contains("task _ci:main:web:e2e-only")
+            && main.contains("task _extension:test:e2e")
+            && main.contains("task _web:test:ui-demo")
+            && main.matches("runs-on: nook-k0s-container").count() == 3
+            && main.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
             && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
