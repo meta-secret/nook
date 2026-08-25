@@ -8,7 +8,10 @@ import {
 
 export function pageHasDocumentBackupCodeHint(): boolean {
   const bodyText = document.body?.innerText ?? ''
-  return textHasBackupCodeHint(bodyText)
+  return (
+    textHasBackupCodeHint(bodyText) &&
+    extractDocumentBackupCodeCandidates(bodyText).length > 0
+  )
 }
 
 export function textHasBackupCodeHint(sourceText: string): boolean {

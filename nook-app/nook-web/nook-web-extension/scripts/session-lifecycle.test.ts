@@ -55,7 +55,8 @@ describe('openCompanionLauncherBestEffort', () => {
     expect(detachedWindowOpens).toBe(0)
   })
 
-  test('contains launcher failures for callers returning locked responses', async () => {
+  test('falls back to an extension tab when toolbar popup opening fails', async () => {
+    const openedUrls: string[] = []
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
@@ -66,6 +67,12 @@ describe('openCompanionLauncherBestEffort', () => {
       action: {
         openPopup: () => Promise.reject(new Error('toolbar unavailable')),
       },
+      tabs: {
+        create: ({ url }: chrome.tabs.CreateProperties) => {
+          if (url) openedUrls.push(url)
+          return Promise.resolve({})
+        },
+      },
     } as typeof chrome
     const { openCompanionLauncherBestEffort } =
       await import('../src/background/service-worker/session-lifecycle')
@@ -74,9 +81,12 @@ describe('openCompanionLauncherBestEffort', () => {
       openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default),
     ).not.toThrow()
     await Promise.resolve()
+    await Promise.resolve()
+    expect(openedUrls).toEqual(['chrome-extension://nook/popup/index.html'])
   })
 
-  test('rejects when the browser cannot open the toolbar popup', async () => {
+  test('opens an extension tab when the toolbar popup API is unavailable', async () => {
+    const openedUrls: string[] = []
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
@@ -85,13 +95,18 @@ describe('openCompanionLauncherBestEffort', () => {
         getURL: () => 'chrome-extension://nook/popup/index.html',
       },
       action: {},
+      tabs: {
+        create: ({ url }: chrome.tabs.CreateProperties) => {
+          if (url) openedUrls.push(url)
+          return Promise.resolve({})
+        },
+      },
     } as typeof chrome
     const { openCompanionLauncher } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(
-      openCompanionLauncher(OpenCompanionLauncherIntent.Default),
-    ).rejects.toThrow('toolbar popup unavailable')
+    await openCompanionLauncher(OpenCompanionLauncherIntent.Default)
+    expect(openedUrls).toEqual(['chrome-extension://nook/popup/index.html'])
   })
 })
 

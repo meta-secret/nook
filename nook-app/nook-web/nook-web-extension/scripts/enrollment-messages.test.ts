@@ -134,7 +134,9 @@ describe('backup code candidate extraction', () => {
       body.innerText = 'Save your backup codes\nA1B2-C3D4-E5F6'
       expect(pageHasDocumentBackupCodeHint()).toBe(true)
       body.innerText = 'Enable 2FA codes for your account'
-      expect(pageHasDocumentBackupCodeHint()).toBe(true)
+      expect(pageHasDocumentBackupCodeHint()).toBe(false)
+      body.innerText = 'Use a backup code to sign in'
+      expect(pageHasDocumentBackupCodeHint()).toBe(false)
     } finally {
       if (!documentWasPresent) {
         Reflect.deleteProperty(globalThis, 'document')

@@ -890,17 +890,19 @@ export function pageHasPasskeyControlForScope(
 }
 
 export function pageHasManualCheckpoint(root: ParentNode): boolean {
-  if (
-    root.querySelector(
+  const explicitCheckpoints = Array.from(
+    root.querySelectorAll<HTMLElement>(
       'iframe[src*="recaptcha" i], iframe[src*="hcaptcha" i], iframe[src*="turnstile" i], iframe[title*="captcha" i], [data-nook-manual-checkpoint]',
-    )
-  ) {
+    ),
+  );
+  if (explicitCheckpoints.some(isActionablePageControl)) {
     return true;
   }
   const checkboxes = Array.from(
     root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
   );
   for (const checkbox of checkboxes) {
+    if (!isActionablePageControl(checkbox)) continue;
     const labeled = (
       checkbox.labels?.[0]?.textContent ??
       checkbox.getAttribute("aria-label") ??
@@ -912,7 +914,16 @@ export function pageHasManualCheckpoint(root: ParentNode): boolean {
       return true;
     }
   }
-  return looks_like_email_verification_body(root.textContent ?? "");
+  const checkpointTextElements = Array.from(
+    root.querySelectorAll<HTMLElement>(
+      'p, h1, h2, h3, h4, legend, [role="alert"], [role="status"], [role="dialog"]',
+    ),
+  );
+  return checkpointTextElements.some(
+    (element) =>
+      isActionablePageControl(element) &&
+      looks_like_email_verification_body(element.textContent ?? ""),
+  );
 }
 
 /** Report manual-checkpoint evidence only inside the observed ceremony. */

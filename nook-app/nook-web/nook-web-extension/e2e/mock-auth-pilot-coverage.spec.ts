@@ -108,6 +108,28 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         widget.getByRole('button', { name: 'Add 2FA from this page' }),
       ).toBeVisible({ timeout: 20_000 })
       await expect(widget).toHaveAttribute('aria-expanded', 'true')
+
+      const firstEnrollmentWidget = await widget.elementHandle()
+      expect(firstEnrollmentWidget).toBeTruthy()
+      await loginPage.evaluate(() => {
+        const previousQr = document.querySelector(
+          'canvas[aria-label="Authenticator QR"]',
+        )
+        const replacementQr = document.createElement('canvas')
+        replacementQr.width = 160
+        replacementQr.height = 160
+        replacementQr.setAttribute('aria-label', 'Replacement authenticator QR')
+        previousQr?.replaceWith(replacementQr)
+      })
+
+      await expect
+        .poll(() =>
+          firstEnrollmentWidget?.evaluate((element) => element.isConnected),
+        )
+        .toBe(false)
+      await expect(
+        widget.getByRole('button', { name: 'Add 2FA from this page' }),
+      ).toBeVisible({ timeout: 20_000 })
     } finally {
       await paired.context.close()
       await mockAuth.close()

@@ -187,7 +187,7 @@ async function performScanAndRender(): Promise<void> {
         summary,
         authenticatorSetupPresent: enrollmentHints.qr,
         backupCodesPresent: enrollmentHints.backupCodes,
-        manualCheckpointPresent: pageHasManualCheckpoint(document),
+        manualCheckpointPresent: summary.manualCheckpointPresent,
       }
       return authenticationPageObservation(observationRequest)
     },
@@ -417,7 +417,13 @@ function mutationCanExposeEnrollmentEvidence(record: MutationRecord): boolean {
     (node.matches('canvas, img, svg') ||
       Boolean(node.querySelector('canvas, img, svg')))
   if (record.type === 'childList') {
-    if ([...record.addedNodes].some(elementContainsQrMedia)) return true
+    if (
+      [...record.addedNodes, ...record.removedNodes].some(
+        elementContainsQrMedia,
+      )
+    ) {
+      return true
+    }
   } else if (
     record.type === 'attributes' &&
     elementContainsQrMedia(record.target)
@@ -428,7 +434,13 @@ function mutationCanExposeEnrollmentEvidence(record: MutationRecord): boolean {
     record.target instanceof Element
       ? record.target
       : record.target.parentElement
-  return textHasBackupCodeHint(evidenceContainer?.textContent ?? '')
+  if (textHasBackupCodeHint(evidenceContainer?.textContent ?? '')) return true
+  return (
+    record.type === 'childList' &&
+    [...record.addedNodes, ...record.removedNodes].some((node) =>
+      textHasBackupCodeHint(node.textContent ?? ''),
+    )
+  )
 }
 
 function handleAuthenticationMutations(
@@ -469,7 +481,7 @@ function handleAuthenticationMutations(
     return
   }
   if (
-    widgetState.renderedWorkflowRoot.kind === WidgetWorkflowRootKind.Assigned &&
+    !enrollmentCeremonyActive() &&
     pageMutations.some(mutationCanExposeEnrollmentEvidence)
   ) {
     const enrollmentHints = detectEnrollmentHints()

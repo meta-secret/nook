@@ -4,7 +4,10 @@ import {
   PasswordFormScopeKind,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { isActionablePageControl } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import {
+  isActionablePageControl,
+  pageHasManualCheckpoint,
+} from '../../../../nook-web-shared/src/extension/password-form-fields'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -12,6 +15,39 @@ afterEach(() => {
 })
 
 describe('website authentication control actionability', () => {
+  test('ignores hidden page-wide checkpoint artifacts', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="email" autocomplete="username" />
+        <button type="submit">Sign in</button>
+      </form>
+      <iframe src="https://captcha.test/recaptcha" hidden></iframe>
+      <section style="display: none">
+        <p>Check your email for a verification code</p>
+      </section>
+    `
+
+    expect(pageHasManualCheckpoint(document)).toBe(false)
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      manualCheckpointPresent: false,
+    })
+  })
+
+  test('keeps a visible manual checkpoint observable', () => {
+    document.body.innerHTML = `
+      <form>
+        <input type="email" autocomplete="username" />
+        <button type="submit">Sign in</button>
+        <p>Check your email for a verification code</p>
+      </form>
+    `
+
+    expect(pageHasManualCheckpoint(document)).toBe(true)
+    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+      manualCheckpointPresent: true,
+    })
+  })
+
   test('rejects credential forms hidden by content visibility', () => {
     document.body.innerHTML = `
       <section style="content-visibility: hidden">

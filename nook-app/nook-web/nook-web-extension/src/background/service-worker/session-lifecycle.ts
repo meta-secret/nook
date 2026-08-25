@@ -179,10 +179,19 @@ export async function openCompanionLauncher(
   const popupUrl = chrome.runtime.getURL('popup/index.html')
   if (intent === OpenCompanionLauncherIntent.Default) {
     const toolbarAction = chrome.action as ToolbarActionPopupApi
-    if (!toolbarAction.openPopup) {
-      throw new Error('toolbar popup unavailable')
+    if (toolbarAction.openPopup) {
+      try {
+        await toolbarAction.openPopup()
+        return
+      } catch {
+        // Some browsers expose openPopup but reject it outside a narrow user
+        // gesture. Keep authorization inside an extension-owned document.
+      }
     }
-    await toolbarAction.openPopup()
+    const fallbackArgs: Parameters<typeof chrome.tabs.create>[0] = {
+      url: popupUrl,
+    }
+    await chrome.tabs.create(fallbackArgs)
     return
   }
   const launcherUrl = `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
