@@ -1,6 +1,7 @@
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
+import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
 
 export const extensionSessionDocument = 'offscreen/session.html'
 
@@ -127,6 +128,27 @@ export function openSimpleVault(path = ''): void {
     url: runtimeSimpleVaultUrl(path),
   }
   void chrome.tabs.create(nookTypedArgs0_1)
+}
+
+export async function clearMountedAuthenticationSurfaces(): Promise<void> {
+  try {
+    const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
+    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+      chrome.tabs.query(queryArgs, resolve)
+    })
+    const message: Parameters<typeof chrome.tabs.sendMessage>[1] = {
+      type: ExtensionRuntimeRequestType.ClearAuthenticationSurface,
+    }
+    await Promise.allSettled(
+      tabs.map(async (tab) => {
+        if (tab.id === undefined) return
+        await chrome.tabs.sendMessage(tab.id, message)
+      }),
+    )
+  } catch {
+    // Session locking must still complete if browser tab enumeration is
+    // temporarily unavailable. Match metadata is invalidated independently.
+  }
 }
 
 export async function openCompanionLauncher(

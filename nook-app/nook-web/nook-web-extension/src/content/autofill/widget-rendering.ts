@@ -155,9 +155,12 @@ export function renderWidget({
         widgetState.renderedWorkflowRoot.observation.formScope.owner ===
           workflow.formScope.owner))
   ) {
+    widgetState.host.element.inert = false
     return
   }
   if (widgetState.host.kind === WidgetHostKind.Attached) {
+    cancelPendingAuthenticatorPickerRequest()
+    cancelPendingLoginPickerRequest()
     const preservesPresentation =
       widgetState.presentationScope.kind === WidgetWorkflowKeyKind.Assigned &&
       widgetState.presentationScope.key === presentationScope

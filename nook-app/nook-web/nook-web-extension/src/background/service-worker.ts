@@ -111,6 +111,7 @@ import {
 } from './service-worker/extension-lifecycle-routing'
 import { routeExternalCompanionMessage } from './service-worker/external-companion-routing'
 import {
+  clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,
@@ -132,6 +133,7 @@ import {
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
+  clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument,
   ensureExtensionSessionDocument,
   extensionSessionDocument,

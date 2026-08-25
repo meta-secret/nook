@@ -28,6 +28,7 @@ type ExtensionLifecycleRoutingArgs = {
 }
 
 export type ExtensionLifecycleRoutingDependencies = {
+  clearMountedAuthenticationSurfaces: typeof SessionLifecycle.clearMountedAuthenticationSurfaces
   closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
   ensureExtensionSessionDocument: typeof SessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
@@ -82,6 +83,7 @@ export function routeExtensionLifecycleMessage({
   sendResponse,
 }: ExtensionLifecycleRoutingArgs): boolean | ExtensionLifecycleRoutingResult {
   const {
+    clearMountedAuthenticationSurfaces,
     closeExtensionSessionDocument,
     ensureExtensionSessionDocument,
     extensionSessionDocument,
@@ -127,7 +129,10 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     invalidateAllLoginMatchAvailability()
-    void closeExtensionSessionDocument()
+    void Promise.all([
+      closeExtensionSessionDocument(),
+      clearMountedAuthenticationSurfaces(),
+    ])
       .finally(invalidateAllLoginMatchAvailability)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))
@@ -143,7 +148,10 @@ export function routeExtensionLifecycleMessage({
       return false
     }
     invalidateAllLoginMatchAvailability()
-    void closeExtensionSessionDocument()
+    void Promise.all([
+      closeExtensionSessionDocument(),
+      clearMountedAuthenticationSurfaces(),
+    ])
       .finally(invalidateAllLoginMatchAvailability)
       .then(() => sendResponse(successResponse))
       .catch(() => sendResponse(sessionLockFailureResponse))

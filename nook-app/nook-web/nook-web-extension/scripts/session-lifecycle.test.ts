@@ -94,3 +94,28 @@ describe('openCompanionLauncherBestEffort', () => {
     ).rejects.toThrow('toolbar popup unavailable')
   })
 })
+
+describe('clearMountedAuthenticationSurfaces', () => {
+  test('notifies every content-script tab and contains unavailable receivers', async () => {
+    const notifiedTabIds: number[] = []
+    globalThis.chrome = {
+      tabs: {
+        query: ((...args: Parameters<typeof chrome.tabs.query>) => {
+          const callback = args[1]
+          callback([{ id: 1 }, { id: 2 }, {}])
+        }) as typeof chrome.tabs.query,
+        sendMessage: (tabId: number) => {
+          notifiedTabIds.push(tabId)
+          return tabId === 2
+            ? Promise.reject(new Error('content script unavailable'))
+            : Promise.resolve({ ok: true })
+        },
+      },
+    } as typeof chrome
+    const { clearMountedAuthenticationSurfaces } =
+      await import('../src/background/service-worker/session-lifecycle')
+
+    await clearMountedAuthenticationSurfaces()
+    expect(notifiedTabIds).toEqual([1, 2])
+  })
+})

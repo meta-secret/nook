@@ -248,7 +248,9 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const signupPage = await context.newPage()
     await signupPage.goto(`${loginServer.origin}/signup`)
     const signupWidget = signupPage.locator('#nook-auth-widget')
-    await expect(signupWidget).toHaveCount(0)
+    await expect(
+      signupWidget.getByRole('button', { name: 'Generate password' }),
+    ).toBeVisible()
 
     const otpPage = await context.newPage()
     await otpPage.goto(`${loginServer.origin}/otp`)

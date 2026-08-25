@@ -24,8 +24,10 @@ const unusedAsyncDependency = mock(() =>
 const ensureExtensionSessionDocument = mock(() => Promise.resolve())
 const openCompanionLauncher = mock(() => Promise.resolve())
 const invalidateAllLoginMatchAvailability = mock(() => {})
+const clearMountedAuthenticationSurfaces = mock(() => Promise.resolve())
 
 const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
+  clearMountedAuthenticationSurfaces,
   closeExtensionSessionDocument: unusedAsyncDependency,
   ensureExtensionSessionDocument,
   extensionSessionDocument: 'offscreen/session.html',
@@ -106,6 +108,7 @@ describe('service worker routing', () => {
 
   test('invalidates login-match metadata before and after locking the session', async () => {
     invalidateAllLoginMatchAvailability.mockClear()
+    clearMountedAuthenticationSurfaces.mockClear()
     const closeExtensionSessionDocument = mock(() => {
       expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
       return Promise.resolve()
@@ -133,7 +136,39 @@ describe('service worker routing', () => {
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
     await flushResponses()
     expect(closeExtensionSessionDocument).toHaveBeenCalledTimes(1)
+    expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
     expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
+  })
+
+  test('clears mounted authentication surfaces when the session expires', async () => {
+    invalidateAllLoginMatchAvailability.mockClear()
+    clearMountedAuthenticationSurfaces.mockClear()
+    const closeExtensionSessionDocument = mock(() => Promise.resolve())
+    const dependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      closeExtensionSessionDocument,
+      isExtensionSessionEnsureMessage: () => false,
+      isExtensionSessionExpiryMessage: () => true,
+    }
+    const { routeExtensionLifecycleMessage } =
+      await import('../src/background/service-worker/extension-lifecycle-routing')
+    const sendResponse = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
+      dependencies,
+      message: { type: 'test-session-expiry' },
+      sender: {
+        id: 'nook-extension',
+        url: 'chrome-extension://nook-extension/offscreen/session.html',
+      },
+      sendResponse,
+    }
+
+    expect(routeExtensionLifecycleMessage(routingArgs)).toBe(true)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(1)
+    await flushResponses()
+    expect(clearMountedAuthenticationSurfaces).toHaveBeenCalledTimes(1)
+    expect(invalidateAllLoginMatchAvailability).toHaveBeenCalledTimes(2)
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {

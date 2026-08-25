@@ -67,7 +67,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
-  test('cancels an open login picker when the page gains a manual checkpoint', async ({
+  test('cancels open login pickers when the authentication context changes', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -105,6 +105,24 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await loginPage.evaluate(() => {
         const form = document.querySelector('form')
         if (!form) throw new Error('mock login form missing')
+        form.replaceWith(form.cloneNode(true))
+      })
+
+      await expect.poll(() => loginPicker.isClosed()).toBe(true)
+      await expect(widget.getByText('Ready to sign in')).toBeVisible({
+        timeout: 20_000,
+      })
+      const checkpointPickerPromise = paired.context.waitForEvent('page')
+      await widget.getByRole('button', { name: 'Fill saved login' }).click()
+      const checkpointPicker = await checkpointPickerPromise
+      await checkpointPicker.waitForURL(/intent=login-picker/)
+      await expect(checkpointPicker.getByText('alice@nook.test')).toBeVisible({
+        timeout: 20_000,
+      })
+
+      await loginPage.evaluate(() => {
+        const form = document.querySelector('form')
+        if (!form) throw new Error('mock login form missing')
         const checkpoint = document.createElement('label')
         checkpoint.setAttribute('data-nook-manual-checkpoint', '')
         const checkbox = document.createElement('input')
@@ -114,7 +132,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       })
 
       await expect(widget).toHaveCount(0, { timeout: 20_000 })
-      await expect.poll(() => loginPicker.isClosed()).toBe(true)
+      await expect.poll(() => checkpointPicker.isClosed()).toBe(true)
       await expect(loginPage.locator('[autocomplete="username"]')).toHaveValue(
         '',
       )
@@ -278,11 +296,15 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         'extension-fill-password',
       )
 
-      await lockExtensionSession(paired.context)
-
       const loginPage = await paired.context.newPage()
       await loginPage.goto(`${mockAuth.origin}/plain/login`)
       const widget = loginPage.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+
+      await lockExtensionSession(paired.context)
+      await expect(widget).toHaveCount(0)
+
+      await loginPage.reload()
       await expect(widget.getByTestId('nook-auth-gate-expand')).toBeVisible()
       await widget.getByTestId('nook-auth-gate-expand').click()
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
