@@ -243,6 +243,7 @@ containerRunners.requireAll([
   "maxRunners: 20",
   "type: kubernetes-novolume",
   "automountServiceAccountToken: true",
+  "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
   "ACTIONS_RUNNER_KUBERNETES_NAMESPACE",
   "value: arc-runners",
   "ACTIONS_RUNNER_CONTAINER_HOOK_TEMPLATE",
@@ -250,7 +251,6 @@ containerRunners.requireAll([
   "ghcr.io/actions/actions-runner:2.336.0@sha256:",
 ]);
 containerRunners.forbidAll([
-  "ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER",
   "privileged: true",
   "docker:dind",
   "dockerd",
@@ -262,6 +262,7 @@ containerHook.requireAll([
   "apiVersion: v1",
   "kind: PodTemplate",
   "name: nook-arc-container-hook",
+  "automountServiceAccountToken: false",
   'name: "$job"',
   "nook.nokey.sh/arc-build: \"true\"",
   "values: [primary]",

@@ -110,6 +110,11 @@ fn assert_docker_setup_contract(root: &Path) {
     let setup = read(root, ".github/actions/nook-docker-setup/action.yml");
     let pr = read(root, ".github/workflows/pr.yml");
     let arc_values = read(root, "infra/k0s/manifests/arc/runner-scale-set-values.yaml");
+    let container_values = read(
+        root,
+        "infra/k0s/manifests/arc/container-runner-scale-set-values.yaml",
+    );
+    let container_hook = read(root, "infra/k0s/manifests/arc/container-hook.yaml");
     for required in [
         "docker/setup-buildx-action@v4",
         "Preload hosted BuildKit from Zot",
@@ -143,6 +148,12 @@ fn assert_docker_setup_contract(root: &Path) {
             "GitHub-hosted Docker setup is missing: {required}"
         );
     }
+    assert!(
+        container_values.contains("name: ACTIONS_RUNNER_REQUIRE_JOB_CONTAINER")
+            && container_values.contains("value: \"true\"")
+            && container_hook.contains("automountServiceAccountToken: false"),
+        "container ARC must require declared job containers and withhold Kubernetes credentials from job Pods"
+    );
     assert!(
         pr.contains("name: Publish git-scoped native BuildKit cache")
             && pr.contains("task ci:main:publish-native-cache")

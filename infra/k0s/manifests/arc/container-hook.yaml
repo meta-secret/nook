@@ -12,6 +12,7 @@ data:
         nook.nokey.sh/role: arc-job-container
         nook.nokey.sh/arc-spread-group: container
     spec:
+      automountServiceAccountToken: false
       securityContext:
         fsGroup: 1000
         fsGroupChangePolicy: OnRootMismatch

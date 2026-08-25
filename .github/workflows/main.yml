@@ -447,7 +447,7 @@ jobs:
             }
 
             const { syncUiDemoIssue, transitionUiDemoIssue } = require(
-              `${process.env.GITHUB_WORKSPACE}/.github/scripts/linear-ui-demo.cjs`,
+              '/meta-secret/nook/.github/scripts/linear-ui-demo.cjs',
             )
             const config = {
               labelId: process.env.LINEAR_UI_DEMO_LABEL_ID,
