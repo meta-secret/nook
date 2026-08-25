@@ -68,7 +68,7 @@ function installPopupDemoRuntime(): void {
       switch (message.type) {
         case 'nook:extension-pairing-state-query': {
           const connected =
-            globalThis.localStorage.getItem('nook-popup-demo-state') ===
+            new URLSearchParams(globalThis.location.search).get('state') ===
             'connected'
           callback(connected ? { ok: true, setup } : { ok: false })
           return
@@ -127,9 +127,6 @@ test('keeps the extension toolbar popup focused on one next action', async ({
   await expect(page.getByTestId('open-simple-vault-btn')).toHaveCount(0)
   await demoBeat(page)
 
-  await page.evaluate(() => {
-    globalThis.localStorage.setItem('nook-popup-demo-state', 'connected')
-  })
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=connected`)
   await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
   await expect(page.getByTestId('companion-vault-status')).toHaveText(
