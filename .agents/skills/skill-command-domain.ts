@@ -20,6 +20,7 @@ export enum SkillCommandPhase {
 export enum SkillCommandIssue {
   InvalidRequest = 'invalid-request',
   InvalidYaml = 'invalid-yaml',
+  RequestTooLarge = 'request-too-large',
   RequestFileReadFailed = 'request-file-read-failed',
   UsageError = 'usage-error',
 }
@@ -63,6 +64,12 @@ export type SkillArraySchema = {
 export type SkillObjectSchema = {
   readonly type: SkillSchemaType.Object;
   readonly additionalProperties: false;
+  readonly derivedResultConstraints?: {
+    readonly maximumBytes: number;
+    readonly maximumFindings: number;
+    readonly rule: string;
+  };
+  readonly maximumRequestBytes?: number;
   readonly required: readonly string[];
   readonly properties: {
     readonly [field: string]: SkillInputSchema;

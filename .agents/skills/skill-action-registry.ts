@@ -5,8 +5,11 @@ import {
   CORTEX_ARTICLE_BLOCK_LIMIT,
   CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
   CORTEX_ARTICLE_DOCUMENT_LIMIT,
+  CORTEX_ARTICLE_FINDING_LIMIT,
   CORTEX_ARTICLE_HEADING_DEPTH_LIMIT,
   CORTEX_ARTICLE_PATH_LIMIT,
+  CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
+  CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
   type CortexArticleStructureResult,
 } from './cortex-article-structure/src/domain.ts';
 import { decodeCortexArticleRequest } from './cortex-article-structure/src/codec.ts';
@@ -146,6 +149,12 @@ const MIGRATION_LEDGER_SCHEMA: SkillObjectSchema = {
 const CORTEX_ARTICLE_AUDIT_SCHEMA: SkillObjectSchema = {
   type: SkillSchemaType.Object,
   additionalProperties: false,
+  maximumRequestBytes: CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
+  derivedResultConstraints: {
+    maximumBytes: CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
+    maximumFindings: CORTEX_ARTICLE_FINDING_LIMIT,
+    rule: 'The deterministic audit result derived from this request must fit both limits.',
+  },
   required: [
     'kind',
     'documents',

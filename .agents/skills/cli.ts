@@ -1,5 +1,9 @@
 #!/usr/bin/env bun
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
+import {
+  CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
+  CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
+} from './cortex-article-structure/src/domain.ts';
 import {
   blueprintForSkillRequest,
   decodeSkillActionRequest,
@@ -37,6 +41,14 @@ type SkillSuccessResponse = {
   readonly result: ReturnType<typeof executeSkillAction>;
 };
 
+const SKILL_REQUEST_BYTE_LIMIT = CORTEX_ARTICLE_REQUEST_BYTE_LIMIT;
+const SKILL_RECEIVED_YAML_BYTE_LIMIT = Math.min(
+  32 * 1_024,
+  Math.floor(CORTEX_ARTICLE_RESULT_BYTE_LIMIT / 4),
+);
+const UTF8_ENCODER = new TextEncoder();
+const UTF8_DECODER = new TextDecoder();
+
 export async function runSkillCli(
   request: RunSkillCliRequest,
 ): Promise<SkillCliOutcome> {
@@ -62,6 +74,20 @@ export async function runSkillCli(
   }
   let text: string;
   try {
+    const requestFile = statSync(invocation.requestPath);
+    if (!requestFile.isFile()) {
+      throw new Error('Skill request path must be a regular file.');
+    }
+    if (requestFile.size > SKILL_REQUEST_BYTE_LIMIT) {
+      const outcomeRequest: SkillErrorOutcomeRequest = {
+        phase: SkillCommandPhase.Decode,
+        issue: SkillCommandIssue.RequestTooLarge,
+        message: `Skill request exceeds ${SKILL_REQUEST_BYTE_LIMIT} bytes.`,
+        receivedYaml: '',
+        blueprintYaml: defaultSkillBlueprint(),
+      };
+      return errorOutcome(outcomeRequest);
+    }
     text = readFileSync(invocation.requestPath, 'utf8');
   } catch (error) {
     const outcomeRequest: SkillErrorOutcomeRequest = {
@@ -77,13 +103,23 @@ export async function runSkillCli(
 }
 
 export function dispatchSkillYamlText(text: string): SkillCliOutcome {
+  if (UTF8_ENCODER.encode(text).byteLength > SKILL_REQUEST_BYTE_LIMIT) {
+    const outcomeRequest: SkillErrorOutcomeRequest = {
+      phase: SkillCommandPhase.Decode,
+      issue: SkillCommandIssue.RequestTooLarge,
+      message: `Skill request exceeds ${SKILL_REQUEST_BYTE_LIMIT} bytes.`,
+      receivedYaml: boundedReceivedYaml(text),
+      blueprintYaml: defaultSkillBlueprint(),
+    };
+    return errorOutcome(outcomeRequest);
+  }
   const parsed = parseSkillYamlText(text);
   if (!parsed.ok) {
     const outcomeRequest: SkillErrorOutcomeRequest = {
       phase: SkillCommandPhase.Decode,
       issue: SkillCommandIssue.InvalidYaml,
       message: parsed.message,
-      receivedYaml: text,
+      receivedYaml: boundedReceivedYaml(text),
       blueprintYaml: defaultSkillBlueprint(),
       parseMessage: parsed.message,
     };
@@ -96,7 +132,7 @@ export function dispatchSkillYamlText(text: string): SkillCliOutcome {
       issue: SkillCommandIssue.InvalidRequest,
       message: decoded.message,
       path: decoded.path,
-      receivedYaml: stringifySkillYaml(parsed.value),
+      receivedYaml: boundedReceivedYaml(stringifySkillYaml(parsed.value)),
       blueprintYaml: blueprintForSkillRequest(parsed.value),
     };
     return errorOutcome(outcomeRequest);
@@ -115,7 +151,7 @@ export function dispatchSkillYamlText(text: string): SkillCliOutcome {
       phase: SkillCommandPhase.Execute,
       issue: SkillCommandIssue.InvalidRequest,
       message: error instanceof Error ? error.message : String(error),
-      receivedYaml: stringifySkillYaml(parsed.value),
+      receivedYaml: boundedReceivedYaml(stringifySkillYaml(parsed.value)),
       blueprintYaml: blueprintForSkillRequest(parsed.value),
     };
     return errorOutcome(outcomeRequest);
@@ -160,6 +196,15 @@ function errorOutcome(request: SkillErrorOutcomeRequest): SkillCliOutcome {
     exitCode: 2,
     yaml: stringifySkillYaml(response as UntrustedSkillYamlNode),
   };
+}
+
+function boundedReceivedYaml(text: string): string {
+  const bytes = UTF8_ENCODER.encode(text);
+  if (bytes.byteLength <= SKILL_RECEIVED_YAML_BYTE_LIMIT) return text;
+  const prefix = UTF8_DECODER.decode(
+    bytes.slice(0, SKILL_RECEIVED_YAML_BYTE_LIMIT),
+  );
+  return `${prefix}\n# received YAML truncated at ${SKILL_RECEIVED_YAML_BYTE_LIMIT} bytes\n`;
 }
 
 if (import.meta.main) {

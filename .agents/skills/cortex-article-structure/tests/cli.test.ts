@@ -104,6 +104,15 @@ describe('executable skill YAML command protocol', () => {
     expect('items' in blockItems).toBe(true);
     if (!('items' in blockItems)) throw new Error('Missing block item schema.');
     expect(blockItems.maxItems).toBe(100_000);
+    expect(action.inputSchema.maximumRequestBytes).toBe(4 * 1_024 * 1_024);
+    const expectedResultConstraints = {
+      maximumBytes: 1_024 * 1_024,
+      maximumFindings: 50_000,
+      rule: 'The deterministic audit result derived from this request must fit both limits.',
+    };
+    expect(action.inputSchema.derivedResultConstraints).toEqual(
+      expectedResultConstraints,
+    );
     expect('oneOf' in blockItems.items).toBe(true);
     if (!('oneOf' in blockItems.items)) {
       throw new Error('Missing semantic block variants.');
@@ -172,6 +181,20 @@ describe('executable skill YAML command protocol', () => {
     expect(outcome.exitCode).toBe(2);
     expect(response.errors?.at(0)?.issue).toBe(SkillCommandIssue.InvalidYaml);
     expect(outcome.yaml).toContain('parseMessage:');
+  });
+
+  test('bounds source input and echoed corrective YAML before parsing', () => {
+    const oversizedYaml = `# ${'x'.repeat(4 * 1_024 * 1_024)}\n`;
+    const outcome = dispatchSkillYamlText(oversizedYaml);
+    const response = parseCliResponse(outcome.yaml);
+    expect(outcome.exitCode).toBe(2);
+    expect(response.errors?.at(0)?.issue).toBe(
+      SkillCommandIssue.RequestTooLarge,
+    );
+    expect(outcome.yaml).toContain('received YAML truncated');
+    expect(new TextEncoder().encode(outcome.yaml).byteLength).toBeLessThan(
+      1_024 * 1_024,
+    );
   });
 
   test('keeps every article finding code visible to the executable action', () => {
