@@ -154,10 +154,11 @@
       ? consumeSentinelOnboardingFromLocation()
       : '',
   )
-  function syncRoute() {
+  function syncRoute(event?: Event) {
     if (!IS_SIMPLE_APP) {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
-      if (invitationRequest) sentinelInvitationRequest = invitationRequest
+      if (invitationRequest || event?.type === 'popstate')
+        sentinelInvitationRequest = invitationRequest
       const participantResponse =
         consumeSentinelGenesisParticipantResponseFromLocation()
       if (participantResponse) sentinelParticipantResponse = participantResponse
@@ -228,7 +229,6 @@
       )
     }
   })
-
   function navigateHome() {
     const applyWorkspaceRouteArgs4: Parameters<typeof applyWorkspaceRoute>[0] =
       { state: vault, route: WorkspaceRoute.Vault }

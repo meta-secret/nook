@@ -556,6 +556,24 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-genesis-connect-device'),
     ).toBeVisible()
+    await page.goBack()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toHaveCount(0)
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, ownerRequest)
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
     await page.getByTestId('create-vault-wizard-back').click()
     await expect(page.getByTestId('vault-panel')).toBeVisible({
       timeout: UI_TIMEOUT_MS,
