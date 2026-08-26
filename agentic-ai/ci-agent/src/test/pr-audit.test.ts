@@ -85,6 +85,7 @@ test("buildPrAudit includes comments on the current head before its exact-head r
     mockOctokit({
       codexReview: MockCodexReview.Missing,
       currentHeadFinding: true,
+      omitPushEvent: true,
     }),
     repoRef,
     410,
@@ -346,6 +347,7 @@ type MockOptions = {
   historicalFinding?: boolean;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
+  omitPushEvent?: boolean;
   runStatus?: MockRunStatus;
   unresolvedThreads?: number;
 };
@@ -370,6 +372,23 @@ function mockOctokitWithAgentHandoff(
 
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
+  const activity = {
+    listRepoEvents: async () => ({
+      data:
+        options.omitPushEvent === true
+          ? []
+          : [
+              {
+                created_at: "2026-08-08T00:01:00Z",
+                payload: {
+                  head: headSha,
+                  ref: "refs/heads/feature",
+                },
+                type: "PushEvent",
+              },
+            ],
+    }),
+  };
   const pulls = {
     get: async () => ({
       data: {
@@ -548,12 +567,6 @@ function createMockOctokit(options: MockOptions): Octokit {
         required_status_checks: { checks: [] },
       },
     }),
-    getCommit: async () => ({
-      data: {
-        commit: { committer: { date: "2026-08-08T00:01:00Z" } },
-        sha: headSha,
-      },
-    }),
     listDeployments: async () => ({
       data: [{ environment: "github-pages", id: 99 }],
     }),
@@ -563,6 +576,7 @@ function createMockOctokit(options: MockOptions): Octokit {
   };
   const octokit = {
     rest: {
+      activity,
       actions: {
         listJobsForWorkflowRun: async () => ({
           data: [
@@ -601,6 +615,17 @@ function createMockOctokit(options: MockOptions): Octokit {
                 id: 42,
                 pull_requests: [{ number: 410 }],
                 status: options.runStatus ?? MockRunStatus.Completed,
+              },
+            ],
+          },
+        }),
+        listWorkflowRunsForRepo: async () => ({
+          data: {
+            total_count: 1,
+            workflow_runs: [
+              {
+                created_at: "2026-08-08T00:01:05Z",
+                head_sha: headSha,
               },
             ],
           },

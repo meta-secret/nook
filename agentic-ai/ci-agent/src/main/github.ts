@@ -276,6 +276,51 @@ type RepositoryStatusCommentInput = {
   user: unknown;
 };
 
+type PullRequestHeadIdentity = {
+  createdAt: string;
+  ref: string;
+  sha: string;
+};
+
+type PushEventPayload = {
+  readonly head?: string;
+  readonly ref?: string;
+};
+
+async function loadCurrentHeadTransitionAt(
+  octokit: Octokit,
+  repoRef: RepoRef,
+  head: PullRequestHeadIdentity,
+): Promise<string> {
+  const { owner, repo } = repoRef;
+  const repositoryEvents = await octokit.paginate(
+    octokit.rest.activity.listRepoEvents,
+    { owner, repo, per_page: 100 },
+  );
+  const expectedRef = `refs/heads/${head.ref}`;
+  const pushEvent = repositoryEvents.find((event) => {
+    if (event.type !== "PushEvent") return false;
+    const payload = event.payload as typeof event.payload & PushEventPayload;
+    return payload.ref === expectedRef && payload.head === head.sha;
+  });
+  if (pushEvent?.created_at) return pushEvent.created_at;
+
+  const { data: workflowRunsPage } =
+    await octokit.rest.actions.listWorkflowRunsForRepo({
+      branch: head.ref,
+      event: "pull_request",
+      head_sha: head.sha,
+      owner,
+      per_page: 100,
+      repo,
+    });
+  const workflowRuns = workflowRunsPage.workflow_runs;
+  const indexedAt = workflowRuns
+    .map((run) => run.created_at)
+    .sort()[0];
+  return indexedAt ?? head.createdAt;
+}
+
 export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
@@ -287,12 +332,11 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
-  const { data: headCommit } = await octokit.rest.repos.getCommit({
-    owner,
-    repo,
-    ref: pr.head.sha,
+  const currentHeadAt = await loadCurrentHeadTransitionAt(octokit, repoRef, {
+    createdAt: pr.created_at,
+    ref: pr.head.ref,
+    sha: pr.head.sha,
   });
-  const currentHeadAt = headCommit.commit.committer?.date ?? pr.created_at;
 
   let unresolvedThreads = 0;
   enum PaginationKind {
