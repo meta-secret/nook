@@ -4,11 +4,14 @@
 
 Status: Architecture decision with staged implementation.
 
-Nook separates semantic instructions from deterministic scheduling.
+Nook separates repository policy from native harness coordination.
 
 - **Cortex** documents what a workflow means.
-- **Loom** executes reviewed static workflow graphs.
-- **Codex** supplies local bounded expert threads selected by Loom.
+- **Codex, Cursor, or another capable harness** creates and coordinates native
+  subagents.
+- **Loom** may execute reviewed static read-only workflow graphs.
+- **Nook tools** validate task contracts, isolated workspace handoffs, and
+  deterministic integration evidence.
 
 This design governs local software development only.
 Hive is a separate product and infrastructure feature.
@@ -16,9 +19,10 @@ It does not represent, schedule, or persist local module-development work.
 
 ## Static graph decision
 
-Agent workflow topology is authored as TypeScript in Loom.
+This decision applies only to workflows compiled into Loom.
+Native harness delegation does not require a Loom graph.
 
-Each workflow has a fixed, reviewed graph.
+Each compiled Loom workflow has a fixed, reviewed graph.
 
 The compiled definition owns:
 
@@ -49,27 +53,19 @@ Runtime inputs have bounded authority:
 
 ### Hierarchy semantics
 
-Hierarchy is declared by the reviewed graph.
+The active harness owns native subagent hierarchy.
 
-- Every child attempt records its parent lineage.
-- Every child attempt records its hierarchy depth.
-- A parent may itself be a materializer below another reviewed parent.
-- Each tier consumes child views and emits one higher-level semantic view.
-- The delivery owner is the root outside the worker fan-out.
+- Every delegated task declares parent lineage.
+- Every task declares a hierarchy depth bound.
+- A child may delegate only inside its assigned task and ownership scope.
+- Descendants inherit the exact baseline and delivery owner.
+- The harness owns communication, scheduling, retries, cancellation, barriers,
+  nested delegation, and synthesis.
 
-The hierarchy has a hard maximum depth of three.
-
-- Depth 1 is feature synthesis or materialization.
-- Depth 2 contains named module and internal API experts.
-- Depth 3 is exceptional and predeclared by the reviewed parent.
-- Depth greater than three is invalid.
-
-An agent may not create an unscheduled child or choose a new graph tier from its
-prompt.
-
-The current Cortex workflow has one worker tier and one synthesis tier.
-Children cannot freely create grandchildren.
-No agent may dynamically add a task or another tier.
+A compiled Loom graph still declares its own fixed hierarchy.
+That hierarchy is an optional separate workflow.
+It does not constrain capable native harness delegation beyond the repository's
+task contract and ownership rules.
 
 ### Local feature-development boundary
 
@@ -83,6 +79,8 @@ Feature planning uses the
   [module expert registry](../architecture/module-experts.md).
 - `internal_api_expert` owns changed inter-module and WASM consumer contracts.
 - Expert catalog paths route knowledge and do not grant write authority.
+- Write-capable nodes use isolated workspaces and verified commit handoffs.
+- Downstream nodes bind to the exact integrated provider commit.
 
 ## Responsibilities
 
@@ -107,7 +105,7 @@ The canonical decision contract is
 
 ### Loom static workflow module
 
-Agent workflows live in an isolated Loom module:
+Optional compiled agent workflows live in an isolated Loom module:
 
 ```text
 agentic-ai/loom/src/agent-workflow/
@@ -119,7 +117,7 @@ The module boundary is one-way:
 - It may call existing Loom tools through typed adapters.
 - Existing leaf tools do not import the workflow module.
 
-The workflow module owns:
+For those compiled workflows, the module owns:
 
 - the compiled workflow catalog;
 - graph validation;
@@ -148,139 +146,61 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 
 ### Codex worker adapter
 
-The Codex SDK is the local worker adapter.
+The active Codex, Cursor, or other capable harness is the primary worker
+adapter.
 
-For each reached agent task attempt, the adapter:
+It owns:
 
-- starts exactly one Codex thread in an isolated SDK process;
-- disables agents, both multi-agent implementations, apps, and plugins through
-  constructor overrides; and
-- enforces read-only filesystem access, never-approve behavior, disabled
-  network access, and disabled web search through thread overrides.
+- native subagent creation and communication;
+- dependency-ready scheduling and barriers;
+- retry and cancellation behavior;
+- nested delegation within declared depth and ownership bounds;
+- child-result synthesis;
+- context transfer to downstream tasks.
 
-Project role TOMLs name experts and provide thin instructions.
-They are not capability boundaries because native children reapply the parent
-turn's live permissions after role selection.
-Module experts therefore cannot run as ordinary children of a write-capable
-delivery session.
+Nook does not start another Codex or Cursor process to coordinate those native
+subagents.
 
-The adapter has proven:
+Project role TOMLs remain thin routing instructions.
+They do not grant filesystem capability or delivery ownership.
 
-- local ChatGPT subscription reuse without an API key;
-- exact-source binding;
-- cancellation;
-- streamed lifecycle events;
-- structured results;
-- one worker per reached task attempt.
-- no worker-owned child or successor spawning.
-
-The official Codex SDK can start, continue, and resume local Codex threads.
-
-The authentication proof used the logged-in local Codex session.
-
-An opt-in automated integration test remains future work.
+The existing Loom Codex SDK adapter remains available for reviewed static
+read-only workflows.
+It is not required for module-expert dispatch or module-DAG implementation.
 
 ### Event store and materialized views
 
-A local Loom run writes an event-sourced processing hierarchy under
+A compiled Loom run may write an event-sourced processing hierarchy under
 `workflow/processing/`.
 
-Ordinary collaboration-tool delegation uses the same processing hierarchy.
-The parent first declares the bounded source-bound hierarchy through
-`task loom:agent-delegation:start PLAN=path/to/plan.json`. Before dispatch, the
-parent authorizes each exact planned child through
-`task loom:agent-delegation:admit REQUEST=path/to/admission.json`. Depth-three
-admission additionally requires completed replay-verified depth-two evidence.
-After each child returns, the parent submits its bounded action and semantic
-result:
+That evidence is optional for native harness delegation.
+Native harness scheduling does not depend on repository JSONL files, result
+files, content hashes, or Markdown summaries.
 
-```sh
-task loom:agent-delegation:record REQUEST=path/to/request.json
-```
+These artifacts may remain useful to humans:
 
-Record requires the prior admission, persists verified projections, and
-returns their hashes. A compiled static graph is not required for the
-per-attempt event and view contract. Whole-run aggregation and closure remain
-a separate delivery slice.
+- JSONL streams preserve bounded observable activity for an audit.
+- Typed result files preserve machine-readable evidence.
+- Markdown views preserve agent-authored conclusions for review.
+- Root views preserve a human-readable synthesis.
 
-The run-level `events.jsonl` journal is the scheduling authority for that local
-run and records:
+Optional evidence must exclude prompts, hidden reasoning, credentials,
+secrets, raw command output, and raw errors.
 
-- the run ID;
-- workflow name and version;
-- exact source commit;
-- monotonic event sequence;
-- task eligibility;
-- task attempts;
-- runtime activity;
-- task terminal results;
-- successor activation;
-- workflow termination.
+No optional artifact may gate:
 
-Every reached agent attempt also has its own append-only `events.jsonl` stream.
+- dispatch;
+- continuation;
+- retries;
+- cancellation;
+- dependency joins;
+- nested delegation;
+- synthesis;
+- completion.
 
-- The child stream owns that attempt's observable action history.
-- It carries explicit parent lineage.
-- It does not own scheduling, joins, retries, or workflow completion.
-- A retry receives a new attempt directory and stream.
-
-Each completed agent authors a Markdown semantic materialized view as part of
-its typed terminal result.
-
-Loom validates and atomically persists that content as `view.md`.
-
-- The agent owns the view's conclusions.
-- Loom owns persistence, content hashes, event references, and source identity.
-- A failed attempt receives a clearly labeled Loom-authored failure view.
-- A run whose declared materializer does not complete receives a clearly
-  labeled Loom-authored root failure view.
-- Markdown is never parsed to decide workflow state.
-
-Parents consume child views by default and raw child streams only for
-diagnosis. A declared materializer agent reconciles child views and authors the
-next aggregate view. This repeats through every reviewed graph tier until the
-root aggregate is available to the delivery owner.
-
-The root delivery owner validates that aggregate against current state and
-authors the final user report. That report is the public semantic projection of
-the hierarchy. It does not become scheduling authority.
-
-- **Projection authority:** Task and workflow result files are projections.
-  - Agent result JSON, agent view Markdown, the root result, and the root view
-    are content-hashed projections.
-  - Root task-terminal events reference finalized child streams and views.
-- **Current replay:** The replay API validates identity, sequence, terminal
-  references, canonical projection paths and hashes, referenced agent streams,
-  result equivalence, lineage, and view authorship.
-  - It does not yet rebuild scheduler eligibility or join state.
-
-Journal events are bounded and secret-sanitized. They must not contain:
-
-- prompts;
-- model reasoning;
-- credentials;
-- repository secrets;
-- raw command output.
-
-- **Error records:** Runtime adapters normalize errors before appending events.
-  - An event records a bounded category and sanitized detail.
-  - It never serializes a raw SDK error, stack trace, or command failure object.
-- **Event identity:** Every event carries the workflow version and exact source
-  commit. Sequence numbers increase without gaps within one run.
-- **Attempt schema compatibility:** Adapter-bearing attempt streams use workflow
-  version `2.0.0`.
-  - Version `1.0.0` is rejected as legacy.
-  - Loom does not infer missing adapter provenance during replay or migration.
-  - The exact cleanup and migration policy is owned by
-    [Subagent Delegation](../workflows/subagent-delegation.md#agent-action-streams).
-- **Resume:** Resume is not exposed in the first CLI slice.
-  - Before adding it, a full reducer must rebuild eligibility and join state
-    before scheduling new work.
-- **Terminal results:** A task attempt receives one terminal result.
-  - A successful agent attempt is not terminal until its result, action stream,
-    and semantic view are finalized and journal-referenced.
-- **Durability boundary:** Do not treat the journal as durable distributed
-  coordination.
+The active harness remains the coordination authority.
+The delivery owner validates accepted commits and evidence against current
+repository state before integration.
 
 ### Delivery owner
 
@@ -296,13 +216,14 @@ That owner controls:
 - validation requests;
 - readiness and merge.
 
-Workers return evidence or isolated patches.
+Read-only workers return evidence. Write-capable workers return verified commit
+handoffs from their isolated workspaces.
 
 They do not become delivery owners.
 
 ## First compiled workflow
 
-The first catalog entry has this contract:
+The first optional catalog entry has this contract:
 
 - Name: `cortex-full-garbage-collection`.
 - Capability: read-only.
@@ -344,46 +265,36 @@ The parallel wave contains these tasks:
 
 ## Reviewed catalog growth
 
-The catalog grows one reviewed workflow at a time.
+The optional catalog grows one reviewed workflow at a time.
+Use it only when a static deterministic graph is independently useful.
 
-The next candidates are:
+Native Coding Bro delivery and module-DAG implementation remain harness-owned.
+They do not require compiled Loom workflows.
 
-1. the fixed Coding Bro delivery state machine;
-2. fixed exact-head CI diagnosis lanes;
-3. fixed dependency inventory lanes.
+The optional Loom catalog keeps these boundaries:
 
-Do not add a generic workflow builder.
-
-Do not add prompt-defined task cardinality.
-
-Do not create a general graph language outside TypeScript.
+- Do not add a generic workflow builder.
+- Do not add prompt-defined task cardinality.
+- Do not create a general graph language outside TypeScript.
 
 ## Adoption sequence
 
-1. Define the static graph domain in the isolated Loom module.
-2. Define `cortex-full-garbage-collection` in TypeScript.
-3. Add graph validation and a dry-run projection.
-4. Add the append-only local journal and typed terminal projections.
-5. Add deterministic ready-wave execution.
-6. Add the Codex SDK adapter after auth and cancellation proof.
-7. Execute the read-only Cortex workflow.
-8. Delete Lace and remove it from the Minds workspace.
-9. Add the fixed Coding Bro delivery workflow.
-10. Add reviewed module-oriented workflows only after their read-only expert
-    contracts and depth bounds are proven.
+The static Loom workflow foundation is complete and remains available for
+bounded read-only audits.
 
-Write-capable worker execution is not the starting point.
+Harness-native module delivery proceeds separately:
 
-The first implementation rejects write-capable Codex worker profiles.
+1. Validate a frozen module DAG and task contracts.
+2. Prepare one isolated workspace for each ready write-capable task.
+3. Let the active harness coordinate subagents.
+4. Verify each returned commit against its baseline and write scope.
+5. Integrate accepted commits in deterministic dependency order.
+6. Bind consumers to the exact integrated provider commit.
+7. Give retries fresh isolated state.
+8. Prove the full provider-to-consumer path with focused tests.
 
-It begins only after the read-only workflow proves:
-
-- baseline binding;
-- resource enforcement;
-- complete terminal results;
-- journal replay;
-- cancellation;
-- parent-owned integration.
+Optional journals and views may document the run for humans.
+They do not participate in the control path.
 
 ## Non-goals
 
@@ -397,7 +308,9 @@ This decision does not:
 - map local software development onto Hive;
 - allow concurrent writers in one worktree;
 - transfer lifecycle ownership to child workers;
-- allow a child to create an unscheduled agent tier.
+- let nested delegation widen a frozen task or ownership scope;
+- require Loom to coordinate native harness subagents;
+- require JSONL or Markdown artifacts for workflow progress.
 
 ## External evidence
 

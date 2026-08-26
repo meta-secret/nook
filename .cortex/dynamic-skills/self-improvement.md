@@ -241,6 +241,55 @@ Protocol changes must be:
 Do not add self-justifying rules. Do not weaken a safeguard merely because one
 unusual task required an exception.
 
+## User authority for major architectural initiatives
+
+The user owns the initiative for a major architectural direction.
+
+An agent must not turn its own reasoning into implementation authority when a
+solution has one or more of these signals:
+
+- It introduces a new subsystem, runtime, execution model, storage model,
+  protocol, or security boundary.
+- It changes ownership or dependency direction across several modules.
+- It requires a multi-PR program, broad migration, or substantial operational
+  commitment.
+- It establishes a project pattern that is materially different from current
+  architecture.
+- Its complexity or risk is disproportionate to the problem the user asked to
+  solve.
+
+Before explicit user authorization, the agent may:
+
+- investigate the problem read-only;
+- explain why existing architecture may be insufficient;
+- present bounded alternatives and tradeoffs;
+- recommend the smallest viable direction; and
+- ask the user to select a direction; and
+- record proposal or blocker evidence without representing the direction as an
+  accepted implementation initiative.
+
+The agent must not begin implementation from that analysis alone.
+
+- Do not create implementation code or an implementation branch.
+- Do not change Cortex as though the proposed architecture were accepted.
+- Do not mark an agent-created major direction as ready or in progress.
+- Do not decompose the proposal into an agent-owned delivery program.
+
+Workflow lifecycle records may preserve a proposal, explicit dispatch, or
+authorization blocker. Those records are evidence. They do not authorize the
+major direction.
+
+Implementation becomes authorized only when the user has discussed the problem
+and explicitly asks for the selected major solution to be implemented. A broad
+request to improve, simplify, secure, or automate an area is not sufficient by
+itself.
+
+This rule does not remove normal implementation autonomy. After the user
+selects the major direction, the agent may make bounded engineering decisions
+inside that outcome. The gate also does not apply to ordinary fixes, tests,
+documentation corrections, or refactors that preserve the accepted
+architecture.
+
 ## Workflow improvement review
 
 Use reflection to find repeated workflow policy that can become reliable

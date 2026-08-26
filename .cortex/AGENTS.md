@@ -88,15 +88,18 @@ Agents must follow this navigation and search protocol:
 
 ## ⛔ Agent Execution & Safety Boundaries
 
-- **Event-sourced subagent protocol:** Every delegated agent attempt must have
-  an immutable action stream, explicit parent lineage, and a bounded semantic
-  Markdown view. Parents aggregate child views into higher-level views until
-  the root delivery owner authors the final report. Treat bypasses as P1
-  violations. See [workflows/subagent-delegation.md](workflows/subagent-delegation.md)
-  and [the executable skill](../.agents/skills/subagent-delegation/SKILL.md).
-- **Flat agent hierarchy:** Keep every local agent lineage at depth three or
-  less. Normal work uses synthesis at depth 1 and named experts at depth 2.
-  Depth 3 is exceptional and predeclared. Children cannot add tasks or tiers.
+- **Harness-native subagent protocol:** Let the active Codex, Cursor, or other
+  capable harness create and coordinate subagents. The repository owns task
+  contracts, write scopes, isolated workspace rules, commit handoffs, and
+  integration evidence. JSONL streams and Markdown summaries are optional
+  human evidence. They never gate dispatch, continuation, retries, joins, or
+  completion. See
+  [workflows/subagent-delegation.md](workflows/subagent-delegation.md) and
+  [the executable skill](../.agents/skills/subagent-delegation/SKILL.md).
+- **Bounded agent hierarchy:** Declare parent lineage and a task-specific depth
+  limit before delegation. The harness owns nested delegation and enforces the
+  limit. Children cannot widen their assigned scope or acquire delivery
+  authority.
 - **Module-oriented development:** Plan feature contracts top-down and continue
   implementation bottom-up from accepted providers to their consumers. Route
   read-only expertise through
@@ -143,7 +146,8 @@ Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) 
 ## Canonical Registries
 
 - [Subagent delegation](workflows/subagent-delegation.md) owns hierarchical
-  worker boundaries, event streams, semantic views, and parent aggregation.
+  worker boundaries, harness responsibilities, optional human evidence, and
+  parent-owned integration.
 - [Module expert registry](architecture/module-experts.md) owns named read-only
   expert routing, internal API scope, production coverage, and exclusions.
 - [Structural refactoring expert registry](architecture/refactoring-experts.md)

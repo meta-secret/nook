@@ -22,6 +22,11 @@ on:
         description: Required GitHub login for the prompt-backed continuing owner
         required: false
         type: string
+      major_change_authorized:
+        description: User explicitly selected and requested this major architectural solution
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -151,6 +156,7 @@ jobs:
           ISSUE_URL: ${{ steps.workbench.outputs.url }}
           ISSUE_CONTINUING_OWNER: ${{ steps.workbench.outputs.continuing_owner }}
           MANUAL_CONTINUING_OWNER: ${{ inputs.continuing_owner }}
+          MAJOR_CHANGE_AUTHORIZED: ${{ inputs.major_change_authorized }}
           RUN_ID: ${{ github.run_id }}
           WORKBENCH_SLUG: ${{ steps.workbench.outputs.slug }}
         run: |
@@ -189,6 +195,7 @@ jobs:
             echo "TASK_PLAN_STARTED_AT=$plan_started_at"
             echo "TASK_TITLE=$title"
             echo "CONTINUING_AGENT_OWNER=$continuing_owner"
+            echo "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED"
             echo "AGENT_PR_BODY<<${delim}"
             printf '%s\n' "## Summary"
             if [ -n "$ISSUE_URL" ]; then
@@ -280,6 +287,7 @@ jobs:
           TASK_PLAN_STARTED_AT: ${{ env.TASK_PLAN_STARTED_AT }}
           TASK_TITLE: ${{ env.TASK_TITLE }}
           WORKBENCH_PLAN_FILE: ${{ env.WORKBENCH_PLAN_FILE }}
+          WORKBENCH_SUMMARY_FILE: ${{ env.WORKBENCH_SUMMARY_FILE }}
           WORKBENCH_REPOSITORY: ${{ env.WORKBENCH_REPOSITORY }}
           CURSOR_SECRET: ${{ secrets.CURSOR_API_KEY }}
         with:
@@ -291,8 +299,23 @@ jobs:
             const [owner, repo] = process.env.WORKBENCH_REPOSITORY.split('/')
             const planPath = process.env.TASK_PLAN_PATH
             const localPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_PLAN_FILE}`
-            const candidate = fs.readFileSync(localPath, 'utf8').trim()
+            const summaryPath = `${process.env.GITHUB_WORKSPACE}/${process.env.WORKBENCH_SUMMARY_FILE}`
             const secrets = [process.env.CURSOR_SECRET]
+            if (!fs.existsSync(localPath)) {
+              if (!fs.existsSync(summaryPath)) {
+                core.setFailed('Planning produced neither a plan nor an authorization blocker.')
+                return
+              }
+              const blocker = fs.readFileSync(summaryPath, 'utf8').trim()
+              const rejection = validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)
+              if (rejection) {
+                core.setFailed(`Rejected architectural authorization blocker: ${rejection}.`)
+                return
+              }
+              core.setOutput('authorization_blocked', 'true')
+              return
+            }
+            const candidate = fs.readFileSync(localPath, 'utf8').trim()
             const sourceTask = process.env.AGENT_PROMPT
             const rejection = validateAgentRecord(candidate, 'plan', secrets, sourceTask)
             if (rejection) {
@@ -329,7 +352,7 @@ jobs:
 
       - name: Run ci-agent implement
         id: implement
-        if: steps.plan.outcome == 'success'
+        if: steps.plan.outcome == 'success' && steps.plan.outputs.authorization_blocked != 'true'
         env:
           CURSOR_API_KEY: ${{ secrets.CURSOR_API_KEY }}
           NOOK_GITHUB_PAT: ${{ secrets.NOOK_GITHUB_PAT }}
@@ -345,6 +368,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           AGENT_BRANCH: ${{ env.AGENT_BRANCH }}
+          AGENT_PROMPT: ${{ env.AGENT_PROMPT }}
           IMPLEMENT_OUTCOME: ${{ steps.implement.outcome }}
           MULTI_PR_PLAN: ${{ steps.plan.outputs.multi_pr }}
           ISSUE_PATH: ${{ steps.workbench.outputs.path }}
@@ -435,7 +459,7 @@ jobs:
             if (fs.existsSync(summaryPath)) {
               const candidate = fs.readFileSync(summaryPath, 'utf8').trim()
               const secrets = [process.env.CURSOR_SECRET, process.env.NOOK_SECRET]
-              const rejection = validateAgentRecord(candidate, 'worklog', secrets)
+              const rejection = validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)
               if (rejection) {
                 core.warning(`Rejected agent-authored Workbench summary: ${rejection}; publishing trusted fallback metadata.`)
               } else {

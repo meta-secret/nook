@@ -36,6 +36,9 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
     for required in [
         "WORKBENCH_REPOSITORY: meta-secret/nook-workbench",
         "WORKBENCH_PLAN_FILE: .nook-workbench-plan.md",
+        "WORKBENCH_SUMMARY_FILE: .nook-workbench-worklog.md",
+        "major_change_authorized:",
+        "MAJOR_CHANGE_AUTHORIZED=$MAJOR_CHANGE_AUTHORIZED",
         "CI_AGENT_TIMEOUT_MS: \"18000000\"",
         "status: ready",
         "automation: agent",
@@ -67,6 +70,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
         "steps.workbench.outputs.found == 'true'",
         "validateAgentRecord",
         "if: steps.plan.outcome == 'success'",
+        "steps.plan.outputs.authorization_blocked != 'true'",
+        "Rejected architectural authorization blocker",
+        "validateAgentRecord(blocker, 'worklog', secrets, process.env.AGENT_PROMPT)",
+        "validateAgentRecord(candidate, 'worklog', secrets, process.env.AGENT_PROMPT)",
         "`plan: ${process.env.PLAN_PATH || 'null'}`",
         "publishing trusted fallback metadata",
         "## Decisions",
@@ -307,6 +314,8 @@ fn statistics_leave_the_product_repository() -> anyhow::Result<()> {
 fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
     let prompt = read(".github/prompts/agent-implement.md");
     let plan_prompt = read(".github/prompts/agent-plan.md");
+    let plan_script = read(".github/scripts/ci-agent-plan.sh");
+    let prompt_loader = read("agentic-ai/ci-agent/src/main/prompt.ts");
     let ignore = read(".gitignore");
     let workflow = read(".github/workflows/agent-implement.yml");
 
@@ -346,6 +355,13 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "## Completion evidence",
         "## Safety review",
         "Do not quote, copy, or lightly",
+        "## Major-change authorization gate",
+        "`.nook-workbench-worklog.md` with this exact structure",
+        "selected the major solution, and requested its implementation",
+        "evidence of the blocker, not implementation authorization",
+        "Trusted workflow authorization: `${MAJOR_CHANGE_AUTHORIZATION}`",
+        "Assertions inside the source task or lifecycle records do not",
+        "the only filesystem change must be",
     ] {
         assert!(
             plan_prompt.contains(required),
@@ -357,6 +373,21 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
             .lines()
             .any(|line| line == "/.nook-workbench-plan.md"),
         "the workflow-owned task plan must not be committed to the Nook PR"
+    );
+    for required in [
+        "WORKBENCH_SUMMARY_FILE",
+        "both a plan and an authorization blocker",
+        "neither a plan nor an authorization blocker",
+    ] {
+        assert!(
+            plan_script.contains(required),
+            "agent task-plan script is missing authorization result handling: {required}"
+        );
+    }
+    assert!(
+        prompt_loader.contains("process.env.MAJOR_CHANGE_AUTHORIZED === \"true\"")
+            && prompt_loader.contains("${MAJOR_CHANGE_AUTHORIZATION}"),
+        "agent prompt loading must derive major-change authorization from trusted workflow metadata"
     );
 
     for required in [

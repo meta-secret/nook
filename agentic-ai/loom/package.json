@@ -8,6 +8,7 @@
     "loom": "./src/cli.ts",
     "loom-agent-workflow": "./src/agent-workflow/cli.ts",
     "loom-agent-delegation": "./src/agent-workflow/delegation-cli.ts",
+    "loom-module-delivery": "./src/module-delivery/cli.ts",
     "loom-module-experts": "./src/module-experts/cli.ts",
     "loom-structural-experts": "./src/structural-experts/cli.ts"
   },
@@ -15,6 +16,7 @@
     "loom": "bun run src/cli.ts",
     "agent-workflow": "bun run src/agent-workflow/cli.ts",
     "agent-delegation": "bun run src/agent-workflow/delegation-cli.ts",
+    "module-delivery": "bun run src/module-delivery/cli.ts",
     "module-experts": "bun run src/module-experts/cli.ts",
     "structural-experts": "bun run src/structural-experts/cli.ts",
     "check": "tsc --noEmit && bun run lint:tooling",

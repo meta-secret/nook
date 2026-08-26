@@ -1,16 +1,34 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
-import { resolveAgentTask } from "../main/prompt.js";
+import {
+  resolveAgentTask,
+  resolveMajorChangeAuthorization,
+} from "../main/prompt.js";
 
 const ENV_KEYS = [
   "AGENT_PROMPT",
+  "MAJOR_CHANGE_AUTHORIZED",
 ] as const;
 
 afterEach(() => {
   for (const key of ENV_KEYS) {
     delete process.env[key];
   }
+});
+
+describe("resolveMajorChangeAuthorization", () => {
+  it("defaults to not authorized", () => {
+    assert.equal(resolveMajorChangeAuthorization(), "not-authorized");
+  });
+
+  it("accepts only the exact trusted workflow value", () => {
+    process.env.MAJOR_CHANGE_AUTHORIZED = "true";
+    assert.equal(resolveMajorChangeAuthorization(), "authorized");
+
+    process.env.MAJOR_CHANGE_AUTHORIZED = "TRUE";
+    assert.equal(resolveMajorChangeAuthorization(), "not-authorized");
+  });
 });
 
 describe("resolveAgentTask", () => {
