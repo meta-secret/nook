@@ -51,10 +51,9 @@
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspacePath,
     workspaceRouteFromPath,
   } from '$lib/app/workspace-route'
-  import { applyWorkspaceRoute } from '$lib/vault/ui'
+  import { applyWorkspaceRoute, pushWorkspaceRoute } from '$lib/vault/ui'
   import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
   import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
   import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
@@ -224,33 +223,25 @@
   ): Promise<void> {
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
+    pushWorkspaceRoute(WorkspaceRoute.DevicesAccess)
     const applyWorkspaceRouteArgs: Parameters<typeof applyWorkspaceRoute>[0] = {
       state: vault,
       route: WorkspaceRoute.DevicesAccess,
     }
     applyWorkspaceRoute(applyWorkspaceRouteArgs)
-    const pushStateArgs: Parameters<typeof history.pushState>[0] = {}
-    history.pushState(
-      pushStateArgs,
-      '',
-      workspacePath(WorkspaceRoute.DevicesAccess),
-    )
-    window.dispatchEvent(new PopStateEvent('popstate'))
     await tick()
     focusHostButton('devices-access-back')
   }
 
   async function closeDevicesAccess(): Promise<void> {
     devicesAccessOpen = false
+    pushWorkspaceRoute(WorkspaceRoute.Vault)
     const applyWorkspaceRouteArgs2: Parameters<typeof applyWorkspaceRoute>[0] =
       {
         state: vault,
         route: WorkspaceRoute.Vault,
       }
     applyWorkspaceRoute(applyWorkspaceRouteArgs2)
-    const pushStateArgs2: Parameters<typeof history.pushState>[0] = {}
-    history.pushState(pushStateArgs2, '', workspacePath(WorkspaceRoute.Vault))
-    window.dispatchEvent(new PopStateEvent('popstate'))
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
