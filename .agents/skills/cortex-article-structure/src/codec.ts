@@ -372,6 +372,12 @@ function isCanonicalFinding(request: CanonicalFindingRequest): boolean {
         prefix: 'Article-structure exemption was added after the baseline: ',
         suffix: '',
       },
+      {
+        minimumDetailLength: 1,
+        prefix:
+          'Article-structure exemption cannot be verified without the migration baseline: ',
+        suffix: '',
+      },
     ];
     return shapes.some((shape) => {
       const matchRequest: MatchDiagnosticShapeRequest = {

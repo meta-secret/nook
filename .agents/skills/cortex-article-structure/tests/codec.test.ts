@@ -106,6 +106,13 @@ test('accepts active diagnostics for every finding code', () => {
         message:
           'Duplicate article-structure migration exemption: .cortex/example.md',
       },
+      {
+        code: CortexArticleFindingCode.InvalidMigrationLedger,
+        file: '.cortex/article-structure-migration.txt',
+        line: 3,
+        message:
+          'Article-structure exemption cannot be verified without the migration baseline: .cortex/example.md',
+      },
     ],
   };
   expect(decodeCortexArticleResult(JSON.stringify(result))).toEqual(result);
