@@ -24,11 +24,11 @@ import type {
 } from '../../src/module-delivery/index.ts';
 import type { GitFixture } from './worktree-test-support.ts';
 
-let fixture: GitFixture | undefined;
-let workspace: ModuleWorktreeHandle | undefined;
+const fixtures: GitFixture[] = [];
+const workspaces: ModuleWorktreeHandle[] = [];
 
 afterEach(() => {
-  if (workspace) {
+  for (const workspace of workspaces.splice(0)) {
     const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
     try {
       cleanupModuleWorktree(cleanupRequest);
@@ -36,16 +36,22 @@ afterEach(() => {
       // Rejection tests may intentionally invalidate the worktree.
     }
   }
-  if (fixture) disposeGitFixture(fixture);
-  fixture = undefined;
-  workspace = undefined;
+  for (const fixture of fixtures.splice(0)) disposeGitFixture(fixture);
 });
 
 function createWorkspace(): ModuleWorktreeHandle {
-  fixture = createGitFixture();
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
   const request = prepareRequest(fixture);
-  workspace = prepareModuleWorktree(request);
+  const workspace = prepareModuleWorktree(request);
+  workspaces.push(workspace);
   return workspace;
+}
+
+function currentFixture(): GitFixture {
+  const fixture = fixtures.at(-1);
+  if (!fixture) throw new Error('Git fixture was not prepared.');
+  return fixture;
 }
 
 function verificationRequest(
@@ -164,21 +170,22 @@ describe('verifyModuleCommitHandoff', () => {
 
     const cleanupRequest: CleanupModuleWorktreeRequest = { workspace: active };
     cleanupModuleWorktree(cleanupRequest);
-    workspace = undefined;
-    const sourceGit = fixtureGit(fixture!);
+    const fixture = currentFixture();
+    const sourceGit = fixtureGit(fixture);
     symlinkSync(
       'seed.txt',
-      join(fixture!.sourceRoot, 'module', 'baseline-link'),
+      join(fixture.sourceRoot, 'module', 'baseline-link'),
     );
     sourceGit(['add', '--all']);
     sourceGit(['commit', '--quiet', '-m', 'baseline link']);
     const baselineCommit = sourceGit(['rev-parse', 'HEAD']);
-    const baseRequest = prepareRequest(fixture!);
+    const baseRequest = prepareRequest(fixture);
     const linkedRequest: PrepareModuleWorktreeRequest = {
       ...baseRequest,
       baselineCommit,
     };
-    workspace = prepareModuleWorktree(linkedRequest);
+    const workspace = prepareModuleWorktree(linkedRequest);
+    workspaces.push(workspace);
     const linkedGit = worktreeGit(workspace);
     worktreeFileWriter(workspace)(['module/feature.ts', 'change\n']);
     linkedGit(['add', '--all']);
