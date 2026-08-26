@@ -64,6 +64,7 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 
 - `task pr:preflight`
 - `task pr:review`
+- `task pr:review:stabilize`
 - `task pr:review-local`
 - `task pr:ready`
 
@@ -72,8 +73,14 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 - The local review command runs advisory Codex review against `origin/main`.
 - The review command posts an idempotent SHA-bound Codex request.
 - If Codex reports a usage limit, the same command posts a SHA-bound Cursor Bugbot request instead of retrying Codex.
-- Complete validation immediately dispatches repository-owned checks.
-- It then requests exact-head review without making it a gate.
+- Complete validation first requests an idempotent exact-head review and waits
+  for a clean result or the bounded stabilization timeout.
+- Current-head findings stop the dispatch so the agent can address one coherent
+  review batch before spending the complete validation budget.
+- Three Cloud-review finding batches open a circuit breaker. The agent performs
+  comprehensive stabilization before attempting another complete validation.
+- Review unavailability does not deadlock delivery. Validation proceeds after
+  the bounded timeout.
 - Review results are not required for readiness.
 - Audit commands emit machine-readable exact-head state.
 - Audit commands do not wait for an external reviewer.
@@ -95,6 +102,8 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Extension iteration and other heavy agent feedback use the allowlisted GitHub Actions remote task catalog.
 - Required product validation runs on GitHub Actions only.
 - Validation starts after the coherent pushed iteration is explicitly selected with a validation label.
+- Every replacement PR head enters the same PR-number concurrency group and
+  promptly cancels obsolete complete validation before another label dispatch.
 - Agents do not run local `task check` or `task ci:pr` gates.
 
 ### Focused dispatches (`rust:test`, `web:check`, `web:test`, `extension:check`)

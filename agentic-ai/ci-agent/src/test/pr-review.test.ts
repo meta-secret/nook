@@ -20,6 +20,7 @@ const cleanFeedback: PrFeedbackSummary = {
     requested: false,
     settled: false,
   },
+  findingBatches: 0,
   substantiveComments: 0,
   substantiveReviews: 0,
   unresolvedThreads: 0,
@@ -63,6 +64,23 @@ test("stabilizeExactHeadReview rejects settled actionable feedback", async () =>
 
   assert.equal(result.state, ReviewStabilizationState.Findings);
   assert.equal(result.feedback?.unresolvedThreads, 2);
+});
+
+test("stabilizeExactHeadReview opens the circuit after three finding batches", async () => {
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      findingBatches: 3,
+      unresolvedThreads: 1,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => undefined,
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.CircuitBreaker);
 });
 
 test("stabilizeExactHeadReview ignores historical top-level comments", async () => {

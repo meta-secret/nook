@@ -342,6 +342,7 @@ function createMockOctokit(options: MockOptions): Octokit {
     listFiles: async () => ({
       data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
     }),
+    listReviewComments: async () => ({ data: [] }),
     listReviews: async () => {
       const skipCodexReview =
         options.codexReview === MockCodexReview.Missing ||
