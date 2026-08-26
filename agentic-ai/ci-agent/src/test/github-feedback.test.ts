@@ -106,6 +106,7 @@ test("exact-head iteration markers require a trusted exact request", () => {
       authorAssociation: "OWNER",
       body: `@codex review\n\n${marker}`,
       marker,
+      user: { login: "cypherkitty" },
     }),
     true,
   );
@@ -114,6 +115,7 @@ test("exact-head iteration markers require a trusted exact request", () => {
       authorAssociation: "NONE",
       body: `@codex review\n\n${marker}`,
       marker,
+      user: { login: "reviewer" },
     }),
     false,
   );
@@ -122,8 +124,18 @@ test("exact-head iteration markers require a trusted exact request", () => {
       authorAssociation: "OWNER",
       body: `Quoted marker: ${marker}`,
       marker,
+      user: { login: "cypherkitty" },
     }),
     false,
+  );
+  assert.equal(
+    isTrustedExactHeadReviewRequest({
+      authorAssociation: "CONTRIBUTOR",
+      body: `@codex review\n\n${marker}`,
+      marker,
+      user: { login: "github-actions[bot]" },
+    }),
+    true,
   );
 });
 

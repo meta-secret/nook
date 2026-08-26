@@ -3,6 +3,9 @@ import test from "node:test";
 
 import type { PrFeedbackSummary } from "../main/github.js";
 import {
+  ExactHeadReviewFallback,
+} from "../main/github-review.js";
+import {
   ReviewStabilizationState,
   stabilizeExactHeadReview,
 } from "../main/pr-review.js";
@@ -358,6 +361,36 @@ test("stabilizeExactHeadReview permits a comment-free pending boundary to time o
     waitMs: async () => {},
   });
 
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
+});
+
+test("stabilizeExactHeadReview stops waiting after an explicit usage limit", async () => {
+  let inspections = 0;
+  let requests = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      inspections += 1;
+      return {
+        ...cleanFeedback,
+        codexReview: { ...cleanFeedback.codexReview, settled: false },
+      };
+    },
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => {
+      requests += 1;
+      return {
+        fallback: ExactHeadReviewFallback.CodexUsageLimit,
+        headSha: "head-sha",
+        settled: false,
+      };
+    },
+    timeoutMs: 600_000,
+    waitMs: async () => {},
+  });
+
+  assert.equal(inspections, 2);
+  assert.equal(requests, 1);
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
 });
 

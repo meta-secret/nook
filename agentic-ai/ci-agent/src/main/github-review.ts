@@ -116,6 +116,7 @@ export function isTrustedExactHeadReviewRequest(input: {
   readonly authorAssociation: string;
   readonly body: string;
   readonly marker: string;
+  readonly user: unknown;
 }): boolean {
   return (
     isTrustedCodexReviewRequestComment(input) &&
@@ -126,10 +127,15 @@ export function isTrustedExactHeadReviewRequest(input: {
 export function isTrustedCodexReviewRequestComment(input: {
   readonly authorAssociation: string;
   readonly body: string;
+  readonly user: unknown;
 }): boolean {
   const trustedAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+  const login = actorLogin(input.user);
+  const trustedWorkflowActor =
+    login.state === ActorLoginState.Found &&
+    login.value === "github-actions[bot]";
   return (
-    trustedAssociations.has(input.authorAssociation) &&
+    (trustedAssociations.has(input.authorAssociation) || trustedWorkflowActor) &&
     /^@codex review\n\n<!-- nook-codex-review:[^\s<>]+ -->$/.test(
       input.body.trim(),
     )
@@ -403,6 +409,7 @@ async function snapshotFrom(
         authorAssociation: comment.authorAssociation,
         body: comment.body.value,
         marker: codexMarker,
+        user: comment.user,
       }),
   );
   const cursorRequests = comments.filter((comment) =>

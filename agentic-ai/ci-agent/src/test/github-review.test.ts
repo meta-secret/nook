@@ -125,6 +125,27 @@ test("requestExactHeadReview ignores an untrusted exact-head marker", async () =
   ]);
 });
 
+test("requestExactHeadReview keeps a workflow-token request idempotent", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        author_association: "CONTRIBUTOR",
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+        user: { login: "github-actions[bot]" },
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, false);
+  assert.deepEqual(createdBodies, []);
+});
+
 test("requestExactHeadReview reports an exact-head Codex approval reaction as settled", async () => {
   const createCalls = { count: 0 };
   const octokit = mockOctokit({

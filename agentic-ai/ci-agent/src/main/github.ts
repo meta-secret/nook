@@ -406,6 +406,7 @@ export async function inspectPrFeedback(
       authorAssociation: comment.author_association,
       body: comment.body ?? "",
       marker,
+      user: comment.user,
     }),
   );
   const cursorReviewRequests = issueComments.filter((comment) =>
@@ -618,6 +619,7 @@ export function isRepositoryStatusComment(
     isTrustedCodexReviewRequestComment({
       authorAssociation: input.authorAssociation,
       body: input.body,
+      user: input.user,
     }) ||
     (["OWNER", "MEMBER", "COLLABORATOR"].includes(
       input.authorAssociation,

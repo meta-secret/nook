@@ -1,4 +1,8 @@
-import { DEFAULT_REVIEW_CLOCK, requestExactHeadReview } from "./github-review.js";
+import {
+  DEFAULT_REVIEW_CLOCK,
+  ExactHeadReviewFallback,
+  requestExactHeadReview,
+} from "./github-review.js";
 import {
   createOctokit,
   inspectPrFeedback,
@@ -12,6 +16,7 @@ const STABILIZATION_POLL_INTERVAL_MS = 15_000;
 const ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS = 15_000;
 
 type ReviewStabilizationRequest = () => Promise<{
+  fallback?: ExactHeadReviewFallback;
   headSha: string;
   settled: boolean;
 }>;
@@ -169,6 +174,7 @@ export async function stabilizeExactHeadReview(
       // unavailable, validation may continue only through the timed-out state.
     }
     let settledAfterRequest = false;
+    let unavailableAfterRequest = false;
     if (!settled) {
       try {
         const request = await attemptBeforeDeadline({
@@ -186,17 +192,21 @@ export async function stabilizeExactHeadReview(
         headSha = review.headSha;
         settled = review.settled;
         settledAfterRequest = review.settled;
+        unavailableAfterRequest =
+          review.fallback === ExactHeadReviewFallback.CodexUsageLimit;
       } catch {
         // A transient GitHub or provider error is bounded by the same deadline
         // as review availability. It must not turn review into an unbounded gate.
       }
     }
-    if (settledAfterRequest) {
+    if (settledAfterRequest || unavailableAfterRequest) {
       try {
-        const settledInspectionDeadline = Math.max(
-          deadline,
-          input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS,
-        );
+        const settledInspectionDeadline = unavailableAfterRequest
+          ? input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
+          : Math.max(
+              deadline,
+              input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS,
+            );
         const inspection = await attemptBeforeDeadline({
           deadline: settledInspectionDeadline,
           now: input.now,
@@ -234,10 +244,16 @@ export async function stabilizeExactHeadReview(
         ) {
           return { feedback, headSha, state: ReviewStabilizationState.Clean };
         }
+        if (unavailableAfterRequest) {
+          return finalizeAtDeadline({ feedback: latestFeedback, headSha });
+        }
       } catch {
         // A settled provider response proves review state changed after the
         // first inspection. Retry its classification through the same bounded
         // deadline when GitHub's feedback endpoints are temporarily split.
+        if (unavailableAfterRequest) {
+          return finalizeAtDeadline({ feedback: latestFeedback, headSha });
+        }
       }
     }
     if (input.now() >= deadline) {
