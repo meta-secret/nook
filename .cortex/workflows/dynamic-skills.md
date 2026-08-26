@@ -20,14 +20,6 @@ Dynamic skills turn concrete feedback into reusable guidance:
 2. Executable skills live in [`.agents/skills/`](../../.agents/skills/) (the canonical open agent skill directory for Antigravity, Cursor, Claude, and Codex), with symlinks in [`.cursor/skills/`](../../.cursor/skills/) and [`.claude/skills/`](../../.claude/skills/). Skill wrappers are mirrors, not the canonical copy.
 3. The registry at [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md)
    lists every available skill card and whether it has an executable skill.
-4. Mechanically executable skill actions use one host command protocol.
-   - `task skills:tools-list` returns action descriptions, YAML examples, and
-     input schemas.
-   - `task skills:run CONFIG=<request.yaml>` accepts one domain YAML document.
-   - Action-specific positional flags are prohibited.
-   - The host protocol is an invocation contract, not a process sandbox.
-   - Expose only statically cataloged, deterministic, read-only provider
-     actions. They cannot authorize scheduling, delivery, or lifecycle changes.
 
 ## Prompt Protocol
 
