@@ -40,6 +40,33 @@ Deliver a durable two-phase agent context record.
 - The record contains only public-safe development context.
 `
 
+const validWorklog = `# Work summary
+
+## Outcome
+
+Planning stopped at the user-authorization boundary.
+
+## Progress
+
+- Compared bounded alternatives.
+
+## Implementation problems
+
+- The major direction has not been authorized.
+
+## Decisions
+
+- No implementation decision was inferred.
+
+## Validation
+
+- Confirmed that no implementation plan was created.
+
+## Remaining work
+
+- The user must select and request a direction.
+`
+
 test('accepts a synthesized task plan', () => {
   assert.equal(validateAgentRecord(validPlan, 'plan'), '')
 })
@@ -77,6 +104,19 @@ test('rejects an unlabeled verbatim excerpt from the source task', () => {
   )
   assert.match(
     validateAgentRecord(copied, 'plan', [], sourceTask),
+    /verbatim source-task excerpt/,
+  )
+})
+
+test('rejects a source-task excerpt from a blocker worklog', () => {
+  const sourceTask =
+    'Please expose confidential deployment planning details before the implementation phase begins.'
+  const copied = validWorklog.replace(
+    'Planning stopped at the user-authorization boundary.',
+    sourceTask,
+  )
+  assert.match(
+    validateAgentRecord(copied, 'worklog', [], sourceTask),
     /verbatim source-task excerpt/,
   )
 })

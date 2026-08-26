@@ -29,6 +29,12 @@ Full ownership policy:
 For implementation tasks, the agent's default job is not "make local edits".
 It is "land a PR with Nook's applicable GitHub Actions PR test checks green."
 
+Before establishing a PR path, apply the
+[major architectural initiative rule](../dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
+Stop at analysis and proposals when a major direction comes from agent
+reasoning rather than an explicit user-selected implementation request.
+Lifecycle records and an agent-authored plan do not grant that authority.
+
 Start by confirming feature ownership and establishing the PR path. Keep that
 ownership until merge or a concrete blocked handoff:
 

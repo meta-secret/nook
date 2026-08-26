@@ -8,6 +8,10 @@ Use this pipeline for **every coding request** unless the user explicitly wants 
 
 Additional routing rules apply:
 
+- Before implementation planning, apply the
+  [major architectural initiative rule](../dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
+  A broad problem statement does not authorize an agent-derived subsystem,
+  execution model, or other major architectural direction.
 - Delegated work follows
   [`subagent-delegation.md`](subagent-delegation.md). Outside a compiled Loom
   graph, finalize every reached child attempt with
@@ -56,6 +60,12 @@ Default PR-first loop:
 1. **Record the interpreted task:**
    - Fetch `origin/main`.
    - Write the important requirements in the agent's own words.
+   - Classify any agent-derived solution that appears large, novel,
+     cross-cutting, or architecturally difficult before treating it as
+     implementation scope.
+   - If it is a major architectural initiative, stop at analysis and proposals.
+     Continue only after the user discusses and explicitly selects the
+     direction for implementation.
    - For user-facing features, item types, or UX flows, find and read the owning specification in [`.cortex/product-specs/`](../product-specs/) (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
    - Apply [subagent-delegation.md](subagent-delegation.md).
    - Record the delegation decision, processing identity, parent lineage,
