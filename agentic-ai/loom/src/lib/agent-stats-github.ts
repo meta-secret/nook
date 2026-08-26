@@ -23,6 +23,12 @@ import {
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import { isValidationWorkflow } from './agent-stats-github-validation.ts';
+import {
+  maximumTimestamp,
+  mergeReviewedDeliveryHeads,
+  minimumTimestamp,
+} from './agent-stats-github-delivery.ts';
+import { substantiveReviewBodyFindingCount } from './agent-stats-github-review.ts';
 
 const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
@@ -217,10 +223,16 @@ export function collectAgentStatsGitHubEvidence(
     knownHeadShas,
   };
   const reviews = buildReviewEvidence(reviewRequest);
+  const deliveryHeadsRequest = {
+    actionHeads: actions.heads,
+    reviewEvents: reviews.events,
+    finalHeadSha: request.finalHeadSha,
+  };
+  const deliveryHeads = mergeReviewedDeliveryHeads(deliveryHeadsRequest);
 
   return {
     githubActionsRuns: actions.runs,
-    deliveryHeads: actions.heads,
+    deliveryHeads,
     reviewEvents: reviews.events,
     validationCycles: actions.validationCycles,
     obsoleteValidationSeconds: actions.obsoleteValidationSeconds,
@@ -267,6 +279,11 @@ export function buildActionsEvidence(
       prNumber: request.prNumber,
     };
     if (!isSourcePrRun(associationRequest)) continue;
+    const startedRequest: PropertyRequest = {
+      record: rawRun,
+      key: 'run_started_at',
+    };
+    if (requiredStringProperty(startedRequest) > request.mergedAt) continue;
     const observationRequest: ActionObservationRequest = {
       record: rawRun,
       prNumber: request.prNumber,
@@ -275,9 +292,7 @@ export function buildActionsEvidence(
     const observationKey = `${observation.runId}:${observation.runAttempt}`;
     deduplicatedRuns.set(observationKey, observation);
   }
-  const observations = [...deduplicatedRuns.values()].filter(
-    (run) => run.startedAt <= request.mergedAt,
-  );
+  const observations = [...deduplicatedRuns.values()];
   const observationTimes = observations.map((run) => run.startedAt).sort();
   const headShas: string[] = [];
   for (const observationTime of observationTimes) {
@@ -642,7 +657,7 @@ function reviewResults(
     if (!hasLogin(reviewLoginRequest)) continue;
     const reviewIdRequest: PropertyRequest = { record: review, key: 'id' };
     const reviewId = requiredNumberProperty(reviewIdRequest);
-    const findingCount = request.reviewComments.filter((comment) => {
+    const inlineFindingCount = request.reviewComments.filter((comment) => {
       const commentLoginRequest: HasLoginRequest = {
         record: comment,
         expected: CODEX_LOGIN,
@@ -661,6 +676,11 @@ function reviewResults(
         numberProperty(replyRequest) === 0
       );
     }).length;
+    const bodyRequest: PropertyRequest = { record: review, key: 'body' };
+    const bodyFindingCount = substantiveReviewBodyFindingCount(
+      stringProperty(bodyRequest),
+    );
+    const findingCount = inlineFindingCount + bodyFindingCount;
     if (findingCount === 0) continue;
     const commitRequest: PropertyRequest = { record: review, key: 'commit_id' };
     const candidate = requiredStringProperty(commitRequest);
@@ -931,6 +951,7 @@ function validationCycleRecord(
   request: ValidationCycleRecordRequest,
 ): UntrustedYamlMap {
   const record = {
+    workflow: request.run.workflow,
     head_sha: request.run.headSha,
     run_id: request.run.runId,
     run_attempt: request.run.runAttempt,
@@ -976,24 +997,4 @@ function hasLogin(request: HasLoginRequest): boolean {
   }
   const loginRequest: PropertyRequest = { record: user.value, key: 'login' };
   return stringProperty(loginRequest) === request.expected;
-}
-
-type TimestampExtremaRequest = {
-  readonly values: readonly string[];
-};
-
-function minimumTimestamp(request: TimestampExtremaRequest): string {
-  const populated = request.values.filter((value) => value.length > 0);
-  if (populated.length === 0) return '';
-  let minimum = populated[0] ?? '';
-  for (const value of populated) if (value < minimum) minimum = value;
-  return minimum;
-}
-
-function maximumTimestamp(request: TimestampExtremaRequest): string {
-  const populated = request.values.filter((value) => value.length > 0);
-  if (populated.length === 0) return '';
-  let maximum = populated[0] ?? '';
-  for (const value of populated) if (value > maximum) maximum = value;
-  return maximum;
 }
