@@ -116,6 +116,8 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         "CI_AGENT_CMD: pr-review",
         "pr:review:stabilize:",
         "CI_AGENT_CMD: pr-review-stabilize",
+        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default \"0\" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'",
+        "REVIEW_WAIT_SECONDS: '{{default \"600\" .REVIEW_WAIT_SECONDS}}'",
     ] {
         assert!(
             agentic_tasks.contains(required),
