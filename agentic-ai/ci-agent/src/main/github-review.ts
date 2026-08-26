@@ -140,26 +140,14 @@ export async function requestExactHeadReview(
       settled: true,
     };
   }
-  if (snapshot.cursor.settled) {
-    return {
-      fallback: snapshot.codex.usageLimited
-        ? ExactHeadReviewFallback.CodexUsageLimit
-        : ExactHeadReviewFallback.None,
-      headSha,
-      provider: ExactHeadReviewProvider.Cursor,
-      requested: false,
-      settled: true,
-    };
-  }
   if (snapshot.codex.usageLimited) {
-    return requestCursorReview({
-      alreadyRequested: snapshot.cursor.requested,
+    return {
+      fallback: ExactHeadReviewFallback.CodexUsageLimit,
       headSha,
-      octokit,
-      owner,
-      prNumber,
-      repo,
-    });
+      provider: ExactHeadReviewProvider.Codex,
+      requested: false,
+      settled: false,
+    };
   }
   if (snapshot.codex.requested) {
     return {
@@ -197,14 +185,13 @@ export async function requestExactHeadReview(
     repo,
   });
   if (probed.kind === CodexProbeKind.UsageLimited) {
-    return requestCursorReview({
-      alreadyRequested: probed.cursorRequested,
+    return {
+      fallback: ExactHeadReviewFallback.CodexUsageLimit,
       headSha,
-      octokit,
-      owner,
-      prNumber,
-      repo,
-    });
+      provider: ExactHeadReviewProvider.Codex,
+      requested: true,
+      settled: false,
+    };
   }
   return {
     fallback: ExactHeadReviewFallback.None,
@@ -460,38 +447,6 @@ async function snapshotFrom(
   };
 }
 
-async function requestCursorReview(input: {
-  alreadyRequested: boolean;
-  headSha: string;
-  octokit: Octokit;
-  owner: string;
-  prNumber: number;
-  repo: string;
-}): Promise<ExactHeadReviewRequestResult> {
-  if (input.alreadyRequested) {
-    return {
-      fallback: ExactHeadReviewFallback.CodexUsageLimit,
-      headSha: input.headSha,
-      provider: ExactHeadReviewProvider.Cursor,
-      requested: false,
-      settled: false,
-    };
-  }
-  await input.octokit.rest.issues.createComment({
-    owner: input.owner,
-    repo: input.repo,
-    issue_number: input.prNumber,
-    body: `cursor review\n\n${cursorReviewRequestMarker(input.headSha)}`,
-  });
-  return {
-    fallback: ExactHeadReviewFallback.CodexUsageLimit,
-    headSha: input.headSha,
-    provider: ExactHeadReviewProvider.Cursor,
-    requested: true,
-    settled: false,
-  };
-}
-
 enum CodexProbeKind {
   Pending = "pending",
   Settled = "settled",
@@ -501,7 +456,7 @@ enum CodexProbeKind {
 type CodexProbeResult =
   | { kind: CodexProbeKind.Pending }
   | { kind: CodexProbeKind.Settled }
-  | { kind: CodexProbeKind.UsageLimited; cursorRequested: boolean };
+  | { kind: CodexProbeKind.UsageLimited };
 
 async function probeCodexAvailability(input: {
   availability: ExactHeadReviewAvailability;
@@ -519,10 +474,7 @@ async function probeCodexAvailability(input: {
       return { kind: CodexProbeKind.Settled };
     }
     if (snapshot.codex.usageLimited) {
-      return {
-        kind: CodexProbeKind.UsageLimited,
-        cursorRequested: snapshot.cursor.requested,
-      };
+      return { kind: CodexProbeKind.UsageLimited };
     }
   }
   return { kind: CodexProbeKind.Pending };

@@ -26,10 +26,10 @@ hosted.** Your required local action is host-applied formatting only. Do not run
 `task check` / `task ci:pr` before finishing. The harness assigns the PR to the
 continuing task owner and posts a direct mention. That owner runs advisory local
 review after handoff. The owner may use `task remote` for focused execution,
-then runs `task pr:validate`. It immediately dispatches GitHub Actions and then
-requests exact-head Cloud review. Codex is preferred. Cursor Bugbot is used when
-Codex reports a usage limit. Review-request failure does not block those
-checks. Use repository Task targets; do not replace them with
+then runs `task pr:validate`. It stabilizes exact-head Codex review before
+dispatching GitHub Actions. A bounded timeout keeps review unavailability from
+blocking those checks. It never activates another review provider. Use
+repository Task targets; do not replace them with
 hand-written `docker run` commands.
 
 ## Steps
