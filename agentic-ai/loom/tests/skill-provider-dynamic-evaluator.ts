@@ -1,0 +1,623 @@
+import ts from 'typescript';
+
+export type DynamicEvaluatorInspection = {
+  readonly allowUnprovenComputedDataAccess: boolean;
+  readonly checker: ts.TypeChecker;
+  readonly isAmbientGlobalRoot: (node: ts.Node) => boolean;
+  readonly isAmbientIdentifier: (node: ts.Identifier) => boolean;
+  readonly node: ts.Node;
+};
+
+enum AmbientDynamicEvaluator {
+  AsyncFunction = 'AsyncFunction',
+  Eval = 'eval',
+  Function = 'Function',
+  GeneratorFunction = 'GeneratorFunction',
+}
+
+enum DynamicEvaluatorMember {
+  Constructor = 'constructor',
+}
+
+enum ReflectEvaluatorMember {
+  Get = 'get',
+}
+
+enum AmbientEvaluatorRoot {
+  Object = 'Object',
+  Reflect = 'Reflect',
+}
+
+enum ObjectRecoveryMember {
+  GetOwnPropertyDescriptor = 'getOwnPropertyDescriptor',
+}
+
+const AMBIENT_DYNAMIC_EVALUATORS = new Set<string>(
+  Object.values(AmbientDynamicEvaluator),
+);
+const DYNAMIC_EVALUATOR_MEMBERS = new Set<string>(
+  Object.values(DynamicEvaluatorMember),
+);
+
+export function isAmbientDynamicEvaluator(
+  inspection: DynamicEvaluatorInspection,
+): boolean {
+  const node = inspection.node;
+  if (ts.isIdentifier(node) && isDirectlyInvokedExpression(node)) {
+    const resolution: RuntimeReceiverResolution = {
+      checker: inspection.checker,
+      expression: node,
+      seen: new Set<ts.Symbol>(),
+    };
+    const recovered = runtimeReceiverExpression(resolution);
+    if (ts.isCallExpression(recovered)) {
+      const nestedInspection: DynamicEvaluatorInspection = {
+        allowUnprovenComputedDataAccess:
+          inspection.allowUnprovenComputedDataAccess,
+        checker: inspection.checker,
+        isAmbientGlobalRoot: inspection.isAmbientGlobalRoot,
+        isAmbientIdentifier: inspection.isAmbientIdentifier,
+        node: recovered.expression,
+      };
+      const memberInspection: DynamicEvaluatorMemberInspection = {
+        checker: inspection.checker,
+        node: recovered.expression,
+      };
+      const member = dynamicEvaluatorMember(memberInspection);
+      if (member !== false) {
+        const recoveryInspection: AmbientRecoveryInspection = {
+          inspection: nestedInspection,
+          member,
+          node: recovered.expression,
+        };
+        if (isAmbientRecovery(recoveryInspection)) return true;
+      }
+    }
+  }
+  const bindingInspection: ConstructorBindingInspection = {
+    checker: inspection.checker,
+    node,
+  };
+  if (isConstructorBinding(bindingInspection)) return true;
+  if (isUnboundedAmbientCapabilityRoot(inspection)) return true;
+  if (ts.isIdentifier(node) && AMBIENT_DYNAMIC_EVALUATORS.has(node.text)) {
+    if (isNonRuntimeIdentifierPosition(node)) return false;
+    return inspection.isAmbientIdentifier(node);
+  }
+  const memberInspection: DynamicEvaluatorMemberInspection = {
+    checker: inspection.checker,
+    node,
+  };
+  const member = dynamicEvaluatorMember(memberInspection);
+  if (member === false) {
+    if (isUnboundedAmbientElementAccess(inspection)) return true;
+    const computedInspection: ComputedElementInspection = {
+      allowUnprovenComputedDataAccess:
+        inspection.allowUnprovenComputedDataAccess,
+      checker: inspection.checker,
+      node,
+    };
+    return isComputedCallableElementAccess(computedInspection);
+  }
+  if (DYNAMIC_EVALUATOR_MEMBERS.has(member)) return true;
+  const recoveryInspection: AmbientRecoveryInspection = {
+    inspection,
+    member,
+    node,
+  };
+  if (isAmbientRecovery(recoveryInspection)) return true;
+  if (!AMBIENT_DYNAMIC_EVALUATORS.has(member)) return false;
+  if (
+    !ts.isPropertyAccessExpression(node) &&
+    !ts.isElementAccessExpression(node)
+  ) {
+    return false;
+  }
+  const root = node.expression;
+  return inspection.isAmbientGlobalRoot(root);
+}
+
+type AmbientRecoveryInspection = {
+  readonly inspection: DynamicEvaluatorInspection;
+  readonly member: string;
+  readonly node: ts.Node;
+};
+
+function isAmbientRecovery(request: AmbientRecoveryInspection): boolean {
+  if (
+    !ts.isPropertyAccessExpression(request.node) &&
+    !ts.isElementAccessExpression(request.node)
+  ) {
+    return false;
+  }
+  const rootName =
+    request.member === ObjectRecoveryMember.GetOwnPropertyDescriptor
+      ? AmbientEvaluatorRoot.Object
+      : request.member === ReflectEvaluatorMember.Get
+        ? AmbientEvaluatorRoot.Reflect
+        : false;
+  if (rootName === false) return false;
+  const rootInspection: AmbientNamedRootInspection = {
+    expression: request.node.expression,
+    inspection: request.inspection,
+    rootName,
+  };
+  if (!isAmbientNamedRoot(rootInspection)) return false;
+  if (
+    request.member === ReflectEvaluatorMember.Get &&
+    ts.isCallExpression(request.node.parent) &&
+    request.node.parent.expression === request.node
+  ) {
+    return isDirectlyInvokedExpression(request.node.parent);
+  }
+  return true;
+}
+
+type DynamicEvaluatorMemberInspection = {
+  readonly checker: ts.TypeChecker;
+  readonly node: ts.Node;
+};
+
+function dynamicEvaluatorMember(
+  inspection: DynamicEvaluatorMemberInspection,
+): string | false {
+  if (ts.isPropertyAccessExpression(inspection.node)) {
+    return inspection.node.name.text;
+  }
+  if (ts.isElementAccessExpression(inspection.node)) {
+    const resolution: StaticStringResolution = {
+      checker: inspection.checker,
+      expression: inspection.node.argumentExpression,
+      seen: new Set<ts.Symbol>(),
+    };
+    return staticString(resolution);
+  }
+  return false;
+}
+
+function isUnboundedAmbientElementAccess(
+  inspection: DynamicEvaluatorInspection,
+): boolean {
+  if (!ts.isElementAccessExpression(inspection.node)) return false;
+  const root = unwrapExpression(inspection.node.expression);
+  if (inspection.isAmbientGlobalRoot(root)) return true;
+  return (
+    ts.isIdentifier(root) &&
+    (root.text === AmbientEvaluatorRoot.Reflect ||
+      root.text === AmbientEvaluatorRoot.Object) &&
+    inspection.isAmbientIdentifier(root)
+  );
+}
+
+type AmbientNamedRootInspection = {
+  readonly expression: ts.Expression;
+  readonly inspection: DynamicEvaluatorInspection;
+  readonly rootName: AmbientEvaluatorRoot;
+};
+
+function isAmbientNamedRoot(request: AmbientNamedRootInspection): boolean {
+  const root = unwrapExpression(request.expression);
+  if (ts.isIdentifier(root) && root.text === request.rootName) {
+    return request.inspection.isAmbientIdentifier(root);
+  }
+  const memberInspection: DynamicEvaluatorMemberInspection = {
+    checker: request.inspection.checker,
+    node: root,
+  };
+  return (
+    (ts.isPropertyAccessExpression(root) ||
+      ts.isElementAccessExpression(root)) &&
+    dynamicEvaluatorMember(memberInspection) === request.rootName &&
+    request.inspection.isAmbientGlobalRoot(root.expression)
+  );
+}
+
+function isUnboundedAmbientCapabilityRoot(
+  inspection: DynamicEvaluatorInspection,
+): boolean {
+  const node = inspection.node;
+  let ambient = false;
+  const memberInspection: DynamicEvaluatorMemberInspection = {
+    checker: inspection.checker,
+    node,
+  };
+  const rootName = ts.isIdentifier(node)
+    ? node.text
+    : dynamicEvaluatorMember(memberInspection);
+  if (
+    ts.isIdentifier(node) &&
+    (rootName === AmbientEvaluatorRoot.Object ||
+      rootName === AmbientEvaluatorRoot.Reflect) &&
+    !isNonRuntimeIdentifierPosition(node)
+  ) {
+    ambient = inspection.isAmbientIdentifier(node);
+  } else if (
+    (ts.isPropertyAccessExpression(node) ||
+      ts.isElementAccessExpression(node)) &&
+    (rootName === AmbientEvaluatorRoot.Object ||
+      rootName === AmbientEvaluatorRoot.Reflect)
+  ) {
+    ambient = inspection.isAmbientGlobalRoot(node.expression);
+  }
+  if (!ambient) return false;
+  const parent = node.parent;
+  if (
+    ts.isIdentifier(node) &&
+    node.text === AmbientEvaluatorRoot.Object &&
+    (((ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+      parent.expression === node) ||
+      (ts.isBinaryExpression(parent) &&
+        parent.operatorToken.kind === ts.SyntaxKind.InstanceOfKeyword &&
+        parent.right === node))
+  ) {
+    return false;
+  }
+  return !(
+    (ts.isPropertyAccessExpression(parent) ||
+      ts.isElementAccessExpression(parent)) &&
+    parent.expression === node
+  );
+}
+
+type ComputedElementInspection = {
+  readonly allowUnprovenComputedDataAccess: boolean;
+  readonly checker: ts.TypeChecker;
+  readonly node: ts.Node;
+};
+
+type RuntimeReceiverResolution = {
+  readonly checker: ts.TypeChecker;
+  readonly expression: ts.Expression;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
+type RuntimeReceiverInitializerResolution = {
+  readonly checker: ts.TypeChecker;
+  readonly seen: ReadonlySet<ts.Symbol>;
+  readonly symbol: ts.Symbol;
+};
+
+type BindingElementInitializerResolution = {
+  readonly binding: ts.BindingElement;
+  readonly checker: ts.TypeChecker;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
+type BindingPatternInitializerResolution = {
+  readonly checker: ts.TypeChecker;
+  readonly pattern: ts.BindingPattern;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
+function isComputedCallableElementAccess(
+  inspection: ComputedElementInspection,
+): boolean {
+  if (!ts.isElementAccessExpression(inspection.node)) return false;
+  if (ts.isNumericLiteral(inspection.node.argumentExpression)) return false;
+  const runtimeResolution: RuntimeReceiverResolution = {
+    checker: inspection.checker,
+    expression: inspection.node.expression,
+    seen: new Set<ts.Symbol>(),
+  };
+  const runtimeReceiver = runtimeReceiverExpression(runtimeResolution);
+  const receiverType = inspection.checker.getTypeAtLocation(
+    inspection.node.expression,
+  );
+  const runtimeReceiverType =
+    runtimeReceiver === inspection.node.expression
+      ? receiverType
+      : inspection.checker.getTypeAtLocation(runtimeReceiver);
+  const resultType = inspection.checker.getTypeAtLocation(inspection.node);
+  const hasUnprovenComputedType =
+    inspection.allowUnprovenComputedDataAccess &&
+    [receiverType, runtimeReceiverType, resultType].some((type) =>
+      Boolean(type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)),
+    );
+  if (
+    hasUnprovenComputedType &&
+    !isDirectlyInvokedExpression(inspection.node)
+  ) {
+    return false;
+  }
+  return (
+    typeCanExposeEvaluator(receiverType) ||
+    typeCanExposeEvaluator(runtimeReceiverType) ||
+    typeCanExposeEvaluator(resultType)
+  );
+}
+
+function isDirectlyInvokedExpression(expression: ts.Expression): boolean {
+  let runtimeExpression = expression;
+  while (
+    (ts.isParenthesizedExpression(runtimeExpression.parent) ||
+      ts.isAsExpression(runtimeExpression.parent) ||
+      ts.isTypeAssertionExpression(runtimeExpression.parent) ||
+      ts.isNonNullExpression(runtimeExpression.parent) ||
+      ts.isSatisfiesExpression(runtimeExpression.parent)) &&
+    runtimeExpression.parent.expression === runtimeExpression
+  ) {
+    runtimeExpression = runtimeExpression.parent;
+  }
+  const parent = runtimeExpression.parent;
+  return (
+    ((ts.isCallExpression(parent) || ts.isNewExpression(parent)) &&
+      parent.expression === runtimeExpression) ||
+    (ts.isTaggedTemplateExpression(parent) && parent.tag === runtimeExpression)
+  );
+}
+
+function runtimeReceiverExpression(
+  resolution: RuntimeReceiverResolution,
+): ts.Expression {
+  const expression = unwrapExpression(resolution.expression);
+  if (!ts.isIdentifier(expression)) return expression;
+  const symbol = resolution.checker.getSymbolAtLocation(expression);
+  if (!symbol || resolution.seen.has(symbol)) return expression;
+  const seen = new Set(resolution.seen);
+  seen.add(symbol);
+  const initializerResolution: RuntimeReceiverInitializerResolution = {
+    checker: resolution.checker,
+    seen,
+    symbol,
+  };
+  const initializer = runtimeReceiverInitializer(initializerResolution);
+  if (initializer === false) return expression;
+  const nested: RuntimeReceiverResolution = {
+    checker: resolution.checker,
+    expression: initializer,
+    seen,
+  };
+  return runtimeReceiverExpression(nested);
+}
+
+function runtimeReceiverInitializer(
+  resolution: RuntimeReceiverInitializerResolution,
+): ts.Expression | false {
+  for (const declaration of resolution.symbol.declarations ?? []) {
+    if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
+      return declaration.initializer;
+    }
+    if (ts.isBindingElement(declaration)) {
+      const bindingResolution: BindingElementInitializerResolution = {
+        binding: declaration,
+        checker: resolution.checker,
+        seen: resolution.seen,
+      };
+      const initializer = bindingElementInitializer(bindingResolution);
+      if (initializer !== false) return initializer;
+    }
+  }
+  return false;
+}
+
+function bindingElementInitializer(
+  resolution: BindingElementInitializerResolution,
+): ts.Expression | false {
+  const defaultInitializer = callableBindingDefault(resolution);
+  if (defaultInitializer !== false) return defaultInitializer;
+  const pattern = resolution.binding.parent;
+  const patternResolution: BindingPatternInitializerResolution = {
+    checker: resolution.checker,
+    pattern,
+    seen: resolution.seen,
+  };
+  const patternInitializer = bindingPatternInitializer(patternResolution);
+  if (patternInitializer === false) return false;
+  const sourceResolution: RuntimeReceiverResolution = {
+    checker: resolution.checker,
+    expression: patternInitializer,
+    seen: resolution.seen,
+  };
+  const initializer = runtimeReceiverExpression(sourceResolution);
+  if (
+    ts.isArrayBindingPattern(pattern) &&
+    ts.isArrayLiteralExpression(initializer)
+  ) {
+    const index = pattern.elements.indexOf(resolution.binding);
+    const element = index >= 0 ? initializer.elements.at(index) : false;
+    return element &&
+      !ts.isSpreadElement(element) &&
+      !ts.isOmittedExpression(element)
+      ? element
+      : false;
+  }
+  if (
+    !ts.isObjectBindingPattern(pattern) ||
+    !ts.isObjectLiteralExpression(initializer)
+  ) {
+    return false;
+  }
+  const propertyName = bindingElementPropertyName(resolution.binding);
+  if (propertyName === false) return false;
+  for (const property of initializer.properties) {
+    if (
+      ts.isPropertyAssignment(property) &&
+      propertyNameText(property.name) === propertyName
+    ) {
+      return property.initializer;
+    }
+    if (
+      ts.isShorthandPropertyAssignment(property) &&
+      property.name.text === propertyName
+    ) {
+      return property.name;
+    }
+  }
+  return false;
+}
+
+function callableBindingDefault(
+  resolution: BindingElementInitializerResolution,
+): ts.Expression | false {
+  if (!resolution.binding.initializer) return false;
+  const defaultResolution: RuntimeReceiverResolution = {
+    checker: resolution.checker,
+    expression: resolution.binding.initializer,
+    seen: resolution.seen,
+  };
+  const defaultInitializer = runtimeReceiverExpression(defaultResolution);
+  const defaultType = resolution.checker.getTypeAtLocation(defaultInitializer);
+  return typeCanExposeEvaluator(defaultType) ? defaultInitializer : false;
+}
+
+function bindingPatternInitializer(
+  resolution: BindingPatternInitializerResolution,
+): ts.Expression | false {
+  const parent = resolution.pattern.parent;
+  if (
+    (ts.isVariableDeclaration(parent) || ts.isParameter(parent)) &&
+    parent.name === resolution.pattern
+  ) {
+    return parent.initializer ?? false;
+  }
+  if (ts.isBindingElement(parent) && parent.name === resolution.pattern) {
+    const parentResolution: BindingElementInitializerResolution = {
+      binding: parent,
+      checker: resolution.checker,
+      seen: resolution.seen,
+    };
+    return bindingElementInitializer(parentResolution);
+  }
+  return false;
+}
+
+function bindingElementPropertyName(
+  binding: ts.BindingElement,
+): string | false {
+  if (binding.propertyName) return propertyNameText(binding.propertyName);
+  return ts.isIdentifier(binding.name) ? binding.name.text : false;
+}
+
+function propertyNameText(name: ts.PropertyName): string | false {
+  return ts.isIdentifier(name) ||
+    ts.isStringLiteralLike(name) ||
+    ts.isNumericLiteral(name)
+    ? name.text
+    : false;
+}
+
+function typeCanExposeEvaluator(type: ts.Type): boolean {
+  if (
+    type.flags &
+    (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)
+  ) {
+    return true;
+  }
+  if (type.isUnionOrIntersection()) {
+    return type.types.some(typeCanExposeEvaluator);
+  }
+  return (
+    type.getCallSignatures().length > 0 ||
+    type.getConstructSignatures().length > 0
+  );
+}
+
+type ConstructorBindingInspection = {
+  readonly checker: ts.TypeChecker;
+  readonly node: ts.Node;
+};
+
+function isConstructorBinding(
+  inspection: ConstructorBindingInspection,
+): boolean {
+  if (!ts.isBindingElement(inspection.node) || !inspection.node.propertyName) {
+    return false;
+  }
+  if (
+    ts.isIdentifier(inspection.node.propertyName) &&
+    inspection.node.propertyName.text === DynamicEvaluatorMember.Constructor
+  ) {
+    return true;
+  }
+  if (ts.isStringLiteralLike(inspection.node.propertyName)) {
+    return (
+      inspection.node.propertyName.text === DynamicEvaluatorMember.Constructor
+    );
+  }
+  if (!ts.isComputedPropertyName(inspection.node.propertyName)) return false;
+  const resolution: StaticStringResolution = {
+    checker: inspection.checker,
+    expression: inspection.node.propertyName.expression,
+    seen: new Set<ts.Symbol>(),
+  };
+  return staticString(resolution) === DynamicEvaluatorMember.Constructor;
+}
+
+type StaticStringResolution = {
+  readonly checker: ts.TypeChecker | false;
+  readonly expression: ts.Expression;
+  readonly seen: ReadonlySet<ts.Symbol>;
+};
+
+function staticString(resolution: StaticStringResolution): string | false {
+  const expression = unwrapExpression(resolution.expression);
+  if (ts.isStringLiteralLike(expression)) return expression.text;
+  if (!resolution.checker || !ts.isIdentifier(expression)) return false;
+  const symbol = resolution.checker.getSymbolAtLocation(expression);
+  if (!symbol || resolution.seen.has(symbol)) return false;
+  const declaration = symbol.declarations?.find(
+    (candidate): candidate is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(candidate) && Boolean(candidate.initializer),
+  );
+  if (!declaration?.initializer) return false;
+  const seen = new Set(resolution.seen);
+  seen.add(symbol);
+  const nested: StaticStringResolution = {
+    checker: resolution.checker,
+    expression: declaration.initializer,
+    seen,
+  };
+  return staticString(nested);
+}
+
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  if (
+    ts.isParenthesizedExpression(expression) ||
+    ts.isAsExpression(expression) ||
+    ts.isTypeAssertionExpression(expression) ||
+    ts.isNonNullExpression(expression) ||
+    ts.isSatisfiesExpression(expression)
+  ) {
+    return unwrapExpression(expression.expression);
+  }
+  return expression;
+}
+
+function isNonRuntimeIdentifierPosition(node: ts.Identifier): boolean {
+  const parent = node.parent;
+  if (ts.isPartOfTypeNode(node)) return true;
+  if (
+    ((ts.isVariableDeclaration(parent) ||
+      ts.isParameter(parent) ||
+      ts.isFunctionDeclaration(parent) ||
+      ts.isClassDeclaration(parent) ||
+      ts.isInterfaceDeclaration(parent) ||
+      ts.isTypeAliasDeclaration(parent) ||
+      ts.isEnumDeclaration(parent) ||
+      ts.isEnumMember(parent) ||
+      ts.isModuleDeclaration(parent) ||
+      ts.isImportClause(parent) ||
+      ts.isImportSpecifier(parent) ||
+      ts.isNamespaceImport(parent) ||
+      ts.isImportEqualsDeclaration(parent)) &&
+      parent.name === node) ||
+    (ts.isBindingElement(parent) && parent.propertyName === node)
+  ) {
+    return true;
+  }
+  if (
+    ((ts.isPropertyAssignment(parent) ||
+      ts.isPropertyDeclaration(parent) ||
+      ts.isPropertySignature(parent) ||
+      ts.isMethodDeclaration(parent) ||
+      ts.isMethodSignature(parent) ||
+      ts.isGetAccessorDeclaration(parent) ||
+      ts.isSetAccessorDeclaration(parent)) &&
+      parent.name === node) ||
+    (ts.isPropertyAccessExpression(parent) && parent.name === node) ||
+    (ts.isPropertyAssignment(parent) && parent.name === node)
+  ) {
+    return true;
+  }
+  return false;
+}
