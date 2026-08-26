@@ -175,6 +175,17 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
         "node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler"
     ));
 
+    for path in [
+        "README.md",
+        ".cortex/workflows/coding-bro.md",
+        ".cortex/workflows/pull-requests.md",
+    ] {
+        let documentation = read(path);
+        assert!(documentation.contains("task remote TASK_NAME=web:build"));
+        assert!(documentation.contains("task remote TASK_NAME=web:e2e"));
+        assert!(!documentation.contains("task remote TASK_NAMES=web:build,web:e2e"));
+    }
+
     let cortex_rule = read(".cortex/dynamic-skills/kubernetes-native-cluster-execution.md");
     assert!(cortex_rule.contains("P1 hard rule"));
     assert!(cortex_rule.contains("BuildKit shard is a build service only"));
