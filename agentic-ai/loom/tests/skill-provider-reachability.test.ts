@@ -7,6 +7,7 @@ import {
 import {
   executableScriptViolatesBoundary,
   ShellExecutablePolicy,
+  shellExecutableLaunchesUnprovenScript,
 } from './skill-provider-executable-script.ts';
 import { repositorySubprocessEntrypoints } from './skill-provider-subprocess.ts';
 import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
@@ -119,11 +120,15 @@ function runtimeDependencyViolations(
     const boundaryInspection = {
       path,
       roots: new Set(inspection.roots),
-      shellPolicy: ShellExecutablePolicy.Reject,
+      shellPolicy: ShellExecutablePolicy.TrackedConfiguration,
       source: sourceBody,
       sources: inspection.sources,
     };
-    if (executableScriptViolatesBoundary(boundaryInspection)) {
+    if (
+      executableScriptViolatesBoundary(boundaryInspection) ||
+      (path.endsWith('.sh') &&
+        shellExecutableLaunchesUnprovenScript(sourceBody))
+    ) {
       violations.push(path);
       continue;
     }
@@ -387,6 +392,100 @@ test('follows repository subprocess entrypoints and fails closed', () => {
       'agentic-ai/loom/src/facade.ts',
     );
   }
+  const packageScriptSources = new Map<string, string>([
+    [
+      'agentic-ai/loom/src/cli.ts',
+      `const request = {
+  command: 'bun',
+  args: ['run', '--cwd', 'agentic-ai/loom', 'loom', '--', '--default', 'prePush'],
+};
+      runCommand(request);`,
+    ],
+    [
+      'agentic-ai/loom/package.json',
+      '{"scripts":{"loom":"bun run src/cli.ts"}}',
+    ],
+  ]);
+  const packageScriptInspection: RuntimeDependencyGraphInspection = {
+    executablePaths: new Set<string>(),
+    roots: ['agentic-ai/loom/src/cli.ts'],
+    sources: packageScriptSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(runtimeDependencyViolations(packageScriptInspection)).toEqual([]);
+
+  for (const launch of [
+    `function launch(scriptPath: string) {
+  runCommand({ command: 'bun', args: [scriptPath] });
+}
+launch('./facade.ts');`,
+    `import { exec } from 'node:child_process';
+exec('node ./safe.ts && node ./facade.ts');`,
+    `import { exec } from 'node:child_process';
+exec('node --eval import(./facade.ts)');`,
+    `Bun.spawn(['bun', '--cwd', 'tools', './facade.ts']);`,
+    `runCommand({ command: 'bun', args: ['run', 'provider-task'] });`,
+    `const scriptPath = './safe.ts';
+function launch(scriptPath: string) {
+  Bun.spawn(['bun', scriptPath]);
+}
+launch('./facade.ts');`,
+    `function launch(runtime: string) {
+  Bun.spawn([runtime, './facade.ts']);
+}
+launch('bun');`,
+    `let script = './safe.ts';
+script = './facade.ts';
+Bun.spawn(['bun', script]);`,
+    `const script = 0 ? './safe.ts' : './facade.ts';
+Bun.spawn(['bun', script]);`,
+    `const args = ['bun', './safe.ts'];
+args[1] = './facade.ts';
+Bun.spawn(args);`,
+    `const request = { command: 'bun', args: ['./safe.ts'] };
+request.args.push('./facade.ts');
+runCommand(request);`,
+    `const args = ['bun', './safe.ts'];
+const alias = args;
+alias[1] = './facade.ts';
+Bun.spawn(args);`,
+    `const request = { command: 'bun', args: ['./safe.ts'] };
+const alias = request.args;
+alias.push('./facade.ts');
+runCommand(request);`,
+  ]) {
+    const failClosedSources = new Map<string, string>([
+      ['agentic-ai/loom/src/cli.ts', launch],
+      ['agentic-ai/loom/src/safe.ts', 'export const safe = true;'],
+      ['agentic-ai/loom/src/facade.ts', 'export const safe = true;'],
+      ['tools/facade.ts', "import '../.agents/skills/provider/src/audit.ts';"],
+    ]);
+    const failClosedInspection: RuntimeDependencyGraphInspection = {
+      executablePaths: new Set<string>(),
+      roots: ['agentic-ai/loom/src/cli.ts'],
+      sources: failClosedSources,
+      symlinkPaths: new Set<string>(),
+    };
+    expect(
+      runtimeDependencyViolations(failClosedInspection),
+      launch,
+    ).not.toEqual([]);
+  }
+
+  const extensionlessRuntimeSources = new Map<string, string>([
+    ['agentic-ai/loom/src/cli.ts', `Bun.spawn(['bun', 'runner']);`],
+    ['runner', "import './.agents/skills/provider/src/audit.ts';"],
+  ]);
+  const extensionlessRuntimeInspection: RuntimeDependencyGraphInspection = {
+    executablePaths: new Set<string>(['runner']),
+    roots: ['agentic-ai/loom/src/cli.ts'],
+    sources: extensionlessRuntimeSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(runtimeDependencyViolations(extensionlessRuntimeInspection)).toEqual([
+    'runner',
+  ]);
+
   const sources = new Map<string, string>([
     ['agentic-ai/loom/src/cli.ts', "Bun.spawn(['bun', './missing.ts']);"],
   ]);
@@ -465,9 +564,40 @@ test('checks external and extensionless subprocess scripts as executable sources
     sources: shellSources,
     symlinkPaths: new Set<string>(),
   };
+  expect(runtimeDependencyViolations(shellInspection)).toEqual([]);
+
+  shellSources.set(
+    'tools/facade.sh',
+    '#!/bin/sh\nbun .agents/skills/provider/src/audit.ts',
+  );
   expect(runtimeDependencyViolations(shellInspection)).toEqual([
     'tools/facade.sh',
   ]);
+
+  shellSources.set('tools/facade.sh', '#!/bin/sh\nbun ../nested.ts');
+  shellSources.set(
+    'nested.ts',
+    "import './.agents/skills/provider/src/audit.ts';",
+  );
+  expect(runtimeDependencyViolations(shellInspection)).toEqual([
+    'tools/facade.sh',
+  ]);
+
+  shellSources.set('tools/facade.sh', '#!/bin/sh\nbun ../runner');
+  shellSources.set(
+    'runner',
+    "import './.agents/skills/provider/src/audit.ts';",
+  );
+  expect(runtimeDependencyViolations(shellInspection)).toEqual([
+    'tools/facade.sh',
+  ]);
+
+  for (const launch of ['MODE=x bun ../runner', 'exec bun ../runner']) {
+    shellSources.set('tools/facade.sh', `#!/bin/sh\n${launch}`);
+    expect(runtimeDependencyViolations(shellInspection), launch).toEqual([
+      'tools/facade.sh',
+    ]);
+  }
 });
 
 test('rejects ambient dynamic-code evaluators and constructor recovery', () => {

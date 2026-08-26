@@ -44,7 +44,9 @@ type SubprocessCallResolution = {
 };
 
 type LiteralCollection = {
-  readonly initializers: ReadonlyMap<string, ts.Expression>;
+  readonly checker: ts.TypeChecker;
+  readonly initializers: ReadonlyMap<ts.Symbol, ts.Expression>;
+  readonly mutableSymbols: ReadonlySet<ts.Symbol>;
   readonly node: ts.Node;
   readonly seenNodes: Set<ts.Node>;
   readonly values: string[];
@@ -57,17 +59,31 @@ const CHILD_PROCESS_SPECIFIERS = new Set([
 const SUBPROCESS_APIS = new Set<string>(Object.values(SubprocessApi));
 const SCRIPT_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
 const SCRIPT_RUNTIMES = new Set(['bash', 'bun', 'node', 'sh']);
+const UNRESOLVED_LITERAL = '\0unresolved-subprocess-literal';
+const MUTABLE_LITERAL = '\0mutable-subprocess-literal';
+const MUTATING_COLLECTION_METHODS = new Set([
+  'copyWithin',
+  'fill',
+  'pop',
+  'push',
+  'reverse',
+  'set',
+  'shift',
+  'sort',
+  'splice',
+  'unshift',
+]);
 
 export function repositorySubprocessEntrypoints(
   inspection: RepositorySubprocessInspection,
 ): RepositorySubprocessDiscovery {
-  const sourceFile = ts.createSourceFile(
-    inspection.importer,
-    inspection.source,
-    ts.ScriptTarget.ES2022,
-    true,
-  );
-  const initializers = collectInitializers(sourceFile);
+  const context = createSubprocessTypeContext(inspection);
+  const sourceFile = context.sourceFile;
+  const initializerInspection: InitializerInspection = {
+    checker: context.checker,
+    sourceFile,
+  };
+  const initializerCollection = collectInitializers(initializerInspection);
   const bindings = collectSubprocessBindings(sourceFile);
   const discoveries: SubprocessCallResolution[] = [];
   const visit = (node: ts.Node): void => {
@@ -109,7 +125,9 @@ export function repositorySubprocessEntrypoints(
     const literals: string[] = [];
     for (const argument of discovery.call.arguments) {
       const collection: LiteralCollection = {
-        initializers,
+        checker: context.checker,
+        initializers: initializerCollection.initializers,
+        mutableSymbols: initializerCollection.mutableSymbols,
         node: argument,
         seenNodes: new Set<ts.Node>(),
         values: literals,
@@ -119,13 +137,15 @@ export function repositorySubprocessEntrypoints(
     const candidateInspection: CandidateScriptInspection = {
       api: discovery.api,
       literals,
+      repository: inspection,
     };
-    const candidates = candidateScriptLiterals(candidateInspection);
-    for (const literal of candidates) {
+    const candidateDiscovery = candidateScriptLiterals(candidateInspection);
+    for (const literal of candidateDiscovery.literals) {
       if (
         discovery.api !== SubprocessApi.Fork &&
         posix.extname(literal).length === 0 &&
-        !literal.includes('/')
+        !literal.includes('/') &&
+        !candidateUsesScriptRuntime(candidateInspection)
       ) {
         continue;
       }
@@ -137,11 +157,34 @@ export function repositorySubprocessEntrypoints(
       if (resolved === false) unresolved = true;
       else paths.add(resolved);
     }
-    if (discovery.api === SubprocessApi.Fork && candidates.length === 0) {
-      unresolved = true;
-    }
+    if (candidateDiscovery.unresolved) unresolved = true;
   }
   return { paths: [...paths], unresolved };
+}
+
+type SubprocessTypeContext = {
+  readonly checker: ts.TypeChecker;
+  readonly sourceFile: ts.SourceFile;
+};
+
+function createSubprocessTypeContext(
+  inspection: RepositorySubprocessInspection,
+): SubprocessTypeContext {
+  const options: ts.CompilerOptions = { noLib: true, noResolve: true };
+  const sourceFile = ts.createSourceFile(
+    inspection.importer,
+    inspection.source,
+    ts.ScriptTarget.ES2022,
+    true,
+  );
+  const host = ts.createCompilerHost(options);
+  host.fileExists = (path) => path === inspection.importer;
+  host.getSourceFile = (path) =>
+    path === inspection.importer ? sourceFile : void 0;
+  host.readFile = (path) =>
+    path === inspection.importer ? inspection.source : '';
+  const program = ts.createProgram([inspection.importer], options, host);
+  return { checker: program.getTypeChecker(), sourceFile };
 }
 
 type SubprocessExpressionInspection = {
@@ -328,22 +371,108 @@ function isBunSubprocessCall(expression: ts.Expression): boolean {
   );
 }
 
+type InitializerInspection = {
+  readonly checker: ts.TypeChecker;
+  readonly sourceFile: ts.SourceFile;
+};
+
+type InitializerCollection = {
+  readonly initializers: ReadonlyMap<ts.Symbol, ts.Expression>;
+  readonly mutableSymbols: ReadonlySet<ts.Symbol>;
+};
+
 function collectInitializers(
-  sourceFile: ts.SourceFile,
-): ReadonlyMap<string, ts.Expression> {
-  const initializers = new Map<string, ts.Expression>();
+  inspection: InitializerInspection,
+): InitializerCollection {
+  const initializers = new Map<ts.Symbol, ts.Expression>();
+  const mutableSymbols = collectMutableSymbols(inspection);
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      ts.isIdentifier(node.name) &&
+      node.initializer &&
+      ts.isVariableDeclarationList(node.parent) &&
+      (node.parent.flags & ts.NodeFlags.Const) !== 0
+    ) {
+      const symbol = inspection.checker.getSymbolAtLocation(node.name);
+      if (symbol && !mutableSymbols.has(symbol)) {
+        initializers.set(symbol, node.initializer);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(inspection.sourceFile);
+  return { initializers, mutableSymbols };
+}
+
+function collectMutableSymbols(
+  inspection: InitializerInspection,
+): ReadonlySet<ts.Symbol> {
+  const mutableSymbols = new Set<ts.Symbol>();
+  const aliasSources = new Map<ts.Symbol, ts.Symbol>();
+  const recordMutation = (expression: ts.Expression): void => {
+    const root = mutationRootIdentifier(expression);
+    const symbol = root ? inspection.checker.getSymbolAtLocation(root) : false;
+    if (symbol) mutableSymbols.add(symbol);
+  };
   const visit = (node: ts.Node): void => {
     if (
       ts.isVariableDeclaration(node) &&
       ts.isIdentifier(node.name) &&
       node.initializer
     ) {
-      initializers.set(node.name.text, node.initializer);
+      const alias = inspection.checker.getSymbolAtLocation(node.name);
+      const sourceRoot = mutationRootIdentifier(node.initializer);
+      const source = sourceRoot
+        ? inspection.checker.getSymbolAtLocation(sourceRoot)
+        : false;
+      if (alias && source && alias !== source) aliasSources.set(alias, source);
+    }
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
+      node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
+    ) {
+      recordMutation(node.left);
+    }
+    if (
+      (ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) &&
+      (node.operator === ts.SyntaxKind.PlusPlusToken ||
+        node.operator === ts.SyntaxKind.MinusMinusToken)
+    ) {
+      recordMutation(node.operand);
+    }
+    if (
+      ts.isCallExpression(node) &&
+      ts.isPropertyAccessExpression(node.expression) &&
+      MUTATING_COLLECTION_METHODS.has(node.expression.name.text)
+    ) {
+      recordMutation(node.expression.expression);
     }
     ts.forEachChild(node, visit);
   };
-  visit(sourceFile);
-  return initializers;
+  visit(inspection.sourceFile);
+  let priorSize = -1;
+  while (priorSize !== mutableSymbols.size) {
+    priorSize = mutableSymbols.size;
+    for (const [alias, source] of aliasSources) {
+      if (mutableSymbols.has(alias)) mutableSymbols.add(source);
+    }
+  }
+  return mutableSymbols;
+}
+
+function mutationRootIdentifier(
+  expression: ts.Expression,
+): ts.Identifier | false {
+  let current = unwrapExpression(expression);
+  while (
+    ts.isPropertyAccessExpression(current) ||
+    ts.isElementAccessExpression(current)
+  ) {
+    current = unwrapExpression(current.expression);
+  }
+  return ts.isIdentifier(current) ? current : false;
 }
 
 function collectLiterals(collection: LiteralCollection): void {
@@ -354,10 +483,16 @@ function collectLiterals(collection: LiteralCollection): void {
     return;
   }
   if (ts.isIdentifier(collection.node)) {
-    const initializer = collection.initializers.get(collection.node.text);
+    const symbol = collection.checker.getSymbolAtLocation(collection.node);
+    const initializer =
+      symbol && collection.initializers.has(symbol)
+        ? collection.initializers.get(symbol)!
+        : false;
     if (initializer) {
       const nestedCollection: LiteralCollection = {
+        checker: collection.checker,
         initializers: collection.initializers,
+        mutableSymbols: collection.mutableSymbols,
         node: initializer,
         seenNodes: collection.seenNodes,
         values: collection.values,
@@ -365,46 +500,289 @@ function collectLiterals(collection: LiteralCollection): void {
       collectLiterals(nestedCollection);
       return;
     }
+    if (
+      !ts.isPropertyAssignment(collection.node.parent) ||
+      collection.node.parent.name !== collection.node
+    ) {
+      collection.values.push(
+        symbol && collection.mutableSymbols.has(symbol)
+          ? MUTABLE_LITERAL
+          : UNRESOLVED_LITERAL,
+      );
+    }
+    return;
   }
-  collection.node.forEachChild((child) => {
-    const nestedCollection: LiteralCollection = {
-      initializers: collection.initializers,
-      node: child,
-      seenNodes: collection.seenNodes,
-      values: collection.values,
+  if (ts.isArrayLiteralExpression(collection.node)) {
+    for (const element of collection.node.elements) {
+      const nestedInspection: NestedLiteralCollection = {
+        collection,
+        node: element,
+      };
+      collectNestedLiterals(nestedInspection);
+    }
+    return;
+  }
+  if (ts.isObjectLiteralExpression(collection.node)) {
+    for (const property of collection.node.properties) {
+      if (ts.isPropertyAssignment(property)) {
+        const nestedInspection: NestedLiteralCollection = {
+          collection,
+          node: property.initializer,
+        };
+        collectNestedLiterals(nestedInspection);
+      } else if (ts.isShorthandPropertyAssignment(property)) {
+        const nestedInspection: NestedLiteralCollection = {
+          collection,
+          node: property.name,
+        };
+        collectNestedLiterals(nestedInspection);
+      } else if (ts.isSpreadAssignment(property)) {
+        const nestedInspection: NestedLiteralCollection = {
+          collection,
+          node: property.expression,
+        };
+        collectNestedLiterals(nestedInspection);
+      } else {
+        collection.values.push(UNRESOLVED_LITERAL);
+      }
+    }
+    return;
+  }
+  if (ts.isSpreadElement(collection.node)) {
+    const nestedInspection: NestedLiteralCollection = {
+      collection,
+      node: collection.node.expression,
     };
-    collectLiterals(nestedCollection);
-  });
+    collectNestedLiterals(nestedInspection);
+    return;
+  }
+  collection.values.push(UNRESOLVED_LITERAL);
+}
+
+type NestedLiteralCollection = {
+  readonly collection: LiteralCollection;
+  readonly node: ts.Node;
+};
+
+function collectNestedLiterals(inspection: NestedLiteralCollection): void {
+  const nestedCollection: LiteralCollection = {
+    checker: inspection.collection.checker,
+    initializers: inspection.collection.initializers,
+    mutableSymbols: inspection.collection.mutableSymbols,
+    node: inspection.node,
+    seenNodes: inspection.collection.seenNodes,
+    values: inspection.collection.values,
+  };
+  collectLiterals(nestedCollection);
 }
 
 type CandidateScriptInspection = {
   readonly api: SubprocessApi;
   readonly literals: readonly string[];
+  readonly repository: RepositorySubprocessInspection;
 };
+
+type CandidateScriptDiscovery = {
+  readonly literals: readonly string[];
+  readonly unresolved: boolean;
+};
+
+type RuntimeScriptInspection = {
+  readonly arguments: readonly string[];
+  readonly repository: RepositorySubprocessInspection;
+  readonly runtime: string;
+};
+
+const RUNTIME_OPTIONS_WITH_VALUES = new Set(['--cwd']);
 
 function candidateScriptLiterals(
   inspection: CandidateScriptInspection,
-): readonly string[] {
-  if (inspection.api === SubprocessApi.Fork)
-    return inspection.literals.slice(0, 1);
+): CandidateScriptDiscovery {
+  if (inspection.api === SubprocessApi.Fork) {
+    const literal = inspection.literals[0] ?? false;
+    return literal === false || literal === UNRESOLVED_LITERAL
+      ? { literals: [], unresolved: true }
+      : { literals: [literal], unresolved: false };
+  }
   const first = inspection.literals[0] ?? false;
-  if (first === false) return [];
+  if (first === MUTABLE_LITERAL) {
+    return { literals: [], unresolved: true };
+  }
+  if (first === UNRESOLVED_LITERAL) {
+    const repositoryPathIsUnresolved = inspection.literals
+      .slice(1)
+      .some((literal) => {
+        if (literal === UNRESOLVED_LITERAL) return false;
+        if (literal === MUTABLE_LITERAL) return true;
+        const resolution: RepositoryScriptResolution = {
+          inspection: inspection.repository,
+          literal,
+        };
+        return (
+          SCRIPT_EXTENSION.test(literal) ||
+          literal.includes('/') ||
+          resolveRepositoryScript(resolution) !== false
+        );
+      });
+    return { literals: [], unresolved: repositoryPathIsUnresolved };
+  }
+  if (first === false) {
+    return { literals: [], unresolved: false };
+  }
   if (
     inspection.api === SubprocessApi.Exec ||
     inspection.api === SubprocessApi.ExecSync
   ) {
+    if (/[;&|`$<>\n"']/u.test(first)) {
+      return { literals: [], unresolved: true };
+    }
     const tokens = first.split(/\s+/u).filter(Boolean);
     const command = tokens[0] ?? false;
-    if (command === false) return [];
+    if (command === false) return { literals: [], unresolved: true };
     if (SCRIPT_RUNTIMES.has(posix.basename(command))) {
-      return tokens.slice(1).filter(isScriptLikeLiteral);
+      const runtimeInspection: RuntimeScriptInspection = {
+        arguments: tokens.slice(1),
+        repository: inspection.repository,
+        runtime: command,
+      };
+      return runtimeScriptLiterals(runtimeInspection);
     }
-    return isScriptLikeLiteral(command) ? [command] : [];
+    return {
+      literals: isScriptLikeLiteral(command) ? [command] : [],
+      unresolved: false,
+    };
   }
   if (SCRIPT_RUNTIMES.has(posix.basename(first))) {
-    return inspection.literals.slice(1).filter(isScriptLikeLiteral);
+    const runtimeInspection: RuntimeScriptInspection = {
+      arguments: inspection.literals.slice(1),
+      repository: inspection.repository,
+      runtime: first,
+    };
+    return runtimeScriptLiterals(runtimeInspection);
   }
-  return isScriptLikeLiteral(first) ? [first] : [];
+  return {
+    literals: isScriptLikeLiteral(first) ? [first] : [],
+    unresolved: false,
+  };
+}
+
+function candidateUsesScriptRuntime(
+  inspection: CandidateScriptInspection,
+): boolean {
+  const first = inspection.literals[0] ?? false;
+  if (first === false || first === UNRESOLVED_LITERAL) return false;
+  const command =
+    inspection.api === SubprocessApi.Exec ||
+    inspection.api === SubprocessApi.ExecSync
+      ? (first.split(/\s+/u)[0] ?? '')
+      : first;
+  return SCRIPT_RUNTIMES.has(posix.basename(command));
+}
+
+function runtimeScriptLiterals(
+  inspection: RuntimeScriptInspection,
+): CandidateScriptDiscovery {
+  const runtime = posix.basename(inspection.runtime);
+  let index = 0;
+  let workingDirectory: string | false = false;
+  const bunRun = runtime === 'bun' && inspection.arguments[0] === 'run';
+  if (bunRun) index += 1;
+  while (index < inspection.arguments.length) {
+    const argument = inspection.arguments[index];
+    if (
+      !argument ||
+      argument === UNRESOLVED_LITERAL ||
+      argument === MUTABLE_LITERAL
+    ) {
+      return { literals: [], unresolved: true };
+    }
+    if (argument === '--') {
+      index += 1;
+      continue;
+    }
+    if (RUNTIME_OPTIONS_WITH_VALUES.has(argument)) {
+      const directory = inspection.arguments[index + 1] ?? false;
+      if (
+        directory === false ||
+        directory === UNRESOLVED_LITERAL ||
+        directory === MUTABLE_LITERAL
+      ) {
+        return { literals: [], unresolved: true };
+      }
+      workingDirectory = directory;
+      index += 2;
+      continue;
+    }
+    if (argument.startsWith('-')) {
+      return { literals: [], unresolved: true };
+    }
+    if (bunRun && !SCRIPT_EXTENSION.test(argument)) {
+      if (workingDirectory === false) {
+        return { literals: [], unresolved: true };
+      }
+      const packageScriptInspection: BunPackageScriptInspection = {
+        name: argument,
+        repository: inspection.repository,
+        workingDirectory,
+      };
+      return resolveBunPackageScript(packageScriptInspection);
+    }
+    const literal =
+      workingDirectory === false
+        ? argument
+        : posix.normalize(posix.join(workingDirectory, argument));
+    return {
+      literals: isScriptLikeLiteral(literal) ? [literal] : [],
+      unresolved: !isScriptLikeLiteral(literal),
+    };
+  }
+  return { literals: [], unresolved: true };
+}
+
+type BunPackageDocument = {
+  readonly scripts?: Readonly<Record<string, string>>;
+};
+
+type BunPackageScriptInspection = {
+  readonly name: string;
+  readonly repository: RepositorySubprocessInspection;
+  readonly workingDirectory: string;
+};
+
+function resolveBunPackageScript(
+  inspection: BunPackageScriptInspection,
+): CandidateScriptDiscovery {
+  const packagePath = posix.normalize(
+    posix.join(inspection.workingDirectory, 'package.json'),
+  );
+  const packageSource = inspection.repository.sources.get(packagePath) ?? false;
+  if (packageSource === false) return { literals: [], unresolved: true };
+  let document: BunPackageDocument;
+  try {
+    document = JSON.parse(packageSource) as BunPackageDocument;
+  } catch {
+    return { literals: [], unresolved: true };
+  }
+  const command = document.scripts?.[inspection.name] ?? false;
+  if (command === false || /[;&|`$<>\n"']/u.test(command)) {
+    return { literals: [], unresolved: true };
+  }
+  const tokens = command.split(/\s+/u).filter(Boolean);
+  if (
+    tokens.length !== 3 ||
+    tokens[0] !== 'bun' ||
+    tokens[1] !== 'run' ||
+    !tokens[2] ||
+    !SCRIPT_EXTENSION.test(tokens[2])
+  ) {
+    return { literals: [], unresolved: true };
+  }
+  return {
+    literals: [
+      posix.normalize(posix.join(inspection.workingDirectory, tokens[2])),
+    ],
+    unresolved: false,
+  };
 }
 
 function isScriptLikeLiteral(value: string): boolean {
