@@ -391,7 +391,7 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     return 'content resembles a transcript, credential, environment dump, or raw log'
   }
 
-  if (kind === 'plan' && containsSourceTaskExcerpt(candidate, sourceTask)) {
+  if (containsSourceTaskExcerpt(candidate, sourceTask)) {
     return 'content contains a verbatim source-task excerpt'
   }
 

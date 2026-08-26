@@ -199,7 +199,10 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - Requires exactly one explicit `issue_path` or `prompt`.
 - Resolves and atomically claims only the requested ready agent issue.
 - Requires an assigned Nook GitHub collaborator for issue mode.
-- Cursor SDK implement → PR opened → owner assigned and mentioned → Workbench
+- Classifies and publishes the planning result before implementation.
+- An unauthorized major direction publishes a validated blocker and stops.
+- An authorized or ordinary bounded task continues through Cursor SDK
+  implementation → PR opened → owner assigned and mentioned → Workbench
   progress/worklog published → workflow exits.
 
 **`ci-agent-smoke.yml`**
