@@ -279,6 +279,7 @@ tasks:
         --set "*.output=type=cacheonly"
         builder-debug
       - >-
+        PREFLIGHT_SOURCE_CONTEXT="{{.REPO_ROOT}}"
         bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
         "cache-publish:native-preflight"
         {{.DOCKER}} buildx bake

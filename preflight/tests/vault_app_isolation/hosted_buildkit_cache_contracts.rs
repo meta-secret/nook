@@ -421,11 +421,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .unwrap_or("");
     assert!(
         native_publish.contains("preflight-test")
+            && native_publish.contains("PREFLIGHT_SOURCE_CONTEXT=\"{{.REPO_ROOT}}\"")
             && native_publish.contains("task: docker:ci:cache:publish:rust-base")
             && native_publish.contains("builder-core-deps-publish")
             && native_publish.contains("builder-debug")
             && !native_publish.contains("builder-core-deps-publish builder-debug"),
-        "native cache publish must stage rust-base, deps, source, then preflight as separate solves"
+        "native cache publish must stage rust-base, deps, source, then preflight as separate solves with the full repository source context"
     );
     let wasm_publish = docker_tasks
         .split("docker:ci:cache:publish:wasm:")
