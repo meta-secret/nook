@@ -338,6 +338,8 @@ task skills:run CONFIG=path/to/skill-request.yaml
 
 Discovery returns each action's description, exact YAML example, and input
 schema. The command accepts one YAML document instead of action-specific flags.
+Successful results and corrective failures are both emitted as YAML, so callers
+never need to parse mixed human-readable and machine-readable output.
 
 ```sh
 task web:dev
