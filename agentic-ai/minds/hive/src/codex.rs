@@ -7,11 +7,12 @@ use std::sync::Arc;
 use codex::{
     AbsolutePathBuf, Arg0DispatchPaths, AskForApproval, AuthManager, CodexAppsToolsCache,
     CodexHomeUserInstructionsProvider, CodexThread, Config, Constrained, EnvironmentManager,
-    EventMsg, ExecServerRuntimePaths, ExternalAuth, Features, NewThread, OPENAI_PROVIDER_ID, Op,
-    PermissionProfile, Permissions, ProjectConfig, SessionSource, StartThreadOptions,
-    ThreadManager, UserInput, WebSearchMode, build_models_manager, built_in_model_providers,
-    empty_extension_registry, find_codex_home, init_state_db,
-    local_agent_graph_store_from_state_db, resolve_installation_id, thread_store_from_config,
+    EventMsg, ExecServerRuntimePaths, ExternalAuth, Features, NewThread, OPENAI_PROVIDER_ID,
+    PermissionProfile, Permissions, ProjectConfig, SessionSource, StartIfIdleSubmission,
+    StartThreadOptions, ThreadManager, TurnInputRequest, TurnStartOptions, UserInput,
+    WebSearchMode, build_models_manager, built_in_model_providers, empty_extension_registry,
+    find_codex_home, init_state_db, local_agent_graph_store_from_state_db, resolve_installation_id,
+    thread_store_from_config,
 };
 use thiserror::Error;
 use tokio::sync::mpsc;
@@ -132,7 +133,9 @@ impl InProcessCodexRunner {
         let config = new_config(options).await?;
         let state_db = init_state_db(&config).await;
         let auth_manager =
-            AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false).await;
+            AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false)
+                .await
+                .map_err(|error| CodexError::Run(error.to_string()))?;
         if let Some(external_auth) = &self.external_auth {
             auth_manager
                 .set_external_auth(Arc::clone(external_auth))
@@ -377,19 +380,23 @@ async fn submit_and_wait(
         TurnKind::Task(_) => TASK_OUTPUT_SCHEMA,
     };
     let output_schema = serde_json::from_str(schema).map_err(CodexError::OutputSchema)?;
-    thread
-        .submit(Op::UserInput {
-            items: vec![UserInput::Text {
-                text: prompt.to_owned(),
-                text_elements: Vec::new(),
-            }],
-            final_output_json_schema: Some(output_schema),
-            responsesapi_client_metadata: None,
-            additional_context: Default::default(),
-            thread_settings: Default::default(),
-        })
+    let request = TurnInputRequest::user_input(vec![UserInput::Text {
+        text: prompt.to_owned(),
+        text_elements: Vec::new(),
+    }])
+    .on_start(TurnStartOptions {
+        final_output_json_schema: Some(output_schema),
+        ..TurnStartOptions::default()
+    });
+    let submission = thread
+        .start_turn_if_idle(request)
         .await
         .map_err(|error| CodexError::Run(error.to_string()))?;
+    if let StartIfIdleSubmission::NotSubmitted { reason } = submission {
+        return Err(CodexError::Run(format!(
+            "Codex rejected the initial Hive turn: {reason:?}"
+        )));
+    }
 
     let stderr = io::stderr();
     let decorate = stderr.is_terminal() && std::env::var_os("NO_COLOR").is_none();
