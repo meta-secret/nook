@@ -531,7 +531,7 @@ function buildHeadObservation(
     run.startedAt,
     run.finishedAt,
   ]);
-  const timestampRequest: TimestampExtremaRequest = { values: timestamps };
+  const timestampRequest = { values: timestamps };
   const firstObservedAt = minimumTimestamp(timestampRequest);
   const lastObservedAt = maximumTimestamp(timestampRequest);
   const supersededRequest: HeadSupersededRequest = {
@@ -571,7 +571,7 @@ function headSupersededAt(request: HeadSupersededRequest): string {
   const laterStarts = request.allRuns
     .filter((run) => laterHeads.has(run.headSha))
     .map((run) => run.startedAt);
-  const timestampRequest: TimestampExtremaRequest = { values: laterStarts };
+  const timestampRequest = { values: laterStarts };
   return minimumTimestamp(timestampRequest);
 }
 
