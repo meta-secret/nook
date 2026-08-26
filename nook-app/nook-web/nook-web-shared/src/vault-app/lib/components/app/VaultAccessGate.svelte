@@ -83,7 +83,7 @@
 </script>
 
 <div class="space-y-6">
-  {#if showAccessGate}
+  {#if showAccessGate || devicesAccessRouteOpen()}
     {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen()}
       <LoginGate
         {vault}

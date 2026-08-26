@@ -11,6 +11,7 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
+  prepareTwoProtectedIdentitiesWithoutVault,
   saveAuthProvidersInBrowser,
   unselectedAuthProviderSeedScope,
 } from './helpers'
@@ -123,6 +124,37 @@ test.describe('devices and access dashboard', () => {
 
     await expect(page).toHaveURL(/\/devices-access$/)
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+  })
+
+  test('keeps the dashboard mounted while switching identities before a vault exists', async ({
+    page,
+  }) => {
+    await prepareTwoProtectedIdentitiesWithoutVault(page)
+
+    const identityOptions = page.getByTestId('devices-access-identity-option')
+    const personalIdentity = identityOptions.filter({ hasText: 'Identity 1' })
+    await personalIdentity.click()
+    await page.getByTestId('devices-access-use-identity').click()
+
+    const loginDashboard = page
+      .getByTestId('login-gate')
+      .getByTestId('devices-access-dashboard')
+    await expect(loginDashboard).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      loginDashboard.getByTestId('devices-access-identity-protection-flow'),
+    ).toBeVisible()
+    await expect(page.getByTestId('device-protection-unlock-btn')).toBeVisible()
+
+    await page.getByTestId('device-protection-unlock-btn').click()
+    await expect(personalIdentity).toHaveAttribute('data-selected', 'true', {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('devices-access-identity-protection-flow'),
+    ).toHaveCount(0)
+    await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible()
   })
 
   test('after creating a passkey vault shows the access dependency graph', async ({
