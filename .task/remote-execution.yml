@@ -12,7 +12,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - |
-        set -eu
+        set -euo pipefail
 
         requested_tasks="$(.github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS")"
 
@@ -73,7 +73,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - |
-        set -eu
+        set -euo pipefail
 
         case "$REQUESTED_PR" in
           ''|*[!0-9]*|0)
@@ -147,8 +147,17 @@ tasks:
                 case " $cancelled_run_ids " in
                   *" $run_id "*) ;;
                   *)
-                    gh run cancel "$run_id"
-                    cancelled_run_ids="$cancelled_run_ids $run_id"
+                    if gh run cancel "$run_id"; then
+                      cancelled_run_ids="$cancelled_run_ids $run_id"
+                    elif latest_run_status="$(gh run view "$run_id" --json status --jq .status)"; then
+                      if [ "$latest_run_status" = "completed" ]; then
+                        cancelled_run_ids="$cancelled_run_ids $run_id"
+                      else
+                        echo "Could not cancel active replacement-state run $run_id; retrying within the bounded cleanup window." >&2
+                      fi
+                    else
+                      echo "Could not cancel or recheck replacement-state run $run_id; retrying within the bounded cleanup window." >&2
+                    fi
                     ;;
                 esac
               done
