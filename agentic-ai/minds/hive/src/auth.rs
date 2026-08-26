@@ -5,8 +5,9 @@ use std::time::Duration;
 
 use crate::HiveContext;
 use codex::{
-    AuthCredentialsStoreMode, AuthKeyringBackendKind, AuthManager, CodexAuth, ExternalAuth,
-    ExternalAuthFuture, ExternalAuthRefreshContext,
+    AuthCredentialsStoreMode, AuthKeyringBackendKind, AuthManager, AuthRouteConfig, CodexAuth,
+    ExternalAuth, ExternalAuthFuture, ExternalAuthRefreshContext, HttpClientFactory,
+    OutboundProxyPolicy,
 };
 use serde::{Deserialize, Serialize};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -20,6 +21,12 @@ const AUTH_PERSIST_URL_ENV: &str = "HIVE_AUTH_PERSIST_URL";
 const AUTH_API_TOKEN: &str = "/run/secrets/hive-auth-api/token";
 const AUTH_API_CA: &str = "/run/secrets/hive-auth-api/ca.crt";
 const AUTH_PERSIST_RETRY_MAX: Duration = Duration::from_secs(30);
+
+fn auth_route_config() -> AuthRouteConfig {
+    AuthRouteConfig::from_http_client_factory(HttpClientFactory::new(
+        OutboundProxyPolicy::ReqwestDefault,
+    ))
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 struct BrokerRequest {
@@ -137,7 +144,7 @@ pub async fn run_auth_broker(
         None,
         None,
         AuthKeyringBackendKind::default(),
-        None,
+        auth_route_config(),
     )
     .await;
     if auth_manager.auth_cached().is_none() {
@@ -183,7 +190,7 @@ pub async fn run_auth_broker(
                     None,
                     None,
                     AuthKeyringBackendKind::default(),
-                    None,
+                    auth_route_config(),
                 )
                 .await;
             } else {
@@ -217,7 +224,7 @@ pub async fn run_auth_broker(
                             None,
                             None,
                             AuthKeyringBackendKind::default(),
-                            None,
+                            auth_route_config(),
                         )
                         .await;
                     }

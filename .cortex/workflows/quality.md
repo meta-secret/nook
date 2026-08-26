@@ -108,9 +108,9 @@ Use this workflow for quality, CI, and deployment changes.
      must name the RustSec IDs, identify the exact pinned upstream graph, and
      state the dependency upgrade that removes them in both `deny.toml` and
      the affected workspace's `.cargo/audit.toml`.
-     The current `agentic-ai/minds` exception is limited to RUSTSEC-2026-0118 and
-     RUSTSEC-2026-0119 in the pinned `openai/codex` Rama/Hickory graph; remove it
-     when upstream moves from `hickory-proto` 0.25.2 to 0.26.1 or later.
+     `agentic-ai/minds` has no active advisory exceptions. Its latest-derived
+     Codex source and Hickory compatibility source must resolve patched package
+     versions without hiding RustSec findings.
    - `PR / Rust ecosystem / Proptest, Insta, and Loom` —
      `task docker:ecosystem:deterministic` warms `docker:rust-base`, then Bakes
      `rust-ecosystem-deterministic` on `rust-platform` (platform sources over
