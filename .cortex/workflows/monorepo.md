@@ -7,7 +7,7 @@ Use this workflow for feature work that touches more than one package.
 0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [pull-requests.md](pull-requests.md)).
    0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [pull-requests.md](pull-requests.md#squash-merge-only---no-exceptions).
    0c. Estimate authored changed lines and map package ownership before editing.
-   If the change approaches 5,000 lines, split it into ordered package- or
+   If the change approaches 3,000 lines, split it into ordered package- or
    layer-focused PRs. Follow
    [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.

@@ -128,7 +128,7 @@ Agents must follow this navigation and search protocol:
 
 Implementation agents follow [workflows/coding-bro.md](workflows/coding-bro.md) from start to finish:
 
-1. **Branch & plan:** Fetch `origin/main`. Read owning product specs for product tasks. Publish the task plan and branch. Start [agent self-improvement](dynamic-skills/self-improvement.md) for substantial work. Target <= 5,000 authored changed lines per PR.
+1. **Branch & plan:** Fetch `origin/main`. Read owning product specs for product tasks. Publish the task plan and branch. Start [agent self-improvement](dynamic-skills/self-improvement.md) for substantial work. Target <= 3,000 authored changed lines per PR. At 2,500 lines, inventory logical domain changes and plan a stacked sequence before adding scope.
 2. **Implement:** Write focused code using canonical dynamic skills. Update `.cortex/product-specs/` when new product knowledge is gained.
 3. **Pre-push format:** Run `task loom:pre-push` to apply host formatting.
 4. **Commit & push:** Commit formatted changes and push to the feature branch.

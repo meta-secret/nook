@@ -250,7 +250,7 @@ test('rejects an over-budget one-PR plan', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /current PR estimate exceeds 5,000 authored changed lines/,
+    /current PR estimate exceeds 3,000 authored changed lines/,
   )
 })
 
@@ -261,7 +261,7 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan exceeds 5,000 authored changed lines/,
+    /one-PR plan exceeds 3,000 authored changed lines/,
   )
 })
 
@@ -273,7 +273,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
     )
     .replace(
       'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 4,999',
+      'Current PR estimated authored changed lines: 2,999',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),

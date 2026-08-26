@@ -90,13 +90,20 @@ snapshots, vendored sources, binary artifacts, and pure renames from the
 estimate. Set `Delivery shape` to exactly `One PR` or `Multiple PRs`.
 For a multi-PR feature, list each ordered, module-focused slice with its
 acceptance evidence. Identify the first or currently authorized slice
-separately. Its estimate must not exceed 5,000 authored changed lines. Use
-`None` when no public or cross-module interface changes.
+separately. Its estimate must not exceed 3,000 authored changed lines. At 2,500
+lines, inventory the logical domain changes and require an ordered stacked-PR
+sequence before implementation expands further. Use `None` when no public or
+cross-module interface changes.
 
 If planning replaces an in-progress oversized PR, require a successor branch
 and linked draft PR from the last full-work commit before any scope reduction.
 Require a Workbench inventory that maps every removed file and behavior to a
 successor PR.
+
+Model a stacked sequence with GitHub base branches. Each successor draft PR
+temporarily targets its predecessor branch. After the predecessor merges,
+retarget the successor to `main`, update it from `origin/main`, re-measure it,
+and validate the new exact head.
 
 Write the current slice as `<scope>; Acceptance evidence: <observable proof>`.
 Write every numbered PR slice in the same form. Never use `None`, `N/A`, or
