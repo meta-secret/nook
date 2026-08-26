@@ -2,16 +2,15 @@
 
 ## Overview
 
-Exact-head Cloud review runs alongside repository-owned GitHub Actions.
+Review policy is explicit:
 
-Codex is the first reviewer. When Codex reports that it cannot review, the
-same `task pr:review` request switches to Cursor Bugbot.
-
-Review is not a merge gate. A missing or unavailable review result does not
-delay delivery after those checks finish.
-
-Other external review services remain optional. Do not request or wait for
-Claude, CodeRabbit, or similar services unless the user explicitly asks.
+- Exact-head Cloud review runs alongside repository-owned GitHub Actions.
+- Codex is the first reviewer. When Codex reports that it cannot review, the
+  same `task pr:review` request switches to Cursor Bugbot.
+- Review is not a merge gate. A missing or unavailable review result does not
+  delay delivery after those checks finish.
+- Other external review services remain optional. Do not request or wait for
+  Claude, CodeRabbit, or similar services unless the user explicitly asks.
 
 ## Local review before the first owner-authored push
 
@@ -21,19 +20,18 @@ Run the advisory local review on a coherent branch head:
 task pr:review-local
 ```
 
-The command compares the branch with current `origin/main`.
+The command compares the branch with current `origin/main`. Handle its outcome
+as follows:
 
-If the Codex CLI or authentication is unavailable, it reports the skip and
-does not block delivery. There is no headless Cursor review CLI. Cloud review
-later requests Cursor Bugbot when Codex reports a usage limit.
-
-Treat any actionable finding local review does produce as normal
-implementation work. Run pre-push hygiene again after fixes.
-
-The bounded implementation worker cannot run Git. The harness commits and
-pushes its result after the worker exits. For that path, the continuing owner
-runs local review immediately after handoff. This is the only first-push
-exception.
+- If the Codex CLI or authentication is unavailable, it reports the skip and
+  does not block delivery. There is no headless Cursor review CLI. Cloud review
+  later requests Cursor Bugbot when Codex reports a usage limit.
+- Treat any actionable finding as normal implementation work. Run pre-push
+  hygiene again after fixes.
+- The bounded implementation worker cannot run Git. The harness commits and
+  pushes its result after the worker exits. For that path, the continuing owner
+  runs local review immediately after handoff. This is the only first-push
+  exception.
 
 ## Complete validation and Cloud review
 

@@ -18,6 +18,9 @@ Every `.cortex` Markdown edit must keep cognitive complexity low, prefer
 enclosed structured lists, reserve tables for compact exact mappings, avoid
 static directory trees, and ban ASCII graphics.
 
+Present causes, consequences, and warning signs as parallel bullets when a
+paragraph would combine independent facts.
+
 ## Required response while writing
 
 1. Split each independent fact into its own short sentence.

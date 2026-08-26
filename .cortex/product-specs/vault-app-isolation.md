@@ -49,6 +49,8 @@ before creation, local selection, import, remote adoption, and extension
 approval. TypeScript selects the application at bootstrap but is never the
 authority for the boundary.
 
+### Startup boundary
+
 Each vault entrypoint renders an inert, localized startup shell before the
 shared vault WASM settles. The shell exposes no action or vault state. The
 browser imports the application module only after Rust has initialized, because
@@ -62,6 +64,8 @@ use the size-focused `wasm-opt -Oz` profile. Artifact verification reports both
 raw and Brotli-compressed size and rejects regressions beyond the maintained
 ceilings. The small companion WASM is loaded only by extension-owned features;
 it is not part of the Simple or Sentinel startup dependency graph.
+
+### Extension boundary
 
 The shared package contains the extension-approval binding needed by Simple and
 the browser companion. Sentinel remains extension-free because its Rust

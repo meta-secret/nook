@@ -150,13 +150,13 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 
 The Codex SDK is the local worker adapter.
 
-The adapter starts one Codex thread for one reached agent task attempt.
+For each reached agent task attempt, the adapter:
 
-It starts that thread in an isolated SDK process.
-Constructor overrides disable agents, both multi-agent implementations, apps,
-and plugins.
-Thread overrides enforce read-only filesystem access, never-approve behavior,
-disabled network access, and disabled web search.
+- starts exactly one Codex thread in an isolated SDK process;
+- disables agents, both multi-agent implementations, apps, and plugins through
+  constructor overrides; and
+- enforces read-only filesystem access, never-approve behavior, disabled
+  network access, and disabled web search through thread overrides.
 
 Project role TOMLs name experts and provide thin instructions.
 They are not capability boundaries because native children reapply the parent
@@ -194,9 +194,7 @@ delivery owner's final report. A compiled static graph is not required for the
 per-attempt event and view contract.
 
 The run-level `events.jsonl` journal is the scheduling authority for that local
-run.
-
-It records:
+run and records:
 
 - the run ID;
 - workflow name and version;
