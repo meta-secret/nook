@@ -98,6 +98,7 @@ const LEDGER_KEYS = ['relativePath', 'content'] as const;
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
+const PATH_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 const UTF8_ENCODER = new TextEncoder();
 enum SerializedCortexArticleContract {
   Request = 'request',
@@ -533,7 +534,7 @@ function isSafeRelativePath(value: string | false): value is string {
     value.length <= CORTEX_ARTICLE_PATH_LIMIT &&
     !value.startsWith('/') &&
     !value.includes('\\') &&
-    !value.includes('\0') &&
+    !PATH_CONTROL_CHARACTER.test(value) &&
     value
       .split('/')
       .every((part) => part !== '..' && part !== '.' && part !== '')

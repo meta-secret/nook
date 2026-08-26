@@ -304,6 +304,27 @@ test('bounds paths, source lines, codes, and finding messages', () => {
   );
 });
 
+test('rejects control characters in request and result paths', () => {
+  const controls = ['\n', '\t', '\u001b', '\u0001', '\u007f'];
+  for (const control of controls) {
+    const relativePath = `.cortex/exam${control}ple.md`;
+    const document = { ...validRequest.documents[0], relativePath };
+    const request = { ...validRequest, documents: [document] };
+    expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow(
+      'Invalid Cortex article document',
+    );
+
+    const finding = { ...validResult.findings[0], file: relativePath };
+    const result = {
+      kind: CortexArticleContractKind.Result,
+      findings: [finding],
+    };
+    expect(() => decodeCortexArticleResult(JSON.stringify(result))).toThrow(
+      'Invalid Cortex article finding',
+    );
+  }
+});
+
 test('enforces serialized request and result byte limits', () => {
   const oversizedRequest = 'x'.repeat(CORTEX_ARTICLE_REQUEST_BYTE_LIMIT + 1);
   expect(() => decodeCortexArticleRequest(oversizedRequest)).toThrow(
