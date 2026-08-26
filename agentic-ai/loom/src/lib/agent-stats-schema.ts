@@ -14,6 +14,7 @@ import {
   validateReviewEvents,
   type ValidateReviewEventsRequest,
 } from './agent-stats-schema-review.ts';
+import { validationRetriggerCount } from './agent-stats-validation-cycles.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 export type AgentStatsValidation = {
@@ -653,6 +654,13 @@ function validateValidationEntries(args: ValidateHeadLinkedEntriesArgs): void {
       errors: args.errors,
     };
     evidenceString(conclusionArgs);
+    const workflowArgs: EvidencePropertyArgs = {
+      record: item,
+      key: 'workflow',
+      path: `validation_cycles[${index}].workflow`,
+      errors: args.errors,
+    };
+    evidenceString(workflowArgs);
   }
 }
 
@@ -764,8 +772,8 @@ function validateDerivedDeliveryEvidence(
   const retriggerCountArgs: ValidateSummaryCountArgs = {
     summary: args.summary,
     key: 'pr_retrigger_count',
-    expected: Math.max(0, validationCycles.length - 1),
-    detailKey: 'validation_cycles after the first',
+    expected: validationRetriggerCount(validationCycles.filter(isRecord)),
+    detailKey: 'validation_cycles repeated within each workflow',
     errors: args.errors,
   };
   validateSummaryCount(retriggerCountArgs);

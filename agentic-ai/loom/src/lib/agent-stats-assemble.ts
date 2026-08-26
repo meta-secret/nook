@@ -15,6 +15,7 @@ import {
   collectAgentStatsGitHubEvidence,
   type AgentStatsGitHubEvidenceRequest,
 } from './agent-stats-github.ts';
+import { validationRetriggerCount } from './agent-stats-validation-cycles.ts';
 import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
@@ -374,7 +375,7 @@ export async function assembleAgentStats(
     obsolete_validation_count: evidence.obsoleteValidationCount,
     cancelled_validation_seconds: evidence.cancelledValidationSeconds,
     cancelled_validation_count: evidence.cancelledValidationCount,
-    pr_retrigger_count: Math.max(0, evidence.validationCycles.length - 1),
+    pr_retrigger_count: validationRetriggerCount(evidence.validationCycles),
     agent_requested_rerun_count: scratch.pr_retriggers.filter((item) => {
       const kindArgs: UntrustedYamlPropertyArgs = { record: item, key: 'kind' };
       const kind = untrustedYamlProperty(kindArgs);
