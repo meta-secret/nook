@@ -318,6 +318,7 @@ export async function assembleAgentStats(
     repoRoot: options.repoRoot,
     prNumber: options.prNumber,
     branch,
+    startedAt: scratch.started_at,
     openedAt,
     mergedAt,
     finalHeadSha: headSha,
