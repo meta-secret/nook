@@ -121,10 +121,10 @@ export function specializeProvenGeneratedArtifactLoader(
   if (!dynamicImport || !urlArgument || !ts.isIdentifier(urlArgument)) {
     return inspection.source;
   }
-  const urlDeclaration = declarations.get(urlArgument.text);
+  const urlDeclaration = declarations.get(urlArgument.text) ?? false;
   const target = generatedArtifactTarget(urlDeclaration);
   if (target === false) return inspection.source;
-  const siteDeclaration = declarations.get(target.root.text);
+  const siteDeclaration = declarations.get(target.root.text) ?? false;
   const output = fixedOutputDirectory(siteDeclaration);
   const useInspection: IdentifierUseInspection = {
     name: urlArgument.text,
@@ -158,9 +158,9 @@ type GeneratedArtifactTarget = {
 };
 
 function generatedArtifactTarget(
-  declaration: ts.VariableDeclaration | undefined,
+  declaration: ts.VariableDeclaration | false,
 ): GeneratedArtifactTarget | false {
-  const initializer = declaration?.initializer;
+  const initializer = declaration === false ? false : declaration.initializer;
   if (
     !initializer ||
     !ts.isTemplateExpression(initializer) ||
@@ -207,9 +207,9 @@ function generatedArtifactTarget(
 }
 
 function fixedOutputDirectory(
-  declaration: ts.VariableDeclaration | undefined,
+  declaration: ts.VariableDeclaration | false,
 ): string | false {
-  const initializer = declaration?.initializer;
+  const initializer = declaration === false ? false : declaration.initializer;
   const outputArgument =
     initializer && ts.isCallExpression(initializer)
       ? initializer.arguments[1]
@@ -321,10 +321,10 @@ export function specializeBoundedLocalDataLoaders(
     if (!moduleDeclaration) continue;
     const sourceBinding = dataUrlSourceBinding(moduleDeclaration);
     if (sourceBinding === false) continue;
-    const sourceDeclaration = declarations.get(sourceBinding.text);
+    const sourceDeclaration = declarations.get(sourceBinding.text) ?? false;
     const pathBinding = readFilePathBinding(sourceDeclaration);
     if (pathBinding === false) continue;
-    const pathDeclaration = declarations.get(pathBinding.text);
+    const pathDeclaration = declarations.get(pathBinding.text) ?? false;
     const pathInspection: TrackedResolvedPathInspection = {
       declaration: pathDeclaration,
       sources: inspection.sources,
@@ -364,9 +364,9 @@ export function specializeBoundedLocalDataLoaders(
 }
 
 function dataUrlSourceBinding(
-  declaration: ts.VariableDeclaration | undefined,
+  declaration: ts.VariableDeclaration | false,
 ): ts.Identifier | false {
-  const initializer = declaration?.initializer;
+  const initializer = declaration === false ? false : declaration.initializer;
   if (
     !initializer ||
     !ts.isTemplateExpression(initializer) ||
@@ -397,9 +397,9 @@ function dataUrlSourceBinding(
 }
 
 function readFilePathBinding(
-  declaration: ts.VariableDeclaration | undefined,
+  declaration: ts.VariableDeclaration | false,
 ): ts.Identifier | false {
-  const initializer = declaration?.initializer;
+  const initializer = declaration === false ? false : declaration.initializer;
   const expression =
     initializer && ts.isAwaitExpression(initializer)
       ? initializer.expression
@@ -419,14 +419,17 @@ function readFilePathBinding(
 }
 
 type TrackedResolvedPathInspection = {
-  readonly declaration: ts.VariableDeclaration | undefined;
+  readonly declaration: ts.VariableDeclaration | false;
   readonly sources: ReadonlyMap<string, string>;
 };
 
 function trackedResolvedPath(
   inspection: TrackedResolvedPathInspection,
 ): string | false {
-  const initializer = inspection.declaration?.initializer;
+  const initializer =
+    inspection.declaration === false
+      ? false
+      : inspection.declaration.initializer;
   if (
     !initializer ||
     !ts.isCallExpression(initializer) ||
@@ -446,9 +449,9 @@ type LocalDataLoaderClosure = {
   readonly moduleArgument: ts.Identifier;
   readonly moduleDeclaration: ts.VariableDeclaration;
   readonly pathBinding: ts.Identifier;
-  readonly pathDeclaration: ts.VariableDeclaration | undefined;
+  readonly pathDeclaration: ts.VariableDeclaration | false;
   readonly sourceBinding: ts.Identifier;
-  readonly sourceDeclaration: ts.VariableDeclaration | undefined;
+  readonly sourceDeclaration: ts.VariableDeclaration | false;
   readonly scope: ts.Node | false;
 };
 
@@ -650,7 +653,7 @@ function findBoundedDynamicImport(
       node.arguments.length === 1 &&
       (() => {
         const inspection: ResolvedFileUrlImportInspection = {
-          argument: node.arguments[0],
+          argument: node.arguments[0] ?? false,
           resolvedBinding: search.resolvedBinding,
         };
         return isResolvedFileUrlImport(inspection);
@@ -665,7 +668,7 @@ function findBoundedDynamicImport(
 }
 
 type ResolvedFileUrlImportInspection = {
-  readonly argument: ts.Expression | undefined;
+  readonly argument: ts.Expression | false;
   readonly resolvedBinding: ts.Identifier;
 };
 
