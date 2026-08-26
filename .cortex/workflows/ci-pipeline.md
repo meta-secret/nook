@@ -418,6 +418,9 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - Runtime-backed selectors build a run-scoped image on the general ARC set.
   They then execute their internal daemonless task inside an ordinary Pod
   created by `nook-k0s-container` hooks.
+- No cluster Pod hosts or controls Docker, Podman, DinD, or another nested
+  runtime. BuildKit is build-only. Browser tasks run Playwright directly inside
+  the selected Pod image.
 - These selectors are `web:build`, `web:e2e`, `extension:e2e`, `check`,
   `ci:pr`, and `ci:pr:e2e`.
 - Each runtime-backed selector must be dispatched alone. Mixed batches are

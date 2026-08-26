@@ -47,6 +47,8 @@ source of truth.
 - **[github-actions-only-validation.md](github-actions-only-validation.md)**
   - Purpose: Format locally; run focused tasks and trusted Rust gates on the configured Actions runner while runtime-dependent gates stay GitHub-hosted
   - Executable skill: [`.agents/skills/github-actions-only-validation/SKILL.md`](../../.agents/skills/github-actions-only-validation/SKILL.md)
+- **[kubernetes-native-cluster-execution.md](kubernetes-native-cluster-execution.md)**
+  - Purpose: Prohibit nested container runtimes in k8s and k0s and require direct Pod execution for Playwright and other workloads
 - **[pre-push-hygiene.md](pre-push-hygiene.md)**
   - Purpose: Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses
   - Executable skill: [`.agents/skills/pre-push-hygiene/SKILL.md`](../../.agents/skills/pre-push-hygiene/SKILL.md)

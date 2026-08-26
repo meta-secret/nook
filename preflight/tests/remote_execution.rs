@@ -215,11 +215,23 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
             "container execution must call the internal daemonless task: {direct_task}"
         );
     }
-    assert!(batch_script.contains("snapshot_daemon_containers > \"$daemon_snapshot\""));
     assert!(batch_script.contains("status == 124 || status == 137"));
-    assert!(batch_script.contains("docker rm -f \"$container\""));
-    assert!(batch_script.contains("docker restart \"$container\""));
+    assert!(batch_script.contains("cleanup_timed_out_buildkit_work"));
     assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
+    for forbidden in [
+        "docker ps",
+        "docker rm",
+        "docker restart",
+        "docker run",
+        "docker create",
+        "docker start",
+        "docker exec",
+    ] {
+        assert!(
+            !batch_script.contains(forbidden),
+            "ARC batch helper must not control a container runtime: {forbidden}"
+        );
+    }
     assert!(batch_script.contains("git restore --source=HEAD --staged --worktree -- ."));
     assert!(batch_script.contains("git clean -fd"));
     Ok(())
@@ -287,7 +299,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
 }
 
 #[test]
-fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<()> {
+fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues() -> Result<()> {
     for timeout_status in [124, 137] {
         let fixture_nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
@@ -308,39 +320,37 @@ fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<(
         let mock_timeout = fixture.join("timeout");
         fs::write(
             &mock_timeout,
-            "#!/usr/bin/env bash\nshift 2\n\"$@\"\nif [[ ! -e \"$TIMEOUT_MARKER\" ]]; then touch \"$TIMEOUT_MARKER\" \"$LEAK_MARKER\"; exit \"$MOCK_TIMEOUT_STATUS\"; fi\n",
+            "#!/usr/bin/env bash\nshift 2\n\"$@\"\nif [[ ! -e \"$TIMEOUT_MARKER\" ]]; then touch \"$TIMEOUT_MARKER\"; exit \"$MOCK_TIMEOUT_STATUS\"; fi\n",
         )?;
         fs::set_permissions(&mock_timeout, fs::Permissions::from_mode(0o755))?;
 
         let mock_docker = fixture.join("docker");
         fs::write(
             &mock_docker,
-            "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$DAEMON_LOG\"\nif [[ \"$*\" = \"ps -aq\" ]]; then echo existing; [[ -e \"$LEAK_MARKER\" ]] && echo leaked; fi\nif [[ \"$*\" = \"rm -f leaked\" ]]; then rm -f \"$LEAK_MARKER\"; fi\n",
+            "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$CLEANUP_LOG\"\n[[ \"$*\" = \"buildx inspect --bootstrap remote-builder\" ]]\n",
         )?;
         fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
 
         let mock_git = fixture.join("git");
         fs::write(
             &mock_git,
-            "#!/usr/bin/env bash\nprintf 'git %s\\n' \"$*\" >> \"$DAEMON_LOG\"\n",
+            "#!/usr/bin/env bash\nprintf 'git %s\\n' \"$*\" >> \"$CLEANUP_LOG\"\n",
         )?;
         fs::set_permissions(&mock_git, fs::Permissions::from_mode(0o755))?;
 
         let task_log = fixture.join("task.log");
-        let daemon_log = fixture.join("daemon.log");
+        let cleanup_log = fixture.join("cleanup.log");
         let timeout_marker = fixture.join("timeout.marker");
-        let leak_marker = fixture.join("leak.marker");
         let system_path = std::env::var("PATH")?;
         let output = Command::new("bash")
             .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
             .args(["--run", "rust:test,wasm:test"])
             .env("PATH", format!("{}:{system_path}", fixture.display()))
             .env("TASK_LOG", &task_log)
-            .env("DAEMON_LOG", &daemon_log)
+            .env("CLEANUP_LOG", &cleanup_log)
             .env("TIMEOUT_MARKER", &timeout_marker)
-            .env("LEAK_MARKER", &leak_marker)
             .env("MOCK_TIMEOUT_STATUS", timeout_status.to_string())
-            .env_remove("NOOK_PR_BUILDX_BUILDER")
+            .env("NOOK_PR_BUILDX_BUILDER", "remote-builder")
             .output()?;
 
         assert!(!output.status.success());
@@ -349,11 +359,10 @@ fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<(
             "task remote:rust:test\ntask wasm:test\n",
             "a timed-out task must not block the next selection"
         );
-        let daemon_log = fs::read_to_string(&daemon_log)?;
-        assert!(daemon_log.contains("docker rm -f leaked"));
-        assert!(daemon_log.contains("git restore --source=HEAD --staged --worktree -- ."));
-        assert!(daemon_log.contains("git clean -fd"));
-        assert!(!leak_marker.exists());
+        let cleanup_log = fs::read_to_string(&cleanup_log)?;
+        assert!(cleanup_log.contains("docker buildx inspect --bootstrap remote-builder"));
+        assert!(cleanup_log.contains("git restore --source=HEAD --staged --worktree -- ."));
+        assert!(cleanup_log.contains("git clean -fd"));
 
         fs::remove_dir_all(fixture)?;
     }
@@ -526,6 +535,59 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
     assert!(!batch_script.contains("web:check) task web:check"));
     assert!(!batch_script.contains("web:test) task web:test"));
     assert!(!batch_script.contains("extension:check) task extension:check"));
+    Ok(())
+}
+
+#[test]
+fn k0s_workflows_never_control_a_nested_container_runtime() -> Result<()> {
+    let workflow_directory = repository_root().join(".github/workflows");
+    let forbidden = [
+        "docker run",
+        "docker create",
+        "docker start",
+        "docker exec",
+        "docker rm",
+        "docker restart",
+        "docker:dind",
+        "dockerd",
+        "/var/run/docker.sock",
+        "podman.sock",
+    ];
+
+    for entry in fs::read_dir(workflow_directory)? {
+        let path = entry?.path();
+        let workflow = fs::read_to_string(&path)?;
+        if !workflow.contains("nook-k0s") && !workflow.contains("NOOK_RUNS_ON") {
+            continue;
+        }
+        for command in forbidden {
+            assert!(
+                !workflow.contains(command),
+                "k0s workflow {} must not control a nested container runtime: {command}",
+                path.display()
+            );
+        }
+    }
+
+    let remote_batch = read(".github/scripts/remote-task-batch.sh");
+    for command in forbidden {
+        assert!(
+            !remote_batch.contains(command),
+            "ARC batch helper must not control a nested container runtime: {command}"
+        );
+    }
+
+    let remote_workflow = read(".github/workflows/remote.yml");
+    assert!(remote_workflow.contains("runs-on: nook-k0s-container"));
+    assert!(remote_workflow.contains("container:"));
+    assert!(remote_workflow.contains("task _web:test:e2e"));
+    assert!(remote_workflow.contains("task _extension:test:e2e"));
+
+    let cortex_rule = read(".cortex/dynamic-skills/kubernetes-native-cluster-execution.md");
+    assert!(cortex_rule.contains("P1 hard rule"));
+    assert!(cortex_rule.contains("BuildKit shard is a build service only"));
+    assert!(cortex_rule.contains("Playwright directly inside an ordinary Pod"));
+    assert!(cortex_rule.contains("local-machine container runtime policy"));
     Ok(())
 }
 

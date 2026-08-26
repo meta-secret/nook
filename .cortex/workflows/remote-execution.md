@@ -5,7 +5,8 @@
 Trusted focused tasks run on Nook's ARC scale sets in the k0s cluster.
 
 General `nook-k0s` runners are disposable ordinary Pods. Their Docker CLI
-connects to the persistent rootless BuildKit shard on the selected node.
+connects to the persistent rootless BuildKit shard on the selected node for
+build and export operations only. It is not a container runtime.
 
 ARC runners receive no:
 
@@ -107,6 +108,9 @@ Security rules:
 - Disable runner Kubernetes service-account tokens.
 - Prohibit DinD, Docker daemons, Podman, Sysbox, host runtime sockets, runner
   host paths, privileged runners, and Kata runtime classes.
+- Prohibit `docker run`, `docker create`, `docker start`, `docker exec`, and equivalent container runtime lifecycle commands inside cluster Pods.
+- Run Playwright directly in a purpose-built browser Pod image. Installing Playwright directly in an Actions Pod is the slower fallback; never launch a browser container from another Pod.
+- Treat BuildKit as a build-only service. A produced image executes later as an ordinary Kubernetes Pod or Job.
 - Give Remote read-only access to Main cache refs.
 - Give Remote write access only to commit-scoped refs.
 - Mount SeaweedFS credentials only as fixed BuildKit secrets.

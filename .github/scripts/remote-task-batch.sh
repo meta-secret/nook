@@ -139,38 +139,11 @@ restore_hosted_builder() {
   fi
 }
 
-snapshot_daemon_containers() {
-  if [[ "${NOOK_BUILDKIT_REMOTE:-}" == "1" ]]; then
-    return 0
-  fi
-  docker ps -aq | sort
-}
-
-cleanup_timed_out_daemon_work() {
-  local container
-  local snapshot="$1"
+cleanup_timed_out_buildkit_work() {
   local builder="${NOOK_PR_BUILDX_BUILDER:-}"
   local cleanup_status=0
 
-  if [[ "${NOOK_BUILDKIT_REMOTE:-}" == "1" ]]; then
-    if [[ -n "$builder" ]]; then
-      docker buildx inspect --bootstrap "$builder" >/dev/null || cleanup_status=1
-    fi
-    return "$cleanup_status"
-  fi
-
-  while IFS= read -r container; do
-    if [[ -n "$container" ]] && ! grep -Fxq "$container" "$snapshot"; then
-      docker rm -f "$container" || cleanup_status=1
-    fi
-  done < <(docker ps -aq)
-
   if [[ -n "$builder" ]]; then
-    while IFS= read -r container; do
-      if [[ -n "$container" ]]; then
-        docker restart "$container" || cleanup_status=1
-      fi
-    done < <(docker ps -q --filter "name=buildx_buildkit_${builder}")
     docker buildx inspect --bootstrap "$builder" >/dev/null || cleanup_status=1
   fi
 
@@ -242,7 +215,6 @@ run_batch() {
   local task
   local status
   local failures=0
-  local daemon_snapshot
   local timeout_cleanup_status
   local -a tasks
 
@@ -253,21 +225,18 @@ run_batch() {
 
   for task in "${tasks[@]}"; do
     echo "::group::Remote task: $task"
-    daemon_snapshot="$(mktemp)"
-    snapshot_daemon_containers > "$daemon_snapshot"
     set +e
     run_task "$task"
     status=$?
     if (( status == 124 || status == 137 )); then
       timeout_cleanup_status=0
-      cleanup_timed_out_daemon_work "$daemon_snapshot" || timeout_cleanup_status=1
+      cleanup_timed_out_buildkit_work || timeout_cleanup_status=1
       restore_exact_worktree || timeout_cleanup_status=1
       if (( timeout_cleanup_status != 0 )); then
         echo "::error::Failed to restore exact runner state after timeout: $task"
         status=1
       fi
     fi
-    rm -f "$daemon_snapshot"
     if ! restore_hosted_builder; then
       echo "::error::Failed to restore the hosted Buildx builder after: $task"
       status=1

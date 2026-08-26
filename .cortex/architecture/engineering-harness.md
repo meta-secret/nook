@@ -108,7 +108,10 @@ Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
 build producers execute in disposable ordinary Pods through ARC. Focused
 `preflight`, `rust:ci`, and `arc:runtime` jobs may use the same scale set. The
 Docker CLI connects only to the persistent rootless BuildKit shard on its node.
-It is not a general container-runtime API. Fork and Dependabot PRs retain
+It is a build-and-export API only, not a general container-runtime API. Cluster
+Pods never issue `docker run`, `docker create`, `docker start`, `docker exec`,
+or equivalent lifecycle commands. Playwright runs directly inside its selected
+browser Pod image. Fork and Dependabot PRs retain
 secret-free checks on ephemeral GitHub-hosted runners. Trusted release,
 browser, WASM, deployment, and agent workflows execute through ARC. Main's
 portable WASM dependency-cache writer uses the selected node-local BuildKit

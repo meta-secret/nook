@@ -18,6 +18,8 @@ Nook is a passwordless, local-first secrets manager. Your vault is encrypted in
 the browser, replicated only through storage you choose, and opened only by
 identities you authorize.
 
+Nook's k8s and k0s automation is Kubernetes-native: cluster Pods never run or control Docker, Podman, DinD, or another nested container runtime. BuildKit is build-only, and browser tests execute directly inside purpose-built Pods. The local-machine runtime policy remains intentionally undecided.
+
 There is no centrally hosted Nook account and no master password. The shipped
 applications keep multiple local identities in an independently protected
 browser keyring. Replicated identity control remains target architecture;
