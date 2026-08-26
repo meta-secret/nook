@@ -4,6 +4,8 @@
 require "yaml"
 require "json"
 require "tmpdir"
+require "fileutils"
+require "open3"
 
 root = File.expand_path("../..", __dir__)
 load_yaml = lambda do |path|
@@ -535,6 +537,31 @@ k0s_status_task = infra_taskfile.match(
 raise "k0s status task is missing" unless k0s_status_task
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
+end
+formatter_sync_program = infra_taskfile.match(
+  /IFS= read -r -d '' formatter_sync_program <<'FORMATTER_SYNC' \|\| true\n(?<body>.*?)^        FORMATTER_SYNC$/m
+)&.[](:body)
+raise "Formatter sync replacement program is missing" unless formatter_sync_program
+Dir.mktmpdir("nook-formatter-sync-source") do |source|
+  Dir.mktmpdir("nook-formatter-sync-remote") do |remote_parent|
+    remote = File.join(remote_parent, "home", "nook", ".local", "share", "nook-infra")
+    source_formatter = File.join(source, ".github", "formatting")
+    remote_formatter = File.join(remote, ".github", "formatting")
+    FileUtils.mkdir_p(source_formatter)
+    FileUtils.mkdir_p(remote_formatter)
+    File.write(File.join(source_formatter, "current"), "current\n")
+    File.write(File.join(remote_formatter, "removed"), "stale\n")
+    pipeline = Open3.pipeline(
+      ["tar", "-cf", "-", ".github/formatting"],
+      ["bash", "-c", formatter_sync_program, "--", remote, File.join(remote_parent, "home")],
+      chdir: source
+    )
+    unless pipeline.all?(&:success?) &&
+           File.read(File.join(remote_formatter, "current")) == "current\n" &&
+           !File.exist?(File.join(remote_formatter, "removed"))
+      raise "Formatter sync must replace the staged directory and remove stale files"
+    end
+  end
 end
 unless infra_taskfile.include?(
          '--build-context "nook-sccache-helpers=$remote_dir/nook-app/nook-platform/docker"'
