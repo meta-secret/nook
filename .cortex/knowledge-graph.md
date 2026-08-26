@@ -168,7 +168,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Application Checklist](dynamic-skills/code-review-comments.md#application-checklist)
   - [GitHub Queries](dynamic-skills/code-review-comments.md#github-queries)
   - [Validation](dynamic-skills/code-review-comments.md#validation)
-- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md) — semantic Markdown structure with no authored HTML
+- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md) — semantic Markdown with no HTML nodes; literal HTML belongs in inline or block code
   - [Priority](dynamic-skills/cortex-article-structure.md#priority)
   - [Purpose](dynamic-skills/cortex-article-structure.md#purpose)
   - [Body grammar](dynamic-skills/cortex-article-structure.md#body-grammar)

@@ -43,22 +43,60 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
     mkdirSync(skillsRoot, directoryOptions);
     writeFileSync(
       path.join(cortexRoot, 'AGENTS.md'),
-      '# Agent Map\n\n## Policy\n\n<!-- forbidden -->\n',
+      `Text before the title with a [broken link](missing.md).
+
+# Agent Map
+
+## Document map
+
+- [Policy](#policy)
+  - Defines the policy.
+  - Read for the rule.
+
+## Policy
+
+First paragraph and another clause and another clause and another clause that makes this sentence deliberately dense enough for the density audit.
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+
+<!-- forbidden -->
+`,
     );
     writeFileSync(
       path.join(cortexRoot, 'knowledge-graph.md'),
       '# Knowledge Graph\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
-    const request = { includeDensityLint: false };
+    const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
     expect(report.auditOk).toBe(false);
+    const agentFindings = report.structureFindings.filter(
+      (finding) => finding.file === '.cortex/AGENTS.md',
+    );
+    expect(agentFindings).toHaveLength(1);
+    expect(agentFindings[0]?.code).toBe(
+      CortexStructureFindingCode.ProhibitedHtml,
+    );
     expect(
-      report.structureFindings.filter(
-        (finding) => finding.code === CortexStructureFindingCode.ProhibitedHtml,
+      report.articleStructureFindings.some(
+        (finding) => finding.file === '.cortex/AGENTS.md',
       ),
-    ).toHaveLength(1);
+    ).toBe(false);
+    expect(
+      report.brokenLinks.some(
+        (finding) => finding.file === '.cortex/AGENTS.md',
+      ),
+    ).toBe(false);
+    expect(
+      report.densityFindings.some(
+        (finding) => finding.file === '.cortex/AGENTS.md',
+      ),
+    ).toBe(false);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);

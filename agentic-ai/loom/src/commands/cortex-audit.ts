@@ -18,6 +18,7 @@ import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
   auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
+  CortexStructureFindingCode,
   type AuditCortexMarkdownSyntaxArgs,
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
@@ -78,13 +79,30 @@ export async function runCortexAuditFromDirectory(
     };
     return documentSource;
   });
+  const syntaxAuditArgs: AuditCortexMarkdownSyntaxArgs = {
+    documents: allDocuments,
+  };
+  const syntaxFindings = auditCortexMarkdownSyntax(syntaxAuditArgs);
+  const syntaxInvalidPaths = new Set(
+    syntaxFindings
+      .filter(
+        (finding) => finding.code === CortexStructureFindingCode.ProhibitedHtml,
+      )
+      .map((finding) => finding.file),
+  );
   const documents = allDocuments.filter((document) => {
     const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
       cortexRoot,
       filePath: document.absolutePath,
     };
-    return isPersistentCortexMarkdownFile(persistenceArgs);
+    return (
+      isPersistentCortexMarkdownFile(persistenceArgs) &&
+      !syntaxInvalidPaths.has(document.relativePath)
+    );
   });
+  const admittedDocumentPaths = new Set(
+    documents.map((document) => document.relativePath),
+  );
 
   for (const documentSource of documents) {
     const filePath = documentSource.absolutePath;
@@ -103,10 +121,6 @@ export async function runCortexAuditFromDirectory(
     }
   }
 
-  const syntaxAuditArgs: AuditCortexMarkdownSyntaxArgs = {
-    documents: allDocuments,
-  };
-  const syntaxFindings = auditCortexMarkdownSyntax(syntaxAuditArgs);
   const documentMapBaselineArgs: MigrationBaselineEntriesArgs = {
     ledgerPath: DOCUMENT_MAP_MIGRATION_LEDGER_PATH,
     markerPath: DOCUMENT_MAP_SKILL_PATH,
@@ -118,10 +132,10 @@ export async function runCortexAuditFromDirectory(
     migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
   };
-  const structureFindings = [
-    ...syntaxFindings,
-    ...auditCortexDocumentStructure(structureAuditArgs),
-  ];
+  const downstreamStructureFindings = auditCortexDocumentStructure(
+    structureAuditArgs,
+  ).filter((finding) => !syntaxInvalidPaths.has(finding.file));
+  const structureFindings = [...syntaxFindings, ...downstreamStructureFindings];
   const articleBaselineArgs: MigrationBaselineEntriesArgs = {
     ledgerPath: ARTICLE_MIGRATION_LEDGER_PATH,
     markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
@@ -144,23 +158,32 @@ export async function runCortexAuditFromDirectory(
   const skillFiles = readdirSync(skillsDir)
     .filter((name) => name.endsWith('.md'))
     .filter((name) => name !== 'index.md' && name !== '_template.md')
+    .filter((name) =>
+      admittedDocumentPaths.has(path.join('.cortex', 'dynamic-skills', name)),
+    )
     .sort();
 
   const indexPath = path.join(skillsDir, 'index.md');
-  const indexContent = readFileSync(indexPath, 'utf8');
+  const indexRelativePath = path.relative(repoRoot, indexPath);
+  const indexIsAdmitted = admittedDocumentPaths.has(indexRelativePath);
+  const indexContent = indexIsAdmitted ? readFileSync(indexPath, 'utf8') : '';
   const indexed = new Set(
     [...indexContent.matchAll(/\(([^)]+\.md)\)/g)]
       .map((match) => match[1] ?? '')
       .filter((target) => !target.includes('/') && target.endsWith('.md')),
   );
 
-  const missingFromIndex = skillFiles.filter((name) => !indexed.has(name));
-  const orphanIndexRows = [...indexed].filter(
-    (name) =>
-      name !== 'index.md' &&
-      name !== '_template.md' &&
-      !skillFiles.includes(name),
-  );
+  const missingFromIndex = indexIsAdmitted
+    ? skillFiles.filter((name) => !indexed.has(name))
+    : [];
+  const orphanIndexRows = indexIsAdmitted
+    ? [...indexed].filter(
+        (name) =>
+          name !== 'index.md' &&
+          name !== '_template.md' &&
+          !skillFiles.includes(name),
+      )
+    : [];
 
   const missingExecutableSkills: string[] = [];
   for (const match of indexContent.matchAll(

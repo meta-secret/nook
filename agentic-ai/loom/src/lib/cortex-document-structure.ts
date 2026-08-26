@@ -166,7 +166,7 @@ function validateMarkdownSyntax(args: ValidateMarkdownSyntaxArgs): void {
         file: args.document.relativePath,
         line: nodeLine(node),
         message:
-          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or a fenced code block.',
+          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
       };
       addFinding(findingArgs);
     }

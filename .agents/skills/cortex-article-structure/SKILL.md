@@ -18,7 +18,8 @@ Authored HTML is prohibited in every `.cortex/**/*.md` file.
 
 - The prohibition includes block HTML, inline HTML, and HTML comments.
 - Generic notation such as `Option<T>` must use inline code.
-- Literal HTML examples belong in inline code or fenced code blocks.
+- Literal HTML examples belong in inline code or block code.
+- Block code may use fenced or indented Markdown syntax.
 - Escaped text and Markdown autolinks remain valid.
 - Migration exemptions never bypass the prohibition.
 

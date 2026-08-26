@@ -193,6 +193,9 @@ Autolink: <https://example.com>.
 <span>example only</span>
 \`\`\`
 
+    <!-- indented example only -->
+    <span>indented example only</span>
+
 ### Details
 
 Details text.

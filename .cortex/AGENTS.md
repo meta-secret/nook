@@ -65,7 +65,8 @@ Agents must follow this navigation and search protocol:
 - Do not author HTML in Cortex Markdown.
 - This prohibition includes block tags, inline tags, and HTML comments.
 - Use Markdown syntax for document structure.
-- Use escaped text or fenced code blocks for literal HTML examples.
+- Use escaped text, inline code, or block code for literal HTML examples.
+- Block code may use fenced or indented Markdown syntax.
 
 ### 5. Keep documentation consistent (Garbage Collection)
 
