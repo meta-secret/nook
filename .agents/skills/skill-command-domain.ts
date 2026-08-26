@@ -36,6 +36,7 @@ export type SkillStringSchema = {
   readonly type: SkillSchemaType.String;
   readonly enum?: readonly string[];
   readonly maxLength?: number;
+  readonly maxTrimmedLineLength?: number;
   readonly pattern?: string;
 };
 

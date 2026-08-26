@@ -177,7 +177,13 @@ const CORTEX_ARTICLE_AUDIT_SCHEMA: SkillObjectSchema = {
       properties: {
         ...MIGRATION_LEDGER_SCHEMA.properties,
         content: {
-          oneOf: [{ type: SkillSchemaType.String }, { const: false }],
+          oneOf: [
+            {
+              type: SkillSchemaType.String,
+              maxTrimmedLineLength: CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+            },
+            { const: false },
+          ],
         },
       },
     },

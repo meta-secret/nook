@@ -135,6 +135,20 @@ describe('executable skill YAML command protocol', () => {
     expect(textSchema.maxLength).toBe(3_800);
     expect(simpleBlockSchema.additionalProperties).toBe(false);
     expect(simpleBlockSchema.required).toEqual(['kind', 'line']);
+
+    const migrationLedger = action.inputSchema.properties.migrationLedger;
+    if (!migrationLedger || !('properties' in migrationLedger)) {
+      throw new Error('Missing migration-ledger schema.');
+    }
+    const content = migrationLedger.properties.content;
+    if (!content || !('oneOf' in content)) {
+      throw new Error('Missing migration-ledger content variants.');
+    }
+    const textContent = content.oneOf.at(0);
+    if (!textContent || !('maxTrimmedLineLength' in textContent)) {
+      throw new Error('Missing migration-ledger line bound.');
+    }
+    expect(textContent.maxTrimmedLineLength).toBe(3_800);
   });
 
   test('fails closed with a path and corrective blueprint', () => {
