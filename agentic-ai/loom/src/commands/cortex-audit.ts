@@ -16,7 +16,9 @@ import type { LintProseDensityArgs } from '../lib/density.ts';
 import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
+  auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
+  type AuditCortexMarkdownSyntaxArgs,
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
   type CortexStructureFinding,
@@ -65,34 +67,46 @@ export async function runCortexAuditFromDirectory(
     loomFailureDetail(loomFailureDetailArgs);
   }
 
-  const mdFiles = listPersistentCortexMarkdownFiles(cortexRoot);
+  const allMarkdownFiles = listCortexMarkdownFiles(cortexRoot);
   const brokenLinks: BrokenLink[] = [];
   const densityFindings: DensityFinding[] = [];
-  const documents: CortexDocumentSource[] = [];
-
-  for (const filePath of mdFiles) {
-    const content = readFileSync(filePath, 'utf8');
+  const allDocuments = allMarkdownFiles.map((filePath) => {
     const documentSource: CortexDocumentSource = {
       absolutePath: filePath,
       relativePath: path.relative(repoRoot, filePath),
-      content,
+      content: readFileSync(filePath, 'utf8'),
     };
-    documents.push(documentSource);
+    return documentSource;
+  });
+  const documents = allDocuments.filter((document) => {
+    const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
+      cortexRoot,
+      filePath: document.absolutePath,
+    };
+    return isPersistentCortexMarkdownFile(persistenceArgs);
+  });
+
+  for (const documentSource of documents) {
+    const filePath = documentSource.absolutePath;
     const findBrokenRelativeLinksArgs: FindBrokenRelativeLinksArgs = {
       filePath,
-      content,
+      content: documentSource.content,
       repoRoot,
     };
     brokenLinks.push(...findBrokenRelativeLinks(findBrokenRelativeLinksArgs));
     if (args.request.includeDensityLint) {
       const lintProseDensityArgs: LintProseDensityArgs = {
         filePath: path.relative(repoRoot, filePath),
-        content,
+        content: documentSource.content,
       };
       densityFindings.push(...lintProseDensity(lintProseDensityArgs));
     }
   }
 
+  const syntaxAuditArgs: AuditCortexMarkdownSyntaxArgs = {
+    documents: allDocuments,
+  };
+  const syntaxFindings = auditCortexMarkdownSyntax(syntaxAuditArgs);
   const documentMapBaselineArgs: MigrationBaselineEntriesArgs = {
     ledgerPath: DOCUMENT_MAP_MIGRATION_LEDGER_PATH,
     markerPath: DOCUMENT_MAP_SKILL_PATH,
@@ -104,7 +118,10 @@ export async function runCortexAuditFromDirectory(
     migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
   };
-  const structureFindings = auditCortexDocumentStructure(structureAuditArgs);
+  const structureFindings = [
+    ...syntaxFindings,
+    ...auditCortexDocumentStructure(structureAuditArgs),
+  ];
   const articleBaselineArgs: MigrationBaselineEntriesArgs = {
     ledgerPath: ARTICLE_MIGRATION_LEDGER_PATH,
     markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
@@ -293,6 +310,31 @@ function ledgerEntries(content: string): readonly string[] {
 }
 
 export function listPersistentCortexMarkdownFiles(root: string): string[] {
+  return listCortexMarkdownFiles(root).filter((filePath) => {
+    const args: IsPersistentCortexMarkdownFileArgs = {
+      cortexRoot: root,
+      filePath,
+    };
+    return isPersistentCortexMarkdownFile(args);
+  });
+}
+
+type IsPersistentCortexMarkdownFileArgs = {
+  readonly cortexRoot: string;
+  readonly filePath: string;
+};
+
+function isPersistentCortexMarkdownFile(
+  args: IsPersistentCortexMarkdownFileArgs,
+): boolean {
+  const relativePath = path.relative(args.cortexRoot, args.filePath);
+  return (
+    relativePath !== '.session' &&
+    !relativePath.startsWith(`.session${path.sep}`)
+  );
+}
+
+export function listCortexMarkdownFiles(root: string): string[] {
   const out: string[] = [];
   const stack = [root];
   const directoryReadOptions: { readonly withFileTypes: true } = {
@@ -306,9 +348,6 @@ export function listPersistentCortexMarkdownFiles(root: string): string[] {
     for (const entry of readdirSync(current, directoryReadOptions)) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (path.relative(root, full) === '.session') {
-          continue;
-        }
         stack.push(full);
         continue;
       }

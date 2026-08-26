@@ -54,9 +54,70 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
     expect(report.auditOk).toBe(false);
-    expect(report.structureFindings.map((finding) => finding.code)).toContain(
-      CortexStructureFindingCode.ProhibitedHtml,
+    expect(
+      report.structureFindings.filter(
+        (finding) => finding.code === CortexStructureFindingCode.ProhibitedHtml,
+      ),
+    ).toHaveLength(1);
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(repoRoot, removeOptions);
+  }
+});
+
+test('admits session Markdown only through the global HTML syntax gate', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-session-html-'));
+  try {
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    const sessionRoot = path.join(cortexRoot, '.session', 'nested');
+    const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(sessionRoot, directoryOptions);
+    mkdirSync(skillsRoot, directoryOptions);
+    writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
+    writeFileSync(
+      path.join(cortexRoot, 'knowledge-graph.md'),
+      '# Knowledge Graph\n',
     );
+    writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
+    const sessionPath = path.join(sessionRoot, 'current-task.md');
+    writeFileSync(
+      sessionPath,
+      'Session scratch without a title and with many clauses and constraints and failure modes and commands until it becomes too dense for a reader. [Broken](missing.md).\n',
+    );
+    const request = { includeDensityLint: true };
+    const auditArgs = { request, startDirectory: repoRoot };
+    const ordinaryReport = await runCortexAuditFromDirectory(auditArgs);
+    expect(
+      ordinaryReport.structureFindings.some((finding) =>
+        finding.file.includes('.session'),
+      ),
+    ).toBe(false);
+    expect(
+      ordinaryReport.brokenLinks.some((finding) =>
+        finding.file.includes('.session'),
+      ),
+    ).toBe(false);
+    expect(
+      ordinaryReport.densityFindings.some((finding) =>
+        finding.file.includes('.session'),
+      ),
+    ).toBe(false);
+
+    writeFileSync(sessionPath, '<!-- forbidden session HTML -->\n');
+    const htmlReport = await runCortexAuditFromDirectory(auditArgs);
+    expect(htmlReport.auditOk).toBe(false);
+    const sessionHtmlFindings = htmlReport.structureFindings.filter(
+      (finding) =>
+        finding.code === CortexStructureFindingCode.ProhibitedHtml &&
+        finding.file.includes('.session'),
+    );
+    expect(sessionHtmlFindings).toHaveLength(1);
+    expect(
+      htmlReport.articleStructureFindings.some((finding) =>
+        finding.file.includes('.session'),
+      ),
+    ).toBe(false);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);

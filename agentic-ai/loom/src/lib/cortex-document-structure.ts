@@ -62,6 +62,10 @@ type ValidateMarkdownSyntaxArgs = {
   readonly findings: CortexStructureFinding[];
 };
 
+export type AuditCortexMarkdownSyntaxArgs = {
+  readonly documents: readonly CortexDocumentSource[];
+};
+
 type ValidateIndexArgs = {
   readonly indexDocument: ParsedDocument;
   readonly catalog: ReadonlyMap<string, ParsedDocument>;
@@ -90,11 +94,6 @@ export function auditCortexDocumentStructure(
       document,
     ]),
   );
-
-  for (const document of parsedDocuments) {
-    const syntaxArgs: ValidateMarkdownSyntaxArgs = { document, findings };
-    validateMarkdownSyntax(syntaxArgs);
-  }
 
   const indexDoc =
     catalog.get('.cortex/knowledge-graph.md') ??
@@ -144,6 +143,17 @@ export function auditCortexDocumentStructure(
     validateDocument(validateArgs);
   }
 
+  return findings;
+}
+
+export function auditCortexMarkdownSyntax(
+  args: AuditCortexMarkdownSyntaxArgs,
+): CortexStructureFinding[] {
+  const findings: CortexStructureFinding[] = [];
+  for (const document of args.documents.map(parseDocument)) {
+    const syntaxArgs: ValidateMarkdownSyntaxArgs = { document, findings };
+    validateMarkdownSyntax(syntaxArgs);
+  }
   return findings;
 }
 

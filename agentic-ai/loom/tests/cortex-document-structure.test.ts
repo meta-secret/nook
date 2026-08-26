@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import {
+  auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
   CortexStructureFindingCode,
 } from '../src/lib/cortex-document-structure.ts';
 import type {
+  AuditCortexMarkdownSyntaxArgs,
   AuditCortexDocumentStructureArgs,
   CortexDocumentSource,
 } from '../src/lib/cortex-document-structure.ts';
@@ -36,6 +38,11 @@ function audit(documents: readonly CortexDocumentSource[]) {
     repoRoot: REPO_ROOT,
   };
   return auditCortexDocumentStructure(args);
+}
+
+function auditSyntax(documents: readonly CortexDocumentSource[]) {
+  const args: AuditCortexMarkdownSyntaxArgs = { documents };
+  return auditCortexMarkdownSyntax(args);
 }
 
 const INDEX_DOC_ARGS: MakeDocumentArgs = {
@@ -153,9 +160,9 @@ test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
       content: `# HTML\n\n## Policy\n\n${content}\n`,
     };
     const document = makeDocument(documentArgs);
-    expect(
-      audit([INDEX_DOC, document]).map((finding) => finding.code),
-    ).toContain(CortexStructureFindingCode.ProhibitedHtml);
+    expect(auditSyntax([document]).map((finding) => finding.code)).toContain(
+      CortexStructureFindingCode.ProhibitedHtml,
+    );
   }
 
   const indexArgs: MakeDocumentArgs = {
@@ -163,7 +170,7 @@ test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
     content: '# Index\n\n<!-- hidden index note -->\n',
   };
   const index = makeDocument(indexArgs);
-  expect(audit([index]).map((finding) => finding.code)).toContain(
+  expect(auditSyntax([index]).map((finding) => finding.code)).toContain(
     CortexStructureFindingCode.ProhibitedHtml,
   );
 });
@@ -192,7 +199,7 @@ Details text.
 `,
   };
   const document = makeDocument(documentArgs);
-  expect(audit([INDEX_DOC, document, DOCUMENT_B])).toEqual([]);
+  expect(auditSyntax([document])).toEqual([]);
 });
 
 test('does not exempt legacy documents from the HTML prohibition', () => {
@@ -201,19 +208,9 @@ test('does not exempt legacy documents from the HTML prohibition', () => {
     content: '# Legacy\n\n## Policy\n\n<div>Legacy HTML</div>\n',
   };
   const legacy = makeDocument(legacyArgs);
-  const auditArgs: AuditCortexDocumentStructureArgs = {
-    documents: [INDEX_DOC, legacy],
-    migrationBaselineEntries: ['.cortex/legacy.md'],
-    migrationLedgerPath: path.join(
-      REPO_ROOT,
-      '.cortex',
-      'document-map-migration.txt',
-    ),
-    repoRoot: REPO_ROOT,
-  };
-  expect(
-    auditCortexDocumentStructure(auditArgs).map((finding) => finding.code),
-  ).toContain(CortexStructureFindingCode.ProhibitedHtml);
+  expect(auditSyntax([legacy]).map((finding) => finding.code)).toContain(
+    CortexStructureFindingCode.ProhibitedHtml,
+  );
 });
 
 test('rejects index links pointing to non-existent documents', () => {
