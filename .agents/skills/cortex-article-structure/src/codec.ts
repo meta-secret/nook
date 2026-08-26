@@ -3,9 +3,6 @@ import {
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
   CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
-  CORTEX_ARTICLE_DOCUMENT_LIMIT,
-  CORTEX_ARTICLE_BLOCK_LIMIT,
-  CORTEX_ARTICLE_HEADING_DEPTH_LIMIT,
   CORTEX_ARTICLE_FINDING_LIMIT,
   CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
   CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
@@ -142,7 +139,7 @@ export function decodeCortexArticleRequest(
     !hasExactKeys(exactKeysRequest) ||
     transport.kind !== CortexArticleContractKind.Request ||
     !Array.isArray(transport.documents) ||
-    transport.documents.length > CORTEX_ARTICLE_DOCUMENT_LIMIT ||
+    transport.documents.length > 10_000 ||
     !isCortexMarkdownPathArrayOrFalse(transport.migrationBaselineEntries) ||
     !transport.migrationLedger
   ) {
@@ -223,7 +220,7 @@ function decodeDocument(
     !hasExactKeys(exactKeysRequest) ||
     !isCortexMarkdownPath(transport.relativePath) ||
     !Array.isArray(transport.blocks) ||
-    transport.blocks.length > CORTEX_ARTICLE_BLOCK_LIMIT
+    transport.blocks.length > 100_000
   ) {
     throw new Error('Invalid Cortex article document.');
   }
@@ -258,7 +255,7 @@ function decodeBlock(
       typeof transport.depth !== 'number' ||
       !Number.isInteger(transport.depth) ||
       transport.depth < 1 ||
-      transport.depth > CORTEX_ARTICLE_HEADING_DEPTH_LIMIT ||
+      transport.depth > 6 ||
       !isBoundedDetail(transport.text)
     ) {
       throw new Error('Invalid Cortex article heading block.');
@@ -495,7 +492,7 @@ function isCortexMarkdownPathArrayOrFalse(
   return (
     value === false ||
     (Array.isArray(value) &&
-      value.length <= CORTEX_ARTICLE_DOCUMENT_LIMIT &&
+      value.length <= 10_000 &&
       value.every((entry) => isCortexMarkdownPath(entry)))
   );
 }
