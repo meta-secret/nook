@@ -1,5 +1,8 @@
-import { isValidTaskResourceClaim } from '../agent-workflow/domain.ts';
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
+import {
+  resourceClaimMatchesPath,
+  validateModuleWriteClaims,
+} from './resource-claims.ts';
 import {
   CANONICAL_GIT_PATH,
   EXACT_GIT_COMMIT,
@@ -11,6 +14,7 @@ import {
 } from './workspace.ts';
 
 import type { GitCommandRequest } from './git-command.ts';
+import type { ResourcePathMatchRequest } from './resource-claims.ts';
 import type { ModuleWorktreeHandle } from './workspace.ts';
 
 export type VerifyModuleCommitHandoffRequest = {
@@ -28,9 +32,10 @@ export type VerifiedModuleCommitHandoff = {
   readonly changedPaths: readonly string[];
 };
 
-type ResourcePathMatchRequest = {
-  readonly claim: string;
-  readonly path: string;
+export type ModuleCommitPathRequest = {
+  readonly workspace: ModuleWorktreeHandle;
+  readonly baselineCommit: string;
+  readonly commit: string;
 };
 
 type TreeEntryInspection = {
@@ -47,11 +52,6 @@ type ParsedTreeEntry = {
 type ModuleGitInvocation = {
   readonly cwd: string;
   readonly args: readonly string[];
-};
-
-type BasenamePatternMatch = {
-  readonly pattern: string;
-  readonly basename: string;
 };
 
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
@@ -78,55 +78,6 @@ function decodeNullSeparatedGitPaths(bytes: Buffer): readonly string[] {
     throw new Error('Changed Git paths require NUL termination.');
   }
   return paths;
-}
-
-function wildcardBasenameMatches(match: BasenamePatternMatch): boolean {
-  if (match.pattern === '*') return match.basename.length > 0;
-  if (!match.pattern.startsWith('*.')) return match.pattern === match.basename;
-  return match.basename.endsWith(match.pattern.slice(1));
-}
-
-function resourceClaimMatchesPath(request: ResourcePathMatchRequest): boolean {
-  if (request.claim.startsWith('git:')) return false;
-  if (!isValidTaskResourceClaim(request.claim)) return false;
-  if (request.claim.endsWith('/**')) {
-    const root = request.claim.slice(0, -3);
-    return request.path === root || request.path.startsWith(`${root}/`);
-  }
-  if (request.claim.startsWith('**/')) {
-    const pattern = request.claim.slice(3);
-    const slash = request.path.lastIndexOf('/');
-    const basename = request.path.slice(slash + 1);
-    const match: BasenamePatternMatch = { pattern, basename };
-    return wildcardBasenameMatches(match);
-  }
-  const lastSlash = request.claim.lastIndexOf('/');
-  const basenamePattern = request.claim.slice(lastSlash + 1);
-  if (basenamePattern.startsWith('*')) {
-    const parent = request.claim.slice(0, lastSlash);
-    const pathSlash = request.path.lastIndexOf('/');
-    const pathParent = pathSlash === -1 ? '' : request.path.slice(0, pathSlash);
-    const pathBasename = request.path.slice(pathSlash + 1);
-    const match: BasenamePatternMatch = {
-      pattern: basenamePattern,
-      basename: pathBasename,
-    };
-    return pathParent === parent && wildcardBasenameMatches(match);
-  }
-  return request.path === request.claim;
-}
-
-function validateClaims(claims: readonly string[]): void {
-  if (claims.length === 0) {
-    throw new Error(
-      'Commit handoff requires at least one allowed write claim.',
-    );
-  }
-  for (const claim of claims) {
-    if (!isValidTaskResourceClaim(claim) || claim.startsWith('git:')) {
-      throw new Error(`Commit handoff has an invalid write claim: ${claim}.`);
-    }
-  }
 }
 
 function assertSafeTreeEntry(inspection: TreeEntryInspection): void {
@@ -209,6 +160,32 @@ function assertBaselineClaimsSafe(
   }
 }
 
+export function moduleCommitChangedPaths(
+  request: ModuleCommitPathRequest,
+): readonly string[] {
+  if (
+    !EXACT_GIT_COMMIT.test(request.baselineCommit) ||
+    !EXACT_GIT_COMMIT.test(request.commit)
+  ) {
+    throw new Error('Commit path inspection requires exact Git commits.');
+  }
+  const invocation: ModuleGitInvocation = {
+    cwd: request.workspace.worktreePath,
+    args: [
+      'diff',
+      '--name-only',
+      '-z',
+      '--no-renames',
+      request.baselineCommit,
+      request.commit,
+      '--',
+    ],
+  };
+  return decodeNullSeparatedGitPaths(
+    runModuleDeliveryGit(gitRequest(invocation)).stdout,
+  );
+}
+
 export function verifyModuleCommitHandoff(
   request: VerifyModuleCommitHandoffRequest,
 ): VerifiedModuleCommitHandoff {
@@ -218,7 +195,7 @@ export function verifyModuleCommitHandoff(
   ) {
     throw new Error('Commit handoff baseline does not match its workspace.');
   }
-  validateClaims(request.allowedWriteClaims);
+  validateModuleWriteClaims(request.allowedWriteClaims);
   assertPreparedModuleWorktreeIdentity(request.workspace);
   assertModuleWorktreeClean(request.workspace);
   assertBaselineClaimsSafe(request);
@@ -254,21 +231,12 @@ export function verifyModuleCommitHandoff(
   if (gitText(runModuleDeliveryGit(gitRequest(countInvocation))) !== '1') {
     throw new Error('Commit handoff must contain exactly one commit.');
   }
-  const pathsInvocation: ModuleGitInvocation = {
-    cwd: request.workspace.worktreePath,
-    args: [
-      'diff',
-      '--name-only',
-      '-z',
-      '--no-renames',
-      request.baselineCommit,
-      commit,
-      '--',
-    ],
+  const pathRequest: ModuleCommitPathRequest = {
+    workspace: request.workspace,
+    baselineCommit: request.baselineCommit,
+    commit,
   };
-  const changedPaths = decodeNullSeparatedGitPaths(
-    runModuleDeliveryGit(gitRequest(pathsInvocation)).stdout,
-  );
+  const changedPaths = moduleCommitChangedPaths(pathRequest);
   if (changedPaths.length === 0) {
     throw new Error('Commit handoff commit must be nonempty.');
   }

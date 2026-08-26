@@ -11,6 +11,8 @@ export type GitCommandRequest = {
   readonly cwd: string;
   readonly args: readonly string[];
   readonly allowFailure?: boolean;
+  readonly indexFile?: string;
+  readonly commitTimestamp?: string;
 };
 
 export type GitCommandResult = {
@@ -45,9 +47,18 @@ export function runModuleDeliveryGit(
     '--literal-pathspecs',
     ...request.args,
   ];
+  const environment = scrubbedGitEnvironment();
+  if (request.indexFile) environment.GIT_INDEX_FILE = request.indexFile;
+  if (request.commitTimestamp) {
+    if (!/^@[0-9]+ \+0000$/u.test(request.commitTimestamp)) {
+      throw new Error('Git commit timestamp must be canonical UTC epoch time.');
+    }
+    environment.GIT_AUTHOR_DATE = request.commitTimestamp;
+    environment.GIT_COMMITTER_DATE = request.commitTimestamp;
+  }
   const options: SpawnSyncOptionsWithBufferEncoding = {
     cwd: request.cwd,
-    env: scrubbedGitEnvironment(),
+    env: environment,
     encoding: 'buffer',
     maxBuffer: MAX_GIT_OUTPUT_BYTES,
     stdio: ['ignore', 'pipe', 'pipe'],
