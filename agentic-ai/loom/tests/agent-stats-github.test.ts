@@ -1,11 +1,15 @@
 import { describe, expect, test } from 'bun:test';
-import { asUntrustedYamlNode } from '../src/lib/guards.ts';
+import {
+  asUntrustedYamlNode,
+  sealUntrustedYamlMap,
+} from '../src/lib/guards.ts';
 import {
   buildActionsEvidence,
   buildReviewEvidence,
   type BuildActionsEvidenceRequest,
   type BuildReviewEvidenceRequest,
 } from '../src/lib/agent-stats-github.ts';
+import { mergeReviewedDeliveryHeads } from '../src/lib/agent-stats-github-delivery.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -159,6 +163,10 @@ describe('agent stats GitHub evidence', () => {
     const evidence = buildActionsEvidence(request);
 
     expect(evidence.validationCycles).toHaveLength(2);
+    expect(evidence.validationCycles.map((cycle) => cycle.workflow)).toEqual([
+      'Rust ecosystem checks',
+      'Web research',
+    ]);
   });
 
   test('excludes workflow attempts started after merge', () => {
@@ -177,6 +185,7 @@ describe('agent stats GitHub evidence', () => {
       startedAt: '2026-08-01T10:06:00Z',
       finishedAt: '2026-08-01T10:07:00Z',
       conclusion: 'success',
+      status: 'in_progress',
     };
     const pages = asUntrustedYamlNode([
       {
@@ -295,6 +304,68 @@ describe('agent stats GitHub evidence', () => {
     expect(evidence.events[0]?.latency_seconds).toBe(300);
     expect(evidence.events[1]?.outcome).toBe('clean');
     expect(evidence.events[1]?.latency_seconds).toBe(180);
+  });
+
+  test('counts a substantive review body as one finding', () => {
+    const request: BuildReviewEvidenceRequest = {
+      issueCommentPages: yamlPages([
+        {
+          id: 20,
+          body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
+          created_at: '2026-08-01T10:00:00Z',
+          author_association: 'MEMBER',
+          user: { login: 'github-actions[bot]' },
+        },
+      ]),
+      reviewPages: yamlPages([
+        {
+          id: 502,
+          body: 'Please preserve review evidence for this head.',
+          commit_id: finalHead,
+          submitted_at: '2026-08-01T10:05:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      reviewCommentPages: yamlPages([]),
+      reviewReactionPages: yamlPages([]),
+      knownHeadShas: [finalHead],
+    };
+    const evidence = buildReviewEvidence(request);
+
+    expect(evidence.findingBatchCount).toBe(1);
+    expect(evidence.findingCount).toBe(1);
+    expect(evidence.events[0]?.outcome).toBe('findings');
+  });
+
+  test('adds reviewed heads without Actions to delivery evidence', () => {
+    const actionHeadRecord = {
+      head_sha: finalHead,
+      first_observed_at: '2026-08-01T10:20:00Z',
+      last_observed_at: '2026-08-01T10:25:00Z',
+      final: true,
+      action_run_count: 1,
+      action_seconds: 300,
+      obsolete_action_seconds: 0,
+    };
+    const actionHead = sealUntrustedYamlMap(actionHeadRecord);
+    const reviewEventRecord = {
+      head_sha: firstHead,
+      requested_at: '2026-08-01T10:00:00Z',
+      completed_at: '2026-08-01T10:05:00Z',
+    };
+    const reviewEvent = sealUntrustedYamlMap(reviewEventRecord);
+    const mergeRequest = {
+      actionHeads: [actionHead],
+      reviewEvents: [reviewEvent],
+      finalHeadSha: finalHead,
+    };
+    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+
+    expect(heads).toHaveLength(2);
+    expect(heads[1]?.head_sha).toBe(firstHead);
+    expect(heads[1]?.action_run_count).toBe(0);
+    expect(heads[1]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
+    expect(heads[1]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
   });
 });
 
