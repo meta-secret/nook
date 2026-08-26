@@ -589,7 +589,7 @@ export function isRepositoryStatusComment(
 function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {
   return (
     typeof user === "object" &&
-    user !== null &&
+    !!user &&
     "login" in user &&
     user.login === "github-actions[bot]"
   );
