@@ -18,6 +18,7 @@
   import {
     type EnrollmentSubmitQueue,
     EnrollmentSubmitQueueKind,
+    isSentinelParticipantKeyPending,
     isSentinelParticipantResponsePending,
     PendingVaultCreationKind,
     type VaultCreationQueue,
@@ -74,7 +75,10 @@
   } from '$lib/enrollment/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
+  import {
+    ExistingVaultImportLifecycle,
+    loginUnlockStoreId,
+  } from '$lib/vault/existing-vault-import.svelte'
   import {
     mountBrowserLifecycle,
     THEME_STORAGE_KEY,
@@ -82,9 +86,7 @@
   } from '$lib/app/browser-lifecycle'
   import {
     ActiveVaultKind,
-    LocalVaultCatalogKind,
     LoginSetupKind,
-    LoginVaultSelectionKind,
   } from '$lib/vault/state/provider.svelte'
   import {
     WorkspaceRoute,
@@ -174,6 +176,16 @@
     appLogsPage = isAppLogsPath(window.location.pathname)
     extensionConnectRoute =
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
+    const leavesAccessGate =
+      legalPageState.kind !== LegalRouteKind.Application ||
+      logsPage ||
+      appLogsPage ||
+      extensionConnectRoute
+    if (
+      leavesAccessGate &&
+      isSentinelParticipantKeyPending(pendingVaultCreationState)
+    )
+      finishPendingCreation()
     if (
       legalPageState.kind === LegalRouteKind.Application &&
       !logsPage &&
@@ -294,22 +306,6 @@
     updateApplicationDocument(updateApplicationDocumentArgs)
   })
 
-  function loginUnlockStoreId(): string {
-    if (vault.activeVault.kind === ActiveVaultKind.Open) {
-      const storeId = vault.activeVault.storeId.trim()
-      if (storeId) return storeId
-    }
-    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
-      const storeId = vault.selectedLoginVault.storeId.trim()
-      if (storeId) return storeId
-    }
-    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
-      const storeId = vault.localVaultCatalog.first.storeId.trim()
-      if (storeId) return storeId
-    }
-    return ''
-  }
-
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
@@ -328,7 +324,7 @@
       await vault.connectStagedProvider()
       return
     }
-    let activeStoreId = loginUnlockStoreId()
+    let activeStoreId = loginUnlockStoreId(vault)
     if (existingVaultImport) {
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
@@ -649,7 +645,7 @@
     window.setTimeout(() => {
       if (
         !vault.isAuthenticated &&
-        (loginUnlockStoreId() === request.storeId ||
+        (loginUnlockStoreId(vault) === request.storeId ||
           request.discoveringStagedImport) &&
         extensionDiscoveryStoreId === request.storeId
       ) {
@@ -833,7 +829,7 @@
   })
 
   $effect(() => {
-    const storeId = loginUnlockStoreId()
+    const storeId = loginUnlockStoreId(vault)
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&

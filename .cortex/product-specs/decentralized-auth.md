@@ -87,6 +87,11 @@ The participant invitation has explicit exit behavior:
   authenticated participant to the vault workspace.
 - Reopening the participant flow requires another owner-issued invitation URL.
 
+Sentinel owner setup also treats an unfinished initiator-key protection step as
+route-local work. Leaving the access gate for legal, diagnostic, or extension
+routes cancels that queued key preparation. Returning requires the owner to
+re-enter Card Stack setup explicitly.
+
 ### 2.1 Local device-key protection
 
 Before provider credential or device-key work, follow this ceremony:

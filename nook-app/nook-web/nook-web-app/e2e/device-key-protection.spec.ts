@@ -423,6 +423,43 @@ test.describe('passkey device-key protection', () => {
     await participantTwo.context.close()
   })
 
+  test('cancels queued initiator keys when navigation unmounts the access gate', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    await page.goto('/app/')
+    await page.getByTestId('get-started-path-sentinel').click()
+    await page.getByTestId('sentinel-dashboard-card-stack').click()
+    await page.getByTestId('sentinel-onboarding-create-keys').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    await page.evaluate(() => {
+      history.pushState({}, '', '/privacy')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+    await expect(page.getByTestId('legal-document-page')).toHaveAttribute(
+      'data-legal-page',
+      'privacy',
+    )
+    await page.goBack()
+    await expect(page).toHaveURL(/\/vault$/)
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(page.getByTestId('get-started-path-sentinel')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+
+    await page.getByTestId('get-started-path-sentinel').click()
+    await page.getByTestId('sentinel-dashboard-card-stack').click()
+    await page.getByTestId('sentinel-onboarding-create-keys').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  })
+
   test('resumes an invitation response after participant protection setup', async ({
     page,
   }) => {
