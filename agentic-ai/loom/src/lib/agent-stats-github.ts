@@ -31,7 +31,6 @@ import {
 } from './agent-stats-github-validation.ts';
 import {
   deliveryHeadStarts,
-  gitHubCommitTimestamp,
   maximumTimestamp,
   mergeReviewedDeliveryHeads,
   minimumTimestamp,
@@ -91,9 +90,7 @@ export type BuildActionsEvidenceRequest = {
   readonly finalHeadSha: string;
   readonly mergedAt: string;
   readonly reviewEvents: readonly UntrustedYamlMap[];
-  readonly finalHeadObservedAt?: string;
-  readonly deliveryHeadOrder?: readonly string[];
-  readonly commitHeads?: readonly DeliveryHeadStart[];
+  readonly deliveryHeadOrder: readonly string[];
 };
 
 export type BuildReviewEvidenceRequest = {
@@ -194,19 +191,11 @@ export function collectAgentStatsGitHubEvidence(
   };
   const commitPages = runGitHubApi(commitsRequest);
   const knownHeadShas: string[] = [];
-  const commitHeads: DeliveryHeadStart[] = [];
-  let finalHeadObservedAt = '';
   for (const commit of flattenApiPages(commitPages)) {
     if (!isRecord(commit)) continue;
     const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
     const headSha = requiredStringProperty(propertyRequest);
-    const observedAt = gitHubCommitTimestamp(commit);
     knownHeadShas.push(headSha);
-    const commitHead: DeliveryHeadStart = { headSha, observedAt };
-    commitHeads.push(commitHead);
-    if (headSha === request.finalHeadSha) {
-      finalHeadObservedAt = observedAt;
-    }
   }
   if (!knownHeadShas.includes(request.finalHeadSha)) {
     knownHeadShas.push(request.finalHeadSha);
@@ -231,9 +220,7 @@ export function collectAgentStatsGitHubEvidence(
     finalHeadSha: request.finalHeadSha,
     mergedAt: request.mergedAt,
     reviewEvents: reviews.events,
-    finalHeadObservedAt,
     deliveryHeadOrder: knownHeadShas,
-    commitHeads,
   };
   const actions = buildActionsEvidence(actionsRequest);
   const deliveryHeadsRequest = {
@@ -310,9 +297,7 @@ export function buildActionsEvidence(
     actions: observations,
     reviewEvents: request.reviewEvents,
     finalHeadSha: request.finalHeadSha,
-    finalHeadObservedAt: request.finalHeadObservedAt ?? '',
-    deliveryHeadOrder: request.deliveryHeadOrder ?? [],
-    commitHeads: request.commitHeads ?? [],
+    deliveryHeadOrder: request.deliveryHeadOrder,
   };
   const headStarts = deliveryHeadStarts(headStartsRequest);
   const headShas = headStarts.map((head) => head.headSha);

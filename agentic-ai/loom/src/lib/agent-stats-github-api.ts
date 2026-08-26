@@ -114,7 +114,14 @@ function actionAttemptRequestedValidation(
     record: request.attemptRecord,
     key: 'name',
   };
-  if (requiredStringProperty(workflowRequest) !== 'PR') return true;
+  const workflow = requiredStringProperty(workflowRequest);
+  const gateJobName =
+    workflow === 'PR'
+      ? 'Validate explicit CI request'
+      : workflow === 'Rust ecosystem checks'
+        ? 'Validate explicit ecosystem request'
+        : '';
+  if (gateJobName.length === 0) return true;
   const jobsRequest: GitHubApiRequest = {
     repoRoot: request.repoRoot,
     endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
@@ -125,17 +132,35 @@ function actionAttemptRequestedValidation(
       failGitHubCollection('GitHub Actions jobs page must be a mapping');
     }
     const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
-    for (const job of requiredArrayProperty(jobsProperty)) {
-      if (!isRecord(job)) continue;
-      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-      if (
-        requiredStringProperty(nameRequest) !== 'Validate explicit CI request'
-      ) {
-        return true;
-      }
-    }
+    const validationRequest: ActionJobsRequestedValidationRequest = {
+      jobs: requiredArrayProperty(jobsProperty),
+      gateJobName,
+    };
+    if (actionJobsRequestedValidation(validationRequest)) return true;
   }
   return false;
+}
+
+export type ActionJobsRequestedValidationRequest = {
+  readonly jobs: readonly UntrustedYamlNode[];
+  readonly gateJobName: string;
+};
+
+export function actionJobsRequestedValidation(
+  request: ActionJobsRequestedValidationRequest,
+): boolean {
+  return request.jobs.some((job) => {
+    if (!isRecord(job)) return false;
+    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+    const conclusionRequest: GitHubPropertyRequest = {
+      record: job,
+      key: 'conclusion',
+    };
+    return (
+      requiredStringProperty(nameRequest) !== request.gateJobName &&
+      stringProperty(conclusionRequest) !== 'skipped'
+    );
+  });
 }
 
 export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {

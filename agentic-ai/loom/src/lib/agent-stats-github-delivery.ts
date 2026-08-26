@@ -1,10 +1,4 @@
-import {
-  UntrustedYamlPropertyPresence,
-  isRecord,
-  sealUntrustedYamlMap,
-  untrustedYamlProperty,
-  type UntrustedYamlMap,
-} from './guards.ts';
+import { sealUntrustedYamlMap, type UntrustedYamlMap } from './guards.ts';
 import { stringProperty } from './agent-stats-github-api.ts';
 
 type TimestampExtremaRequest = {
@@ -31,9 +25,7 @@ type DeliveryHeadStartsRequest = {
   readonly actions: readonly ActionHeadStart[];
   readonly reviewEvents: readonly UntrustedYamlMap[];
   readonly finalHeadSha: string;
-  readonly finalHeadObservedAt: string;
   readonly deliveryHeadOrder: readonly string[];
-  readonly commitHeads: readonly DeliveryHeadStart[];
 };
 
 type RetainEarlierStartRequest = {
@@ -139,22 +131,6 @@ export function deliveryHeadStarts(
     };
     retainEarlierStart(retainRequest);
   }
-  for (const commitHead of request.commitHeads) {
-    const retainRequest: RetainEarlierStartRequest = {
-      starts: earliestByHead,
-      headSha: commitHead.headSha,
-      observedAt: commitHead.observedAt,
-    };
-    retainEarlierStart(retainRequest);
-  }
-  if (request.finalHeadObservedAt.length > 0) {
-    const retainRequest: RetainEarlierStartRequest = {
-      starts: earliestByHead,
-      headSha: request.finalHeadSha,
-      observedAt: request.finalHeadObservedAt,
-    };
-    retainEarlierStart(retainRequest);
-  }
   const unsorted = [...earliestByHead.entries()].map((entry) => ({
     headSha: entry[0],
     observedAt: entry[1],
@@ -183,33 +159,6 @@ export function deliveryHeadStarts(
     if (!inserted) sorted.push(candidate);
   }
   return sorted;
-}
-
-export function gitHubCommitTimestamp(record: UntrustedYamlMap): string {
-  const commitRequest = { record, key: 'commit' };
-  const commitProperty = untrustedYamlProperty(commitRequest);
-  if (
-    commitProperty.presence === UntrustedYamlPropertyPresence.Absent ||
-    !isRecord(commitProperty.value)
-  ) {
-    return '';
-  }
-  const committerRequest = {
-    record: commitProperty.value,
-    key: 'committer',
-  };
-  const committerProperty = untrustedYamlProperty(committerRequest);
-  if (
-    committerProperty.presence === UntrustedYamlPropertyPresence.Absent ||
-    !isRecord(committerProperty.value)
-  ) {
-    return '';
-  }
-  const dateRequest: PropertyRequest = {
-    record: committerProperty.value,
-    key: 'date',
-  };
-  return property(dateRequest);
 }
 
 function retainEarlierStart(request: RetainEarlierStartRequest): void {
