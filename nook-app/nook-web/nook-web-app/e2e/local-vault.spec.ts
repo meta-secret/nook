@@ -296,6 +296,11 @@ test.describe('local vault', () => {
             )
           request.onsuccess = () => {
             const db = request.result
+            if (!db.objectStoreNames.contains(target.storeName)) {
+              db.close()
+              resolve(false)
+              return
+            }
             const transaction = db.transaction(target.storeName, 'readonly')
             const read = transaction
               .objectStore(target.storeName)

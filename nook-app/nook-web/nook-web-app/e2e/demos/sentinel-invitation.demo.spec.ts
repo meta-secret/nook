@@ -87,12 +87,18 @@ test('Sentinel creation invites participants instead of standalone join', async 
     await expect(
       participant.getByTestId('sentinel-genesis-connect-device'),
     ).toBeVisible()
-    await expect(
-      participant.getByTestId('create-vault-wizard-back'),
-    ).not.toBeVisible()
+    const invitationBack = participant.getByTestId('create-vault-wizard-back')
+    await expect(invitationBack).toBeVisible()
     await expect(
       participant.getByTestId('sentinel-genesis-share-request-input'),
     ).not.toHaveValue('')
+    await invitationBack.click()
+    await expect(
+      participant.getByTestId('sentinel-genesis-participant-step'),
+    ).toHaveCount(0)
+    await expect(
+      participant.getByTestId('get-started-path-chooser'),
+    ).toBeVisible()
   } finally {
     await participantContext.close()
   }

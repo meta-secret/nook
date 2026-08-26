@@ -106,20 +106,23 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     identityCreationOpen = false
     vault.devicesAccessIdentityProtectionOpen = false
-    vault.devicesAccessIdentityTransitionPending = false
-    if (!dashboardMounted) return
     const providerLoadOptions: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
     }
     try {
       await vault.loadProviders(providerLoadOptions)
       vault.applyActiveProviderCredentials()
+      // Navigation can unmount the dashboard while WebAuthn is still in
+      // flight. Keep the login gate alive until the selected identity's
+      // providers are available, regardless of which shell now owns it.
+      vault.devicesAccessIdentityTransitionPending = false
     } catch (error) {
       vault.errorMsg =
         error instanceof Error
           ? error.message
           : vault.t(I18N_KEYS.ErrorsDeviceProtectionAuthorizationRequired)
     }
+    if (!dashboardMounted) return
     directoryLoadState = { kind: IdentityDirectoryLoadKind.Loading }
     await reloadSnapshots()
   }

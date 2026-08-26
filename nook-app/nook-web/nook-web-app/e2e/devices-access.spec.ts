@@ -324,7 +324,17 @@ test.describe('devices and access dashboard', () => {
     await page.goForward()
     await expect(page).toHaveURL(/\/devices-access$/)
     await page.getByTestId('devices-access-identity-protection-flow').waitFor()
-    await page.getByTestId('devices-access-back').click()
+    await page.evaluate(() => {
+      const credentials = navigator.credentials
+      const getCredential = credentials.get.bind(credentials)
+      credentials.get = async (options) => {
+        await new Promise((resolve) => window.setTimeout(resolve, 250))
+        return getCredential(options)
+      }
+    })
+    await page.getByTestId('device-protection-unlock-btn').click()
+    await page.goBack()
+    await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })

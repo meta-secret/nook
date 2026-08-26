@@ -34,6 +34,7 @@
     usesExtensionDeviceIdentity,
     showPasskeyOverlay,
     sentinelInvitationRequest,
+    sentinelParticipantResponsePending,
     sentinelParticipantResponse,
     sentinelOnboardingPackage,
     onUnlock,
@@ -54,6 +55,7 @@
     usesExtensionDeviceIdentity: boolean
     showPasskeyOverlay: boolean
     sentinelInvitationRequest: string
+    sentinelParticipantResponsePending: boolean
     sentinelParticipantResponse: string
     sentinelOnboardingPackage: string
     onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
@@ -123,6 +125,7 @@
         prefillEnrollmentCode={vault.prefillEnrollmentCode}
         enrollmentFromUrlPending={vault.enrollmentFromUrlPending}
         {sentinelInvitationRequest}
+        {sentinelParticipantResponsePending}
         {sentinelParticipantResponse}
         {sentinelOnboardingPackage}
         {onAcceptSentinelOnboardingPackage}

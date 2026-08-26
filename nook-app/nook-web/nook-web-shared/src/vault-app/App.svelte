@@ -15,13 +15,12 @@
     type ExtensionConnectIntent,
   } from '$lib/app/route-state'
   import { ColorMode, manualColorMode, systemColorMode } from '$lib/app/theme'
-  import type {
-    EnrollmentSubmitQueue,
-    VaultCreationQueue,
-  } from '$lib/vault/creation-queue'
   import {
+    type EnrollmentSubmitQueue,
     EnrollmentSubmitQueueKind,
+    isSentinelParticipantResponsePending,
     PendingVaultCreationKind,
+    type VaultCreationQueue,
     VaultCreationQueueKind,
   } from '$lib/vault/creation-queue'
   import AppSurface from '$lib/components/app/AppSurface.svelte'
@@ -155,7 +154,6 @@
       ? consumeSentinelOnboardingFromLocation()
       : '',
   )
-
   function syncRoute() {
     if (!IS_SIMPLE_APP) {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
@@ -216,7 +214,6 @@
       }
     }
   }
-
   $effect(() => {
     if (!vault.isAuthenticated || !('window' in globalThis)) return
     const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
@@ -476,7 +473,6 @@
     }
     await vault.loadDb()
   }
-
   async function handleSettingsReconnect() {
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
       await vault.connectAndSyncStagedProvider()
@@ -484,7 +480,6 @@
     }
     await vault.manualSync()
   }
-
   function toggleColorMode() {
     followsSystemColorMode = false
     const manualColorModeArgs: Parameters<typeof manualColorMode>[0] = {
@@ -493,7 +488,6 @@
     }
     colorMode = manualColorMode(manualColorModeArgs)
   }
-
   const appVersion = APP_VERSION
   const shellWidth = $derived(
     vault.settingsOpen &&
@@ -951,6 +945,9 @@
       showExistingVaultPasskeyOverlay ||
       showEnrollmentPasskeyOverlay,
     sentinelInvitationRequest,
+    sentinelParticipantResponsePending: isSentinelParticipantResponsePending(
+      pendingVaultCreationState,
+    ),
     sentinelParticipantResponse,
     sentinelOnboardingPackage,
     onUnlock: handleUnlock,
@@ -959,7 +956,10 @@
     onUnlockWithPassword: (unlockRequest) =>
       existingVaultImportLifecycle.unlockWithPassword(unlockRequest),
     onSwitchVault: () => existingVaultImportLifecycle.leave(),
-    onSentinelUnlocked: () => existingVaultImportLifecycle.finish(),
+    onSentinelUnlocked: () => {
+      sentinelInvitationRequest = ''
+      return existingVaultImportLifecycle.finish()
+    },
     onCreateDeviceVault: handleCreateDeviceVault,
     onStartSentinelGenesis: handleStartSentinelGenesis,
     onCreateSentinelParticipantKey: handleCreateSentinelParticipantKey,

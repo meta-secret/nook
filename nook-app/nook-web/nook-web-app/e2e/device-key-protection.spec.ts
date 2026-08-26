@@ -4,6 +4,7 @@ import {
   createIsolatedContext,
   disableVaultIdleLock,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  signedSentinelInvitation,
   waitForPersistedAppLog,
 } from './helpers'
 
@@ -420,6 +421,40 @@ test.describe('passkey device-key protection', () => {
 
     await participantOne.context.close()
     await participantTwo.context.close()
+  })
+
+  test('resumes an invitation response after participant protection setup', async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      localStorage.setItem('nook_e2e_manual_passkey', 'true')
+    })
+    const invitation = await signedSentinelInvitation()
+    await page.goto(`/vault#sentinel-request=${encodeURIComponent(invitation)}`)
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('sentinel-genesis-connect-device').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await revealDeviceProtectionCreateWorkflow(page)
+    await page
+      .getByTestId('device-protection-label-input')
+      .fill('Protected invitation participant')
+    await clickDeviceProtectionSetup(page)
+    const generatedResponse = page.getByTestId(
+      'sentinel-genesis-generated-response',
+    )
+    await expect(generatedResponse).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await expect(generatedResponse).toHaveValue(/#sentinel-response=/)
+    await page.getByTestId('sentinel-genesis-finish-invitation').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toHaveCount(0)
+    await expect(page.getByTestId('app-shell-content')).not.toBeEmpty()
   })
 
   test('derives the device identity and requires passkey authorization after reload', async ({

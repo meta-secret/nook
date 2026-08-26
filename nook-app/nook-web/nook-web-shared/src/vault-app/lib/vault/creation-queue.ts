@@ -32,6 +32,15 @@ export type VaultCreationQueue =
       request: PendingVaultCreation;
     };
 
+export function isSentinelParticipantResponsePending(
+  queue: VaultCreationQueue,
+): boolean {
+  return (
+    queue.kind === VaultCreationQueueKind.WaitingForDevice &&
+    queue.request.kind === PendingVaultCreationKind.SentinelParticipantResponse
+  );
+}
+
 export type PendingExistingVaultImport = {
   storeId: string;
   previousActiveVault: ActiveVault;

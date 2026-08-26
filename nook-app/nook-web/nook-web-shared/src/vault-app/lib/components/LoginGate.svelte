@@ -121,6 +121,7 @@
     deviceAuthorizationPending = false,
     usesExtensionDeviceIdentity = false,
     sentinelInvitationRequest = '',
+    sentinelParticipantResponsePending = false,
     sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
@@ -157,6 +158,7 @@
     deviceAuthorizationPending?: boolean
     usesExtensionDeviceIdentity?: boolean
     sentinelInvitationRequest?: string
+    sentinelParticipantResponsePending?: boolean
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     onAcceptSentinelOnboardingPackage?: (
@@ -567,9 +569,11 @@
         sentinelGenesisParticipants={vault.sentinelGenesisParticipants}
         sentinelGenesisDeliveries={vault.sentinelGenesisDeliveries}
         {sentinelInvitationRequest}
+        {sentinelParticipantResponsePending}
         {sentinelParticipantResponse}
         {sentinelOnboardingPackage}
         {onAcceptSentinelOnboardingPackage}
+        onFinishSentinelInvitation={onSentinelUnlocked}
         onConnectStorage={() => {
           vault.beginExistingVaultOpen()
           showProviderSetupLink = true
