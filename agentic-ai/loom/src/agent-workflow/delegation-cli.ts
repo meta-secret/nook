@@ -3,6 +3,16 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { AgentAttemptJournal } from './agent-journal.ts';
 import { AgentAttemptEventKind } from './agent-events.ts';
+import { readVerifiedBarrierAttempt } from './attempt-verification.ts';
+import {
+  decodeDelegationAdmissionRequest,
+  decodeDelegationPlan,
+} from './delegation-codec.ts';
+import {
+  admitDelegationAttempt,
+  requireDelegationAttemptAdmission,
+  startDelegationRun,
+} from './delegation-run-journal.ts';
 import {
   AgentAttemptAdapterKind,
   AgentAttemptParentKind,
@@ -14,6 +24,15 @@ import { WorkflowRuntimeActivityKind } from './events.ts';
 import { decodeWorkflowTaskOutput } from './structured-result-codec.ts';
 import type { AgentAttemptEventWithoutMetadata } from './agent-events.ts';
 import type { AgentAttemptJournalConfiguration } from './agent-journal.ts';
+import type { ReadParentAttemptArgs } from './attempt-verification.ts';
+import type {
+  DelegationAdmissionRequest,
+  DelegationAttemptDeclaration,
+} from './delegation-domain.ts';
+import type {
+  AdmitDelegationAttemptInput,
+  StartDelegationRunInput,
+} from './delegation-run-journal.ts';
 import type {
   AgentAttemptParent,
   TaskTerminal,
@@ -24,16 +43,48 @@ import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.
 const HELP = `Loom delegated agent journal
 
 Usage:
+  loom-agent-delegation start --plan <plan.json> --working-directory <repo-root>
+  loom-agent-delegation admit --request <request.json> --working-directory <repo-root>
   loom-agent-delegation record --request <request.json> --working-directory <repo-root>
 
-The request declares runId, sourceCommit, task, agent, attempt, depth, parent,
-bounded activities, and a typed terminal. The command creates one finalized,
-content-addressed agent attempt under workflow/processing/delegated-agent-work.
+Start persists one immutable source-bound delegation plan. Admit authorizes one
+exactly declared attempt before dispatch. Record requires that admission,
+creates the finalized content-addressed journal, and then rereads and verifies
+its persisted event, result, and semantic view.
 `;
 
-type DelegationCommandLine = {
+enum DelegationCommandKind {
+  Start = 'start',
+  Admit = 'admit',
+  Record = 'record',
+}
+
+type DelegationStartCommandLine = {
+  readonly kind: DelegationCommandKind.Start;
+  readonly planPath: string;
+  readonly workingDirectory: string;
+};
+
+type DelegationRecordCommandLine = {
+  readonly kind: DelegationCommandKind.Record;
   readonly requestPath: string;
   readonly workingDirectory: string;
+};
+
+type DelegationAdmitCommandLine = {
+  readonly kind: DelegationCommandKind.Admit;
+  readonly requestPath: string;
+  readonly workingDirectory: string;
+};
+
+type DelegationCommandLine =
+  | DelegationStartCommandLine
+  | DelegationAdmitCommandLine
+  | DelegationRecordCommandLine;
+
+type DelegationStartResponse = {
+  readonly receipt: Awaited<ReturnType<typeof startDelegationRun>>;
+  readonly rootAdmission: Awaited<ReturnType<typeof admitDelegationAttempt>>;
 };
 
 type DelegationActivity = {
@@ -64,6 +115,62 @@ async function main(): Promise<number> {
     console.error(HELP);
     return 2;
   }
+  if (commandLine.kind === DelegationCommandKind.Start) {
+    return start(commandLine);
+  }
+  if (commandLine.kind === DelegationCommandKind.Admit) {
+    return admit(commandLine);
+  }
+  return record(commandLine);
+}
+
+async function start(commandLine: DelegationStartCommandLine): Promise<number> {
+  const serialized = await readFile(commandLine.planPath, 'utf8');
+  const plan = decodeDelegationPlan(serialized);
+  const input: StartDelegationRunInput = {
+    workingDirectory: commandLine.workingDirectory,
+    plan,
+  };
+  const receipt = await startDelegationRun(input);
+  const root = plan.attempts.find(
+    (declaration) =>
+      declaration.identity.task === plan.rootMaterializer.task &&
+      declaration.identity.agent === plan.rootMaterializer.agent &&
+      declaration.identity.attempt === plan.rootMaterializer.attempt,
+  );
+  if (!root) throw new Error('Delegation root materializer is missing.');
+  const rootAdmissionRequestInput: AdmissionRequestForDeclarationInput = {
+    runId: plan.runId,
+    sourceCommit: plan.sourceCommit,
+    declaration: root,
+  };
+  const admissionInput: AdmitDelegationAttemptInput = {
+    workingDirectory: commandLine.workingDirectory,
+    runId: plan.runId,
+    request: admissionRequestForDeclaration(rootAdmissionRequestInput),
+  };
+  const rootAdmission = await admitDelegationAttempt(admissionInput);
+  const response: DelegationStartResponse = { receipt, rootAdmission };
+  console.log(JSON.stringify(response));
+  return 0;
+}
+
+async function admit(commandLine: DelegationAdmitCommandLine): Promise<number> {
+  const serialized = await readFile(commandLine.requestPath, 'utf8');
+  const request = decodeDelegationAdmissionRequest(serialized);
+  const input: AdmitDelegationAttemptInput = {
+    workingDirectory: commandLine.workingDirectory,
+    runId: request.runId,
+    request,
+  };
+  const receipt = await admitDelegationAttempt(input);
+  console.log(JSON.stringify(receipt));
+  return 0;
+}
+
+async function record(
+  commandLine: DelegationRecordCommandLine,
+): Promise<number> {
   const serialized = await readFile(commandLine.requestPath, 'utf8');
   const request = JSON.parse(serialized) as DelegationRecordRequest;
   assertRequest(request);
@@ -75,6 +182,23 @@ async function main(): Promise<number> {
     DelegatedAgentWorkflowName.AgentWork,
     request.runId,
   );
+  const admissionRequest: DelegationAdmissionRequest = {
+    runId: request.runId,
+    sourceCommit: request.sourceCommit,
+    identity: {
+      task: request.task,
+      agent: request.agent,
+      attempt: request.attempt,
+    },
+    depth: request.depth,
+    parent: request.parent,
+  };
+  const admissionInput: AdmitDelegationAttemptInput = {
+    workingDirectory: commandLine.workingDirectory,
+    runId: request.runId,
+    request: admissionRequest,
+  };
+  const admission = await requireDelegationAttemptAdmission(admissionInput);
   const journalConfiguration: AgentAttemptJournalConfiguration = {
     adapter: AgentAttemptAdapterKind.GenericDelegationRecorder,
     runDirectory,
@@ -100,30 +224,76 @@ async function main(): Promise<number> {
     await journal.append(event);
   }
   const processing = await journal.finalize(terminal);
-  const response = { runDirectory, processing };
+  const verificationRequest: ReadParentAttemptArgs = {
+    runDirectory,
+    runId: request.runId,
+    workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
+    sourceCommit: request.sourceCommit,
+    identity: {
+      task: request.task,
+      agent: request.agent,
+      attempt: request.attempt,
+      depth: request.depth,
+    },
+  };
+  await readVerifiedBarrierAttempt(verificationRequest);
+  const response = { runDirectory, admission, processing };
   console.log(JSON.stringify(response));
   return 0;
+}
+
+type AdmissionRequestForDeclarationInput = {
+  readonly runId: string;
+  readonly sourceCommit: string;
+  readonly declaration: DelegationAttemptDeclaration;
+};
+
+function admissionRequestForDeclaration(
+  input: AdmissionRequestForDeclarationInput,
+): DelegationAdmissionRequest {
+  return {
+    runId: input.runId,
+    sourceCommit: input.sourceCommit,
+    identity: input.declaration.identity,
+    depth: input.declaration.depth,
+    parent: input.declaration.parent,
+  };
 }
 
 function parseCommandLine(
   argv: readonly string[],
 ): DelegationCommandLine | false {
-  if (argv.length !== 5 || argv[0] !== 'record') return false;
-  const requestFlag = argv.indexOf('--request');
+  if (argv.length !== 5) return false;
+  const command = argv[0];
   const workingDirectoryFlag = argv.indexOf('--working-directory');
-  const requestPath = argv[requestFlag + 1];
   const workingDirectory = argv[workingDirectoryFlag + 1];
   if (
-    requestFlag !== 1 ||
     workingDirectoryFlag !== 3 ||
-    !requestPath ||
     !workingDirectory ||
-    requestPath.startsWith('--') ||
     workingDirectory.startsWith('--')
   ) {
     return false;
   }
+  if (command === DelegationCommandKind.Start && argv[1] === '--plan') {
+    const planPath = argv[2];
+    if (!planPath || planPath.startsWith('--')) return false;
+    return {
+      kind: DelegationCommandKind.Start,
+      planPath: resolve(planPath),
+      workingDirectory: resolve(workingDirectory),
+    };
+  }
+  if (
+    (command !== DelegationCommandKind.Admit &&
+      command !== DelegationCommandKind.Record) ||
+    argv[1] !== '--request'
+  ) {
+    return false;
+  }
+  const requestPath = argv[2];
+  if (!requestPath || requestPath.startsWith('--')) return false;
   return {
+    kind: command,
     requestPath: resolve(requestPath),
     workingDirectory: resolve(workingDirectory),
   };

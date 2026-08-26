@@ -200,19 +200,39 @@ The current adapter-bearing attempt schema uses workflow version `2.0.0`.
 The run-level stream remains the single local scheduling authority.
 
 Ordinary coding delegation uses the generic Loom recording adapter when no
-compiled workflow owns the dispatch. The parent declares the run identity and
-lineage before dispatch. The child produces a typed record request containing
-its bounded observable activities and its agent-authored semantic result. After
-the child returns, the parent finalizes that request with:
+compiled workflow owns the dispatch. Before dispatch, the parent writes a
+bounded typed plan with the exact source commit, one depth-one root
+materializer, every attempt and parent identity, and each parent's exact
+all-terminal child barrier. The parent starts that immutable run with:
 
 ```sh
-task loom:agent-delegation:record REQUEST=<request.json>
+task loom:agent-delegation:start PLAN=path/to/plan.json
+```
+
+Loom content-hashes the plan, writes the run declaration, and admits the root
+materializer. Before dispatching each child, the parent submits its exact run,
+source, identity, depth, and parent binding with:
+
+```sh
+task loom:agent-delegation:admit REQUEST=path/to/admission.json
+```
+
+Depth-three admission requires the depth-two parent to have already completed
+with replay-verified evidence. The child then produces a typed record request
+containing its bounded observable activities and agent-authored semantic
+result. After the child returns, the parent finalizes the already admitted
+attempt with:
+
+```sh
+task loom:agent-delegation:record REQUEST=path/to/request.json
 ```
 
 The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
-contract used by compiled workflows. It rejects reuse of an existing attempt
-directory. This gives collaboration-tool subagents a journal boundary without
-making their transcript or Markdown output into scheduling authority.
+contract used by compiled workflows. It rejects undeclared lineage, source
+drift, post-dispatch admission, depth above three, and reuse of an existing
+attempt directory. Run-level aggregation and closure remain a separate
+delivery slice. This gives collaboration-tool subagents a journal boundary
+without making their transcript or Markdown output into scheduling authority.
 The generic adapter cannot record `ModuleExpertEvidence`.
 Named module experts use their isolated invocation adapter and its separately
 verified authorization boundary.
