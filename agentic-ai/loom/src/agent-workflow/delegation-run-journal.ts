@@ -1,6 +1,15 @@
-import { createHash } from 'node:crypto';
-import { appendFile, mkdir, rename, rmdir, writeFile } from 'node:fs/promises';
-import { dirname, join } from 'node:path';
+import { Database, constants as sqliteConstants } from 'bun:sqlite';
+import { createHash, randomUUID } from 'node:crypto';
+import {
+  appendFile,
+  lstat,
+  mkdir,
+  realpath,
+  rename,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 import {
   readVerifiedParentAttempt,
   readVerifiedProjection,
@@ -45,6 +54,13 @@ const EXCLUSIVE_UTF8_WRITE_OPTIONS: {
 } = { encoding: 'utf8', flag: 'wx' };
 const MAX_DELEGATION_PLAN_BYTES = 262_144;
 const MAX_DELEGATION_EVENTS_BYTES = 1_048_576;
+const LIFECYCLE_LOCK_BUSY_TIMEOUT_MILLISECONDS = 30_000;
+const LIFECYCLE_LOCK_OPEN_FLAGS =
+  sqliteConstants.SQLITE_OPEN_READWRITE |
+  sqliteConstants.SQLITE_OPEN_CREATE |
+  sqliteConstants.SQLITE_OPEN_NOFOLLOW |
+  sqliteConstants.SQLITE_OPEN_FULLMUTEX;
+const localLifecycleLockTails = new Map<string, Promise<void>>();
 
 export type StartDelegationRunInput = {
   readonly workingDirectory: string;
@@ -67,6 +83,10 @@ export type LoadedDelegationPlan = DelegationRunReceipt & {
   readonly plan: DelegationPlan;
 };
 
+export type LoadedDelegationRunState = LoadedDelegationPlan & {
+  readonly events: readonly DelegationRunEvent[];
+};
+
 export type AdmitDelegationAttemptInput = LoadDelegationPlanInput & {
   readonly request: DelegationAdmissionRequest;
 };
@@ -76,6 +96,20 @@ export type DelegationAdmissionReceipt = {
   readonly declaration: DelegationAttemptDeclaration;
   readonly eventsPath: string;
   readonly planSha256: string;
+};
+
+export type DelegationLifecycleLockInput = {
+  readonly runDirectory: string;
+};
+
+export type DelegationLifecycleLease = {
+  readonly lockPath: string;
+  readonly database: Database;
+  readonly releaseLocal: () => void;
+};
+
+type LocalLifecycleLease = {
+  readonly release: () => void;
 };
 
 export async function startDelegationRun(
@@ -161,19 +195,104 @@ export async function admitDelegationAttempt(
   input: AdmitDelegationAttemptInput,
 ): Promise<DelegationAdmissionReceipt> {
   const runDirectory = delegationRunDirectory(input);
-  const lockPath = join(runDirectory, '.admission.lock');
-  await mkdir(lockPath);
+  const lockInput: DelegationLifecycleLockInput = { runDirectory };
+  const lease = await acquireDelegationLifecycleLock(lockInput);
   try {
     return await admitWhileLocked(input);
   } finally {
-    await rmdir(lockPath);
+    await releaseDelegationLifecycleLock(lease);
   }
+}
+
+export async function acquireDelegationLifecycleLock(
+  input: DelegationLifecycleLockInput,
+): Promise<DelegationLifecycleLease> {
+  const runDirectoryStatus = await lstat(input.runDirectory);
+  if (
+    runDirectoryStatus.isSymbolicLink() ||
+    !runDirectoryStatus.isDirectory()
+  ) {
+    throw new Error('Delegation lifecycle run directory is unsafe.');
+  }
+  const canonicalRunDirectory = await realpath(input.runDirectory);
+  const lockPath = resolve(canonicalRunDirectory, '.delegation.lock.sqlite');
+  const localLease = await acquireLocalLifecycleLock(lockPath);
+  let database: Database | false = false;
+  try {
+    database = new Database(lockPath, LIFECYCLE_LOCK_OPEN_FLAGS);
+    database.exec(
+      `PRAGMA busy_timeout = ${LIFECYCLE_LOCK_BUSY_TIMEOUT_MILLISECONDS};`,
+    );
+    database.exec('BEGIN EXCLUSIVE;');
+    return { lockPath, database, releaseLocal: localLease.release };
+  } catch {
+    try {
+      if (database !== false) database.close(false);
+    } finally {
+      localLease.release();
+    }
+    throw new Error('Delegation lifecycle lock acquisition failed.');
+  }
+}
+
+export async function releaseDelegationLifecycleLock(
+  lease: DelegationLifecycleLease,
+): Promise<void> {
+  try {
+    lease.database.exec('ROLLBACK;');
+  } finally {
+    try {
+      lease.database.close(false);
+    } finally {
+      lease.releaseLocal();
+    }
+  }
+}
+
+async function acquireLocalLifecycleLock(
+  lockPath: string,
+): Promise<LocalLifecycleLease> {
+  const predecessor =
+    localLifecycleLockTails.get(lockPath) ?? Promise.resolve();
+  let releaseSignal = (): void => {
+    throw new Error('Delegation local lifecycle lease was not initialized.');
+  };
+  const completion = new Promise<void>((resolve) => {
+    releaseSignal = resolve;
+  });
+  const tail = predecessor.then(() => completion);
+  localLifecycleLockTails.set(lockPath, tail);
+  await predecessor;
+  let released = false;
+  const release = (): void => {
+    if (released) return;
+    released = true;
+    releaseSignal();
+    if (localLifecycleLockTails.get(lockPath) === tail) {
+      localLifecycleLockTails.delete(lockPath);
+    }
+  };
+  return { release };
+}
+
+export async function loadDelegationRunState(
+  input: LoadDelegationPlanInput,
+): Promise<LoadedDelegationRunState> {
+  const loaded = await loadDelegationPlan(input);
+  const eventInput: ReadVerifiedEventsInput = {
+    eventsPath: loaded.eventsPath,
+    plan: loaded.plan,
+    planSha256: loaded.planSha256,
+  };
+  const events = await readVerifiedEvents(eventInput);
+  return { ...loaded, events };
 }
 
 export async function requireDelegationAttemptAdmission(
   input: AdmitDelegationAttemptInput,
 ): Promise<DelegationAdmissionReceipt> {
   const loaded = await loadDelegationPlan(input);
+  await assertRunNotFinalized(loaded.runDirectory);
   const eventInput: ReadVerifiedEventsInput = {
     eventsPath: loaded.eventsPath,
     plan: loaded.plan,
@@ -210,6 +329,7 @@ async function admitWhileLocked(
   input: AdmitDelegationAttemptInput,
 ): Promise<DelegationAdmissionReceipt> {
   const loaded = await loadDelegationPlan(input);
+  await assertRunNotFinalized(loaded.runDirectory);
   const eventInput: ReadVerifiedEventsInput = {
     eventsPath: loaded.eventsPath,
     plan: loaded.plan,
@@ -284,6 +404,41 @@ async function admitWhileLocked(
     eventsPath: loaded.eventsPath,
     planSha256: loaded.planSha256,
   };
+}
+
+async function assertRunNotFinalized(runDirectory: string): Promise<void> {
+  const resultPath = join(runDirectory, 'run-result.json');
+  const viewPath = join(runDirectory, 'view.md');
+  const finalized =
+    (await filesystemPathExists(resultPath)) ||
+    (await filesystemPathExists(viewPath));
+  if (finalized) {
+    throw new Error('Delegation run is already finalized.');
+  }
+}
+
+async function filesystemPathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error) {
+    if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function unlinkIfPresent(path: string): Promise<void> {
+  try {
+    await unlink(path);
+  } catch (error) {
+    if (!(error instanceof Error) || !isMissingPathError(error)) throw error;
+  }
+}
+
+function isMissingPathError(error: Error): boolean {
+  return 'code' in error && error.code === 'ENOENT';
 }
 
 type ExistingAdmissionEventInput = {

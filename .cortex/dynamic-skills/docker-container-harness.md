@@ -4,6 +4,8 @@
 
 Enforce container harness stability, cache predictability, and dependency reproducibility across local and CI environments.
 
+This card does not authorize Docker inside k8s or k0s. Cluster execution follows [Kubernetes-Native Cluster Execution](kubernetes-native-cluster-execution.md).
+
 ## Problem Pattern
 
 - Adding Dockerfile `RUN --mount=type=cache` directives that introduce hidden state and serialize concurrent builds.
@@ -39,6 +41,8 @@ Applies to:
 - All Dockerfiles, compose files, and container tasks under `infra/`.
 - Dependency manifests (`Cargo.toml`, `package.json`, `bun.lock`).
 - Local development workflows and CI runners.
+
+Cluster Pods are excluded from local Docker lifecycle guidance. They may use a remote BuildKit build API, but they never host or control a container runtime.
 
 ## Application Checklist
 

@@ -65,13 +65,19 @@ fn extension_and_release_contract_preserve_origin_isolation() -> anyhow::Result<
     for required in [
         "nook-vault-simple/dist",
         "nook-vault-sentinel/dist",
-        "registry.dev.nokey.sh/library/node:24-trixie-slim",
-        "docker run --rm",
-        "npx --yes wrangler@4",
+        "node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler",
+        "wrangler pages project create",
+        "wrangler pages deploy",
     ] {
         assert!(
             deploy_script.contains(required),
             "release vault deploy script missing {required}"
+        );
+    }
+    for forbidden in ["docker run", "npx --yes wrangler"] {
+        assert!(
+            !deploy_script.contains(forbidden),
+            "release vault deployment must run directly in its Kubernetes Pod: {forbidden}"
         );
     }
     let domains_script = read(&root, ".github/scripts/ci-release-attach-prod-domains.sh");

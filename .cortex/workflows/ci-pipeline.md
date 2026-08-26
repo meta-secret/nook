@@ -418,15 +418,19 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
 - Runtime-backed selectors build a run-scoped image on the general ARC set.
   They then execute their internal daemonless task inside an ordinary Pod
   created by `nook-k0s-container` hooks.
+- No cluster Pod hosts or controls Docker, Podman, DinD, or another nested
+  runtime. BuildKit is build-only. Browser tasks run Playwright directly inside
+  the selected Pod image.
 - These selectors are `web:build`, `web:e2e`, `extension:e2e`, `check`,
   `ci:pr`, and `ci:pr:e2e`.
 - Each runtime-backed selector must be dispatched alone. Mixed batches are
   rejected before repository commands execute.
 - Other `remote.yml` selections use the general or Hive ARC scale set. Browser
   tasks use the container scale set.
-- Common Rust test and web/extension check routes use smaller source-sealed image targets.
-- Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
-- These remote-only routes preserve the exact check command while reducing preparation work.
+- Common Rust test and web/extension check image targets remain available to
+  local workflows.
+- Their Docker-backed task selectors are not exposed through ARC until a direct
+  ordinary-Pod implementation exists.
 - Complete trusted PR, Main, manual, agent, and release graphs run on ARC.
 
 **BuildKit cache propagation:**

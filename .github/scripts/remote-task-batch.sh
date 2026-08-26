@@ -8,18 +8,8 @@ catalog() {
 preflight
 arc:runtime
 rust:ci
-bake-cache:prove
-rust:test
-rust:lint
-rust:coverage
-wasm:build
-wasm:test
-wasm:test:browser
-web:check
-web:test
 web:build
 web:e2e
-extension:check
 extension:e2e
 hive:verify
 check
@@ -92,18 +82,8 @@ task_command() {
     preflight) echo "task preflight" ;;
     arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
     rust:ci) echo "task ci:pr:rust" ;;
-    bake-cache:prove) echo "task infra:bake-cache:prove" ;;
-    rust:test) echo "task remote:rust:test" ;;
-    rust:lint) echo "task remote:rust:lint" ;;
-    rust:coverage) echo "task remote:rust:coverage" ;;
-    wasm:build) echo "task wasm:build" ;;
-    wasm:test) echo "task wasm:test" ;;
-    wasm:test:browser) echo "task wasm:test:browser" ;;
-    web:check) echo "task remote:web:check" ;;
-    web:test) echo "task remote:web:test" ;;
     web:build) echo "task web:build" ;;
     web:e2e) echo "task web:test:e2e" ;;
-    extension:check) echo "task remote:extension:check" ;;
     extension:e2e) echo "task extension:test:e2e" ;;
     hive:verify) echo "task hive:verify" ;;
     check) echo "task check" ;;
@@ -117,9 +97,9 @@ task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
     preflight) echo 15 ;;
-    bake-cache:prove|rust:ci|rust:test|rust:lint|wasm:build|wasm:test|web:check|web:test|extension:check|hive:verify) echo 20 ;;
-    wasm:test:browser|web:build) echo 25 ;;
-    rust:coverage|web:e2e|extension:e2e) echo 30 ;;
+    rust:ci|hive:verify) echo 20 ;;
+    web:build) echo 25 ;;
+    web:e2e|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
     ci:pr:e2e) echo 45 ;;
     *) return 2 ;;
@@ -139,38 +119,11 @@ restore_hosted_builder() {
   fi
 }
 
-snapshot_daemon_containers() {
-  if [[ "${NOOK_BUILDKIT_REMOTE:-}" == "1" ]]; then
-    return 0
-  fi
-  docker ps -aq | sort
-}
-
-cleanup_timed_out_daemon_work() {
-  local container
-  local snapshot="$1"
+cleanup_timed_out_buildkit_work() {
   local builder="${NOOK_PR_BUILDX_BUILDER:-}"
   local cleanup_status=0
 
-  if [[ "${NOOK_BUILDKIT_REMOTE:-}" == "1" ]]; then
-    if [[ -n "$builder" ]]; then
-      docker buildx inspect --bootstrap "$builder" >/dev/null || cleanup_status=1
-    fi
-    return "$cleanup_status"
-  fi
-
-  while IFS= read -r container; do
-    if [[ -n "$container" ]] && ! grep -Fxq "$container" "$snapshot"; then
-      docker rm -f "$container" || cleanup_status=1
-    fi
-  done < <(docker ps -aq)
-
   if [[ -n "$builder" ]]; then
-    while IFS= read -r container; do
-      if [[ -n "$container" ]]; then
-        docker restart "$container" || cleanup_status=1
-      fi
-    done < <(docker ps -q --filter "name=buildx_buildkit_${builder}")
     docker buildx inspect --bootstrap "$builder" >/dev/null || cleanup_status=1
   fi
 
@@ -191,18 +144,8 @@ run_task() {
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
-    bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
-    rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;
-    rust:lint) run_with_timeout "$timeout_minutes" task remote:rust:lint ;;
-    rust:coverage) run_with_timeout "$timeout_minutes" task remote:rust:coverage ;;
-    wasm:build) run_with_timeout "$timeout_minutes" task wasm:build ;;
-    wasm:test) run_with_timeout "$timeout_minutes" task wasm:test ;;
-    wasm:test:browser) run_with_timeout "$timeout_minutes" task wasm:test:browser ;;
-    web:check) run_with_timeout "$timeout_minutes" task remote:web:check ;;
-    web:test) run_with_timeout "$timeout_minutes" task remote:web:test ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
-    extension:check) run_with_timeout "$timeout_minutes" task remote:extension:check ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
     hive:verify) run_with_timeout "$timeout_minutes" env HIVE_CACHE_TO= task hive:verify ;;
     check) run_with_timeout "$timeout_minutes" task check ;;
@@ -242,7 +185,6 @@ run_batch() {
   local task
   local status
   local failures=0
-  local daemon_snapshot
   local timeout_cleanup_status
   local -a tasks
 
@@ -253,21 +195,18 @@ run_batch() {
 
   for task in "${tasks[@]}"; do
     echo "::group::Remote task: $task"
-    daemon_snapshot="$(mktemp)"
-    snapshot_daemon_containers > "$daemon_snapshot"
     set +e
     run_task "$task"
     status=$?
     if (( status == 124 || status == 137 )); then
       timeout_cleanup_status=0
-      cleanup_timed_out_daemon_work "$daemon_snapshot" || timeout_cleanup_status=1
+      cleanup_timed_out_buildkit_work || timeout_cleanup_status=1
       restore_exact_worktree || timeout_cleanup_status=1
       if (( timeout_cleanup_status != 0 )); then
         echo "::error::Failed to restore exact runner state after timeout: $task"
         status=1
       fi
     fi
-    rm -f "$daemon_snapshot"
     if ! restore_hosted_builder; then
       echo "::error::Failed to restore the hosted Buildx builder after: $task"
       status=1
