@@ -216,7 +216,8 @@ That owner controls:
 - validation requests;
 - readiness and merge.
 
-Workers return evidence or isolated patches.
+Read-only workers return evidence. Write-capable workers return verified commit
+handoffs from their isolated workspaces.
 
 They do not become delivery owners.
 

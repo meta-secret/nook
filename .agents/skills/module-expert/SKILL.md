@@ -17,8 +17,9 @@ Read and follow:
 Resolve one named profile before exploring its source.
 Load only that profile's authorities and task-relevant skills.
 
-Treat every profile as read-only unless the delivery plan separately assigns a
-write-capable module task with an isolated workspace and explicit path scope.
+Every module expert profile remains read-only. When the delivery plan assigns
+write-capable module work, a separate implementation worker receives the
+isolated workspace and explicit path scope.
 
 Use the active Codex, Cursor, or other capable harness to create and coordinate
 the expert. The harness owns communication, scheduling, retries, cancellation,
