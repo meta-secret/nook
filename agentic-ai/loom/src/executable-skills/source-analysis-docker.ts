@@ -138,7 +138,9 @@ const DOCKER_CONTROL_STDOUT_BYTES = 64 * 1024;
 const DOCKER_CONTROL_STDERR_BYTES = 64 * 1024;
 const DOCKER_BUILD_OUTPUT_BYTES = 512 * 1024;
 const TEARDOWN_ATTEMPTS = 3;
-const TEARDOWN_ATTEMPT_MILLISECONDS = 4_000;
+const TEARDOWN_ATTEMPT_MILLISECONDS = 4_500;
+const TEARDOWN_AUTHORITY_MILLISECONDS = 1_500;
+const TEARDOWN_REMOVAL_MILLISECONDS = 3_000;
 const TEARDOWN_RESERVE_MILLISECONDS = 15_000;
 const MINIMUM_TOTAL_MILLISECONDS = 20_000;
 const MAXIMUM_TOTAL_MILLISECONDS = 5 * 60 * 1_000;
@@ -703,13 +705,22 @@ async function removeSourceAnalysisContainer(
   for (let attempt = 0; attempt < TEARDOWN_ATTEMPTS; attempt += 1) {
     const remaining = request.deadlineExpiresAt - Date.now();
     if (remaining <= 1_000) break;
+    const attemptStartedAt = Date.now();
     const attemptDeadline = Math.min(
       request.deadlineExpiresAt,
-      Date.now() + TEARDOWN_ATTEMPT_MILLISECONDS,
+      attemptStartedAt + TEARDOWN_ATTEMPT_MILLISECONDS,
+    );
+    const authorityDeadline = Math.min(
+      request.deadlineExpiresAt,
+      attemptStartedAt + TEARDOWN_AUTHORITY_MILLISECONDS,
+    );
+    const removalDeadline = Math.min(
+      request.deadlineExpiresAt,
+      attemptStartedAt + TEARDOWN_REMOVAL_MILLISECONDS,
     );
     const attemptAuthorityRequest: DockerAuthorityRequest = {
       ...request,
-      deadlineExpiresAt: attemptDeadline,
+      deadlineExpiresAt: authorityDeadline,
       signal: false,
     };
     try {
@@ -721,7 +732,7 @@ async function removeSourceAnalysisContainer(
     const executeRequest: ExecuteDockerCommandRequest = {
       ...request,
       arguments: ['rm', '--force', request.containerName],
-      deadlineExpiresAt: attemptDeadline,
+      deadlineExpiresAt: removalDeadline,
       maximumStderrBytes: DOCKER_CONTROL_STDERR_BYTES,
       maximumStdoutBytes: DOCKER_CONTROL_STDOUT_BYTES,
       signal: false,

@@ -45,6 +45,7 @@ type FakeDockerState = {
   active: boolean;
   buildIdentity: string;
   readonly commands: string[][];
+  readonly deadlines: number[];
   imageInspectFailures: number;
   readonly mode: FakeDockerMode;
   removals: number;
@@ -111,6 +112,7 @@ function fakeDockerExecutor(
   return async (request: RunBoundedProcessRequest) => {
     const command = [...request.command];
     state.commands.push(command);
+    state.deadlines.push(request.deadlineExpiresAt);
     const joined = command.join(' ');
     if (joined.includes(' context inspect ')) {
       return successfulOutput(
@@ -230,6 +232,7 @@ function fakeState(mode: FakeDockerMode): FakeDockerState {
     active: false,
     buildIdentity: '',
     commands: [],
+    deadlines: [],
     imageInspectFailures: 0,
     mode,
     removals: 0,
@@ -445,6 +448,18 @@ describe('sealed source analysis Docker boundary', () => {
     await runSealedSourceAnalysisWithDependencies(execution);
     expect(state.removals).toBe(1);
     expect(state.active).toBe(false);
+    let probeIndex = -1;
+    for (const [index, command] of state.commands.entries()) {
+      if (command.includes('info')) probeIndex = index;
+    }
+    const removalIndex = state.commands.findIndex((command) =>
+      command.includes('rm'),
+    );
+    expect(probeIndex).toBeGreaterThanOrEqual(0);
+    expect(removalIndex).toBeGreaterThan(probeIndex);
+    expect(state.deadlines[removalIndex] ?? 0).toBeGreaterThan(
+      state.deadlines[probeIndex] ?? 0,
+    );
   });
 
   test('rejects preexisting containers, remote endpoints, and unconfirmed teardown', async () => {
