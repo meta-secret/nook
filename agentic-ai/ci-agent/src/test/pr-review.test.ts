@@ -59,7 +59,7 @@ test("stabilizeExactHeadReview rejects settled actionable feedback", async () =>
     pollIntervalMs: 15,
     requestReview: async () => ({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
-    waitMs: async () => undefined,
+    waitMs: async () => {},
   });
 
   assert.equal(result.state, ReviewStabilizationState.Findings);
@@ -77,7 +77,7 @@ test("stabilizeExactHeadReview opens the circuit after three finding batches", a
     pollIntervalMs: 15,
     requestReview: async () => ({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
-    waitMs: async () => undefined,
+    waitMs: async () => {},
   });
 
   assert.equal(result.state, ReviewStabilizationState.CircuitBreaker);
@@ -93,7 +93,7 @@ test("stabilizeExactHeadReview ignores historical top-level comments", async () 
     pollIntervalMs: 15,
     requestReview: async () => ({ headSha: "head-sha", settled: true }),
     timeoutMs: 60,
-    waitMs: async () => undefined,
+    waitMs: async () => {},
   });
 
   assert.equal(result.state, ReviewStabilizationState.Clean);

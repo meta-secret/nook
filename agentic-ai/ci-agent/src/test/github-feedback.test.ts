@@ -6,25 +6,29 @@ import { countAutomatedFindingBatches } from "../main/github.js";
 test("countAutomatedFindingBatches groups root bot findings by review", () => {
   const batches = countAutomatedFindingBatches([
     {
-      pull_request_review_id: 10,
-      user: { login: "chatgpt-codex-connector" },
+      isReply: false,
+      reviewerLogin: "chatgpt-codex-connector",
+      reviewId: 10,
     },
     {
-      pull_request_review_id: 10,
-      user: { login: "chatgpt-codex-connector" },
+      isReply: false,
+      reviewerLogin: "chatgpt-codex-connector",
+      reviewId: 10,
     },
     {
-      pull_request_review_id: 11,
-      user: { login: "cursor[bot]" },
+      isReply: false,
+      reviewerLogin: "cursor[bot]",
+      reviewId: 11,
     },
     {
-      in_reply_to_id: 1,
-      pull_request_review_id: 10,
-      user: { login: "cypherkitty" },
+      isReply: true,
+      reviewerLogin: "cypherkitty",
+      reviewId: 10,
     },
     {
-      pull_request_review_id: 12,
-      user: { login: "human-reviewer" },
+      isReply: false,
+      reviewerLogin: "human-reviewer",
+      reviewId: 12,
     },
   ]);
 
