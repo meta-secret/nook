@@ -28,23 +28,28 @@ import type {
 } from '../../src/module-delivery/index.ts';
 import type { GitFixture } from './worktree-test-support.ts';
 
-let fixture: GitFixture | undefined;
+const fixtures: GitFixture[] = [];
 const workspaces: ModuleWorktreeHandle[] = [];
 
 afterEach(() => {
-  if (fixture) {
-    for (const workspace of workspaces.splice(0)) {
-      const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
-      try {
-        cleanupModuleWorktree(cleanupRequest);
-      } catch {
-        // Rejection tests can intentionally invalidate the workspace.
-      }
+  for (const workspace of workspaces.splice(0)) {
+    const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
+    try {
+      cleanupModuleWorktree(cleanupRequest);
+    } catch {
+      // Rejection tests can intentionally invalidate the workspace.
     }
+  }
+  for (const fixture of fixtures.splice(0)) {
     disposeGitFixture(fixture);
-    fixture = undefined;
   }
 });
+
+function createTrackedFixture(): GitFixture {
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
+  return fixture;
+}
 
 function prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
   const workspace = prepareModuleWorktree(request);
@@ -54,7 +59,7 @@ function prepared(request: PrepareModuleWorktreeRequest): ModuleWorktreeHandle {
 
 describe('prepareModuleWorktree', () => {
   test('prepares a clean detached direct child at the exact baseline', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const marker = installCheckoutHook(fixture);
     const request = prepareRequest(fixture);
     const workspace = prepared(request);
@@ -71,7 +76,7 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('uses distinct generated worktrees for retry attempts', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const firstRequest = prepareRequest(fixture);
     const first = prepared(firstRequest);
     const secondRequest: PrepareModuleWorktreeRequest = {
@@ -84,7 +89,7 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('rejects nonexact commits, Git environment poisoning, and overlapping roots', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const base = prepareRequest(fixture);
     const shortCommitRequest: PrepareModuleWorktreeRequest = {
       ...base,
@@ -94,12 +99,13 @@ describe('prepareModuleWorktree', () => {
       'exact lowercase 40-hex',
     );
 
-    const previousGitDirectory = process.env.GIT_DIR;
+    const hadGitDirectory = 'GIT_DIR' in process.env;
+    const previousGitDirectory = process.env.GIT_DIR ?? '';
     process.env.GIT_DIR = join(fixture.root, 'does-not-exist');
     const scrubbed = prepared(base);
     expect(scrubbed.baselineCommit).toBe(fixture.baselineCommit);
-    if (previousGitDirectory === undefined) delete process.env.GIT_DIR;
-    else process.env.GIT_DIR = previousGitDirectory;
+    if (hadGitDirectory) process.env.GIT_DIR = previousGitDirectory;
+    else delete process.env.GIT_DIR;
 
     const nestedRoot = join(fixture.sourceRoot, 'nested-workspaces');
     mkdirSync(nestedRoot);
@@ -111,7 +117,7 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('rejects symlink roots before creating a registration', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const linkedRoot = join(fixture.root, 'linked-workspaces');
     symlinkSync(fixture.workspaceRoot, linkedRoot);
     const request: PrepareModuleWorktreeRequest = {
@@ -125,20 +131,21 @@ describe('prepareModuleWorktree', () => {
   });
 
   test('ignores inherited global Git configuration during preparation', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const marker = join(fixture.root, 'fsmonitor-ran');
     const monitor = join(fixture.root, 'fsmonitor.sh');
     const globalConfig = join(fixture.root, 'poisoned.gitconfig');
     writeFileSync(monitor, `#!/bin/sh\ntouch '${marker}'\nexit 1\n`);
     chmodSync(monitor, 0o755);
     writeFileSync(globalConfig, `[core]\n\tfsmonitor = ${monitor}\n`);
-    const previousConfig = process.env.GIT_CONFIG_GLOBAL;
+    const hadGlobalConfig = 'GIT_CONFIG_GLOBAL' in process.env;
+    const previousConfig = process.env.GIT_CONFIG_GLOBAL ?? '';
     process.env.GIT_CONFIG_GLOBAL = globalConfig;
     try {
       prepared(prepareRequest(fixture));
     } finally {
-      if (previousConfig === undefined) delete process.env.GIT_CONFIG_GLOBAL;
-      else process.env.GIT_CONFIG_GLOBAL = previousConfig;
+      if (hadGlobalConfig) process.env.GIT_CONFIG_GLOBAL = previousConfig;
+      else delete process.env.GIT_CONFIG_GLOBAL;
     }
     expect(existsSync(marker)).toBe(false);
   });

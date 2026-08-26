@@ -19,21 +19,35 @@ import type {
 } from '../../src/module-delivery/index.ts';
 import type { GitFixture } from './worktree-test-support.ts';
 
-let fixture: GitFixture | undefined;
-let workspace: ModuleWorktreeHandle | undefined;
+const fixtures: GitFixture[] = [];
+const workspaces: ModuleWorktreeHandle[] = [];
 
 afterEach(() => {
-  if (fixture) {
+  for (const workspace of workspaces.splice(0)) {
+    const cleanupRequest: CleanupModuleWorktreeRequest = { workspace };
+    try {
+      cleanupModuleWorktree(cleanupRequest);
+    } catch {
+      // Rejection tests can intentionally invalidate the workspace.
+    }
+  }
+  for (const fixture of fixtures.splice(0)) {
     disposeGitFixture(fixture);
-    fixture = undefined;
-    workspace = undefined;
   }
 });
 
 function createWorkspace(): ModuleWorktreeHandle {
-  fixture = createGitFixture();
-  workspace = prepareModuleWorktree(prepareRequest(fixture));
+  const fixture = createGitFixture();
+  fixtures.push(fixture);
+  const workspace = prepareModuleWorktree(prepareRequest(fixture));
+  workspaces.push(workspace);
   return workspace;
+}
+
+function currentFixture(): GitFixture {
+  const fixture = fixtures.at(-1);
+  if (!fixture) throw new Error('Git fixture was not prepared.');
+  return fixture;
 }
 
 describe('cleanupModuleWorktree', () => {
@@ -48,7 +62,7 @@ describe('cleanupModuleWorktree', () => {
 
   test('rejects locked worktrees', () => {
     const active = createWorkspace();
-    fixtureGit(fixture!)([
+    fixtureGit(currentFixture())([
       'worktree',
       'lock',
       '--reason',
@@ -70,7 +84,7 @@ describe('cleanupModuleWorktree', () => {
 
   test('rejects a replacement directory after external removal', () => {
     const active = createWorkspace();
-    fixtureGit(fixture!)([
+    fixtureGit(currentFixture())([
       'worktree',
       'remove',
       '--force',
@@ -83,7 +97,7 @@ describe('cleanupModuleWorktree', () => {
 
   test('rejects a dangling symlink after external removal', () => {
     const active = createWorkspace();
-    fixtureGit(fixture!)([
+    fixtureGit(currentFixture())([
       'worktree',
       'remove',
       '--force',
