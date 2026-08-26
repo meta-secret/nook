@@ -14,12 +14,11 @@ import type { StructuralExpertAuthorization } from '../agent-workflow/domain.ts'
 import {
   readVerifiedBarrierAttempt,
   readVerifiedParentAttempt,
-} from '../module-experts/parent-authorization.ts';
+} from '../agent-workflow/attempt-verification.ts';
 import type {
   ReadParentAttemptArgs,
   VerifiedBarrierAttempt,
-  VerifiedParentAttempt,
-} from '../module-experts/parent-authorization.ts';
+} from '../agent-workflow/attempt-verification.ts';
 import { StructuralExpertKind, structuralExpertProfile } from './catalog.ts';
 import type {
   StructuralChildProjection,
@@ -194,6 +193,12 @@ async function verifyChildProjections(
         },
       };
       const child = await readVerifiedBarrierAttempt(readRequest);
+      if (
+        child.terminal.kind !== TaskTerminalKind.Completed &&
+        child.terminal.kind !== TaskTerminalKind.Failed
+      ) {
+        authorizationFailed();
+      }
       const assertionRequest: AssertVerifiedChildRequest = {
         child,
         input,
@@ -220,6 +225,12 @@ type AssertVerifiedChildRequest = {
 
 function assertVerifiedChild(request: AssertVerifiedChildRequest): void {
   const { child, input, projection } = request;
+  if (
+    child.terminal.kind !== TaskTerminalKind.Completed &&
+    child.terminal.kind !== TaskTerminalKind.Failed
+  ) {
+    authorizationFailed();
+  }
   const validResult =
     child.terminal.kind === TaskTerminalKind.Failed ||
     child.terminal.output.resultKind ===

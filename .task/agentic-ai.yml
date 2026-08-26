@@ -209,8 +209,40 @@ tasks:
             --working-directory "{{.REPO_ROOT}}"
         fi
 
+  loom:agent-delegation:start:
+    desc: Start one declared ordinary delegation run (PLAN=<plan.json>).
+    deps: [loom:install]
+    requires:
+      vars: [PLAN]
+    cmds:
+      - |
+        set -euo pipefail
+        plan="{{.PLAN}}"
+        case "$plan" in
+          /*) ;;
+          *) plan="{{.REPO_ROOT}}/$plan" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          start --plan "$plan" --working-directory "{{.REPO_ROOT}}"
+
+  loom:agent-delegation:admit:
+    desc: Admit one declared ordinary delegation attempt before dispatch (REQUEST=<request.json>).
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - |
+        set -euo pipefail
+        request="{{.REQUEST}}"
+        case "$request" in
+          /*) ;;
+          *) request="{{.REPO_ROOT}}/$request" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          admit --request "$request" --working-directory "{{.REPO_ROOT}}"
+
   loom:agent-delegation:record:
-    desc: Finalize one ordinary delegated agent attempt (REQUEST=<request.json>).
+    desc: Finalize one admitted ordinary delegated agent attempt (REQUEST=<request.json>).
     deps: [loom:install]
     requires:
       vars: [REQUEST]
