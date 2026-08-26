@@ -238,9 +238,7 @@ export function buildActionsEvidence(
     const workflowRuns = requiredArrayProperty(workflowRunsRequest);
     rawRuns.push(...workflowRuns.filter(isRecord));
   }
-  const collectedRunIds = new Set(
-    rawRuns.map((run) => requiredNumberProperty({ record: run, key: 'id' })),
-  );
+  const collectedRunIds = new Set(rawRuns.map(actionRunId));
   if (collectedRunIds.size < expectedRunCount) {
     failGitHubCollection(
       `GitHub Actions history is incomplete: expected ${expectedRunCount}, collected ${collectedRunIds.size}`,
@@ -248,7 +246,11 @@ export function buildActionsEvidence(
   }
   const deduplicatedRuns = new Map<string, ActionObservation>();
   for (const rawRun of rawRuns) {
-    if (!isSourcePrRun(rawRun, request.prNumber)) continue;
+    const associationRequest: SourcePrRunRequest = {
+      run: rawRun,
+      prNumber: request.prNumber,
+    };
+    if (!isSourcePrRun(associationRequest)) continue;
     const observationRequest: ActionObservationRequest = {
       record: rawRun,
       prNumber: request.prNumber,
@@ -837,14 +839,26 @@ function actionObservation(
   };
 }
 
-function isSourcePrRun(run: UntrustedYamlMap, prNumber: number): boolean {
-  const pullRequests = requiredArrayProperty({
-    record: run,
+function actionRunId(run: UntrustedYamlMap): number {
+  const request: PropertyRequest = { record: run, key: 'id' };
+  return requiredNumberProperty(request);
+}
+
+type SourcePrRunRequest = {
+  readonly run: UntrustedYamlMap;
+  readonly prNumber: number;
+};
+
+function isSourcePrRun(request: SourcePrRunRequest): boolean {
+  const pullRequestsRequest: PropertyRequest = {
+    record: request.run,
     key: 'pull_requests',
-  });
+  };
+  const pullRequests = requiredArrayProperty(pullRequestsRequest);
   return pullRequests.some((candidate) => {
     if (!isRecord(candidate)) return false;
-    return numberProperty({ record: candidate, key: 'number' }) === prNumber;
+    const numberRequest: PropertyRequest = { record: candidate, key: 'number' };
+    return numberProperty(numberRequest) === request.prNumber;
   });
 }
 

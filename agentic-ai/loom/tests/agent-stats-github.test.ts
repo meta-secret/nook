@@ -75,58 +75,62 @@ describe('agent stats GitHub evidence', () => {
   });
 
   test('ignores a same-branch run associated with another PR', () => {
+    const sourceRun: ActionRunFixture = {
+      id: 101,
+      runAttempt: 1,
+      headSha: finalHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:01:00Z',
+      conclusion: 'success',
+    };
+    const foreignRun: ActionRunFixture = {
+      id: 102,
+      runAttempt: 1,
+      headSha: firstHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:01:00Z',
+      conclusion: 'success',
+      sourcePr: 99,
+    };
     const pages = asUntrustedYamlNode([
       {
         total_count: 2,
-        workflow_runs: [
-          actionRun({
-            id: 101,
-            runAttempt: 1,
-            headSha: finalHead,
-            startedAt: '2026-08-01T10:00:00Z',
-            finishedAt: '2026-08-01T10:01:00Z',
-            conclusion: 'success',
-          }),
-          actionRun({
-            id: 102,
-            runAttempt: 1,
-            headSha: firstHead,
-            startedAt: '2026-08-01T10:00:00Z',
-            finishedAt: '2026-08-01T10:01:00Z',
-            conclusion: 'success',
-            sourcePr: 99,
-          }),
-        ],
+        workflow_runs: [actionRun(sourceRun), actionRun(foreignRun)],
       },
     ]);
-    const evidence = buildActionsEvidence({
+    const request: BuildActionsEvidenceRequest = {
       pages,
       prNumber: 42,
       finalHeadSha: finalHead,
-    });
+    };
+    const evidence = buildActionsEvidence(request);
     expect(evidence.runs).toHaveLength(1);
   });
 
   test('rejects nonterminal action attempts', () => {
+    const nonterminalRun: ActionRunFixture = {
+      id: 101,
+      runAttempt: 1,
+      headSha: finalHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:01:00Z',
+      conclusion: 'success',
+      status: 'in_progress',
+    };
     const pages = asUntrustedYamlNode([
       {
         total_count: 1,
-        workflow_runs: [
-          actionRun({
-            id: 101,
-            runAttempt: 1,
-            headSha: finalHead,
-            startedAt: '2026-08-01T10:00:00Z',
-            finishedAt: '2026-08-01T10:01:00Z',
-            conclusion: 'success',
-            status: 'in_progress',
-          }),
-        ],
+        workflow_runs: [actionRun(nonterminalRun)],
       },
     ]);
-    expect(() =>
-      buildActionsEvidence({ pages, prNumber: 42, finalHeadSha: finalHead }),
-    ).toThrow('retry collection after completion');
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+    };
+    expect(() => buildActionsEvidence(request)).toThrow(
+      'retry collection after completion',
+    );
   });
 
   test('pairs review requests and outcomes with exact delivery heads', () => {
