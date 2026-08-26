@@ -14,6 +14,7 @@ import {
   actionJobsRequestedValidation,
   type ActionJobsRequestedValidationRequest,
 } from '../src/lib/agent-stats-github-api.ts';
+import { substantiveReviewBodyFindingCount } from '../src/lib/agent-stats-github-review.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -36,9 +37,29 @@ describe('agent stats GitHub evidence', () => {
         { name: 'Clippy', conclusion: 'failure' },
       ],
     };
+    const cancelledRequest: ActionJobsRequestedValidationRequest = {
+      gateJobName: 'Validate explicit CI request',
+      jobs: [
+        { name: 'Validate explicit CI request', conclusion: 'cancelled' },
+        { name: 'Native Rust verification', conclusion: 'skipped' },
+      ],
+    };
 
     expect(actionJobsRequestedValidation(skippedRequest)).toBe(false);
     expect(actionJobsRequestedValidation(requestedRequest)).toBe(true);
+    expect(actionJobsRequestedValidation(cancelledRequest)).toBe(true);
+  });
+
+  test('counts findings in noncanonical details blocks', () => {
+    const reviewBody = `### 💡 Codex Review
+
+Here are some automated review suggestions for this pull request.
+
+**Reviewed commit:** \`1234567890\`
+
+<details><summary>Additional finding</summary>Do not discard this.</details>`;
+
+    expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
   });
 
   test('groups validation by head and measures work after supersession', () => {
@@ -263,6 +284,33 @@ describe('agent stats GitHub evidence', () => {
       'Rust ecosystem checks',
       'Web research',
     ]);
+  });
+
+  test('keeps manual runs out of validation cycles', () => {
+    const pages = actionPages([
+      {
+        id: 203,
+        runAttempt: 1,
+        headSha: finalHead,
+        startedAt: '2026-08-01T10:02:00Z',
+        finishedAt: '2026-08-01T10:03:00Z',
+        conclusion: 'success',
+        workflow: 'Web research',
+        trigger: 'workflow_dispatch',
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [finalHead],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs).toHaveLength(1);
+    expect(evidence.validationCycles).toHaveLength(0);
   });
 
   test('excludes workflow attempts started after merge', () => {
@@ -667,6 +715,7 @@ type ActionRunFixture = {
   readonly status?: string;
   readonly workflow?: string;
   readonly validationRequested?: boolean;
+  readonly trigger?: string;
 };
 
 function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
@@ -675,7 +724,7 @@ function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
     name: fixture.workflow ?? 'PR',
     run_attempt: fixture.runAttempt,
     head_sha: fixture.headSha,
-    event: 'pull_request',
+    event: fixture.trigger ?? 'pull_request',
     created_at: fixture.createdAt ?? fixture.startedAt,
     run_started_at: fixture.startedAt,
     updated_at: fixture.finishedAt,

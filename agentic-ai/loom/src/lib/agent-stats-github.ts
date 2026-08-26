@@ -316,7 +316,10 @@ export function buildActionsEvidence(
   const runs = observations.map(actionObservationRecord);
   const heads = headObservations.map(headObservationRecord);
   const validationObservations = observations.filter(
-    (run) => isValidationWorkflow(run.workflow) && run.validationRequested,
+    (run) =>
+      isValidationWorkflow(run.workflow) &&
+      run.validationRequested &&
+      run.trigger === 'pull_request',
   );
   const validationCycles = validationObservations.map((run) => {
     const supersededRequest: HeadSupersededRequest = {

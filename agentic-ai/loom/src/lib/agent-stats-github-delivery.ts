@@ -184,7 +184,11 @@ function chronologicallySortedHeads(
         record: existing,
         key: 'first_observed_at',
       };
-      if (candidateTime < property(existingRequest)) {
+      const existingTime = property(existingRequest);
+      if (
+        candidateTime.length > 0 &&
+        (existingTime.length === 0 || candidateTime < existingTime)
+      ) {
         sorted.splice(index, 0, head);
         inserted = true;
         break;

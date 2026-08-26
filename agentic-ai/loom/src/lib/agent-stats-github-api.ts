@@ -149,6 +149,19 @@ export type ActionJobsRequestedValidationRequest = {
 export function actionJobsRequestedValidation(
   request: ActionJobsRequestedValidationRequest,
 ): boolean {
+  const gateCancelled = request.jobs.some((job) => {
+    if (!isRecord(job)) return false;
+    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+    const conclusionRequest: GitHubPropertyRequest = {
+      record: job,
+      key: 'conclusion',
+    };
+    return (
+      requiredStringProperty(nameRequest) === request.gateJobName &&
+      stringProperty(conclusionRequest) === 'cancelled'
+    );
+  });
+  if (gateCancelled) return true;
   return request.jobs.some((job) => {
     if (!isRecord(job)) return false;
     const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
