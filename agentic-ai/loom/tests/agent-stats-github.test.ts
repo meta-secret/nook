@@ -40,7 +40,32 @@ describe('agent stats GitHub evidence', () => {
     const cancelledRequest: ActionJobsRequestedValidationRequest = {
       gateJobName: 'Validate explicit CI request',
       jobs: [
-        { name: 'Validate explicit CI request', conclusion: 'cancelled' },
+        {
+          name: 'Validate explicit CI request',
+          conclusion: 'cancelled',
+          steps: [
+            {
+              name: 'Reject unsupported label events',
+              conclusion: 'success',
+            },
+          ],
+        },
+        { name: 'Native Rust verification', conclusion: 'skipped' },
+      ],
+    };
+    const unsupportedCancelledRequest: ActionJobsRequestedValidationRequest = {
+      gateJobName: 'Validate explicit CI request',
+      jobs: [
+        {
+          name: 'Validate explicit CI request',
+          conclusion: 'cancelled',
+          steps: [
+            {
+              name: 'Reject unsupported label events',
+              conclusion: 'cancelled',
+            },
+          ],
+        },
         { name: 'Native Rust verification', conclusion: 'skipped' },
       ],
     };
@@ -48,6 +73,9 @@ describe('agent stats GitHub evidence', () => {
     expect(actionJobsRequestedValidation(skippedRequest)).toBe(false);
     expect(actionJobsRequestedValidation(requestedRequest)).toBe(true);
     expect(actionJobsRequestedValidation(cancelledRequest)).toBe(true);
+    expect(actionJobsRequestedValidation(unsupportedCancelledRequest)).toBe(
+      false,
+    );
   });
 
   test('counts findings in noncanonical details blocks', () => {
@@ -58,6 +86,18 @@ Here are some automated review suggestions for this pull request.
 **Reviewed commit:** \`1234567890\`
 
 <details><summary>Additional finding</summary>Do not discard this.</details>`;
+
+    expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
+  });
+
+  test('counts text inserted into an otherwise status-only review', () => {
+    const reviewBody = `### 💡 Codex Review
+
+Here are some automated review suggestions for this pull request.
+
+Preserve this actionable text.
+
+**Reviewed commit:** \`1234567890\``;
 
     expect(substantiveReviewBodyFindingCount(reviewBody)).toBe(1);
   });
@@ -161,6 +201,39 @@ Here are some automated review suggestions for this pull request.
       finalHead,
     ]);
     expect(evidence.obsoleteValidationSeconds).toBe(600);
+  });
+
+  test('uses delivery order when an ancestor is observed after its successor', () => {
+    const pages = actionPages([
+      {
+        id: 105,
+        runAttempt: 1,
+        headSha: firstHead,
+        startedAt: '2026-08-01T10:30:00Z',
+        finishedAt: '2026-08-01T10:32:00Z',
+        conclusion: 'failure',
+      },
+    ]);
+    const successorReviewEvent = {
+      head_sha: finalHead,
+      requested_at: '2026-08-01T10:20:00Z',
+      completed_at: '',
+    };
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [sealUntrustedYamlMap(successorReviewEvent)],
+      deliveryHeadOrder: [firstHead, finalHead],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.heads.map((head) => head.head_sha)).toEqual([
+      firstHead,
+      finalHead,
+    ]);
+    expect(evidence.obsoleteValidationSeconds).toBe(120);
   });
 
   test('keeps unsupported-label runs out of validation cycles', () => {
@@ -583,6 +656,46 @@ Here are some automated review suggestions for this pull request.
     expect(evidence.findingBatchCount).toBe(1);
     expect(evidence.findingCount).toBe(1);
     expect(evidence.events[0]?.outcome).toBe('findings');
+  });
+
+  test('retains a clean reaction for a request after an earlier finding', () => {
+    const request: BuildReviewEvidenceRequest = {
+      issueCommentPages: yamlPages([
+        {
+          id: 21,
+          body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
+          created_at: '2026-08-01T10:20:00Z',
+          author_association: 'MEMBER',
+          user: { login: 'github-actions[bot]' },
+        },
+      ]),
+      reviewPages: yamlPages([
+        {
+          id: 503,
+          body: 'Finding completed before the later request.',
+          commit_id: finalHead,
+          submitted_at: '2026-08-01T10:05:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      reviewCommentPages: yamlPages([]),
+      reviewReactionPages: yamlPages([
+        {
+          request_comment_id: 21,
+          content: '+1',
+          created_at: '2026-08-01T10:23:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      knownHeadShas: [finalHead],
+      mergedAt: '2026-08-01T11:00:00Z',
+    };
+    const evidence = buildReviewEvidence(request);
+
+    expect(evidence.events).toHaveLength(2);
+    expect(evidence.events[0]?.outcome).toBe('clean');
+    expect(evidence.events[0]?.latency_seconds).toBe(180);
+    expect(evidence.events[1]?.outcome).toBe('findings');
   });
 
   test('excludes review results completed after merge', () => {

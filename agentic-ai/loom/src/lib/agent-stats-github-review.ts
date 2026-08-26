@@ -4,6 +4,12 @@ export enum ReviewOutcome {
   Unavailable = 'unavailable',
 }
 
+const CODEX_REVIEW_HEADING = '### 💡 Codex Review';
+const CODEX_REVIEW_INTRO =
+  'Here are some automated review suggestions for this pull request.';
+const CODEX_REVIEWED_COMMIT_ONLY_PATTERN =
+  /^\*\*Reviewed commit:\*\*\s*`[0-9a-f]{10,40}`$/i;
+
 const CANONICAL_CODEX_ABOUT_DETAILS = [
   '<details> <summary>ℹ️ About Codex in GitHub</summary>',
   '<br/>',
@@ -28,8 +34,11 @@ export function substantiveReviewBodyFindingCount(body: string): number {
       ? `${body.slice(0, detailsIndex)}${body.slice(detailsEnd)}`.trim()
       : body.trim();
   if (summary.length === 0) return 0;
+  const expectedPrefix = `${CODEX_REVIEW_HEADING}\n\n${CODEX_REVIEW_INTRO}\n\n`;
   const statusOnly =
-    summary.includes('Here are some automated review suggestions') &&
-    /\*\*Reviewed commit:\*\* `?[0-9a-f]{7,40}`?\s*$/i.test(summary);
+    summary.startsWith(expectedPrefix) &&
+    CODEX_REVIEWED_COMMIT_ONLY_PATTERN.test(
+      summary.slice(expectedPrefix.length),
+    );
   return statusOnly ? 0 : 1;
 }

@@ -145,11 +145,14 @@ export function deliveryHeadStarts(
     for (const [index, existing] of sorted.entries()) {
       const candidateOrder = orderByHead.get(candidate.headSha) ?? -1;
       const existingOrder = orderByHead.get(existing.headSha) ?? -1;
+      const bothKnown = candidateOrder >= 0 && existingOrder >= 0;
       if (
-        candidate.observedAt < existing.observedAt ||
-        (candidate.observedAt === existing.observedAt &&
+        (bothKnown && candidateOrder < existingOrder) ||
+        (!bothKnown && candidate.observedAt < existing.observedAt) ||
+        (!bothKnown &&
+          candidate.observedAt === existing.observedAt &&
           candidateOrder >= 0 &&
-          (existingOrder < 0 || candidateOrder < existingOrder))
+          existingOrder < 0)
       ) {
         sorted.splice(index, 0, candidate);
         inserted = true;

@@ -736,7 +736,13 @@ function reviewResults(
       candidate.commentIds.includes(commentId),
     );
     if (!reviewRequest) continue;
-    if (results.some((result) => result.headSha === reviewRequest.headSha)) {
+    if (
+      results.some(
+        (result) =>
+          result.headSha === reviewRequest.headSha &&
+          result.completedAt >= reviewRequest.requestedAt,
+      )
+    ) {
       continue;
     }
     const createdAtRequest: PropertyRequest = {

@@ -149,19 +149,38 @@ export type ActionJobsRequestedValidationRequest = {
 export function actionJobsRequestedValidation(
   request: ActionJobsRequestedValidationRequest,
 ): boolean {
-  const gateCancelled = request.jobs.some((job) => {
+  const gateCancelledAfterValidation = request.jobs.some((job) => {
     if (!isRecord(job)) return false;
     const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
     const conclusionRequest: GitHubPropertyRequest = {
       record: job,
       key: 'conclusion',
     };
-    return (
-      requiredStringProperty(nameRequest) === request.gateJobName &&
-      stringProperty(conclusionRequest) === 'cancelled'
-    );
+    if (
+      requiredStringProperty(nameRequest) !== request.gateJobName ||
+      stringProperty(conclusionRequest) !== 'cancelled'
+    ) {
+      return false;
+    }
+    const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
+    return requiredArrayProperty(stepsRequest).some((step) => {
+      if (!isRecord(step)) return false;
+      const stepNameRequest: GitHubPropertyRequest = {
+        record: step,
+        key: 'name',
+      };
+      const stepConclusionRequest: GitHubPropertyRequest = {
+        record: step,
+        key: 'conclusion',
+      };
+      return (
+        requiredStringProperty(stepNameRequest) ===
+          'Reject unsupported label events' &&
+        stringProperty(stepConclusionRequest) === 'success'
+      );
+    });
   });
-  if (gateCancelled) return true;
+  if (gateCancelledAfterValidation) return true;
   return request.jobs.some((job) => {
     if (!isRecord(job)) return false;
     const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
