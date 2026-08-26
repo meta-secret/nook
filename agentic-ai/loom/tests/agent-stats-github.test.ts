@@ -354,6 +354,13 @@ describe('agent stats GitHub evidence', () => {
         author_association: 'MEMBER',
         user: { login: 'github-actions[bot]' },
       },
+      {
+        id: 13,
+        body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
+        created_at: '2026-08-01T10:21:00Z',
+        author_association: 'MEMBER',
+        user: { login: 'github-actions[bot]' },
+      },
     ]);
     const reviewPages = yamlPages([
       {
@@ -388,7 +395,7 @@ describe('agent stats GitHub evidence', () => {
     ]);
     const reviewReactionPages = yamlPages([
       {
-        request_comment_id: 12,
+        request_comment_id: 13,
         content: '+1',
         created_at: '2026-08-01T10:23:00Z',
         user: { login: 'chatgpt-codex-connector[bot]' },
@@ -405,11 +412,12 @@ describe('agent stats GitHub evidence', () => {
     const evidence = buildReviewEvidence(request);
 
     expect(evidence.events).toHaveLength(2);
-    expect(evidence.requestCount).toBe(2);
+    expect(evidence.requestCount).toBe(3);
     expect(evidence.findingBatchCount).toBe(1);
     expect(evidence.findingCount).toBe(2);
     expect(evidence.events[0]?.latency_seconds).toBe(300);
     expect(evidence.events[1]?.outcome).toBe('clean');
+    expect(evidence.events[1]?.latency_seconds).toBe(180);
     expect(evidence.events[1]?.latency_seconds).toBe(180);
   });
 

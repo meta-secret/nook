@@ -126,7 +126,7 @@ type HeadObservation = {
 };
 
 type ReviewRequestObservation = {
-  readonly commentId: number;
+  readonly commentIds: readonly number[];
   readonly headSha: string;
   readonly requestedAt: string;
 };
@@ -446,9 +446,13 @@ export function buildReviewEvidence(
     findingBatchCount += 1;
     findingCount += event.findingCount;
   }
+  let requestCount = 0;
+  for (const reviewRequest of requests) {
+    requestCount += reviewRequest.commentIds.length;
+  }
   return {
     events: events.map(reviewEventRecord),
-    requestCount: requests.length,
+    requestCount,
     findingBatchCount,
     findingCount,
   };
@@ -577,16 +581,22 @@ function reviewRequests(
       knownHeadShas: request.knownHeadShas,
     };
     const headSha = resolveHeadSha(headRequest);
-    if (headSha.length === 0 || byHead.has(headSha)) continue;
+    if (headSha.length === 0) continue;
     const createdAtRequest: PropertyRequest = {
       record: comment,
       key: 'created_at',
     };
     const commentIdRequest: PropertyRequest = { record: comment, key: 'id' };
+    const commentId = requiredNumberProperty(commentIdRequest);
+    const requestedAt = requiredStringProperty(createdAtRequest);
+    const existing = byHead.get(headSha);
     const observation: ReviewRequestObservation = {
-      commentId: requiredNumberProperty(commentIdRequest),
+      commentIds: existing ? [...existing.commentIds, commentId] : [commentId],
       headSha,
-      requestedAt: requiredStringProperty(createdAtRequest),
+      requestedAt:
+        existing && existing.requestedAt < requestedAt
+          ? existing.requestedAt
+          : requestedAt,
     };
     byHead.set(headSha, observation);
   }
@@ -722,8 +732,8 @@ function reviewResults(
       key: 'request_comment_id',
     };
     const commentId = requiredNumberProperty(commentIdRequest);
-    const reviewRequest = request.requests.find(
-      (candidate) => candidate.commentId === commentId,
+    const reviewRequest = request.requests.find((candidate) =>
+      candidate.commentIds.includes(commentId),
     );
     if (!reviewRequest) continue;
     if (results.some((result) => result.headSha === reviewRequest.headSha)) {
