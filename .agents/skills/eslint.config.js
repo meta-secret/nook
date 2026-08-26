@@ -3,7 +3,7 @@ import { noRawObjectArguments } from '../../tooling/eslint-rules/no-raw-object-a
 
 export default tseslint.config({
   ignores: ['node_modules/**'],
-  files: ['*/src/**/*.ts', '*/tests/**/*.ts'],
+  files: ['*.ts', '*/src/**/*.ts', '*/tests/**/*.ts'],
   plugins: {
     '@typescript-eslint': tseslint.plugin,
     nook: {

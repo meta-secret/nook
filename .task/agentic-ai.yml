@@ -24,6 +24,27 @@ tasks:
     cmds:
       - bun run verify
 
+  skills:run:
+    desc: Run one executable skill action from a domain YAML request (CONFIG=<request.yaml>).
+    dir: .agents/skills
+    requires:
+      vars: [CONFIG]
+    cmds:
+      - |
+        set -euo pipefail
+        config="{{.CONFIG}}"
+        case "$config" in
+          /*) ;;
+          *) config="{{.REPO_ROOT}}/$config" ;;
+        esac
+        bun cli.ts "$config"
+
+  skills:tools-list:
+    desc: List executable skill actions, YAML examples, and request schemas.
+    dir: .agents/skills
+    cmds:
+      - bun cli.ts --default toolsList
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
@@ -50,17 +71,6 @@ tasks:
     deps: [loom:install]
     cmds:
       - bun test
-
-  loom:source-analysis:containment:
-    desc: Run the opt-in sealed analyzer matrix on an explicit non-ARC local Docker environment.
-    dir: agentic-ai/loom
-    deps: [loom:install]
-    requires:
-      vars:
-        - NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID
-        - NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT
-    cmds:
-      - bun run test:source-analysis-containment
 
   loom:check:
     desc: Typecheck Loom.
@@ -256,6 +266,22 @@ tasks:
         esac
         bun run --cwd agentic-ai/loom agent-delegation -- \
           record --request "$request" --working-directory "{{.REPO_ROOT}}"
+
+  loom:agent-delegation:finalize:
+    desc: Verify and materialize one complete ordinary delegation run (REQUEST=<request.json>).
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - |
+        set -euo pipefail
+        request="{{.REQUEST}}"
+        case "$request" in
+          /*) ;;
+          *) request="{{.REPO_ROOT}}/$request" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          finalize --request "$request" --working-directory "{{.REPO_ROOT}}"
 
   loom:skill-scaffold:
     desc: Scaffold a dynamic-skill card via Loom (CONFIG=<request.yaml>).

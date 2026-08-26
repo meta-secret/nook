@@ -18,6 +18,8 @@ Nook is a passwordless, local-first secrets manager. Your vault is encrypted in
 the browser, replicated only through storage you choose, and opened only by
 identities you authorize.
 
+Nook's k8s and k0s automation is Kubernetes-native: cluster Pods never run or control Docker, Podman, DinD, or another nested container runtime. BuildKit is build-only, and browser tests execute directly inside purpose-built Pods. The local-machine runtime policy remains intentionally undecided.
+
 There is no centrally hosted Nook account and no master password. The shipped
 applications keep multiple local identities in an independently protected
 browser keyring. Replicated identity control remains target architecture;
@@ -328,6 +330,19 @@ Use `task skills:install`, `task skills:format`, and `task skills:verify` to
 install its pinned dependencies, apply formatting, and run its complete quality
 gate.
 
+Executable skill actions use the same domain-YAML command model as Loom. List
+the available actions before authoring a request:
+
+```sh
+task skills:tools-list
+task skills:run CONFIG=path/to/skill-request.yaml
+```
+
+Discovery returns each action's description, exact YAML example, and input
+schema. The command accepts one YAML document instead of action-specific flags.
+Successful results and corrective failures are both emitted as YAML, so callers
+never need to parse mixed human-readable and machine-readable output.
+
 ```sh
 task web:dev
 ```
@@ -413,8 +428,9 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
 with **`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`,
-and `arc:runtime` selections use disposable ARC runner Pods in k0s;
-other selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
+and `arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
+selectors execute separately in exact-image Kubernetes Pods; compatible
+build-only selectors may share one ARC batch. Then explicitly start complete PR validation with
 **`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
 not start the complete pipeline. Local Task mirrors below remain available for
 humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
@@ -428,15 +444,6 @@ immutable JSONL attempt stream under the gitignored
 bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
-
-The opt-in executable-skill analyzer containment proof runs only against an
-explicit local, non-ARC Docker environment. Set
-**`NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID`** and
-**`NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT`** to the exact daemon ID and local
-Unix endpoint. Docker context configuration is not inherited. Then run
-**`task loom:source-analysis:containment`**. The analyzer image is byte-bound to
-its minimal build context. Its disposable container has no network, mounts, or
-privilege; it runs read-only with bounded memory, processes, output, and time.
 
 Project-scoped module experts are named Codex roles backed by one typed registry
 and an isolated read-only Loom runtime. Direct native child spawning is not the
@@ -488,15 +495,16 @@ task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
-task loom:source-analysis:containment # explicit local Docker containment proof
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
 task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
-task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
-task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks
+task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
+task remote TASK_NAME=web:build # direct-Pod web build
+task remote TASK_NAME=web:e2e # direct-Pod browser proof
+task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
 task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
 task pr:validate PR=410 FULL_E2E=1 # complete gate plus Main-fix browser suites
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)

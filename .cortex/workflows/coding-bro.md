@@ -442,8 +442,10 @@ Do **not** require `task check` or `task ci:pr` for merge or handoff.
 Focused hosted commands (never merge gates):
 
 ```bash
-task remote TASK_NAMES=web:check,web:test,extension:check
-task remote TASK_NAME=rust:test
+task remote TASK_NAME=web:build
+task remote TASK_NAME=web:e2e
+task remote TASK_NAME=extension:e2e
+task remote TASK_NAME=rust:ci
 ```
 
 ```text
