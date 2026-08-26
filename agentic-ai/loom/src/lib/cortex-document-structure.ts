@@ -18,6 +18,12 @@ export enum CortexStructureFindingCode {
   InvalidMapEntry = 'invalid-map-entry',
 }
 
+enum CortexTeamOwner {
+  DevCore = 'dev-core',
+  Sre = 'sre',
+  WebDev = 'web-dev',
+}
+
 export type CortexStructureFinding = {
   readonly code: CortexStructureFindingCode;
   readonly file: string;
@@ -448,7 +454,7 @@ function isKnowledgeGraphPath(filePath: string): boolean {
 }
 
 function owningKnowledgeGraphPath(filePath: string): string {
-  for (const team of ['dev-core', 'sre', 'web-dev'] as const) {
+  for (const team of Object.values(CortexTeamOwner)) {
     if (filePath.startsWith(`.cortex/${team}/`)) {
       return `.cortex/${team}/knowledge-graph.md`;
     }
@@ -456,12 +462,14 @@ function owningKnowledgeGraphPath(filePath: string): string {
   return '.cortex/knowledge-graph.md';
 }
 
-function cortexTeamOwner(
-  filePath: string,
-): 'dev-core' | 'sre' | 'web-dev' | false {
+function cortexTeamOwner(filePath: string): CortexTeamOwner | false {
   const match = /^\.cortex\/(dev-core|sre|web-dev)\//.exec(filePath);
   const owner = match?.[1];
-  if (owner === 'dev-core' || owner === 'sre' || owner === 'web-dev') {
+  if (
+    owner === CortexTeamOwner.DevCore ||
+    owner === CortexTeamOwner.Sre ||
+    owner === CortexTeamOwner.WebDev
+  ) {
     return owner;
   }
   return false;
