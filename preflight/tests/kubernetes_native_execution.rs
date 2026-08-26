@@ -160,9 +160,9 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
     assert!(remote_workflow.contains("task _extension:test:e2e"));
 
     let release_deploy = read(".github/scripts/ci-release-deploy-vaults.sh");
-    assert!(
-        release_deploy.contains("node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler")
-    );
+    assert!(release_deploy.contains(
+        "node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler"
+    ));
 
     let cortex_rule = read(".cortex/dynamic-skills/kubernetes-native-cluster-execution.md");
     assert!(cortex_rule.contains("P1 hard rule"));

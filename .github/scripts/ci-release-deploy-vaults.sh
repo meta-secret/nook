@@ -15,7 +15,7 @@ cd "$ROOT"
 : "${CLOUDFLARE_ACCOUNT_ID:?CLOUDFLARE_ACCOUNT_ID is required}"
 
 wrangler() {
-  node nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler "$@"
+  node /meta-secret/nook/nook-app/nook-web/nook-web-app/node_modules/.bin/wrangler "$@"
 }
 
 for spec in \
