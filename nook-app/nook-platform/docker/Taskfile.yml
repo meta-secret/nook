@@ -249,6 +249,8 @@ tasks:
       # rust-base-publish writes nook-rust-base-v1 under write_cache_repository
       # (Main: nook/buildcache; isolated: nook/remote-buildcache…-git-<sha>).
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ci:cache:publish:rust-base"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
@@ -263,16 +265,22 @@ tasks:
       # leaves cannot thin-export another scope.
       - task: docker:ci:cache:publish:rust-base
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "cache-publish:native-core-deps"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         builder-core-deps-publish
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "cache-publish:native-debug"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         builder-debug
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "cache-publish:native-preflight"
         {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}
         {{.SCCACHE_S3_BUILD_SECRETS}}
@@ -295,6 +303,8 @@ tasks:
       # its worker-specific metadata overwrite the portable Main dependency ref;
       # the fresh hosted proof job is its sole writer and consumer verifier.
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ci:cache:publish:wasm"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"

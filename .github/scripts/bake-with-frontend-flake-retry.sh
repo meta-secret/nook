@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Retry a BuildKit command once only for known frontend or client-session
-# transport flakes. Application/build failures fail closed.
+# Retry a BuildKit command once only for known frontend, client-session, or
+# cache-export transport flakes. Application/build failures fail closed.
 set -euo pipefail
 
 if [ "$#" -lt 2 ]; then
@@ -11,10 +11,10 @@ fi
 label="$1"
 shift
 
-is_buildkit_frontend_flake() {
+is_buildkit_transport_flake() {
   local log_file="$1"
-  # Match only infrastructure flakes that occur before or while loading the
-  # Dockerfile/frontend, not RUN-step application failures.
+  # Match only infrastructure transport failures. These can occur while loading
+  # the frontend, transferring the source context, or exporting a verified cache.
   grep -Eiq \
     -e 'failed to read dockerfile' \
     -e 'error reading dockerfile' \
@@ -80,7 +80,7 @@ for attempt in 1 2; do
   if [ "$attempt" -eq 2 ]; then
     exit "$status"
   fi
-  if ! is_buildkit_frontend_flake "$log_file" \
+  if ! is_buildkit_transport_flake "$log_file" \
     && ! is_unattributed_syntax_frontend_exit "$log_file" \
     && ! is_frontend_authorization_timeout "$log_file"; then
     echo "task ${label}: non-transient BuildKit failure; not retrying" >&2

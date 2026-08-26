@@ -79,6 +79,27 @@ if ! bash "$retry_script" session-timeout "$session_command" "$session_count"; t
 fi
 assert_equals "$(<"$session_count")" 2 'session retry count'
 
+cache_export_count="$test_dir/cache-export-count"
+cache_export_command="$test_dir/cache-export-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'if [ "$count" -eq 1 ]; then' \
+  '  printf "%s\n" "#60 exporting cache to registry" "ERROR: failed to receive status: rpc error: code = Unavailable desc = error reading from server: EOF"' \
+  '  exit 1' \
+  'fi' >"$cache_export_command"
+chmod +x "$cache_export_command"
+if ! bash "$retry_script" cache-export "$cache_export_command" "$cache_export_count"; then
+  echo 'BuildKit cache-export EOF should retry' >&2
+  exit 1
+fi
+assert_equals "$(<"$cache_export_count")" 2 'cache-export retry count'
+
 application_count="$test_dir/application-count"
 application_command="$test_dir/application-command"
 printf '%s\n' \
