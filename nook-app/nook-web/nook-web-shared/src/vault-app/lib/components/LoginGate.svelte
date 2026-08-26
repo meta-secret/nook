@@ -235,6 +235,7 @@
       '',
       workspacePath(WorkspaceRoute.DevicesAccess),
     )
+    window.dispatchEvent(new PopStateEvent('popstate'))
     await tick()
     focusHostButton('devices-access-back')
   }
@@ -249,6 +250,7 @@
     applyWorkspaceRoute(applyWorkspaceRouteArgs2)
     const pushStateArgs2: Parameters<typeof history.pushState>[0] = {}
     history.pushState(pushStateArgs2, '', workspacePath(WorkspaceRoute.Vault))
+    window.dispatchEvent(new PopStateEvent('popstate'))
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
