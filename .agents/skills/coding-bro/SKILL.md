@@ -18,10 +18,10 @@ description: >-
 
 # Coding Bro
 
-When delegating any part of this workflow outside a compiled Loom graph, follow
-the `subagent-delegation` skill and finalize every reached attempt with
-`task loom:agent-delegation:record REQUEST=<request.json>` before consuming its
-semantic view.
+When delegating any part of this workflow, follow the `subagent-delegation`
+skill. The active harness owns child lifecycle and delivers results directly.
+Optional JSONL or Markdown evidence exists for humans and never gates parent
+continuation.
 
 **Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
 
@@ -32,7 +32,7 @@ Follow the delivery sequence in the cortex workflow:
 1. Fetch repo, read owning product specs, and publish the Workbench task plan.
 2. Branch and create ignored session memory for substantial work.
 3. Apply [subagent-delegation](../subagent-delegation/SKILL.md) when delegating.
-   Require attempt streams and recursive view aggregation before integration.
+   Use direct harness results and parent-owned acceptance before integration.
 4. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
 5. Commit and run advisory local Codex review.
 6. Push and use focused execution on the configured Actions runner when useful.

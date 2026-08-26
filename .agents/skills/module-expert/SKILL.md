@@ -17,15 +17,15 @@ Read and follow:
 Resolve one named profile before exploring its source.
 Load only that profile's authorities and task-relevant skills.
 
-Treat every profile as read-only.
-Run it only through Loom's isolated non-delegating SDK runtime.
-Before invocation, require a completed, replay-verified depth-one
-`ModuleDevelopmentPlan` whose typed `moduleExpertAuthorizations` entry exactly
-matches the child task, expert, attempt, depth, and immediate parent.
-For depth three, also require the completed immediate parent named by that
-predeclaration.
-Never treat `ModuleExpertEvidence`, Markdown, or `parentActions` as child
-authorization.
-Do not use ordinary native child spawning as the capability boundary.
-Do not delegate, schedule successors, mutate lifecycle state, or infer write
-permission from catalog paths.
+Treat every profile as read-only unless the delivery plan separately assigns a
+write-capable module task with an isolated workspace and explicit path scope.
+
+Use the active Codex, Cursor, or other capable harness to create and coordinate
+the expert. The harness owns communication, scheduling, retries, cancellation,
+nested delegation, and synthesis.
+
+The profile routes domain knowledge. It does not grant filesystem capability,
+write ownership, successor scheduling, or lifecycle authority.
+
+Optional Loom journals and Markdown views may support human inspection. They
+must not gate expert dispatch, continuation, retry, join, or completion.

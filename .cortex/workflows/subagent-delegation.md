@@ -72,6 +72,7 @@ The delivery owner owns:
 - the final completion report.
 
 Child workers must not mutate those surfaces.
+The active harness may coordinate children on the delivery owner's behalf.
 
 This rule preserves
 [agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
@@ -86,6 +87,7 @@ Every delegated work unit must declare:
 - its allowed files or evidence surface;
 - whether it is read-only;
 - its dependencies;
+- its hierarchy depth bound;
 - its expected result shape;
 - its acceptance evidence;
 - forbidden mutations;
@@ -104,7 +106,7 @@ A retry is a new attempt of the same logical task.
 - summary;
 - evidence;
 - affected paths;
-- proposed changes or an isolated patch;
+- proposed changes or a verified commit handoff;
 - risks;
 - notes for the parent.
 
@@ -119,56 +121,45 @@ Module-oriented work follows
 - Keep the feature dependency DAG separate from agent parent lineage.
 - Use the named read-only profiles in the
   [module expert registry](../architecture/module-experts.md).
-- Run module experts only through Loom's isolated non-delegating SDK runtime.
-  Native child spawning inherits the delivery session's live permissions and
-  is not an authorized read-only boundary.
+- Use the active harness to create and coordinate module experts and
+  implementation workers.
 - Invoke `internal_api_expert` when a changed contract crosses a module
   boundary.
 - Freeze provider-consumer edges before implementation.
 - Continue from accepted providers to immediate consumers.
+- Give every write-capable worker an isolated workspace.
+- Verify every returned commit against its exact baseline and allowed paths.
+- Bind every downstream task to the exact integrated provider commit.
 - Keep shared files and lifecycle state with the delivery owner.
 
-The hierarchy has a hard maximum depth of three.
-
-- Depth 1 is feature synthesis or materialization.
-- Depth 2 contains named module and internal API experts.
-- Depth 3 is exceptional and must be declared before dispatch.
-- Depth greater than three is invalid.
-
-Children cannot freely create grandchildren.
-No agent may add a task, create a new tier, or schedule a successor.
-The completed depth-one parent publishes a typed `ModuleDevelopmentPlan` with
-the exact task, expert, attempt, depth, and immediate-parent identity before a
-named expert is invoked.
-Loom replay-verifies that plan before creating the child journal.
-Only this parent plan may predeclare a bounded depth-three specialist.
-The immediate depth-two parent must also be completed before depth three runs.
-`ModuleExpertEvidence` and `parentActions` are never scheduling authority.
+The plan declares a task-specific hierarchy depth bound.
+The harness enforces that bound.
+A child may delegate within its assigned task only.
+Nested delegation cannot add a feature-DAG node, widen write scope, or acquire
+delivery authority.
+`ModuleExpertEvidence`, Markdown, and `parentActions` are recommendations.
+They do not authorize descendants or lifecycle mutations.
 
 ## Hierarchical event protocol
 
-Subagent work is an event-sourced hierarchy.
+The active harness owns the live subagent hierarchy.
 
-The mandatory information flow is:
+Its native control path includes:
 
-1. An agent performs observable actions.
-2. Loom records those actions in that attempt's append-only JSONL stream.
-3. The agent authors a bounded Markdown semantic view from its full task
-   context.
-4. Loom validates, persists, and content-hashes that view.
-5. The parent consumes child views and authors a higher-level aggregate view.
-6. Each higher tier repeats that projection step.
-7. The root delivery owner validates the root aggregate and authors the final
-   user report.
+- creation and communication;
+- dependency-ready scheduling;
+- retries and cancellation;
+- terminal barriers;
+- nested delegation within declared bounds;
+- parent and root synthesis.
 
-The final report is the public semantic projection of the completed hierarchy.
-It does not replace the run journal as lifecycle authority.
+Repository event streams and semantic views are optional human evidence.
+They are not lifecycle authority for native harness delegation.
 
 ### Agent action streams
 
-Each reached agent task attempt owns one immutable action stream.
-
-The stream records bounded observable actions and outcomes. It never records:
+An optional JSONL stream may record bounded observable actions and outcomes.
+It must never record:
 
 - prompts;
 - hidden model reasoning;
@@ -176,152 +167,55 @@ The stream records bounded observable actions and outcomes. It never records:
 - raw command output;
 - raw SDK errors or stack traces.
 
-Every event carries the exact adapter, workflow, version, source commit, task,
-agent, attempt, hierarchy depth, parent lineage, local sequence, and timestamp.
-
-The current adapter-bearing attempt schema uses workflow version `2.0.0`.
-
-- Generic delegation, named module experts, and compiled static agent tasks emit
-  that version.
-- Version `1.0.0` is the legacy pre-provenance schema.
-- Loom rejects legacy attempt creation and replay with migration guidance.
-- A disposable legacy local run must be removed before retrying.
-- A retained legacy run requires an explicit trusted migration.
-- A migration must not infer a missing adapter from paths, result kinds, or
-  terminal content.
-- Missing adapter provenance under version `2.0.0` is invalid evidence.
+When retained, an event should identify the source commit, task, attempt,
+parent lineage, local sequence, and timestamp.
 
 - Sequence is monotonic inside one stream.
 - Cross-stream global ordering is not claimed.
-- A retry creates a new attempt stream.
-- A terminal attempt accepts no later events.
-- Child streams do not decide eligibility, joins, retries, or completion.
+- A retry may receive a new attempt stream.
+- Child streams never decide eligibility, joins, retries, or completion.
 
-The run-level stream remains the single local scheduling authority.
-
-Ordinary coding delegation uses the generic Loom recording adapter when no
-compiled workflow owns the dispatch. Before dispatch, the parent writes a
-bounded typed plan with the exact source commit, one depth-one root
-materializer, every attempt and parent identity, and each parent's exact
-all-terminal child barrier. The parent starts that immutable run with:
-
-```sh
-task loom:agent-delegation:start PLAN=path/to/plan.json
-```
-
-Loom content-hashes the plan, writes the run declaration, and admits the root
-materializer. Before dispatching each child, the parent submits its exact run,
-source, identity, depth, and parent binding with:
-
-```sh
-task loom:agent-delegation:admit REQUEST=path/to/admission.json
-```
-
-Depth-three admission requires the depth-two parent to have already completed
-with replay-verified evidence. The child then produces a typed record request
-containing its bounded observable activities and agent-authored semantic
-result. After the child returns, the parent finalizes the already admitted
-attempt with:
-
-```sh
-task loom:agent-delegation:record REQUEST=path/to/request.json
-```
-
-The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
-contract used by compiled workflows. It rejects undeclared lineage, source
-drift, post-dispatch admission, depth above three, and reuse of an existing
-attempt directory. Run-level aggregation and closure remain a separate
-delivery step. After every planned attempt reaches a replay-verified terminal,
-the parent submits an ordered barrier-evidence manifest and finalizes the run:
-
-```sh
-task loom:agent-delegation:finalize REQUEST=path/to/finalization.json
-```
-
-The manifest binds every parent's exact direct children to their terminal kind,
-result hash, and view hash. Loom verifies the complete hierarchy recursively.
-Non-completed child terminals remain evidence and do not short-circuit closure.
-The completed root materializer's exact bounded agent-authored view becomes the
-deterministic run view. Finalization writes `run-result.json` and `view.md`, is
-idempotent for exact bytes, and prevents later admission or recording. It does
-not infer cross-stream ordering or claim that timestamps prove semantic
-consumption. Admission and finalization share one SQLite advisory lifecycle
-lock. Process death releases the operating-system lock. Loom removes stale or
-legacy temporary run projections under the next acquired lock before retrying.
-
-This gives collaboration-tool subagents a journal boundary
-without making their transcript or Markdown output into scheduling authority.
-The generic adapter cannot record `ModuleExpertEvidence`.
-Named module experts use their isolated invocation adapter and its separately
-verified authorization boundary.
-
-The record request contains:
-
-- the shared run identifier and exact 40-character source commit;
-- the task, agent, attempt, hierarchy depth, and parent identity;
-- only bounded `WorkflowRuntimeActivityKind` observations;
-- one typed terminal whose task and attempt match the declared identity; and
-- for completed work, the agent-authored Markdown view inside the typed output.
-
-The child does not write canonical projections directly. Loom validates the
-request and owns canonical event serialization, append order, projection
-storage, and content hashes. The parent consumes only the returned projection
-references and verified `view.md`.
+The existing Loom recording commands may preserve optional audit evidence.
+Ordinary native delegation does not require `start`, `admit`, `record`, or
+`finalize` before the harness proceeds.
 
 ### Semantic materialized views
 
-An action stream is operational evidence. It does not contain enough semantic
-information to reconstruct the agent's conclusions.
+A Markdown view may preserve an agent's conclusions for human inspection.
 
-Therefore every completed agent must author `view.md` content in its typed
-result.
-
-- The agent owns semantic authorship because it has the complete task context.
-- Loom owns schema validation, bounded persistence, hashing, and event
-  references.
-- Read-only agents never write the processing store directly.
-- The view records its child-event high-water mark.
-- Markdown is a read model. Scheduler transitions never depend on parsing it.
-
-If an attempt fails before it can author a view, Loom writes a clearly labeled
-machine-authored failure view. A parent must not represent that view as an
-agent-authored conclusion.
-
-If a compiled workflow's declared root materializer does not complete, Loom
-writes a clearly labeled machine-authored root failure view. Ordinary
-delegation finalization instead fails closed because its canonical run view
-must be the completed root's agent-authored view.
+- Label agent-authored and machine-authored content clearly.
+- Keep secrets, prompts, and hidden reasoning out of the view.
+- Never parse Markdown to decide workflow state.
+- Never require a view before dispatch, continuation, retry, join, or
+  completion.
 
 ### Parent aggregation and continuation
 
-A parent normally reads child semantic views and typed artifact references.
+The harness passes child results to the owning parent and enforces declared
+barriers.
 
-It reads raw child streams only when evidence is missing, disputed, or requires
-diagnosis.
+Before integration, the parent:
 
-Before continuing or terminating, the parent must:
+1. checks task identity and lineage;
+2. verifies the exact baseline;
+3. verifies changed paths and commit ancestry;
+4. verifies acceptance evidence;
+5. reconciles failures and disagreements;
+6. integrates accepted commits in deterministic dependency order;
+7. binds downstream work to the exact integrated commit.
 
-1. wait for the declared terminal barrier;
-2. verify each accepted view reference and content hash;
-3. reconcile child conclusions, failures, and disagreements;
-4. author its own higher-level Markdown view;
-5. persist that view through Loom; and
-6. pass the aggregate view to the next reviewed tier.
-
-This rule applies recursively. A root agent receives aggregate child views,
-not an undifferentiated transcript of every descendant action.
-
-The compiled graph uses an all-terminal barrier when failed lanes still contain
-evidence that the parent must aggregate.
+The parent may author a Markdown summary for humans.
+That summary is optional.
 
 ### Processing storage and retention
 
-Local execution evidence lives under the ignored project root
+Optional local execution evidence lives under the ignored project root
 `workflow/processing/`.
 
 Path contracts are:
 
-- `workflow/processing/<workflow>/<run-id>/events.jsonl` for run authority;
+- `workflow/processing/<workflow>/<run-id>/events.jsonl` for optional run
+  evidence;
 - `workflow/processing/<workflow>/<run-id>/agents/<task>/attempt-<n>/events.jsonl`
   for one agent attempt;
 - `workflow/processing/<workflow>/<run-id>/agents/<task>/attempt-<n>/result.json`
@@ -330,14 +224,11 @@ Path contracts are:
   for its semantic projection; and
 - `workflow/processing/<workflow>/<run-id>/view.md` for the root aggregate.
 
-The workflow segment is `delegated-agent-work` for ordinary coding delegation.
-Each tier can be recorded as an attempt: child attempts point to their declared
-parent attempt, the root aggregation attempt points to `workflow-root`, and the
-delivery owner's final user report is the final public projection of that root
-view.
+Compiled Loom workflows may rely on their own processing store.
+Native harness delegation does not.
 
-Keep processing evidence through aggregation and handoff. Cleanup is explicit.
-It is separate from disposable `.cortex/.session/` reflection memory.
+When optional evidence is retained, cleanup is explicit.
+It remains separate from disposable `.cortex/.session/` reflection memory.
 
 ## Safe delegation patterns
 
@@ -427,6 +318,8 @@ Keep one owner when work is:
 - Concurrent writers must not share one worktree.
 - Write-capable workers need isolated worktrees or disposable workspaces.
 - Their file scopes must be disjoint.
+- Every retry needs fresh isolated attempt state from the declared baseline.
+- A successful writer returns a commit with verifiable baseline ancestry.
 - The parent still owns integration.
 
 ## Machine-managed workflows
@@ -439,6 +332,7 @@ This delegation workflow still owns the worker boundary:
 
 - semantic work uses bounded child workers;
 - deterministic work uses tools;
+- the active harness owns native worker coordination;
 - one delivery owner defines and reviews the join; and
 - child workers do not acquire delivery authority.
 
@@ -449,18 +343,19 @@ The architecture boundary is defined in
 
 Before integration, verify:
 
-- every worker used the same exact baseline;
-- every reached task has one terminal result;
-- every reached agent attempt has one continuous terminal action stream;
-- every terminal attempt has an agent-authored or explicitly machine-authored
-  view;
-- every projection path and digest matches its recorded bytes;
+- every worker used its declared exact baseline;
+- every reached task has a harness-visible terminal result;
 - every child records the correct parent lineage;
-- every attempt depth is at most three;
-- no child dynamically created a task or tier;
-- every parent aggregate covers the declared child terminal barrier;
-- the root aggregate is the input to the delivery owner's final report;
-- skipped branches are recorded;
+- every task stayed inside its declared hierarchy depth bound;
+- no descendant widened its assigned task or write scope;
+- every parent result covers the declared child terminal barrier;
 - write scopes did not overlap;
+- every write-capable attempt used an isolated workspace;
+- every retry started from fresh isolated state;
+- every accepted commit descends from its exact baseline;
+- every accepted commit changes only allowed paths;
+- every downstream task binds to the exact integrated provider commit;
+- integration follows deterministic dependency order;
+- optional JSONL and Markdown evidence did not gate harness progress;
 - the parent reviewed all evidence;
 - only the delivery owner mutated shared lifecycle state.

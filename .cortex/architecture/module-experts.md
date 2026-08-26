@@ -9,8 +9,9 @@ It does not schedule work.
 It does not replace package responsibilities in
 [packages.md](packages.md).
 
-Loom owns scheduling and attempt journals.
-The delivery owner owns implementation, integration, and lifecycle state.
+The active Codex, Cursor, or other capable harness owns expert scheduling and
+communication.
+The delivery owner owns integration and lifecycle state.
 
 ## Registry contract
 
@@ -33,9 +34,10 @@ The executable catalog lives in
 `agentic-ai/loom/src/module-experts/catalog.ts`.
 Project role files live under `.codex/agents/module-experts/`.
 
-Every successful role completion uses the dedicated
-`ModuleExpertEvidence` result kind.
-Its structured continuation contains exactly these non-empty evidence lists:
+Every successful native-harness role completion returns equivalent semantic
+evidence fields. Optional compiled Loom runs use the dedicated
+`ModuleExpertEvidence` result kind. The continuation contains these non-empty
+evidence lists:
 
 - `externalApi`;
 - `dependencies`;
@@ -54,33 +56,22 @@ The lists are bounded, unique, and free of control characters.
 `parentActions` is evidence for the delivery owner.
 It does not grant scheduling or mutation authority.
 
-Every invocation also requires a replay-verified parent declaration.
-A completed depth-one planning attempt uses the dedicated
-`ModuleDevelopmentPlan` result kind.
-Its `moduleExpertAuthorizations` entries declare the exact child:
+Every invocation uses a declared task contract.
+The contract binds:
 
-- task;
-- expert;
-- attempt;
-- depth;
-- immediate parent task, agent, and attempt.
+- task and expert identity;
+- exact source commit;
+- parent lineage and hierarchy depth bound;
+- evidence or write scope;
+- dependencies and resource claims;
+- acceptance evidence;
+- parent-owned join.
 
-Depth-two experts require a matching declaration from their immediate
-depth-one plan.
-Depth-three experts require both a completed immediate parent and a matching
-declaration from that parent's depth-one plan.
-The invocation adapter verifies the parent journal, result and view hashes,
-source commit, identity, completion, and exact authorization before it creates
-the child journal or starts Codex.
-`ModuleExpertEvidence` and `parentActions` cannot authorize descendants.
-
-Every attempt event also records its typed Loom adapter identity.
-Replay rejects missing, unknown, or changing adapter identities.
-Only the isolated module-expert invocation adapter may finalize
-`ModuleExpertEvidence`.
-The generic delegation recorder rejects that result kind.
-Depth-three authorization requires replay-verified evidence from the isolated
-adapter, not merely an expert name in a generic journal.
+The active harness owns native expert creation, communication, scheduling,
+retries, cancellation, barriers, nested delegation, and synthesis. Native
+semantic evidence, optional `ModuleExpertEvidence`, and `parentActions` remain
+recommendations.
+They do not authorize descendants, writes, integration, or lifecycle changes.
 
 Role definitions preserve two structural rules:
 
@@ -88,62 +79,26 @@ Role definitions preserve two structural rules:
 - Role files contain thin routing instructions instead of copied domain facts.
 
 The role TOML is an identity and behavioral default.
-It is not the capability boundary because a native child inherits the parent
-turn's live permissions.
-An expert runs only through Loom's isolated Codex SDK runtime.
-That runtime enforces:
+It routes the harness to the relevant domain context.
+It does not grant filesystem capability or delivery ownership.
 
-- read-only filesystem access;
-- no approval escalation;
-- no model-controlled process, general network, or web-search path;
-- disabled apps and plugins;
-- disabled multi-agent tools and zero child depth;
-- one disposable Codex home with no inherited configuration or MCP servers;
-- an empty working directory;
-- one catalog-scoped snapshot materialized from the exact source commit;
-- the canonical module-expert skill and workflow authorities in every snapshot;
-- physical removal of catalog exclusions before the snapshot is served;
-- tracked generated-scope entries from that commit, with untracked workspace
-  output represented only by its tracked producer contract;
-- one in-process numeric-loopback context server with bounded list, read, and
-  literal-search tools;
-- one runtime-owned authentication helper embedded in the already-running Loom
-  module, rather than loaded from the analyzed commit or live worktree;
-- one nonce-bound, one-shot `CODEX_API_KEY` redemption over a disposable Unix
-  socket;
-- exclusion of the raw credential from the Codex environment, provider
-  configuration, arguments, repository snapshot, and disposable Codex home
-  before redemption;
-- exact process and login-shell environment allowlists that exclude unrelated
-  parent credentials and capability-bearing variables.
+Read-only experts receive a bounded evidence surface from the exact source
+commit.
+Write-capable module tasks are separate implementation assignments.
+They require:
 
-Pinned Codex `0.147` retains a JavaScript composition wrapper and non-process
-helpers.
-The wrapper exposes only the bounded context tools and inert host helpers.
-It cannot start a process.
-Patch attempts remain blocked by the read-only sandbox and approval policy.
-Image access is disabled.
+- an isolated disposable worktree or workspace;
+- an explicit allowed-path scope;
+- a fresh workspace for every retry;
+- a commit whose ancestry begins at the declared baseline;
+- verification that the commit changed only allowed paths;
+- task-specific tests and acceptance evidence;
+- deterministic parent-owned integration.
 
-This boundary prevents model-controlled credential recovery.
-It does not claim protection from a separate hostile process already running
-under the same operating-system account or from memory forensics.
-That stronger boundary requires managed workload identity or operating-system
-account isolation.
-
-Adapter scope remains explicit:
-
-- This isolation belongs only to the module-expert adapter.
-- Generic Loom workflows retain the ordinary Codex home and authentication
-  store, including keyring-backed sessions.
-
-Direct custom-agent spawning from a write-capable delivery session is not an
-authorized module-expert invocation.
-
-The invocation boundary treats the SDK completion as untrusted transport data.
-It first verifies the completed parent plan and exact child authorization.
-It then validates the expert result, finalizes the immutable attempt journal,
-and rereads, hashes, and replay-verifies `events.jsonl`, `result.json`, and
-`view.md` before processing references can reach the parent.
+Loom may still run reviewed read-only static workflows.
+Its JSONL streams, result files, and Markdown views are optional human or audit
+evidence for native harness delegation.
+They never gate dispatch, continuation, retry, join, or completion.
 
 ## Portable Rust module experts
 
@@ -321,8 +276,7 @@ task loom:module-experts:validate
 
 The audit rejects:
 
-- malformed role definitions, runtime capability drift, unsafe credential or
-  environment allowlists, and generic-versus-expert runtime routing drift;
+- malformed role definitions and runtime routing drift;
 - missing or duplicate production-module routes;
 - missing authority, skill, authored scope, or entry-point paths;
 - generated scope producer, selector, or marker drift;
