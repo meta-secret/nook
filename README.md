@@ -415,8 +415,9 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
 with **`task remote TASK_NAMES=<name>,<name>`**. Single `preflight`, `rust:ci`,
-and `arc:runtime` selections use disposable ARC runner Pods in k0s;
-other selections and batches use GitHub-hosted workers. Then explicitly start complete PR validation with
+and `arc:runtime` selections use disposable ARC runner Pods in k0s. Browser
+selectors execute separately in exact-image Kubernetes Pods; compatible
+build-only selectors may share one ARC batch. Then explicitly start complete PR validation with
 **`task pr:validate PR=<number>`** when the head is ready. Ordinary PR pushes do
 not start the complete pipeline. Local Task mirrors below remain available for
 humans. Main-fix PRs use `FULL_E2E=1` to request the Main-equivalent browser
@@ -498,7 +499,8 @@ task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authoriz
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
-task remote TASK_NAMES=web:build,web:e2e # direct-Pod web build and browser proof
+task remote TASK_NAME=web:build # direct-Pod web build
+task remote TASK_NAME=web:e2e # direct-Pod browser proof
 task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
 task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
 task pr:validate PR=410 FULL_E2E=1 # complete gate plus Main-fix browser suites

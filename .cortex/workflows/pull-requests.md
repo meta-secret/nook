@@ -347,7 +347,8 @@ Always run `task loom:pre-push` again before every fix re-push.
 Focused hosted commands (never merge gates):
 
 ```bash
-task remote TASK_NAMES=web:build,web:e2e
+task remote TASK_NAME=web:build
+task remote TASK_NAME=web:e2e
 task remote TASK_NAME=rust:ci
 ```
 
