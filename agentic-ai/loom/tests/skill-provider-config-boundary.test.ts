@@ -2,6 +2,8 @@ import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
 import {
+  type ExecutableProviderReferenceInspection,
+  executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
   ShellExecutablePolicy,
 } from './skill-provider-executable-script.ts';
@@ -63,6 +65,11 @@ type ConfigurationScriptGraph = {
 type RequiredLaunchInspection = {
   readonly source: string;
   readonly specifier: string;
+};
+
+type ConfigurationReferenceInspection = {
+  readonly importer: string;
+  readonly source: string;
 };
 
 type RepositoryPackageDocument = {
@@ -190,7 +197,14 @@ async function pathsContainingProviderRoot(
   const matches: string[] = [];
   for (const path of paths) {
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
-    if (path.includes(PROVIDER_ROOT) || source.includes(PROVIDER_ROOT)) {
+    const referenceInspection: ExecutableProviderReferenceInspection = {
+      path,
+      source,
+    };
+    if (
+      path.includes(PROVIDER_ROOT) ||
+      executableSourceReferencesProvider(referenceInspection)
+    ) {
       matches.push(path);
     }
   }
@@ -227,15 +241,13 @@ function configurationScriptPaths(
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
-    CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
-    EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
-    const matches = [
-      ...source.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
-      ...source.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
-    ];
-    for (const match of matches) {
-      const specifier = match[1] ?? false;
-      if (specifier === false) continue;
+    const referenceInspection: ConfigurationReferenceInspection = {
+      importer,
+      source,
+    };
+    for (const specifier of configurationScriptReferences(
+      referenceInspection,
+    )) {
       const candidates = [
         posix.normalize(specifier.replace(/^\.\//u, '')),
         posix.normalize(posix.join(posix.dirname(importer), specifier)),
@@ -256,7 +268,9 @@ function configurationScriptPaths(
           specifier,
         };
         if (isRequiredScriptLaunch(launchInspection)) {
-          throw new Error(`Runnable script is untracked: ${specifier}`);
+          throw new Error(
+            `Runnable script is untracked: ${importer} -> ${specifier}`,
+          );
         }
         continue;
       }
@@ -290,11 +304,47 @@ function configurationScriptPaths(
   return [...scripts].sort();
 }
 
+function configurationScriptReferences(
+  inspection: ConfigurationReferenceInspection,
+): readonly string[] {
+  CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
+  EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
+  const matched = [
+    ...inspection.source.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
+    ...inspection.source.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
+  ]
+    .map((match) => match[1] ?? false)
+    .filter((specifier) => specifier !== false);
+  if (!EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer)) {
+    return [...new Set(matched)];
+  }
+  const importSource = inspection.source.replace(/^#![^\n]*\n/u, '');
+  const references = new Set(
+    ACTION_IMPORT_SCANNER.scanImports(importSource).map(
+      (imported) => imported.path,
+    ),
+  );
+  for (const specifier of matched) {
+    const launchInspection: RequiredLaunchInspection = {
+      source: inspection.source,
+      specifier,
+    };
+    if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
+  }
+  return [...references];
+}
+
 function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
   if (inspection.source.includes('{{')) return false;
-  return ['bun', 'node', 'bash', 'sh'].some((command) =>
-    inspection.source.includes(`${command} ${inspection.specifier}`),
+  const escapedSpecifier = inspection.specifier.replace(
+    /[.*+?^${}()|[\]\\]/gu,
+    '\\$&',
   );
+  const launchPattern = new RegExp(
+    `(?:^|[\\s;&|"'=:\\[(])(?:bun|node|bash|sh)\\s+["']?${escapedSpecifier}(?=$|[\\s"';&|])`,
+    'u',
+  );
+  return launchPattern.test(inspection.source);
 }
 
 function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
@@ -827,6 +877,21 @@ test('follows scripts launched from every runnable configuration surface', () =>
   expect(() => configurationScriptPaths(graph)).toThrow(
     'Runnable script is untracked',
   );
+
+  const inertCatalogSources = new Map<string, string>([
+    ['package.json', '{"scripts":{"audit":"bun scripts/catalog.ts"}}'],
+    ['scripts/catalog.ts', "const evidencePath = 'scripts/unsafe.test.ts';"],
+    ['scripts/unsafe.test.ts', 'eval(source);'],
+  ]);
+  const inertCatalogGraph: ConfigurationScriptGraph = {
+    executablePaths: new Set<string>(),
+    roots: ['package.json'],
+    sources: inertCatalogSources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(configurationScriptPaths(inertCatalogGraph)).toEqual([
+    'scripts/catalog.ts',
+  ]);
 });
 
 test('checks external and extensionless configuration scripts as executable sources', () => {
