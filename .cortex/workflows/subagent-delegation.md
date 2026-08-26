@@ -231,7 +231,25 @@ The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
 contract used by compiled workflows. It rejects undeclared lineage, source
 drift, post-dispatch admission, depth above three, and reuse of an existing
 attempt directory. Run-level aggregation and closure remain a separate
-delivery slice. This gives collaboration-tool subagents a journal boundary
+delivery step. After every planned attempt reaches a replay-verified terminal,
+the parent submits an ordered barrier-evidence manifest and finalizes the run:
+
+```sh
+task loom:agent-delegation:finalize REQUEST=path/to/finalization.json
+```
+
+The manifest binds every parent's exact direct children to their terminal kind,
+result hash, and view hash. Loom verifies the complete hierarchy recursively.
+Non-completed child terminals remain evidence and do not short-circuit closure.
+The completed root materializer's exact bounded agent-authored view becomes the
+deterministic run view. Finalization writes `run-result.json` and `view.md`, is
+idempotent for exact bytes, and prevents later admission or recording. It does
+not infer cross-stream ordering or claim that timestamps prove semantic
+consumption. Admission and finalization share one SQLite advisory lifecycle
+lock. Process death releases the operating-system lock. Loom removes stale or
+legacy temporary run projections under the next acquired lock before retrying.
+
+This gives collaboration-tool subagents a journal boundary
 without making their transcript or Markdown output into scheduling authority.
 The generic adapter cannot record `ModuleExpertEvidence`.
 Named module experts use their isolated invocation adapter and its separately
@@ -269,9 +287,10 @@ If an attempt fails before it can author a view, Loom writes a clearly labeled
 machine-authored failure view. A parent must not represent that view as an
 agent-authored conclusion.
 
-If the declared root materializer does not complete, Loom still writes a
-clearly labeled machine-authored root failure view. The delivery owner uses it
-to diagnose or retry the hierarchy. It is not an agent-authored aggregate.
+If a compiled workflow's declared root materializer does not complete, Loom
+writes a clearly labeled machine-authored root failure view. Ordinary
+delegation finalization instead fails closed because its canonical run view
+must be the completed root's agent-authored view.
 
 ### Parent aggregation and continuation
 
