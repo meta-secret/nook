@@ -45,6 +45,7 @@ import {
 import {
   actionObservation,
   actionObservationRecord,
+  actionAttemptStartedAt,
   actionRunId,
   isSourcePrRun,
   validationCycleRecord,
@@ -298,11 +299,7 @@ export function buildActionsEvidence(
       prNumber: request.prNumber,
     };
     if (!isSourcePrRun(associationRequest)) continue;
-    const startedRequest: PropertyRequest = {
-      record: rawRun,
-      key: 'created_at',
-    };
-    if (requiredStringProperty(startedRequest) > request.mergedAt) continue;
+    if (actionAttemptStartedAt(rawRun) > request.mergedAt) continue;
     const observationRequest: ActionObservationRequest = {
       record: rawRun,
       prNumber: request.prNumber,
@@ -313,8 +310,11 @@ export function buildActionsEvidence(
     deduplicatedRuns.set(observationKey, observation);
   }
   const observations = [...deduplicatedRuns.values()];
+  const attributedObservations = observations.filter(
+    (observation) => observation.sourceAttributed,
+  );
   const headStartsRequest = {
-    actions: observations,
+    actions: attributedObservations,
     reviewEvents: request.reviewEvents,
     finalHeadSha: request.finalHeadSha,
     deliveryHeadOrder: request.deliveryHeadOrder,
@@ -324,7 +324,9 @@ export function buildActionsEvidence(
   if (!headShas.includes(request.finalHeadSha))
     headShas.push(request.finalHeadSha);
   const headObservations = headShas.map((headSha) => {
-    const runs = observations.filter((run) => run.headSha === headSha);
+    const runs = attributedObservations.filter(
+      (run) => run.headSha === headSha,
+    );
     const headRequest: BuildHeadObservationRequest = {
       headSha,
       runs,

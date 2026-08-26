@@ -382,6 +382,7 @@ describe('agent stats GitHub evidence', () => {
       runAttempt: 2,
       headSha: finalHead,
       startedAt: '2026-08-01T10:06:00Z',
+      createdAt: '2026-08-01T10:00:00Z',
       finishedAt: '2026-08-01T10:07:00Z',
       conclusion: 'success',
       status: 'in_progress',
@@ -404,6 +405,33 @@ describe('agent stats GitHub evidence', () => {
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(1);
+  });
+
+  test('measures a rerun from its attempt-specific start', () => {
+    const pages = actionPages([
+      {
+        id: 302,
+        runAttempt: 2,
+        headSha: finalHead,
+        createdAt: '2026-08-01T09:00:00Z',
+        startedAt: '2026-08-01T10:00:00Z',
+        finishedAt: '2026-08-01T10:02:00Z',
+        conclusion: 'success',
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [finalHead],
+    };
+
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs[0]?.started_at).toBe('2026-08-01T10:00:00Z');
+    expect(evidence.runs[0]?.duration_seconds).toBe(120);
   });
 
   test('includes queued time through the merge boundary', () => {

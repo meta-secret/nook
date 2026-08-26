@@ -91,9 +91,6 @@ export function collectDispatchedActionAttemptPages(
       const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
       const runId = requiredNumberProperty(idRequest);
       const headSha = sourceHeadByRun.get(runId) ?? '';
-      if (headSha.length === 0) {
-        failGitHubCollection(`E2E PR run ${runId} has no source head`);
-      }
       const associatedRecord = {
         ...run,
         head_sha: headSha,
@@ -125,12 +122,7 @@ export function dispatchedSourceHead(
     suffixStart < 0
       ? ''
       : request.displayTitle.slice(prefix.length, suffixStart);
-  if (!/^[0-9a-f]{40}$/.test(headSha)) {
-    failGitHubCollection(
-      `E2E PR run ${request.runId} must retain one valid source head in its title`,
-    );
-  }
-  return headSha;
+  return /^[0-9a-f]{40}$/.test(headSha) ? headSha : '';
 }
 
 export function expandActionAttemptPages(

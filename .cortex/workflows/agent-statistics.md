@@ -89,6 +89,9 @@ Measure wall-clock time, including owned wait time.
   - Dispatch manual E2E with the exact current PR head SHA.
   - Retain that SHA in the workflow run title so reruns, early cancellation,
     and artifact expiry cannot change or erase source attribution.
+  - Retain malformed dispatches as unattributed run evidence. Never let one
+    invalid manual input block post-merge assembly.
+  - Measure attempt one from run creation and reruns from `run_started_at`.
   - Snapshot optional runs that outlive the PR at `merged_at` with conclusion
     `nonterminal_at_merge` so post-merge assembly does not wait for them.
 - **Cache telemetry:** flatten `cache-telemetry-*` artifacts into the scratch

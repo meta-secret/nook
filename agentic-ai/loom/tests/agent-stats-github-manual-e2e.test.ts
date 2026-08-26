@@ -59,16 +59,14 @@ describe('agent stats manual E2E evidence', () => {
     expect(dispatchedSourceHead(request)).toBe(firstHead);
   });
 
-  test('rejects manual E2E metadata without a valid source head', () => {
+  test('leaves malformed manual E2E metadata unattributed', () => {
     const request = {
       displayTitle: 'E2E PR #42 @ missing · all',
       prNumber: 42,
       runId: 500,
     };
 
-    expect(() => dispatchedSourceHead(request)).toThrow(
-      'must retain one valid source head in its title',
-    );
+    expect(dispatchedSourceHead(request)).toBe('');
   });
 
   test('snapshots nonterminal action attempts at merge', () => {
@@ -104,6 +102,22 @@ describe('agent stats manual E2E evidence', () => {
     expect(evidence.runs[0]?.finished_at).toBe(request.mergedAt);
     expect(evidence.runs[0]?.duration_seconds).toBe(3600);
     expect(evidence.runs[0]?.conclusion).toBe('nonterminal_at_merge');
+  });
+
+  test('counts malformed dispatches without inventing a delivery head', () => {
+    const pages = actionPages([
+      {
+        id: 105,
+        headSha: '',
+        finishedAt: '2026-08-01T10:01:00Z',
+        conclusion: 'failure',
+      },
+    ]);
+    const evidence = buildActionsEvidence(evidenceRequest(pages));
+
+    expect(evidence.runs).toHaveLength(1);
+    expect(evidence.runs[0]?.source_attributed).toBe(false);
+    expect(evidence.heads.map((head) => head.head_sha)).toEqual([finalHead]);
   });
 });
 
