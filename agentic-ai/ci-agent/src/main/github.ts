@@ -277,12 +277,6 @@ type RepositoryStatusCommentInput = {
   user: unknown;
 };
 
-type PullRequestHeadIdentity = {
-  ref: string;
-  repository: RepoRef;
-  sha: string;
-};
-
 enum HeadTransitionState {
   Observed = "observed",
   Pending = "pending",
@@ -293,39 +287,37 @@ type HeadTransitionBoundary =
   | { state: HeadTransitionState.Pending };
 
 type CurrentHeadTransitionInput = {
-  head: PullRequestHeadIdentity;
+  headSha: string;
   octokit: Octokit;
-};
-
-type PushEventPayload = {
-  readonly head?: string;
-  readonly ref?: string;
+  prNumber: number;
+  repoRef: RepoRef;
 };
 
 async function loadCurrentHeadTransition(
   input: CurrentHeadTransitionInput,
 ): Promise<HeadTransitionBoundary> {
-  const { head, octokit } = input;
-  const { owner, repo } = head.repository;
-  let repositoryEvents: Awaited<
-    ReturnType<typeof octokit.rest.activity.listRepoEvents>
+  const { headSha, octokit, prNumber, repoRef } = input;
+  const { owner, repo } = repoRef;
+  let timelineEvents: Awaited<
+    ReturnType<typeof octokit.rest.issues.listEventsForTimeline>
   >["data"];
   try {
-    repositoryEvents = await octokit.paginate(
-      octokit.rest.activity.listRepoEvents,
-      { owner, repo, per_page: 100 },
+    timelineEvents = await octokit.paginate(
+      octokit.rest.issues.listEventsForTimeline,
+      { issue_number: prNumber, owner, repo, per_page: 100 },
     );
   } catch {
     return { state: HeadTransitionState.Pending };
   }
-  const expectedRef = `refs/heads/${head.ref}`;
-  const pushEvent = repositoryEvents.find((event) => {
-    if (event.type !== "PushEvent") return false;
-    const payload = event.payload as typeof event.payload & PushEventPayload;
-    return payload.ref === expectedRef && payload.head === head.sha;
-  });
-  if (pushEvent?.created_at) {
-    return { at: pushEvent.created_at, state: HeadTransitionState.Observed };
+  const commitEvent = timelineEvents.find(
+    (event) =>
+      event.event === "committed" &&
+      "sha" in event &&
+      event.sha === headSha &&
+      "committer" in event,
+  );
+  if (commitEvent && "committer" in commitEvent && commitEvent.committer.date) {
+    return { at: commitEvent.committer.date, state: HeadTransitionState.Observed };
   }
   return { state: HeadTransitionState.Pending };
 }
@@ -341,16 +333,11 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
-  const currentHeadIdentity: PullRequestHeadIdentity = {
-    ref: pr.head.ref,
-    repository: pr.head.repo
-      ? { owner: pr.head.repo.owner.login, repo: pr.head.repo.name }
-      : repoRef,
-    sha: pr.head.sha,
-  };
   const transitionInput: CurrentHeadTransitionInput = {
-    head: currentHeadIdentity,
+    headSha: pr.head.sha,
     octokit,
+    prNumber,
+    repoRef,
   };
   const currentHeadTransition = await loadCurrentHeadTransition(transitionInput);
 

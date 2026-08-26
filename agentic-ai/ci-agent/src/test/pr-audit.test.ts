@@ -86,7 +86,7 @@ test("buildPrAudit leaves comments unclassified while the head transition is pen
     mockOctokit({
       codexReview: MockCodexReview.Missing,
       currentHeadFinding: true,
-      omitPushEvent: true,
+      omitHeadCommit: true,
     }),
     repoRef,
     410,
@@ -98,9 +98,9 @@ test("buildPrAudit leaves comments unclassified while the head transition is pen
   assert.equal(audit.feedback.substantiveComments, 1);
 });
 
-test("buildPrAudit treats repository event lookup failures as a pending transition", async () => {
+test("buildPrAudit treats PR timeline lookup failures as a pending transition", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ repositoryEventFailure: true }),
+    mockOctokit({ timelineEventFailure: true }),
     repoRef,
     410,
   );
@@ -108,7 +108,7 @@ test("buildPrAudit treats repository event lookup failures as a pending transiti
   assert.equal(audit.feedback.headTransitionObserved, false);
 });
 
-test("buildPrAudit reads head transitions from a fork repository", async () => {
+test("buildPrAudit reads fork head transitions from the base PR timeline", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
       headRepository: { owner: "contributor", repo: "nook-fork" },
@@ -373,9 +373,9 @@ type MockOptions = {
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
-  omitPushEvent?: boolean;
-  repositoryEventFailure?: boolean;
+  omitHeadCommit?: boolean;
   runStatus?: MockRunStatus;
+  timelineEventFailure?: boolean;
   unresolvedThreads?: number;
 };
 
@@ -400,30 +400,6 @@ function mockOctokitWithAgentHandoff(
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
   const headRepository = options.headRepository ?? repoRef;
-  const activity = {
-    listRepoEvents: async (input: RepoRef) => {
-      assert.equal(input.owner, headRepository.owner);
-      assert.equal(input.repo, headRepository.repo);
-      if (options.repositoryEventFailure === true) {
-        throw new Error("repository event feed unavailable");
-      }
-      return {
-        data:
-          options.omitPushEvent === true
-            ? []
-            : [
-                {
-                  created_at: "2026-08-08T00:01:00Z",
-                  payload: {
-                    head: headSha,
-                    ref: "refs/heads/feature",
-                  },
-                  type: "PushEvent",
-                },
-              ],
-      };
-    },
-  };
   const pulls = {
     get: async () => ({
       data: {
@@ -503,6 +479,30 @@ function createMockOctokit(options: MockOptions): Octokit {
     },
   };
   const issues = {
+    listEventsForTimeline: async (input: {
+      issue_number: number;
+      owner: string;
+      repo: string;
+    }) => {
+      assert.equal(input.issue_number, 410);
+      assert.equal(input.owner, repoRef.owner);
+      assert.equal(input.repo, repoRef.repo);
+      if (options.timelineEventFailure === true) {
+        throw new Error("PR timeline unavailable");
+      }
+      return {
+        data:
+          options.omitHeadCommit === true
+            ? []
+            : [
+                {
+                  committer: { date: "2026-08-08T00:01:00Z" },
+                  event: "committed",
+                  sha: headSha,
+                },
+              ],
+      };
+    },
     listComments: async () => ({
       data: [
         {
@@ -618,7 +618,6 @@ function createMockOctokit(options: MockOptions): Octokit {
   };
   const octokit = {
     rest: {
-      activity,
       actions: {
         listJobsForWorkflowRun: async () => ({
           data: [
