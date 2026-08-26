@@ -184,7 +184,8 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "the primary setup path must retry only its final web solve after the immediate BuildKit frontend flake"
     );
     for required in [
-        "is_buildkit_frontend_flake",
+        "is_buildkit_transport_flake",
+        "cache-export transport flakes",
         "is_frontend_authorization_timeout",
         "failed to read dockerfile",
         "status=${PIPESTATUS[0]}",
@@ -195,6 +196,19 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         assert!(
             bake_retry.contains(required),
             "Bake frontend-flake retry helper is missing: {required}"
+        );
+    }
+    for required in [
+        "docker:ci:cache:publish:rust-base",
+        "cache-publish:native-core-deps",
+        "cache-publish:native-debug",
+        "cache-publish:native-preflight",
+        "docker:ci:cache:publish:wasm",
+        "docker:ci:cache:publish:web",
+    ] {
+        assert!(
+            docker_tasks.contains(required),
+            "verified cache publication must use the bounded BuildKit transport retry: {required}"
         );
     }
     let isolation = read(

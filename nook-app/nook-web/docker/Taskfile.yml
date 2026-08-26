@@ -188,6 +188,8 @@ tasks:
       # web-deps-publish writes nook-web-deps-v1 under write_cache_repository plus
       # GHA_CACHE_SCOPE_SUFFIX. Image leaves use web-deps (no cache-to) as context.
       - >-
+        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
+        "docker:ci:cache:publish:web"
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
