@@ -9,7 +9,10 @@ import {
   type BuildActionsEvidenceRequest,
   type BuildReviewEvidenceRequest,
 } from '../src/lib/agent-stats-github.ts';
-import { mergeReviewedDeliveryHeads } from '../src/lib/agent-stats-github-delivery.ts';
+import {
+  gitHubCommitTimestamp,
+  mergeReviewedDeliveryHeads,
+} from '../src/lib/agent-stats-github-delivery.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -17,6 +20,15 @@ const firstHead = '1111111111111111111111111111111111111111';
 const finalHead = '2222222222222222222222222222222222222222';
 
 describe('agent stats GitHub evidence', () => {
+  test('reads the final commit observation timestamp', () => {
+    const rawCommitRecord = {
+      commit: { committer: { date: '2026-08-01T10:20:00Z' } },
+    };
+    const commitRecord = sealUntrustedYamlMap(rawCommitRecord);
+
+    expect(gitHubCommitTimestamp(commitRecord)).toBe('2026-08-01T10:20:00Z');
+  });
+
   test('groups validation by head and measures work after supersession', () => {
     const firstRun: ActionRunFixture = {
       id: 101,
@@ -265,6 +277,32 @@ describe('agent stats GitHub evidence', () => {
     expect(evidence.obsoleteValidationCount).toBe(1);
   });
 
+  test('uses the final commit to supersede zero-workflow validation', () => {
+    const oldHeadRun: ActionRunFixture = {
+      id: 403,
+      runAttempt: 1,
+      headSha: firstHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:30:00Z',
+      conclusion: 'success',
+    };
+    const pages = asUntrustedYamlNode([
+      { total_count: 1, workflow_runs: [actionRun(oldHeadRun)] },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      finalHeadObservedAt: '2026-08-01T10:20:00Z',
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.obsoleteValidationSeconds).toBe(600);
+    expect(evidence.heads[1]?.head_sha).toBe(finalHead);
+  });
+
   test('rejects nonterminal action attempts', () => {
     const nonterminalRun: ActionRunFixture = {
       id: 101,
@@ -306,7 +344,7 @@ describe('agent stats GitHub evidence', () => {
         id: 11,
         body: `<!-- nook-codex-review:${firstHead.slice(0, 12)} -->`,
         created_at: '2026-08-01T10:00:00Z',
-        author_association: 'MEMBER',
+        author_association: 'NONE',
         user: { login: 'github-actions[bot]' },
       },
       {
@@ -318,6 +356,13 @@ describe('agent stats GitHub evidence', () => {
       },
     ]);
     const reviewPages = yamlPages([
+      {
+        id: 500,
+        body: '',
+        commit_id: firstHead,
+        state: 'PENDING',
+        user: { login: 'human-reviewer' },
+      },
       {
         id: 501,
         body: '',

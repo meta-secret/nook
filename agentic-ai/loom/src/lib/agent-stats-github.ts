@@ -31,6 +31,7 @@ import {
 } from './agent-stats-github-validation.ts';
 import {
   deliveryHeadStarts,
+  gitHubCommitTimestamp,
   maximumTimestamp,
   mergeReviewedDeliveryHeads,
   minimumTimestamp,
@@ -42,6 +43,7 @@ import {
 } from './agent-stats-github-review.ts';
 
 const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
+const GITHUB_ACTIONS_LOGIN = 'github-actions[bot]';
 const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
   'OWNER',
   'MEMBER',
@@ -53,6 +55,7 @@ export type AgentStatsGitHubEvidenceRequest = {
   readonly prNumber: number;
   readonly branch: string;
   readonly openedAt: string;
+  readonly startedAt: string;
   readonly mergedAt: string;
   readonly finalHeadSha: string;
 };
@@ -77,6 +80,7 @@ export type BuildActionsEvidenceRequest = {
   readonly finalHeadSha: string;
   readonly mergedAt: string;
   readonly reviewEvents: readonly UntrustedYamlMap[];
+  readonly finalHeadObservedAt?: string;
 };
 
 export type BuildReviewEvidenceRequest = {
@@ -155,7 +159,7 @@ export function collectAgentStatsGitHubEvidence(
   request: AgentStatsGitHubEvidenceRequest,
 ): AgentStatsGitHubEvidence {
   const actionsEndpoint = 'repos/{owner}/{repo}/actions/runs';
-  const createdRange = `created=${request.openedAt}..${request.mergedAt}`;
+  const createdRange = `created=${request.startedAt}..${request.mergedAt}`;
   const branchField = `branch=${request.branch}`;
   const actionsApiRequest: GitHubApiRequest = {
     repoRoot: request.repoRoot,
@@ -189,12 +193,17 @@ export function collectAgentStatsGitHubEvidence(
     fields: ['per_page=100'],
   };
   const commitPages = runGitHubApi(commitsRequest);
-  const knownHeadShas = flattenApiPages(commitPages)
-    .filter(isRecord)
-    .map((commit) => {
-      const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
-      return requiredStringProperty(propertyRequest);
-    });
+  const knownHeadShas: string[] = [];
+  let finalHeadObservedAt = '';
+  for (const commit of flattenApiPages(commitPages)) {
+    if (!isRecord(commit)) continue;
+    const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
+    const headSha = requiredStringProperty(propertyRequest);
+    knownHeadShas.push(headSha);
+    if (headSha === request.finalHeadSha) {
+      finalHeadObservedAt = gitHubCommitTimestamp(commit);
+    }
+  }
   if (!knownHeadShas.includes(request.finalHeadSha)) {
     knownHeadShas.push(request.finalHeadSha);
   }
@@ -218,6 +227,7 @@ export function collectAgentStatsGitHubEvidence(
     finalHeadSha: request.finalHeadSha,
     mergedAt: request.mergedAt,
     reviewEvents: reviews.events,
+    finalHeadObservedAt,
   };
   const actions = buildActionsEvidence(actionsRequest);
   const deliveryHeadsRequest = {
@@ -293,6 +303,8 @@ export function buildActionsEvidence(
   const headStartsRequest = {
     actions: observations,
     reviewEvents: request.reviewEvents,
+    finalHeadSha: request.finalHeadSha,
+    finalHeadObservedAt: request.finalHeadObservedAt ?? '',
   };
   const headStarts = deliveryHeadStarts(headStartsRequest);
   const headShas = headStarts.map((head) => head.headSha);
@@ -453,17 +465,7 @@ function collectReviewReactionPages(
   const reactions: UntrustedYamlMap[] = [];
   const comments = flattenApiPages(request.issueCommentPages).filter(isRecord);
   for (const comment of comments) {
-    const associationRequest: PropertyRequest = {
-      record: comment,
-      key: 'author_association',
-    };
-    if (
-      !TRUSTED_REVIEW_ASSOCIATIONS.has(
-        requiredStringProperty(associationRequest),
-      )
-    ) {
-      continue;
-    }
+    if (!isTrustedReviewRequester(comment)) continue;
     const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
     const body = requiredStringProperty(bodyRequest);
     if (!/nook-codex-review:[0-9a-f]{7,40}/.test(body)) continue;
@@ -565,12 +567,7 @@ function reviewRequests(
       key: 'created_at',
     };
     if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
-    const associationRequest: PropertyRequest = {
-      record: comment,
-      key: 'author_association',
-    };
-    const association = requiredStringProperty(associationRequest);
-    if (!TRUSTED_REVIEW_ASSOCIATIONS.has(association)) continue;
+    if (!isTrustedReviewRequester(comment)) continue;
     const bodyRequest: PropertyRequest = { record: comment, key: 'body' };
     const body = requiredStringProperty(bodyRequest);
     const marker = body.match(/nook-codex-review:([0-9a-f]{7,40})/);
@@ -611,16 +608,18 @@ function reviewResults(
 ): ReviewResultObservation[] {
   const results: ReviewResultObservation[] = [];
   for (const review of request.reviews) {
-    const cutoffRequest: PropertyRequest = {
-      record: review,
-      key: 'submitted_at',
-    };
-    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
     const reviewLoginRequest: HasLoginRequest = {
       record: review,
       expected: CODEX_LOGIN,
     };
     if (!hasLogin(reviewLoginRequest)) continue;
+    const stateRequest: PropertyRequest = { record: review, key: 'state' };
+    if (stringProperty(stateRequest) === 'PENDING') continue;
+    const cutoffRequest: PropertyRequest = {
+      record: review,
+      key: 'submitted_at',
+    };
+    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
     const reviewIdRequest: PropertyRequest = { record: review, key: 'id' };
     const reviewId = requiredNumberProperty(reviewIdRequest);
     const inlineFindingCount = request.reviewComments.filter((comment) => {
@@ -973,4 +972,19 @@ function hasLogin(request: HasLoginRequest): boolean {
   }
   const loginRequest: PropertyRequest = { record: user.value, key: 'login' };
   return stringProperty(loginRequest) === request.expected;
+}
+
+function isTrustedReviewRequester(comment: UntrustedYamlMap): boolean {
+  const associationRequest: PropertyRequest = {
+    record: comment,
+    key: 'author_association',
+  };
+  if (TRUSTED_REVIEW_ASSOCIATIONS.has(stringProperty(associationRequest))) {
+    return true;
+  }
+  const loginRequest: HasLoginRequest = {
+    record: comment,
+    expected: GITHUB_ACTIONS_LOGIN,
+  };
+  return hasLogin(loginRequest);
 }
