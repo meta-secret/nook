@@ -21,9 +21,23 @@ const documents: readonly CortexArticleDocument[] = [
   },
 ];
 
+const emptyDocuments: readonly CortexArticleDocument[] = [
+  {
+    relativePath: '.cortex/legacy.md',
+    blocks: [
+      {
+        depth: 2,
+        kind: CortexArticleSemanticKind.Heading,
+        line: 1,
+        text: 'Empty legacy article',
+      },
+    ],
+  },
+];
+
 test('exempts cataloged baseline entries', () => {
   const request: MakeAuditRequest = {
-    documents,
+    documents: emptyDocuments,
     migrationBaselineEntries: ['.cortex/legacy.md'],
     migrationLedgerContent: '.cortex/legacy.md\n',
   };
@@ -82,19 +96,6 @@ test('reports post-baseline entries with exact source details', () => {
 });
 
 test('missing ledgers do not exempt empty documents', () => {
-  const emptyDocuments: readonly CortexArticleDocument[] = [
-    {
-      relativePath: '.cortex/legacy.md',
-      blocks: [
-        {
-          depth: 2,
-          kind: CortexArticleSemanticKind.Heading,
-          line: 1,
-          text: 'Empty legacy article',
-        },
-      ],
-    },
-  ];
   const request: MakeAuditRequest = {
     documents: emptyDocuments,
     migrationLedgerContent: false,
