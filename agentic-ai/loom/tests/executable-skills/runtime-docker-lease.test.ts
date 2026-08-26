@@ -1,109 +1,97 @@
 import { expect, test } from 'bun:test';
-import { LoomFailureCode } from '../../src/loom-failure.ts';
+import path from 'node:path';
 import {
   executeWithExecutableSkillDockerLease,
   type ExecuteWithExecutableSkillDockerLeaseRequest,
 } from '../../src/executable-skills/runtime-docker-lease.ts';
-import type {
-  BoundedProcessOutput,
-  RunBoundedProcessRequest,
-} from '../../src/executable-skills/source-analysis-process.ts';
 
-type DockerLeaseFixture = {
-  readonly commands: string[][];
-  readonly deadlines: number[];
-  readonly request: ExecuteWithExecutableSkillDockerLeaseRequest;
-};
+const ENDPOINT = 'unix:///tmp/nook-runtime-test.sock';
 
-type CreateDockerLeaseFixtureRequest = {
-  readonly actualOwnerToken: string;
-  readonly requestedOwnerToken: string;
-  readonly runLifecycle: () => Promise<void>;
-};
-
-function createDockerLeaseFixture(
-  request: CreateDockerLeaseFixtureRequest,
-): DockerLeaseFixture {
-  const commands: string[][] = [];
-  const deadlines: number[] = [];
-  const executeProcess = async (
-    processRequest: RunBoundedProcessRequest,
-  ): Promise<BoundedProcessOutput> => {
-    const command = [...processRequest.command];
-    commands.push(command);
-    deadlines.push(processRequest.deadlineExpiresAt);
-    if (command.includes('inspect')) {
-      return {
-        exitCode: 0,
-        stderr: '',
-        stdout: `${request.actualOwnerToken}\n`,
+test('serializes one daemon and releases after normal completion', async () => {
+  const daemonId = daemonIdentity('normal');
+  const events: string[] = [];
+  const ownerRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
+    daemonId,
+    endpoint: ENDPOINT,
+    execute: async () => {
+      events.push('execute');
+      const contenderRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
+        daemonId,
+        endpoint: ENDPOINT,
+        execute: async () => {
+          events.push('contender-execute');
+        },
+        recover: async () => {
+          events.push('contender-recover');
+        },
       };
-    }
-    return {
-      exitCode: 0,
-      stderr: '',
-      stdout: 'nook-executable-skill-runtime-lease\n',
+      const contender = executeWithExecutableSkillDockerLease(contenderRequest);
+      await expect(contender).rejects.toThrow('already owned');
+    },
+    recover: async () => {
+      events.push('recover');
+    },
+  };
+  await executeWithExecutableSkillDockerLease(ownerRequest);
+  const successorRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
+    daemonId,
+    endpoint: ENDPOINT,
+    execute: async () => {
+      events.push('successor');
+    },
+    recover: async () => {},
+  };
+  await executeWithExecutableSkillDockerLease(successorRequest);
+  expect(events).toEqual(['recover', 'execute', 'successor']);
+});
+
+test('kernel lease is released when its owner process is killed', async () => {
+  const daemonId = daemonIdentity('crash');
+  const command = [
+    process.execPath,
+    path.join(import.meta.dir, 'runtime-docker-lease-child.ts'),
+    daemonId,
+  ];
+  const options = { stderr: 'pipe', stdout: 'pipe' } as const;
+  const child = Bun.spawn(command, options);
+  const reader = child.stdout.getReader();
+  const ready = await reader.read();
+  expect(new TextDecoder().decode(ready.value).trim()).toBe('ready');
+  const contenderRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
+    daemonId,
+    endpoint: ENDPOINT,
+    execute: async () => {},
+    recover: async () => {},
+  };
+  const contender = executeWithExecutableSkillDockerLease(contenderRequest);
+  await expect(contender).rejects.toThrow('already owned');
+  child.kill(9);
+  await child.exited;
+  const successorRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
+    daemonId,
+    endpoint: ENDPOINT,
+    execute: async () => {},
+    recover: async () => {},
+  };
+  await executeWithExecutableSkillDockerLease(successorRequest);
+});
+
+test('rejects malformed daemon and endpoint identities', async () => {
+  for (const identity of [
+    { daemonId: 'short', endpoint: ENDPOINT },
+    { daemonId: daemonIdentity('endpoint'), endpoint: 'tcp://remote:2375' },
+  ]) {
+    const request = {
+      ...identity,
+      execute: async () => {},
+      recover: async () => {},
     };
-  };
-  const leaseRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
-    cwd: '/repository',
-    deadlineExpiresAt: Date.now() + 40_000,
-    dockerExecutable: '/trusted/docker',
-    endpoint: 'unix:///trusted/docker.sock',
-    execute: request.runLifecycle,
-    executeProcess,
-    ownerToken: request.requestedOwnerToken,
-    signal: false,
-  };
-  return { commands, deadlines, request: leaseRequest };
+    await expect(
+      executeWithExecutableSkillDockerLease(request),
+    ).rejects.toThrow('identity is invalid');
+  }
+});
+
+function daemonIdentity(label: string): string {
+  return `runtime-${label.padEnd(24, 'x')}`;
 }
-
-test('executes and removes only for the Docker lease owner', async () => {
-  let executions = 0;
-  const fixtureRequest: CreateDockerLeaseFixtureRequest = {
-    actualOwnerToken: 'a'.repeat(32),
-    requestedOwnerToken: 'a'.repeat(32),
-    runLifecycle: async () => {
-      executions += 1;
-    },
-  };
-  const fixture = createDockerLeaseFixture(fixtureRequest);
-
-  await executeWithExecutableSkillDockerLease(fixture.request);
-
-  expect(executions).toBe(1);
-  expect(
-    fixture.commands.filter((command) => command.includes('rm')),
-  ).toHaveLength(1);
-  expect(fixture.commands.some((command) => command.includes('TMPDIR'))).toBe(
-    false,
-  );
-  expect(fixture.deadlines.at(-2)).toBe(
-    fixture.request.deadlineExpiresAt - 2_000,
-  );
-  expect(fixture.deadlines.at(-1)).toBe(fixture.request.deadlineExpiresAt);
-});
-
-test('a losing Docker lease contender performs no lifecycle or cleanup', async () => {
-  let executions = 0;
-  const fixtureRequest: CreateDockerLeaseFixtureRequest = {
-    actualOwnerToken: 'a'.repeat(32),
-    requestedOwnerToken: 'b'.repeat(32),
-    runLifecycle: async () => {
-      executions += 1;
-    },
-  };
-  const fixture = createDockerLeaseFixture(fixtureRequest);
-  const expectedFailure = {
-    code: LoomFailureCode.ExecutableSkillRuntimeFailed,
-    message: expect.stringContaining('lease is already owned'),
-  };
-
-  await expect(
-    executeWithExecutableSkillDockerLease(fixture.request),
-  ).rejects.toMatchObject(expectedFailure);
-  expect(executions).toBe(0);
-  expect(
-    fixture.commands.filter((command) => command.includes('rm')),
-  ).toHaveLength(0);
-});

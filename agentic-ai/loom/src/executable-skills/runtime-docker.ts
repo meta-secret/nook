@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
+import { assertLocalDockerHostAllowed } from './docker-host-admission.ts';
 import { MINIMUM_EXECUTABLE_SKILL_TIMEOUT_MS } from './domain.ts';
 import type { RegisteredExecutableSkill } from './domain.ts';
 import type { AuditedExecutableSkillRegistry } from './registry.ts';
@@ -22,6 +23,7 @@ import {
 } from './runtime-failure.ts';
 import {
   EXECUTABLE_SKILL_CONTAINER_LABEL,
+  EXECUTABLE_SKILL_OWNER_LABEL,
   planExecutableSkillContainer,
   type ExecutableSkillContainerPlanRequest,
 } from './runtime-docker-plan.ts';
@@ -32,8 +34,29 @@ import {
 } from './runtime-slot.ts';
 import {
   executeWithExecutableSkillDockerLease,
+  resolveExecutableSkillHostUserId,
   type ExecuteWithExecutableSkillDockerLeaseRequest,
 } from './runtime-docker-lease.ts';
+import {
+  recoverStaleExecutableSkillDockerResources,
+  type ExecutableSkillDockerRecoveryRequest,
+} from './runtime-docker-recovery.ts';
+import {
+  attemptExecutableSkillContainerCreation,
+  type ExecutableSkillContainerCreationDependencies,
+} from './runtime-docker-create.ts';
+import {
+  executeExecutableSkillResourceTeardownWithDependencies,
+  type ExecutableSkillResourceTeardownDependencies,
+  type ExecutableSkillResourceTeardownRequest,
+  type ExecuteExecutableSkillResourceTeardownWithDependenciesRequest,
+} from './runtime-docker-teardown.ts';
+export {
+  executeExecutableSkillResourceTeardownWithDependencies,
+  type ExecutableSkillResourceTeardownDependencies,
+  type ExecutableSkillResourceTeardownRequest,
+  type ExecuteExecutableSkillResourceTeardownWithDependenciesRequest,
+} from './runtime-docker-teardown.ts';
 import {
   resolveExecutableSkillContainerState,
   type ExecutableSkillContainerState,
@@ -64,7 +87,9 @@ export type ExecutableSkillDockerProcessExecutor = (
 export type ExecutableSkillDockerDependencies = {
   readonly dockerExecutable: string;
   readonly executeProcess: ExecutableSkillDockerProcessExecutor;
+  readonly killProcessGroup: (processGroupId: number) => void;
   readonly uniqueId: () => string;
+  readonly userId: number;
 };
 
 export type ExecuteExecutableSkillContainerRequest = {
@@ -83,22 +108,6 @@ export type ExecutableSkillContainerCandidate = {
 export type ExecuteExecutableSkillContainerWithDependenciesRequest = {
   readonly dependencies: ExecutableSkillDockerDependencies;
   readonly request: ExecuteExecutableSkillContainerRequest;
-};
-
-export type ExecutableSkillResourceTeardownDependencies = {
-  readonly assertContainerInventoryEmpty: () => Promise<void>;
-  readonly confirmContainerRemoved: () => Promise<boolean>;
-  readonly removeImage: () => Promise<void>;
-};
-
-export type ExecutableSkillResourceTeardownRequest = {
-  readonly containerMayExist: boolean;
-  readonly imageMayExist: boolean;
-};
-
-export type ExecuteExecutableSkillResourceTeardownWithDependenciesRequest = {
-  readonly dependencies: ExecutableSkillResourceTeardownDependencies;
-  readonly request: ExecutableSkillResourceTeardownRequest;
 };
 
 export type ExecutableSkillTeardownInventoryActivityRequest = {
@@ -137,12 +146,13 @@ type ExecuteExecutableSkillContainerLifecycleRequest = {
 type DockerResourceNames = {
   readonly container: string;
   readonly image: string;
+  readonly ownerToken: string;
 };
 
 const PINNED_BUN_IMAGE =
   'oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4';
 const IMAGE_CLOSURE_LABEL = 'dev.nokey.loom.executable-skill.closure';
-const EXECUTABLE_SKILL_CONTAINER_NAME = 'nook-executable-skill-runtime';
+const EXECUTABLE_SKILL_CONTAINER_PREFIX = 'nook-executable-skill-runtime';
 const EXPECTED_DOCKER_RUNTIME = 'runc';
 const OPERATION_RESERVE_MILLISECONDS = 28_000;
 const LEASE_TEARDOWN_RESERVE_MILLISECONDS = 4_000;
@@ -150,7 +160,6 @@ const TEARDOWN_AUTHORITY_MILLISECONDS = 1_500;
 const TEARDOWN_ATTEMPT_MILLISECONDS = 4_500;
 const TEARDOWN_PHASE_MILLISECONDS = 3_000;
 const TEARDOWN_INVENTORY_MILLISECONDS = 3_000;
-const TEARDOWN_ATTEMPTS = 3;
 const CONTROL_OUTPUT_BYTES = 64 * 1024;
 const BUILD_OUTPUT_BYTES = 512 * 1024;
 export const EXECUTABLE_SKILL_DOCKER_AUTHORITY_FORMAT =
@@ -160,6 +169,7 @@ export async function executeExecutableSkillContainer(
   request: ExecuteExecutableSkillContainerRequest,
 ): Promise<ExecutableSkillContainerCandidate> {
   try {
+    assertLocalDockerHostAllowed();
     assertContainerRequestDeadline(request);
     const preflightRequest = {
       authority: request.registryAuthority,
@@ -171,7 +181,10 @@ export async function executeExecutableSkillContainer(
     const dependencies: ExecutableSkillDockerDependencies = {
       dockerExecutable: await resolveTrustedDockerExecutable(),
       executeProcess: runBoundedProcess,
+      killProcessGroup: (processGroupId) =>
+        process.kill(-processGroupId, 'SIGKILL'),
       uniqueId: randomUUID,
+      userId: resolveExecutableSkillHostUserId(),
     };
     const execution: ExecuteExecutableSkillContainerWithDependenciesRequest = {
       dependencies,
@@ -292,9 +305,7 @@ async function executeExecutableSkillContainerLifecycle(
   }
   let candidate: ExecutableSkillContainerCandidate | false = false;
   const leaseRequest: ExecuteWithExecutableSkillDockerLeaseRequest = {
-    cwd: request.context.directory,
-    deadlineExpiresAt: request.deadlineExpiresAt,
-    dockerExecutable: execution.dependencies.dockerExecutable,
+    daemonId: request.dockerEnvironment.daemonId,
     endpoint: request.dockerEnvironment.endpoint,
     execute: async () => {
       const insideLeaseRequest: ExecuteExecutableSkillContainerInsideDockerLeaseRequest =
@@ -304,9 +315,18 @@ async function executeExecutableSkillContainerLifecycle(
           insideLeaseRequest,
         );
     },
-    executeProcess: execution.dependencies.executeProcess,
-    ownerToken: suffix,
-    signal: request.signal,
+    recover: async () => {
+      const recoveryRequest: ExecutableSkillDockerRecoveryRequest = {
+        cwd: request.context.directory,
+        deadlineExpiresAt: authorityRequest.deadlineExpiresAt,
+        dockerExecutable: execution.dependencies.dockerExecutable,
+        endpoint: request.dockerEnvironment.endpoint,
+        executeProcess: execution.dependencies.executeProcess,
+        killProcessGroup: execution.dependencies.killProcessGroup,
+        userId: execution.dependencies.userId,
+      };
+      await recoverStaleExecutableSkillDockerResources(recoveryRequest);
+    },
   };
   await executeWithExecutableSkillDockerLease(leaseRequest);
   if (candidate === false) {
@@ -324,8 +344,9 @@ async function executeExecutableSkillContainerInsideDockerLease(
     lifecycleRequest.deadlineExpiresAt - LEASE_TEARDOWN_RESERVE_MILLISECONDS;
   await assertNoExecutableSkillContainers(request.authorityRequest);
   const names: DockerResourceNames = {
-    container: EXECUTABLE_SKILL_CONTAINER_NAME,
+    container: `${EXECUTABLE_SKILL_CONTAINER_PREFIX}-${request.suffix}`,
     image: `nook-executable-skill:${request.suffix}`,
+    ownerToken: request.suffix,
   };
   let imageMayExist = false;
   let containerMayExist = false;
@@ -350,8 +371,13 @@ async function executeExecutableSkillContainerInsideDockerLease(
       names,
       request: lifecycleRequest,
     };
-    await createSkillContainer(createRequest);
-    containerMayExist = true;
+    const creationDependencies: ExecutableSkillContainerCreationDependencies = {
+      create: async () => await createSkillContainer(createRequest),
+      markContainerMayExist: () => {
+        containerMayExist = true;
+      },
+    };
+    await attemptExecutableSkillContainerCreation(creationDependencies);
     await inspectSkillContainer(createRequest);
     await assertDockerAuthority(request.authorityRequest);
     const executionDeadlineExpiresAt = Math.min(
@@ -426,40 +452,6 @@ async function executeExecutableSkillContainerInsideDockerLease(
         request: teardownRequest,
       };
     await executeExecutableSkillResourceTeardownWithDependencies(teardown);
-  }
-}
-
-export async function executeExecutableSkillResourceTeardownWithDependencies(
-  execution: ExecuteExecutableSkillResourceTeardownWithDependenciesRequest,
-): Promise<void> {
-  try {
-    try {
-      if (execution.request.containerMayExist) {
-        let confirmed = false;
-        for (let attempt = 0; attempt < TEARDOWN_ATTEMPTS; attempt += 1) {
-          if (await execution.dependencies.confirmContainerRemoved()) {
-            confirmed = true;
-            break;
-          }
-        }
-        if (!confirmed) {
-          throw new Error(
-            'Executable skill container absence was not confirmed.',
-          );
-        }
-        await execution.dependencies.assertContainerInventoryEmpty();
-      }
-    } finally {
-      if (execution.request.imageMayExist) {
-        await execution.dependencies.removeImage();
-      }
-    }
-  } catch (error) {
-    const failureRequest: ThrowExecutableSkillRuntimeFailureRequest = {
-      error:
-        error instanceof Error ? error : 'Executable skill teardown failed.',
-    };
-    throwExecutableSkillRuntimeFailure(failureRequest);
   }
 }
 
@@ -541,6 +533,7 @@ async function buildSkillImage(
   const dockerfile = [
     `FROM ${PINNED_BUN_IMAGE}`,
     `LABEL ${IMAGE_CLOSURE_LABEL}=${closureSha256}`,
+    `LABEL ${EXECUTABLE_SKILL_OWNER_LABEL}=${operation.names.ownerToken}`,
     'WORKDIR /opt/nook-skill',
     'COPY --chown=65532:65532 . .',
     'USER 65532:65532',
@@ -608,6 +601,7 @@ async function createSkillContainer(
   const planRequest: ExecutableSkillContainerPlanRequest = {
     containerName: operation.names.container,
     imageDigest: operation.imageDigest,
+    ownerToken: operation.names.ownerToken,
     runnerContainerPath: operation.request.context.runnerContainerPath,
     skillId: operation.request.registration.skillId,
   };
@@ -636,6 +630,7 @@ async function inspectSkillContainer(
   const planRequest: ExecutableSkillContainerPlanRequest = {
     containerName: operation.names.container,
     imageDigest: operation.imageDigest,
+    ownerToken: operation.names.ownerToken,
     runnerContainerPath: operation.request.context.runnerContainerPath,
     skillId: operation.request.registration.skillId,
   };
@@ -736,6 +731,36 @@ async function attemptContainerRemovalAndConfirm(
     await assertDockerAuthority(authorityRequest);
   } catch {
     // Removal still targets the exact registry-bound endpoint and unique name.
+  }
+  const ownershipCommand: DockerCommandRequest = {
+    arguments: [
+      'container',
+      'inspect',
+      '--format',
+      `{{index .Config.Labels "${EXECUTABLE_SKILL_OWNER_LABEL}"}}`,
+      operation.names.container,
+    ],
+    cwd: operation.cwd,
+    deadlineExpiresAt: Math.min(
+      operation.deadlineExpiresAt,
+      startedAt + TEARDOWN_PHASE_MILLISECONDS,
+    ),
+    dependencies: operation.dependencies,
+    environment: operation.environment,
+    maximumStderrBytes: CONTROL_OUTPUT_BYTES,
+    maximumStdinBytes: 0,
+    maximumStdoutBytes: CONTROL_OUTPUT_BYTES,
+    signal: false,
+    stdin: false,
+  };
+  const ownership = await runDocker(ownershipCommand);
+  if (isConfirmedContainerAbsent(ownership)) return true;
+  if (
+    ownership.exitCode !== 0 ||
+    ownership.stderr !== '' ||
+    ownership.stdout.trim() !== operation.names.ownerToken
+  ) {
+    throw new Error('Executable skill container teardown owner is invalid.');
   }
   const removalCommand: DockerCommandRequest = {
     arguments: ['rm', '--force', operation.names.container],

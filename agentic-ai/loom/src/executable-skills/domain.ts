@@ -52,26 +52,17 @@ export type ExecutableSkillManifest = {
   readonly limits: ExecutableSkillLimits;
 };
 
-export type ExecutableSkillResultValidationRequest = {
-  readonly expectedKind: string;
-  readonly schemaVersion: 1;
-  readonly serializedResult: string;
-};
-
-export enum ExecutableSkillResultValidation {
-  Valid = 'valid',
+export enum ExecutableSkillValidationKind {
+  KindAndSchemaV1 = 'kind-and-schema-v1',
 }
-
-export type ExecutableSkillResultValidator = (
-  request: ExecutableSkillResultValidationRequest,
-) => ExecutableSkillResultValidation | false;
 
 export type RegisteredExecutableSkill = {
   readonly skillId: string;
   readonly manifest: ExecutableSkillManifest;
   readonly manifestPath: string;
+  readonly requestValidation: ExecutableSkillValidationKind;
+  readonly resultValidation: ExecutableSkillValidationKind;
   readonly runnerPath: string;
-  readonly validateResult: ExecutableSkillResultValidator;
 };
 
 export type ExecutableSkillRegistryFinding = {

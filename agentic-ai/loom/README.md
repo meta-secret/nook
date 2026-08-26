@@ -273,13 +273,15 @@ execution and materializes only audited TypeScript sources.
 Disposable skill containers run without network, mounts, privilege,
 capabilities, or a writable root. Resource, output, and lifecycle limits are
 mandatory. Admission and teardown both require an empty labeled-container
-inventory. One bounded slot serializes local lifecycles. An owner-token named
-volume on the audited Docker daemon rejects competing processes before image
-build and stays held through teardown. A fixed container name provides a
-second Docker-side exclusion boundary. A static host validator must
-synchronously return `Valid` for serialized output before verified receipts
-bind request, result, tree, closure, and image digests through a production-only
-opaque authority.
+inventory. One bounded slot serializes local lifecycles. A per-daemon SQLite
+exclusive transaction provides crash-released host exclusion through teardown.
+Under that lock, recovery kills and rescans exact stale owner-token Docker
+process groups. It then removes only matching labeled, owner-token-named
+containers and images and requires two clean inventories. Static registrations select
+finite reviewed host request and result validation kinds rather than injecting
+callbacks. Validation must finish within the deadline before execution and
+receipt construction. Verified receipts bind request, result, tree, closure,
+and image digests through a production-only opaque authority.
 
 Diagnostic dependency seams cannot mint that authority. Activation remains
 blocked until a static registration and real-Docker success, failure,

@@ -2,10 +2,13 @@ import path from 'node:path';
 
 export const EXECUTABLE_SKILL_CONTAINER_LABEL =
   'dev.nokey.loom.executable-skill.id';
+export const EXECUTABLE_SKILL_OWNER_LABEL =
+  'dev.nokey.loom.executable-skill.owner';
 
 export type ExecutableSkillContainerPlanRequest = {
   readonly containerName: string;
   readonly imageDigest: string;
+  readonly ownerToken: string;
   readonly runnerContainerPath: string;
   readonly skillId: string;
 };
@@ -45,6 +48,8 @@ export function planExecutableSkillContainer(
     request.containerName,
     '--label',
     `${EXECUTABLE_SKILL_CONTAINER_LABEL}=${request.skillId}`,
+    '--label',
+    `${EXECUTABLE_SKILL_OWNER_LABEL}=${request.ownerToken}`,
     '--network=none',
     '--read-only',
     '--cap-drop=ALL',
@@ -72,6 +77,7 @@ export function planExecutableSkillContainer(
     request.runnerContainerPath,
   ];
   const inspectionFormat = [
+    `{{index .Config.Labels "${EXECUTABLE_SKILL_OWNER_LABEL}"}}`,
     '{{.Image}}',
     '{{.Config.User}}',
     '{{.HostConfig.NetworkMode}}',
@@ -100,6 +106,7 @@ export function planExecutableSkillContainer(
     '{{.HostConfig.RestartPolicy.Name}}',
   ].join('|');
   const expectedInspection = [
+    request.ownerToken,
     request.imageDigest,
     '65532:65532',
     'none',

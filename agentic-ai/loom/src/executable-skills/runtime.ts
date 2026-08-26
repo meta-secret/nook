@@ -1,8 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { ExecutableSkillResultValidation } from './domain.ts';
+import { ExecutableSkillValidationKind } from './domain.ts';
 import type {
   ExecutableSkillExecutionKind,
-  ExecutableSkillResultValidationRequest,
   RegisteredExecutableSkill,
 } from './domain.ts';
 import type { AuditedExecutableSkillRegistry } from './registry.ts';
@@ -110,6 +109,14 @@ export async function executeExecutableSkillWithDependencies(
       value: request.serializedRequest,
     };
     assertPayloadBound(manifestRequestBound);
+    const validationRequest: ValidateRegisteredExecutableSkillRequestRequest = {
+      deadlineExpiresAt: request.deadlineExpiresAt,
+      registration: resolved.registration,
+      serializedRequest: request.serializedRequest,
+      signal: request.signal,
+    };
+    validateRegisteredExecutableSkillRequest(validationRequest);
+    assertRuntimeActive(request);
   } catch (error) {
     const failureRequest: ThrowExecutableSkillRuntimeFailureRequest = {
       error:
@@ -149,10 +156,13 @@ export async function executeExecutableSkillWithDependencies(
     };
     assertPayloadBound(resultBound);
     const validationRequest: ValidateRegisteredExecutableSkillResultRequest = {
+      deadlineExpiresAt: request.deadlineExpiresAt,
       registration: resolved.registration,
       serializedResult: candidate.serializedResult,
+      signal: request.signal,
     };
     validateRegisteredExecutableSkillResult(validationRequest);
+    assertRuntimeActive(request);
     if (!/^sha256:[0-9a-f]{64}$/u.test(candidate.imageDigest)) {
       throw new Error('Executable skill runtime image identity is invalid.');
     }
@@ -183,24 +193,56 @@ export async function executeExecutableSkillWithDependencies(
 }
 
 export type ValidateRegisteredExecutableSkillResultRequest = {
+  readonly deadlineExpiresAt: number;
   readonly registration: RegisteredExecutableSkill;
   readonly serializedResult: string;
+  readonly signal: AbortSignal | false;
 };
+
+export type ValidateRegisteredExecutableSkillRequestRequest = {
+  readonly deadlineExpiresAt: number;
+  readonly registration: RegisteredExecutableSkill;
+  readonly serializedRequest: string;
+  readonly signal: AbortSignal | false;
+};
+
+export function validateRegisteredExecutableSkillRequest(
+  request: ValidateRegisteredExecutableSkillRequestRequest,
+): void {
+  try {
+    const manifest = request.registration.manifest;
+    const validationRequest: ValidateExecutableSkillSerializedContractRequest =
+      {
+        expectedKind: manifest.requestKind,
+        serializedValue: request.serializedRequest,
+        validationKind: request.registration.requestValidation,
+      };
+    validateExecutableSkillSerializedContract(validationRequest);
+    assertRuntimeValidationActive(request);
+  } catch (error) {
+    const failureRequest: ThrowExecutableSkillRuntimeFailureRequest = {
+      error:
+        error instanceof Error
+          ? error
+          : 'Executable skill request contract validation failed.',
+    };
+    throwExecutableSkillRuntimeFailure(failureRequest);
+  }
+}
 
 export function validateRegisteredExecutableSkillResult(
   request: ValidateRegisteredExecutableSkillResultRequest,
 ): void {
   try {
     const manifest = request.registration.manifest;
-    const validationRequest: ExecutableSkillResultValidationRequest = {
-      expectedKind: manifest.resultKind,
-      schemaVersion: manifest.schemaVersion,
-      serializedResult: request.serializedResult,
-    };
-    const validation = request.registration.validateResult(validationRequest);
-    if (validation !== ExecutableSkillResultValidation.Valid) {
-      throw new Error('Executable skill result contract is invalid.');
-    }
+    const validationRequest: ValidateExecutableSkillSerializedContractRequest =
+      {
+        expectedKind: manifest.resultKind,
+        serializedValue: request.serializedResult,
+        validationKind: request.registration.resultValidation,
+      };
+    validateExecutableSkillSerializedContract(validationRequest);
+    assertRuntimeValidationActive(request);
   } catch (error) {
     const failureRequest: ThrowExecutableSkillRuntimeFailureRequest = {
       error:
@@ -209,6 +251,49 @@ export function validateRegisteredExecutableSkillResult(
           : 'Executable skill result contract validation failed.',
     };
     throwExecutableSkillRuntimeFailure(failureRequest);
+  }
+}
+
+type ValidateExecutableSkillSerializedContractRequest = {
+  readonly expectedKind: string;
+  readonly serializedValue: string;
+  readonly validationKind: ExecutableSkillValidationKind;
+};
+
+type ExecutableSkillKindAndSchemaDocument = {
+  readonly kind?: string;
+  readonly schemaVersion?: number;
+};
+
+function validateExecutableSkillSerializedContract(
+  request: ValidateExecutableSkillSerializedContractRequest,
+): void {
+  if (
+    request.validationKind !== ExecutableSkillValidationKind.KindAndSchemaV1
+  ) {
+    throw new Error('Executable skill validation kind is invalid.');
+  }
+  const parsed: ExecutableSkillKindAndSchemaDocument = JSON.parse(
+    request.serializedValue,
+  );
+  if (parsed.kind !== request.expectedKind || parsed.schemaVersion !== 1) {
+    throw new Error('Executable skill serialized contract is invalid.');
+  }
+}
+
+type ExecutableSkillRuntimeValidationActivityRequest = {
+  readonly deadlineExpiresAt: number;
+  readonly signal: AbortSignal | false;
+};
+
+function assertRuntimeValidationActive(
+  request: ExecutableSkillRuntimeValidationActivityRequest,
+): void {
+  if (
+    Date.now() >= request.deadlineExpiresAt ||
+    (request.signal !== false && request.signal.aborted)
+  ) {
+    throw new Error('Executable skill runtime is no longer active.');
   }
 }
 

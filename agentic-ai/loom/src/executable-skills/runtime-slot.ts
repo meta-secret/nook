@@ -128,7 +128,12 @@ function waitForRuntimeSlot(
     timer = setTimeout(() => resolve(RuntimeSlotWaitKind.Interrupted), delay);
     if (request.signal !== false) {
       listener = () => resolve(RuntimeSlotWaitKind.Interrupted);
+      if (request.signal.aborted) {
+        resolve(RuntimeSlotWaitKind.Interrupted);
+        return;
+      }
       request.signal.addEventListener('abort', listener);
+      if (request.signal.aborted) resolve(RuntimeSlotWaitKind.Interrupted);
     }
   });
   const wait: RuntimeSlotWait = {

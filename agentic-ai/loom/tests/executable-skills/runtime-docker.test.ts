@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { LoomFailureCode } from '../../src/loom-failure.ts';
+import { assertLocalDockerHostAllowed } from '../../src/executable-skills/docker-host-admission.ts';
 import type { AuditedExecutableSkillRegistry } from '../../src/executable-skills/registry.ts';
 import {
   assertExecutableSkillContainerDeadline,
@@ -47,6 +48,7 @@ test('plans an attested no-network read-only container', () => {
   const request: ExecutableSkillContainerPlanRequest = {
     containerName: 'nook-skill-1234',
     imageDigest: `sha256:${'a'.repeat(64)}`,
+    ownerToken: 'b'.repeat(32),
     runnerContainerPath: '/opt/nook-skill/fixture/src/runner.ts',
     skillId: 'fixture',
   };
@@ -121,10 +123,12 @@ test('rejects forged registry authority before Docker execution', async () => {
       executed = true;
       return { exitCode: 0, stderr: '', stdout: '' };
     },
+    killProcessGroup: () => {},
     uniqueId: () => '12345678-1234-1234-1234-123456789abc',
+    userId: 501,
   };
   const request: ExecuteExecutableSkillContainerRequest = {
-    deadlineExpiresAt: Date.now() + 40_000,
+    deadlineExpiresAt: Date.now() + 41_000,
     registryAuthority,
     serializedRequest: '{}',
     signal: false,
@@ -143,6 +147,29 @@ test('rejects forged registry authority before Docker execution', async () => {
     executeExecutableSkillContainerWithDependencies(execution),
   ).rejects.toMatchObject(expectedFailure);
   expect(executed).toBe(false);
+});
+
+test('rejects ARC and remote BuildKit hosts before Docker execution', () => {
+  const environmentVariables = [
+    'NOOK_ARC_RUNNER',
+    'NOOK_BUILDKIT_REMOTE',
+  ] as const;
+  for (const variable of environmentVariables) {
+    const previousValue = process.env[variable] || false;
+    process.env[variable] = '1';
+    try {
+      const expectedFailure = {
+        message: expect.stringContaining('non-ARC local Docker'),
+      };
+      expect(() => assertLocalDockerHostAllowed()).toThrow(
+        expect.objectContaining(expectedFailure),
+      );
+    } finally {
+      if (previousValue === false)
+        Reflect.deleteProperty(process.env, variable);
+      else process.env[variable] = previousValue;
+    }
+  }
 });
 
 test('fails closed when executable skill container inventory is not empty', () => {

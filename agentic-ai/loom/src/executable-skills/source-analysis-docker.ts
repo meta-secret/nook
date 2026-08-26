@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import type { RmOptions } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { assertLocalDockerHostAllowed } from './docker-host-admission.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import {
   type BoundedProcessOutput,
@@ -178,7 +179,7 @@ let sourceAnalysisImage: Promise<SourceAnalysisImageReceipt> | false = false;
 export async function runSealedSourceAnalysisContainer(
   request: RunSealedSourceAnalysisContainerRequest,
 ): Promise<SealedSourceAnalysisContainerOutput> {
-  assertSourceAnalysisDockerHostAllowed();
+  assertLocalDockerHostAllowed();
   const dockerExecutable = await resolveTrustedDockerExecutable();
   const dependencies: SourceAnalysisDockerDependencies = {
     dockerExecutable,
@@ -293,17 +294,6 @@ export async function runSealedSourceAnalysisWithDependencies(
       await removeSourceAnalysisContainer(removalRequest);
       await assertNoLabeledContainers(removalRequest);
     }
-  }
-}
-
-function assertSourceAnalysisDockerHostAllowed(): void {
-  if (
-    process.env.NOOK_ARC_RUNNER === '1' ||
-    process.env.NOOK_BUILDKIT_REMOTE === '1'
-  ) {
-    throw new Error(
-      'Sealed source analysis requires its explicit non-ARC Docker environment.',
-    );
   }
 }
 

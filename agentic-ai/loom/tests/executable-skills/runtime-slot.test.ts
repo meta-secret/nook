@@ -107,6 +107,58 @@ test('aborted slot wait releases its queue position', async () => {
   expect((await final).serializedResult).toBe('c');
 });
 
+test('observes cancellation that predates slot listener installation', async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let executed = false;
+  const request: ExecuteExecutableSkillInRuntimeSlotRequest = {
+    clock: systemClock,
+    deadlineExpiresAt: Date.now() + 60_000,
+    execute: async () => {
+      executed = true;
+      return candidate('a');
+    },
+    signal: controller.signal,
+  };
+  const expectedFailure = {
+    code: LoomFailureCode.ExecutableSkillRuntimeFailed,
+    message: expect.stringContaining('slot was aborted'),
+  };
+
+  await expect(
+    executeExecutableSkillInRuntimeSlot(request),
+  ).rejects.toMatchObject(expectedFailure);
+  expect(executed).toBe(false);
+});
+
+test('observes cancellation during slot listener installation', async () => {
+  const controller = new AbortController();
+  let executed = false;
+  const clock: ExecutableSkillRuntimeSlotClock = {
+    now: () => {
+      controller.abort();
+      return Date.now();
+    },
+  };
+  const request: ExecuteExecutableSkillInRuntimeSlotRequest = {
+    clock,
+    deadlineExpiresAt: Date.now() + 60_000,
+    execute: async () => {
+      executed = true;
+      return candidate('a');
+    },
+    signal: controller.signal,
+  };
+
+  const expectedFailure = {
+    code: LoomFailureCode.ExecutableSkillRuntimeFailed,
+  };
+  await expect(
+    executeExecutableSkillInRuntimeSlot(request),
+  ).rejects.toMatchObject(expectedFailure);
+  expect(executed).toBe(false);
+});
+
 test('hands queued work the declared minimum operation budget', async () => {
   let releaseFirst = (): void => {};
   let markFirstStarted = (): void => {};

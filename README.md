@@ -442,8 +442,9 @@ The separate executable-skill execution runtime is still dormant. Its
 production catalog is empty, so no repository skill can execute through it.
 The runtime already binds audited source closure and local Docker authority,
 serializes container lifecycles, rejects competing processes through an
-owner-token Docker volume before image build, fails closed on stale labeled
-containers, and mints only opaque receipts after static host-result validation.
+exclusive per-daemon SQLite transaction, reaps exact stale owner-token Docker
+process groups and labeled resources before image build, and mints opaque receipts
+only after static host request and result validation within the deadline.
 Registration and real-Docker lifecycle acceptance must land together before
 activation.
 

@@ -166,17 +166,22 @@ timestamps. It builds from a digest-pinned Bun base and runs as UID 65532 in a
 no-network, read-only, capability-free container with bounded CPU, memory,
 processes, output, and time.
 
-One bounded in-process slot serializes lifecycles. An owner-token named-volume
-lease on the audited Docker daemon rejects competing processes before image
-build. A fixed container name remains a second Docker-side exclusion boundary.
-Loom fails closed when any executable-skill-labeled container exists before
-admission or remains after exact-container teardown. Teardown uses bounded
-force-removal attempts and confirmed absence. The Docker lease remains held
-through resource teardown.
+One bounded in-process slot serializes lifecycles. A per-daemon SQLite
+exclusive transaction excludes competing host processes. Its database lives
+in a verified current-user-owned directory. The kernel releases the lock after
+a host crash. Under that lock, Loom identifies exact stale owner-token Docker
+process groups, kills and rescans them, then removes only matching labeled
+containers and images. Every mutable Docker resource has an owner-token name.
+Recovery requires two clean process and resource inventories before a new
+lifecycle starts. Loom fails closed on foreign ownership or any labeled
+container that remains after teardown. The transaction remains held through
+bounded force-removal and confirmed absence.
 
-The static registration owns a synchronous host-side result validator. It must
-return the explicit `Valid` result. Only validated serialized output can reach
-receipt construction. Production execution
+The static registration selects distinct finite, reviewed host-side request and
+result validation kinds. Registration cannot inject host callback functions.
+Validation must complete within the runtime deadline. Only validated serialized
+input can execute. Only validated serialized output can reach receipt
+construction. Production execution
 receipts are opaque `WeakMap` authorities bound to the request hash, result
 hash, Git tree, closure digest, and runtime image digest. Injectable diagnostic
 seams return unsealed candidates and cannot mint execution authority.

@@ -2,6 +2,7 @@ import type {
   ExecutableSkillManifest,
   RegisteredExecutableSkill,
 } from './domain.ts';
+import { ExecutableSkillValidationKind } from './domain.ts';
 
 export const MAXIMUM_EXECUTABLE_SKILL_REGISTRATIONS = 32;
 
@@ -111,8 +112,9 @@ function freezeRegistration(
     skillId: entry.skillId,
     manifest: Object.freeze(manifest),
     manifestPath: entry.manifestPath,
+    requestValidation: entry.requestValidation,
+    resultValidation: entry.resultValidation,
     runnerPath: entry.runnerPath,
-    validateResult: entry.validateResult,
   };
   return Object.freeze(registration);
 }
@@ -122,7 +124,8 @@ function assertRegistrationIdentity(entry: RegisteredExecutableSkill): void {
   const expectedManifestPath = `${expectedRoot}executable-skill.json`;
   if (
     entry.manifest.id !== entry.skillId ||
-    typeof entry.validateResult !== 'function' ||
+    entry.requestValidation !== ExecutableSkillValidationKind.KindAndSchemaV1 ||
+    entry.resultValidation !== ExecutableSkillValidationKind.KindAndSchemaV1 ||
     entry.manifestPath !== expectedManifestPath ||
     !entry.runnerPath.startsWith(expectedRoot) ||
     !entry.runnerPath.endsWith('.ts') ||

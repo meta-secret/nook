@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
   ExecutableSkillExecutionKind,
-  ExecutableSkillResultValidation,
+  ExecutableSkillValidationKind,
 } from '../../src/executable-skills/domain.ts';
 import {
   buildExecutableSkillClosureCandidate,
@@ -16,22 +16,7 @@ import type {
   ExecutableSkillClosurePlan,
   ExecutableSkillManifest,
   RegisteredExecutableSkill,
-  ExecutableSkillResultValidationRequest,
 } from '../../src/executable-skills/domain.ts';
-
-export function validateFixtureResult(
-  request: ExecutableSkillResultValidationRequest,
-): ExecutableSkillResultValidation | false {
-  const parsed: { readonly kind?: string; readonly schemaVersion?: number } =
-    JSON.parse(request.serializedResult);
-  if (
-    parsed.kind !== request.expectedKind ||
-    parsed.schemaVersion !== request.schemaVersion
-  ) {
-    return false;
-  }
-  return ExecutableSkillResultValidation.Valid;
-}
 
 const skillLimits = {
   requestBytes: 1024,
@@ -53,8 +38,9 @@ const fixtureRegistrationValue: RegisteredExecutableSkill = {
   skillId: 'fixture',
   manifest: skillManifest,
   manifestPath: '.agents/skills/fixture/executable-skill.json',
+  requestValidation: ExecutableSkillValidationKind.KindAndSchemaV1,
+  resultValidation: ExecutableSkillValidationKind.KindAndSchemaV1,
   runnerPath: '.agents/skills/fixture/src/runner.ts',
-  validateResult: validateFixtureResult,
 };
 export const FIXTURE_REGISTRATION = Object.freeze(fixtureRegistrationValue);
 
