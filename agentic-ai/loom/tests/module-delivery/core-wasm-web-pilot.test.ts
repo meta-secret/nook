@@ -114,8 +114,8 @@ type PlanNodeInput = {
   readonly taskId: string;
 };
 
-let fixture: GitFixture | undefined;
-let integrationCleanup: ModuleIntegrationCleanupHandle | undefined;
+const fixtures: GitFixture[] = [];
+const integrationCleanups: ModuleIntegrationCleanupHandle[] = [];
 const writerWorkspaces: ModuleWorktreeHandle[] = [];
 
 function cleanupWriters(): void {
@@ -126,21 +126,27 @@ function cleanupWriters(): void {
 }
 
 afterEach(() => {
-  if (!fixture) return;
   try {
     cleanupWriters();
-    if (integrationCleanup) {
+    for (const cleanupHandle of integrationCleanups.splice(0).reverse()) {
       const request: CleanupModuleIntegrationRequest = {
-        cleanupHandle: integrationCleanup,
+        cleanupHandle,
       };
       cleanupModuleIntegration(request);
     }
   } finally {
-    disposeGitFixture(fixture);
-    fixture = undefined;
-    integrationCleanup = undefined;
+    for (const trackedFixture of fixtures.splice(0).reverse()) {
+      disposeGitFixture(trackedFixture);
+    }
   }
 });
+
+function forgetIntegrationCleanup(
+  request: CleanupModuleIntegrationRequest,
+): void {
+  const cleanupIndex = integrationCleanups.indexOf(request.cleanupHandle);
+  if (cleanupIndex >= 0) integrationCleanups.splice(cleanupIndex, 1);
+}
 
 function nodeBaseline(input: PilotNodeInput): ModuleDeliveryBaseline {
   return input.dependencies.length === 0
@@ -336,7 +342,7 @@ function planNode(input: PlanNodeInput): WriteModuleDeliveryNode {
 describe('core to WASM to web module delivery pilot', () => {
   test('hands each integrated commit to the next registered layer', () => {
     const activeFixture = createGitFixture();
-    fixture = activeFixture;
+    fixtures.push(activeFixture);
     const fixtureInput: FixtureInput = { fixture: activeFixture };
     const before = sourceProof(fixtureInput);
     const sourceInput: SourceCommitInput = {
@@ -360,7 +366,7 @@ describe('core to WASM to web module delivery pilot', () => {
       acceptedPlan,
     };
     const initialState = prepareModuleIntegration(preparation);
-    integrationCleanup = initialState.cleanupHandle;
+    integrationCleanups.push(initialState.cleanupHandle);
 
     const coreNodeInput: PlanNodeInput = {
       plan: acceptedPlan,
@@ -491,7 +497,7 @@ describe('core to WASM to web module delivery pilot', () => {
       cleanupHandle: initialState.cleanupHandle,
     };
     expect(cleanupModuleIntegration(cleanupRequest).removed).toBe(true);
-    integrationCleanup = undefined;
+    forgetIntegrationCleanup(cleanupRequest);
     expect(sourceProof(fixtureInput)).toEqual(before);
     expect(sourceGit(['worktree', 'list', '--porcelain'])).not.toContain(
       activeFixture.workspaceRoot,
