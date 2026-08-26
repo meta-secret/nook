@@ -1,20 +1,15 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 use std::future::Future;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use codex::{
-    AbsolutePathBuf, AltScreenMode, ApprovalsReviewer, Arg0DispatchPaths, AskForApproval,
-    AuthCredentialsStoreMode, AuthManager, AutoCompactTokenLimitScope,
-    CodexHomeUserInstructionsProvider, CodexThread, Config, ConfigLayerStack, Constrained,
-    EnvironmentManager, EventMsg, ExecServerRuntimePaths, ExternalAuth, Features,
-    GhostSnapshotConfig, History, MemoriesConfig, ModelAvailabilityNuxConfig, MultiAgentV2Config,
-    NewThread, Notice, OAuthCredentialsStoreMode, OPENAI_PROVIDER_ID, Op, OtelConfig,
-    PermissionProfile, Permissions, ProjectConfig, RealtimeAudioConfig, RealtimeConfig,
-    SessionPickerViewMode, SessionSource, TerminalResizeReflowConfig, ThreadManager,
-    ThreadStoreConfig, ToolSuggestConfig, TuiKeymap, TuiNotificationSettings, TuiPetAnchor,
-    UriBasedFileOpener, UserInput, WebSearchMode, build_models_manager, built_in_model_providers,
+    AbsolutePathBuf, Arg0DispatchPaths, AskForApproval, AuthManager, CodexAppsToolsCache,
+    CodexHomeUserInstructionsProvider, CodexThread, Config, Constrained, EnvironmentManager,
+    EventMsg, ExecServerRuntimePaths, ExternalAuth, Features, NewThread, OPENAI_PROVIDER_ID, Op,
+    PermissionProfile, Permissions, ProjectConfig, SessionSource, StartThreadOptions,
+    ThreadManager, UserInput, WebSearchMode, build_models_manager, built_in_model_providers,
     empty_extension_registry, find_codex_home, init_state_db,
     local_agent_graph_store_from_state_db, resolve_installation_id, thread_store_from_config,
 };
@@ -134,7 +129,7 @@ impl InProcessCodexRunner {
         kind: TurnKind,
         options: &CodexOptions,
     ) -> Result<String, CodexError> {
-        let config = new_config(options)?;
+        let config = new_config(options).await?;
         let state_db = init_state_db(&config).await;
         let auth_manager =
             AuthManager::shared_from_config(&config, /* enable_codex_api_key_env */ false).await;
@@ -151,9 +146,13 @@ impl InProcessCodexRunner {
         .map_err(|error| CodexError::Run(error.to_string()))?;
         let thread_store = thread_store_from_config(&config, state_db.clone());
         let environment_manager = Arc::new(
-            EnvironmentManager::from_codex_home(config.codex_home.clone(), Some(runtime_paths))
-                .await
-                .map_err(|error| CodexError::Run(error.to_string()))?,
+            EnvironmentManager::from_codex_home(
+                config.codex_home.clone(),
+                Some(runtime_paths),
+                config.http_client_factory(),
+            )
+            .await
+            .map_err(|error| CodexError::Run(error.to_string()))?,
         );
         let installation_id = resolve_installation_id(&config.codex_home)
             .await
@@ -165,6 +164,7 @@ impl InProcessCodexRunner {
             &config,
             Arc::clone(&auth_manager),
             build_models_manager(&config, auth_manager),
+            CodexAppsToolsCache::default(),
             SessionSource::Exec,
             environment_manager,
             empty_extension_registry::<Config>(),
@@ -179,7 +179,7 @@ impl InProcessCodexRunner {
         let NewThread {
             thread_id, thread, ..
         } = thread_manager
-            .start_thread(config)
+            .start_thread(StartThreadOptions::new(config))
             .await
             .map_err(|error| CodexError::Run(error.to_string()))?;
 
@@ -283,7 +283,7 @@ impl CodexRunner for InProcessCodexRunner {
     }
 }
 
-fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
+async fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
     let codex_home =
         find_codex_home().map_err(|error| CodexError::Configuration(error.to_string()))?;
     let cwd = AbsolutePathBuf::from_absolute_path_checked(&options.repo_root)
@@ -322,130 +322,42 @@ fn new_config(options: &CodexOptions) -> Result<Config, CodexError> {
                 ))
             })?;
 
-    let workspace_roots = vec![cwd.clone()];
-    let mut config = Config {
-        config_layer_stack: ConfigLayerStack::default(),
-        startup_warnings: Vec::new(),
-        bypass_hook_trust: false,
-        model: Some(options.model.clone()),
-        service_tier: None,
-        review_model: None,
-        model_context_window: None,
-        model_auto_compact_token_limit: None,
-        model_auto_compact_token_limit_scope: AutoCompactTokenLimitScope::Total,
-        model_provider_id,
-        model_provider,
-        personality: None,
-        permissions,
-        explicit_permission_profile_mode: false,
-        custom_permission_profiles: Vec::new(),
-        approvals_reviewer: ApprovalsReviewer::User,
-        enforce_residency: Constrained::allow_any(/* initial_value */ None),
-        hide_agent_reasoning: false,
-        show_raw_agent_reasoning: false,
-        base_instructions: None,
-        developer_instructions: None,
-        guardian_policy_config: None,
-        include_permissions_instructions: false,
-        include_apps_instructions: false,
-        include_collaboration_mode_instructions: false,
-        include_skill_instructions: false,
-        orchestrator_skills_enabled: false,
-        orchestrator_mcp_enabled: false,
-        include_environment_context: false,
-        compact_prompt: None,
-        notify: None,
-        tui_notifications: TuiNotificationSettings::default(),
-        animations: true,
-        show_tooltips: true,
-        model_availability_nux: ModelAvailabilityNuxConfig::default(),
-        tui_alternate_screen: AltScreenMode::Auto,
-        tui_status_line: None,
-        tui_status_line_use_colors: true,
-        tui_terminal_title: None,
-        tui_theme: None,
-        tui_raw_output_mode: false,
-        tui_pet: None,
-        tui_pet_anchor: TuiPetAnchor::Composer,
-        terminal_resize_reflow: TerminalResizeReflowConfig::default(),
-        tui_keymap: TuiKeymap::default(),
-        tui_session_picker_view: SessionPickerViewMode::Dense,
-        tui_vim_mode_default: false,
-        cwd: cwd.clone(),
-        workspace_roots,
-        workspace_roots_explicit: true,
-        cli_auth_credentials_store_mode: AuthCredentialsStoreMode::File,
-        mcp_servers: Constrained::allow_any(HashMap::new()),
-        mcp_oauth_credentials_store_mode: OAuthCredentialsStoreMode::File,
-        mcp_oauth_callback_port: None,
-        mcp_oauth_callback_url: None,
-        model_providers,
-        project_doc_max_bytes: 32 * 1024,
-        project_doc_fallback_filenames: Vec::new(),
-        tool_output_token_limit: None,
-        agent_max_threads: Some(1),
-        agent_job_max_runtime_seconds: None,
-        agent_interrupt_message_enabled: false,
-        agent_max_depth: 1,
-        agent_roles: BTreeMap::new(),
-        memories: MemoriesConfig::default(),
-        sqlite_home: codex_home.to_path_buf(),
-        log_dir: codex_home.join("log").to_path_buf(),
-        config_lock_export_dir: None,
-        config_lock_allow_codex_version_mismatch: false,
-        config_lock_save_fields_resolved_from_model_catalog: true,
-        config_lock_toml: None,
-        codex_home,
-        history: History::default(),
-        ephemeral: true,
-        extra_config: None,
-        file_opener: UriBasedFileOpener::VsCode,
-        codex_self_exe: options.arg0_paths.codex_self_exe.clone(),
-        codex_linux_sandbox_exe: options.arg0_paths.codex_linux_sandbox_exe.clone(),
-        main_execve_wrapper_exe: options.arg0_paths.main_execve_wrapper_exe.clone(),
-        zsh_path: None,
-        model_reasoning_effort: Some(model_reasoning_effort),
-        plan_mode_reasoning_effort: None,
-        model_reasoning_summary: None,
-        model_catalog: None,
-        model_verbosity: None,
-        chatgpt_base_url: "https://chatgpt.com/backend-api/".to_string(),
-        respect_system_proxy: false,
-        apps_mcp_product_sku: None,
-        realtime_audio: RealtimeAudioConfig::default(),
-        experimental_realtime_ws_base_url: None,
-        experimental_realtime_webrtc_call_base_url: None,
-        experimental_realtime_ws_model: None,
-        realtime: RealtimeConfig::default(),
-        experimental_realtime_ws_backend_prompt: None,
-        experimental_realtime_ws_startup_context: None,
-        experimental_realtime_start_instructions: None,
-        experimental_thread_config_endpoint: None,
-        experimental_thread_store: ThreadStoreConfig::Local,
-        forced_chatgpt_workspace_id: None,
-        forced_login_method: None,
-        web_search_mode: Constrained::allow_any(WebSearchMode::Disabled),
-        web_search_config: None,
-        experimental_request_user_input_enabled: true,
-        code_mode: Default::default(),
-        use_experimental_unified_exec_tool: false,
-        background_terminal_max_timeout: 300_000,
-        ghost_snapshot: GhostSnapshotConfig::default(),
-        multi_agent_v2: MultiAgentV2Config::default(),
-        token_budget: None,
-        rollout_budget: None,
-        current_time_reminder: None,
-        features: Default::default(),
-        suppress_unstable_features_warning: false,
-        active_project: ProjectConfig { trust_level: None },
-        notices: Notice::default(),
-        check_for_update_on_startup: false,
-        disable_paste_burst: false,
-        analytics_enabled: Some(false),
-        feedback_enabled: false,
-        tool_suggest: ToolSuggestConfig::default(),
-        otel: OtelConfig::default(),
-    };
+    let mut config = Config::load_default_with_cli_overrides_for_codex_home(
+        codex_home.to_path_buf(),
+        Vec::new(),
+    )
+    .await
+    .map_err(|error| CodexError::Configuration(error.to_string()))?;
+    config.model = Some(options.model.clone());
+    config.model_provider_id = model_provider_id;
+    config.model_provider = model_provider;
+    config.model_providers = model_providers;
+    config.model_reasoning_effort = Some(model_reasoning_effort);
+    config.permissions = permissions;
+    config.cwd = cwd.clone();
+    config.workspace_roots = vec![cwd];
+    config.workspace_roots_explicit = true;
+    config.mcp_servers = Constrained::allow_any(HashMap::new());
+    config.non_prefixed_mcp_tool_servers = None;
+    config.agents_enabled = false;
+    config.agent_max_threads = Some(1);
+    config.ephemeral = true;
+    config.codex_self_exe = options.arg0_paths.codex_self_exe.clone();
+    config.codex_linux_sandbox_exe = options.arg0_paths.codex_linux_sandbox_exe.clone();
+    config.main_execve_wrapper_exe = options.arg0_paths.main_execve_wrapper_exe.clone();
+    config.web_search_mode = Constrained::allow_any(WebSearchMode::Disabled);
+    config.web_search_config = None;
+    config.orchestrator_skills_enabled = false;
+    config.orchestrator_mcp_enabled = false;
+    config.include_permissions_instructions = false;
+    config.include_apps_instructions = false;
+    config.include_collaboration_mode_instructions = false;
+    config.include_skill_instructions = false;
+    config.include_environment_context = false;
+    config.active_project = ProjectConfig { trust_level: None };
+    config.check_for_update_on_startup = false;
+    config.analytics_enabled = Some(false);
+    config.feedback_enabled = false;
     config
         .features
         .set(Features::with_defaults())
@@ -551,8 +463,8 @@ mod tests {
     use super::*;
     use crate::HiveContext;
 
-    #[test]
-    fn configures_an_ephemeral_read_only_core_thread() -> crate::HiveResult<()> {
+    #[tokio::test]
+    async fn configures_an_ephemeral_read_only_core_thread() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions {
             repo_root: repository.path().to_owned(),
@@ -567,7 +479,7 @@ mod tests {
             github_token: None,
             activity_sender: None,
         };
-        let config = new_config(&options)?;
+        let config = new_config(&options).await?;
 
         assert_eq!(config.model.as_deref(), Some("test-model"));
         assert_eq!(
@@ -583,6 +495,11 @@ mod tests {
         assert!(config.workspace_roots_explicit);
         assert!(config.ephemeral);
         assert_eq!(config.agent_max_threads, Some(1));
+        assert!(!config.include_permissions_instructions);
+        assert!(!config.include_apps_instructions);
+        assert!(!config.include_collaboration_mode_instructions);
+        assert!(!config.include_skill_instructions);
+        assert!(!config.include_environment_context);
         assert_eq!(
             config.codex_self_exe,
             Some(PathBuf::from("/bin/meta-agent"))
@@ -614,13 +531,13 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn trusted_task_thread_receives_direct_github_access() -> crate::HiveResult<()> {
+    #[tokio::test]
+    async fn trusted_task_thread_receives_direct_github_access() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let github_token = "test-token".to_owned();
         let mut options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
         options.github_token = Some(github_token.clone());
-        let config = new_config(&options)?;
+        let config = new_config(&options).await?;
 
         assert_eq!(
             config.permissions.permission_profile(),
@@ -682,11 +599,12 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn trusted_execution_options_disable_the_inner_permission_profile() -> crate::HiveResult<()> {
+    #[tokio::test]
+    async fn trusted_execution_options_disable_the_inner_permission_profile()
+    -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
         let options = CodexOptions::new(repository.path().to_owned()).with_workspace_write();
-        let config = new_config(&options)?;
+        let config = new_config(&options).await?;
 
         assert_eq!(options.access, CodexAccess::WorkspaceWrite);
         assert_eq!(
