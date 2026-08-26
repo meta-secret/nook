@@ -706,24 +706,8 @@ advisory: timing, animation, font rendering, and compression can make frame-only
 judgments flaky. A future AI reviewer should consume the video plus assertion
 results and traces, and must not receive real vault secrets.
 
-## Playwright projects
-
-Defined in `nook-app/nook-web/playwright.config.ts`:
-
-- **`stable`**
-  - Specs: IndexedDB-only specs (3 workers)
-  - CI: `main.yml`, `e2e-pr.yml` (manual/debug)
-- **`unstable`**
-  - Specs: Local-provider and sync specs (2 workers)
-  - CI: `main.yml`, `e2e-pr.yml` (manual)
-- **`sync-live`**
-  - Specs: `e2e/live/**/*.spec.ts`
-  - CI: `e2e-pr.yml` (manual)
-- **`ui-demo`**
-  - Specs: `e2e/demos/**/*.demo.spec.ts` (1 worker)
-  - CI: UI-changing PRs
-
-The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
+The Playwright project catalog and command grouping live in
+[Browser Validation](browser-validation.md).
 
 ## Task commands
 

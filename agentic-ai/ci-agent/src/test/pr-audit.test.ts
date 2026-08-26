@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { Octokit } from "@octokit/rest";
 
+import type { RepoRef } from "../main/github.js";
 import { buildPrAudit } from "../main/pr-audit.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
@@ -95,6 +96,18 @@ test("buildPrAudit leaves comments unclassified while the head transition is pen
   assert.equal(audit.feedback.currentIterationComments, 0);
   assert.equal(audit.feedback.headTransitionObserved, false);
   assert.equal(audit.feedback.substantiveComments, 1);
+});
+
+test("buildPrAudit reads head transitions from a fork repository", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      headRepository: { owner: "contributor", repo: "nook-fork" },
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.feedback.headTransitionObserved, true);
 });
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
@@ -347,6 +360,7 @@ type MockOptions = {
   cursorReview?: MockCursorReview;
   dismissedThreads?: number;
   historicalFinding?: boolean;
+  headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   omitPushEvent?: boolean;
@@ -374,29 +388,41 @@ function mockOctokitWithAgentHandoff(
 
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
+  const headRepository = options.headRepository ?? repoRef;
   const activity = {
-    listRepoEvents: async () => ({
-      data:
-        options.omitPushEvent === true
-          ? []
-          : [
-              {
-                created_at: "2026-08-08T00:01:00Z",
-                payload: {
-                  head: headSha,
-                  ref: "refs/heads/feature",
+    listRepoEvents: async (input: RepoRef) => {
+      assert.equal(input.owner, headRepository.owner);
+      assert.equal(input.repo, headRepository.repo);
+      return {
+        data:
+          options.omitPushEvent === true
+            ? []
+            : [
+                {
+                  created_at: "2026-08-08T00:01:00Z",
+                  payload: {
+                    head: headSha,
+                    ref: "refs/heads/feature",
+                  },
+                  type: "PushEvent",
                 },
-                type: "PushEvent",
-              },
-            ],
-    }),
+              ],
+      };
+    },
   };
   const pulls = {
     get: async () => ({
       data: {
         base: { ref: "main", sha: "base-sha" },
         draft: false,
-        head: { ref: "feature", sha: headSha },
+        head: {
+          ref: "feature",
+          repo: {
+            name: headRepository.repo,
+            owner: { login: headRepository.owner },
+          },
+          sha: headSha,
+        },
         html_url: "https://github.com/meta-secret/nook/pull/410",
         created_at: "2026-08-08T00:00:00Z",
         mergeable: true,

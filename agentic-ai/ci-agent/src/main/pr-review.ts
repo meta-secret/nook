@@ -50,6 +50,15 @@ enum FeedbackClassificationState {
   PendingHeadTransition = "pending-head-transition",
 }
 
+enum LatestFeedbackState {
+  Missing = "missing",
+  Present = "present",
+}
+
+type LatestFeedback =
+  | { state: LatestFeedbackState.Missing }
+  | { state: LatestFeedbackState.Present; value: PrFeedbackSummary };
+
 export type ReviewStabilizationResult = {
   feedback?: PrFeedbackSummary;
   headSha: string;
@@ -110,7 +119,7 @@ export async function stabilizeExactHeadReview(
       ? deadline + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
       : deadline;
   let headSha = "";
-  let latestFeedback: PrFeedbackSummary | undefined;
+  let latestFeedback: LatestFeedback = { state: LatestFeedbackState.Missing };
   let settled = false;
   while (true) {
     try {
@@ -123,7 +132,7 @@ export async function stabilizeExactHeadReview(
         return { headSha, state: ReviewStabilizationState.TimedOut };
       }
       const feedback = inspection.value;
-      latestFeedback = feedback;
+      latestFeedback = { state: LatestFeedbackState.Present, value: feedback };
       const findingState = classifyFeedbackState(
         feedback,
         input.circuitBreakerAcknowledged ?? false,
@@ -150,7 +159,10 @@ export async function stabilizeExactHeadReview(
         };
       }
       if (input.timeoutMs > 0 && input.now() >= deadline) {
-        return finalizeAtDeadline({ feedback, headSha });
+        return finalizeAtDeadline({
+          feedback: { state: LatestFeedbackState.Present, value: feedback },
+          headSha,
+        });
       }
     } catch {
       // Retry feedback inspection until the bounded deadline. If GitHub remains
@@ -194,7 +206,10 @@ export async function stabilizeExactHeadReview(
           return { headSha, state: ReviewStabilizationState.TimedOut };
         }
         const feedback = inspection.value;
-        latestFeedback = feedback;
+        latestFeedback = {
+          state: LatestFeedbackState.Present,
+          value: feedback,
+        };
         const findingState = classifyFeedbackState(
           feedback,
           input.circuitBreakerAcknowledged ?? false,
@@ -274,7 +289,7 @@ function classifyFeedbackState(
 }
 
 type DeadlineFinalizationInput = {
-  feedback?: PrFeedbackSummary;
+  feedback: LatestFeedback;
   headSha: string;
 };
 
@@ -282,18 +297,24 @@ function finalizeAtDeadline(
   input: DeadlineFinalizationInput,
 ): ReviewStabilizationResult {
   if (
-    input.feedback &&
-    !input.feedback.headTransitionObserved &&
-    input.feedback.substantiveComments > 0
+    input.feedback.state === LatestFeedbackState.Present &&
+    !input.feedback.value.headTransitionObserved &&
+    input.feedback.value.substantiveComments > 0
   ) {
     return {
-      feedback: input.feedback,
+      feedback: input.feedback.value,
       headSha: input.headSha,
       state: ReviewStabilizationState.Findings,
     };
   }
+  if (input.feedback.state === LatestFeedbackState.Present) {
+    return {
+      feedback: input.feedback.value,
+      headSha: input.headSha,
+      state: ReviewStabilizationState.TimedOut,
+    };
+  }
   return {
-    feedback: input.feedback,
     headSha: input.headSha,
     state: ReviewStabilizationState.TimedOut,
   };

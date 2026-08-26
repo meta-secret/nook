@@ -279,6 +279,7 @@ type RepositoryStatusCommentInput = {
 
 type PullRequestHeadIdentity = {
   ref: string;
+  repository: RepoRef;
   sha: string;
 };
 
@@ -294,7 +295,6 @@ type HeadTransitionBoundary =
 type CurrentHeadTransitionInput = {
   head: PullRequestHeadIdentity;
   octokit: Octokit;
-  repoRef: RepoRef;
 };
 
 type PushEventPayload = {
@@ -305,8 +305,8 @@ type PushEventPayload = {
 async function loadCurrentHeadTransition(
   input: CurrentHeadTransitionInput,
 ): Promise<HeadTransitionBoundary> {
-  const { head, octokit, repoRef } = input;
-  const { owner, repo } = repoRef;
+  const { head, octokit } = input;
+  const { owner, repo } = head.repository;
   const repositoryEvents = await octokit.paginate(
     octokit.rest.activity.listRepoEvents,
     { owner, repo, per_page: 100 },
@@ -336,12 +336,14 @@ export async function inspectPrFeedback(
   });
   const currentHeadIdentity: PullRequestHeadIdentity = {
     ref: pr.head.ref,
+    repository: pr.head.repo
+      ? { owner: pr.head.repo.owner.login, repo: pr.head.repo.name }
+      : repoRef,
     sha: pr.head.sha,
   };
   const transitionInput: CurrentHeadTransitionInput = {
     head: currentHeadIdentity,
     octokit,
-    repoRef,
   };
   const currentHeadTransition = await loadCurrentHeadTransition(transitionInput);
 
