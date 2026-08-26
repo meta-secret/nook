@@ -24,7 +24,17 @@ export function headSupersededAt(request: HeadSupersededRequest): string {
     (head) => head.headSha === request.headSha,
   );
   if (currentIndex < 0) return '';
-  return request.headStarts[currentIndex + 1]?.observedAt ?? '';
+  let earliestDescendant = '';
+  for (const descendant of request.headStarts.slice(currentIndex + 1)) {
+    if (
+      descendant.observedAt.length > 0 &&
+      (earliestDescendant.length === 0 ||
+        descendant.observedAt < earliestDescendant)
+    ) {
+      earliestDescendant = descendant.observedAt;
+    }
+  }
+  return earliestDescendant;
 }
 
 export type ObsoleteRunSecondsRequest = {

@@ -123,7 +123,7 @@ type HeadObservation = {
 };
 
 type ReviewRequestObservation = {
-  readonly commentIds: readonly number[];
+  readonly commentId: number;
   readonly headSha: string;
   readonly requestedAt: string;
 };
@@ -133,6 +133,7 @@ type ReviewResultObservation = {
   readonly completedAt: string;
   readonly outcome: ReviewOutcome;
   readonly findingCount: number;
+  readonly requestCommentId: number;
 };
 
 type ReviewEventObservation = {
@@ -403,7 +404,10 @@ export function buildReviewEvidence(
     const result = results.find(
       (candidate) =>
         candidate.headSha === reviewRequest.headSha &&
-        candidate.completedAt >= reviewRequest.requestedAt,
+        candidate.completedAt >= reviewRequest.requestedAt &&
+        (candidate.requestCommentId === 0 ||
+          candidate.requestCommentId === reviewRequest.commentId) &&
+        !matchedResultKeys.has(reviewResultKey(candidate)),
     );
     if (result) {
       matchedResultKeys.add(reviewResultKey(result));
@@ -442,13 +446,9 @@ export function buildReviewEvidence(
     findingBatchCount += 1;
     findingCount += event.findingCount;
   }
-  let requestCount = 0;
-  for (const reviewRequest of requests) {
-    requestCount += reviewRequest.commentIds.length;
-  }
   return {
     events: events.map(reviewEventRecord),
-    requestCount,
+    requestCount: requests.length,
     findingBatchCount,
     findingCount,
   };
@@ -564,7 +564,7 @@ type ReviewRequestsRequest = {
 function reviewRequests(
   request: ReviewRequestsRequest,
 ): ReviewRequestObservation[] {
-  const byHead = new Map<string, ReviewRequestObservation>();
+  const observations: ReviewRequestObservation[] = [];
   for (const comment of request.comments) {
     const cutoffRequest: PropertyRequest = {
       record: comment,
@@ -589,18 +589,14 @@ function reviewRequests(
     const commentIdRequest: PropertyRequest = { record: comment, key: 'id' };
     const commentId = requiredNumberProperty(commentIdRequest);
     const requestedAt = requiredStringProperty(createdAtRequest);
-    const existing = byHead.get(headSha);
     const observation: ReviewRequestObservation = {
-      commentIds: existing ? [...existing.commentIds, commentId] : [commentId],
+      commentId,
       headSha,
-      requestedAt:
-        existing && existing.requestedAt < requestedAt
-          ? existing.requestedAt
-          : requestedAt,
+      requestedAt,
     };
-    byHead.set(headSha, observation);
+    observations.push(observation);
   }
-  return [...byHead.values()];
+  return observations;
 }
 
 type ReviewResultsRequest = {
@@ -674,6 +670,7 @@ function reviewResults(
       completedAt: requiredStringProperty(submittedAtRequest),
       outcome: ReviewOutcome.Findings,
       findingCount,
+      requestCommentId: 0,
     };
     results.push(observation);
   }
@@ -708,6 +705,7 @@ function reviewResults(
       completedAt: requiredStringProperty(createdAtRequest),
       outcome: ReviewOutcome.Clean,
       findingCount: 0,
+      requestCommentId: 0,
     };
     results.push(observation);
   }
@@ -732,8 +730,8 @@ function reviewResults(
       key: 'request_comment_id',
     };
     const commentId = requiredNumberProperty(commentIdRequest);
-    const reviewRequest = request.requests.find((candidate) =>
-      candidate.commentIds.includes(commentId),
+    const reviewRequest = request.requests.find(
+      (candidate) => candidate.commentId === commentId,
     );
     if (!reviewRequest) continue;
     if (
@@ -754,6 +752,7 @@ function reviewResults(
       completedAt: requiredStringProperty(createdAtRequest),
       outcome: ReviewOutcome.Clean,
       findingCount: 0,
+      requestCommentId: commentId,
     };
     results.push(observation);
   }
@@ -799,7 +798,7 @@ function reviewEventFromPair(
 }
 
 function reviewResultKey(result: ReviewResultObservation): string {
-  return `${result.headSha}:${result.completedAt}:${result.outcome}`;
+  return `${result.headSha}:${result.completedAt}:${result.outcome}:${result.requestCommentId}`;
 }
 
 function headObservationRecord(observation: HeadObservation): UntrustedYamlMap {

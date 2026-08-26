@@ -20,6 +20,7 @@ import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
 const firstHead = '1111111111111111111111111111111111111111';
 const finalHead = '2222222222222222222222222222222222222222';
+const thirdHead = '3333333333333333333333333333333333333333';
 
 describe('agent stats GitHub evidence', () => {
   test('requires a non-skipped job beyond the validation gate', () => {
@@ -257,6 +258,46 @@ Preserve this actionable text.
       finalHead,
     ]);
     expect(evidence.obsoleteValidationSeconds).toBe(120);
+  });
+
+  test('uses the earliest observed descendant as the supersession boundary', () => {
+    const pages = actionPages([
+      {
+        id: 107,
+        runAttempt: 1,
+        headSha: firstHead,
+        startedAt: '2026-08-01T10:00:00Z',
+        finishedAt: '2026-08-01T10:40:00Z',
+        conclusion: 'success',
+      },
+      {
+        id: 108,
+        runAttempt: 1,
+        headSha: finalHead,
+        startedAt: '2026-08-01T10:30:00Z',
+        finishedAt: '2026-08-01T10:31:00Z',
+        conclusion: 'success',
+      },
+    ]);
+    const descendantReviewEvent = {
+      head_sha: thirdHead,
+      requested_at: '2026-08-01T10:20:00Z',
+      completed_at: '',
+    };
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: thirdHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [sealUntrustedYamlMap(descendantReviewEvent)],
+      deliveryHeadOrder: [firstHead, finalHead, thirdHead],
+    };
+    const evidence = buildActionsEvidence(request);
+    const firstCycle = evidence.validationCycles.find(
+      (cycle) => cycle.head_sha === firstHead,
+    );
+
+    expect(firstCycle?.obsolete_seconds).toBe(1200);
   });
 
   test('keeps unsupported-label runs out of validation cycles', () => {
@@ -665,14 +706,14 @@ Preserve this actionable text.
     };
     const evidence = buildReviewEvidence(request);
 
-    expect(evidence.events).toHaveLength(2);
+    expect(evidence.events).toHaveLength(3);
     expect(evidence.requestCount).toBe(3);
     expect(evidence.findingBatchCount).toBe(1);
     expect(evidence.findingCount).toBe(2);
     expect(evidence.events[0]?.latency_seconds).toBe(300);
-    expect(evidence.events[1]?.outcome).toBe('clean');
-    expect(evidence.events[1]?.latency_seconds).toBe(180);
-    expect(evidence.events[1]?.latency_seconds).toBe(180);
+    expect(evidence.events[1]?.outcome).toBe('unavailable');
+    expect(evidence.events[2]?.outcome).toBe('clean');
+    expect(evidence.events[2]?.latency_seconds).toBe(120);
   });
 
   test('counts a substantive review body as one finding', () => {
@@ -747,8 +788,56 @@ Preserve this actionable text.
     expect(evidence.events[1]?.outcome).toBe('findings');
   });
 
+  test('pairs a later duplicate request with its own clean reaction', () => {
+    const request: BuildReviewEvidenceRequest = {
+      issueCommentPages: yamlPages([
+        {
+          id: 23,
+          body: `<!-- nook-codex-review:${finalHead} -->`,
+          created_at: '2026-08-01T10:00:00Z',
+          author_association: 'MEMBER',
+          user: { login: 'github-actions[bot]' },
+        },
+        {
+          id: 24,
+          body: `<!-- nook-codex-review:${finalHead} -->`,
+          created_at: '2026-08-01T10:10:00Z',
+          author_association: 'MEMBER',
+          user: { login: 'github-actions[bot]' },
+        },
+      ]),
+      reviewPages: yamlPages([
+        {
+          id: 505,
+          body: 'Finding for the first request.',
+          commit_id: finalHead,
+          submitted_at: '2026-08-01T10:05:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      reviewCommentPages: yamlPages([]),
+      reviewReactionPages: yamlPages([
+        {
+          request_comment_id: 24,
+          content: '+1',
+          created_at: '2026-08-01T10:15:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      knownHeadShas: [finalHead],
+      mergedAt: '2026-08-01T11:00:00Z',
+    };
+    const evidence = buildReviewEvidence(request);
+
+    expect(evidence.events).toHaveLength(2);
+    expect(evidence.events[0]?.outcome).toBe('findings');
+    expect(evidence.events[0]?.latency_seconds).toBe(300);
+    expect(evidence.events[1]?.outcome).toBe('clean');
+    expect(evidence.events[1]?.latency_seconds).toBe(300);
+  });
+
   test('retains trusted review evidence for a rebased-away full SHA', () => {
-    const rebasedHead = '3333333333333333333333333333333333333333';
+    const rebasedHead = '4444444444444444444444444444444444444444';
     const request: BuildReviewEvidenceRequest = {
       issueCommentPages: yamlPages([
         {
