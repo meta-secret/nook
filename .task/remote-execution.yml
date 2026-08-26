@@ -59,12 +59,13 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Trigger required PR validation immediately, then request non-blocking exact-head Cloud review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    desc: Stabilize exact-head Cloud review before triggering required PR validation (PR=<number>, FULL_E2E=1 for a Main-fix browser gate, REVIEW_WAIT_SECONDS defaults to 600).
     requires:
       vars: [PR]
     env:
       REQUESTED_PR: '{{.PR}}'
       REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
+      REQUEST_REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
         msg: GitHub CLI is required.
@@ -101,6 +102,16 @@ tasks:
 
         .github/scripts/require-current-base.sh origin "$base_ref"
 
+        task pr:review:stabilize \
+          PR="$REQUESTED_PR" \
+          REVIEW_WAIT_SECONDS="$REQUEST_REVIEW_WAIT_SECONDS"
+
+        stabilized_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
+        if [ "$local_sha" != "$stabilized_pr_sha" ]; then
+          echo "PR #$REQUESTED_PR changed head during review stabilization; validate the replacement head explicitly." >&2
+          exit 2
+        fi
+
         validation_label="ci:validate"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
           validation_label="ci:full-e2e"
@@ -112,17 +123,3 @@ tasks:
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
         echo "Triggered PR validation for $pr_sha with label $validation_label."
-
-        pre_review_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
-        if [ "$local_sha" != "$pre_review_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head after validation dispatch; validate the replacement head explicitly." >&2
-          exit 2
-        fi
-        if ! task pr:review PR="$REQUESTED_PR"; then
-          echo "Exact-head review request was unavailable; validation is already running." >&2
-        fi
-        post_review_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
-        if [ "$local_sha" != "$post_review_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head while requesting review; validate the replacement head explicitly." >&2
-          exit 2
-        fi
