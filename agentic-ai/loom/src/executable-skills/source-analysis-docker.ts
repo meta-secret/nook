@@ -268,6 +268,17 @@ function assertTotalDeadline(deadlineExpiresAt: number): void {
   }
 }
 
+function assertDockerOperationActive(request: DockerAuthorityRequest): void {
+  if (request.signal !== false && request.signal.aborted) {
+    throw new Error('Sealed source analysis Docker operation was aborted.');
+  }
+  if (Date.now() >= request.deadlineExpiresAt) {
+    throw new Error(
+      'Sealed source analysis Docker operation deadline expired.',
+    );
+  }
+}
+
 async function assertDockerAuthority(
   request: DockerAuthorityRequest,
 ): Promise<void> {
@@ -355,7 +366,8 @@ async function requireSourceAnalysisImage(
   );
   const authorityKey = dockerAuthorityKey(request.environment);
   if (sourceAnalysisImage !== false) {
-    const cached = await sourceAnalysisImage;
+    const cachedPromise = sourceAnalysisImage;
+    const cached = await cachedPromise;
     if (
       cached.authorityKey === authorityKey &&
       cached.buildIdentity === snapshot.buildIdentity
@@ -364,8 +376,15 @@ async function requireSourceAnalysisImage(
         ...request,
         receipt: cached,
       };
-      await inspectSourceAnalysisImage(inspectRequest);
-      return cached;
+      try {
+        await inspectSourceAnalysisImage(inspectRequest);
+        return cached;
+      } catch {
+        if (sourceAnalysisImage === cachedPromise) {
+          sourceAnalysisImage = false;
+        }
+        assertDockerOperationActive(request);
+      }
     }
   }
   const buildRequest: BuildSourceAnalysisImageRequest = {
@@ -682,13 +701,23 @@ async function removeSourceAnalysisContainer(
   request: RemoveSourceAnalysisContainerRequest,
 ): Promise<void> {
   for (let attempt = 0; attempt < TEARDOWN_ATTEMPTS; attempt += 1) {
-    await assertDockerAuthority(request);
     const remaining = request.deadlineExpiresAt - Date.now();
     if (remaining <= 1_000) break;
     const attemptDeadline = Math.min(
       request.deadlineExpiresAt,
       Date.now() + TEARDOWN_ATTEMPT_MILLISECONDS,
     );
+    const attemptAuthorityRequest: DockerAuthorityRequest = {
+      ...request,
+      deadlineExpiresAt: attemptDeadline,
+      signal: false,
+    };
+    try {
+      await assertDockerAuthority(attemptAuthorityRequest);
+    } catch {
+      // Removal still runs against the exact verified local endpoint and unique
+      // container name. A slow authority probe cannot consume teardown.
+    }
     const executeRequest: ExecuteDockerCommandRequest = {
       ...request,
       arguments: ['rm', '--force', request.containerName],

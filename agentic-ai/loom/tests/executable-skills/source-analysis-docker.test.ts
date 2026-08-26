@@ -37,6 +37,7 @@ enum FakeDockerMode {
   Oom = 'oom',
   Preexisting = 'preexisting',
   StartFailure = 'startFailure',
+  TeardownAuthorityFailure = 'teardownAuthorityFailure',
   TeardownFailure = 'teardownFailure',
 }
 
@@ -44,6 +45,7 @@ type FakeDockerState = {
   active: boolean;
   buildIdentity: string;
   readonly commands: string[][];
+  imageInspectFailures: number;
   readonly mode: FakeDockerMode;
   removals: number;
   repoRoot: string;
@@ -116,6 +118,12 @@ function fakeDockerExecutor(
       );
     }
     if (joined.includes(' info --format ')) {
+      if (
+        state.mode === FakeDockerMode.TeardownAuthorityFailure &&
+        state.active
+      ) {
+        return failedOutput('authority probe timed out');
+      }
       return successfulOutput(
         `${DOCKER_ENVIRONMENT.daemonId}|linux|runc|["name=seccomp,profile=builtin","name=cgroupns"]|2\n`,
       );
@@ -152,6 +160,10 @@ function fakeDockerExecutor(
       return successfulOutput('built\n');
     }
     if (joined.includes(' image inspect ')) {
+      if (state.imageInspectFailures > 0) {
+        state.imageInspectFailures -= 1;
+        return failedOutput('Error: No such image');
+      }
       const environment = JSON.stringify([
         'PATH=/usr/bin',
         'NOOK_SEALED_SOURCE_ANALYZER=1',
@@ -218,6 +230,7 @@ function fakeState(mode: FakeDockerMode): FakeDockerState {
     active: false,
     buildIdentity: '',
     commands: [],
+    imageInspectFailures: 0,
     mode,
     removals: 0,
     repoRoot: REPO_ROOT,
@@ -387,6 +400,21 @@ describe('sealed source analysis Docker boundary', () => {
     expect(allCommands).toContain(SOURCE_ANALYSIS_IMAGE_LABEL);
   });
 
+  test('rebuilds after a cached image disappears', async () => {
+    resetSourceAnalysisImageCacheForTest();
+    const state = fakeState(FakeDockerMode.Normal);
+    const execution = {
+      dependencies: fakeDependencies(state),
+      request: executionRequest(),
+    };
+    await runSealedSourceAnalysisWithDependencies(execution);
+    state.imageInspectFailures = 1;
+    await runSealedSourceAnalysisWithDependencies(execution);
+    expect(
+      state.commands.filter((command) => command.includes('build')),
+    ).toHaveLength(2);
+  });
+
   test('fails closed and cleans up every post-create failure', async () => {
     for (const mode of [
       FakeDockerMode.ConfigurationDrift,
@@ -405,6 +433,18 @@ describe('sealed source analysis Docker boundary', () => {
       expect(state.active).toBe(false);
       expect(state.removals).toBe(1);
     }
+  });
+
+  test('attempts removal when the teardown authority probe fails', async () => {
+    resetSourceAnalysisImageCacheForTest();
+    const state = fakeState(FakeDockerMode.TeardownAuthorityFailure);
+    const execution = {
+      dependencies: fakeDependencies(state),
+      request: executionRequest(),
+    };
+    await runSealedSourceAnalysisWithDependencies(execution);
+    expect(state.removals).toBe(1);
+    expect(state.active).toBe(false);
   });
 
   test('rejects preexisting containers, remote endpoints, and unconfirmed teardown', async () => {

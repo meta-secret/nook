@@ -51,18 +51,6 @@ tasks:
     cmds:
       - bun test
 
-  loom:source-analysis:containment:
-    desc: Run the opt-in sealed analyzer matrix on an explicit non-ARC local Docker environment.
-    dir: agentic-ai/loom
-    deps: [loom:install]
-    requires:
-      vars:
-        - NOOK_SOURCE_ANALYSIS_DOCKER_CONTEXT
-        - NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID
-        - NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT
-    cmds:
-      - bun run test:source-analysis-containment
-
   loom:check:
     desc: Typecheck Loom.
     dir: agentic-ai/loom

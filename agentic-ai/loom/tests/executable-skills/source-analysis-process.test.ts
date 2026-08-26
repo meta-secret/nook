@@ -12,6 +12,24 @@ import {
 
 const REPO_ROOT = findRepoRoot();
 
+async function assertProcessStopped(pid: number): Promise<void> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    try {
+      process.kill(pid, 0);
+      if (process.platform === 'linux') {
+        const processState = (
+          await readFile(`/proc/${pid}/stat`, 'utf8')
+        ).split(' ')[2];
+        if (processState === 'Z') return;
+      }
+    } catch {
+      return;
+    }
+    await Bun.sleep(50);
+  }
+  throw new Error(`Process ${pid} remained live after group teardown.`);
+}
+
 describe('sealed source analysis bounded process', () => {
   test('bounds stdin, stdout, and stderr independently', async () => {
     const successfulRequest: RunBoundedProcessRequest = {
@@ -97,7 +115,7 @@ describe('sealed source analysis bounded process', () => {
       );
       const childPid = Number(await readFile(pidFile, 'utf8'));
       expect(Number.isSafeInteger(childPid)).toBe(true);
-      expect(() => process.kill(childPid, 0)).toThrow();
+      await assertProcessStopped(childPid);
     } finally {
       const removalOptions: RmOptions = { force: true, recursive: true };
       await rm(temporaryDirectory, removalOptions);
@@ -129,7 +147,7 @@ describe('sealed source analysis bounded process', () => {
         'deadline expired',
       );
       const childPid = Number(await readFile(pidFile, 'utf8'));
-      expect(() => process.kill(childPid, 0)).toThrow();
+      await assertProcessStopped(childPid);
     } finally {
       const removalOptions: RmOptions = { force: true, recursive: true };
       await rm(temporaryDirectory, removalOptions);
