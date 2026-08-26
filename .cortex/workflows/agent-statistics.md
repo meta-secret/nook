@@ -86,9 +86,9 @@ Measure wall-clock time, including owned wait time.
 - **Local executions:** normally `task format` / Loom pre-push and the UI demo
   contract. Heavy checks belong in GitHub Actions.
 - **GitHub Actions:** every repository-owned workflow run for the PR head.
-  - Attribute manual E2E reruns with their attempt-scoped source artifact.
-  - Retain a cancelled manual attempt whose source artifact was never published
-    as `source_attributed: false`. Never invent a PR head for it.
+  - Dispatch manual E2E with the exact current PR head SHA.
+  - Retain that SHA in the workflow run title so reruns, early cancellation,
+    and artifact expiry cannot change or erase source attribution.
   - Snapshot optional runs that outlive the PR at `merged_at` with conclusion
     `nonterminal_at_merge` so post-merge assembly does not wait for them.
 - **Cache telemetry:** flatten `cache-telemetry-*` artifacts into the scratch

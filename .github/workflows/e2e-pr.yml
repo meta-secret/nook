@@ -5,16 +5,21 @@
 # including live-provider sync checks.
 # Inputs:
 #   pr_number — PR to checkout (refs/pull/<n>/head)
+#   source_head_sha — exact current PR head to validate and retain in run metadata
 #   suite     — e2e-pr, e2e, sync-live, or all
 
 name: E2E (PR)
-run-name: "E2E PR #${{ inputs.pr_number }} · ${{ inputs.suite }}"
+run-name: "E2E PR #${{ inputs.pr_number }} @ ${{ inputs.source_head_sha }} · ${{ inputs.suite }}"
 
 on:
   workflow_dispatch:
     inputs:
       pr_number:
         description: Pull request number to test
+        required: true
+        type: string
+      source_head_sha:
+        description: Exact current PR head SHA to test
         required: true
         type: string
       suite:
@@ -51,6 +56,7 @@ jobs:
         uses: actions/github-script@v9
         env:
           RAW_PR_NUMBER: ${{ inputs.pr_number }}
+          SOURCE_HEAD_SHA: ${{ inputs.source_head_sha }}
         with:
           script: |
             const rawPrNumber = process.env.RAW_PR_NUMBER || ''
@@ -61,6 +67,11 @@ jobs:
             const prNumber = Number(rawPrNumber)
             if (!Number.isSafeInteger(prNumber)) {
               core.setFailed(`Invalid pr_number: ${rawPrNumber}`)
+              return
+            }
+            const sourceHeadSha = process.env.SOURCE_HEAD_SHA || ''
+            if (!/^[0-9a-f]{40}$/.test(sourceHeadSha)) {
+              core.setFailed(`Invalid source_head_sha: ${sourceHeadSha}`)
               return
             }
             const { data: pr } = await github.rest.pulls.get({
@@ -76,29 +87,14 @@ jobs:
               core.setFailed(`PR #${prNumber} is authored by Dependabot and cannot run on private ARC`)
               return
             }
-            core.setOutput('ref', pr.head.sha)
+            if (pr.head.sha !== sourceHeadSha) {
+              core.setFailed(`PR #${prNumber} moved from requested head ${sourceHeadSha} to ${pr.head.sha}`)
+              return
+            }
+            core.setOutput('ref', sourceHeadSha)
             core.setOutput('branch', pr.head.ref)
             core.setOutput('number', String(prNumber))
-            core.info(`PR #${prNumber}: ${pr.head.ref} @ ${pr.head.sha}`)
-
-      - name: Materialize PR source metadata
-        env:
-          SOURCE_PR_NUMBER: ${{ steps.pr.outputs.number }}
-          SOURCE_HEAD_SHA: ${{ steps.pr.outputs.ref }}
-        run: |
-          jq -n \
-            --argjson source_pr_number "$SOURCE_PR_NUMBER" \
-            --arg source_head_sha "$SOURCE_HEAD_SHA" \
-            '{source_pr_number: $source_pr_number, source_head_sha: $source_head_sha}' \
-            > "${{ runner.temp }}/e2e-pr-source.json"
-
-      - name: Publish PR source metadata
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-pr-source-${{ steps.pr.outputs.number }}-${{ github.run_attempt }}-${{ steps.pr.outputs.ref }}
-          path: ${{ runner.temp }}/e2e-pr-source.json
-          if-no-files-found: error
-          retention-days: 30
+            core.info(`PR #${prNumber}: ${pr.head.ref} @ ${sourceHeadSha}`)
 
       - name: Checkout PR head
         uses: actions/checkout@v7

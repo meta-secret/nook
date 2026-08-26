@@ -8,7 +8,6 @@ import {
   requiredArrayProperty,
   requiredNumberProperty,
   requiredStringProperty,
-  stringProperty,
   type GitHubPropertyRequest as PropertyRequest,
 } from './agent-stats-github-api.ts';
 
@@ -23,7 +22,6 @@ export type ActionObservation = {
   readonly durationSeconds: number;
   readonly conclusion: string;
   readonly sourcePr: number;
-  readonly sourceAttributed: boolean;
   readonly validationRequested: boolean;
 };
 
@@ -78,7 +76,7 @@ export function actionObservation(
   const crossesObservationBoundary =
     recordedFinishedAt > request.observedThrough;
   const startedAt = requiredStringProperty(startedRequest);
-  const headSha = stringProperty(headRequest);
+  const headSha = requiredStringProperty(headRequest);
   const finishedAt =
     status !== 'completed' || crossesObservationBoundary
       ? request.observedThrough
@@ -98,7 +96,6 @@ export function actionObservation(
         ? 'nonterminal_at_merge'
         : requiredStringProperty(conclusionRequest),
     sourcePr: request.prNumber,
-    sourceAttributed: headSha.length > 0,
     validationRequested: requiredStringProperty(validationRequest) === 'true',
   };
 }
@@ -155,7 +152,6 @@ export function actionObservationRecord(
     duration_seconds: observation.durationSeconds,
     conclusion: observation.conclusion,
     source_pr: observation.sourcePr,
-    source_attributed: observation.sourceAttributed,
   };
   return sealUntrustedYamlMap(record);
 }

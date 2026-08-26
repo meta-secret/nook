@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'bun:test';
 import { asUntrustedYamlNode } from '../src/lib/guards.ts';
 import {
@@ -12,43 +13,62 @@ const firstHead = '1111111111111111111111111111111111111111';
 const finalHead = '2222222222222222222222222222222222222222';
 
 describe('agent stats manual E2E evidence', () => {
+  test('routes production assembly through complete GitHub evidence', () => {
+    const source = readFileSync(
+      new URL('../src/lib/agent-stats-assemble.ts', import.meta.url),
+      'utf8',
+    );
+
+    expect(source).toContain(
+      'collectAgentStatsGitHubEvidence(evidenceRequest)',
+    );
+    expect(source).not.toContain('collectGithubActionsRuns');
+    expect(source).not.toContain("'run',\n      'list'");
+  });
+
+  test('retains the exact source head in durable workflow metadata', () => {
+    const workflow = readFileSync(
+      new URL('../../../.github/workflows/e2e-pr.yml', import.meta.url),
+      'utf8',
+    );
+
+    expect(workflow).toContain('source_head_sha:');
+    expect(workflow).toContain(
+      'E2E PR #${{ inputs.pr_number }} @ ${{ inputs.source_head_sha }}',
+    );
+    expect(workflow).not.toContain('retention-days:');
+  });
+
   test('resolves exact manual E2E source provenance', () => {
-    const pages = asUntrustedYamlNode([
-      { artifacts: [{ name: `e2e-pr-source-42-1-${finalHead}` }] },
-    ]);
     const request = {
-      pages,
+      displayTitle: `E2E PR #42 @ ${finalHead} · all`,
       prNumber: 42,
       runId: 500,
-      runAttempt: 1,
     };
 
     expect(dispatchedSourceHead(request)).toBe(finalHead);
   });
 
-  test('keeps manual E2E provenance scoped to its rerun attempt', () => {
-    const pages = asUntrustedYamlNode([
-      {
-        artifacts: [
-          { name: `e2e-pr-source-42-1-${firstHead}` },
-          { name: `e2e-pr-source-42-2-${finalHead}` },
-        ],
-      },
-    ]);
-    const request = { pages, prNumber: 42, runId: 500, runAttempt: 1 };
+  test('keeps rerun provenance immutable in workflow metadata', () => {
+    const request = {
+      displayTitle: `E2E PR #42 @ ${firstHead} · e2e-pr`,
+      prNumber: 42,
+      runId: 500,
+    };
 
     expect(dispatchedSourceHead(request)).toBe(firstHead);
   });
 
-  test('leaves a pre-provenance cancellation unattributed', () => {
+  test('rejects manual E2E metadata without a valid source head', () => {
     const request = {
-      pages: asUntrustedYamlNode([{ artifacts: [] }]),
+      displayTitle: 'E2E PR #42 @ missing · all',
       prNumber: 42,
       runId: 500,
-      runAttempt: 1,
     };
 
-    expect(dispatchedSourceHead(request)).toBe('');
+    expect(() => dispatchedSourceHead(request)).toThrow(
+      'must retain one valid source head in its title',
+    );
   });
 
   test('snapshots nonterminal action attempts at merge', () => {
@@ -84,23 +104,6 @@ describe('agent stats manual E2E evidence', () => {
     expect(evidence.runs[0]?.finished_at).toBe(request.mergedAt);
     expect(evidence.runs[0]?.duration_seconds).toBe(3600);
     expect(evidence.runs[0]?.conclusion).toBe('nonterminal_at_merge');
-  });
-
-  test('counts an action whose source was unavailable without inventing a head', () => {
-    const pages = actionPages([
-      {
-        id: 105,
-        headSha: '',
-        finishedAt: '2026-08-01T10:01:00Z',
-        conclusion: 'cancelled',
-      },
-    ]);
-    const request = evidenceRequest(pages);
-    const evidence = buildActionsEvidence(request);
-
-    expect(evidence.runs).toHaveLength(1);
-    expect(evidence.runs[0]?.source_attributed).toBe(false);
-    expect(evidence.heads.map((head) => head.head_sha)).toEqual([finalHead]);
   });
 });
 

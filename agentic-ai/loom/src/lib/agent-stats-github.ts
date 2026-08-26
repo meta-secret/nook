@@ -313,11 +313,8 @@ export function buildActionsEvidence(
     deduplicatedRuns.set(observationKey, observation);
   }
   const observations = [...deduplicatedRuns.values()];
-  const attributedObservations = observations.filter(
-    (observation) => observation.headSha.length > 0,
-  );
   const headStartsRequest = {
-    actions: attributedObservations,
+    actions: observations,
     reviewEvents: request.reviewEvents,
     finalHeadSha: request.finalHeadSha,
     deliveryHeadOrder: request.deliveryHeadOrder,
@@ -327,9 +324,7 @@ export function buildActionsEvidence(
   if (!headShas.includes(request.finalHeadSha))
     headShas.push(request.finalHeadSha);
   const headObservations = headShas.map((headSha) => {
-    const runs = attributedObservations.filter(
-      (run) => run.headSha === headSha,
-    );
+    const runs = observations.filter((run) => run.headSha === headSha);
     const headRequest: BuildHeadObservationRequest = {
       headSha,
       runs,

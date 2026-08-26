@@ -40,7 +40,8 @@ export function collectDispatchedActionAttemptPages(
   request: CollectDispatchedActionAttemptPagesRequest,
 ): UntrustedYamlNode {
   const selectedRuns: UntrustedYamlMap[] = [];
-  const titlePrefix = `E2E PR #${request.prNumber} ·`;
+  const sourceHeadByRun = new Map<number, string>();
+  const titlePrefix = `E2E PR #${request.prNumber} @ `;
   for (const page of flattenApiPages(request.pages)) {
     if (!isRecord(page)) continue;
     const runsRequest: GitHubPropertyRequest = {
@@ -53,9 +54,18 @@ export function collectDispatchedActionAttemptPages(
         record: run,
         key: 'display_title',
       };
-      if (!requiredStringProperty(titleRequest).startsWith(titlePrefix)) {
+      const displayTitle = requiredStringProperty(titleRequest);
+      if (!displayTitle.startsWith(titlePrefix)) {
         continue;
       }
+      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+      const runId = requiredNumberProperty(idRequest);
+      const sourceRequest: DispatchedSourceHeadRequest = {
+        displayTitle,
+        prNumber: request.prNumber,
+        runId,
+      };
+      sourceHeadByRun.set(runId, dispatchedSourceHead(sourceRequest));
       selectedRuns.push(run);
     }
   }
@@ -70,7 +80,6 @@ export function collectDispatchedActionAttemptPages(
   };
   const expanded = expandActionAttemptPages(expandRequest);
   const associatedRuns: UntrustedYamlMap[] = [];
-  const artifactPagesByRun = new Map<number, UntrustedYamlNode>();
   for (const page of flattenApiPages(expanded)) {
     if (!isRecord(page)) continue;
     const runsRequest: GitHubPropertyRequest = {
@@ -81,28 +90,10 @@ export function collectDispatchedActionAttemptPages(
       if (!isRecord(run)) continue;
       const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
       const runId = requiredNumberProperty(idRequest);
-      const attemptRequest: GitHubPropertyRequest = {
-        record: run,
-        key: 'run_attempt',
-      };
-      const runAttempt = requiredNumberProperty(attemptRequest);
-      let artifactPages = artifactPagesByRun.get(runId);
-      if (!artifactPages) {
-        const artifactRequest: GitHubApiRequest = {
-          repoRoot: request.repoRoot,
-          endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/artifacts`,
-          fields: ['per_page=100'],
-        };
-        artifactPages = runGitHubApi(artifactRequest);
-        artifactPagesByRun.set(runId, artifactPages);
+      const headSha = sourceHeadByRun.get(runId) ?? '';
+      if (headSha.length === 0) {
+        failGitHubCollection(`E2E PR run ${runId} has no source head`);
       }
-      const sourceRequest: DispatchedSourceHeadRequest = {
-        pages: artifactPages,
-        prNumber: request.prNumber,
-        runId,
-        runAttempt,
-      };
-      const headSha = dispatchedSourceHead(sourceRequest);
       const associatedRecord = {
         ...run,
         head_sha: headSha,
@@ -120,40 +111,26 @@ export function collectDispatchedActionAttemptPages(
 }
 
 type DispatchedSourceHeadRequest = {
-  readonly pages: UntrustedYamlNode;
+  readonly displayTitle: string;
   readonly prNumber: number;
   readonly runId: number;
-  readonly runAttempt: number;
 };
 
 export function dispatchedSourceHead(
   request: DispatchedSourceHeadRequest,
 ): string {
-  const prefix = `e2e-pr-source-${request.prNumber}-${request.runAttempt}-`;
-  const matches: string[] = [];
-  for (const page of flattenApiPages(request.pages)) {
-    if (!isRecord(page)) continue;
-    const artifactsRequest: GitHubPropertyRequest = {
-      record: page,
-      key: 'artifacts',
-    };
-    for (const artifact of requiredArrayProperty(artifactsRequest)) {
-      if (!isRecord(artifact)) continue;
-      const nameRequest: GitHubPropertyRequest = {
-        record: artifact,
-        key: 'name',
-      };
-      const name = requiredStringProperty(nameRequest);
-      if (name.startsWith(prefix)) matches.push(name.slice(prefix.length));
-    }
-  }
-  if (matches.length === 0) return '';
-  if (matches.length !== 1 || !/^[0-9a-f]{40}$/.test(matches[0] ?? '')) {
+  const prefix = `E2E PR #${request.prNumber} @ `;
+  const suffixStart = request.displayTitle.indexOf(' · ', prefix.length);
+  const headSha =
+    suffixStart < 0
+      ? ''
+      : request.displayTitle.slice(prefix.length, suffixStart);
+  if (!/^[0-9a-f]{40}$/.test(headSha)) {
     failGitHubCollection(
-      `E2E PR attempt ${request.runId}:${request.runAttempt} must publish at most one valid source artifact`,
+      `E2E PR run ${request.runId} must retain one valid source head in its title`,
     );
   }
-  return matches[0] ?? '';
+  return headSha;
 }
 
 export function expandActionAttemptPages(
