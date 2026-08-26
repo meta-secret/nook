@@ -9,7 +9,6 @@ import {
   isCodexReviewer,
   isCursorReviewStatusBody,
   isCursorReviewer,
-  isExactHeadReviewRequestComment,
   isSubmittedReviewState,
   isTrustedExactHeadReviewRequest,
 } from "./github-review.js";
@@ -263,6 +262,13 @@ export type PrFeedbackSummary = {
   unresolvedThreads: number;
 };
 
+type RepositoryStatusCommentInput = {
+  authorAssociation: string;
+  body: string;
+  cursorMarker: string;
+  marker: string;
+};
+
 export async function inspectPrFeedback(
   octokit: Octokit,
   repoRef: RepoRef,
@@ -372,7 +378,12 @@ export async function inspectPrFeedback(
 
   const substantiveComments = issueComments.filter(
     (comment) =>
-      !isRepositoryStatusComment(comment.body ?? "") &&
+      !isRepositoryStatusComment({
+        authorAssociation: comment.author_association,
+        body: comment.body ?? "",
+        cursorMarker,
+        marker,
+      }) &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
   const latestRequestAt = reviewRequests.reduce(
@@ -528,14 +539,21 @@ function isMainPrIgnoredPath(path: string): boolean {
   );
 }
 
-function isRepositoryStatusComment(body: string): boolean {
-  const trimmed = body.trimStart();
+export function isRepositoryStatusComment(
+  input: RepositoryStatusCommentInput,
+): boolean {
+  const trimmed = input.body.trimStart();
   return (
     trimmed.startsWith("### Preview deployed") ||
     trimmed.startsWith("### Web research preview") ||
     trimmed.startsWith("<!-- nook-ui-demo -->") ||
     trimmed.startsWith("<!-- nook-core-coverage -->") ||
-    isExactHeadReviewRequestComment(trimmed) ||
+    isTrustedExactHeadReviewRequest({
+      authorAssociation: input.authorAssociation,
+      body: input.body,
+      marker: input.marker,
+    }) ||
+    input.body.trim() === `cursor review\n\n${input.cursorMarker}` ||
     isAgentImplementationHandoffComment(trimmed) ||
     // Codex posts this when it cannot review; it is status, not a finding.
     trimmed.includes("Codex usage limits for code reviews") ||

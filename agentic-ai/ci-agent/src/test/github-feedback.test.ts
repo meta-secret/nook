@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   countAutomatedFindingBatches,
+  isRepositoryStatusComment,
   isTrustedExactHeadReviewRequest,
 } from "../main/github.js";
 
@@ -119,6 +120,37 @@ test("exact-head iteration markers require a trusted exact request", () => {
     isTrustedExactHeadReviewRequest({
       authorAssociation: "OWNER",
       body: `Quoted marker: ${marker}`,
+      marker,
+    }),
+    false,
+  );
+});
+
+test("only a trusted canonical request marker is repository status", () => {
+  const marker = "<!-- nook-codex-review:head-sha -->";
+  assert.equal(
+    isRepositoryStatusComment({
+      authorAssociation: "OWNER",
+      body: `@codex review\n\n${marker}`,
+      cursorMarker: "<!-- nook-cursor-review:head-sha -->",
+      marker,
+    }),
+    true,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      authorAssociation: "OWNER",
+      body: `Finding quoting ${marker}`,
+      cursorMarker: "<!-- nook-cursor-review:head-sha -->",
+      marker,
+    }),
+    false,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      authorAssociation: "NONE",
+      body: `@codex review\n\n${marker}`,
+      cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
     }),
     false,

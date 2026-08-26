@@ -147,6 +147,7 @@ test("stabilizeExactHeadReview stops on findings discovered at timeout", async (
 });
 
 test("stabilizeExactHeadReview reinspects a review settled at the deadline", async () => {
+  let now = 30;
   let inspections = 0;
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => {
@@ -155,16 +156,39 @@ test("stabilizeExactHeadReview reinspects a review settled at the deadline", asy
         ? cleanFeedback
         : { ...cleanFeedback, unresolvedThreads: 1 };
     },
-    now: () => 30,
+    now: () => now,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
-    timeoutMs: 0,
+    requestReview: async () => {
+      now = 31;
+      return { headSha: "head-sha", settled: true };
+    },
+    timeoutMs: 1,
     waitMs: async () => {},
   });
 
   assert.equal(result.state, ReviewStabilizationState.Findings);
   assert.equal(result.feedback?.unresolvedThreads, 1);
   assert.equal(inspections, 2);
+});
+
+test("stabilizeExactHeadReview preserves a bounded zero-wait feedback snapshot", async () => {
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: () =>
+      new Promise((resolve) => {
+        setTimeout(
+          () => resolve({ ...cleanFeedback, unresolvedThreads: 1 }),
+          5,
+        );
+      }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    timeoutMs: 0,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+  assert.equal(result.feedback?.unresolvedThreads, 1);
 });
 
 test("stabilizeExactHeadReview stops on current-iteration comments", async () => {
@@ -200,7 +224,7 @@ test("stabilizeExactHeadReview bounds transient request errors", async () => {
     },
   });
 
-  assert.equal(requests, 3);
+  assert.equal(requests, 2);
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
   assert.equal(result.headSha, "");
 });

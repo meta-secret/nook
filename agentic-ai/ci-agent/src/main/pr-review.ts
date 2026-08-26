@@ -9,6 +9,7 @@ import { prettyJson } from "./json.js";
 
 const DEFAULT_STABILIZATION_WAIT_SECONDS = 600;
 const STABILIZATION_POLL_INTERVAL_MS = 15_000;
+const ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS = 15_000;
 
 type ReviewStabilizationRequest = () => Promise<{
   headSha: string;
@@ -95,12 +96,16 @@ export async function stabilizeExactHeadReview(
   input: ReviewStabilizationInput,
 ): Promise<ReviewStabilizationResult> {
   const deadline = input.now() + input.timeoutMs;
+  const initialFeedbackDeadline =
+    input.timeoutMs === 0
+      ? deadline + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
+      : deadline;
   let headSha = "";
   let settled = false;
   while (true) {
     try {
       const inspection = await attemptBeforeDeadline({
-        deadline,
+        deadline: initialFeedbackDeadline,
         now: input.now,
         operation: input.inspectFeedback,
       });
@@ -118,6 +123,9 @@ export async function stabilizeExactHeadReview(
           headSha,
           state: ReviewStabilizationState.Clean,
         };
+      }
+      if (input.now() >= deadline) {
+        return { feedback, headSha, state: ReviewStabilizationState.TimedOut };
       }
     } catch {
       // Retry feedback inspection until the bounded deadline. If GitHub remains
