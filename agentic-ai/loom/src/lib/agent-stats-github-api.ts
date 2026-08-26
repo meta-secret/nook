@@ -90,10 +90,15 @@ export function collectDispatchedActionAttemptPages(
       if (!isRecord(run)) continue;
       const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
       const runId = requiredNumberProperty(idRequest);
+      const verifiedRequest: GitHubPropertyRequest = {
+        record: run,
+        key: 'source_verified',
+      };
+      const sourceVerified = stringProperty(verifiedRequest) === 'true';
       const headSha = sourceHeadByRun.get(runId) ?? '';
       const associatedRecord = {
         ...run,
-        head_sha: headSha,
+        head_sha: sourceVerified ? headSha : '',
         pull_requests: [{ number: request.prNumber }],
       };
       associatedRuns.push(sealUntrustedYamlMap(associatedRecord));
@@ -179,9 +184,20 @@ export function expandActionAttemptPages(
         };
         const validationRequested =
           actionAttemptRequestedValidation(validationRequest);
+        const sourceVerificationRequest: ActionAttemptSourceVerificationRequest =
+          {
+            repoRoot: request.repoRoot,
+            runId,
+            attempt,
+            attemptRecord,
+          };
+        const sourceVerified = actionAttemptSourceVerified(
+          sourceVerificationRequest,
+        );
         const expandedRecord = {
           ...attemptRecord,
           validation_requested: validationRequested ? 'true' : 'false',
+          source_verified: sourceVerified ? 'true' : 'false',
         };
         expandedRuns.push(sealUntrustedYamlMap(expandedRecord));
       }
@@ -193,6 +209,79 @@ export function expandActionAttemptPages(
   };
   const expandedPage = sealUntrustedYamlMap(expandedPageRecord);
   return asUntrustedYamlNode([expandedPage]);
+}
+
+type ActionAttemptSourceVerificationRequest = {
+  readonly repoRoot: string;
+  readonly runId: number;
+  readonly attempt: number;
+  readonly attemptRecord: UntrustedYamlMap;
+};
+
+function actionAttemptSourceVerified(
+  request: ActionAttemptSourceVerificationRequest,
+): boolean {
+  const workflowRequest: GitHubPropertyRequest = {
+    record: request.attemptRecord,
+    key: 'name',
+  };
+  if (requiredStringProperty(workflowRequest) !== 'E2E (PR)') return true;
+  const jobsRequest: GitHubApiRequest = {
+    repoRoot: request.repoRoot,
+    endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
+    fields: ['per_page=100'],
+  };
+  for (const page of flattenApiPages(runGitHubApi(jobsRequest))) {
+    if (!isRecord(page)) {
+      failGitHubCollection('GitHub Actions jobs page must be a mapping');
+    }
+    const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+    const verificationRequest: ActionJobsVerifiedSourceRequest = {
+      jobs: requiredArrayProperty(jobsProperty),
+    };
+    if (actionJobsVerifiedSource(verificationRequest)) return true;
+  }
+  return false;
+}
+
+export type ActionJobsVerifiedSourceRequest = {
+  readonly jobs: readonly UntrustedYamlNode[];
+};
+
+export function actionJobsVerifiedSource(
+  request: ActionJobsVerifiedSourceRequest,
+): boolean {
+  return request.jobs.some((job) => {
+    if (!isRecord(job)) return false;
+    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+    if (requiredStringProperty(nameRequest) !== 'Build PR browser image') {
+      return false;
+    }
+    const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
+    const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
+    const stepsProperty = untrustedYamlProperty(stepsArgs);
+    if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
+      return false;
+    }
+    if (!Array.isArray(stepsProperty.value)) {
+      failGitHubCollection('GitHub field steps must be a list');
+    }
+    return stepsProperty.value.some((step) => {
+      if (!isRecord(step)) return false;
+      const stepNameRequest: GitHubPropertyRequest = {
+        record: step,
+        key: 'name',
+      };
+      const conclusionRequest: GitHubPropertyRequest = {
+        record: step,
+        key: 'conclusion',
+      };
+      return (
+        requiredStringProperty(stepNameRequest) === 'Resolve PR head SHA' &&
+        stringProperty(conclusionRequest) === 'success'
+      );
+    });
+  });
 }
 
 type ActionAttemptRequestedValidationRequest = {

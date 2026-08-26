@@ -5,7 +5,10 @@ import {
   buildActionsEvidence,
   type BuildActionsEvidenceRequest,
 } from '../src/lib/agent-stats-github.ts';
-import { dispatchedSourceHead } from '../src/lib/agent-stats-github-api.ts';
+import {
+  actionJobsVerifiedSource,
+  dispatchedSourceHead,
+} from '../src/lib/agent-stats-github-api.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -67,6 +70,37 @@ describe('agent stats manual E2E evidence', () => {
     };
 
     expect(dispatchedSourceHead(request)).toBe('');
+  });
+
+  test('attributes manual provenance only after server-side verification', () => {
+    const successful = {
+      jobs: [
+        {
+          name: 'Build PR browser image',
+          steps: [{ name: 'Resolve PR head SHA', conclusion: 'success' }],
+        },
+      ],
+    };
+    const rejected = {
+      jobs: [
+        {
+          name: 'Build PR browser image',
+          steps: [{ name: 'Resolve PR head SHA', conclusion: 'failure' }],
+        },
+      ],
+    };
+    const cancelledBeforeResolution = {
+      jobs: [
+        {
+          name: 'Build PR browser image',
+          steps: [{ name: 'Resolve PR head SHA', conclusion: '' }],
+        },
+      ],
+    };
+
+    expect(actionJobsVerifiedSource(successful)).toBe(true);
+    expect(actionJobsVerifiedSource(rejected)).toBe(false);
+    expect(actionJobsVerifiedSource(cancelledBeforeResolution)).toBe(false);
   });
 
   test('snapshots nonterminal action attempts at merge', () => {
