@@ -40,7 +40,6 @@ const fixtureRegistrationValue: RegisteredExecutableSkill = {
 export const FIXTURE_REGISTRATION = Object.freeze(fixtureRegistrationValue);
 
 const fixtureDockerEnvironment: SealedSourceAnalysisDockerEnvironment = {
-  contextName: 'fixture',
   daemonId: '12345678-1234-1234-1234-123456789abc',
   endpoint: 'unix:///fixture/docker.sock',
 };
