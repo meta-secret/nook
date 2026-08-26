@@ -383,6 +383,21 @@ export async function inspectPrFeedback(
     );
   });
 
+  const normalizedReviewComments: ReviewFindingComment[] = reviewComments.map(
+    (comment) => {
+      const reviewerLogin = comment.user?.login;
+      return {
+        isReply: typeof comment.in_reply_to_id === "number",
+        reviewerLogin:
+          typeof reviewerLogin === "string" ? reviewerLogin : "",
+        reviewId:
+          typeof comment.pull_request_review_id === "number"
+            ? comment.pull_request_review_id
+            : 0,
+      };
+    },
+  );
+
   return {
     codexReview: {
       approvalReaction,
@@ -396,7 +411,7 @@ export async function inspectPrFeedback(
       requested: cursorReviewRequests.length > 0,
       settled: currentHeadCursorReview,
     },
-    findingBatches: countAutomatedFindingBatches(reviewComments),
+    findingBatches: countAutomatedFindingBatches(normalizedReviewComments),
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
@@ -404,9 +419,9 @@ export async function inspectPrFeedback(
 }
 
 type ReviewFindingComment = {
-  readonly in_reply_to_id?: number;
-  readonly pull_request_review_id?: number | null;
-  readonly user: { readonly login: string } | null;
+  readonly isReply: boolean;
+  readonly reviewerLogin: string;
+  readonly reviewId: number;
 };
 
 export function countAutomatedFindingBatches(
@@ -414,13 +429,12 @@ export function countAutomatedFindingBatches(
 ): number {
   const reviewIds = new Set<number>();
   for (const comment of comments) {
-    if (comment.in_reply_to_id !== undefined) continue;
-    if (!isCodexReviewer(comment.user) && !isCursorReviewer(comment.user)) {
+    if (comment.isReply) continue;
+    const reviewer = { login: comment.reviewerLogin };
+    if (!isCodexReviewer(reviewer) && !isCursorReviewer(reviewer)) {
       continue;
     }
-    if (typeof comment.pull_request_review_id === "number") {
-      reviewIds.add(comment.pull_request_review_id);
-    }
+    if (comment.reviewId > 0) reviewIds.add(comment.reviewId);
   }
   return reviewIds.size;
 }
