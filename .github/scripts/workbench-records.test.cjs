@@ -202,27 +202,61 @@ test('rejects an over-budget one-PR plan', () => {
   const invalid = validPlan
     .replace(
       'Estimated authored changed lines: 240',
-      'Estimated authored changed lines: 6,000',
+      'Estimated authored changed lines: 3,016',
     )
     .replace(
       'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 6,000',
+      'Current PR estimated authored changed lines: 3,016',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /current PR estimate exceeds 5,000 authored changed lines/,
+    /current PR estimate exceeds the 3,000-line target and 15-line tolerance/,
   )
 })
 
 test('rejects a one-PR shape for an over-budget feature', () => {
   const invalid = validPlan.replace(
     'Estimated authored changed lines: 240',
-    'Estimated authored changed lines: 6,000',
+    'Estimated authored changed lines: 3,016',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan exceeds 5,000 authored changed lines/,
+    /one-PR plan exceeds the 3,000-line target and 15-line tolerance/,
   )
+})
+
+test('requires semantic split planning at the early warning band', () => {
+  const invalid = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 2,700',
+    )
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 2,700',
+    )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /near-limit work requires a semantic multi-PR split plan/,
+  )
+})
+
+test('accepts the 15-line tolerance for a planned stack slice', () => {
+  const multiPr = validPlan
+    .replace(
+      'Estimated authored changed lines: 240',
+      'Estimated authored changed lines: 6,000',
+    )
+    .replace(
+      'Current PR estimated authored changed lines: 240',
+      'Current PR estimated authored changed lines: 3,015',
+    )
+    .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
+    .replace(
+      '- PR slices and acceptance evidence: Validator change; Acceptance evidence: Contract tests pass',
+      '- PR slices and acceptance evidence:\n1. Validator change; Acceptance evidence: Contract tests pass\n2. Publisher adoption; Acceptance evidence: Integration checks pass.',
+    )
+  assert.equal(validateAgentRecord(multiPr, 'plan'), '')
 })
 
 test('rejects a feature estimate below its current PR estimate', () => {
@@ -233,7 +267,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
     )
     .replace(
       'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 4,999',
+      'Current PR estimated authored changed lines: 3,015',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),

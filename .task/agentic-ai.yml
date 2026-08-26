@@ -142,6 +142,9 @@ tasks:
 
   loom:pre-push:
     desc: Run the default pre-push request; its host formatter includes Loom.
+    env:
+      NOOK_PRE_PUSH_BASE_REF: '{{default "origin/main" .BASE_REF}}'
+      NOOK_PRE_PUSH_MULTI_PR: '{{default "0" .MULTI_PR}}'
     deps: [loom:install]
     vars:
       CONFIG: '{{default "" .CONFIG}}'

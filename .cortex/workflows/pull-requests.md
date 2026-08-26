@@ -75,8 +75,8 @@ ownership until merge or a concrete blocked handoff:
 
 ### Size boundary
 
-- An implementation pull request targets no more than **5,000 authored changed
-  lines**.
+- An implementation pull request targets no more than **3,000 authored changed
+  lines**. A maximum of 15 additional lines tolerates estimation noise only.
 - Treat this as a planning ceiling because review, validation, conflict
   resolution, and repair costs rise sharply above it.
 - Estimate before implementation.
@@ -94,6 +94,12 @@ Count additions and deletions against the intended base for:
   working-tree changes.
 - Count untracked authored files separately.
 - After commit, use `git diff --numstat <base>...HEAD`.
+- `task loom:pre-push` enforces the budget and counts untracked authored text.
+- For a stacked slice, pass its immediate base with
+  `BASE_REF=origin/<predecessor-branch>`.
+- At or above 2,700 lines, the command stops until the semantic stack is
+  recorded. Rerun with `MULTI_PR=1` only after publishing the ordered Workbench
+  slices and opening the linked successor.
 
 Report these separately because they do not represent authored functionality:
 
@@ -106,7 +112,7 @@ Report these separately because they do not represent authored functionality:
 
 - Do not exclude tests or delete-heavy refactors from the authored estimate.
 - Do not pad, compress, or mechanically reorganize code to fit the number.
-- Treat 4,000 authored changed lines as a mandatory split-planning warning.
+- Treat 2,700 authored changed lines as a mandatory split-planning warning.
 - Stop implementation and re-estimate the complete requested outcome.
 - If the remaining work may cross the ceiling, define at least two semantic PR
   slices in Workbench before continuing.
@@ -144,6 +150,12 @@ Sequence rules:
 - The same agent owns every PR in the declared sequence unless Workbench records
   an explicit owner handoff.
 - Scope reduction without a linked preservation PR is a P1 delivery failure.
+
+Use GitHub stacked pull requests for dependent slices when the public preview
+is available. Base each successor on its immediate predecessor so review and
+line measurement see only that layer. If the preview or `gh stack` command is
+unavailable, open an ordinary pull request against the predecessor branch and
+cross-link the sequence. Independent slices remain based on current `main`.
 
 ### Required plan
 

@@ -47,8 +47,14 @@ snapshots, vendored sources, binary artifacts, and pure renames from the
 estimate. Set `Delivery shape` to exactly `One PR` or `Multiple PRs`.
 For a multi-PR feature, list each ordered, module-focused slice with its
 acceptance evidence. Identify the first or currently authorized slice
-separately. Its estimate must not exceed 5,000 authored changed lines. Use
+separately. Its estimate must not exceed 3,015 authored changed lines. Use
 `None` when no public or cross-module interface changes.
+
+Target at most 3,000 authored changed lines per pull request. A 15-line
+tolerance exists only for estimation noise; it is not extra feature capacity.
+At 2,700 lines, inventory the logical domain changes and require `Multiple PRs`
+with ordered semantic slices. Each dependent slice uses the previous slice as
+its temporary stacked base. Independent slices use current `main`.
 
 If planning replaces an in-progress oversized PR, require a successor branch
 and linked draft PR from the last full-work commit before any scope reduction.

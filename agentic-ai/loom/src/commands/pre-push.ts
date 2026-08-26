@@ -2,6 +2,10 @@ import type { PrePushRequest } from '../codec/args/pre-push.ts';
 import { findRepoRoot, requireBun } from '../lib/repo.ts';
 import { runCommand } from '../lib/run.ts';
 import {
+  measureAuthoredChangeBudget,
+  type AuthoredChangeBudgetRequest,
+} from '../lib/authored-change-budget.ts';
+import {
   LoomFailureCode,
   loomFailure,
   loomFailureDetail,
@@ -10,6 +14,8 @@ import {
 import type { RunCommandArgs } from '../lib/run.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type PrePushReport = {
+  readonly authoredLines: number;
+  readonly baseRef: string;
   readonly formatOk: boolean;
   readonly uiDemoOk: boolean;
   readonly baseSha: string;
@@ -23,6 +29,7 @@ export async function runPrePush(
   requireBun();
   const repoRoot = findRepoRoot();
   const messages: string[] = [];
+  const baseRef = process.env.NOOK_PRE_PUSH_BASE_REF?.trim() || 'origin/main';
 
   const formatArgs: RunCommandArgs = {
     command: 'task',
@@ -57,14 +64,14 @@ export async function runPrePush(
 
   const baseArgs: RunCommandArgs = {
     command: 'git',
-    args: ['rev-parse', 'origin/main'],
+    args: ['rev-parse', baseRef],
     cwd: repoRoot,
   };
   const base = runCommand(baseArgs);
   if (base.exitCode !== 0) {
     const loomFailureDetailArgs4: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
-      text: `git rev-parse origin/main failed: ${base.stderr}`,
+      text: `git rev-parse ${baseRef} failed: ${base.stderr}`,
     };
     loomFailureDetail(loomFailureDetailArgs4);
   }
@@ -72,10 +79,40 @@ export async function runPrePush(
   if (!/^[0-9a-f]{40}$/.test(baseSha)) {
     const loomFailureDetailArgs3: LoomFailureDetailArgs = {
       code: LoomFailureCode.CommandFailed,
-      text: `origin/main did not resolve to a full SHA: ${baseSha}`,
+      text: `${baseRef} did not resolve to a full SHA: ${baseSha}`,
     };
     loomFailureDetail(loomFailureDetailArgs3);
   }
+
+  const budgetRequest: AuthoredChangeBudgetRequest = { baseRef, repoRoot };
+  const budget = measureAuthoredChangeBudget(budgetRequest);
+  if (budget.unmeasurableAuthoredFiles > 0) {
+    const budgetFailure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CommandFailed,
+      text: `${budget.unmeasurableAuthoredFiles} authored file(s) have unmeasurable binary line counts`,
+    };
+    loomFailureDetail(budgetFailure);
+  }
+  if (budget.authoredLines > 3_015) {
+    const budgetFailure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CommandFailed,
+      text: `PR slice has ${budget.authoredLines} authored changed lines against ${baseRef}; split logical domain changes before exceeding the 3,000-line target and 15-line tolerance`,
+    };
+    loomFailureDetail(budgetFailure);
+  }
+  if (
+    budget.authoredLines >= 2_700 &&
+    process.env.NOOK_PRE_PUSH_MULTI_PR?.trim() !== '1'
+  ) {
+    const splitFailure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.CommandFailed,
+      text: `PR slice has ${budget.authoredLines} authored changed lines against ${baseRef}; inventory logical domain changes, publish ordered Workbench slices, open the dependent stack, then rerun with MULTI_PR=1`,
+    };
+    loomFailureDetail(splitFailure);
+  }
+  messages.push(
+    `authored-change-budget: ${budget.authoredLines}/3000 lines against ${baseRef}; untracked authored files=${budget.untrackedAuthoredFiles}`,
+  );
 
   const contractArgs: RunCommandArgs = {
     command: 'bash',
@@ -112,6 +149,8 @@ export async function runPrePush(
   }
 
   return {
+    authoredLines: budget.authoredLines,
+    baseRef,
     formatOk: true,
     uiDemoOk: true,
     baseSha,
