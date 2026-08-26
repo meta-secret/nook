@@ -412,7 +412,10 @@ function createMockOctokit(options: MockOptions): Octokit {
   const issues = {
     listComments: async () => ({
       data: [
-        { body: "### Preview deployed\n\nhttps://preview.test" },
+        {
+          body: "### Preview deployed\n\nhttps://preview.test",
+          user: { login: "github-actions[bot]" },
+        },
         {
           body: "<!-- nook-ui-demo -->\n### UI demo\n\n- Result: **success**",
           user: { login: "github-actions[bot]" },
@@ -470,6 +473,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         },
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
+          user: { login: "github-actions[bot]" },
         },
         ...(options.agentHandoff === MockAgentHandoff.Included
           ? [

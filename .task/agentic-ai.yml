@@ -553,11 +553,12 @@ tasks:
           CI_AGENT_CMD: pr-review
 
   pr:review:stabilize:
-    desc: Wait for an exact-head Cloud review before expensive validation, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600).
+    desc: Wait for an exact-head Cloud review before expensive validation, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     env:
       REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
+      REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
     cmds:
       - task: pr:ci-agent:audit
         vars:

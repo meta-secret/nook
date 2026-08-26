@@ -44,8 +44,10 @@ jobs:
                 pull_number: prNumber,
               });
               liveHeadSha = currentPr.head.sha;
-              const runs = (
-                await Promise.all(
+              let runs;
+              try {
+                runs = (
+                  await Promise.all(
                   validationWorkflows.flatMap((workflow) =>
                     activeStatuses.map((status) =>
                       github.paginate(github.rest.actions.listWorkflowRuns, {
@@ -58,8 +60,18 @@ jobs:
                       })
                     )
                   )
-                )
-              ).flat();
+                  )
+                ).flat();
+              } catch (error) {
+                core.warning(
+                  `Could not enumerate active validation runs; retrying within the registration window: ${String(error)}`
+                );
+                if (Date.now() < inspectionDeadline) {
+                  await new Promise((resolve) => setTimeout(resolve, 5_000));
+                  continue;
+                }
+                break;
+              }
               const obsoleteRuns = runs.filter((run) =>
                 !inspectedRunIds.has(run.id) &&
                 run.head_sha !== currentPr.head.sha &&

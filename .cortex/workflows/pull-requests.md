@@ -62,7 +62,8 @@ ownership until merge or a concrete blocked handoff:
    - A bounded 600-second wait lets validation proceed when review remains
      unavailable and no current findings are visible.
    - Three automated finding batches open the circuit breaker. Perform a
-     comprehensive stabilization pass before spending another validation run.
+     comprehensive stabilization pass, resolve its batch, and set
+     `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation run.
    - Codex is the sole automatic review provider. Do not activate Cursor
      Bugbot.
    - Do not request Claude, CodeRabbit, or other optional reviewers.

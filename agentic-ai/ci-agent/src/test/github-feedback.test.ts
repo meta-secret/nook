@@ -196,6 +196,37 @@ test("provider status text is authenticated before exclusion", () => {
   );
 });
 
+test("workflow status markers are authenticated before exclusion", () => {
+  const base = {
+    authorAssociation: "NONE",
+    cursorMarker: "<!-- nook-cursor-review:head-sha -->",
+    marker: "<!-- nook-codex-review:head-sha -->",
+  };
+  for (const body of [
+    "### Preview deployed",
+    "### Web research preview",
+    "<!-- nook-ui-demo -->",
+    "<!-- nook-core-coverage -->",
+  ]) {
+    assert.equal(
+      isRepositoryStatusComment({
+        ...base,
+        body,
+        user: { login: "github-actions[bot]" },
+      }),
+      true,
+    );
+    assert.equal(
+      isRepositoryStatusComment({
+        ...base,
+        body,
+        user: { login: "human-reviewer" },
+      }),
+      false,
+    );
+  }
+});
+
 test("common praise is non-actionable", () => {
   assert.equal(isNonActionableReviewBody("Looks good to me."), true);
   assert.equal(isNonActionableReviewBody("No issues found!"), true);

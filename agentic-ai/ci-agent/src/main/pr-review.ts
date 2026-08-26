@@ -17,6 +17,7 @@ type ReviewStabilizationRequest = () => Promise<{
 }>;
 
 type ReviewStabilizationInput = {
+  circuitBreakerAcknowledged?: boolean;
   inspectFeedback: () => Promise<PrFeedbackSummary>;
   now: () => number;
   pollIntervalMs: number;
@@ -65,6 +66,7 @@ export async function runPrReviewStabilization(): Promise<void> {
   const octokit = createOctokit();
   const repoRef = parseRepository(repository);
   const result = await stabilizeExactHeadReview({
+    circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
     inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
     now: () => Date.now(),
     pollIntervalMs: STABILIZATION_POLL_INTERVAL_MS,
@@ -113,7 +115,10 @@ export async function stabilizeExactHeadReview(
         return { headSha, state: ReviewStabilizationState.TimedOut };
       }
       const feedback = inspection.value;
-      const findingState = classifyFeedbackState(feedback);
+      const findingState = classifyFeedbackState(
+        feedback,
+        input.circuitBreakerAcknowledged ?? false,
+      );
       if (findingState !== ReviewStabilizationState.Clean) {
         return { feedback, headSha, state: findingState };
       }
@@ -169,7 +174,10 @@ export async function stabilizeExactHeadReview(
           return { headSha, state: ReviewStabilizationState.TimedOut };
         }
         const feedback = inspection.value;
-        const findingState = classifyFeedbackState(feedback);
+        const findingState = classifyFeedbackState(
+          feedback,
+          input.circuitBreakerAcknowledged ?? false,
+        );
         if (findingState !== ReviewStabilizationState.Clean) {
           return { feedback, headSha, state: findingState };
         }
@@ -217,8 +225,9 @@ async function attemptBeforeDeadline<T>(
 
 function classifyFeedbackState(
   feedback: PrFeedbackSummary,
+  circuitBreakerAcknowledged: boolean,
 ): ReviewStabilizationState {
-  if (feedback.findingBatches >= 3) {
+  if (feedback.findingBatches >= 3 && !circuitBreakerAcknowledged) {
     return ReviewStabilizationState.CircuitBreaker;
   }
   const hasFindings =
@@ -227,6 +236,16 @@ function classifyFeedbackState(
     feedback.unresolvedThreads > 0;
   if (!hasFindings) return ReviewStabilizationState.Clean;
   return ReviewStabilizationState.Findings;
+}
+
+function readCircuitBreakerAcknowledgement(): boolean {
+  const value = process.env.REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED?.trim() ?? "0";
+  if (value !== "0" && value !== "1") {
+    throw new Error(
+      `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED must be 0 or 1 (received ${value})`,
+    );
+  }
+  return value === "1";
 }
 
 function readReviewContext(): { prNumber: number; repository: string } {

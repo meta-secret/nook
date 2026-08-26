@@ -110,6 +110,41 @@ test("stabilizeExactHeadReview keeps the circuit open after findings are resolve
   assert.equal(requests, 0);
 });
 
+test("stabilizeExactHeadReview reopens after comprehensive stabilization", async () => {
+  const result = await stabilizeExactHeadReview({
+    circuitBreakerAcknowledged: true,
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      findingBatches: 3,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Clean);
+});
+
+test("stabilizeExactHeadReview keeps acknowledged findings actionable", async () => {
+  const result = await stabilizeExactHeadReview({
+    circuitBreakerAcknowledged: true,
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      findingBatches: 3,
+      unresolvedThreads: 1,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+});
+
 test("stabilizeExactHeadReview ignores historical top-level comments", async () => {
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => ({

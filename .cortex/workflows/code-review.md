@@ -50,7 +50,9 @@ The command:
 3. Stops before validation when findings exist so the agent can address one
    coherent batch.
 4. Opens a circuit breaker after three finding batches and requires a
-   comprehensive stabilization pass before another complete validation.
+   comprehensive stabilization pass. After resolving its coherent batch, the
+   delivery owner explicitly acknowledges that pass with
+   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation.
 5. Rechecks that the PR head did not change, then dispatches repository-owned
    GitHub Actions.
 

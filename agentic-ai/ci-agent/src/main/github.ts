@@ -561,10 +561,11 @@ export function isRepositoryStatusComment(
 ): boolean {
   const trimmed = input.body.trimStart();
   return (
-    trimmed.startsWith("### Preview deployed") ||
-    trimmed.startsWith("### Web research preview") ||
-    trimmed.startsWith("<!-- nook-ui-demo -->") ||
-    trimmed.startsWith("<!-- nook-core-coverage -->") ||
+    (isGitHubActionsBot(input.user) &&
+      (trimmed.startsWith("### Preview deployed") ||
+        trimmed.startsWith("### Web research preview") ||
+        trimmed.startsWith("<!-- nook-ui-demo -->") ||
+        trimmed.startsWith("<!-- nook-core-coverage -->"))) ||
     isTrustedCodexReviewRequestComment({
       authorAssociation: input.authorAssociation,
       body: input.body,
@@ -582,6 +583,15 @@ export function isRepositoryStatusComment(
       )) ||
     (isCursorReviewer(input.user) &&
       trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
+  );
+}
+
+function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {
+  return (
+    typeof user === "object" &&
+    user !== null &&
+    "login" in user &&
+    user.login === "github-actions[bot]"
   );
 }
 
