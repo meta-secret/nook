@@ -58,7 +58,7 @@ to generate bookkeeping.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
-   - Record the ordered issue and PR sequence for a feature above 5,000
+   - Record the ordered issue and PR sequence for a feature above 3,000
      authored changed lines.
    - Open and link the successor draft PR before reducing an implemented PR.
    - Record a preservation inventory for every removed file and behavior.

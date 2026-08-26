@@ -40,7 +40,7 @@ index. Focused Markdown files replace sub-issues.
 
 Create a focused sequence when either condition holds:
 
-- the complete feature is expected to exceed 5,000 authored changed lines; or
+- the complete feature is expected to exceed 3,000 authored changed lines; or
 - separate module ownership makes independent slices safer below that size.
 
 The feature `README.md` must record:

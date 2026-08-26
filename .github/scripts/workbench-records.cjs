@@ -312,14 +312,14 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     if (estimate < 1 || currentPrEstimate < 1) {
       return 'authored changed-line estimates must be positive integers'
     }
-    if (currentPrEstimate > 5_000) {
-      return 'current PR estimate exceeds 5,000 authored changed lines'
+    if (currentPrEstimate > 3_000) {
+      return 'current PR estimate exceeds 3,000 authored changed lines'
     }
     if (estimate < currentPrEstimate) {
       return 'feature estimate must be at least the current PR estimate'
     }
-    if (deliveryShape === 'One PR' && estimate > 5_000) {
-      return 'one-PR plan exceeds 5,000 authored changed lines'
+    if (deliveryShape === 'One PR' && estimate > 3_000) {
+      return 'one-PR plan exceeds 3,000 authored changed lines'
     }
     if (deliveryShape === 'One PR' && estimate !== currentPrEstimate) {
       return 'one-PR feature and current PR estimates must match'
