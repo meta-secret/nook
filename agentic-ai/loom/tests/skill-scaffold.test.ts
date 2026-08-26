@@ -5,10 +5,15 @@ import { join } from 'node:path';
 import {
   findExistingSkillCard,
   insertSkillCatalogEntry,
+  markdownPath,
   renderSkillCard,
 } from '../src/commands/skill-scaffold.ts';
 
 describe('skill scaffold', () => {
+  test('normalizes Markdown links across platforms', () => {
+    expect(markdownPath('sre\\recovery.md')).toBe('sre/recovery.md');
+  });
+
   test('renders the current skill-card title placeholder', () => {
     const renderArgs = {
       template: '# Skill name\n\n## Purpose\n\nDescribe the rule.\n',

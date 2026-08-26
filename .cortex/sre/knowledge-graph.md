@@ -4,7 +4,6 @@
 
 - The [common agent contract](../AGENTS.md) routes delivery and platform work here.
 - [Engineering team ownership](../architecture/team-ownership.md) defines the boundary.
-- [Team-oriented development](../workflows/team-oriented-development.md) defines delegation and cross-team handoffs.
 
 ## Document map
 

@@ -54,6 +54,10 @@ type FindExistingSkillCardArgs = {
   readonly slug: string;
 };
 
+export function markdownPath(filePath: string): string {
+  return filePath.replaceAll('\\', '/');
+}
+
 export function findExistingSkillCard(
   args: FindExistingSkillCardArgs,
 ): string | false {
@@ -142,7 +146,7 @@ export async function runSkillScaffold(
   const card = renderSkillCard(renderArgs);
   const currentIndexContent = readFileSync(indexPath, 'utf8');
   const insertArgs: InsertSkillCatalogEntryArgs = {
-    cardHref: path.relative(commonSkillsDir, cardPath),
+    cardHref: markdownPath(path.relative(commonSkillsDir, cardPath)),
     createExecutableWrappers: request.createExecutableWrappers,
     indexContent: currentIndexContent,
     slug,
@@ -161,7 +165,7 @@ export async function runSkillScaffold(
     mkdirSync(agentsDir, directoryOptions);
     const skillMd = path.join(agentsDir, 'SKILL.md');
     if (!existsSync(skillMd)) {
-      const cortexLink = path.relative(repoRoot, cardPath);
+      const cortexLink = markdownPath(path.relative(repoRoot, cardPath));
       writeFileSync(
         skillMd,
         [
