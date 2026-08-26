@@ -133,6 +133,7 @@ tasks:
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
           repository="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
           cancel_attempt=0
+          cancelled_run_ids=""
           while [ "$cancel_attempt" -lt 6 ]; do
             run_ids="$(
               for run_status in requested waiting pending queued in_progress; do
@@ -142,13 +143,20 @@ tasks:
               done | sort -u
             )"
             if [ -n "$run_ids" ]; then
-              printf '%s\n' "$run_ids" | while IFS= read -r run_id; do
-                gh run cancel "$run_id"
+              for run_id in $run_ids; do
+                case " $cancelled_run_ids " in
+                  *" $run_id "*) ;;
+                  *)
+                    gh run cancel "$run_id"
+                    cancelled_run_ids="$cancelled_run_ids $run_id"
+                    ;;
+                esac
               done
-              break
             fi
             cancel_attempt=$((cancel_attempt + 1))
-            sleep 5
+            if [ "$cancel_attempt" -lt 6 ]; then
+              sleep 5
+            fi
           done
           echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
           exit 2

@@ -250,6 +250,30 @@ test("stabilizeExactHeadReview bounds feedback errors after review settles", asy
   assert.equal(feedbackInspections, 4);
 });
 
+test("stabilizeExactHeadReview waits for feedback to observe settlement", async () => {
+  let inspections = 0;
+  const unsettledFeedback: PrFeedbackSummary = {
+    ...cleanFeedback,
+    codexReview: { ...cleanFeedback.codexReview, settled: false },
+  };
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      inspections += 1;
+      return inspections < 3
+        ? unsettledFeedback
+        : { ...unsettledFeedback, unresolvedThreads: 1 };
+    },
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(inspections, 3);
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+});
+
 test("stabilizeExactHeadReview bounds a stalled feedback request", async () => {
   let now = 0;
   const result = await stabilizeExactHeadReview({

@@ -231,6 +231,17 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
   );
 });
 
+test("buildPrAudit excludes unresolved threads from dismissed reviews", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ dismissedThreads: 1 }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.feedback.unresolvedThreads, 0);
+});
+
 test("buildPrAudit rejects a green workflow when Native Rust failed", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ nativeConclusion: MockJobConclusion.Failure }),
@@ -301,6 +312,7 @@ type MockOptions = {
   behindBy?: number;
   codexReview?: MockCodexReview;
   cursorReview?: MockCursorReview;
+  dismissedThreads?: number;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   runStatus?: MockRunStatus;
@@ -446,12 +458,14 @@ function createMockOctokit(options: MockOptions): Octokit {
           : []),
         {
           body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
+          user: { login: "chatgpt-codex-connector[bot]" },
         },
         {
           body: `cursor review\n\n<!-- nook-cursor-review:${headSha} -->`,
         },
         {
           body: "<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->\nBugbot is not enabled for your account, so this pull request was not reviewed.",
+          user: { login: "cursor[bot]" },
         },
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
@@ -563,8 +577,18 @@ function createMockOctokit(options: MockOptions): Octokit {
             nodes: Array.from(
               { length: options.unresolvedThreads ?? 0 },
               () => ({
+                comments: {
+                  nodes: [{ pullRequestReview: { state: "COMMENTED" } }],
+                },
                 isResolved: false,
               }),
+            ).concat(
+              Array.from({ length: options.dismissedThreads ?? 0 }, () => ({
+                comments: {
+                  nodes: [{ pullRequestReview: { state: "DISMISSED" } }],
+                },
+                isResolved: false,
+              })),
             ),
             pageInfo: { hasNextPage: false },
           },

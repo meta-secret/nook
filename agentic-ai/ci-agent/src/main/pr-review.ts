@@ -117,7 +117,7 @@ export async function stabilizeExactHeadReview(
       if (findingState !== ReviewStabilizationState.Clean) {
         return { feedback, headSha, state: findingState };
       }
-      if (settled) {
+      if (settled && feedback.codexReview.settled) {
         return {
           feedback,
           headSha,
@@ -163,7 +163,12 @@ export async function stabilizeExactHeadReview(
         }
         const feedback = inspection.value;
         const findingState = classifyFeedbackState(feedback);
-        return { feedback, headSha, state: findingState };
+        if (findingState !== ReviewStabilizationState.Clean) {
+          return { feedback, headSha, state: findingState };
+        }
+        if (feedback.codexReview.settled) {
+          return { feedback, headSha, state: ReviewStabilizationState.Clean };
+        }
       } catch {
         // A settled provider response proves review state changed after the
         // first inspection. Retry its classification through the same bounded

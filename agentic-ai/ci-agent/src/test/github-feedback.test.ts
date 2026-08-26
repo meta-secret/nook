@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   countAutomatedFindingBatches,
+  isNonActionableReviewBody,
   isRepositoryStatusComment,
   isTrustedExactHeadReviewRequest,
 } from "../main/github.js";
@@ -134,6 +135,7 @@ test("only a trusted canonical request marker is repository status", () => {
       body: `@codex review\n\n${marker}`,
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
+      user: { login: "cypherkitty" },
     }),
     true,
   );
@@ -143,6 +145,7 @@ test("only a trusted canonical request marker is repository status", () => {
       body: `Finding quoting ${marker}`,
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
+      user: { login: "cypherkitty" },
     }),
     false,
   );
@@ -152,7 +155,39 @@ test("only a trusted canonical request marker is repository status", () => {
       body: `@codex review\n\n${marker}`,
       cursorMarker: "<!-- nook-cursor-review:head-sha -->",
       marker,
+      user: { login: "cypherkitty" },
     }),
     false,
   );
+});
+
+test("provider status text is authenticated before exclusion", () => {
+  const status =
+    "You have reached your Codex usage limits for code reviews. Try later.";
+  const base = {
+    authorAssociation: "NONE",
+    body: status,
+    cursorMarker: "<!-- nook-cursor-review:head-sha -->",
+    marker: "<!-- nook-codex-review:head-sha -->",
+  };
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      user: { login: "chatgpt-codex-connector[bot]" },
+    }),
+    true,
+  );
+  assert.equal(
+    isRepositoryStatusComment({
+      ...base,
+      user: { login: "human-reviewer" },
+    }),
+    false,
+  );
+});
+
+test("common praise is non-actionable", () => {
+  assert.equal(isNonActionableReviewBody("Looks good to me."), true);
+  assert.equal(isNonActionableReviewBody("No issues found!"), true);
+  assert.equal(isNonActionableReviewBody("This drops the head guard."), false);
 });

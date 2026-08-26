@@ -219,7 +219,12 @@ type ReviewThreadPage = {
   repository: {
     pullRequest: {
       reviewThreads: {
-        nodes: Array<{ isResolved: boolean }>;
+        nodes: Array<{
+          isResolved: boolean;
+          comments: {
+            nodes: Array<{ pullRequestReview?: { state: string } }>;
+          };
+        }>;
         pageInfo: { hasNextPage: boolean; endCursor?: string };
       };
     };
@@ -234,7 +239,10 @@ const REVIEW_THREADS_QUERY = `
     repository(owner: $owner, name: $repo) {
       pullRequest(number: $number) {
         reviewThreads(first: 100, after: $cursor) {
-          nodes { isResolved }
+          nodes {
+            isResolved
+            comments(first: 1) { nodes { pullRequestReview { state } } }
+          }
           pageInfo { hasNextPage endCursor }
         }
       }
@@ -267,6 +275,7 @@ type RepositoryStatusCommentInput = {
   body: string;
   cursorMarker: string;
   marker: string;
+  user: unknown;
 };
 
 export async function inspectPrFeedback(
@@ -303,9 +312,14 @@ export async function inspectPrFeedback(
           : {}),
       });
     const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
-    unresolvedThreads += threads.nodes.filter(
-      (thread) => !thread.isResolved,
-    ).length;
+    unresolvedThreads += threads.nodes.filter((thread) => {
+      const reviewState = thread.comments.nodes[0]?.pullRequestReview?.state;
+      return (
+        !thread.isResolved &&
+        typeof reviewState === "string" &&
+        isSubmittedReviewState(reviewState)
+      );
+    }).length;
     pagination =
       threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
         ? { kind: PaginationKind.NextPage, cursor: threads.pageInfo.endCursor }
@@ -383,6 +397,7 @@ export async function inspectPrFeedback(
         body: comment.body ?? "",
         cursorMarker,
         marker,
+        user: comment.user,
       }) &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
@@ -555,21 +570,30 @@ export function isRepositoryStatusComment(
     }) ||
     input.body.trim() === `cursor review\n\n${input.cursorMarker}` ||
     isAgentImplementationHandoffComment(trimmed) ||
-    // Codex posts this when it cannot review; it is status, not a finding.
-    trimmed.includes("Codex usage limits for code reviews") ||
-    // Cursor posts this when Bugbot is not enabled; it is status, not a finding.
-    trimmed.includes("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->")
+    (isCodexReviewer(input.user) &&
+      trimmed.startsWith(
+        "You have reached your Codex usage limits for code reviews.",
+      )) ||
+    (isCursorReviewer(input.user) &&
+      trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
   );
 }
 
-function isNonActionableReviewBody(body: string): boolean {
+export function isNonActionableReviewBody(body: string): boolean {
   const normalized = body
     .trim()
     .toLowerCase()
     .replace(/[.!\s]+$/g, "");
-  return ["lgtm", "looks good", "nice work", "thank you", "thanks"].includes(
-    normalized,
-  );
+  return [
+    "lgtm",
+    "looks good",
+    "looks good to me",
+    "nice work",
+    "no issues",
+    "no issues found",
+    "thank you",
+    "thanks",
+  ].includes(normalized);
 }
 
 function isActionableReviewBody(input: {
