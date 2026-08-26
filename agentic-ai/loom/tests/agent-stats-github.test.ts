@@ -92,6 +92,68 @@ describe('agent stats GitHub evidence', () => {
     expect(evidence.cancelledValidationCount).toBe(1);
   });
 
+  test('uses delivery order when head timestamps tie', () => {
+    const sharedTimestamp = '2026-08-01T10:00:00Z';
+    const pages = actionPages([
+      {
+        id: 102,
+        runAttempt: 1,
+        headSha: finalHead,
+        startedAt: sharedTimestamp,
+        finishedAt: '2026-08-01T10:02:00Z',
+        conclusion: 'success',
+      },
+      {
+        id: 101,
+        runAttempt: 1,
+        headSha: firstHead,
+        startedAt: sharedTimestamp,
+        finishedAt: '2026-08-01T10:10:00Z',
+        conclusion: 'success',
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [firstHead, finalHead],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.heads.map((head) => head.head_sha)).toEqual([
+      firstHead,
+      finalHead,
+    ]);
+    expect(evidence.obsoleteValidationSeconds).toBe(600);
+  });
+
+  test('keeps unsupported-label runs out of validation cycles', () => {
+    const pages = actionPages([
+      {
+        id: 104,
+        runAttempt: 1,
+        headSha: finalHead,
+        startedAt: '2026-08-01T10:00:00Z',
+        finishedAt: '2026-08-01T10:00:10Z',
+        conclusion: 'failure',
+        validationRequested: false,
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs).toHaveLength(1);
+    expect(evidence.validationCycles).toHaveLength(0);
+  });
+
   test('ignores a same-branch run associated with another PR', () => {
     const sourceRun: ActionRunFixture = {
       id: 101,
@@ -555,6 +617,7 @@ type ActionRunFixture = {
   readonly sourcePr?: number;
   readonly status?: string;
   readonly workflow?: string;
+  readonly validationRequested?: boolean;
 };
 
 function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
@@ -570,7 +633,18 @@ function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
     conclusion: fixture.conclusion,
     status: fixture.status ?? 'completed',
     pull_requests: [{ number: fixture.sourcePr ?? 42 }],
+    validation_requested:
+      fixture.validationRequested === false ? 'false' : 'true',
   };
+}
+
+function actionPages(fixtures: readonly ActionRunFixture[]): UntrustedYamlNode {
+  return asUntrustedYamlNode([
+    {
+      total_count: fixtures.length,
+      workflow_runs: fixtures.map(actionRun),
+    },
+  ]);
 }
 
 function yamlPages(items: readonly UntrustedYamlNode[]): UntrustedYamlNode {

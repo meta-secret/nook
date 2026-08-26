@@ -41,6 +41,17 @@ import {
   ReviewOutcome,
   substantiveReviewBodyFindingCount,
 } from './agent-stats-github-review.ts';
+import {
+  actionObservation,
+  actionObservationRecord,
+  actionRunId,
+  isSourcePrRun,
+  validationCycleRecord,
+  type ActionObservation,
+  type ActionObservationRequest,
+  type SourcePrRunRequest,
+  type ValidationCycleRecordRequest,
+} from './agent-stats-github-actions.ts';
 
 const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 const GITHUB_ACTIONS_LOGIN = 'github-actions[bot]';
@@ -81,6 +92,7 @@ export type BuildActionsEvidenceRequest = {
   readonly mergedAt: string;
   readonly reviewEvents: readonly UntrustedYamlMap[];
   readonly finalHeadObservedAt?: string;
+  readonly deliveryHeadOrder?: readonly string[];
 };
 
 export type BuildReviewEvidenceRequest = {
@@ -100,19 +112,6 @@ type ActionsEvidence = {
   readonly obsoleteValidationCount: number;
   readonly cancelledValidationSeconds: number;
   readonly cancelledValidationCount: number;
-};
-
-type ActionObservation = {
-  readonly workflow: string;
-  readonly runId: number;
-  readonly runAttempt: number;
-  readonly headSha: string;
-  readonly trigger: string;
-  readonly startedAt: string;
-  readonly finishedAt: string;
-  readonly durationSeconds: number;
-  readonly conclusion: string;
-  readonly sourcePr: number;
 };
 
 type HeadObservation = {
@@ -228,6 +227,7 @@ export function collectAgentStatsGitHubEvidence(
     mergedAt: request.mergedAt,
     reviewEvents: reviews.events,
     finalHeadObservedAt,
+    deliveryHeadOrder: knownHeadShas,
   };
   const actions = buildActionsEvidence(actionsRequest);
   const deliveryHeadsRequest = {
@@ -305,6 +305,7 @@ export function buildActionsEvidence(
     reviewEvents: request.reviewEvents,
     finalHeadSha: request.finalHeadSha,
     finalHeadObservedAt: request.finalHeadObservedAt ?? '',
+    deliveryHeadOrder: request.deliveryHeadOrder ?? [],
   };
   const headStarts = deliveryHeadStarts(headStartsRequest);
   const headShas = headStarts.map((head) => head.headSha);
@@ -322,8 +323,8 @@ export function buildActionsEvidence(
   });
   const runs = observations.map(actionObservationRecord);
   const heads = headObservations.map(headObservationRecord);
-  const validationObservations = observations.filter((run) =>
-    isValidationWorkflow(run.workflow),
+  const validationObservations = observations.filter(
+    (run) => isValidationWorkflow(run.workflow) && run.validationRequested,
   );
   const validationCycles = validationObservations.map((run) => {
     const supersededRequest: HeadSupersededRequest = {
@@ -797,123 +798,6 @@ function reviewResultKey(result: ReviewResultObservation): string {
   return `${result.headSha}:${result.completedAt}:${result.outcome}`;
 }
 
-type ActionObservationRequest = {
-  readonly record: UntrustedYamlMap;
-  readonly prNumber: number;
-};
-
-function actionObservation(
-  request: ActionObservationRequest,
-): ActionObservation {
-  const startedRequest: PropertyRequest = {
-    record: request.record,
-    key: 'created_at',
-  };
-  const updatedRequest: PropertyRequest = {
-    record: request.record,
-    key: 'updated_at',
-  };
-  const workflowRequest: PropertyRequest = {
-    record: request.record,
-    key: 'name',
-  };
-  const runIdRequest: PropertyRequest = { record: request.record, key: 'id' };
-  const attemptRequest: PropertyRequest = {
-    record: request.record,
-    key: 'run_attempt',
-  };
-  const headRequest: PropertyRequest = {
-    record: request.record,
-    key: 'head_sha',
-  };
-  const triggerRequest: PropertyRequest = {
-    record: request.record,
-    key: 'event',
-  };
-  const conclusionRequest: PropertyRequest = {
-    record: request.record,
-    key: 'conclusion',
-  };
-  const statusRequest: PropertyRequest = {
-    record: request.record,
-    key: 'status',
-  };
-  const status = requiredStringProperty(statusRequest);
-  if (status !== 'completed') {
-    failGitHubCollection(
-      `GitHub Actions attempt ${requiredNumberProperty(runIdRequest)}:${requiredNumberProperty(attemptRequest)} is ${status}; retry collection after completion`,
-    );
-  }
-  const startedAt = requiredStringProperty(startedRequest);
-  const finishedAt = requiredStringProperty(updatedRequest);
-  const durationRequest: DurationSecondsRequest = { startedAt, finishedAt };
-  return {
-    workflow: requiredStringProperty(workflowRequest),
-    runId: requiredNumberProperty(runIdRequest),
-    runAttempt: requiredNumberProperty(attemptRequest),
-    headSha: requiredStringProperty(headRequest),
-    trigger: requiredStringProperty(triggerRequest),
-    startedAt,
-    finishedAt,
-    durationSeconds: durationSeconds(durationRequest),
-    conclusion: requiredStringProperty(conclusionRequest),
-    sourcePr: request.prNumber,
-  };
-}
-
-function actionRunId(run: UntrustedYamlMap): number {
-  const request: PropertyRequest = { record: run, key: 'id' };
-  return requiredNumberProperty(request);
-}
-
-type SourcePrRunRequest = {
-  readonly run: UntrustedYamlMap;
-  readonly prNumber: number;
-};
-
-function isSourcePrRun(request: SourcePrRunRequest): boolean {
-  const pullRequestsRequest: PropertyRequest = {
-    record: request.run,
-    key: 'pull_requests',
-  };
-  const pullRequests = requiredArrayProperty(pullRequestsRequest);
-  return pullRequests.some((candidate) => {
-    if (!isRecord(candidate)) return false;
-    const numberRequest: PropertyRequest = { record: candidate, key: 'number' };
-    return numberProperty(numberRequest) === request.prNumber;
-  });
-}
-
-type DurationSecondsRequest = {
-  readonly startedAt: string;
-  readonly finishedAt: string;
-};
-
-function durationSeconds(request: DurationSecondsRequest): number {
-  const startedAt = Date.parse(request.startedAt);
-  const finishedAt = Date.parse(request.finishedAt);
-  if (Number.isNaN(startedAt) || Number.isNaN(finishedAt)) return 0;
-  return Math.max(0, Math.round((finishedAt - startedAt) / 1000));
-}
-
-function actionObservationRecord(
-  observation: ActionObservation,
-): UntrustedYamlMap {
-  const record = {
-    workflow: observation.workflow,
-    run_id: observation.runId,
-    run_attempt: observation.runAttempt,
-    head_sha: observation.headSha,
-    trigger: observation.trigger,
-    started_at: observation.startedAt,
-    finished_at: observation.finishedAt,
-    duration_seconds: observation.durationSeconds,
-    conclusion: observation.conclusion,
-    source_pr: observation.sourcePr,
-  };
-  return sealUntrustedYamlMap(record);
-}
-
 function headObservationRecord(observation: HeadObservation): UntrustedYamlMap {
   const record = {
     head_sha: observation.headSha,
@@ -923,28 +807,6 @@ function headObservationRecord(observation: HeadObservation): UntrustedYamlMap {
     action_run_count: observation.actionRunCount,
     action_seconds: observation.actionSeconds,
     obsolete_action_seconds: observation.obsoleteActionSeconds,
-  };
-  return sealUntrustedYamlMap(record);
-}
-
-type ValidationCycleRecordRequest = {
-  readonly run: ActionObservation;
-  readonly obsoleteSeconds: number;
-};
-
-function validationCycleRecord(
-  request: ValidationCycleRecordRequest,
-): UntrustedYamlMap {
-  const record = {
-    workflow: request.run.workflow,
-    head_sha: request.run.headSha,
-    run_id: request.run.runId,
-    run_attempt: request.run.runAttempt,
-    started_at: request.run.startedAt,
-    finished_at: request.run.finishedAt,
-    duration_seconds: request.run.durationSeconds,
-    conclusion: request.run.conclusion,
-    obsolete_seconds: request.obsoleteSeconds,
   };
   return sealUntrustedYamlMap(record);
 }

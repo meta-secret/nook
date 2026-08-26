@@ -32,6 +32,7 @@ type DeliveryHeadStartsRequest = {
   readonly reviewEvents: readonly UntrustedYamlMap[];
   readonly finalHeadSha: string;
   readonly finalHeadObservedAt: string;
+  readonly deliveryHeadOrder: readonly string[];
 };
 
 type RetainEarlierStartRequest = {
@@ -139,11 +140,22 @@ export function deliveryHeadStarts(
     headSha: entry[0],
     observedAt: entry[1],
   }));
+  const orderByHead = new Map<string, number>();
+  for (const [index, headSha] of request.deliveryHeadOrder.entries()) {
+    orderByHead.set(headSha, index);
+  }
   const sorted: DeliveryHeadStart[] = [];
   for (const candidate of unsorted) {
     let inserted = false;
     for (const [index, existing] of sorted.entries()) {
-      if (candidate.observedAt < existing.observedAt) {
+      const candidateOrder = orderByHead.get(candidate.headSha) ?? -1;
+      const existingOrder = orderByHead.get(existing.headSha) ?? -1;
+      if (
+        candidate.observedAt < existing.observedAt ||
+        (candidate.observedAt === existing.observedAt &&
+          candidateOrder >= 0 &&
+          (existingOrder < 0 || candidateOrder < existingOrder))
+      ) {
         sorted.splice(index, 0, candidate);
         inserted = true;
         break;

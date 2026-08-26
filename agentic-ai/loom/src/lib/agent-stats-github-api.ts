@@ -76,7 +76,19 @@ export function expandActionAttemptPages(
             `GitHub Actions attempt ${runId}:${attempt} was not returned`,
           );
         }
-        expandedRuns.push(attemptRecord);
+        const validationRequest: ActionAttemptRequestedValidationRequest = {
+          repoRoot: request.repoRoot,
+          runId,
+          attempt,
+          attemptRecord,
+        };
+        const validationRequested =
+          actionAttemptRequestedValidation(validationRequest);
+        const expandedRecord = {
+          ...attemptRecord,
+          validation_requested: validationRequested ? 'true' : 'false',
+        };
+        expandedRuns.push(sealUntrustedYamlMap(expandedRecord));
       }
     }
   }
@@ -86,6 +98,44 @@ export function expandActionAttemptPages(
   };
   const expandedPage = sealUntrustedYamlMap(expandedPageRecord);
   return asUntrustedYamlNode([expandedPage]);
+}
+
+type ActionAttemptRequestedValidationRequest = {
+  readonly repoRoot: string;
+  readonly runId: number;
+  readonly attempt: number;
+  readonly attemptRecord: UntrustedYamlMap;
+};
+
+function actionAttemptRequestedValidation(
+  request: ActionAttemptRequestedValidationRequest,
+): boolean {
+  const workflowRequest: GitHubPropertyRequest = {
+    record: request.attemptRecord,
+    key: 'name',
+  };
+  if (requiredStringProperty(workflowRequest) !== 'PR') return true;
+  const jobsRequest: GitHubApiRequest = {
+    repoRoot: request.repoRoot,
+    endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
+    fields: ['per_page=100'],
+  };
+  for (const page of flattenApiPages(runGitHubApi(jobsRequest))) {
+    if (!isRecord(page)) {
+      failGitHubCollection('GitHub Actions jobs page must be a mapping');
+    }
+    const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+    for (const job of requiredArrayProperty(jobsProperty)) {
+      if (!isRecord(job)) continue;
+      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+      if (
+        requiredStringProperty(nameRequest) !== 'Validate explicit CI request'
+      ) {
+        return true;
+      }
+    }
+  }
+  return false;
 }
 
 export function runGitHubApi(request: GitHubApiRequest): UntrustedYamlNode {
