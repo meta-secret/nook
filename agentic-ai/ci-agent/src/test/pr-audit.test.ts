@@ -69,7 +69,7 @@ test("buildPrAudit excludes historical comments before the first exact-head requ
   const audit = await buildPrAudit(
     mockOctokit({
       codexReview: MockCodexReview.Missing,
-      preRequestFinding: true,
+      historicalFinding: true,
     }),
     repoRef,
     410,
@@ -80,11 +80,11 @@ test("buildPrAudit excludes historical comments before the first exact-head requ
   assert.equal(audit.feedback.currentIterationComments, 0);
 });
 
-test("buildPrAudit includes comments after the exact-head request", async () => {
+test("buildPrAudit includes comments on the current head before its exact-head request", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
-      codexReview: MockCodexReview.Reaction,
-      preRequestFinding: true,
+      codexReview: MockCodexReview.Missing,
+      currentHeadFinding: true,
     }),
     repoRef,
     410,
@@ -260,15 +260,15 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
   );
 });
 
-test("buildPrAudit excludes unresolved threads from dismissed reviews", async () => {
+test("buildPrAudit counts unresolved threads from dismissed reviews", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ dismissedThreads: 1 }),
     repoRef,
     410,
   );
 
-  assert.equal(audit.ready, true);
-  assert.equal(audit.feedback.unresolvedThreads, 0);
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
 test("buildPrAudit rejects a green workflow when Native Rust failed", async () => {
@@ -340,11 +340,12 @@ type MockOptions = {
   agentHandoff: MockAgentHandoff;
   behindBy?: number;
   codexReview?: MockCodexReview;
+  currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
   dismissedThreads?: number;
+  historicalFinding?: boolean;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
-  preRequestFinding?: boolean;
   runStatus?: MockRunStatus;
   unresolvedThreads?: number;
 };
@@ -376,6 +377,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         draft: false,
         head: { ref: "feature", sha: headSha },
         html_url: "https://github.com/meta-secret/nook/pull/410",
+        created_at: "2026-08-08T00:00:00Z",
         mergeable: true,
         number: 410,
         state: "open",
@@ -507,11 +509,20 @@ function createMockOctokit(options: MockOptions): Octokit {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
           user: { login: "github-actions[bot]" },
         },
-        ...(options.preRequestFinding === true
+        ...(options.historicalFinding === true
+          ? [
+              {
+                body: "The older head drops the replacement-state guard.",
+                created_at: "2026-08-08T00:00:30Z",
+                user: { login: "reviewer" },
+              },
+            ]
+          : []),
+        ...(options.currentHeadFinding === true
           ? [
               {
                 body: "The current head drops the replacement-state guard.",
-                created_at: "2026-08-08T00:01:00Z",
+                created_at: "2026-08-08T00:01:30Z",
                 user: { login: "reviewer" },
               },
             ]
@@ -535,6 +546,12 @@ function createMockOctokit(options: MockOptions): Octokit {
         required_conversation_resolution: { enabled: true },
         required_pull_request_reviews: { required_approving_review_count: 0 },
         required_status_checks: { checks: [] },
+      },
+    }),
+    getCommit: async () => ({
+      data: {
+        commit: { committer: { date: "2026-08-08T00:01:00Z" } },
+        sha: headSha,
       },
     }),
     listDeployments: async () => ({

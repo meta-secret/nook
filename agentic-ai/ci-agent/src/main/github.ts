@@ -223,9 +223,6 @@ type ReviewThreadPage = {
       reviewThreads: {
         nodes: Array<{
           isResolved: boolean;
-          comments: {
-            nodes: Array<{ pullRequestReview?: { state: string } }>;
-          };
         }>;
         pageInfo: { hasNextPage: boolean; endCursor?: string };
       };
@@ -243,7 +240,6 @@ const REVIEW_THREADS_QUERY = `
         reviewThreads(first: 100, after: $cursor) {
           nodes {
             isResolved
-            comments(first: 1) { nodes { pullRequestReview { state } } }
           }
           pageInfo { hasNextPage endCursor }
         }
@@ -291,6 +287,12 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
+  const { data: headCommit } = await octokit.rest.repos.getCommit({
+    owner,
+    repo,
+    ref: pr.head.sha,
+  });
+  const currentHeadAt = headCommit.commit.committer?.date ?? pr.created_at;
 
   let unresolvedThreads = 0;
   enum PaginationKind {
@@ -314,14 +316,9 @@ export async function inspectPrFeedback(
           : {}),
       });
     const threads: ReviewThreads = page.repository.pullRequest.reviewThreads;
-    unresolvedThreads += threads.nodes.filter((thread) => {
-      const reviewState = thread.comments.nodes[0]?.pullRequestReview?.state;
-      return (
-        !thread.isResolved &&
-        typeof reviewState === "string" &&
-        isSubmittedReviewState(reviewState)
-      );
-    }).length;
+    unresolvedThreads += threads.nodes.filter(
+      (thread) => !thread.isResolved,
+    ).length;
     pagination =
       threads.pageInfo.hasNextPage && threads.pageInfo.endCursor
         ? { kind: PaginationKind.NextPage, cursor: threads.pageInfo.endCursor }
@@ -403,19 +400,11 @@ export async function inspectPrFeedback(
       }) &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
-  const latestRequestAt = reviewRequests.reduce(
-    (latest, request) =>
-      request.created_at > latest ? request.created_at : latest,
-    "",
+  const currentIterationComments = substantiveComments.filter(
+    (comment) =>
+      comment.created_at >= currentHeadAt &&
+      !isNonActionableReviewBody(comment.body ?? ""),
   );
-  const currentIterationComments =
-    latestRequestAt.length === 0
-      ? []
-      : substantiveComments.filter(
-          (comment) =>
-            comment.created_at >= latestRequestAt &&
-            !isNonActionableReviewBody(comment.body ?? ""),
-        );
   const substantiveReviews = reviews.filter((review) => {
     if (
       review.commit_id !== pr.head.sha ||
