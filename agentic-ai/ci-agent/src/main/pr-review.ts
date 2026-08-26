@@ -156,8 +156,12 @@ export async function stabilizeExactHeadReview(
     }
     if (settledAfterRequest) {
       try {
-        const inspection = await attemptBeforeDeadline({
+        const settledInspectionDeadline = Math.max(
           deadline,
+          input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS,
+        );
+        const inspection = await attemptBeforeDeadline({
+          deadline: settledInspectionDeadline,
           now: input.now,
           operation: input.inspectFeedback,
         });
@@ -214,14 +218,15 @@ async function attemptBeforeDeadline<T>(
 function classifyFeedbackState(
   feedback: PrFeedbackSummary,
 ): ReviewStabilizationState {
+  if (feedback.findingBatches >= 3) {
+    return ReviewStabilizationState.CircuitBreaker;
+  }
   const hasFindings =
     feedback.currentIterationComments > 0 ||
     feedback.substantiveReviews > 0 ||
     feedback.unresolvedThreads > 0;
   if (!hasFindings) return ReviewStabilizationState.Clean;
-  return feedback.findingBatches >= 3
-    ? ReviewStabilizationState.CircuitBreaker
-    : ReviewStabilizationState.Findings;
+  return ReviewStabilizationState.Findings;
 }
 
 function readReviewContext(): { prNumber: number; repository: string } {

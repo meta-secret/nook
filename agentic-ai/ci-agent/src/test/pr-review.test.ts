@@ -89,6 +89,27 @@ test("stabilizeExactHeadReview opens the circuit after three finding batches", a
   assert.equal(requests, 0);
 });
 
+test("stabilizeExactHeadReview keeps the circuit open after findings are resolved", async () => {
+  let requests = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      findingBatches: 3,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => {
+      requests += 1;
+      return { headSha: "head-sha", settled: true };
+    },
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.CircuitBreaker);
+  assert.equal(requests, 0);
+});
+
 test("stabilizeExactHeadReview ignores historical top-level comments", async () => {
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => ({
@@ -207,6 +228,27 @@ test("stabilizeExactHeadReview still dispatches a zero-wait review request", asy
 
   assert.equal(requests, 1);
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
+});
+
+test("stabilizeExactHeadReview classifies a review settled during zero-wait dispatch", async () => {
+  let inspections = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      inspections += 1;
+      return inspections === 1
+        ? cleanFeedback
+        : { ...cleanFeedback, unresolvedThreads: 1 };
+    },
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 0,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+  assert.equal(result.feedback?.unresolvedThreads, 1);
+  assert.equal(inspections, 2);
 });
 
 test("stabilizeExactHeadReview stops on current-iteration comments", async () => {
