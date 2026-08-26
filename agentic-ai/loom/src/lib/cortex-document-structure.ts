@@ -415,7 +415,7 @@ function validateIndex(args: ValidateIndexArgs): void {
   for (const [targetPath, linkedFragments] of indexedFragments) {
     if (owningKnowledgeGraphPath(targetPath) !== indexPath) continue;
     const targetDocument = args.catalog.get(targetPath);
-    if (targetDocument === undefined) continue;
+    if (!targetDocument) continue;
     for (const sectionSlug of targetDocument.sectionSlugs) {
       if (linkedFragments.has(sectionSlug)) continue;
       const findingArgs: AddFindingArgs = {

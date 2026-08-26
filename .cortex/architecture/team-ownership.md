@@ -4,13 +4,8 @@
 
 Nook divides implementation responsibility across three engineering teams.
 
-The split controls:
-
-- code and Cortex ownership;
-- team-agent routing;
-- cross-team contracts;
-- test responsibility; and
-- review-fix responsibility.
+The split controls code, Cortex, agent routing, contracts, tests, and review-fix
+responsibility.
 
 One delivery owner retains the shared integration and lifecycle join.
 
@@ -26,16 +21,8 @@ Development core owns portable application behavior and security-sensitive domai
   - typed WASM bridges when their change begins from a core contract; and
   - generated binding contracts consumed by web packages.
 - **Primary Cortex:** `.cortex/dev-core/`.
-- **Responsibilities:**
-  - identity, authorization, replication, event logs, vaults, and cryptography;
-  - validation and business rules;
-  - storage schemas and migrations owned by Rust/WASM;
-  - public DTO and bridge contracts; and
-  - behavior-focused Rust and WASM tests.
-- **Forbidden ownership:**
-  - browser presentation and interaction policy;
-  - CI/CD, runner, cluster, deployment, and provider operations; and
-  - another team's Cortex authorities.
+It must not own browser presentation, infrastructure operations, or another
+team's Cortex authorities.
 
 ### Site reliability engineering
 
@@ -48,16 +35,8 @@ SRE owns build, validation, deployment, and runtime infrastructure.
   - container, runner, cache, and release configuration; and
   - infrastructure-focused preflight contracts.
 - **Primary Cortex:** `.cortex/sre/`.
-- **Responsibilities:**
-  - CI/CD pipelines and exact-head validation mechanics;
-  - k0s, Kubernetes, ARC, Kata, and deployment systems;
-  - build images, caches, runners, and release operations;
-  - operational credentials and provider boundaries; and
-  - infrastructure and pipeline tests.
-- **Forbidden ownership:**
-  - product business rules;
-  - browser presentation behavior; and
-  - another team's Cortex authorities.
+It must not own product rules, browser presentation, or another team's Cortex
+authorities.
 
 ### Web development
 
@@ -70,16 +49,8 @@ Web development owns browser presentation and frontend interaction behavior.
   - frontend unit, browser, accessibility, and visual tests; and
   - user-interface demos.
 - **Primary Cortex:** `.cortex/web-dev/`.
-- **Responsibilities:**
-  - frontend state and rendering;
-  - accessibility, responsive behavior, and interaction design;
-  - browser-extension user journeys and release-facing presentation;
-  - safe consumption of public Rust/WASM DTOs; and
-  - browser-visible regression evidence.
-- **Forbidden ownership:**
-  - portable validation, cryptography, authorization, and vault-storage rules;
-  - CI/CD, cluster, deployment, and provider operations; and
-  - another team's Cortex authorities.
+It must not own portable security or storage rules, infrastructure operations,
+or another team's Cortex authorities.
 
 ## Common and serialized ownership
 
@@ -90,14 +61,8 @@ Common Cortex contains policy that genuinely governs every team.
 - Documentation, consistency, review, and Workbench protocols remain common.
 - Shared integration files remain serialized under the delivery owner.
 
-Shared integration files include:
-
-- root manifests and lockfiles;
-- generated bindings;
-- cross-team registries;
-- the root knowledge graph;
-- pull-request and Workbench lifecycle state; and
-- validation, readiness, and merge state.
+Shared integration includes root manifests, lockfiles, generated bindings,
+cross-team registries, the root graph, and delivery lifecycle state.
 
 A team agent may propose a required shared-file change.
 The delivery owner decides its integration order and final writer.

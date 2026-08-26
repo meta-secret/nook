@@ -4,10 +4,8 @@
 
 Use this workflow whenever a request touches one or more Nook engineering teams.
 
-The canonical boundaries live in
-[Engineering team ownership](../architecture/team-ownership.md).
-The universal worker protocol remains
-[Subagent delegation](subagent-delegation.md).
+Use [Engineering team ownership](../architecture/team-ownership.md) for the
+boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 
 ## Plan the team work graph
 
@@ -88,12 +86,6 @@ The delivery owner waits for the declared barrier.
 
 ## Validation
 
-Team-oriented work is complete when:
-
-- every functional unit has exactly one team owner;
-- no team changed another team's code or Cortex;
-- every cross-team dependency has an explicit contract;
-- each team owns its tests and review fixes;
-- shared integration state has one writer;
-- child views are aggregated through the root; and
-- the integrated exact head passes the ordinary delivery gates.
+Completion requires one owner per unit, explicit cross-team contracts,
+team-owned tests and review fixes, one shared-state writer, root aggregation,
+and green exact-head delivery gates without cross-team writes.
