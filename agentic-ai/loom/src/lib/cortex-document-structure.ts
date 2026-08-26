@@ -7,6 +7,7 @@ export enum CortexStructureFindingCode {
   InvalidMigrationLedger = 'invalid-migration-ledger',
   InvalidTitle = 'invalid-title',
   ProhibitedNavigation = 'prohibited-navigation',
+  ProhibitedHtml = 'prohibited-html',
   MissingIndex = 'missing-index',
   InvalidIndexEntry = 'invalid-index-entry',
   BrokenFragment = 'broken-fragment',
@@ -56,6 +57,11 @@ type ValidateDocumentArgs = {
   readonly findings: CortexStructureFinding[];
 };
 
+type ValidateMarkdownSyntaxArgs = {
+  readonly document: ParsedDocument;
+  readonly findings: CortexStructureFinding[];
+};
+
 type ValidateIndexArgs = {
   readonly indexDocument: ParsedDocument;
   readonly catalog: ReadonlyMap<string, ParsedDocument>;
@@ -84,6 +90,11 @@ export function auditCortexDocumentStructure(
       document,
     ]),
   );
+
+  for (const document of parsedDocuments) {
+    const syntaxArgs: ValidateMarkdownSyntaxArgs = { document, findings };
+    validateMarkdownSyntax(syntaxArgs);
+  }
 
   const indexDoc =
     catalog.get('.cortex/knowledge-graph.md') ??
@@ -134,6 +145,25 @@ export function auditCortexDocumentStructure(
   }
 
   return findings;
+}
+
+function validateMarkdownSyntax(args: ValidateMarkdownSyntaxArgs): void {
+  function visit(node: RootContent | Parent): void {
+    if (node.type === 'html') {
+      const findingArgs: AddFindingArgs = {
+        findings: args.findings,
+        code: CortexStructureFindingCode.ProhibitedHtml,
+        file: args.document.relativePath,
+        line: nodeLine(node),
+        message:
+          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or a fenced code block.',
+      };
+      addFinding(findingArgs);
+    }
+    if (!('children' in node) || !Array.isArray(node.children)) return;
+    for (const child of node.children) visit(child as RootContent);
+  }
+  visit(args.document.root);
 }
 
 function normalizeCortexRelativePath(filePath: string): string {

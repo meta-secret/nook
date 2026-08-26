@@ -28,6 +28,14 @@ purpose and boundaries are visible.
 
 Every substantive H2 or H3 article uses the body shape that matches its meaning.
 
+Authored HTML is prohibited in every Cortex Markdown file.
+
+- Do not use block HTML.
+- Do not use inline HTML.
+- Do not use HTML comments.
+- Use Markdown syntax for document structure.
+- Escape literal HTML text or place examples inside fenced code blocks.
+
 An article may combine shapes when the content genuinely combines them. Keep
 the transition visible with a short lead-in or a meaningful subheading.
 
@@ -138,8 +146,11 @@ It rejects mechanically provable failures:
 - explicitly procedure-labeled articles that contain no ordered list;
 - invalid or growing migration-ledger entries.
 
-Loom ignores headings and lists inside code, HTML, and block quotes when they are
-examples rather than document structure.
+Loom ignores headings and lists inside fenced code and block quotes when they
+are examples rather than document structure.
+
+The canonical document audit rejects every Markdown AST HTML node before
+article-structure findings are accepted.
 
 Mechanical checks cannot decide whether a list reflects the correct semantics.
 The author still owns hierarchy, meaning, and consistency review.

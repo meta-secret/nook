@@ -24,7 +24,7 @@ source of truth.
   - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; reserve tables for compact repeated fields or exact mappings
   - Executable skill: [`.agents/skills/cortex-writer/SKILL.md`](../../.agents/skills/cortex-writer/SKILL.md)
 - **[cortex-article-structure.md](cortex-article-structure.md)**
-  - Purpose: **P1 / critical `.cortex` article rule:** expose explanation, rules, procedures, branches, and reference data through semantic hierarchy
+  - Purpose: **P1 / critical `.cortex` article rule:** expose explanation, rules, procedures, branches, and reference data through semantic Markdown hierarchy; authored HTML is prohibited
   - Executable skill: [`.agents/skills/cortex-article-structure/SKILL.md`](../../.agents/skills/cortex-article-structure/SKILL.md)
 - **[cortex-consistency.md](cortex-consistency.md)**
   - Purpose: **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code

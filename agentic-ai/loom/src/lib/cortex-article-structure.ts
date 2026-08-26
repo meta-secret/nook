@@ -305,11 +305,7 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
 }
 
 function isTransparentArticleNode(node: RootContent): boolean {
-  return node.type === 'definition' || isInvisibleHtmlComment(node);
-}
-
-function isInvisibleHtmlComment(node: RootContent): boolean {
-  return node.type === 'html' && /^\s*<!--[\s\S]*-->\s*$/.test(node.value);
+  return node.type === 'definition';
 }
 
 function auditProcedure(args: AuditArticleArgs): void {

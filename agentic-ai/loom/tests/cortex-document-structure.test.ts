@@ -139,6 +139,83 @@ Text.
   expect(codes).toContain(CortexStructureFindingCode.ProhibitedNavigation);
 });
 
+test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
+  const htmlDocuments = [
+    '<details>Block HTML</details>',
+    'Before <span>inline HTML</span> after.',
+    '<!-- authoring note -->',
+    'Generic types such as Option<T> are still HTML syntax.',
+    '- Nested <mark>list HTML</mark>.',
+  ];
+  for (const content of htmlDocuments) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/html.md',
+      content: `# HTML\n\n## Policy\n\n${content}\n`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(
+      audit([INDEX_DOC, document]).map((finding) => finding.code),
+    ).toContain(CortexStructureFindingCode.ProhibitedHtml);
+  }
+
+  const indexArgs: MakeDocumentArgs = {
+    path: '.cortex/knowledge-graph.md',
+    content: '# Index\n\n<!-- hidden index note -->\n',
+  };
+  const index = makeDocument(indexArgs);
+  expect(audit([index]).map((finding) => finding.code)).toContain(
+    CortexStructureFindingCode.ProhibitedHtml,
+  );
+});
+
+test('allows escaped HTML text and HTML examples inside code', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/a.md',
+    content: `# A
+
+## Overview
+
+Escaped text: &lt;span&gt;not HTML&lt;/span&gt;.
+
+Inline code: \`<span>not HTML</span>\`.
+
+Autolink: <https://example.com>.
+
+\`\`\`html
+<!-- example only -->
+<span>example only</span>
+\`\`\`
+
+### Details
+
+Details text.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([INDEX_DOC, document, DOCUMENT_B])).toEqual([]);
+});
+
+test('does not exempt legacy documents from the HTML prohibition', () => {
+  const legacyArgs: MakeDocumentArgs = {
+    path: '.cortex/legacy.md',
+    content: '# Legacy\n\n## Policy\n\n<div>Legacy HTML</div>\n',
+  };
+  const legacy = makeDocument(legacyArgs);
+  const auditArgs: AuditCortexDocumentStructureArgs = {
+    documents: [INDEX_DOC, legacy],
+    migrationBaselineEntries: ['.cortex/legacy.md'],
+    migrationLedgerPath: path.join(
+      REPO_ROOT,
+      '.cortex',
+      'document-map-migration.txt',
+    ),
+    repoRoot: REPO_ROOT,
+  };
+  expect(
+    auditCortexDocumentStructure(auditArgs).map((finding) => finding.code),
+  ).toContain(CortexStructureFindingCode.ProhibitedHtml);
+});
+
 test('rejects index links pointing to non-existent documents', () => {
   const badIndexArgs: MakeDocumentArgs = {
     path: '.cortex/knowledge-graph.md',
