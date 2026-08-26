@@ -12,10 +12,10 @@ import {
 import { sealUntrustedYamlMap } from './guards.ts';
 import { runCommand } from './run.ts';
 import {
-  LoomFailureCode,
-  loomFailure,
-  loomFailureDetail,
-} from '../loom-failure.ts';
+  collectAgentStatsGitHubEvidence,
+  type AgentStatsGitHubEvidenceRequest,
+} from './agent-stats-github.ts';
+import { LoomFailureCode, loomFailureDetail } from '../loom-failure.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 import type { RunCommandArgs } from './run.ts';
@@ -175,7 +175,7 @@ export async function assembleAgentStats(
       'view',
       String(options.prNumber),
       '--json',
-      'number,url,title,mergedAt,createdAt,mergeCommit,baseRefName,state',
+      'number,url,title,mergedAt,createdAt,mergeCommit,headRefName,headRefOid,baseRefName,state',
     ],
     cwd: options.repoRoot,
   };
@@ -232,6 +232,16 @@ export async function assembleAgentStats(
     code: LoomFailureCode.PrMetadataInvalid,
   };
   const mergedAt = requireExternalString(mergedAtArgs);
+  const headShaArgs = { record: pr, key: 'headRefOid' };
+  const headSha = optionalExternalString(headShaArgs);
+  if (!/^[0-9a-f]{40}$/.test(headSha)) {
+    const loomFailureDetailArgs8: LoomFailureDetailArgs = {
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'Merged PR is missing headRefOid',
+    };
+    loomFailureDetail(loomFailureDetailArgs8);
+  }
+
   const mergeCommitPropertyArgs: UntrustedYamlPropertyArgs = {
     record: pr,
     key: 'mergeCommit',
@@ -242,34 +252,15 @@ export async function assembleAgentStats(
     isRecord(mergeCommitProperty.value)
       ? mergeCommitProperty.value
       : {};
-  const oidPropertyArgs: UntrustedYamlPropertyArgs = {
-    record: mergeCommit,
-    key: 'oid',
-  };
-  const oidProperty = untrustedYamlProperty(oidPropertyArgs);
-  const headSha =
-    oidProperty.presence === UntrustedYamlPropertyPresence.Present &&
-    typeof oidProperty.value === 'string'
-      ? oidProperty.value
-      : '';
-  if (!/^[0-9a-f]{40}$/.test(headSha)) {
-    const loomFailureDetailArgs8: LoomFailureDetailArgs = {
+  const mergeShaArgs = { record: mergeCommit, key: 'oid' };
+  const mergeSha = optionalExternalString(mergeShaArgs);
+  if (!/^[0-9a-f]{40}$/.test(mergeSha)) {
+    const mergeShaFailure: LoomFailureDetailArgs = {
       code: LoomFailureCode.PrMetadataInvalid,
       text: 'Merged PR is missing mergeCommit.oid',
     };
-    loomFailureDetail(loomFailureDetailArgs8);
+    loomFailureDetail(mergeShaFailure);
   }
-
-  const runsArgs = {
-    repoRoot: options.repoRoot,
-    prNumber: options.prNumber,
-    headSha,
-  };
-  const runs = collectGithubActionsRuns(runsArgs);
-
-  const localExecutions = scratch.local_executions;
-  const localSeconds = sumDurationSeconds(localExecutions);
-  const actionsSeconds = sumDurationSeconds(runs);
 
   let inventory: UntrustedYamlMap;
   if (scratch.test_inventory.kind === OptionalRecordKind.Present) {
@@ -313,6 +304,28 @@ export async function assembleAgentStats(
     typeof createdAtProperty.value === 'string'
       ? createdAtProperty.value
       : scratch.started_at;
+  const branchArgs = { record: pr, key: 'headRefName' };
+  const branch = optionalExternalString(branchArgs);
+  if (branch.length === 0) {
+    const branchFailure: LoomFailureDetailArgs = {
+      code: LoomFailureCode.PrMetadataInvalid,
+      text: 'Merged PR is missing headRefName',
+    };
+    loomFailureDetail(branchFailure);
+  }
+  const evidenceRequest: AgentStatsGitHubEvidenceRequest = {
+    repoRoot: options.repoRoot,
+    prNumber: options.prNumber,
+    branch,
+    openedAt,
+    mergedAt,
+    finalHeadSha: headSha,
+  };
+  const evidence = collectAgentStatsGitHubEvidence(evidenceRequest);
+  const runs = evidence.githubActionsRuns;
+  const localExecutions = scratch.local_executions;
+  const localSeconds = sumDurationSeconds(localExecutions);
+  const actionsSeconds = sumDurationSeconds(runs);
   const startedMs = Date.parse(scratch.started_at);
   const openedMs = Date.parse(openedAt);
   const mergedMs = Date.parse(mergedAt);
@@ -352,7 +365,16 @@ export async function assembleAgentStats(
     local_execution_seconds: localSeconds,
     github_actions_run_count: runs.length,
     github_actions_seconds: actionsSeconds,
-    pr_retrigger_count: scratch.pr_retriggers.length,
+    delivery_head_count: evidence.deliveryHeads.length,
+    review_request_count: evidence.reviewRequestCount,
+    review_finding_batch_count: evidence.reviewFindingBatchCount,
+    review_finding_count: evidence.reviewFindingCount,
+    validation_cycle_count: evidence.validationCycles.length,
+    obsolete_validation_seconds: evidence.obsoleteValidationSeconds,
+    obsolete_validation_count: evidence.obsoleteValidationCount,
+    cancelled_validation_seconds: evidence.cancelledValidationSeconds,
+    cancelled_validation_count: evidence.cancelledValidationCount,
+    pr_retrigger_count: Math.max(0, evidence.validationCycles.length - 1),
     agent_requested_rerun_count: scratch.pr_retriggers.filter((item) => {
       const kindArgs: UntrustedYamlPropertyArgs = { record: item, key: 'kind' };
       const kind = untrustedYamlProperty(kindArgs);
@@ -376,6 +398,7 @@ export async function assembleAgentStats(
     title,
     change_surface: scratch.change_surface,
     head_sha: headSha,
+    merge_sha: mergeSha,
     started_at: scratch.started_at,
     opened_at: openedAt,
     merged_at: mergedAt,
@@ -386,12 +409,15 @@ export async function assembleAgentStats(
     ),
   };
   const recordBuilder: UntrustedYamlMapBuilder = {
-    schema_version: 3,
+    schema_version: 4,
     source_pr: sealUntrustedYamlMap(sealUntrustedYamlMapArgs3),
     summary: sealUntrustedYamlMap(sealUntrustedYamlMapArgs2),
     test_inventory: inventory,
     local_executions: localExecutions,
     github_actions_runs: runs,
+    delivery_heads: evidence.deliveryHeads,
+    review_events: evidence.reviewEvents,
+    validation_cycles: evidence.validationCycles,
     cache_telemetry: cacheTelemetry,
     pr_retriggers: scratch.pr_retriggers,
     merge_attempts: scratch.merge_attempts,
@@ -404,136 +430,6 @@ export async function assembleAgentStats(
     yaml: Bun.YAML.stringify(record),
     record,
   };
-}
-
-type CollectGithubActionsRunsArgs = {
-  readonly repoRoot: string;
-  readonly prNumber: number;
-  readonly headSha: string;
-};
-
-function collectGithubActionsRuns(
-  args: CollectGithubActionsRunsArgs,
-): UntrustedYamlMap[] {
-  const { repoRoot, prNumber, headSha } = args;
-
-  const listedArgs4: RunCommandArgs = {
-    command: 'gh',
-    args: [
-      'run',
-      'list',
-      '--limit',
-      '50',
-      '--json',
-      'databaseId,workflowName,headSha,event,status,conclusion,createdAt,updatedAt,attempt',
-    ],
-    cwd: repoRoot,
-  };
-  const listed = runCommand(listedArgs4);
-  if (listed.exitCode !== 0) {
-    const loomFailureDetailArgs6: LoomFailureDetailArgs = {
-      code: LoomFailureCode.CommandFailed,
-      text: `gh run list failed: ${listed.stderr || listed.stdout}`,
-    };
-    loomFailureDetail(loomFailureDetailArgs6);
-  }
-
-  let runs: UntrustedYamlNode;
-  try {
-    runs = asUntrustedYamlNode(JSON.parse(listed.stdout) as UntrustedYamlNode);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    const loomFailureDetailArgs5: LoomFailureDetailArgs = {
-      code: LoomFailureCode.CommandFailed,
-      text: `Failed to parse gh run list JSON: ${message}`,
-    };
-    loomFailureDetail(loomFailureDetailArgs5);
-  }
-  if (!Array.isArray(runs)) {
-    const loomFailureDetailArgs4: LoomFailureDetailArgs = {
-      code: LoomFailureCode.CommandFailed,
-      text: 'gh run list returned a non-array',
-    };
-    loomFailureDetail(loomFailureDetailArgs4);
-  }
-
-  const out: UntrustedYamlMap[] = [];
-  for (const run of runs) {
-    if (!isRecord(run)) {
-      continue;
-    }
-    const headShaPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: run,
-      key: 'headSha',
-    };
-    const headShaProperty = untrustedYamlProperty(headShaPropertyArgs);
-    if (
-      headShaProperty.presence === UntrustedYamlPropertyPresence.Absent ||
-      headShaProperty.value !== headSha
-    ) {
-      continue;
-    }
-    const createdAtArgs = { record: run, key: 'createdAt' };
-    const createdAt = optionalExternalString(createdAtArgs);
-    const updatedAtPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: run,
-      key: 'updatedAt',
-    };
-    const updatedAtProperty = untrustedYamlProperty(updatedAtPropertyArgs);
-    const updatedAt =
-      updatedAtProperty.presence === UntrustedYamlPropertyPresence.Present &&
-      typeof updatedAtProperty.value === 'string'
-        ? updatedAtProperty.value
-        : createdAt;
-    const startedMs = Date.parse(createdAt);
-    const finishedMs = Date.parse(updatedAt);
-    const durationSeconds =
-      Number.isNaN(startedMs) || Number.isNaN(finishedMs)
-        ? 0
-        : Math.max(0, Math.round((finishedMs - startedMs) / 1000));
-    const attemptPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: run,
-      key: 'attempt',
-    };
-    const attemptProperty = untrustedYamlProperty(attemptPropertyArgs);
-    const conclusionPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: run,
-      key: 'conclusion',
-    };
-    const conclusionProperty = untrustedYamlProperty(conclusionPropertyArgs);
-    const statusPropertyArgs: UntrustedYamlPropertyArgs = {
-      record: run,
-      key: 'status',
-    };
-    const statusProperty = untrustedYamlProperty(statusPropertyArgs);
-    const optionalUntrustedYamlNodeArgs = { record: run, key: 'event' };
-    const optionalUntrustedYamlNodeArgs2 = { record: run, key: 'databaseId' };
-    const optionalUntrustedYamlNodeArgs3 = { record: run, key: 'workflowName' };
-    const sealUntrustedYamlMapArgs = {
-      workflow: optionalUntrustedYamlNode(optionalUntrustedYamlNodeArgs3),
-      run_id: optionalUntrustedYamlNode(optionalUntrustedYamlNodeArgs2),
-      run_attempt:
-        attemptProperty.presence === UntrustedYamlPropertyPresence.Present &&
-        typeof attemptProperty.value === 'number'
-          ? attemptProperty.value
-          : 1,
-      head_sha: headSha,
-      trigger: optionalUntrustedYamlNode(optionalUntrustedYamlNodeArgs),
-      started_at: createdAt,
-      finished_at: updatedAt,
-      duration_seconds: durationSeconds,
-      conclusion:
-        conclusionProperty.presence === UntrustedYamlPropertyPresence.Present &&
-        typeof conclusionProperty.value === 'string'
-          ? conclusionProperty.value
-          : statusProperty.presence === UntrustedYamlPropertyPresence.Present
-            ? String(statusProperty.value)
-            : '',
-      source_pr: prNumber,
-    };
-    out.push(sealUntrustedYamlMap(sealUntrustedYamlMapArgs));
-  }
-  return out;
 }
 
 type CountTestInventoryArgs = {
@@ -762,16 +658,6 @@ function optionalExternalString(args: OptionalExternalFieldArgs): string {
     property.presence === UntrustedYamlPropertyPresence.Present &&
     typeof property.value === 'string'
   ) {
-    return property.value;
-  }
-  return '';
-}
-
-function optionalUntrustedYamlNode(
-  args: OptionalExternalFieldArgs,
-): UntrustedYamlNode {
-  const property = untrustedYamlProperty(args);
-  if (property.presence === UntrustedYamlPropertyPresence.Present) {
     return property.value;
   }
   return '';
