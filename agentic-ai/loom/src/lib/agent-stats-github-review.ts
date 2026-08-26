@@ -1,3 +1,9 @@
+export enum ReviewOutcome {
+  Findings = 'findings',
+  Clean = 'clean',
+  Unavailable = 'unavailable',
+}
+
 export function substantiveReviewBodyFindingCount(body: string): number {
   const detailsIndex = body.indexOf('<details>');
   const summary = (

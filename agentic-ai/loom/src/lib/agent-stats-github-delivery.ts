@@ -11,6 +11,27 @@ type MergeReviewedDeliveryHeadsRequest = {
   readonly finalHeadSha: string;
 };
 
+export type DeliveryHeadStart = {
+  readonly headSha: string;
+  readonly observedAt: string;
+};
+
+type ActionHeadStart = {
+  readonly headSha: string;
+  readonly startedAt: string;
+};
+
+type DeliveryHeadStartsRequest = {
+  readonly actions: readonly ActionHeadStart[];
+  readonly reviewEvents: readonly UntrustedYamlMap[];
+};
+
+type RetainEarlierStartRequest = {
+  readonly starts: Map<string, string>;
+  readonly headSha: string;
+  readonly observedAt: string;
+};
+
 type PropertyRequest = {
   readonly record: UntrustedYamlMap;
   readonly key: string;
@@ -70,7 +91,85 @@ export function mergeReviewedDeliveryHeads(
       heads[existingIndex] = sealUntrustedYamlMap(headRecord);
     }
   }
-  return heads;
+  return chronologicallySortedHeads(heads);
+}
+
+export function deliveryHeadStarts(
+  request: DeliveryHeadStartsRequest,
+): DeliveryHeadStart[] {
+  const earliestByHead = new Map<string, string>();
+  for (const action of request.actions) {
+    const retainRequest: RetainEarlierStartRequest = {
+      starts: earliestByHead,
+      headSha: action.headSha,
+      observedAt: action.startedAt,
+    };
+    retainEarlierStart(retainRequest);
+  }
+  for (const event of request.reviewEvents) {
+    const headRequest: PropertyRequest = { record: event, key: 'head_sha' };
+    const observedRequest: PropertyRequest = {
+      record: event,
+      key: 'requested_at',
+    };
+    const retainRequest: RetainEarlierStartRequest = {
+      starts: earliestByHead,
+      headSha: property(headRequest),
+      observedAt: property(observedRequest),
+    };
+    retainEarlierStart(retainRequest);
+  }
+  const unsorted = [...earliestByHead.entries()].map((entry) => ({
+    headSha: entry[0],
+    observedAt: entry[1],
+  }));
+  const sorted: DeliveryHeadStart[] = [];
+  for (const candidate of unsorted) {
+    let inserted = false;
+    for (const [index, existing] of sorted.entries()) {
+      if (candidate.observedAt < existing.observedAt) {
+        sorted.splice(index, 0, candidate);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) sorted.push(candidate);
+  }
+  return sorted;
+}
+
+function retainEarlierStart(request: RetainEarlierStartRequest): void {
+  const existing = request.starts.get(request.headSha) ?? '';
+  if (existing.length === 0 || request.observedAt < existing) {
+    request.starts.set(request.headSha, request.observedAt);
+  }
+}
+
+function chronologicallySortedHeads(
+  heads: readonly UntrustedYamlMap[],
+): UntrustedYamlMap[] {
+  const sorted: UntrustedYamlMap[] = [];
+  for (const head of heads) {
+    const candidateRequest: PropertyRequest = {
+      record: head,
+      key: 'first_observed_at',
+    };
+    const candidateTime = property(candidateRequest);
+    let inserted = false;
+    for (const [index, existing] of sorted.entries()) {
+      const existingRequest: PropertyRequest = {
+        record: existing,
+        key: 'first_observed_at',
+      };
+      if (candidateTime < property(existingRequest)) {
+        sorted.splice(index, 0, head);
+        inserted = true;
+        break;
+      }
+    }
+    if (!inserted) sorted.push(head);
+  }
+  return sorted;
 }
 
 export function minimumTimestamp(request: TimestampExtremaRequest): string {
