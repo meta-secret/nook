@@ -197,24 +197,32 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
 
 #[test]
 fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
-    let valid = remote_batch_command(&["--validate", "rust:test,web:check"])?;
+    let valid = remote_batch_command(&["--validate", "preflight,rust:ci"])?;
     assert!(valid.status.success());
-    assert_eq!(String::from_utf8(valid.stdout)?, "rust:test,web:check\n");
+    assert_eq!(String::from_utf8(valid.stdout)?, "preflight,rust:ci\n");
 
     for invalid in [
         "",
-        "rust:test,",
-        "rust:test,,web:check",
-        "rust:test,rust:test",
-        "rust:test,arbitrary:command",
-        "rust:test, web:check",
-        "rust:test,web:e2e",
-        "rust:test,extension:e2e",
-        "rust:test,web:build",
-        "rust:test,check",
-        "rust:test,ci:pr",
-        "rust:test,ci:pr:e2e",
-        "preflight,rust:test,rust:lint,rust:coverage,wasm:build,wasm:test,web:check,web:test,web:build",
+        "preflight,",
+        "preflight,,rust:ci",
+        "preflight,preflight",
+        "preflight,arbitrary:command",
+        "preflight, rust:ci",
+        "preflight,web:e2e",
+        "preflight,extension:e2e",
+        "preflight,web:build",
+        "preflight,check",
+        "preflight,ci:pr",
+        "preflight,ci:pr:e2e",
+        "rust:test",
+        "rust:lint",
+        "rust:coverage",
+        "wasm:build",
+        "wasm:test",
+        "wasm:test:browser",
+        "web:check",
+        "web:test",
+        "extension:check",
     ] {
         assert!(
             !remote_batch_command(&["--validate", invalid])?
@@ -224,13 +232,13 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
         );
     }
 
-    let commands = remote_batch_command(&["--commands", "rust:test,web:check,wasm:test"])?;
+    let commands = remote_batch_command(&["--commands", "preflight,rust:ci"])?;
     assert!(commands.status.success());
     assert_eq!(
         String::from_utf8(commands.stdout)?,
-        "task remote:rust:test\ntask remote:web:check\ntask wasm:test\n"
+        "task preflight\ntask ci:pr:rust\n"
     );
-    let mixed_runtime = remote_batch_command(&["--validate", "arc:runtime,rust:test"])?;
+    let mixed_runtime = remote_batch_command(&["--validate", "arc:runtime,preflight"])?;
     assert!(
         !mixed_runtime.status.success(),
         "ARC runtime smoke must be dispatched alone so workflow placement selects ARC"
@@ -275,11 +283,23 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
             "container execution must call the internal daemonless task: {direct_task}"
         );
     }
-    assert!(batch_script.contains("snapshot_daemon_containers > \"$daemon_snapshot\""));
     assert!(batch_script.contains("status == 124 || status == 137"));
-    assert!(batch_script.contains("docker rm -f \"$container\""));
-    assert!(batch_script.contains("docker restart \"$container\""));
+    assert!(batch_script.contains("cleanup_timed_out_buildkit_work"));
     assert!(batch_script.contains("docker buildx inspect --bootstrap \"$builder\""));
+    for forbidden in [
+        "docker ps",
+        "docker rm",
+        "docker restart",
+        "docker run",
+        "docker create",
+        "docker start",
+        "docker exec",
+    ] {
+        assert!(
+            !batch_script.contains(forbidden),
+            "ARC batch helper must not control a container runtime: {forbidden}"
+        );
+    }
     assert!(batch_script.contains("git restore --source=HEAD --staged --worktree -- ."));
     assert!(batch_script.contains("git clean -fd"));
     Ok(())
@@ -299,7 +319,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let mock_task = fixture.join("task");
     fs::write(
         &mock_task,
-        "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$TASK_LOG\"\n[[ \"$1\" != \"remote:web:check\" ]]\n",
+        "#!/usr/bin/env bash\nprintf '%s\\n' \"$*\" >> \"$TASK_LOG\"\n[[ \"$*\" != \"ci:pr:rust\" ]]\n",
     )?;
     fs::set_permissions(&mock_task, fs::Permissions::from_mode(0o755))?;
 
@@ -316,7 +336,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let system_path = std::env::var("PATH")?;
     let output = Command::new("bash")
         .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
-        .args(["--run", "rust:test,web:check,wasm:test"])
+        .args(["--run", "preflight,rust:ci,hive:verify"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
         .env("GITHUB_STEP_SUMMARY", &summary)
@@ -334,20 +354,20 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     );
     assert_eq!(
         fs::read_to_string(&task_log)?,
-        "remote:rust:test\nremote:web:check\nwasm:test\n",
+        "preflight\nci:pr:rust\nhive:verify\n",
         "a failed task must not prevent later selections from running"
     );
     let summary = fs::read_to_string(&summary)?;
-    assert!(summary.contains("| `rust:test` | passed |"));
-    assert!(summary.contains("| `web:check` | failed (exit 1) |"));
-    assert!(summary.contains("| `wasm:test` | passed |"));
+    assert!(summary.contains("| `preflight` | passed |"));
+    assert!(summary.contains("| `rust:ci` | failed (exit 1) |"));
+    assert!(summary.contains("| `hive:verify` | passed |"));
 
     fs::remove_dir_all(fixture)?;
     Ok(())
 }
 
 #[test]
-fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<()> {
+fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues() -> Result<()> {
     for timeout_status in [124, 137] {
         let fixture_nonce = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)?
@@ -368,52 +388,49 @@ fn remote_task_batch_cleans_up_both_timeout_statuses_and_continues() -> Result<(
         let mock_timeout = fixture.join("timeout");
         fs::write(
             &mock_timeout,
-            "#!/usr/bin/env bash\nshift 2\n\"$@\"\nif [[ ! -e \"$TIMEOUT_MARKER\" ]]; then touch \"$TIMEOUT_MARKER\" \"$LEAK_MARKER\"; exit \"$MOCK_TIMEOUT_STATUS\"; fi\n",
+            "#!/usr/bin/env bash\nshift 2\n\"$@\"\nif [[ ! -e \"$TIMEOUT_MARKER\" ]]; then touch \"$TIMEOUT_MARKER\"; exit \"$MOCK_TIMEOUT_STATUS\"; fi\n",
         )?;
         fs::set_permissions(&mock_timeout, fs::Permissions::from_mode(0o755))?;
 
         let mock_docker = fixture.join("docker");
         fs::write(
             &mock_docker,
-            "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$DAEMON_LOG\"\nif [[ \"$*\" = \"ps -aq\" ]]; then echo existing; [[ -e \"$LEAK_MARKER\" ]] && echo leaked; fi\nif [[ \"$*\" = \"rm -f leaked\" ]]; then rm -f \"$LEAK_MARKER\"; fi\n",
+            "#!/usr/bin/env bash\nprintf 'docker %s\\n' \"$*\" >> \"$CLEANUP_LOG\"\n[[ \"$*\" = \"buildx inspect --bootstrap remote-builder\" ]]\n",
         )?;
         fs::set_permissions(&mock_docker, fs::Permissions::from_mode(0o755))?;
 
         let mock_git = fixture.join("git");
         fs::write(
             &mock_git,
-            "#!/usr/bin/env bash\nprintf 'git %s\\n' \"$*\" >> \"$DAEMON_LOG\"\n",
+            "#!/usr/bin/env bash\nprintf 'git %s\\n' \"$*\" >> \"$CLEANUP_LOG\"\n",
         )?;
         fs::set_permissions(&mock_git, fs::Permissions::from_mode(0o755))?;
 
         let task_log = fixture.join("task.log");
-        let daemon_log = fixture.join("daemon.log");
+        let cleanup_log = fixture.join("cleanup.log");
         let timeout_marker = fixture.join("timeout.marker");
-        let leak_marker = fixture.join("leak.marker");
         let system_path = std::env::var("PATH")?;
         let output = Command::new("bash")
             .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
-            .args(["--run", "rust:test,wasm:test"])
+            .args(["--run", "preflight,rust:ci"])
             .env("PATH", format!("{}:{system_path}", fixture.display()))
             .env("TASK_LOG", &task_log)
-            .env("DAEMON_LOG", &daemon_log)
+            .env("CLEANUP_LOG", &cleanup_log)
             .env("TIMEOUT_MARKER", &timeout_marker)
-            .env("LEAK_MARKER", &leak_marker)
             .env("MOCK_TIMEOUT_STATUS", timeout_status.to_string())
-            .env_remove("NOOK_PR_BUILDX_BUILDER")
+            .env("NOOK_PR_BUILDX_BUILDER", "remote-builder")
             .output()?;
 
         assert!(!output.status.success());
         assert_eq!(
             fs::read_to_string(&task_log)?,
-            "task remote:rust:test\ntask wasm:test\n",
+            "task preflight\ntask ci:pr:rust\n",
             "a timed-out task must not block the next selection"
         );
-        let daemon_log = fs::read_to_string(&daemon_log)?;
-        assert!(daemon_log.contains("docker rm -f leaked"));
-        assert!(daemon_log.contains("git restore --source=HEAD --staged --worktree -- ."));
-        assert!(daemon_log.contains("git clean -fd"));
-        assert!(!leak_marker.exists());
+        let cleanup_log = fs::read_to_string(&cleanup_log)?;
+        assert!(cleanup_log.contains("docker buildx inspect --bootstrap remote-builder"));
+        assert!(cleanup_log.contains("git restore --source=HEAD --staged --worktree -- ."));
+        assert!(cleanup_log.contains("git clean -fd"));
 
         fs::remove_dir_all(fixture)?;
     }
@@ -433,7 +450,7 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
         );
     }
     assert!(
-        !remote_batch_command(&["--requires-current-base", "rust:test,web:check"])?
+        !remote_batch_command(&["--requires-current-base", "preflight,rust:ci"])?
             .status
             .success(),
         "cheap batch must remain available on a stale base"
@@ -557,35 +574,29 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         1,
         "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
     );
-    for (requested, focused) in [
-        ("rust:test", "remote:rust:test"),
-        ("rust:lint", "remote:rust:lint"),
-        ("rust:coverage", "remote:rust:coverage"),
-        ("web:check", "remote:web:check"),
-        ("web:test", "remote:web:test"),
-        ("extension:check", "remote:extension:check"),
+    for unavailable in [
+        "bake-cache:prove",
+        "rust:test",
+        "rust:lint",
+        "rust:coverage",
+        "wasm:build",
+        "wasm:test",
+        "wasm:test:browser",
+        "web:check",
+        "web:test",
+        "extension:check",
     ] {
         assert!(
-            batch_script.contains(&format!("{requested}) echo \"task {focused}\""))
-                && batch_script.contains(&format!(
-                    "{requested}) run_with_timeout \"$timeout_minutes\" task {focused}"
-                )),
-            "frequent remote task {requested} must use its narrow source-sealed route"
+            !task_catalog.contains(unavailable),
+            "Docker-backed task must remain unavailable to ARC: {unavailable}"
+        );
+        assert!(
+            !batch_script
+                .lines()
+                .any(|line| line.trim_start().starts_with(&format!("{unavailable})"))),
+            "Docker-backed task must have no ARC command mapping: {unavailable}"
         );
     }
-    assert_eq!(
-        batch_script
-            .matches(") run_with_timeout \"$timeout_minutes\" task remote:")
-            .count(),
-        6,
-        "only the mechanically reviewed focused routes may bypass their full local task"
-    );
-    assert!(!batch_script.contains("rust:test) task rust:test"));
-    assert!(!batch_script.contains("rust:lint) task rust:lint"));
-    assert!(!batch_script.contains("rust:coverage) task rust:coverage"));
-    assert!(!batch_script.contains("web:check) task web:check"));
-    assert!(!batch_script.contains("web:test) task web:test"));
-    assert!(!batch_script.contains("extension:check) task extension:check"));
     Ok(())
 }
 
@@ -855,7 +866,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         "if [ \"$local_sha\" != \"$pr_sha\" ]",
         "--remove-label \"$validation_label\"",
         "--add-label \"$validation_label\"",
-        "task remote TASK_NAME=rust:test",
+        "task remote TASK_NAME=rust:ci",
         "task pr:validate PR=<number>",
         "becomes stale after any later push",
     ] {

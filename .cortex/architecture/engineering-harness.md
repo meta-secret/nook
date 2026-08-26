@@ -113,18 +113,24 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
   cancellation so the same safe path covers forks and Dependabot.
 - Agents do not run local `task check` or `task ci:pr` gates.
 
-### Focused dispatches (`rust:test`, `web:check`, `web:test`, `extension:check`)
+### Focused dispatches
 
-- Use narrow source-sealed images.
-- Native tests branch from the manifest-keyed Rust dependency image.
-- Web checks consume only web dependencies plus the generated WASM package.
-- They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
+- The remote catalog exposes only build-only tasks or tasks that execute
+  directly in ordinary Kubernetes Pods.
+- Docker-backed local selectors such as `rust:test`, `web:check`, `web:test`,
+  and `extension:check` remain unavailable remotely until they have direct Pod
+  implementations.
+- Complete validation provides their required merge evidence without granting a
+  nested runtime to an ARC runner.
 
 Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
 build producers execute in disposable ordinary Pods through ARC. Focused
 `preflight`, `rust:ci`, and `arc:runtime` jobs may use the same scale set. The
 Docker CLI connects only to the persistent rootless BuildKit shard on its node.
-It is not a general container-runtime API. Fork and Dependabot PRs retain
+It is a build-and-export API only, not a general container-runtime API. Cluster
+Pods never issue `docker run`, `docker create`, `docker start`, `docker exec`,
+or equivalent lifecycle commands. Playwright runs directly inside its selected
+browser Pod image. Fork and Dependabot PRs retain
 secret-free checks on ephemeral GitHub-hosted runners. Trusted release,
 browser, WASM, deployment, and agent workflows execute through ARC. Main's
 portable WASM dependency-cache writer uses the selected node-local BuildKit

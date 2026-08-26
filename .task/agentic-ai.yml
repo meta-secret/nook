@@ -51,17 +51,6 @@ tasks:
     cmds:
       - bun test
 
-  loom:source-analysis:containment:
-    desc: Run the opt-in sealed analyzer matrix on an explicit non-ARC local Docker environment.
-    dir: agentic-ai/loom
-    deps: [loom:install]
-    requires:
-      vars:
-        - NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID
-        - NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT
-    cmds:
-      - bun run test:source-analysis-containment
-
   loom:check:
     desc: Typecheck Loom.
     dir: agentic-ai/loom
@@ -209,8 +198,40 @@ tasks:
             --working-directory "{{.REPO_ROOT}}"
         fi
 
+  loom:agent-delegation:start:
+    desc: Start one declared ordinary delegation run (PLAN=<plan.json>).
+    deps: [loom:install]
+    requires:
+      vars: [PLAN]
+    cmds:
+      - |
+        set -euo pipefail
+        plan="{{.PLAN}}"
+        case "$plan" in
+          /*) ;;
+          *) plan="{{.REPO_ROOT}}/$plan" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          start --plan "$plan" --working-directory "{{.REPO_ROOT}}"
+
+  loom:agent-delegation:admit:
+    desc: Admit one declared ordinary delegation attempt before dispatch (REQUEST=<request.json>).
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - |
+        set -euo pipefail
+        request="{{.REQUEST}}"
+        case "$request" in
+          /*) ;;
+          *) request="{{.REPO_ROOT}}/$request" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          admit --request "$request" --working-directory "{{.REPO_ROOT}}"
+
   loom:agent-delegation:record:
-    desc: Finalize one ordinary delegated agent attempt (REQUEST=<request.json>).
+    desc: Finalize one admitted ordinary delegated agent attempt (REQUEST=<request.json>).
     deps: [loom:install]
     requires:
       vars: [REQUEST]
@@ -224,6 +245,22 @@ tasks:
         esac
         bun run --cwd agentic-ai/loom agent-delegation -- \
           record --request "$request" --working-directory "{{.REPO_ROOT}}"
+
+  loom:agent-delegation:finalize:
+    desc: Verify and materialize one complete ordinary delegation run (REQUEST=<request.json>).
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - |
+        set -euo pipefail
+        request="{{.REQUEST}}"
+        case "$request" in
+          /*) ;;
+          *) request="{{.REPO_ROOT}}/$request" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          finalize --request "$request" --working-directory "{{.REPO_ROOT}}"
 
   loom:skill-scaffold:
     desc: Scaffold a dynamic-skill card via Loom (CONFIG=<request.yaml>).

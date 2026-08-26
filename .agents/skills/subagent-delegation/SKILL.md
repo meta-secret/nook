@@ -45,6 +45,9 @@ Before continuation or completion:
 4. Require the parent to author the next aggregate view.
 5. Repeat through the root aggregate.
 6. Let the delivery owner validate that root view and author the final report.
+7. For ordinary delegation, submit the exact ordered child terminal/result/view
+   hash manifest and finalize with
+   `task loom:agent-delegation:finalize REQUEST=<request.json>`.
 
 Never allow a child stream to become an independent scheduling authority.
 Never parse Markdown to decide workflow transitions.

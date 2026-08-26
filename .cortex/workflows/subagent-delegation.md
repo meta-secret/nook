@@ -200,19 +200,57 @@ The current adapter-bearing attempt schema uses workflow version `2.0.0`.
 The run-level stream remains the single local scheduling authority.
 
 Ordinary coding delegation uses the generic Loom recording adapter when no
-compiled workflow owns the dispatch. The parent declares the run identity and
-lineage before dispatch. The child produces a typed record request containing
-its bounded observable activities and its agent-authored semantic result. After
-the child returns, the parent finalizes that request with:
+compiled workflow owns the dispatch. Before dispatch, the parent writes a
+bounded typed plan with the exact source commit, one depth-one root
+materializer, every attempt and parent identity, and each parent's exact
+all-terminal child barrier. The parent starts that immutable run with:
 
 ```sh
-task loom:agent-delegation:record REQUEST=<request.json>
+task loom:agent-delegation:start PLAN=path/to/plan.json
+```
+
+Loom content-hashes the plan, writes the run declaration, and admits the root
+materializer. Before dispatching each child, the parent submits its exact run,
+source, identity, depth, and parent binding with:
+
+```sh
+task loom:agent-delegation:admit REQUEST=path/to/admission.json
+```
+
+Depth-three admission requires the depth-two parent to have already completed
+with replay-verified evidence. The child then produces a typed record request
+containing its bounded observable activities and agent-authored semantic
+result. After the child returns, the parent finalizes the already admitted
+attempt with:
+
+```sh
+task loom:agent-delegation:record REQUEST=path/to/request.json
 ```
 
 The adapter finalizes the same `events.jsonl`, `result.json`, and `view.md`
-contract used by compiled workflows. It rejects reuse of an existing attempt
-directory. This gives collaboration-tool subagents a journal boundary without
-making their transcript or Markdown output into scheduling authority.
+contract used by compiled workflows. It rejects undeclared lineage, source
+drift, post-dispatch admission, depth above three, and reuse of an existing
+attempt directory. Run-level aggregation and closure remain a separate
+delivery step. After every planned attempt reaches a replay-verified terminal,
+the parent submits an ordered barrier-evidence manifest and finalizes the run:
+
+```sh
+task loom:agent-delegation:finalize REQUEST=path/to/finalization.json
+```
+
+The manifest binds every parent's exact direct children to their terminal kind,
+result hash, and view hash. Loom verifies the complete hierarchy recursively.
+Non-completed child terminals remain evidence and do not short-circuit closure.
+The completed root materializer's exact bounded agent-authored view becomes the
+deterministic run view. Finalization writes `run-result.json` and `view.md`, is
+idempotent for exact bytes, and prevents later admission or recording. It does
+not infer cross-stream ordering or claim that timestamps prove semantic
+consumption. Admission and finalization share one SQLite advisory lifecycle
+lock. Process death releases the operating-system lock. Loom removes stale or
+legacy temporary run projections under the next acquired lock before retrying.
+
+This gives collaboration-tool subagents a journal boundary
+without making their transcript or Markdown output into scheduling authority.
 The generic adapter cannot record `ModuleExpertEvidence`.
 Named module experts use their isolated invocation adapter and its separately
 verified authorization boundary.
@@ -249,9 +287,10 @@ If an attempt fails before it can author a view, Loom writes a clearly labeled
 machine-authored failure view. A parent must not represent that view as an
 agent-authored conclusion.
 
-If the declared root materializer does not complete, Loom still writes a
-clearly labeled machine-authored root failure view. The delivery owner uses it
-to diagnose or retry the hierarchy. It is not an agent-authored aggregate.
+If a compiled workflow's declared root materializer does not complete, Loom
+writes a clearly labeled machine-authored root failure view. Ordinary
+delegation finalization instead fails closed because its canonical run view
+must be the completed root's agent-authored view.
 
 ### Parent aggregation and continuation
 
