@@ -25,8 +25,9 @@ Dynamic skills turn concrete feedback into reusable guidance:
      input schemas.
    - `task skills:run CONFIG=<request.yaml>` accepts one domain YAML document.
    - Action-specific positional flags are prohibited.
-   - Discovery and execution do not grant network, write, scheduling, delivery,
-     or lifecycle authority.
+   - The host protocol is an invocation contract, not a process sandbox.
+   - Expose only statically cataloged, deterministic, read-only provider
+     actions. They cannot authorize scheduling, delivery, or lifecycle changes.
 
 ## Prompt Protocol
 
