@@ -485,8 +485,7 @@ function createMockOctokit(options: MockOptions): Octokit {
           ? []
           : [
               {
-                body: `<!-- nook-head-transition:${headSha}:main -->\nExact-head delivery boundary (automated).`,
-                updated_at: "2026-08-08T00:01:00Z",
+                body: `<!-- nook-head-transition:${headSha}:main:2026-08-08T00:01:00Z -->\nExact-head delivery boundary (automated).`,
                 user: {
                   login:
                     options.untrustedHeadTransition === true

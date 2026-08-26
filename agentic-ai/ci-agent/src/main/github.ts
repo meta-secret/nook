@@ -287,8 +287,7 @@ type HeadTransitionBoundary =
   | { state: HeadTransitionState.Pending };
 
 type HeadTransitionComment = {
-  readonly body?: string | null;
-  readonly updated_at: string;
+  readonly body: string;
   readonly user: unknown;
 };
 
@@ -301,14 +300,11 @@ type CurrentHeadTransitionInput = {
 function findCurrentHeadTransition(
   input: CurrentHeadTransitionInput,
 ): HeadTransitionBoundary {
-  const marker = headTransitionMarker(input.headSha, input.baseRef);
+  const markerPrefix = headTransitionMarkerPrefix(input.headSha, input.baseRef);
   const transitionTimes = input.comments
-    .filter(
-      (comment) =>
-        isGitHubActionsBot(comment.user) &&
-        comment.body?.trimStart().startsWith(marker),
-    )
-    .map((comment) => comment.updated_at)
+    .filter((comment) => isGitHubActionsBot(comment.user))
+    .map((comment) => transitionTimeFromMarker(comment.body, markerPrefix))
+    .filter((transitionTime) => transitionTime.length > 0)
     .sort();
   const transitionTime = transitionTimes.at(-1);
   return transitionTime
@@ -349,7 +345,10 @@ export async function inspectPrFeedback(
   ]);
   const transitionInput: CurrentHeadTransitionInput = {
     baseRef: pr.base.ref,
-    comments: issueComments,
+    comments: issueComments.map((comment) => ({
+      body: comment.body ?? "",
+      user: comment.user,
+    })),
     headSha: pr.head.sha,
   };
   const currentHeadTransition = findCurrentHeadTransition(transitionInput);
@@ -624,8 +623,17 @@ export function isRepositoryStatusComment(
   );
 }
 
-function headTransitionMarker(headSha: string, baseRef: string): string {
-  return `<!-- nook-head-transition:${headSha}:${baseRef} -->`;
+function headTransitionMarkerPrefix(headSha: string, baseRef: string): string {
+  return `<!-- nook-head-transition:${headSha}:${baseRef}:`;
+}
+
+function transitionTimeFromMarker(body: string, markerPrefix: string): string {
+  const markerLine = body.trimStart().split("\n", 1)[0] ?? "";
+  if (!markerLine.startsWith(markerPrefix) || !markerLine.endsWith(" -->")) {
+    return "";
+  }
+  const transitionTime = markerLine.slice(markerPrefix.length, -4);
+  return Number.isNaN(Date.parse(transitionTime)) ? "" : transitionTime;
 }
 
 function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {

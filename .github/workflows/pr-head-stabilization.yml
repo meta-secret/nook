@@ -42,7 +42,7 @@ jobs:
               return;
             }
             const markerPrefix = "<!-- nook-head-transition:";
-            const marker = `${markerPrefix}${pullRequest.head.sha}:${pullRequest.base.ref} -->`;
+            const marker = `${markerPrefix}${pullRequest.head.sha}:${pullRequest.base.ref}:${pullRequest.updated_at} -->`;
             const body = `${marker}\nExact-head delivery boundary (automated).`;
             const comments = await github.paginate(
               github.rest.issues.listComments,
