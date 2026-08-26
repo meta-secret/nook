@@ -73,7 +73,8 @@ Does not apply to:
 
 - Before: format → push → `task check` ‖ PR CI → merge after both green.
 - After: `task loom:pre-push` → local Codex review → push → focused remote →
-  complete validation and Cloud review request → ready → squash merge.
+  exact-head Cloud review stabilization → complete validation → ready → squash
+  merge.
 - Before: discover stale-base requirements after a failed merge command.
 - After: `task pr:preflight` / Loom ready reports the blocker before merge.
 
@@ -85,7 +86,9 @@ Does not apply to:
 - [ ] Run advisory `task pr:review-local` before the first owner-authored push.
 - [ ] For a harness-created PR, run local review after handoff instead.
 - [ ] Push; use focused hosted tasks instead of a local product gate.
-- [ ] Dispatch complete validation and request exact-head review together.
+- [ ] Stabilize one exact-head Codex review before complete validation.
+- [ ] Address current findings as one coherent batch before dispatching complete
+      validation.
 - [ ] Inspect and address all feedback already present.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.

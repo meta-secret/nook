@@ -65,6 +65,20 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
   assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
+test("buildPrAudit preserves actionable comments before the first review request", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Missing,
+      preRequestFinding: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.currentIterationComments, 1);
+});
+
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ codexReview: MockCodexReview.Missing }),
@@ -315,6 +329,7 @@ type MockOptions = {
   dismissedThreads?: number;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
+  preRequestFinding?: boolean;
   runStatus?: MockRunStatus;
   unresolvedThreads?: number;
 };
@@ -475,6 +490,15 @@ function createMockOctokit(options: MockOptions): Octokit {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
           user: { login: "github-actions[bot]" },
         },
+        ...(options.preRequestFinding === true
+          ? [
+              {
+                body: "The current head drops the replacement-state guard.",
+                created_at: "2026-08-08T00:01:00Z",
+                user: { login: "reviewer" },
+              },
+            ]
+          : []),
         ...(options.agentHandoff === MockAgentHandoff.Included
           ? [
               {

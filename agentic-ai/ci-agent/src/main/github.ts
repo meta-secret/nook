@@ -410,8 +410,8 @@ export async function inspectPrFeedback(
   );
   const currentIterationComments = substantiveComments.filter(
     (comment) =>
-      latestRequestAt.length > 0 &&
-      comment.created_at >= latestRequestAt &&
+      (latestRequestAt.length === 0 ||
+        comment.created_at >= latestRequestAt) &&
       !isNonActionableReviewBody(comment.body ?? ""),
   );
   const substantiveReviews = reviews.filter((review) => {
