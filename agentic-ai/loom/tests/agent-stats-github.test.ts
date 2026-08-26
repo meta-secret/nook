@@ -67,6 +67,7 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
     };
     const evidence = buildActionsEvidence(request);
 
@@ -108,6 +109,7 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
     };
     const evidence = buildActionsEvidence(request);
     expect(evidence.runs).toHaveLength(1);
@@ -120,6 +122,7 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
     };
     const evidence = buildActionsEvidence(request);
 
@@ -159,6 +162,7 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
     };
     const evidence = buildActionsEvidence(request);
 
@@ -198,11 +202,67 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T10:05:00Z',
+      reviewEvents: [],
     };
     const evidence = buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(1);
     expect(evidence.validationCycles).toHaveLength(1);
+  });
+
+  test('includes queued time in action duration', () => {
+    const queuedRun: ActionRunFixture = {
+      id: 401,
+      runAttempt: 1,
+      headSha: finalHead,
+      createdAt: '2026-08-01T09:55:00Z',
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:01:00Z',
+      conclusion: 'success',
+    };
+    const pages = asUntrustedYamlNode([
+      { total_count: 1, workflow_runs: [actionRun(queuedRun)] },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs[0]?.duration_seconds).toBe(360);
+  });
+
+  test('uses review-only heads to supersede running validation', () => {
+    const oldHeadRun: ActionRunFixture = {
+      id: 402,
+      runAttempt: 1,
+      headSha: firstHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:30:00Z',
+      conclusion: 'success',
+    };
+    const reviewEventRecord = {
+      head_sha: finalHead,
+      requested_at: '2026-08-01T10:20:00Z',
+      completed_at: '',
+    };
+    const pages = asUntrustedYamlNode([
+      { total_count: 1, workflow_runs: [actionRun(oldHeadRun)] },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [sealUntrustedYamlMap(reviewEventRecord)],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.obsoleteValidationSeconds).toBe(600);
+    expect(evidence.obsoleteValidationCount).toBe(1);
   });
 
   test('rejects nonterminal action attempts', () => {
@@ -226,6 +286,7 @@ describe('agent stats GitHub evidence', () => {
       prNumber: 42,
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
     };
     expect(() => buildActionsEvidence(request)).toThrow(
       'retry collection after completion',
@@ -294,6 +355,7 @@ describe('agent stats GitHub evidence', () => {
       reviewCommentPages,
       reviewReactionPages,
       knownHeadShas: [firstHead, finalHead],
+      mergedAt: '2026-08-01T11:00:00Z',
     };
     const evidence = buildReviewEvidence(request);
 
@@ -329,12 +391,45 @@ describe('agent stats GitHub evidence', () => {
       reviewCommentPages: yamlPages([]),
       reviewReactionPages: yamlPages([]),
       knownHeadShas: [finalHead],
+      mergedAt: '2026-08-01T11:00:00Z',
     };
     const evidence = buildReviewEvidence(request);
 
     expect(evidence.findingBatchCount).toBe(1);
     expect(evidence.findingCount).toBe(1);
     expect(evidence.events[0]?.outcome).toBe('findings');
+  });
+
+  test('excludes review results completed after merge', () => {
+    const request: BuildReviewEvidenceRequest = {
+      issueCommentPages: yamlPages([
+        {
+          id: 30,
+          body: `<!-- nook-codex-review:${finalHead.slice(0, 12)} -->`,
+          created_at: '2026-08-01T10:00:00Z',
+          author_association: 'MEMBER',
+          user: { login: 'github-actions[bot]' },
+        },
+      ]),
+      reviewPages: yamlPages([
+        {
+          id: 503,
+          body: 'A late finding must not alter delivery statistics.',
+          commit_id: finalHead,
+          submitted_at: '2026-08-01T11:01:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      reviewCommentPages: yamlPages([]),
+      reviewReactionPages: yamlPages([]),
+      knownHeadShas: [finalHead],
+      mergedAt: '2026-08-01T11:00:00Z',
+    };
+    const evidence = buildReviewEvidence(request);
+
+    expect(evidence.findingBatchCount).toBe(0);
+    expect(evidence.findingCount).toBe(0);
+    expect(evidence.events[0]?.outcome).toBe('unavailable');
   });
 
   test('adds reviewed heads without Actions to delivery evidence', () => {
@@ -362,10 +457,10 @@ describe('agent stats GitHub evidence', () => {
     const heads = mergeReviewedDeliveryHeads(mergeRequest);
 
     expect(heads).toHaveLength(2);
-    expect(heads[1]?.head_sha).toBe(firstHead);
-    expect(heads[1]?.action_run_count).toBe(0);
-    expect(heads[1]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
-    expect(heads[1]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
+    expect(heads[0]?.head_sha).toBe(firstHead);
+    expect(heads[0]?.action_run_count).toBe(0);
+    expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
+    expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
   });
 
   test('enriches a zero-Actions final head with review timestamps', () => {
@@ -401,6 +496,7 @@ type ActionRunFixture = {
   readonly runAttempt: number;
   readonly headSha: string;
   readonly startedAt: string;
+  readonly createdAt?: string;
   readonly finishedAt: string;
   readonly conclusion: string;
   readonly sourcePr?: number;
@@ -415,7 +511,7 @@ function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
     run_attempt: fixture.runAttempt,
     head_sha: fixture.headSha,
     event: 'pull_request',
-    created_at: fixture.startedAt,
+    created_at: fixture.createdAt ?? fixture.startedAt,
     run_started_at: fixture.startedAt,
     updated_at: fixture.finishedAt,
     conclusion: fixture.conclusion,

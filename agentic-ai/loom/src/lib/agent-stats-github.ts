@@ -22,13 +22,24 @@ import {
 } from './agent-stats-github-api.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
-import { isValidationWorkflow } from './agent-stats-github-validation.ts';
 import {
+  headSupersededAt,
+  isValidationWorkflow,
+  obsoleteRunSeconds,
+  type HeadSupersededRequest,
+  type ObsoleteRunSecondsRequest,
+} from './agent-stats-github-validation.ts';
+import {
+  deliveryHeadStarts,
   maximumTimestamp,
   mergeReviewedDeliveryHeads,
   minimumTimestamp,
+  type DeliveryHeadStart,
 } from './agent-stats-github-delivery.ts';
-import { substantiveReviewBodyFindingCount } from './agent-stats-github-review.ts';
+import {
+  ReviewOutcome,
+  substantiveReviewBodyFindingCount,
+} from './agent-stats-github-review.ts';
 
 const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
 const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
@@ -36,12 +47,6 @@ const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
   'MEMBER',
   'COLLABORATOR',
 ]);
-
-export enum ReviewOutcome {
-  Findings = 'findings',
-  Clean = 'clean',
-  Unavailable = 'unavailable',
-}
 
 export type AgentStatsGitHubEvidenceRequest = {
   readonly repoRoot: string;
@@ -71,6 +76,7 @@ export type BuildActionsEvidenceRequest = {
   readonly prNumber: number;
   readonly finalHeadSha: string;
   readonly mergedAt: string;
+  readonly reviewEvents: readonly UntrustedYamlMap[];
 };
 
 export type BuildReviewEvidenceRequest = {
@@ -79,6 +85,7 @@ export type BuildReviewEvidenceRequest = {
   readonly reviewCommentPages: UntrustedYamlNode;
   readonly reviewReactionPages: UntrustedYamlNode;
   readonly knownHeadShas: readonly string[];
+  readonly mergedAt: string;
 };
 
 type ActionsEvidence = {
@@ -161,14 +168,6 @@ export function collectAgentStatsGitHubEvidence(
     pages: actionPages,
   };
   const expandedActionPages = expandActionAttemptPages(attemptPagesRequest);
-  const actionsRequest: BuildActionsEvidenceRequest = {
-    pages: expandedActionPages,
-    prNumber: request.prNumber,
-    finalHeadSha: request.finalHeadSha,
-    mergedAt: request.mergedAt,
-  };
-  const actions = buildActionsEvidence(actionsRequest);
-
   const issueCommentsRequest: GitHubApiRequest = {
     repoRoot: request.repoRoot,
     endpoint: `repos/{owner}/{repo}/issues/${request.prNumber}/comments`,
@@ -196,17 +195,6 @@ export function collectAgentStatsGitHubEvidence(
       const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
       return requiredStringProperty(propertyRequest);
     });
-  for (const headSha of actions.heads
-    .map((head) => {
-      const propertyRequest: PropertyRequest = {
-        record: head,
-        key: 'head_sha',
-      };
-      return stringProperty(propertyRequest);
-    })
-    .filter((headSha) => headSha.length > 0)) {
-    if (!knownHeadShas.includes(headSha)) knownHeadShas.push(headSha);
-  }
   if (!knownHeadShas.includes(request.finalHeadSha)) {
     knownHeadShas.push(request.finalHeadSha);
   }
@@ -221,8 +209,17 @@ export function collectAgentStatsGitHubEvidence(
     reviewCommentPages: runGitHubApi(reviewCommentsRequest),
     reviewReactionPages: collectReviewReactionPages(reactionsRequest),
     knownHeadShas,
+    mergedAt: request.mergedAt,
   };
   const reviews = buildReviewEvidence(reviewRequest);
+  const actionsRequest: BuildActionsEvidenceRequest = {
+    pages: expandedActionPages,
+    prNumber: request.prNumber,
+    finalHeadSha: request.finalHeadSha,
+    mergedAt: request.mergedAt,
+    reviewEvents: reviews.events,
+  };
+  const actions = buildActionsEvidence(actionsRequest);
   const deliveryHeadsRequest = {
     actionHeads: actions.heads,
     reviewEvents: reviews.events,
@@ -293,16 +290,12 @@ export function buildActionsEvidence(
     deduplicatedRuns.set(observationKey, observation);
   }
   const observations = [...deduplicatedRuns.values()];
-  const observationTimes = observations.map((run) => run.startedAt).sort();
-  const headShas: string[] = [];
-  for (const observationTime of observationTimes) {
-    const observedAtTime = observations.filter(
-      (run) => run.startedAt === observationTime,
-    );
-    for (const observed of observedAtTime) {
-      if (!headShas.includes(observed.headSha)) headShas.push(observed.headSha);
-    }
-  }
+  const headStartsRequest = {
+    actions: observations,
+    reviewEvents: request.reviewEvents,
+  };
+  const headStarts = deliveryHeadStarts(headStartsRequest);
+  const headShas = headStarts.map((head) => head.headSha);
   if (!headShas.includes(request.finalHeadSha))
     headShas.push(request.finalHeadSha);
   const headObservations = headShas.map((headSha) => {
@@ -310,9 +303,8 @@ export function buildActionsEvidence(
     const headRequest: BuildHeadObservationRequest = {
       headSha,
       runs,
-      allRuns: observations,
       finalHeadSha: request.finalHeadSha,
-      orderedHeadShas: headShas,
+      headStarts,
     };
     return buildHeadObservation(headRequest);
   });
@@ -324,8 +316,7 @@ export function buildActionsEvidence(
   const validationCycles = validationObservations.map((run) => {
     const supersededRequest: HeadSupersededRequest = {
       headSha: run.headSha,
-      allRuns: observations,
-      orderedHeadShas: headShas,
+      headStarts,
     };
     const supersededAt = headSupersededAt(supersededRequest);
     const obsoleteRequest: ObsoleteRunSecondsRequest = { run, supersededAt };
@@ -385,6 +376,7 @@ export function buildReviewEvidence(
   const requestsRequest: ReviewRequestsRequest = {
     comments: issueComments,
     knownHeadShas: request.knownHeadShas,
+    mergedAt: request.mergedAt,
   };
   const requests = reviewRequests(requestsRequest);
   const resultsRequest: ReviewResultsRequest = {
@@ -394,6 +386,7 @@ export function buildReviewEvidence(
     reviewReactions,
     requests,
     knownHeadShas: request.knownHeadShas,
+    mergedAt: request.mergedAt,
   };
   const results = reviewResults(resultsRequest);
   const events: ReviewEventObservation[] = [];
@@ -519,9 +512,8 @@ function collectReviewReactionPages(
 type BuildHeadObservationRequest = {
   readonly headSha: string;
   readonly runs: readonly ActionObservation[];
-  readonly allRuns: readonly ActionObservation[];
   readonly finalHeadSha: string;
-  readonly orderedHeadShas: readonly string[];
+  readonly headStarts: readonly DeliveryHeadStart[];
 };
 
 function buildHeadObservation(
@@ -536,8 +528,7 @@ function buildHeadObservation(
   const lastObservedAt = maximumTimestamp(timestampRequest);
   const supersededRequest: HeadSupersededRequest = {
     headSha: request.headSha,
-    allRuns: request.allRuns,
-    orderedHeadShas: request.orderedHeadShas,
+    headStarts: request.headStarts,
   };
   const supersededAt = headSupersededAt(supersededRequest);
   let actionSeconds = 0;
@@ -558,46 +549,10 @@ function buildHeadObservation(
   };
 }
 
-type HeadSupersededRequest = {
-  readonly headSha: string;
-  readonly allRuns: readonly ActionObservation[];
-  readonly orderedHeadShas: readonly string[];
-};
-
-function headSupersededAt(request: HeadSupersededRequest): string {
-  const currentIndex = request.orderedHeadShas.indexOf(request.headSha);
-  if (currentIndex < 0) return '';
-  const laterHeads = new Set(request.orderedHeadShas.slice(currentIndex + 1));
-  const laterStarts = request.allRuns
-    .filter((run) => laterHeads.has(run.headSha))
-    .map((run) => run.startedAt);
-  const timestampRequest = { values: laterStarts };
-  return minimumTimestamp(timestampRequest);
-}
-
-type ObsoleteRunSecondsRequest = {
-  readonly run: ActionObservation;
-  readonly supersededAt: string;
-};
-
-function obsoleteRunSeconds(request: ObsoleteRunSecondsRequest): number {
-  if (
-    request.supersededAt.length === 0 ||
-    request.run.finishedAt <= request.supersededAt
-  ) {
-    return 0;
-  }
-  const obsoleteStart = Math.max(
-    Date.parse(request.run.startedAt),
-    Date.parse(request.supersededAt),
-  );
-  const finishedAt = Date.parse(request.run.finishedAt);
-  return Math.max(0, Math.round((finishedAt - obsoleteStart) / 1000));
-}
-
 type ReviewRequestsRequest = {
   readonly comments: readonly UntrustedYamlMap[];
   readonly knownHeadShas: readonly string[];
+  readonly mergedAt: string;
 };
 
 function reviewRequests(
@@ -605,6 +560,11 @@ function reviewRequests(
 ): ReviewRequestObservation[] {
   const byHead = new Map<string, ReviewRequestObservation>();
   for (const comment of request.comments) {
+    const cutoffRequest: PropertyRequest = {
+      record: comment,
+      key: 'created_at',
+    };
+    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
     const associationRequest: PropertyRequest = {
       record: comment,
       key: 'author_association',
@@ -643,6 +603,7 @@ type ReviewResultsRequest = {
   readonly reviewReactions: readonly UntrustedYamlMap[];
   readonly requests: readonly ReviewRequestObservation[];
   readonly knownHeadShas: readonly string[];
+  readonly mergedAt: string;
 };
 
 function reviewResults(
@@ -650,6 +611,11 @@ function reviewResults(
 ): ReviewResultObservation[] {
   const results: ReviewResultObservation[] = [];
   for (const review of request.reviews) {
+    const cutoffRequest: PropertyRequest = {
+      record: review,
+      key: 'submitted_at',
+    };
+    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
     const reviewLoginRequest: HasLoginRequest = {
       record: review,
       expected: CODEX_LOGIN,
@@ -703,6 +669,11 @@ function reviewResults(
     results.push(observation);
   }
   for (const comment of request.issueComments) {
+    const cutoffRequest: PropertyRequest = {
+      record: comment,
+      key: 'created_at',
+    };
+    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
     const commentLoginRequest: HasLoginRequest = {
       record: comment,
       expected: CODEX_LOGIN,
@@ -732,6 +703,11 @@ function reviewResults(
     results.push(observation);
   }
   for (const reaction of request.reviewReactions) {
+    const cutoffRequest: PropertyRequest = {
+      record: reaction,
+      key: 'created_at',
+    };
+    if (requiredStringProperty(cutoffRequest) > request.mergedAt) continue;
     const reactionLoginRequest: HasLoginRequest = {
       record: reaction,
       expected: CODEX_LOGIN,
@@ -822,7 +798,7 @@ function actionObservation(
 ): ActionObservation {
   const startedRequest: PropertyRequest = {
     record: request.record,
-    key: 'run_started_at',
+    key: 'created_at',
   };
   const updatedRequest: PropertyRequest = {
     record: request.record,
