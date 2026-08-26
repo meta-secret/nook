@@ -8,14 +8,17 @@ Runner placement, provider policy, and pipeline topology remain in
 
 ## Playwright projects
 
-The projects are defined in `nook-app/nook-web/playwright.config.ts`.
+The projects are defined in
+`nook-app/nook-web/nook-web-app/playwright.config.ts`.
 
 - **`stable`**
   - Specs: IndexedDB-only specs with three workers.
-  - CI: `main.yml` and manual or debug `e2e-pr.yml` runs.
+  - CI: `main.yml`, `ci:full-e2e` pull requests, and manual or debug
+    `e2e-pr.yml` runs.
 - **`unstable`**
   - Specs: Local-provider and sync specs with two workers.
-  - CI: `main.yml` and manual `e2e-pr.yml` runs.
+  - CI: `main.yml`, `ci:full-e2e` pull requests, and manual `e2e-pr.yml`
+    runs.
 - **`sync-live`**
   - Specs: `e2e/live/**/*.spec.ts`.
   - CI: Manual `e2e-pr.yml` runs.

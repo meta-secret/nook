@@ -98,6 +98,16 @@ test("buildPrAudit leaves comments unclassified while the head transition is pen
   assert.equal(audit.feedback.substantiveComments, 1);
 });
 
+test("buildPrAudit treats repository event lookup failures as a pending transition", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ repositoryEventFailure: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.feedback.headTransitionObserved, false);
+});
+
 test("buildPrAudit reads head transitions from a fork repository", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
@@ -364,6 +374,7 @@ type MockOptions = {
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
   omitPushEvent?: boolean;
+  repositoryEventFailure?: boolean;
   runStatus?: MockRunStatus;
   unresolvedThreads?: number;
 };
@@ -393,6 +404,9 @@ function createMockOctokit(options: MockOptions): Octokit {
     listRepoEvents: async (input: RepoRef) => {
       assert.equal(input.owner, headRepository.owner);
       assert.equal(input.repo, headRepository.repo);
+      if (options.repositoryEventFailure === true) {
+        throw new Error("repository event feed unavailable");
+      }
       return {
         data:
           options.omitPushEvent === true

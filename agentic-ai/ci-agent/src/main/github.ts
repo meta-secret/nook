@@ -307,10 +307,17 @@ async function loadCurrentHeadTransition(
 ): Promise<HeadTransitionBoundary> {
   const { head, octokit } = input;
   const { owner, repo } = head.repository;
-  const repositoryEvents = await octokit.paginate(
-    octokit.rest.activity.listRepoEvents,
-    { owner, repo, per_page: 100 },
-  );
+  let repositoryEvents: Awaited<
+    ReturnType<typeof octokit.rest.activity.listRepoEvents>
+  >["data"];
+  try {
+    repositoryEvents = await octokit.paginate(
+      octokit.rest.activity.listRepoEvents,
+      { owner, repo, per_page: 100 },
+    );
+  } catch {
+    return { state: HeadTransitionState.Pending };
+  }
   const expectedRef = `refs/heads/${head.ref}`;
   const pushEvent = repositoryEvents.find((event) => {
     if (event.type !== "PushEvent") return false;

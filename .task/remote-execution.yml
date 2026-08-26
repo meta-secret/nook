@@ -146,7 +146,7 @@ tasks:
               for run_status in requested waiting pending queued in_progress; do
                 gh api --paginate \
                   "repos/$repository/actions/runs?head_sha=$dispatched_pr_sha&status=$run_status&per_page=100" \
-                  --jq ".workflow_runs[] | select(any(.pull_requests[]?; .number == $REQUESTED_PR)) | select(.name == \"PR\" or .name == \"Rust ecosystem checks\") | .id"
+                  --jq ".workflow_runs[] | select(.event == \"pull_request\") | select(any(.pull_requests[]?; .number == $REQUESTED_PR)) | select(.name == \"PR\" or .name == \"Rust ecosystem checks\") | .id"
               done | sort -u
             )"
             if [ -n "$run_ids" ]; then
