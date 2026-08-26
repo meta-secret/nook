@@ -124,47 +124,51 @@ describe('validateAgentStatsYaml', () => {
   });
 
   test('preserves validation for schema-v3 records', () => {
-    const result = validateAgentStatsYaml({
+    const request: ValidateAgentStatsYamlArgs = {
       content: validYaml.replace('schema_version: 4', 'schema_version: 3'),
       expectedPrNumber: 481,
-    });
+    };
+    const result = validateAgentStatsYaml(request);
     expect(result.ok).toBe(true);
   });
 
   test('rejects contradictory review outcomes and finding counts', () => {
-    const result = validateAgentStatsYaml({
+    const request: ValidateAgentStatsYamlArgs = {
       content: validYaml.replace(
         '    finding_count: 2',
         '    finding_count: 0',
       ),
       expectedPrNumber: 481,
-    });
+    };
+    const result = validateAgentStatsYaml(request);
     expect(
       result.errors.some((error) => error.includes('review outcome')),
     ).toBe(true);
   });
 
   test('rejects head observation timestamps outside action extrema', () => {
-    const result = validateAgentStatsYaml({
+    const request: ValidateAgentStatsYamlArgs = {
       content: validYaml.replace(
         'first_observed_at: 2026-07-18T18:25:00Z',
         'first_observed_at: 2026-07-18T18:24:00Z',
       ),
       expectedPrNumber: 481,
-    });
+    };
+    const result = validateAgentStatsYaml(request);
     expect(
       result.errors.some((error) => error.includes('first_observed_at')),
     ).toBe(true);
   });
 
   test('requires every PR attempt to have exactly one validation cycle', () => {
-    const result = validateAgentStatsYaml({
+    const request: ValidateAgentStatsYamlArgs = {
       content: validYaml.replace(
         'validation_cycles:',
         'validation_cycles: []\nignored_validation_cycles:',
       ),
       expectedPrNumber: 481,
-    });
+    };
+    const result = validateAgentStatsYaml(request);
     expect(
       result.errors.some((error) => error.includes('must include PR')),
     ).toBe(true);
