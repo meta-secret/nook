@@ -98,11 +98,13 @@ Default PR-first loop:
    - Use focused remote tasks while iterating.
    - At the final boundary, run `task pr:preflight PR=<number>` and
      `task pr:validate PR=<number>` once.
-   - The command dispatches repository-owned checks immediately.
-   - It then attempts one idempotent exact-head Cloud review request.
-   - The request prefers Codex and falls back to Cursor Bugbot when Codex
-     reports a usage limit.
-   - Review-request failure does not block those checks.
+   - The command requests one idempotent exact-head Codex review first.
+   - It waits up to 600 seconds for a clean result or actionable findings.
+   - Current-head findings stop validation; address them as one coherent batch.
+   - After three finding batches, perform a comprehensive stabilization pass
+     before requesting another complete validation.
+   - Review unavailability does not block checks after the bounded timeout.
+   - A Codex eye reaction is liveness only and never a requirement.
    - Stop and fix every actionable finding.
    - If no feedback exists when checks finish, continue without waiting.
    - Do not request Claude, CodeRabbit, or other optional reviewers.
@@ -234,7 +236,7 @@ Default agent flow:
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
    - Loom dispatches repository-owned PR checks through `task pr:validate`.
    - It then attempts the non-blocking exact-head Cloud review request.
-   - Codex is preferred. Cursor Bugbot is the usage-limit fallback.
+   - Codex is the only automatic review provider. Do not activate Cursor Bugbot.
    - Green status is necessary, but the full readiness audit must also pass.
    - See [code-review.md](code-review.md).
 7. **On a Nook PR-test failure:**
@@ -309,10 +311,10 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
    - Use `task remote` for focused feedback.
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` at the
      complete validation boundary.
-   - Loom dispatches validation before attempting the Cloud review request.
+   - Loom settles or bounds the exact-head Codex review before dispatching validation.
    - Monitor repository-owned PR checks.
    - Inspect any feedback already present.
-   - Never wait for Codex or Cursor after repository-owned checks finish.
+   - Never wait for Codex after repository-owned checks finish.
    - Never request Claude, CodeRabbit, or other optional external reviewers.
    - Before merging, fetch `origin/main` and verify the PR branch is not stale.
    - If it is stale, merge `origin/main`, push, and explicitly validate the refreshed head.
@@ -553,14 +555,14 @@ Create the YAML from current Nook `main`:
 - **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**
 - **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit; once it succeeds, the task-owning agent must squash-merge without asking again. Workflows do not blindly merge based on a check event.
-- **Request exact-head review without delaying complete validation.**
+- **Stabilize exact-head review before complete validation.**
   - Run local review before the first owner-authored push.
   - For a harness-created PR, run it after handoff.
-  - Dispatch complete validation and request Cloud review when the coherent head is ready.
-  - Prefer Codex. Request Cursor Bugbot when Codex reports a usage limit.
+  - Request Codex review when the coherent head is ready, then dispatch complete validation after a clean result or the bounded timeout.
+  - Keep Codex as the sole automatic review provider. Do not activate Cursor Bugbot.
   - Address and resolve actionable comments.
   - Require `task pr:ready` after repository-owned checks pass.
-  - Never wait for Codex or Cursor after checks finish.
+  - Never wait for Codex after checks finish.
   - Do not request Claude, CodeRabbit, or other optional reviewers.
 - **Never kill the Docker daemon** — only stop containers. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).

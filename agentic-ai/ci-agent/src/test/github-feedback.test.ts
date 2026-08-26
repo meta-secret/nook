@@ -7,12 +7,12 @@ test("countAutomatedFindingBatches groups root bot findings by review", () => {
   const batches = countAutomatedFindingBatches([
     {
       isReply: false,
-      reviewerLogin: "chatgpt-codex-connector",
+      reviewerLogin: "chatgpt-codex-connector[bot]",
       reviewId: 10,
     },
     {
       isReply: false,
-      reviewerLogin: "chatgpt-codex-connector",
+      reviewerLogin: "chatgpt-codex-connector[bot]",
       reviewId: 10,
     },
     {
