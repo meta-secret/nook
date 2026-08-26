@@ -199,7 +199,7 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
         assert!(!documentation.contains("task remote TASK_NAMES=web:build,web:e2e"));
     }
 
-    let cortex_rule = read(".cortex/dynamic-skills/kubernetes-native-cluster-execution.md");
+    let cortex_rule = read(".cortex/sre/dynamic-skills/kubernetes-native-cluster-execution.md");
     assert!(cortex_rule.contains("P1 hard rule"));
     assert!(cortex_rule.contains("BuildKit shard is a build service only"));
     assert!(cortex_rule.contains("Playwright directly inside an ordinary Pod"));

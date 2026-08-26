@@ -30,7 +30,7 @@ Authored HTML is prohibited in every `.cortex/**/*.md` file.
 2. Use ordered steps only when action order matters.
 3. Use flat bullets for peers and nested bullets for owned branches or substeps.
 4. Keep detailed rationale as prose inside a clearly owned article.
-5. Update `.cortex/knowledge-graph.md` whenever the heading hierarchy changes.
+5. Update the owning root or team knowledge graph whenever the heading hierarchy changes.
 6. Run the structured-article and consistency checks before completion.
 7. Run the global Cortex audit and fix every prohibited HTML finding.
 

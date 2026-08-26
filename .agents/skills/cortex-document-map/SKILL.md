@@ -1,9 +1,9 @@
 ---
 name: cortex-document-map
 description: >-
-  Require Cortex document navigation and structural section maps to be
-  centralized in .cortex/knowledge-graph.md. Use whenever creating, editing, or
-  auditing .cortex documents.
+  Require Cortex navigation and section maps to use the root routing graph and
+  the owning dev-core, SRE, or web-development graph. Use whenever creating,
+  editing, moving, or auditing Cortex documents.
 ---
 
 # Cortex Document Navigation

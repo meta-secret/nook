@@ -15,7 +15,7 @@ ownership.
 
 ## Preferred pattern
 
-1. Start from `.cortex/knowledge-graph.md`.
+1. Start from `.cortex/knowledge-graph.md` and select the responsible team graph.
 2. Read the owning authority and its one-hop context.
 3. Compare claims with sibling authorities and executable evidence.
 4. Apply consistency, writer, article-structure, and navigation rules.

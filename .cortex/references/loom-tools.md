@@ -218,6 +218,10 @@ ignored `.cortex/.session/` memory.
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
+The request requires `skillOwner` with one of `common`, `dev-core`, `sre`, or
+`web-dev`. Loom creates the canonical card in that owner's dynamic-skill
+directory and registers it in the common skill catalog.
+
 ### agentStats (assemble / validate / publish)
 
 ```bash

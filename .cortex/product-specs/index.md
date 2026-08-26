@@ -11,39 +11,39 @@ Product specifications are the living system of record for user-facing and syste
 
 ## Product catalog
 
-- **[monorepo-setup.md](monorepo-setup.md)**
+- **[monorepo-setup.md](../sre/product-specs/monorepo-setup.md)**
   - Description: Spec for monorepo structure, tooling & containerized workflow
   - Status: Verified
-- **[password-manager.md](password-manager.md)**
+- **[password-manager.md](../dev-core/product-specs/password-manager.md)**
   - Description: Spec for password & secret manager with zero-knowledge Wasm engine
-  - Status: Verified
-- **[decentralized-auth.md](decentralized-auth.md)**
+  - Status: Active; historical storage claims are labeled migration context
+- **[decentralized-auth.md](../dev-core/product-specs/decentralized-auth.md)**
   - Description: Multi-device keys, vault sections, join/approve/enroll flows
-  - Status: Verified
-- **[browser-extension.md](browser-extension.md)**
+  - Status: Active migration authority; logical identity and app-key alignment required
+- **[browser-extension.md](../web-dev/product-specs/browser-extension.md)**
   - Description: Website-owned vault UI, extension authorization, and contextual authentication widget
   - Status: Active
-- **[devices-and-access.md](devices-and-access.md)**
+- **[devices-and-access.md](../dev-core/product-specs/devices-and-access.md)**
   - Description: Multi-identity management, local key protection, onboarding, and verified vault grants
   - Status: Local multi-identity keyring implemented; replicated identity control remains active
-- **[vault-app-isolation.md](vault-app-isolation.md)**
+- **[vault-app-isolation.md](../web-dev/product-specs/vault-app-isolation.md)**
   - Description: Separate Simple and Sentinel projects, origins, capabilities, and deployment
   - Status: Implemented
-- **[password-envelope.md](password-envelope.md)**
+- **[password-envelope.md](../dev-core/product-specs/password-envelope.md)**
   - Description: Optional password envelope for `secrets_key`/`members_key` and one-step QR-based device join
   - Status: Implemented (P1–P4)
-- **[slip39-recovery.md](slip39-recovery.md)**
+- **[slip39-recovery.md](../dev-core/product-specs/slip39-recovery.md)**
   - Description: Fixed 2-of-3 SLIP-0039 device quorum recovery via session-only QR exchange
   - Status: Draft
-- **[secure-notes.md](secure-notes.md)**
+- **[secure-notes.md](../dev-core/product-specs/secure-notes.md)**
   - Description: Secure notes vault item type with create, edit, search, import, and encrypted free-form text
   - Status: Implemented
-- **[authenticator-items.md](authenticator-items.md)**
+- **[authenticator-items.md](../dev-core/product-specs/authenticator-items.md)**
   - Description: TOTP authenticator items with a simple setup-key or URI flow
   - Status: Active
-- **[credit-card-items.md](credit-card-items.md)**
+- **[credit-card-items.md](../dev-core/product-specs/credit-card-items.md)**
   - Description: Credit/debit card vault item type with Luhn-validated numbers
   - Status: Active
-- **[file-attachments.md](file-attachments.md)**
+- **[file-attachments.md](../dev-core/product-specs/file-attachments.md)**
   - Description: Encrypted file attachment vault item type (upload/download)
   - Status: Active

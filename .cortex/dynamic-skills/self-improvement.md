@@ -208,11 +208,11 @@ Apply [Cortex consistency](cortex-consistency.md) to every promotion.
 
 When a candidate qualifies for promotion:
 
-1. Search `.cortex/knowledge-graph.md` and the relevant Cortex family.
+1. Search the root routing graph and the responsible team's knowledge graph.
 2. Find the existing authority for the topic.
 3. Update that authority when possible.
 4. Create a new document only when no current document owns the knowledge.
-5. Update `.cortex/knowledge-graph.md` when headings, relationships, or
+5. Update the owning knowledge graph when headings, relationships, or
    discoverability change.
 6. Apply the writer, article-structure, and consistency rules.
 7. Validate the updated exact head.
@@ -337,7 +337,7 @@ worker contract and safe parallelism rules.
 
 ### Loom extraction procedure
 
-1. Find the owning workflow through `.cortex/knowledge-graph.md`.
+1. Find the owning workflow through the root or responsible team graph.
 2. Inspect its linked skill, Loom reference, Task entrypoint, tests, and current
    implementation evidence.
 3. Search the existing Loom leaf tools and compiled workflow catalog before
@@ -387,7 +387,8 @@ The static graph boundary is defined in
 
 For every substantial task:
 
-1. Load relevant Cortex context through `.cortex/knowledge-graph.md`.
+1. Select the team through the root graph and load relevant context through the
+   owning team graph.
 2. Create temporary session memory.
 3. Investigate and plan.
 4. Implement the bounded request.
@@ -415,7 +416,7 @@ Before a substantial PR is ready:
 - [ ] Session discoveries were reviewed.
 - [ ] Durable project knowledge was extracted when justified.
 - [ ] Agent protocols or project workflows were improved when justified.
-- [ ] `.cortex/knowledge-graph.md` was updated when required.
+- [ ] The owning root or team knowledge graph was updated when required.
 - [ ] Cortex consistency was validated.
 - [ ] Temporary session memory was removed.
 - [ ] No speculative or duplicate knowledge was promoted.

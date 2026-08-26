@@ -24,7 +24,7 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - It must offer actionable remediation instructions so the agent can self-correct immediately.
 - **Fix the finding:** A failing Knip, jscpd, lint, test, coverage, or CI gate is a required fix in the same task.
 - It is not a license to raise thresholds, add authored-code ignores, or defer.
-- See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
+- See [quality.md § Fix check findings](../sre/workflows/quality.md#fix-check-findings--not-silence-them).
 
 ## 3. Strict boundaries & Parse at the Boundary
 

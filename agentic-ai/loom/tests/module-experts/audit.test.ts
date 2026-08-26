@@ -384,17 +384,23 @@ describe('module expert audit', () => {
 
   test('requires exact canonical context, web skills, and Rust boundary scope', () => {
     expect(MODULE_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
+      '.cortex/dev-core/knowledge-graph.md',
       '.cortex/dynamic-skills/module-expert.md',
       '.cortex/workflows/module-oriented-development.md',
     ]);
     expect(INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
+      '.cortex/dev-core/knowledge-graph.md',
+      '.cortex/web-dev/knowledge-graph.md',
       '.cortex/dynamic-skills/internal-api-expert.md',
-      ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+      '.cortex/dynamic-skills/module-expert.md',
+      '.cortex/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/AGENTS.md',
+      '.cortex/web-dev/knowledge-graph.md',
       '.cortex/dynamic-skills/browser-extension-release-security.md',
-      ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+      '.cortex/dynamic-skills/module-expert.md',
+      '.cortex/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_SKILL_PATHS).toEqual([
       '.agents/skills/module-expert/SKILL.md',
@@ -413,17 +419,17 @@ describe('module expert audit', () => {
       '.cortex/architecture/module-experts.md',
     ]);
     expect(WEB_EXPERT_PRODUCT_SPEC_PATHS).toEqual([
-      '.cortex/product-specs/authenticator-items.md',
-      '.cortex/product-specs/browser-extension.md',
-      '.cortex/product-specs/credit-card-items.md',
-      '.cortex/product-specs/decentralized-auth.md',
-      '.cortex/product-specs/devices-and-access.md',
-      '.cortex/product-specs/file-attachments.md',
-      '.cortex/product-specs/password-envelope.md',
-      '.cortex/product-specs/password-manager.md',
-      '.cortex/product-specs/secure-notes.md',
-      '.cortex/product-specs/slip39-recovery.md',
-      '.cortex/product-specs/vault-app-isolation.md',
+      '.cortex/dev-core/product-specs/authenticator-items.md',
+      '.cortex/web-dev/product-specs/browser-extension.md',
+      '.cortex/dev-core/product-specs/credit-card-items.md',
+      '.cortex/dev-core/product-specs/decentralized-auth.md',
+      '.cortex/dev-core/product-specs/devices-and-access.md',
+      '.cortex/dev-core/product-specs/file-attachments.md',
+      '.cortex/dev-core/product-specs/password-envelope.md',
+      '.cortex/dev-core/product-specs/password-manager.md',
+      '.cortex/dev-core/product-specs/secure-notes.md',
+      '.cortex/dev-core/product-specs/slip39-recovery.md',
+      '.cortex/web-dev/product-specs/vault-app-isolation.md',
     ]);
     expect(WEB_EXPERT_RELEASE_AUTHORITY_PATHS).toEqual([
       '.github/scripts/ci-release-verify-extension.sh',

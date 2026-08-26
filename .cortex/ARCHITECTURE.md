@@ -126,7 +126,7 @@ flowchart TD
   - Its credentials stay sealed to a local app key.
 
 The normative model is in
-[identity-vault-architecture.md](design-docs/identity-vault-architecture.md).
+[identity-vault-architecture.md](dev-core/design-docs/identity-vault-architecture.md).
 
 ---
 
@@ -212,18 +212,18 @@ Search catalog detail:
 - Decryption stays in WASM memory only while unlocked.
 - Bucket assignment derives from opaque secret ids.
 
-Store identity detail: see [secret-store-identity.md](design-docs/secret-store-identity.md).
+Store identity detail: see [secret-store-identity.md](dev-core/design-docs/secret-store-identity.md).
 
 Vault revision detail:
 
-- Live sync uses the event log ([vault-event-log.md](design-docs/vault-event-log.md)).
-- Legacy YAML `vault_version` is historical/local projection context ([unified-vault.md](design-docs/unified-vault.md)).
+- Live sync uses the event log ([vault-event-log.md](dev-core/design-docs/vault-event-log.md)).
+- Legacy YAML `vault_version` is historical/local projection context ([unified-vault.md](dev-core/design-docs/unified-vault.md)).
 
 Unlock mode detail:
 
 - Password-only vaults use `{type: password, …}`.
 - Device-key vaults use `auth:` plus optional `password_entries`.
-- See [password-envelope.md](product-specs/password-envelope.md).
+- See [password-envelope.md](dev-core/product-specs/password-envelope.md).
 
 Authorization and membership detail:
 
@@ -247,12 +247,12 @@ Provider connections detail:
 - Credentials are sealed to the local device.
   Related design specifications:
 
-- [vault-session-and-lock.md](design-docs/vault-session-and-lock.md): Lock session vs persisted data boundaries.
-- [decentralized-auth.md](product-specs/decentralized-auth.md): Join and approve flows.
-- [auth-providers.md](design-docs/auth-providers.md): Login UX and sync-provider credential persistence.
-- [vault-event-log.md](design-docs/vault-event-log.md): Provider event-log sync.
-- [unified-vault.md](design-docs/unified-vault.md): Local-first vault architecture (scalar sync historical).
-- [identity-vault-architecture.md](design-docs/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
+- [vault-session-and-lock.md](dev-core/design-docs/vault-session-and-lock.md): Lock session vs persisted data boundaries.
+- [decentralized-auth.md](dev-core/product-specs/decentralized-auth.md): Join and approve flows.
+- [auth-providers.md](dev-core/design-docs/auth-providers.md): Login UX and sync-provider credential persistence.
+- [vault-event-log.md](dev-core/design-docs/vault-event-log.md): Provider event-log sync.
+- [unified-vault.md](dev-core/design-docs/unified-vault.md): Local-first vault architecture (scalar sync historical).
+- [identity-vault-architecture.md](dev-core/design-docs/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
 
 YAML payload sections:
 
@@ -310,7 +310,7 @@ Web e2e detail:
 - `task web:test:e2e` — main stub gate and explicit PR validation.
 - `task web:test:e2e:pr` — fast manual subset.
 - `task web:test:e2e:sync-live` — manual real-provider validation.
-- See [workflows/ci-pipeline.md](workflows/ci-pipeline.md).
+- See [workflows/ci-pipeline.md](sre/workflows/ci-pipeline.md).
 
 Extension detail:
 
@@ -351,7 +351,7 @@ All development tasks and builds in Nook run containerized via a unified `Taskfi
   or Kata runtime. Untrusted and unsupported lanes retain ephemeral
   GitHub-hosted fallback capacity.
 
-See [architecture/engineering-harness.md](architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
+See [architecture/engineering-harness.md](sre/architecture/engineering-harness.md) for the complete Taskfile hierarchy, Docker cache topology, builder driver configurations, and solve pipelines.
 
 ---
 
@@ -399,8 +399,10 @@ Kata-backed execution Pods:
 - a token-free dispatcher reconciles trusted Main-failure Workbench incidents;
 - Neo4j owns the DAG, readiness, claims, leases, attempts, results, and bounded
   Git-patch artifacts;
-- a four-replica `kata-dragonball` pool gives every task a separate guest
-  kernel and one embedded Codex thread;
+- Hive is intentionally paused with zero worker replicas while its
+  single-incident and single-repair invariants are revalidated;
+- when re-enabled, each `kata-dragonball` worker gives one task a separate
+  guest kernel and one embedded Codex thread;
 - Hive treats its Codex agents as trusted operators and gives Main-repair
   agents a repository-scoped GitHub credential for standard `git` and `gh`
   delivery; custom publication brokers or mailbox protocols must not be added
@@ -415,6 +417,6 @@ Kata-backed execution Pods:
   squash-merged, its resulting Main state is green, and Workbench is updated.
 
 See
-[design-docs/hive-isolated-agent-platform.md](design-docs/hive-isolated-agent-platform.md)
+[design-docs/hive-isolated-agent-platform.md](sre/design-docs/hive-isolated-agent-platform.md)
 for the complete component model, task lifecycle, trust boundaries, recovery
 semantics, cache topology, and deployment command surface.

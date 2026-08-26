@@ -41,7 +41,8 @@ When a task touches durable behavior, verify the related cortex surface.
 5. Fix obsolete facts in the same PR.
 6. Mark historical context as historical when it must remain.
 7. Remove or rewrite guidance that conflicts.
-8. Update `.cortex/knowledge-graph.md` and `AGENTS.md` links when headings or paths change.
+8. Update the owning root or team knowledge graph and `AGENTS.md` links when
+   headings or paths change.
 
 Verification checklist:
 

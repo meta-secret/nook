@@ -14,6 +14,9 @@ source of truth.
 
 ## Skill catalog
 
+- **[team-oriented-development.md](team-oriented-development.md)**
+  - Purpose: Route implementation through development-core, SRE, and web-development ownership boundaries with team-scoped tests, Cortex, review fixes, and parent-owned cross-team joins
+  - Executable skill: [`.agents/skills/team-oriented-development/SKILL.md`](../../.agents/skills/team-oriented-development/SKILL.md)
 - **[typescript-rust-automation-only.md](typescript-rust-automation-only.md)**
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
   - Executable skill: [`.agents/skills/typescript-rust-automation-only/SKILL.md`](../../.agents/skills/typescript-rust-automation-only/SKILL.md)
@@ -44,12 +47,12 @@ source of truth.
 - **[efficient-pr-delivery.md](efficient-pr-delivery.md)**
   - Purpose: Ship PRs with focused configured-runner execution, complete exact-head validation, and readiness
   - Executable skill: [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../.agents/skills/efficient-pr-delivery/SKILL.md)
-- **[github-actions-only-validation.md](github-actions-only-validation.md)**
+- **[github-actions-only-validation.md](../sre/dynamic-skills/github-actions-only-validation.md)**
   - Purpose: Format locally; run focused tasks and trusted Rust gates on the configured Actions runner while runtime-dependent gates stay GitHub-hosted
   - Executable skill: [`.agents/skills/github-actions-only-validation/SKILL.md`](../../.agents/skills/github-actions-only-validation/SKILL.md)
-- **[kubernetes-native-cluster-execution.md](kubernetes-native-cluster-execution.md)**
+- **[kubernetes-native-cluster-execution.md](../sre/dynamic-skills/kubernetes-native-cluster-execution.md)**
   - Purpose: Prohibit nested container runtimes in k8s and k0s and require direct Pod execution for Playwright and other workloads
-- **[pre-push-hygiene.md](pre-push-hygiene.md)**
+- **[pre-push-hygiene.md](../sre/dynamic-skills/pre-push-hygiene.md)**
   - Purpose: Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses
   - Executable skill: [`.agents/skills/pre-push-hygiene/SKILL.md`](../../.agents/skills/pre-push-hygiene/SKILL.md)
 - **[browser-extension-release-security.md](browser-extension-release-security.md)**
@@ -75,19 +78,19 @@ source of truth.
 - **[system-coherence-synthesizer.md](system-coherence-synthesizer.md)**
   - Purpose: Reconcile verified code and Cortex evidence without repository access or write authority
   - Executable skill: [`.agents/skills/system-coherence-synthesizer/SKILL.md`](../../.agents/skills/system-coherence-synthesizer/SKILL.md)
-- **[rust-coding.md](rust-coding.md)**
+- **[rust-coding.md](../dev-core/dynamic-skills/rust-coding.md)**
   - Purpose: Keep Rust domain models precise: replace string tags, sentinel values, and cross-workflow `Option<T>` fields with enums and per-variant structs
   - Executable skill: [`.agents/skills/rust-coding/SKILL.md`](../../.agents/skills/rust-coding/SKILL.md)
-- **[rust-macro-minimization.md](rust-macro-minimization.md)**
+- **[rust-macro-minimization.md](../dev-core/dynamic-skills/rust-macro-minimization.md)**
   - Purpose: Prohibit repository-defined Rust macros; prefer explicit structs, implementations, functions, and control flow over hidden code generation
   - Executable skill: [`.agents/skills/rust-macro-minimization/SKILL.md`](../../.agents/skills/rust-macro-minimization/SKILL.md)
-- **[rust-typescript-code-separation.md](rust-typescript-code-separation.md)**
+- **[rust-typescript-code-separation.md](../dev-core/dynamic-skills/rust-typescript-code-separation.md)**
   - Purpose: Keep app and extension policy in Rust/WASM; reserve TypeScript for UI, browser observation, and lifecycle glue
-- **[rust-wasm-name-coherence.md](rust-wasm-name-coherence.md)**
+- **[rust-wasm-name-coherence.md](../dev-core/dynamic-skills/rust-wasm-name-coherence.md)**
   - Purpose: Keep exported Rust WASM functions and methods directly searchable under their authored names across generated bindings and TypeScript
-- **[svelte-state-modeling.md](svelte-state-modeling.md)**
+- **[svelte-state-modeling.md](../web-dev/dynamic-skills/svelte-state-modeling.md)**
   - Purpose: Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM
-- **[typescript-serial-operation-queues.md](typescript-serial-operation-queues.md)**
+- **[typescript-serial-operation-queues.md](../web-dev/dynamic-skills/typescript-serial-operation-queues.md)**
   - Purpose: Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains
 - **[typescript-explicit-state.md](typescript-explicit-state.md)**
   - Purpose: Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns
@@ -105,18 +108,18 @@ source of truth.
 - **[prefer-popular-libraries.md](prefer-popular-libraries.md)**
   - Purpose: Before writing boilerplate, prefer mature high-adoption libraries; reject obscure low-star/low-download deps; validate with Loom `dependencyPopularity`
   - Executable skill: [`.agents/skills/prefer-popular-libraries/SKILL.md`](../../.agents/skills/prefer-popular-libraries/SKILL.md)
-- **[ui-design-skills.md](ui-design-skills.md)**
+- **[ui-design-skills.md](../web-dev/dynamic-skills/ui-design-skills.md)**
   - Purpose: Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it
-- **[user-facing-security-abstractions.md](user-facing-security-abstractions.md)**
+- **[user-facing-security-abstractions.md](../web-dev/dynamic-skills/user-facing-security-abstractions.md)**
   - Purpose: Present product-level security objects and keep implementation keys subordinate or advanced
-- **[web-unused-code.md](web-unused-code.md)**
+- **[web-unused-code.md](../web-dev/dynamic-skills/web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
 - **[cortex-document-map.md](cortex-document-map.md)**
-  - Purpose: Centralize Cortex navigation and section anchors in `.cortex/knowledge-graph.md`
+  - Purpose: Centralize Cortex navigation in the root routing graph and each owning team graph
   - Executable skill: [`.agents/skills/cortex-document-map/SKILL.md`](../../.agents/skills/cortex-document-map/SKILL.md)
 - **[testing-pyramid-and-regression.md](testing-pyramid-and-regression.md)**
   - Purpose: Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor
-- **[docker-container-harness.md](docker-container-harness.md)**
+- **[docker-container-harness.md](../sre/dynamic-skills/docker-container-harness.md)**
   - Purpose: Prohibit Dockerfile cache mounts and killing the Docker daemon; enforce exact dependency pinning and Bun lockfiles
 - **[self-improvement.md](self-improvement.md)**
   - Purpose: Capture provisional discoveries, promote durable knowledge, and extract stable workflow mechanics into reviewed Loom tools and graphs
@@ -124,10 +127,12 @@ source of truth.
 
 ## How to add one
 
-1. Scaffold with Loom using a `skillScaffold` domain request YAML.
+1. Scaffold with Loom using a `skillScaffold` domain request YAML. Set
+   `skillOwner` to `common`, `dev-core`, `sre`, or `web-dev`.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
-3. Confirm the new card is in the catalog above.
+3. Confirm the new card is in the catalog above and its owning team graph, or
+   the root graph for common knowledge.
 4. If the user wants direct invocation, set `createExecutableWrappers: true` or
    create `.agents/skills/<skill-name>/SKILL.md` (with `.cursor` / `.claude`
    symlinks) pointing back to the `.cortex` card, then link it from the catalog.

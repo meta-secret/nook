@@ -69,6 +69,6 @@ hand-written `docker run` commands.
   audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
-- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
-- Follow `.cortex/dynamic-skills/github-actions-only-validation.md`: format
+- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/sre/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.

@@ -1,8 +1,16 @@
+---
+name: rust-coding
+description: >-
+  Apply Nook's Rust domain-modeling, error-handling, typed-boundary, and module
+  cohesion rules. Use when editing portable Rust or Rust/WASM bridge code.
+---
+
 # Rust Coding
 
 Use this skill when editing Rust domain or WASM-boundary code in Nook.
 
-Read `.cortex/dynamic-skills/rust-coding.md` before making changes. Apply its
+Read [the canonical development-core skill](../../../.cortex/dev-core/dynamic-skills/rust-coding.md)
+before making changes. Apply its
 core rule aggressively: if a Rust struct contains `Option<T>`, ask what named
 state the absence represents. Prefer enums with per-variant structs over shared
 DTOs with optional fields, string tags, or sentinel values.

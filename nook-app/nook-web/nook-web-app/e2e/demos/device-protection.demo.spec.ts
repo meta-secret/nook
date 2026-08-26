@@ -82,6 +82,7 @@ test('offer PIN device protection when passkeys are unavailable', async ({
   await expect(page.getByTestId('add-secret-panel')).toBeVisible()
   await page.getByTestId('help-open-btn').click()
   await expect(page.getByTestId('help-page')).toBeVisible()
+  await expect(page.getByTestId('help-section-local-first')).toBeVisible()
   await page.getByTestId('help-header-close').click()
   await expect(page.getByTestId('authenticated-shell')).toBeVisible()
   await expect(page.getByTestId('app-shell-content')).toHaveClass(/\bpb-28\b/)

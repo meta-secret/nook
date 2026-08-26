@@ -13,6 +13,21 @@ The active Codex, Cursor, or other capable harness owns expert scheduling and
 communication.
 The delivery owner owns integration and lifecycle state.
 
+## Engineering team routing
+
+Every module expert runs inside one engineering-team ownership domain.
+
+- Portable Rust, companion-domain, core, and Rust/WASM bridge evidence routes
+  through the development-core team graph.
+- Production web evidence routes through the web-development team graph.
+- Infrastructure and CI are excluded from this production module registry and
+  route through the SRE team graph.
+- The internal API expert may inspect an accepted provider-consumer boundary
+  across teams. It remains read-only and cannot transfer ownership.
+
+The delivery owner selects the team before invoking a module expert.
+The expert must not expand into another team's implementation scope.
+
 ## Registry contract
 
 Each profile names:

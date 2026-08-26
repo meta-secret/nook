@@ -10,6 +10,8 @@ For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.m
 
 ## 1. Rust Platform Crates
 
+Team owner: development core.
+
 ### Shared Leaf: `nook-app-common`
 
 - **Cross-cutting primitives:** Owns dependency-light facilities needed by sibling portable crates without depending on their auth, event, or vault domains.
@@ -76,6 +78,9 @@ For the high-level architecture overview and dependency DAG, see [ARCHITECTURE.m
 
 ## 2. WebAssembly Bridge Layer
 
+Team owner: development core for typed provider contracts. Web development
+owns consumer adapters after generated bindings.
+
 These crates and their generated consumer bindings are routed through
 `internal_api_expert`. No separate WASM or bridge expert exists.
 
@@ -97,6 +102,8 @@ These crates and their generated consumer bindings are routed through
 ---
 
 ## 3. Web Presentation Packages
+
+Team owner: web development.
 
 ### `nook-vault-simple`
 

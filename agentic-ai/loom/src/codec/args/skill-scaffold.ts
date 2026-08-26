@@ -5,6 +5,7 @@ import {
   FieldIssue,
   decodeErr,
   decodeOk,
+  fieldDetailText,
   fieldError,
   type DecodeOutcome,
   type FieldErrorArgs,
@@ -29,16 +30,26 @@ import {
 
 export enum SkillScaffoldField {
   SkillSlug = 'skillSlug',
+  SkillOwner = 'skillOwner',
   CreateExecutableWrappers = 'createExecutableWrappers',
+}
+
+export enum SkillOwner {
+  Common = 'common',
+  DevCore = 'dev-core',
+  Sre = 'sre',
+  WebDev = 'web-dev',
 }
 
 export type SkillScaffoldRequest = {
   readonly skillSlug: string;
+  readonly skillOwner: SkillOwner;
   readonly createExecutableWrappers: boolean;
 };
 
 const ROOT = RequestFamily.SkillScaffold;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SKILL_OWNER_RE = /^(?:common|dev-core|sre|web-dev)$/;
 
 export function decodeSkillScaffoldRequest(
   value: UntrustedYamlNode,
@@ -60,6 +71,12 @@ export function decodeSkillScaffoldRequest(
     path: ROOT,
   };
   const skillSlug = expectString(skillSlugArgs);
+  const skillOwnerArgs: ExpectFieldArgs<SkillScaffoldField> = {
+    record: object.value,
+    key: SkillScaffoldField.SkillOwner,
+    path: ROOT,
+  };
+  const skillOwner = expectString(skillOwnerArgs);
   const createExecutableWrappersArgs: ExpectFieldArgs<SkillScaffoldField> = {
     record: object.value,
     key: SkillScaffoldField.CreateExecutableWrappers,
@@ -69,6 +86,7 @@ export function decodeSkillScaffoldRequest(
   const errors = [
     ...unknown,
     ...(skillSlug.status === DecodeStatus.Failed ? skillSlug.errors : []),
+    ...(skillOwner.status === DecodeStatus.Failed ? skillOwner.errors : []),
     ...(createExecutableWrappers.status === DecodeStatus.Failed
       ? createExecutableWrappers.errors
       : []),
@@ -80,11 +98,23 @@ export function decodeSkillScaffoldRequest(
     };
     errors.push(fieldError(fieldErrorArgs));
   }
+  if (
+    skillOwner.status === DecodeStatus.Ok &&
+    !SKILL_OWNER_RE.test(skillOwner.value)
+  ) {
+    const fieldErrorArgs: FieldErrorArgs = {
+      path: `${ROOT}.${SkillScaffoldField.SkillOwner}`,
+      issue: FieldIssue.ExpectedOneOf,
+      detail: fieldDetailText('common|dev-core|sre|web-dev'),
+    };
+    errors.push(fieldError(fieldErrorArgs));
+  }
   if (errors.length > 0) {
     return decodeErr(errors);
   }
   const request: SkillScaffoldRequest = {
     skillSlug: (skillSlug as { value: string }).value,
+    skillOwner: (skillOwner as { value: SkillOwner }).value,
     createExecutableWrappers: (createExecutableWrappers as { value: boolean })
       .value,
   };
@@ -94,14 +124,21 @@ export function decodeSkillScaffoldRequest(
 const skillSlugPatternArgs: PatternStringJsonSchemaArgs = {
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
 };
+const skillOwnerPatternArgs: PatternStringJsonSchemaArgs = {
+  pattern: '^(?:common|dev-core|sre|web-dev)$',
+};
 const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [
     SkillScaffoldField.SkillSlug,
+    SkillScaffoldField.SkillOwner,
     SkillScaffoldField.CreateExecutableWrappers,
   ],
   properties: {
     [SkillScaffoldField.SkillSlug]:
       patternStringJsonSchema(skillSlugPatternArgs),
+    [SkillScaffoldField.SkillOwner]: patternStringJsonSchema(
+      skillOwnerPatternArgs,
+    ),
     [SkillScaffoldField.CreateExecutableWrappers]: booleanJsonSchema(),
   },
 };
