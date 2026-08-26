@@ -99,23 +99,53 @@ type IndependentWriterInput = {
   readonly writeClaim: string;
 };
 
-let fixture: GitFixture | undefined;
+enum FixtureLifecycleKind {
+  Empty = 'empty',
+  Active = 'active',
+}
+
+type FixtureLifecycle =
+  | { readonly kind: FixtureLifecycleKind.Empty }
+  | {
+      readonly kind: FixtureLifecycleKind.Active;
+      readonly fixture: GitFixture;
+    };
+
+let fixtureLifecycle: FixtureLifecycle = { kind: FixtureLifecycleKind.Empty };
+const fixtures: GitFixture[] = [];
 const workspaces: ModuleWorktreeHandle[] = [];
 
 afterEach(() => {
-  if (fixture) {
-    for (const workspace of workspaces.splice(0).reverse()) {
-      const request: CleanupModuleWorktreeRequest = { workspace };
-      try {
-        cleanupModuleWorktree(request);
-      } catch {
-        // A rejection case may intentionally leave an invalid worktree.
-      }
+  for (const workspace of workspaces.splice(0).reverse()) {
+    const request: CleanupModuleWorktreeRequest = { workspace };
+    try {
+      cleanupModuleWorktree(request);
+    } catch {
+      // A rejection case may intentionally leave an invalid worktree.
     }
-    disposeGitFixture(fixture);
-    fixture = undefined;
   }
+  for (const trackedFixture of fixtures.splice(0).reverse()) {
+    disposeGitFixture(trackedFixture);
+  }
+  fixtureLifecycle = { kind: FixtureLifecycleKind.Empty };
 });
+
+function createTrackedFixture(): GitFixture {
+  const trackedFixture = createGitFixture();
+  fixtures.push(trackedFixture);
+  fixtureLifecycle = {
+    kind: FixtureLifecycleKind.Active,
+    fixture: trackedFixture,
+  };
+  return trackedFixture;
+}
+
+function currentFixture(): GitFixture {
+  if (fixtureLifecycle.kind === FixtureLifecycleKind.Empty) {
+    throw new Error('Fixture lifecycle is empty.');
+  }
+  return fixtureLifecycle.fixture;
+}
 
 function baseline(input: WriteNodeInput): ModuleDeliveryBaseline {
   return input.dependencies.length === 0
@@ -214,7 +244,7 @@ function acceptedPlan(input: PlanInput): AcceptedModuleDeliveryPlan {
 function preparedIntegration(
   accepted: AcceptedModuleDeliveryPlan,
 ): ModuleIntegrationState {
-  if (!fixture) throw new Error('Fixture is required.');
+  const fixture = currentFixture();
   const request: PrepareModuleIntegrationRequest = {
     repositoryRoot: fixture.sourceRoot,
     workspaceRoot: fixture.workspaceRoot,
@@ -280,7 +310,7 @@ function independentWriter(
 
 describe('module delivery wave integration', () => {
   test('integrates a complete wave in accepted topology order without touching source', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const alphaClaim = `${CORE_ROOT}/alpha/**`;
     const betaClaim = `${CORE_ROOT}/beta/**`;
     const alphaInput: IndependentWriterInput = {
@@ -367,7 +397,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('advances a read-only wave without creating a commit', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const readInput: ReadOnlyNodeInput = {
       taskId: 'core-audit',
       sourceCommit: fixture.baselineCommit,
@@ -393,7 +423,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('binds a dependent writer to the exact integrated frontier', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const providerClaim = `${CORE_ROOT}/provider/**`;
     const consumerClaim = `${CORE_ROOT}/consumer/**`;
     const providerInput: IndependentWriterInput = {
@@ -468,7 +498,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects incomplete and forged handoff sets before mutation', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const claim = `${CORE_ROOT}/feature/**`;
     const writerInput: IndependentWriterInput = {
       taskId: 'core-provider',
@@ -536,7 +566,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects worker filter controls without executing the configured canary', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const marker = join(fixture.root, 'filter-canary');
     const sourceGit = fixtureGit(fixture);
     sourceGit(['config', 'filter.fail.smudge', `touch ${marker}; cat`]);
@@ -608,7 +638,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects source byte, ref, and config drift after preparation', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const readInput: ReadOnlyNodeInput = {
       taskId: 'core-audit',
       sourceCommit: fixture.baselineCommit,
@@ -641,7 +671,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects drift in a custom ref outside the private integration namespace', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const readInput: ReadOnlyNodeInput = {
       taskId: 'core-audit',
       sourceCommit: fixture.baselineCommit,
@@ -670,7 +700,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects a custom symbolic ref retargeted between equal commits', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const sourceGit = fixtureGit(fixture);
     sourceGit(['branch', 'symbolic-a', 'HEAD']);
     sourceGit(['branch', 'symbolic-b', 'HEAD']);
@@ -710,7 +740,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects source mode drift at a metadata-only checkpoint', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const readInput: ReadOnlyNodeInput = {
       taskId: 'core-audit',
       sourceCommit: fixture.baselineCommit,
@@ -735,7 +765,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects an intermediate symlink before preparing integration', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const modulePath = join(fixture.sourceRoot, 'module');
     const realModulePath = join(fixture.sourceRoot, 'module-real');
     renameSync(modulePath, realModulePath);
@@ -755,7 +785,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('rejects an unauthorized integration-worktree commit', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const readInput: ReadOnlyNodeInput = {
       taskId: 'core-audit',
       sourceCommit: fixture.baselineCommit,
@@ -787,7 +817,7 @@ describe('module delivery wave integration', () => {
   });
 
   test('cleans the latest session through the original stable handle exactly once', () => {
-    fixture = createGitFixture();
+    const fixture = createTrackedFixture();
     const readInput: ReadOnlyNodeInput = {
       taskId: 'core-audit',
       sourceCommit: fixture.baselineCommit,
