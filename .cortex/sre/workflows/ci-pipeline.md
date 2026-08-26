@@ -22,7 +22,9 @@ See [issues.md](../../workflows/issues.md), [agent-statistics.md](../../workflow
 - **[`pr-head-stabilization.yml`](../../../.github/workflows/pr-head-stabilization.yml)**
   - Trigger: PR head replacement through `pull_request_target`
   - Purpose: Cancel active obsolete-head validation associated with that PR
-  - Permissions: `actions: write`, PR read, contents read; never checks out PR code
+  - Permissions: `actions: write`, PR write, contents read. PR write maintains
+    the trusted exact-head boundary comment. The workflow never checks out PR
+    code.
   - GitHub PAT: No
 - **[`repository-policy.yml`](../../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes

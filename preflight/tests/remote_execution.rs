@@ -167,6 +167,8 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         "types: [edited, opened, reopened, synchronize]",
         "actions: write",
         "pull-requests: write",
+        "group: pr-head-boundary-${{ github.event.pull_request.number }}",
+        "cancel-in-progress: false",
         "<!-- nook-head-transition:",
         "Skipping obsolete head-boundary event.",
         "github.rest.issues.updateComment",
@@ -197,9 +199,13 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
             "replacement-head cancellation contract missing: {required}"
         );
     }
+    let cancellation_job = replacement_head
+        .split_once("\n  obsolete-heads:\n")
+        .map(|(_, job)| job)
+        .context("replacement-head workflow must keep the cancellation job")?;
     assert!(
-        !replacement_head.contains("concurrency:"),
-        "a delayed synchronize run must not share a group that can cancel current-head validation"
+        !cancellation_job.contains("concurrency:"),
+        "obsolete-run cancellation must not share the serialized marker group"
     );
     assert!(
         !replacement_head.contains("actions/checkout"),

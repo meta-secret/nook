@@ -12,8 +12,11 @@ permissions:
   pull-requests: write
 
 jobs:
-  obsolete-heads:
-    name: Cancel obsolete validation heads
+  head-boundary:
+    name: Record exact PR head boundary
+    concurrency:
+      group: pr-head-boundary-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
     steps:
@@ -71,8 +74,13 @@ jobs:
               });
             }
 
+  obsolete-heads:
+    name: Cancel obsolete validation heads
+    if: github.event.action == 'synchronize' || github.event.action == 'edited'
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 2
+    steps:
       - name: Cancel active validation for replaced heads
-        if: github.event.action == 'synchronize' || github.event.action == 'edited'
         uses: actions/github-script@v9
         with:
           script: |
