@@ -97,12 +97,14 @@ test('accepts clean documents and valid centralized knowledge-graph.md', () => {
   expect(audit([INDEX_DOC, DOCUMENT_A, DOCUMENT_B])).toEqual([]);
 });
 
-test('accepts root routing plus complete team-owned knowledge graphs', () => {
+test('requires complete section anchors in team-owned knowledge graphs', () => {
   const rootGraphArgs: MakeDocumentArgs = {
     path: '.cortex/knowledge-graph.md',
     content: `# Cortex Knowledge Graph
 
 - [Common](a.md)
+  - [Overview](a.md#overview)
+  - [Details](a.md#details)
 - [Development core](dev-core/knowledge-graph.md)
 - [SRE](sre/knowledge-graph.md)
 - [Web development](web-dev/knowledge-graph.md)
@@ -114,6 +116,7 @@ test('accepts root routing plus complete team-owned knowledge graphs', () => {
     content: `# Development Core Knowledge Graph
 
 - [Core policy](policy.md)
+  - [Boundary](policy.md#boundary)
 `,
   };
   const devGraph = makeDocument(devGraphArgs);
@@ -129,13 +132,36 @@ test('accepts root routing plus complete team-owned knowledge graphs', () => {
   const webGraph = makeDocument(webGraphArgs);
   const corePolicyArgs: MakeDocumentArgs = {
     path: '.cortex/dev-core/policy.md',
-    content: '# Core Policy\n',
+    content: '# Core Policy\n\n## Boundary\n\nPolicy text.\n',
   };
   const corePolicy = makeDocument(corePolicyArgs);
 
   expect(
     audit([rootGraph, devGraph, sreGraph, webGraph, DOCUMENT_A, corePolicy]),
   ).toEqual([]);
+
+  const incompleteGraphArgs: MakeDocumentArgs = {
+    ...devGraphArgs,
+    content: devGraphArgs.content.replace(
+      '  - [Boundary](policy.md#boundary)\n',
+      '',
+    ),
+  };
+  const incompleteFindings = audit([
+    rootGraph,
+    makeDocument(incompleteGraphArgs),
+    sreGraph,
+    webGraph,
+    DOCUMENT_A,
+    corePolicy,
+  ]);
+  expect(incompleteFindings).toContainEqual({
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: '.cortex/dev-core/knowledge-graph.md',
+    line: 1,
+    message:
+      'Knowledge graph is missing section #boundary for .cortex/dev-core/policy.md',
+  });
 });
 
 test('rejects root navigation that bypasses a team graph', () => {

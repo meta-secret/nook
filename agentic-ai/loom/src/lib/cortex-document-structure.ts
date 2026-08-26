@@ -48,7 +48,7 @@ export type AuditCortexDocumentStructureArgs = {
 type ParsedDocument = CortexDocumentSource & {
   readonly root: Root;
   readonly fragments: ReadonlySet<string>;
-  readonly headingSlugs: readonly string[];
+  readonly sectionSlugs: readonly string[];
 };
 
 type AddFindingArgs = {
@@ -298,16 +298,16 @@ function parseDocument(document: CortexDocumentSource): ParsedDocument {
   const root = fromMarkdown(document.content);
   const slugger = new GithubSlugger();
   const fragments = new Set<string>();
-  const headingSlugs: string[] = [];
+  const sectionSlugs: string[] = [];
   for (const node of root.children) {
     if (node.type === 'heading') {
       const headingText = nodeText(node);
       const slug = slugger.slug(headingText);
       fragments.add(slug);
-      headingSlugs.push(slug);
+      if (node.depth > 1) sectionSlugs.push(slug);
     }
   }
-  return { ...document, root, fragments, headingSlugs };
+  return { ...document, root, fragments, sectionSlugs };
 }
 
 function validateDocument(args: ValidateDocumentArgs): void {
@@ -360,6 +360,7 @@ function validateIndex(args: ValidateIndexArgs): void {
   }
 
   const allLinks = collectAllLinks(args.indexDocument.root);
+  const indexedFragments = new Map<string, Set<string>>();
   for (const link of allLinks) {
     const resolveArgs: ResolveIndexLinkArgs = {
       url: link.url,
@@ -389,8 +390,12 @@ function validateIndex(args: ValidateIndexArgs): void {
     }
 
     args.indexedFiles.add(resolved.targetRelativePath);
+    const fragments =
+      indexedFragments.get(resolved.targetRelativePath) ?? new Set();
+    indexedFragments.set(resolved.targetRelativePath, fragments);
 
     if (resolved.fragment !== false) {
+      fragments.add(resolved.fragment);
       if (!targetDoc.fragments.has(resolved.fragment)) {
         const findingArgs: AddFindingArgs = {
           findings: args.findings,
@@ -401,6 +406,26 @@ function validateIndex(args: ValidateIndexArgs): void {
         };
         addFinding(findingArgs);
       }
+    }
+  }
+
+  const indexPath = normalizeCortexRelativePath(
+    args.indexDocument.relativePath,
+  );
+  for (const [targetPath, linkedFragments] of indexedFragments) {
+    if (owningKnowledgeGraphPath(targetPath) !== indexPath) continue;
+    const targetDocument = args.catalog.get(targetPath);
+    if (targetDocument === undefined) continue;
+    for (const sectionSlug of targetDocument.sectionSlugs) {
+      if (linkedFragments.has(sectionSlug)) continue;
+      const findingArgs: AddFindingArgs = {
+        findings: args.findings,
+        code: CortexStructureFindingCode.MissingFromIndex,
+        file: indexPath,
+        line: 1,
+        message: `Knowledge graph is missing section #${sectionSlug} for ${targetPath}`,
+      };
+      addFinding(findingArgs);
     }
   }
 }

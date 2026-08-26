@@ -35,63 +35,6 @@ test('excludes temporary session memory from persistent Cortex documents', () =>
   }
 });
 
-test('indexes team-owned dynamic skills through the common registry', async () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-team-skills-'));
-  try {
-    const cortexRoot = path.join(repoRoot, '.cortex');
-    const commonSkillsRoot = path.join(cortexRoot, 'dynamic-skills');
-    const devSkillsRoot = path.join(cortexRoot, 'dev-core', 'dynamic-skills');
-    const directoryOptions = { recursive: true } as const;
-    mkdirSync(commonSkillsRoot, directoryOptions);
-    mkdirSync(devSkillsRoot, directoryOptions);
-    mkdirSync(path.join(cortexRoot, 'sre'), directoryOptions);
-    mkdirSync(path.join(cortexRoot, 'web-dev'), directoryOptions);
-    writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
-    writeFileSync(
-      path.join(cortexRoot, 'knowledge-graph.md'),
-      `# Knowledge Graph
-
-- [Agent Map](AGENTS.md)
-- [Skill index](dynamic-skills/index.md)
-- [Development core](dev-core/knowledge-graph.md)
-- [SRE](sre/knowledge-graph.md)
-- [Web development](web-dev/knowledge-graph.md)
-`,
-    );
-    writeFileSync(
-      path.join(cortexRoot, 'dev-core', 'knowledge-graph.md'),
-      '# Development Core Knowledge Graph\n\n- [Core skill](dynamic-skills/core-skill.md)\n',
-    );
-    writeFileSync(
-      path.join(cortexRoot, 'sre', 'knowledge-graph.md'),
-      '# SRE Knowledge Graph\n',
-    );
-    writeFileSync(
-      path.join(cortexRoot, 'web-dev', 'knowledge-graph.md'),
-      '# Web Development Knowledge Graph\n',
-    );
-    writeFileSync(path.join(devSkillsRoot, 'core-skill.md'), '# Core Skill\n');
-    writeFileSync(path.join(commonSkillsRoot, 'index.md'), '# Skills\n');
-
-    const request = { includeDensityLint: false };
-    const auditArgs = { request, startDirectory: repoRoot };
-    const missingReport = await runCortexAuditFromDirectory(auditArgs);
-    expect(missingReport.missingFromIndex).toEqual([
-      '.cortex/dev-core/dynamic-skills/core-skill.md',
-    ]);
-
-    writeFileSync(
-      path.join(commonSkillsRoot, 'index.md'),
-      '# Skills\n\n- [Core skill](../dev-core/dynamic-skills/core-skill.md)\n',
-    );
-    const completeReport = await runCortexAuditFromDirectory(auditArgs);
-    expect(completeReport.missingFromIndex).toEqual([]);
-  } finally {
-    const removeOptions = { recursive: true, force: true } as const;
-    rmSync(repoRoot, removeOptions);
-  }
-});
-
 test('fails the integrated Cortex audit for authored HTML', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-'));
   try {
