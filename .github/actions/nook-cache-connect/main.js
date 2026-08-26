@@ -3,15 +3,11 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const accessKeyInput = "INPUT_SCCACHE-ACCESS-KEY";
-const secretKeyInput = "INPUT_SCCACHE-SECRET-KEY";
-const endpointInput = "INPUT_SCCACHE-ENDPOINT";
-const bucketInput = "INPUT_SCCACHE-BUCKET";
-
-const accessKey = process.env[accessKeyInput] || "";
-const secretKey = process.env[secretKeyInput] || "";
-const endpoint = process.env[endpointInput] || "sccache.dev.nokey.sh";
-const bucket = process.env[bucketInput] || "nook-sccache";
+const accessKey = process.env["INPUT_SCCACHE-ACCESS-KEY"] || "";
+const secretKey = process.env["INPUT_SCCACHE-SECRET-KEY"] || "";
+const endpoint =
+  process.env["INPUT_SCCACHE-ENDPOINT"] || "sccache.dev.nokey.sh";
+const bucket = process.env["INPUT_SCCACHE-BUCKET"] || "nook-sccache";
 const credentialsPresent = Boolean(accessKey && secretKey);
 
 const githubEnvironmentPath = process.env.GITHUB_ENV;
@@ -69,8 +65,8 @@ function writeCredential(filename, value) {
 
 const accessKeyFile = writeCredential("sccache-access-key", accessKey);
 const secretKeyFile = writeCredential("sccache-secret-key", secretKey);
-delete process.env[accessKeyInput];
-delete process.env[secretKeyInput];
+delete process.env["INPUT_SCCACHE-ACCESS-KEY"];
+delete process.env["INPUT_SCCACHE-SECRET-KEY"];
 
 const endpointUrl = endpoint.startsWith("https://")
   ? endpoint
