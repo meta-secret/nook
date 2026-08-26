@@ -123,6 +123,29 @@ test("requestExactHeadReview reports an exact-head Codex approval reaction as se
   assert.equal(createCalls.count, 0);
 });
 
+test("requestExactHeadReview does not treat an eye reaction as settled", async () => {
+  const createCalls = { count: 0 };
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+    ],
+    createCalls,
+    reactions: [
+      { content: "eyes", user: { login: "chatgpt-codex-connector[bot]" } },
+    ],
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, false);
+  assert.equal(result.settled, false);
+  assert.equal(createCalls.count, 0);
+});
+
 test("requestExactHeadReview switches to Cursor after a Codex usage-limit comment", async () => {
   const createdBodies: string[] = [];
   const octokit = mockOctokit({
