@@ -128,8 +128,16 @@ export function validateAgentStatsYaml(
           errors.push(`source_pr.${key} must be a full SHA`);
         }
       }
-      const headSha = stringProperty({ record: sourcePr, key: 'head_sha' });
-      const mergeSha = stringProperty({ record: sourcePr, key: 'merge_sha' });
+      const headShaRequest: PropertyRequest = {
+        record: sourcePr,
+        key: 'head_sha',
+      };
+      const mergeShaRequest: PropertyRequest = {
+        record: sourcePr,
+        key: 'merge_sha',
+      };
+      const headSha = stringProperty(headShaRequest);
+      const mergeSha = stringProperty(mergeShaRequest);
       if (headSha.length > 0 && headSha === mergeSha) {
         errors.push('source_pr.head_sha must differ from source_pr.merge_sha');
       }
@@ -436,28 +444,49 @@ export function validateAgentStatsYaml(
     }
   }
   if (isSchemaV4) {
-    validateEvidenceEntries({ parsed, sourcePr, errors });
-    validateDerivedDeliveryEvidence({ parsed, summary, errors });
+    const evidenceRequest: ValidateEvidenceEntriesArgs = {
+      parsed,
+      sourcePr,
+      errors,
+    };
+    const derivedRequest: ValidateDerivedDeliveryEvidenceArgs = {
+      parsed,
+      summary,
+      errors,
+    };
+    validateEvidenceEntries(evidenceRequest);
+    validateDerivedDeliveryEvidence(derivedRequest);
   } else {
-    validateLegacyRetriggerCount({ parsed, summary, errors });
+    const legacyRequest: ValidateLegacyRetriggerCountArgs = {
+      parsed,
+      summary,
+      errors,
+    };
+    validateLegacyRetriggerCount(legacyRequest);
   }
 
   return { ok: errors.length === 0, errors };
 }
 
-function validateLegacyRetriggerCount(args: {
+type ValidateLegacyRetriggerCountArgs = {
   readonly parsed: UntrustedYamlMap;
   readonly summary: UntrustedYamlMap;
   readonly errors: string[];
-}): void {
-  const retriggers = listProperty({
+};
+
+function validateLegacyRetriggerCount(
+  args: ValidateLegacyRetriggerCountArgs,
+): void {
+  const retriggerRequest: PropertyRequest = {
     record: args.parsed,
     key: 'pr_retriggers',
-  });
-  const actual = numberProperty({
+  };
+  const countRequest: PropertyRequest = {
     record: args.summary,
     key: 'pr_retrigger_count',
-  });
+  };
+  const retriggers = listProperty(retriggerRequest);
+  const actual = numberProperty(countRequest);
   if (actual !== retriggers.length) {
     args.errors.push(
       'summary.pr_retrigger_count must match pr_retriggers length',

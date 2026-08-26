@@ -52,12 +52,13 @@ export function validateHeadActionTotals(
       supersededAt,
     };
     const totals = actionTotalsForHead(totalsRequest);
-    validateHeadObservationWindow({
+    const windowRequest: ValidateHeadObservationWindowRequest = {
       errors: request.errors,
       headIndex: index,
       head: node,
       runs,
-    });
+    };
+    validateHeadObservationWindow(windowRequest);
     const runCountRequest: UntrustedYamlPropertyArgs = {
       record: node,
       key: 'action_run_count',
@@ -146,11 +147,7 @@ function validateValidationCycles(
       ? cyclesProperty.value
       : [];
   const expectedAttempts = new Set(
-    request.runs
-      .filter(
-        (run) => stringProperty({ record: run, key: 'workflow' }) === 'PR',
-      )
-      .map((run) => attemptKey(run)),
+    request.runs.filter(isPrWorkflow).map(attemptKey),
   );
   const observedAttempts = new Set<string>();
   for (const [index, node] of cycles.entries()) {
@@ -278,33 +275,73 @@ function validateValidationCycles(
 }
 
 function attemptKey(run: UntrustedYamlMap): string {
-  const runId = numberProperty({ record: run, key: 'run_id' });
-  const attempt = numberProperty({ record: run, key: 'run_attempt' });
+  const runIdRequest: UntrustedYamlPropertyArgs = {
+    record: run,
+    key: 'run_id',
+  };
+  const attemptRequest: UntrustedYamlPropertyArgs = {
+    record: run,
+    key: 'run_attempt',
+  };
+  const runId = numberProperty(runIdRequest);
+  const attempt = numberProperty(attemptRequest);
   return `${runId}:${attempt}`;
 }
 
-function validateHeadObservationWindow(request: {
+function isPrWorkflow(run: UntrustedYamlMap): boolean {
+  const request: UntrustedYamlPropertyArgs = { record: run, key: 'workflow' };
+  return stringProperty(request) === 'PR';
+}
+
+type ValidateHeadObservationWindowRequest = {
   readonly errors: string[];
   readonly head: UntrustedYamlMap;
   readonly headIndex: number;
   readonly runs: readonly UntrustedYamlMap[];
-}): void {
-  const headSha = stringProperty({ record: request.head, key: 'head_sha' });
-  const headRuns = request.runs.filter(
-    (run) => stringProperty({ record: run, key: 'head_sha' }) === headSha,
-  );
-  const timestamps = headRuns.flatMap((run) => [
-    stringProperty({ record: run, key: 'started_at' }),
-    stringProperty({ record: run, key: 'finished_at' }),
-  ]);
-  const ordered = timestamps.sort(
-    (left, right) => Date.parse(left) - Date.parse(right),
-  );
+};
+
+function validateHeadObservationWindow(
+  request: ValidateHeadObservationWindowRequest,
+): void {
+  const headRequest: UntrustedYamlPropertyArgs = {
+    record: request.head,
+    key: 'head_sha',
+  };
+  const headSha = stringProperty(headRequest);
+  let firstObservedAt = '';
+  let lastObservedAt = '';
+  for (const run of request.runs) {
+    const runHeadRequest: UntrustedYamlPropertyArgs = {
+      record: run,
+      key: 'head_sha',
+    };
+    if (stringProperty(runHeadRequest) !== headSha) continue;
+    for (const key of ['started_at', 'finished_at'] as const) {
+      const timestampRequest: UntrustedYamlPropertyArgs = { record: run, key };
+      const timestamp = stringProperty(timestampRequest);
+      if (
+        !firstObservedAt ||
+        Date.parse(timestamp) < Date.parse(firstObservedAt)
+      ) {
+        firstObservedAt = timestamp;
+      }
+      if (
+        !lastObservedAt ||
+        Date.parse(timestamp) > Date.parse(lastObservedAt)
+      ) {
+        lastObservedAt = timestamp;
+      }
+    }
+  }
   for (const [key, expected] of [
-    ['first_observed_at', ordered.at(0) ?? ''],
-    ['last_observed_at', ordered.at(-1) ?? ''],
+    ['first_observed_at', firstObservedAt],
+    ['last_observed_at', lastObservedAt],
   ] as const) {
-    const actual = stringProperty({ record: request.head, key });
+    const propertyRequest: UntrustedYamlPropertyArgs = {
+      record: request.head,
+      key,
+    };
+    const actual = stringProperty(propertyRequest);
     if (actual !== expected) {
       request.errors.push(
         `delivery_heads[${request.headIndex}].${key} must match github_actions_runs (${expected})`,
