@@ -123,6 +123,31 @@ test('visible structure resets prose density', () => {
   }
 });
 
+test('nested H4 headings reset density without ending the owning H3 scan', () => {
+  const h3 = headingAtDepth(3);
+  const h4 = headingAtDepth(4);
+  const blocks = [
+    h3(1)('Explanation'),
+    paragraph(3),
+    paragraph(5),
+    paragraph(7),
+    h4(9)('Nested detail'),
+    paragraph(11),
+    paragraph(13),
+    paragraph(15),
+    paragraph(17),
+  ];
+  expect(findingsFor(blocks)).toEqual([
+    {
+      code: CortexArticleFindingCode.DenseArticle,
+      file: '.cortex/article.md',
+      line: 17,
+      message:
+        'Article #Explanation has more than 3 consecutive prose blocks without visible structure.',
+    },
+  ]);
+});
+
 test('requires an explicit visible ordered-list semantic state', () => {
   const blocks = [
     headingAt(4)('Recovery procedure'),

@@ -203,7 +203,11 @@ function isVisibleArticleBlock(block: CortexArticleSemanticBlock): boolean {
 function auditConsecutiveParagraphs(request: AuditArticleRequest): void {
   let consecutive = 0;
   for (const block of request.sectionBlocks) {
-    if (block.kind === CortexArticleSemanticKind.Heading) break;
+    if (block.kind === CortexArticleSemanticKind.Heading) {
+      if (block.depth <= 3) break;
+      consecutive = 0;
+      continue;
+    }
     if (block.kind === CortexArticleSemanticKind.Transparent) continue;
     if (block.kind === CortexArticleSemanticKind.DensitySeparator) {
       consecutive = 0;
