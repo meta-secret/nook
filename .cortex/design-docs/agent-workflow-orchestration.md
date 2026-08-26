@@ -185,13 +185,23 @@ An opt-in automated integration test remains future work.
 A local Loom run writes an event-sourced processing hierarchy under
 `workflow/processing/`.
 
-Ordinary collaboration-tool delegation uses the same processing hierarchy
-through `task loom:agent-delegation:record REQUEST=<request.json>`. The child
-produces the bounded action and semantic-result request. The parent finalizes
-it through Loom, consumes the returned hashed view, and records its own
-higher-level aggregation attempt. This repeats until the root attempt and the
-delivery owner's final report. A compiled static graph is not required for the
-per-attempt event and view contract.
+Ordinary collaboration-tool delegation uses the same processing hierarchy.
+The parent first declares the bounded source-bound hierarchy through
+`task loom:agent-delegation:start PLAN=path/to/plan.json`. Before dispatch, the
+parent authorizes each exact planned child through
+`task loom:agent-delegation:admit REQUEST=path/to/admission.json`. Depth-three
+admission additionally requires completed replay-verified depth-two evidence.
+After each child returns, the parent submits its bounded action and semantic
+result:
+
+```sh
+task loom:agent-delegation:record REQUEST=path/to/request.json
+```
+
+Record requires the prior admission, persists verified projections, and
+returns their hashes. A compiled static graph is not required for the
+per-attempt event and view contract. Whole-run aggregation and closure remain
+a separate delivery slice.
 
 The run-level `events.jsonl` journal is the scheduling authority for that local
 run and records:
