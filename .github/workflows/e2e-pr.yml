@@ -8,6 +8,7 @@
 #   suite     — e2e-pr, e2e, sync-live, or all
 
 name: E2E (PR)
+run-name: E2E PR #${{ inputs.pr_number }} · ${{ inputs.suite }}
 
 on:
   workflow_dispatch:
@@ -71,6 +72,25 @@ jobs:
             core.setOutput('ref', pr.head.sha)
             core.setOutput('branch', pr.head.ref)
             core.info(`PR #${prNumber}: ${pr.head.ref} @ ${pr.head.sha}`)
+
+      - name: Materialize PR source metadata
+        env:
+          SOURCE_PR_NUMBER: ${{ inputs.pr_number }}
+          SOURCE_HEAD_SHA: ${{ steps.pr.outputs.ref }}
+        run: |
+          jq -n \
+            --argjson source_pr_number "$SOURCE_PR_NUMBER" \
+            --arg source_head_sha "$SOURCE_HEAD_SHA" \
+            '{source_pr_number: $source_pr_number, source_head_sha: $source_head_sha}' \
+            > "${{ runner.temp }}/e2e-pr-source.json"
+
+      - name: Publish PR source metadata
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-pr-source-${{ inputs.pr_number }}-${{ steps.pr.outputs.ref }}
+          path: ${{ runner.temp }}/e2e-pr-source.json
+          if-no-files-found: error
+          retention-days: 30
 
       - name: Checkout PR head
         uses: actions/checkout@v7
