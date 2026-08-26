@@ -195,19 +195,24 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
-    expect(report.auditOk).toBe(false);
-    expect(report.structureFindings).toEqual([
-      {
-        code: CortexStructureFindingCode.ProhibitedHtml,
-        file: '.cortex/dynamic-skills/bad.md',
-        line: 3,
-        message:
-          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
-      },
-    ]);
-    expect(report.orphanIndexRows).toEqual([]);
-    expect(report.missingExecutableSkills).toEqual([]);
-    expect(report.brokenLinks).toEqual([]);
+    expect(report).toEqual({
+      brokenLinks: [],
+      missingFromIndex: [],
+      orphanIndexRows: [],
+      missingExecutableSkills: [],
+      densityFindings: [],
+      structureFindings: [
+        {
+          code: CortexStructureFindingCode.ProhibitedHtml,
+          file: '.cortex/dynamic-skills/bad.md',
+          line: 3,
+          message:
+            'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
+        },
+      ],
+      articleStructureFindings: [],
+      auditOk: false,
+    });
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);
