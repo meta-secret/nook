@@ -719,7 +719,9 @@
     await vault.startSentinelGenesis(args)
     return true
   }
-
+  function finishPendingCreation(): void {
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+  }
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
@@ -728,10 +730,10 @@
       }
       return ''
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    return sentinelGenesisActions.createPublicKeyAnnouncement(vault)
+    return sentinelGenesisActions
+      .createPublicKeyAnnouncement(vault)
+      .finally(finishPendingCreation)
   }
-
   async function handleCreateSentinelParticipantResponse(
     requestPayload: string,
   ): Promise<string> {
@@ -745,15 +747,13 @@
       }
       return ''
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     const createParticipantResponseArgs: Parameters<
       typeof sentinelGenesisActions.createParticipantResponse
     >[0] = { state: vault, requestPayload }
-    return sentinelGenesisActions.createParticipantResponse(
-      createParticipantResponseArgs,
-    )
+    return sentinelGenesisActions
+      .createParticipantResponse(createParticipantResponseArgs)
+      .finally(finishPendingCreation)
   }
-
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
@@ -819,16 +819,16 @@
     )
       return
     const pending = pendingVaultCreationState.request
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    if (pending.kind === PendingVaultCreationKind.Simple) {
-      void vault.createLocalVaultWithDeviceKeys(pending.label)
-      return
-    }
     if (
       pending.kind === PendingVaultCreationKind.SentinelParticipantKey ||
       pending.kind === PendingVaultCreationKind.SentinelParticipantResponse
     )
       return
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    if (pending.kind === PendingVaultCreationKind.Simple) {
+      void vault.createLocalVaultWithDeviceKeys(pending.label)
+      return
+    }
     if (pending.kind === PendingVaultCreationKind.SentinelOnboarding) {
       void handleAcceptSentinelOnboarding(pending.packageJson)
       return
@@ -928,6 +928,9 @@
   extensionSetupState={extensionSetupStateValue}
   {appVersion}
   {extensionConnectRequestState}
+  preserveAccessGate={pendingVaultCreationState.kind ===
+    VaultCreationQueueKind.WaitingForDevice ||
+    Boolean(sentinelInvitationRequest.trim())}
   accessGateProps={{
     vault,
     showAccessGate:

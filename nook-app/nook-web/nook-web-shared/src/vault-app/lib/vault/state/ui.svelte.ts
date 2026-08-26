@@ -23,8 +23,9 @@ export enum AdminAccordionSection {
 export class VaultUiState {
   settingsOpen = $state(false);
   settingsSection = $state<SettingsSection>(SettingsSection.Storage);
-  /** Survives the authenticated-to-login shell remount during identity switch. */
   devicesAccessIdentityProtectionOpen = $state(false);
+  /** Survives panel cancellation and navigation until the identity authenticates. */
+  devicesAccessIdentityTransitionPending = $state(false);
   settingsAccordionSection = $state<SettingsAccordionSection>(
     SettingsAccordionSection.Devices,
   );

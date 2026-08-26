@@ -106,6 +106,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     }
     identityCreationOpen = false
     vault.devicesAccessIdentityProtectionOpen = false
+    vault.devicesAccessIdentityTransitionPending = false
     if (!dashboardMounted) return
     const providerLoadOptions: Parameters<typeof vault.loadProviders>[0] = {
       ensureLocalRow: true,
@@ -298,6 +299,7 @@ FORM: A quiet master-detail layout makes identity ownership primary while a comp
     // Establish the cross-shell transition before clearing authentication.
     // The authenticated dashboard is unmounted as soon as the vault session
     // closes, while the login-shell dashboard reuses this shared vault state.
+    vault.devicesAccessIdentityTransitionPending = true
     vault.devicesAccessIdentityProtectionOpen = true
     vault.deviceProtectionStatus = DeviceProtectionStatus.Loading
     clearPriorIdentitySession()

@@ -7,6 +7,7 @@
     "devices-access-passkey-inventory.spec.ts",
     "devices-access-identity-cancellation.spec.ts",
     "devices-access.spec.ts",
+    "pre-vault-identity-access.spec.ts",
     "local-vault-apple-safari-imports.spec.ts",
     "local-vault-dashlane-import.spec.ts",
     "local-vault-imports.spec.ts",

@@ -13,6 +13,7 @@
     configured_vault_application,
     type StartSentinelGenesisArgs,
   } from '$app-wasm'
+  import { onDestroy } from 'svelte'
   import LoginGate from '$lib/components/LoginGate.svelte'
   import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
   import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
@@ -80,11 +81,26 @@
       route.route === WorkspaceRoute.DevicesAccess
     )
   }
+
+  function sentinelInvitationOpen(): boolean {
+    return sentinelInvitationRequest.trim().length > 0
+  }
+
+  function identityTransitionPending(): boolean {
+    return vault.devicesAccessIdentityTransitionPending
+  }
+
+  onDestroy(() => {
+    if (vault.isAuthenticated) {
+      vault.devicesAccessIdentityProtectionOpen = false
+      vault.devicesAccessIdentityTransitionPending = false
+    }
+  })
 </script>
 
 <div class="space-y-6">
-  {#if showAccessGate || devicesAccessRouteOpen()}
-    {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen()}
+  {#if showAccessGate || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
+    {#if vault.providersLoaded || existingVaultNeedsDeviceUnlock || devicesAccessRouteOpen() || sentinelInvitationOpen() || identityTransitionPending()}
       <LoginGate
         {vault}
         appKind={APP_KIND}
