@@ -24,7 +24,11 @@ import {
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
 
 const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
-const PR_WORKFLOW = 'PR';
+const VALIDATION_WORKFLOWS = new Set([
+  'PR',
+  'Rust ecosystem checks',
+  'Web research',
+]);
 const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
   'OWNER',
   'MEMBER',
@@ -64,6 +68,7 @@ export type BuildActionsEvidenceRequest = {
   readonly pages: UntrustedYamlNode;
   readonly prNumber: number;
   readonly finalHeadSha: string;
+  readonly mergedAt: string;
 };
 
 export type BuildReviewEvidenceRequest = {
@@ -158,6 +163,7 @@ export function collectAgentStatsGitHubEvidence(
     pages: expandedActionPages,
     prNumber: request.prNumber,
     finalHeadSha: request.finalHeadSha,
+    mergedAt: request.mergedAt,
   };
   const actions = buildActionsEvidence(actionsRequest);
 
@@ -176,7 +182,19 @@ export function collectAgentStatsGitHubEvidence(
     endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/comments`,
     fields: ['per_page=100'],
   };
-  const knownHeadShas = actions.heads
+  const commitsRequest: GitHubApiRequest = {
+    repoRoot: request.repoRoot,
+    endpoint: `repos/{owner}/{repo}/pulls/${request.prNumber}/commits`,
+    fields: ['per_page=100'],
+  };
+  const commitPages = runGitHubApi(commitsRequest);
+  const knownHeadShas = flattenApiPages(commitPages)
+    .filter(isRecord)
+    .map((commit) => {
+      const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
+      return requiredStringProperty(propertyRequest);
+    });
+  for (const headSha of actions.heads
     .map((head) => {
       const propertyRequest: PropertyRequest = {
         record: head,
@@ -184,7 +202,9 @@ export function collectAgentStatsGitHubEvidence(
       };
       return stringProperty(propertyRequest);
     })
-    .filter((headSha) => headSha.length > 0);
+    .filter((headSha) => headSha.length > 0)) {
+    if (!knownHeadShas.includes(headSha)) knownHeadShas.push(headSha);
+  }
   if (!knownHeadShas.includes(request.finalHeadSha)) {
     knownHeadShas.push(request.finalHeadSha);
   }
@@ -259,7 +279,9 @@ export function buildActionsEvidence(
     const observationKey = `${observation.runId}:${observation.runAttempt}`;
     deduplicatedRuns.set(observationKey, observation);
   }
-  const observations = [...deduplicatedRuns.values()];
+  const observations = [...deduplicatedRuns.values()].filter(
+    (run) => run.startedAt <= request.mergedAt,
+  );
   const observationTimes = observations.map((run) => run.startedAt).sort();
   const headShas: string[] = [];
   for (const observationTime of observationTimes) {
@@ -270,9 +292,8 @@ export function buildActionsEvidence(
       if (!headShas.includes(observed.headSha)) headShas.push(observed.headSha);
     }
   }
-  if (!headShas.includes(request.finalHeadSha)) {
-    failGitHubCollection('Final PR head has no GitHub Actions evidence');
-  }
+  if (!headShas.includes(request.finalHeadSha))
+    headShas.push(request.finalHeadSha);
   const headObservations = headShas.map((headSha) => {
     const runs = observations.filter((run) => run.headSha === headSha);
     const headRequest: BuildHeadObservationRequest = {
@@ -286,8 +307,8 @@ export function buildActionsEvidence(
   });
   const runs = observations.map(actionObservationRecord);
   const heads = headObservations.map(headObservationRecord);
-  const validationObservations = observations.filter(
-    (run) => run.workflow === PR_WORKFLOW,
+  const validationObservations = observations.filter((run) =>
+    VALIDATION_WORKFLOWS.has(run.workflow),
   );
   const validationCycles = validationObservations.map((run) => {
     const supersededRequest: HeadSupersededRequest = {
@@ -783,9 +804,9 @@ type ActionObservationRequest = {
 function actionObservation(
   request: ActionObservationRequest,
 ): ActionObservation {
-  const createdRequest: PropertyRequest = {
+  const startedRequest: PropertyRequest = {
     record: request.record,
-    key: 'created_at',
+    key: 'run_started_at',
   };
   const updatedRequest: PropertyRequest = {
     record: request.record,
@@ -822,7 +843,7 @@ function actionObservation(
       `GitHub Actions attempt ${requiredNumberProperty(runIdRequest)}:${requiredNumberProperty(attemptRequest)} is ${status}; retry collection after completion`,
     );
   }
-  const startedAt = requiredStringProperty(createdRequest);
+  const startedAt = requiredStringProperty(startedRequest);
   const finishedAt = requiredStringProperty(updatedRequest);
   const durationRequest: DurationSecondsRequest = { startedAt, finishedAt };
   return {
