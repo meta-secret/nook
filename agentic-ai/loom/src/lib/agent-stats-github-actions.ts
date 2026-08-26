@@ -163,6 +163,7 @@ export function actionObservationRecord(
     conclusion: observation.conclusion,
     source_pr: observation.sourcePr,
     source_attributed: observation.sourceAttributed,
+    validation_requested: observation.validationRequested,
   };
   return sealUntrustedYamlMap(record);
 }

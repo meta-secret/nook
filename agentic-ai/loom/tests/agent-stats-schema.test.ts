@@ -64,6 +64,8 @@ github_actions_runs:
     duration_seconds: 60
     conclusion: cancelled
     source_pr: 481
+    source_attributed: true
+    validation_requested: true
 delivery_heads:
   - head_sha: 0123456789abcdef0123456789abcdef01234567
     first_observed_at: 2026-07-18T18:25:00Z
@@ -133,6 +135,38 @@ describe('validateAgentStatsYaml', () => {
     expect(result.ok).toBe(true);
   });
 
+  test('accepts review evidence outside the action observation window', () => {
+    const content = validYaml
+      .replace(
+        'first_observed_at: 2026-07-18T18:25:00Z',
+        'first_observed_at: 2026-07-18T18:24:00Z',
+      )
+      .replace(
+        'requested_at: 2026-07-18T18:25:00Z',
+        'requested_at: 2026-07-18T18:24:00Z',
+      )
+      .replace('latency_seconds: 60', 'latency_seconds: 120');
+    const request: ValidateAgentStatsYamlArgs = {
+      content,
+      expectedPrNumber: 481,
+    };
+
+    expect(validateAgentStatsYaml(request).ok).toBe(true);
+  });
+
+  test('accepts every repository validation workflow', () => {
+    const content = validYaml.replaceAll(
+      'workflow: PR',
+      'workflow: Web research',
+    );
+    const request: ValidateAgentStatsYamlArgs = {
+      content,
+      expectedPrNumber: 481,
+    };
+
+    expect(validateAgentStatsYaml(request).ok).toBe(true);
+  });
+
   test('rejects contradictory review outcomes and finding counts', () => {
     const request: ValidateAgentStatsYamlArgs = {
       content: validYaml.replace(
@@ -171,7 +205,9 @@ describe('validateAgentStatsYaml', () => {
     };
     const result = validateAgentStatsYaml(request);
     expect(
-      result.errors.some((error) => error.includes('must include PR')),
+      result.errors.some((error) =>
+        error.includes('must include requested github_actions_runs attempt'),
+      ),
     ).toBe(true);
   });
 
@@ -254,7 +290,9 @@ describe('validateAgentStatsYaml', () => {
     expect(result.ok).toBe(false);
     expect(
       result.errors.some((item) =>
-        item.includes('must match a PR github_actions_runs attempt'),
+        item.includes(
+          'must match a requested validation github_actions_runs attempt',
+        ),
       ),
     ).toBe(true);
   });

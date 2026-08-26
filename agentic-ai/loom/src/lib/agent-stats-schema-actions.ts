@@ -6,6 +6,7 @@ import {
   type UntrustedYamlNode,
   type UntrustedYamlPropertyArgs,
 } from './guards.ts';
+import { isValidationWorkflow } from './agent-stats-github-validation.ts';
 
 export type ValidateHeadActionTotalsRequest = {
   readonly parsed: UntrustedYamlMap;
@@ -32,6 +33,16 @@ export function validateHeadActionTotals(
     Array.isArray(runsProperty.value)
       ? runsProperty.value.filter(isRecord)
       : [];
+  const reviewEventsArgs: UntrustedYamlPropertyArgs = {
+    record: request.parsed,
+    key: 'review_events',
+  };
+  const reviewEventsProperty = untrustedYamlProperty(reviewEventsArgs);
+  const reviewEvents =
+    reviewEventsProperty.presence === UntrustedYamlPropertyPresence.Present &&
+    Array.isArray(reviewEventsProperty.value)
+      ? reviewEventsProperty.value.filter(isRecord)
+      : [];
   validateDeliveryHeadOrder(request);
   for (const [index, node] of request.deliveryHeads.entries()) {
     if (!isRecord(node)) continue;
@@ -57,6 +68,7 @@ export function validateHeadActionTotals(
       headIndex: index,
       head: node,
       runs,
+      reviewEvents,
     };
     validateHeadObservationWindow(windowRequest);
     const runCountRequest: UntrustedYamlPropertyArgs = {
@@ -147,7 +159,7 @@ function validateValidationCycles(
       ? cyclesProperty.value
       : [];
   const expectedAttempts = new Set(
-    request.runs.filter(isPrWorkflow).map(attemptKey),
+    request.runs.filter(isRequestedValidationRun).map(attemptKey),
   );
   const observedAttempts = new Set<string>();
   for (const [index, node] of cycles.entries()) {
@@ -170,10 +182,6 @@ function validateValidationCycles(
     }
     observedAttempts.add(cycleAttemptKey);
     const matchingRun = request.runs.find((run) => {
-      const workflowRequest: UntrustedYamlPropertyArgs = {
-        record: run,
-        key: 'workflow',
-      };
       const candidateIdRequest: UntrustedYamlPropertyArgs = {
         record: run,
         key: 'run_id',
@@ -183,14 +191,14 @@ function validateValidationCycles(
         key: 'run_attempt',
       };
       return (
-        stringProperty(workflowRequest) === 'PR' &&
+        isRequestedValidationRun(run) &&
         numberProperty(candidateIdRequest) === runId &&
         numberProperty(candidateAttemptRequest) === runAttempt
       );
     });
     if (!matchingRun) {
       request.errors.push(
-        `validation_cycles[${index}] must match a PR github_actions_runs attempt`,
+        `validation_cycles[${index}] must match a requested validation github_actions_runs attempt`,
       );
       continue;
     }
@@ -268,7 +276,7 @@ function validateValidationCycles(
   for (const expectedAttempt of expectedAttempts) {
     if (!observedAttempts.has(expectedAttempt)) {
       request.errors.push(
-        `validation_cycles must include PR github_actions_runs attempt ${expectedAttempt}`,
+        `validation_cycles must include requested github_actions_runs attempt ${expectedAttempt}`,
       );
     }
   }
@@ -288,15 +296,31 @@ function attemptKey(run: UntrustedYamlMap): string {
   return `${runId}:${attempt}`;
 }
 
-function isPrWorkflow(run: UntrustedYamlMap): boolean {
-  const request: UntrustedYamlPropertyArgs = { record: run, key: 'workflow' };
-  return stringProperty(request) === 'PR';
+function isRequestedValidationRun(run: UntrustedYamlMap): boolean {
+  const workflowRequest: UntrustedYamlPropertyArgs = {
+    record: run,
+    key: 'workflow',
+  };
+  const triggerRequest: UntrustedYamlPropertyArgs = {
+    record: run,
+    key: 'trigger',
+  };
+  const requestedRequest: UntrustedYamlPropertyArgs = {
+    record: run,
+    key: 'validation_requested',
+  };
+  return (
+    isValidationWorkflow(stringProperty(workflowRequest)) &&
+    stringProperty(triggerRequest) === 'pull_request' &&
+    booleanProperty(requestedRequest)
+  );
 }
 
 type ValidateHeadObservationWindowRequest = {
   readonly errors: string[];
   readonly head: UntrustedYamlMap;
   readonly headIndex: number;
+  readonly reviewEvents: readonly UntrustedYamlMap[];
   readonly runs: readonly UntrustedYamlMap[];
 };
 
@@ -333,6 +357,33 @@ function validateHeadObservationWindow(
       }
     }
   }
+  for (const event of request.reviewEvents) {
+    const eventHeadRequest: UntrustedYamlPropertyArgs = {
+      record: event,
+      key: 'head_sha',
+    };
+    if (stringProperty(eventHeadRequest) !== headSha) continue;
+    for (const key of ['requested_at', 'completed_at'] as const) {
+      const timestampRequest: UntrustedYamlPropertyArgs = {
+        record: event,
+        key,
+      };
+      const timestamp = stringProperty(timestampRequest);
+      if (timestamp.length === 0) continue;
+      if (
+        !firstObservedAt ||
+        Date.parse(timestamp) < Date.parse(firstObservedAt)
+      ) {
+        firstObservedAt = timestamp;
+      }
+      if (
+        !lastObservedAt ||
+        Date.parse(timestamp) > Date.parse(lastObservedAt)
+      ) {
+        lastObservedAt = timestamp;
+      }
+    }
+  }
   for (const [key, expected] of [
     ['first_observed_at', firstObservedAt],
     ['last_observed_at', lastObservedAt],
@@ -344,7 +395,7 @@ function validateHeadObservationWindow(
     const actual = stringProperty(propertyRequest);
     if (actual !== expected) {
       request.errors.push(
-        `delivery_heads[${request.headIndex}].${key} must match github_actions_runs (${expected})`,
+        `delivery_heads[${request.headIndex}].${key} must match action and review evidence (${expected})`,
       );
     }
   }
@@ -464,4 +515,12 @@ function numberProperty(request: UntrustedYamlPropertyArgs): number {
     typeof property.value === 'number'
     ? property.value
     : 0;
+}
+
+function booleanProperty(request: UntrustedYamlPropertyArgs): boolean {
+  const property = untrustedYamlProperty(request);
+  return (
+    property.presence === UntrustedYamlPropertyPresence.Present &&
+    property.value === true
+  );
 }
