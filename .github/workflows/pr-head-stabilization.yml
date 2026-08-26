@@ -4,12 +4,12 @@ on:
   # This workflow never checks out or executes PR code. pull_request_target
   # preserves actions:write for safe cancellation of fork and Dependabot runs.
   pull_request_target:
-    types: [edited, synchronize]
+    types: [edited, opened, reopened, synchronize]
 
 permissions:
   actions: write
   contents: read
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   obsolete-heads:
@@ -17,7 +17,62 @@ jobs:
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     timeout-minutes: 2
     steps:
+      - name: Record the exact PR head boundary
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const previousBaseRef = context.payload.changes?.base?.ref?.from;
+            const baseRetargeted =
+              context.payload.action === "edited" &&
+              typeof previousBaseRef === "string";
+            if (context.payload.action === "edited" && !baseRetargeted) {
+              core.info("Ignoring PR edit without a base-ref change.");
+              return;
+            }
+            const pullRequest = context.payload.pull_request;
+            const { data: livePullRequest } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: pullRequest.number,
+            });
+            if (
+              livePullRequest.head.sha !== pullRequest.head.sha ||
+              livePullRequest.base.ref !== pullRequest.base.ref
+            ) {
+              core.info("Skipping obsolete head-boundary event.");
+              return;
+            }
+            const markerPrefix = "<!-- nook-head-transition:";
+            const marker = `${markerPrefix}${pullRequest.head.sha}:${pullRequest.base.ref} -->`;
+            const body = `${marker}\nExact-head delivery boundary (automated).`;
+            const comments = await github.paginate(
+              github.rest.issues.listComments,
+              {
+                ...context.repo,
+                issue_number: pullRequest.number,
+                per_page: 100,
+              }
+            );
+            const existing = comments.find(
+              (comment) =>
+                comment.user?.login === "github-actions[bot]" &&
+                comment.body?.trimStart().startsWith(markerPrefix)
+            );
+            if (existing) {
+              await github.rest.issues.updateComment({
+                ...context.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                ...context.repo,
+                issue_number: pullRequest.number,
+                body,
+              });
+            }
+
       - name: Cancel active validation for replaced heads
+        if: github.event.action == 'synchronize' || github.event.action == 'edited'
         uses: actions/github-script@v9
         with:
           script: |

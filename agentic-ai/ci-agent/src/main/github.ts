@@ -286,40 +286,34 @@ type HeadTransitionBoundary =
   | { at: string; state: HeadTransitionState.Observed }
   | { state: HeadTransitionState.Pending };
 
-type CurrentHeadTransitionInput = {
-  headSha: string;
-  octokit: Octokit;
-  prNumber: number;
-  repoRef: RepoRef;
+type HeadTransitionComment = {
+  readonly body?: string | null;
+  readonly updated_at: string;
+  readonly user: unknown;
 };
 
-async function loadCurrentHeadTransition(
+type CurrentHeadTransitionInput = {
+  baseRef: string;
+  comments: readonly HeadTransitionComment[];
+  headSha: string;
+};
+
+function findCurrentHeadTransition(
   input: CurrentHeadTransitionInput,
-): Promise<HeadTransitionBoundary> {
-  const { headSha, octokit, prNumber, repoRef } = input;
-  const { owner, repo } = repoRef;
-  let timelineEvents: Awaited<
-    ReturnType<typeof octokit.rest.issues.listEventsForTimeline>
-  >["data"];
-  try {
-    timelineEvents = await octokit.paginate(
-      octokit.rest.issues.listEventsForTimeline,
-      { issue_number: prNumber, owner, repo, per_page: 100 },
-    );
-  } catch {
-    return { state: HeadTransitionState.Pending };
-  }
-  const commitEvent = timelineEvents.find(
-    (event) =>
-      event.event === "committed" &&
-      "sha" in event &&
-      event.sha === headSha &&
-      "committer" in event,
-  );
-  if (commitEvent && "committer" in commitEvent && commitEvent.committer.date) {
-    return { at: commitEvent.committer.date, state: HeadTransitionState.Observed };
-  }
-  return { state: HeadTransitionState.Pending };
+): HeadTransitionBoundary {
+  const marker = headTransitionMarker(input.headSha, input.baseRef);
+  const transitionTimes = input.comments
+    .filter(
+      (comment) =>
+        isGitHubActionsBot(comment.user) &&
+        comment.body?.trimStart().startsWith(marker),
+    )
+    .map((comment) => comment.updated_at)
+    .sort();
+  const transitionTime = transitionTimes.at(-1);
+  return transitionTime
+    ? { at: transitionTime, state: HeadTransitionState.Observed }
+    : { state: HeadTransitionState.Pending };
 }
 
 export async function inspectPrFeedback(
@@ -333,13 +327,32 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
+  const [issueComments, reviews, reviewComments] = await Promise.all([
+    octokit.paginate(octokit.rest.issues.listComments, {
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    }),
+    octokit.paginate(octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+    octokit.paginate(octokit.rest.pulls.listReviewComments, {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+  ]);
   const transitionInput: CurrentHeadTransitionInput = {
+    baseRef: pr.base.ref,
+    comments: issueComments,
     headSha: pr.head.sha,
-    octokit,
-    prNumber,
-    repoRef,
   };
-  const currentHeadTransition = await loadCurrentHeadTransition(transitionInput);
+  const currentHeadTransition = findCurrentHeadTransition(transitionInput);
 
   let unresolvedThreads = 0;
   enum PaginationKind {
@@ -371,27 +384,6 @@ export async function inspectPrFeedback(
         ? { kind: PaginationKind.NextPage, cursor: threads.pageInfo.endCursor }
         : { kind: PaginationKind.Complete };
   }
-
-  const [issueComments, reviews, reviewComments] = await Promise.all([
-    octokit.paginate(octokit.rest.issues.listComments, {
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
-    }),
-    octokit.paginate(octokit.rest.pulls.listReviews, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-    }),
-    octokit.paginate(octokit.rest.pulls.listReviewComments, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-    }),
-  ]);
 
   const marker = codexReviewRequestMarker(pr.head.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
@@ -609,7 +601,8 @@ export function isRepositoryStatusComment(
       (trimmed.startsWith("### Preview deployed") ||
         trimmed.startsWith("### Web research preview") ||
         trimmed.startsWith("<!-- nook-ui-demo -->") ||
-        trimmed.startsWith("<!-- nook-core-coverage -->"))) ||
+        trimmed.startsWith("<!-- nook-core-coverage -->") ||
+        trimmed.startsWith("<!-- nook-head-transition:"))) ||
     isTrustedCodexReviewRequestComment({
       authorAssociation: input.authorAssociation,
       body: input.body,
@@ -629,6 +622,10 @@ export function isRepositoryStatusComment(
     (isCursorReviewer(input.user) &&
       trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
   );
+}
+
+function headTransitionMarker(headSha: string, baseRef: string): string {
+  return `<!-- nook-head-transition:${headSha}:${baseRef} -->`;
 }
 
 function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {

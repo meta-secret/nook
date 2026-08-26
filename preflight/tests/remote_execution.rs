@@ -164,9 +164,13 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
     let replacement_head = read_fallible(".github/workflows/pr-head-stabilization.yml")?;
     for required in [
         "pull_request_target:",
-        "types: [edited, synchronize]",
+        "types: [edited, opened, reopened, synchronize]",
         "actions: write",
-        "pull-requests: read",
+        "pull-requests: write",
+        "<!-- nook-head-transition:",
+        "Skipping obsolete head-boundary event.",
+        "github.rest.issues.updateComment",
+        "github.rest.issues.createComment",
         "context.payload.changes?.base?.ref?.from",
         "Ignoring PR edit without a base-ref change.",
         "run.name !== \"Web research\"",
