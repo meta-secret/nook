@@ -861,6 +861,9 @@ jobs:
         env:
           CI: true
           NOOK_E2E_SHARD: ${{ matrix.shard }}/2
+          VITE_SITE_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sh.pages.dev
+          VITE_SIMPLE_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-simple.pages.dev
+          VITE_SENTINEL_APP_URL: https://pr-${{ github.event.pull_request.number }}.nokey-sentinel.pages.dev
 
   full-e2e:
     name: Full browser e2e (main fix)
