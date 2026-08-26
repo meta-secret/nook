@@ -13,7 +13,7 @@
 //! Future variants (hardware token, social recovery, …) extend the enum
 //! without altering the storage layout.
 //!
-//! See `.cortex/product-specs/password-envelope.md` for the full design.
+//! See `.cortex/dev-core/product-specs/password-envelope.md` for the full design.
 
 use crate::VaultKeys;
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};

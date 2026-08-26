@@ -7,7 +7,10 @@ import type { CortexSessionCleanRequest } from './args/cortex-session-clean.ts';
 import type { DependencyPopularityRequest } from './args/dependency-popularity.ts';
 import type { PrePushRequest } from './args/pre-push.ts';
 import type { PrLandPrRequest } from './args/pr-land.ts';
-import type { SkillScaffoldRequest } from './args/skill-scaffold.ts';
+import {
+  SkillOwner,
+  type SkillScaffoldRequest,
+} from './args/skill-scaffold.ts';
 import type { ToolsListRequest } from './args/tools-list.ts';
 import { asUntrustedYamlNode, type UntrustedYamlNode } from '../lib/guards.ts';
 import { AGENT_TEMP_DIR_TOKEN } from '../lib/agent-temp-path.ts';
@@ -162,6 +165,7 @@ export const CORTEX_SESSION_CLEAN_EXAMPLE_DOCUMENT: CortexSessionCleanExampleDoc
 export const SKILL_SCAFFOLD_EXAMPLE_DOCUMENT: SkillScaffoldExampleDocument = {
   skillScaffold: {
     skillSlug: 'example-skill',
+    skillOwner: SkillOwner.Common,
     createExecutableWrappers: false,
   },
 };

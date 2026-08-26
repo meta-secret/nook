@@ -50,3 +50,7 @@ For module-oriented work, also load
 [`module-oriented-development.md`](../../../.cortex/workflows/module-oriented-development.md)
 and the named
 [`module expert registry`](../../../.cortex/architecture/module-experts.md).
+
+For implementation work, also load
+[`team-oriented-development.md`](../../../.cortex/workflows/team-oriented-development.md)
+and keep each child inside one engineering-team boundary.

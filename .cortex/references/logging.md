@@ -233,5 +233,5 @@ added" in an event-log sync flow.
 **Note:** `connect` / `vault connected` is emitted by `loadDb` (provider unlock
 path), not device-key local vault creation (`vault-local` + `wasm-connect` instead).
 
-See also: [rust-wasm.md](rust-wasm.md), [bun-svelte.md](bun-svelte.md),
-[../workflows/ci-pipeline.md](../workflows/ci-pipeline.md).
+See also: [rust-wasm.md](../dev-core/references/rust-wasm.md), [bun-svelte.md](../web-dev/references/bun-svelte.md),
+[../workflows/ci-pipeline.md](../sre/workflows/ci-pipeline.md).

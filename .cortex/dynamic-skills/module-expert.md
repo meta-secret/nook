@@ -58,7 +58,7 @@ Do not use this skill to:
 
 ## Application procedure
 
-1. Read `.cortex/knowledge-graph.md`.
+1. Read `.cortex/knowledge-graph.md` and the assigned team's knowledge graph.
 2. Resolve one profile in `architecture/module-experts.md`.
 3. Verify the profile against the exact source commit.
 4. Return findings directly through the harness.

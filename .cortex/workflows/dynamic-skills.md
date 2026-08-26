@@ -5,18 +5,21 @@
 Use this workflow when the user explains a codebase-specific mistake, invariant,
 or refactor pattern that should become durable agent knowledge.
 
-`.cortex/dynamic-skills/` is the canonical repository-local skill directory for
-Nook agents. The name "dynamic skills" means these skills are captured and
-updated dynamically from durable project feedback; it does not mean optional,
-temporary, or lower-priority guidance. Do not create a second top-level skill
-registry unless this directory is renamed everywhere in `.cortex` and all mirror
-links are updated in the same change.
+Nook's canonical repository-local skill cards live in `dynamic-skills/`
+directories under common Cortex or one engineering team.
+
+- Common cards live under `.cortex/dynamic-skills/`.
+- Development-core cards live under `.cortex/dev-core/dynamic-skills/`.
+- SRE cards live under `.cortex/sre/dynamic-skills/`.
+- Web-development cards live under `.cortex/web-dev/dynamic-skills/`.
+
+The name "dynamic skills" means the cards evolve from durable project feedback.
+It does not mean optional or temporary guidance.
 
 Dynamic skills turn concrete feedback into reusable guidance:
 
-1. A **skill card** in [`.cortex/dynamic-skills/`](../dynamic-skills/) is the
-   source of truth for the pattern. Every durable repo-specific agent skill
-   belongs here.
+1. A **skill card** in the responsible team's `dynamic-skills/` directory is
+   the source of truth. Genuinely cross-team cards stay in the common directory.
 2. Executable skills live in [`.agents/skills/`](../../.agents/skills/) (the canonical open agent skill directory for Antigravity, Cursor, Claude, and Codex), with symlinks in [`.cursor/skills/`](../../.cursor/skills/) and [`.claude/skills/`](../../.claude/skills/). Skill wrappers are mirrors, not the canonical copy.
 3. The registry at [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md)
    lists every available skill card and whether it has an executable skill.
@@ -50,8 +53,8 @@ scope, and apply the pattern with normal coding workflow and validation.
    - **Scope:** where this applies and where it does not.
    - **Examples:** before/after references or concise pseudocode.
    - **Validation:** tests, checks, or review heuristics that prove the refactor.
-4. Reuse or update an existing skill card when the concept already exists. Create
-   a new card only when the lesson is meaningfully distinct.
+4. Reuse or update an existing skill card when the concept already exists.
+   Otherwise select the responsible team before creating the card.
 5. Update [`.cortex/dynamic-skills/index.md`](../dynamic-skills/index.md) in the
    same change.
 6. Create or update `.agents/skills/<skill-name>/SKILL.md` (and ensure `.cursor/skills/` and `.claude/skills/` symlinks exist) when the pattern is intended to be invoked directly by future agents.
@@ -61,6 +64,7 @@ For a new card scaffold, prefer Loom:
 ```yaml
 skillScaffold:
   skillSlug: example-skill
+  skillOwner: common # or dev-core, sre, or web-dev
   createExecutableWrappers: false
 ```
 

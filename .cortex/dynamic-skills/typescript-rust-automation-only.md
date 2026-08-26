@@ -46,7 +46,7 @@ rules. Keep operational behavior covered by regression tests after migration.
 Run:
 
 1. `task preflight:source-architecture`
-2. `task k0s:manifests:check`
+2. `task infra:k0s:manifests:check`
 3. `task format`
 4. Exact-head pull-request validation
 

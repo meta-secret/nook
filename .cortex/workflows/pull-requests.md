@@ -318,7 +318,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
+See [pre-push-hygiene.md](../sre/dynamic-skills/pre-push-hygiene.md).
 
 - Before the first owner-authored push, run `task pr:review-local` on the
   coherent head.
@@ -385,9 +385,9 @@ task pr:validate PR=<number> FULL_E2E=1
   - Command: Fix → `task loom:pre-push` → commit → push → trigger validation again
   - Purpose: Pushing alone does not start `pr.yml`
 
-See [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md).
+See [ci-pipeline.md § Local vs remote CI](../sre/workflows/ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../sre/dynamic-skills/github-actions-only-validation.md).
 
-- Follow [workflow concurrency policy](ci-pipeline.md#workflow-concurrency-policy)
+- Follow [workflow concurrency policy](../sre/workflows/ci-pipeline.md#workflow-concurrency-policy)
   for cancellation.
 - Explicit validation cancels only an older labeled run for the same PR.
   - Unrelated PRs keep independent required checks.
@@ -526,7 +526,7 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 
 Investigation order: **test output** → **static analysis** → **app logs** (most important after the first two). See [logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
-Static analysis includes Knip unused findings and jscpd clone/duplicate findings. Fix those problems in code; do not silence the gate. See [quality.md § Fix check findings](../workflows/quality.md#fix-check-findings--not-silence-them).
+Static analysis includes Knip unused findings and jscpd clone/duplicate findings. Fix those problems in code; do not silence the gate. See [quality.md § Fix check findings](../sre/workflows/quality.md#fix-check-findings--not-silence-them).
 
 1. Read the failed job log: `gh run view <run-id> --log-failed`
 2. For **e2e / web failures**, read persisted app logs before changing code.
@@ -599,7 +599,7 @@ Do not:
 
 If the comparison identifies actionable performance regression or workflow waste, create a separate normal Nook build-performance PR and take it through the full pipeline.
 
-Completed Main attempts independently commit one automated `stats/main-build/<run-id>-attempt-<attempt>.yaml` record to Workbench after the workflow finishes. Because no Nook ref changes, publication cannot recurse. See [main-build-statistics.md](main-build-statistics.md).
+Completed Main attempts independently commit one automated `stats/main-build/<run-id>-attempt-<attempt>.yaml` record to Workbench after the workflow finishes. Because no Nook ref changes, publication cannot recurse. See [main-build-statistics.md](../sre/workflows/main-build-statistics.md).
 
 ### 10. Task completion report
 
@@ -627,7 +627,7 @@ Rules:
 - If the task was blocked waiting on the user, exclude idle wait time and note `active time: …` vs `elapsed: …`.
 - For question-only turns with no implementation, a duration line is optional.
 
-**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
+**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [docker-container-harness.md](../sre/dynamic-skills/docker-container-harness.md).
 
 ## Standard flow (summary)
 

@@ -36,7 +36,7 @@ identity is never written to browser-vendor storage; the session is cleared when
 timer expires or the browser closes.
 
 The extension first-run model is specified in
-[`.cortex/product-specs/browser-extension.md`](../../../.cortex/product-specs/browser-extension.md).
+[`.cortex/web-dev/product-specs/browser-extension.md`](../../../.cortex/web-dev/product-specs/browser-extension.md).
 The extension becomes its own passkey-protected Nook device and pairs only
 through vault consent at the configured Simple Vault
 `/extension-connect` route; it does not borrow or scrape the Simple web app

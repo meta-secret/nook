@@ -140,6 +140,25 @@ delivery authority.
 `ModuleExpertEvidence`, Markdown, and `parentActions` are recommendations.
 They do not authorize descendants or lifecycle mutations.
 
+## Team-oriented implementation
+
+Implementation delegation also follows
+[Team-oriented development](team-oriented-development.md).
+
+- Classify each functional unit as `dev-core`, `sre`, or `web-dev` before
+  dispatch.
+- Give every team agent one team identity and explicit code and Cortex paths.
+- Keep write-capable team agents in isolated workspaces with disjoint scopes.
+- Require each team agent to own its implementation, tests, Cortex updates,
+  review fixes, and validation fixes.
+- Let a team agent report a dependency on another team to the delivery owner.
+- Do not let the requesting team implement the foreign provider in its own
+  layer.
+- Keep shared files and GitHub, Workbench, validation, readiness, and merge
+  state with the delivery owner.
+
+Team ownership does not add hierarchy depth or scheduling authority.
+
 ## Hierarchical event protocol
 
 The active harness owns the live subagent hierarchy.

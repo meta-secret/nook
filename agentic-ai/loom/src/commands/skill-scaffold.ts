@@ -6,7 +6,10 @@ import {
   symlinkSync,
 } from 'node:fs';
 import path from 'node:path';
-import type { SkillScaffoldRequest } from '../codec/args/skill-scaffold.ts';
+import {
+  SkillOwner,
+  type SkillScaffoldRequest,
+} from '../codec/args/skill-scaffold.ts';
 import { findRepoRoot } from '../lib/repo.ts';
 import {
   LoomFailureCode,
@@ -40,15 +43,41 @@ export function renderSkillCard(args: RenderSkillCardArgs): string {
 }
 
 type InsertSkillCatalogEntryArgs = {
+  readonly cardHref: string;
   readonly createExecutableWrappers: boolean;
   readonly indexContent: string;
   readonly slug: string;
 };
 
+type FindExistingSkillCardArgs = {
+  readonly cortexRoot: string;
+  readonly slug: string;
+};
+
+export function markdownPath(filePath: string): string {
+  return filePath.replaceAll('\\', '/');
+}
+
+export function findExistingSkillCard(
+  args: FindExistingSkillCardArgs,
+): string | false {
+  const ownerRoots = [
+    path.join(args.cortexRoot, 'dynamic-skills'),
+    path.join(args.cortexRoot, SkillOwner.DevCore, 'dynamic-skills'),
+    path.join(args.cortexRoot, SkillOwner.Sre, 'dynamic-skills'),
+    path.join(args.cortexRoot, SkillOwner.WebDev, 'dynamic-skills'),
+  ];
+  return (
+    ownerRoots
+      .map((ownerRoot) => path.join(ownerRoot, `${args.slug}.md`))
+      .find((candidatePath) => existsSync(candidatePath)) ?? false
+  );
+}
+
 export function insertSkillCatalogEntry(
   args: InsertSkillCatalogEntryArgs,
 ): string {
-  if (args.indexContent.includes(`(${args.slug}.md)`)) {
+  if (args.indexContent.includes(`(${args.cardHref})`)) {
     return args.indexContent;
   }
 
@@ -65,7 +94,7 @@ export function insertSkillCatalogEntry(
   const executableSkill = args.createExecutableWrappers
     ? `\n  - Executable skill: [\`.agents/skills/${args.slug}/SKILL.md\`](../../.agents/skills/${args.slug}/SKILL.md)`
     : '';
-  const entry = `- **[${args.slug}.md](${args.slug}.md)**\n  - Purpose: TODO: purpose${executableSkill}`;
+  const entry = `- **[${args.slug}.md](${args.cardHref})**\n  - Purpose: TODO: purpose${executableSkill}`;
   const markerIndex = markerMatch.index;
   const before = args.indexContent.slice(0, markerIndex).trimEnd();
   const after = args.indexContent.slice(markerIndex);
@@ -78,10 +107,15 @@ export async function runSkillScaffold(
   const repoRoot = findRepoRoot();
   const slug = request.skillSlug;
 
-  const skillsDir = path.join(repoRoot, '.cortex', 'dynamic-skills');
-  const templatePath = path.join(skillsDir, '_template.md');
+  const cortexRoot = path.join(repoRoot, '.cortex');
+  const commonSkillsDir = path.join(cortexRoot, 'dynamic-skills');
+  const skillsDir =
+    request.skillOwner === SkillOwner.Common
+      ? commonSkillsDir
+      : path.join(repoRoot, '.cortex', request.skillOwner, 'dynamic-skills');
+  const templatePath = path.join(commonSkillsDir, '_template.md');
   const cardPath = path.join(skillsDir, `${slug}.md`);
-  const indexPath = path.join(skillsDir, 'index.md');
+  const indexPath = path.join(commonSkillsDir, 'index.md');
 
   if (!existsSync(templatePath)) {
     const loomFailureDetailArgs3: LoomFailureDetailArgs = {
@@ -90,10 +124,15 @@ export async function runSkillScaffold(
     };
     loomFailureDetail(loomFailureDetailArgs3);
   }
-  if (existsSync(cardPath)) {
+  const existingSkillCardArgs: FindExistingSkillCardArgs = {
+    cortexRoot,
+    slug,
+  };
+  const existingSkillCard = findExistingSkillCard(existingSkillCardArgs);
+  if (existingSkillCard !== false) {
     const loomFailureDetailArgs2: LoomFailureDetailArgs = {
       code: LoomFailureCode.SkillScaffoldFailed,
-      text: `Skill card already exists: ${path.relative(repoRoot, cardPath)}`,
+      text: `Skill card already exists: ${path.relative(repoRoot, existingSkillCard)}`,
     };
     loomFailureDetail(loomFailureDetailArgs2);
   }
@@ -107,6 +146,7 @@ export async function runSkillScaffold(
   const card = renderSkillCard(renderArgs);
   const currentIndexContent = readFileSync(indexPath, 'utf8');
   const insertArgs: InsertSkillCatalogEntryArgs = {
+    cardHref: markdownPath(path.relative(commonSkillsDir, cardPath)),
     createExecutableWrappers: request.createExecutableWrappers,
     indexContent: currentIndexContent,
     slug,
@@ -114,17 +154,18 @@ export async function runSkillScaffold(
   const indexContent = insertSkillCatalogEntry(insertArgs);
   const indexUpdated = indexContent !== currentIndexContent;
 
+  const directoryOptions: { readonly recursive: true } = { recursive: true };
+  mkdirSync(skillsDir, directoryOptions);
   writeFileSync(cardPath, card, 'utf8');
   if (indexUpdated) writeFileSync(indexPath, indexContent, 'utf8');
 
   const wrappersCreated: string[] = [];
   if (request.createExecutableWrappers) {
-    const directoryOptions: { readonly recursive: true } = { recursive: true };
     const agentsDir = path.join(repoRoot, '.agents', 'skills', slug);
     mkdirSync(agentsDir, directoryOptions);
     const skillMd = path.join(agentsDir, 'SKILL.md');
     if (!existsSync(skillMd)) {
-      const cortexLink = `.cortex/dynamic-skills/${slug}.md`;
+      const cortexLink = markdownPath(path.relative(repoRoot, cardPath));
       writeFileSync(
         skillMd,
         [
