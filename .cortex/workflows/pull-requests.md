@@ -60,11 +60,21 @@ ownership until merge or a concrete blocked handoff:
    - When the coherent head is ready, run one complete-validation command:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
-   - It dispatches checks and then requests exact-head Cloud review.
-   - Codex is preferred. Cursor Bugbot is the usage-limit fallback.
-   - Review-request failure does not block those checks.
-   - Fix every actionable finding that arrives while checks run.
-   - If no feedback exists when checks finish, continue without waiting.
+   - It requests one idempotent exact-head Codex review before dispatching
+     complete validation.
+   - For a pull request already open when the protocol is deployed, validation
+     dispatches the trusted default-branch boundary workflow once. Actionable
+     comments found before that boundary still stop the first attempt.
+   - The eye reaction is liveness evidence only. It never settles review.
+   - Current-iteration findings stop validation so they can be fixed as one
+     coherent batch.
+   - A bounded 600-second wait lets validation proceed when review remains
+     unavailable and no current findings are visible.
+   - Three automated finding batches open the circuit breaker. Perform a
+     comprehensive stabilization pass, resolve its batch, and set
+     `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation run.
+   - Codex is the sole automatic review provider. Do not activate Cursor
+     Bugbot.
    - Do not request Claude, CodeRabbit, or other optional reviewers.
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
@@ -326,13 +336,17 @@ See [pre-push-hygiene.md](../sre/dynamic-skills/pre-push-hygiene.md).
 - After each coherent push, inspect feedback already present.
 - Use focused remote tasks when they shorten diagnosis.
 - Trigger complete validation only when the head is ready for the final gate.
-  - It dispatches checks immediately and requests exact-head Cloud review.
+  - It first stabilizes one idempotent exact-head Codex review.
+  - Current findings stop dispatch. Review unavailability is bounded to 600
+    seconds when no findings are visible.
 - After a complete-gate failure, validate the completed replacement head again.
-- Do not wait for Codex or Cursor after checks finish.
-  - Cursor Bugbot is requested only when Codex reports a usage limit.
+- Do not request review after checks finish. Review belongs before validation.
+  - Codex is the only automatic provider. Do not activate Cursor Bugbot.
   - See [Code review](code-review.md).
 
-The feedback inspection and readiness audit replace any blind review-batching grace period.
+Three automated finding batches open the review circuit breaker. Complete a
+comprehensive local stabilization pass and resolve the coherent batch instead
+of requesting another Cloud review immediately.
 
 ### 5. Hosted iteration and explicit validation
 
@@ -345,7 +359,7 @@ Rust jobs may use ARC; its remaining jobs stay hosted.
 
 ```text
 implement/fix → task loom:pre-push → commit → local review → push/update PR
-→ complete exact-head PR workflow and Cloud review request
+→ bounded exact-head Codex stabilization → complete exact-head PR workflow
 ```
 
 **Required local action** (before every push):
@@ -450,8 +464,8 @@ task pr:preflight PR=<number>
   `task pr:ready` for read-only exact-head readiness.
   - The command never merges by itself.
   - Success tells the task owner to squash-merge immediately.
-- Codex or Cursor review is not a readiness requirement.
-  - Do not wait for it after repository checks finish.
+- Codex review is not a readiness requirement.
+  - Its bounded pre-validation lane must not deadlock delivery.
   - Do not request Claude, CodeRabbit, or other optional external reviews.
 - Repository-owned checks and exact-head deployment remain required when
   applicable.
@@ -518,7 +532,8 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 - Track unthreaded submitted-review items in the checklist and handoff instead
   of creating comment spam.
 - Resolve all actionable threads and re-query immediately before merge.
-- Do not wait for Codex or Cursor after repository checks finish.
+- Do not request another review after repository checks finish.
+  - Codex is the sole automatic review provider. Do not activate Cursor Bugbot.
   - Do not request Claude, CodeRabbit, or other optional reviewers.
   - See [Code review](code-review.md).
 
@@ -535,8 +550,9 @@ Static analysis includes Knip unused findings and jscpd clone/duplicate findings
 3. Fix the root cause.
 4. Run `task loom:pre-push`, commit, and push the completed fix.
 5. Run Loom/Task validate and return to monitoring Nook's complete exact-head PR checks. Use a focused `task remote` job only when it shortens diagnosis.
-6. Complete validation requests Codex review for the replacement head. Never
-   wait for its result after checks finish or request other review services.
+6. Complete validation stabilizes one exact-head Codex review before dispatch.
+   Current findings stop the dispatch. Review unavailability is bounded, and
+   no other review service is activated.
 
 If the failure was obviously fmt-only, `task loom:pre-push` before re-push is enough. Broader failures are proven by the refreshed remote `pr.yml` run on the latest head.
 
@@ -642,9 +658,11 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–13 checklist.
 7. Push and open or update the PR.
 8. Use focused `task remote` jobs only for faster isolated diagnosis.
 9. Run Loom or Task validation on the ready head.
-10. It dispatches checks and then requests exact-head Cloud review.
-11. Do not wait for review after checks finish.
-12. Do not request Claude, CodeRabbit, or other optional reviews.
+10. It stabilizes one exact-head Codex review before dispatching checks.
+11. Current findings stop dispatch; an unavailable review times out after the
+    bounded wait when no findings are visible.
+12. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
+    Claude, CodeRabbit, or other optional reviews.
 13. Address and resolve actionable comments.
 14. Complete the canonical self-improvement contract for substantial work.
 15. On failure, fix the issue and repeat pre-push hygiene.

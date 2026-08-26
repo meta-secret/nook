@@ -3,6 +3,7 @@ import test from "node:test";
 
 import type { Octokit } from "@octokit/rest";
 
+import type { RepoRef } from "../main/github.js";
 import { buildPrAudit } from "../main/pr-audit.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
@@ -63,6 +64,60 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
   assert.equal(audit.ready, false);
   assert.equal(audit.feedback.cursorReview.settled, true);
   assert.equal(audit.feedback.substantiveReviews, 1);
+});
+
+test("buildPrAudit excludes historical comments before the first exact-head request", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Missing,
+      historicalFinding: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.currentIterationComments, 0);
+});
+
+test("buildPrAudit leaves comments unclassified while the head transition is pending", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Missing,
+      currentHeadFinding: true,
+      omitHeadTransition: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.currentIterationComments, 0);
+  assert.equal(audit.feedback.headTransitionObserved, false);
+  assert.equal(audit.feedback.substantiveComments, 1);
+});
+
+test("buildPrAudit ignores an untrusted head transition marker", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ untrustedHeadTransition: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.feedback.headTransitionObserved, false);
+});
+
+test("buildPrAudit reads fork head transitions from the trusted PR marker", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      headRepository: { owner: "contributor", repo: "nook-fork" },
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.feedback.headTransitionObserved, true);
 });
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
@@ -231,6 +286,17 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
   );
 });
 
+test("buildPrAudit counts unresolved threads from dismissed reviews", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ dismissedThreads: 1 }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.unresolvedThreads, 1);
+});
+
 test("buildPrAudit rejects a green workflow when Native Rust failed", async () => {
   const audit = await buildPrAudit(
     mockOctokit({ nativeConclusion: MockJobConclusion.Failure }),
@@ -259,6 +325,17 @@ test("buildPrAudit rejects when a required PR job is missing from the latest run
       reason.includes("Native Rust verification is missing"),
     ),
   );
+});
+
+test("buildPrAudit rejects validation from a previous base revision", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ staleBaseRun: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.match(audit.reasons.join("\n"), /not indexed for the current head/);
 });
 
 enum MockCodexReview {
@@ -300,10 +377,17 @@ type MockOptions = {
   agentHandoff: MockAgentHandoff;
   behindBy?: number;
   codexReview?: MockCodexReview;
+  currentHeadFinding?: boolean;
   cursorReview?: MockCursorReview;
+  dismissedThreads?: number;
+  historicalFinding?: boolean;
+  headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
+  omitHeadTransition?: boolean;
   runStatus?: MockRunStatus;
+  staleBaseRun?: boolean;
+  untrustedHeadTransition?: boolean;
   unresolvedThreads?: number;
 };
 
@@ -327,13 +411,22 @@ function mockOctokitWithAgentHandoff(
 
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
+  const headRepository = options.headRepository ?? repoRef;
   const pulls = {
     get: async () => ({
       data: {
         base: { ref: "main", sha: "base-sha" },
         draft: false,
-        head: { ref: "feature", sha: headSha },
+        head: {
+          ref: "feature",
+          repo: {
+            name: headRepository.repo,
+            owner: { login: headRepository.owner },
+          },
+          sha: headSha,
+        },
         html_url: "https://github.com/meta-secret/nook/pull/410",
+        created_at: "2026-08-08T00:00:00Z",
         mergeable: true,
         number: 410,
         state: "open",
@@ -342,6 +435,7 @@ function createMockOctokit(options: MockOptions): Octokit {
     listFiles: async () => ({
       data: [{ filename: "nook-app/nook-platform/nook-core/src/lib.rs" }],
     }),
+    listReviewComments: async () => ({ data: [] }),
     listReviews: async () => {
       const skipCodexReview =
         options.codexReview === MockCodexReview.Missing ||
@@ -399,7 +493,23 @@ function createMockOctokit(options: MockOptions): Octokit {
   const issues = {
     listComments: async () => ({
       data: [
-        { body: "### Preview deployed\n\nhttps://preview.test" },
+        ...(options.omitHeadTransition === true
+          ? []
+          : [
+              {
+                body: `<!-- nook-head-transition:${headSha}:main:2026-08-08T00:01:00Z -->\nExact-head delivery boundary (automated).`,
+                user: {
+                  login:
+                    options.untrustedHeadTransition === true
+                      ? "reviewer"
+                      : "github-actions[bot]",
+                },
+              },
+            ]),
+        {
+          body: "### Preview deployed\n\nhttps://preview.test",
+          user: { login: "github-actions[bot]" },
+        },
         {
           body: "<!-- nook-ui-demo -->\n### UI demo\n\n- Result: **success**",
           user: { login: "github-actions[bot]" },
@@ -428,13 +538,17 @@ function createMockOctokit(options: MockOptions): Octokit {
         options.codexReview === MockCodexReview.DuplicateReaction
           ? [
               {
-                body: `Please review this exact head.\n\n@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                author_association: "OWNER",
+                body: `@codex review\n\n<!-- nook-codex-review:${headSha}:base-sha -->`,
+                created_at: "2026-08-08T00:00:00Z",
                 id: 77,
               },
               ...(options.codexReview === MockCodexReview.DuplicateReaction
                 ? [
                     {
-                      body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                      author_association: "OWNER",
+                      body: `@codex review\n\n<!-- nook-codex-review:${headSha}:base-sha -->`,
+                      created_at: "2026-08-08T00:00:30Z",
                       id: 78,
                     },
                   ]
@@ -443,16 +557,38 @@ function createMockOctokit(options: MockOptions): Octokit {
           : []),
         {
           body: "You have reached your Codex usage limits for code reviews. You can see your limits in the Codex usage dashboard.",
+          user: { login: "chatgpt-codex-connector[bot]" },
         },
         {
+          author_association: "OWNER",
           body: `cursor review\n\n<!-- nook-cursor-review:${headSha} -->`,
         },
         {
           body: "<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->\nBugbot is not enabled for your account, so this pull request was not reviewed.",
+          user: { login: "cursor[bot]" },
         },
         {
           body: "<!-- nook-core-coverage -->\n### portable Rust crate coverage\n\nPASS",
+          user: { login: "github-actions[bot]" },
         },
+        ...(options.historicalFinding === true
+          ? [
+              {
+                body: "The older head drops the replacement-state guard.",
+                created_at: "2026-08-08T00:00:30Z",
+                user: { login: "reviewer" },
+              },
+            ]
+          : []),
+        ...(options.currentHeadFinding === true
+          ? [
+              {
+                body: "The current head drops the replacement-state guard.",
+                created_at: "2026-08-08T00:01:30Z",
+                user: { login: "reviewer" },
+              },
+            ]
+          : []),
         ...(options.agentHandoff === MockAgentHandoff.Included
           ? [
               {
@@ -519,7 +655,17 @@ function createMockOctokit(options: MockOptions): Octokit {
                 head_sha: headSha,
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
                 id: 42,
-                pull_requests: [{ number: 410 }],
+                pull_requests: [
+                  {
+                    base: {
+                      sha:
+                        options.staleBaseRun === true
+                          ? "previous-base-sha"
+                          : "base-sha",
+                    },
+                    number: 410,
+                  },
+                ],
                 status: options.runStatus ?? MockRunStatus.Completed,
               },
             ],
@@ -560,8 +706,18 @@ function createMockOctokit(options: MockOptions): Octokit {
             nodes: Array.from(
               { length: options.unresolvedThreads ?? 0 },
               () => ({
+                comments: {
+                  nodes: [{ pullRequestReview: { state: "COMMENTED" } }],
+                },
                 isResolved: false,
               }),
+            ).concat(
+              Array.from({ length: options.dismissedThreads ?? 0 }, () => ({
+                comments: {
+                  nodes: [{ pullRequestReview: { state: "DISMISSED" } }],
+                },
+                isResolved: false,
+              })),
             ),
             pageInfo: { hasNextPage: false },
           },

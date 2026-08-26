@@ -79,37 +79,45 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_starts_before_non_blocking_review_request() -> Result<()> {
+fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
-    let direct_review_position = direct_validation
-        .find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
-        .context("direct validation must request review without making it a gate")?;
-    let head_recheck_position = direct_validation
-        .find(
-            "pre_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-        )
-        .context("direct validation must recheck the PR head before requesting review")?;
-    let post_review_recheck_position = direct_validation
-        .find(
-            "post_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-        )
-        .context("direct validation must recheck the PR head after requesting review")?;
+    let stabilization_position = direct_validation
+        .find("task pr:review:stabilize")
+        .context("direct validation must stabilize exact-head review first")?;
+    let stabilized_head_position = direct_validation
+        .find("stabilized_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
+        .context("direct validation must recheck the stabilized PR head and base")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
+    let refreshed_base_position = direct_validation[stabilization_position..]
+        .find(".github/scripts/require-current-base.sh origin \"$stabilized_base_ref\"")
+        .map(|position| position + stabilization_position)
+        .context("direct validation must recheck the base after review stabilization")?;
+    let dispatched_head_position = direct_validation
+        .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
+        .context("direct validation must recheck the head and base after label dispatch")?;
     assert!(
-        validation_label_position < head_recheck_position
-            && head_recheck_position < direct_review_position
-            && direct_review_position < post_review_recheck_position,
-        "validation must start before the non-blocking exact-head review request"
+        stabilization_position < stabilized_head_position
+            && stabilized_head_position < refreshed_base_position
+            && refreshed_base_position < validation_label_position,
+        "complete validation must start only after bounded exact-head review stabilization"
+    );
+    assert!(
+        validation_label_position < dispatched_head_position,
+        "complete validation must reject a head change during label dispatch"
     );
     for required in [
         "pr:review-local:",
         "codex review --base origin/main",
-        "Cloud review will request Cursor Bugbot if Codex reports a usage limit.",
+        "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.",
         "pr:review:",
         "CI_AGENT_CMD: pr-review",
+        "pr:review:stabilize:",
+        "CI_AGENT_CMD: pr-review-stabilize",
+        "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default \"0\" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'",
+        "REVIEW_WAIT_SECONDS: '{{default \"600\" .REVIEW_WAIT_SECONDS}}'",
     ] {
         assert!(
             agentic_tasks.contains(required),
@@ -117,20 +125,100 @@ fn complete_validation_starts_before_non_blocking_review_request() -> Result<()>
         );
     }
     assert!(
-        direct_validation.contains("validation is already running"),
-        "review-request failure must not block validation"
+        direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
+        "review stabilization must expose a bounded wait"
     );
     assert!(
         direct_validation.contains(
-            "changed head after validation dispatch; validate the replacement head explicitly.\" >&2\n          exit 2"
+            "changed head or base during review stabilization; validate the replacement state explicitly.\" >&2\n          exit 2"
         ),
-        "a head change after dispatch must fail so the replacement head is validated"
+        "a head or base change during stabilization must fail so the replacement state is validated"
     );
     assert!(
         direct_validation.contains(
-            "changed head while requesting review; validate the replacement head explicitly.\" >&2\n          exit 2"
+            "changed head or base while validation was dispatched; removed $validation_label from the replacement state."
         ),
-        "a head change during the review request must fail so the replacement head is validated"
+        "a head or base change during label dispatch must remove the replacement-state label"
+    );
+    assert!(
+        direct_validation.contains("gh run cancel \"$run_id\""),
+        "a replacement-head validation dispatched during the race must be cancelled"
+    );
+    for required in [
+        "for run_status in requested waiting pending queued in_progress",
+        "any(.pull_requests[]?; .number == $REQUESTED_PR)",
+        "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\")",
+    ] {
+        assert!(
+            direct_validation.contains(required),
+            "replacement-head dispatch cleanup missing: {required}"
+        );
+    }
+    assert!(
+        !direct_validation.contains(
+            "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\" or .name == \\\"Web research\\\")"
+        ),
+        "label-race cleanup must preserve independently synchronized Web research runs"
+    );
+
+    let replacement_head = read_fallible(".github/workflows/pr-head-stabilization.yml")?;
+    for required in [
+        "pull_request_target:",
+        "types: [edited, opened, reopened, synchronize]",
+        "workflow_dispatch:",
+        "pr_number:",
+        "head_sha:",
+        "base_sha:",
+        "actions: write",
+        "pull-requests: write",
+        "group: pr-head-boundary-${{ github.event.pull_request.number || inputs.pr_number }}",
+        "cancel-in-progress: false",
+        "runs-on: ubuntu-latest",
+        "<!-- nook-head-transition:",
+        "github.rest.actions.getWorkflowRun",
+        "Skipping obsolete head-boundary backfill.",
+        "Skipping obsolete head-boundary event.",
+        "github.rest.issues.updateComment",
+        "github.rest.issues.createComment",
+        "context.payload.changes?.base?.ref?.from",
+        "Ignoring PR edit without a base-ref change.",
+        "run.name !== \"Web research\"",
+        "associatedPullRequest?.base?.sha !== currentPr.base.sha",
+        ".filter((run) => activeStatuses.has(run.status))",
+        "latestPr.base.ref === eventBaseRef",
+        "associatedPullRequest?.base?.sha !== latestPr.base.sha",
+        "github.rest.actions.listWorkflowRuns",
+        "github.rest.pulls.get",
+        "inspectionDeadline = Date.now() + 45_000",
+        "setTimeout(resolve, 5_000)",
+        "run.head_sha !== currentPr.head.sha || predatesBaseRetarget",
+        "run.head_sha === latestPr.head.sha &&",
+        "Could not recheck PR state before cancelling",
+        "retrying within the registration window",
+        "run.pull_requests.find",
+        "github.rest.actions.cancelWorkflowRun",
+        "github.rest.actions.getWorkflowRun",
+        "latestRun.status === \"completed\"",
+        "\"PR\"",
+        "\"Rust ecosystem checks\"",
+        "\"Web research\"",
+    ] {
+        assert!(
+            replacement_head.contains(required),
+            "replacement-head cancellation contract missing: {required}"
+        );
+    }
+    let cancellation_job = replacement_head
+        .split_once("\n  obsolete-heads:\n")
+        .map(|(_, job)| job)
+        .context("replacement-head workflow must keep the cancellation job")?;
+    assert!(
+        !cancellation_job.contains("concurrency:"),
+        "obsolete-run cancellation must not share the serialized marker group"
+    );
+    assert!(
+        !replacement_head.contains("actions/checkout"),
+        "privileged replacement-head cancellation must never checkout PR code"
     );
     Ok(())
 }
@@ -399,8 +487,8 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
         remote_tasks
             .matches(".github/scripts/require-current-base.sh")
             .count(),
-        2,
-        "focused expensive dispatch and complete PR validation must share the freshness guard"
+        3,
+        "focused expensive dispatch and both complete-validation boundaries must enforce freshness"
     );
     assert!(remote_tasks.contains("baseRefName"));
 
@@ -802,7 +890,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         );
     }
     for required in [
-        "pr_sha=\"$(gh pr view \"$REQUESTED_PR\"",
+        "pr_state=\"$(gh pr view \"$REQUESTED_PR\"",
         "if [ \"$local_sha\" != \"$pr_sha\" ]",
         "--remove-label \"$validation_label\"",
         "--add-label \"$validation_label\"",

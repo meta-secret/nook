@@ -39,15 +39,17 @@ Follow the delivery sequence in the cortex workflow:
 4. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
 5. Commit and run advisory local Codex review.
 6. Push and use focused execution on the configured Actions runner when useful.
-7. Trigger complete validation and exact-head Cloud review through Loom.
-8. Resolve actionable feedback while repository-owned checks run.
+7. Stabilize one bounded exact-head Codex review, then trigger complete
+   validation through Loom.
+8. Resolve current actionable feedback before validation dispatch.
 9. Fix until exact-head checks pass.
 10. When session memory was created, reflect, promote durable knowledge, remove the file, and verify readiness.
 11. Squash-merge and publish the Workbench completion records.
 12. Report duration.
 
-Never wait for a Codex or Cursor result after repository-owned checks finish.
-`task pr:review` may request Cursor Bugbot when Codex reports a usage limit.
+Never request another review after repository-owned checks finish. Complete
+validation stabilizes one bounded exact-head Codex review first. Cursor Bugbot
+must remain inactive.
 Do not request Claude, CodeRabbit, or other optional reviewers. Never run heavy
 product work locally. Focused daemon-free tasks and trusted native or Rust
 ecosystem merge gates may run on fresh ARC Kata microVMs. Fork PRs and
@@ -84,7 +86,7 @@ or less, and never let a child add tasks or tiers.
 | 3    | Create session memory for substantial work; implement the plan; capture discoveries; update product specs when justified                                        |
 | 4    | **Always** `task loom:pre-push`                                                                                                                                 |
 | 5    | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff                                             |
-| 6    | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to dispatch validation and request review             |
+| 6    | Run focused `task remote` jobs as useful; then use `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` for review-first validation                       |
 | 7    | Watch exact-head repository-owned checks and inspect feedback already present                                                                                   |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation                                                     |
 | 11   | Reflect; promote durable knowledge; update the graph when needed; delete session memory; revalidate a changed head                                              |

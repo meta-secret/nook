@@ -12,7 +12,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - |
-        set -eu
+        set -euo pipefail
 
         requested_tasks="$(.github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS")"
 
@@ -59,12 +59,14 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Trigger required PR validation immediately, then request non-blocking exact-head Cloud review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate).
+    desc: Stabilize exact-head Cloud review before triggering required PR validation (PR=<number>, FULL_E2E=1 for a Main-fix browser gate, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     env:
       REQUESTED_PR: '{{.PR}}'
       REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
+      REQUEST_REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
+      REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
         msg: GitHub CLI is required.
@@ -72,7 +74,7 @@ tasks:
         msg: GitHub CLI must be authenticated.
     cmds:
       - |
-        set -eu
+        set -euo pipefail
 
         case "$REQUESTED_PR" in
           ''|*[!0-9]*|0)
@@ -86,8 +88,9 @@ tasks:
         fi
 
         local_sha="$(git rev-parse HEAD)"
-        pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
-        base_ref="$(gh pr view "$REQUESTED_PR" --json baseRefName --jq .baseRefName)"
+        pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
+        pr_sha="${pr_state%%|*}"
+        base_ref="${pr_state#*|}"
         if [ "$local_sha" != "$pr_sha" ]; then
           echo "Local HEAD is not PR #$REQUESTED_PR's current head." >&2
           echo "local: $local_sha" >&2
@@ -101,28 +104,77 @@ tasks:
 
         .github/scripts/require-current-base.sh origin "$base_ref"
 
+        task pr:review:stabilize \
+          PR="$REQUESTED_PR" \
+          REVIEW_WAIT_SECONDS="$REQUEST_REVIEW_WAIT_SECONDS" \
+          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED"
+
+        stabilized_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
+        stabilized_pr_sha="${stabilized_pr_state%%|*}"
+        stabilized_base_ref="${stabilized_pr_state#*|}"
+        if [ "$local_sha" != "$stabilized_pr_sha" ] || [ "$base_ref" != "$stabilized_base_ref" ]; then
+          echo "PR #$REQUESTED_PR changed head or base during review stabilization; validate the replacement state explicitly." >&2
+          exit 2
+        fi
+        .github/scripts/require-current-base.sh origin "$stabilized_base_ref"
+
         validation_label="ci:validate"
+        stale_validation_label="ci:full-e2e"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
           validation_label="ci:full-e2e"
+          stale_validation_label="ci:validate"
         fi
 
         current_labels="$(gh pr view "$REQUESTED_PR" --json labels --jq '.labels[].name')"
+        if printf '%s\n' "$current_labels" | grep -Fxq "$stale_validation_label"; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$stale_validation_label"
+        fi
         if printf '%s\n' "$current_labels" | grep -Fxq "$validation_label"; then
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
+        dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
+        dispatched_pr_sha="${dispatched_pr_state%%|*}"
+        dispatched_base_ref="${dispatched_pr_state#*|}"
+        if [ "$local_sha" != "$dispatched_pr_sha" ] || [ "$base_ref" != "$dispatched_base_ref" ]; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
+          repository="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+          cancel_attempt=0
+          cancelled_run_ids=""
+          while [ "$cancel_attempt" -lt 6 ]; do
+            run_ids="$(
+              for run_status in requested waiting pending queued in_progress; do
+                gh api --paginate \
+                  "repos/$repository/actions/runs?head_sha=$dispatched_pr_sha&status=$run_status&per_page=100" \
+                  --jq ".workflow_runs[] | select(.event == \"pull_request\") | select(any(.pull_requests[]?; .number == $REQUESTED_PR)) | select(.name == \"PR\" or .name == \"Rust ecosystem checks\") | .id"
+              done | sort -u
+            )"
+            if [ -n "$run_ids" ]; then
+              for run_id in $run_ids; do
+                case " $cancelled_run_ids " in
+                  *" $run_id "*) ;;
+                  *)
+                    if gh run cancel "$run_id"; then
+                      cancelled_run_ids="$cancelled_run_ids $run_id"
+                    elif latest_run_status="$(gh run view "$run_id" --json status --jq .status)"; then
+                      if [ "$latest_run_status" = "completed" ]; then
+                        cancelled_run_ids="$cancelled_run_ids $run_id"
+                      else
+                        echo "Could not cancel active replacement-state run $run_id; retrying within the bounded cleanup window." >&2
+                      fi
+                    else
+                      echo "Could not cancel or recheck replacement-state run $run_id; retrying within the bounded cleanup window." >&2
+                    fi
+                    ;;
+                esac
+              done
+            fi
+            cancel_attempt=$((cancel_attempt + 1))
+            if [ "$cancel_attempt" -lt 6 ]; then
+              sleep 5
+            fi
+          done
+          echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
+          exit 2
+        fi
         echo "Triggered PR validation for $pr_sha with label $validation_label."
-
-        pre_review_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
-        if [ "$local_sha" != "$pre_review_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head after validation dispatch; validate the replacement head explicitly." >&2
-          exit 2
-        fi
-        if ! task pr:review PR="$REQUESTED_PR"; then
-          echo "Exact-head review request was unavailable; validation is already running." >&2
-        fi
-        post_review_pr_sha="$(gh pr view "$REQUESTED_PR" --json headRefOid --jq .headRefOid)"
-        if [ "$local_sha" != "$post_review_pr_sha" ]; then
-          echo "PR #$REQUESTED_PR changed head while requesting review; validate the replacement head explicitly." >&2
-          exit 2
-        fi

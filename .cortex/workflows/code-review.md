@@ -4,9 +4,11 @@
 
 Review policy is explicit:
 
-- Exact-head Cloud review runs alongside repository-owned GitHub Actions.
-- Codex is the first reviewer. When Codex reports that it cannot review, the
-  same `task pr:review` request switches to Cursor Bugbot.
+- Exact-head Cloud review settles before expensive repository-owned GitHub
+  Actions begin, subject to a bounded timeout.
+- Codex is the only automatic review provider. Do not activate Cursor Bugbot.
+- A Codex eye reaction is liveness evidence only. It does not settle review and
+  is never required for validation or readiness.
 - Review is not a merge gate. A missing or unavailable review result does not
   delay delivery after those checks finish.
 - Other external review services remain optional. Do not request or wait for
@@ -24,8 +26,7 @@ The command compares the branch with current `origin/main`. Handle its outcome
 as follows:
 
 - If the Codex CLI or authentication is unavailable, it reports the skip and
-  does not block delivery. There is no headless Cursor review CLI. Cloud review
-  later requests Cursor Bugbot when Codex reports a usage limit.
+  does not block delivery. Cloud review remains Codex-only.
 - Treat any actionable finding as normal implementation work. Run pre-push
   hygiene again after fixes.
 - The bounded implementation worker cannot run Git. The harness commits and
@@ -43,16 +44,22 @@ task pr:validate PR=<number>
 
 The command:
 
-1. Immediately dispatches repository-owned GitHub Actions.
-2. Rechecks that the PR head did not change after dispatch.
-3. Attempts one idempotent, exact-head Cloud review request.
+1. Requests one idempotent exact-head Codex review.
+2. Backfills the trusted head boundary through default-branch workflow code
+   when the pull request predates this protocol.
+3. Waits for a clean result, current-head findings, or the bounded 600-second
+   stabilization timeout.
+4. Stops before validation when findings exist so the agent can address one
+   coherent batch.
+5. Opens a circuit breaker after three finding batches and requires a
+   comprehensive stabilization pass. After resolving its coherent batch, the
+   delivery owner explicitly acknowledges that pass with
+   `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation.
+6. Rechecks that the PR head did not change, then dispatches repository-owned
+   GitHub Actions.
 
-That review request prefers Codex. After a fresh Codex comment, it probes
-briefly for a Codex usage-limit reply. If that exact-head Codex request already
-has a usage-limit reply, or the probe sees one, it posts `cursor review`
-instead of retrying Codex. A later head tries Codex first again.
-
-Review-request failure does not fail validation. Do not wait for a result.
+Review unavailability does not deadlock validation: the bounded timeout allows
+the checks to proceed. A liveness reaction does not end that wait.
 
 Use `task pr:review PR=<number>` only when an exact-head review request is needed
 without complete validation. It is idempotent and does not wait for a result.
@@ -86,9 +93,8 @@ empty. Feedback that arrives while checks run takes priority.
 
 `task pr:ready` enforces unresolved-thread count alongside the exact-head
 deployment, branch state, and applicable repository-owned PR checks. It reports
-existing comments and reviews for inspection. It does not require a Codex or
-Cursor result and does not wait for one. A Cursor Bugbot disabled-account
-upsell comment is status. It is not a finding.
+existing comments and reviews for inspection. It does not require a Codex
+result and does not wait for one.
 
 ## Handling feedback that already exists
 
@@ -104,8 +110,8 @@ Cursor, CodeRabbit, or another service:
 4. Commit and push the completed fix.
 5. Use focused hosted tasks as useful.
 6. If complete validation was already requested, restart it for the replacement
-   head. This also requests exact-head Cloud review. Otherwise start it when
-   that head is ready for the final gate.
+   head. This first stabilizes one exact-head Codex review. Otherwise start it
+   when that head is ready for the final gate.
 7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 8. Resolve only after the targeted reply is visible and the finding is fixed or

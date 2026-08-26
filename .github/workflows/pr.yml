@@ -10,7 +10,7 @@
 # Validation is requested explicitly by adding a label. Ordinary pushes do not
 # spend hosted workers. A later push invalidates the prior head's checks, so the
 # label must be toggled again before merge. The trusted Linear close workflow
-# claims the same concurrency group to cancel in-flight validation on PR close.
+# claims the same exact-head concurrency group to cancel in-flight validation on PR close.
 # Schedule, manual, and minds-only PR ecosystem entry points stay in rust-ecosystem.yml.
 
 name: PR
@@ -33,7 +33,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}
+  group: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: true
 
 env:

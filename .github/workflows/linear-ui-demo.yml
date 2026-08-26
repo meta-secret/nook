@@ -17,10 +17,10 @@ permissions:
   issues: write
   pull-requests: write
 
-# A close event claims the same repository-wide group as pr.yml and cancels any
-# in-flight validation. workflow_run publishers use a unique group.
+# A close event claims the same exact-head group as pr.yml and cancels current
+# validation. workflow_run publishers use a unique group.
 concurrency:
-  group: ${{ github.event_name == 'pull_request_target' && format('pr-{0}', github.event.pull_request.number) || format('linear-ui-demo-{0}', github.run_id) }}
+  group: ${{ github.event_name == 'pull_request_target' && format('pr-{0}-{1}', github.event.pull_request.number, github.event.pull_request.head.sha) || format('linear-ui-demo-{0}', github.run_id) }}
   cancel-in-progress: true
 
 env:

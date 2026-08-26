@@ -9,8 +9,9 @@ import {
   isCodexReviewer,
   isCursorReviewStatusBody,
   isCursorReviewer,
-  isExactHeadReviewRequestComment,
   isSubmittedReviewState,
+  isTrustedCodexReviewRequestComment,
+  isTrustedExactHeadReviewRequest,
 } from "./github-review.js";
 import { createLogger } from "./logger.js";
 
@@ -21,12 +22,20 @@ export {
   ExactHeadReviewProvider,
   codexReviewRequestMarker,
   cursorReviewRequestMarker,
+  isTrustedCodexReviewRequestComment,
+  isTrustedExactHeadReviewRequest,
   requestExactHeadReview,
 } from "./github-review.js";
 
 const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
+
+type HeadTransitionBackfillInput = {
+  octokit: Octokit;
+  prNumber: number;
+  repoRef: RepoRef;
+};
 
 export enum OpenPrLookupKind {
   Found = "found",
@@ -59,6 +68,28 @@ export function resolveGitHubToken(): string {
 
 export function createOctokit(): Octokit {
   return new Octokit({ auth: resolveGitHubToken() });
+}
+
+export async function requestHeadTransitionBackfill(
+  input: HeadTransitionBackfillInput,
+): Promise<void> {
+  const { owner, repo } = input.repoRef;
+  const { data: pr } = await input.octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: input.prNumber,
+  });
+  await input.octokit.rest.actions.createWorkflowDispatch({
+    owner,
+    repo,
+    workflow_id: "pr-head-stabilization.yml",
+    ref: pr.base.ref,
+    inputs: {
+      base_sha: pr.base.sha,
+      head_sha: pr.head.sha,
+      pr_number: String(input.prNumber),
+    },
+  });
 }
 
 export async function findOpenPr(
@@ -218,7 +249,9 @@ type ReviewThreadPage = {
   repository: {
     pullRequest: {
       reviewThreads: {
-        nodes: Array<{ isResolved: boolean }>;
+        nodes: Array<{
+          isResolved: boolean;
+        }>;
         pageInfo: { hasNextPage: boolean; endCursor?: string };
       };
     };
@@ -233,7 +266,9 @@ const REVIEW_THREADS_QUERY = `
     repository(owner: $owner, name: $repo) {
       pullRequest(number: $number) {
         reviewThreads(first: 100, after: $cursor) {
-          nodes { isResolved }
+          nodes {
+            isResolved
+          }
           pageInfo { hasNextPage endCursor }
         }
       }
@@ -254,10 +289,56 @@ export type PrFeedbackSummary = {
     requested: boolean;
     settled: boolean;
   };
+  currentIterationComments: number;
+  findingBatches: number;
+  headTransitionObserved: boolean;
   substantiveComments: number;
   substantiveReviews: number;
   unresolvedThreads: number;
 };
+
+type RepositoryStatusCommentInput = {
+  authorAssociation: string;
+  body: string;
+  cursorMarker: string;
+  marker: string;
+  user: unknown;
+};
+
+enum HeadTransitionState {
+  Observed = "observed",
+  Pending = "pending",
+}
+
+type HeadTransitionBoundary =
+  | { at: string; state: HeadTransitionState.Observed }
+  | { state: HeadTransitionState.Pending };
+
+type HeadTransitionComment = {
+  readonly body: string;
+  readonly user: unknown;
+};
+
+type CurrentHeadTransitionInput = {
+  baseRef: string;
+  comments: readonly HeadTransitionComment[];
+  headSha: string;
+};
+
+function findCurrentHeadTransition(
+  input: CurrentHeadTransitionInput,
+): HeadTransitionBoundary {
+  const markerPrefix = headTransitionMarkerPrefix(input.headSha, input.baseRef);
+  const transitionTimes = input.comments
+    .filter((comment) => isGitHubActionsBot(comment.user))
+    .map((comment) => transitionTimeFromMarker(comment.body, markerPrefix))
+    .filter((transitionTime) => transitionTime.length > 0)
+    .sort();
+  const transitionTime = transitionTimes.at(-1);
+  return transitionTime
+    ? { at: transitionTime, state: HeadTransitionState.Observed }
+    : { state: HeadTransitionState.Pending };
+}
 
 export async function inspectPrFeedback(
   octokit: Octokit,
@@ -270,6 +351,35 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
+  const [issueComments, reviews, reviewComments] = await Promise.all([
+    octokit.paginate(octokit.rest.issues.listComments, {
+      owner,
+      repo,
+      issue_number: prNumber,
+      per_page: 100,
+    }),
+    octokit.paginate(octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+    octokit.paginate(octokit.rest.pulls.listReviewComments, {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+  ]);
+  const transitionInput: CurrentHeadTransitionInput = {
+    baseRef: pr.base.ref,
+    comments: issueComments.map((comment) => ({
+      body: comment.body ?? "",
+      user: comment.user,
+    })),
+    headSha: pr.head.sha,
+  };
+  const currentHeadTransition = findCurrentHeadTransition(transitionInput);
 
   let unresolvedThreads = 0;
   enum PaginationKind {
@@ -302,25 +412,15 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
-  const [issueComments, reviews] = await Promise.all([
-    octokit.paginate(octokit.rest.issues.listComments, {
-      owner,
-      repo,
-      issue_number: prNumber,
-      per_page: 100,
-    }),
-    octokit.paginate(octokit.rest.pulls.listReviews, {
-      owner,
-      repo,
-      pull_number: prNumber,
-      per_page: 100,
-    }),
-  ]);
-
-  const marker = codexReviewRequestMarker(pr.head.sha);
+  const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
   const reviewRequests = issueComments.filter((comment) =>
-    comment.body?.includes(marker),
+    isTrustedExactHeadReviewRequest({
+      authorAssociation: comment.author_association,
+      body: comment.body ?? "",
+      marker,
+      user: comment.user,
+    }),
   );
   const cursorReviewRequests = issueComments.filter((comment) =>
     comment.body?.includes(cursorMarker),
@@ -329,6 +429,10 @@ export async function inspectPrFeedback(
     (review) =>
       review.commit_id === pr.head.sha &&
       isSubmittedReviewState(review.state) &&
+      evidenceFollowsTransition(
+        review.submitted_at ?? "",
+        currentHeadTransition,
+      ) &&
       isCodexReviewer(review.user),
   );
   const currentHeadCursorReview = reviews.some(
@@ -353,16 +457,35 @@ export async function inspectPrFeedback(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
   const cleanComment = issueComments.some((comment) =>
+    evidenceFollowsTransition(comment.created_at ?? "", currentHeadTransition) &&
     isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
   const substantiveComments = issueComments.filter(
     (comment) =>
-      !isRepositoryStatusComment(comment.body ?? "") &&
+      !isRepositoryStatusComment({
+        authorAssociation: comment.author_association,
+        body: comment.body ?? "",
+        cursorMarker,
+        marker,
+        user: comment.user,
+      }) &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
+  const currentIterationComments =
+    currentHeadTransition.state === HeadTransitionState.Observed
+      ? substantiveComments.filter(
+          (comment) =>
+            comment.created_at >= currentHeadTransition.at &&
+            !isNonActionableReviewBody(comment.body ?? ""),
+        )
+      : [];
   const substantiveReviews = reviews.filter((review) => {
-    if (review.commit_id !== pr.head.sha || review.state === "APPROVED") {
+    if (
+      review.commit_id !== pr.head.sha ||
+      !isSubmittedReviewState(review.state) ||
+      review.state === "APPROVED"
+    ) {
       return false;
     }
     if (review.state === "CHANGES_REQUESTED") {
@@ -372,9 +495,39 @@ export async function inspectPrFeedback(
     return (
       body.length > 0 &&
       !isCodexReviewStatusBody(body, review.user) &&
-      !isCursorReviewStatusBody(body, review.user)
+      !isCursorReviewStatusBody(body, review.user) &&
+      !isNonActionableReviewBody(body)
     );
   });
+
+  const normalizedReviewComments: ReviewFindingComment[] = reviewComments.map(
+    (comment) => {
+      const reviewerLogin = comment.user?.login;
+      return {
+        isReply: typeof comment.in_reply_to_id === "number",
+        reviewerLogin:
+          typeof reviewerLogin === "string" ? reviewerLogin : "",
+        reviewId:
+          typeof comment.pull_request_review_id === "number"
+            ? comment.pull_request_review_id
+            : 0,
+      };
+    },
+  );
+  const normalizedReviews: ReviewFindingReview[] = reviews.map((review) => ({
+    active: isSubmittedReviewState(review.state),
+    actionable: isActionableReviewBody({
+      body: review.body?.trim() ?? "",
+      state: review.state,
+      user: review.user,
+    }),
+    reviewId: review.id,
+    reviewerLogin: review.user?.login ?? "",
+  }));
+  const findingBatchRequest: AutomatedFindingBatchRequest = {
+    comments: normalizedReviewComments,
+    reviews: normalizedReviews,
+  };
 
   return {
     codexReview: {
@@ -389,10 +542,62 @@ export async function inspectPrFeedback(
       requested: cursorReviewRequests.length > 0,
       settled: currentHeadCursorReview,
     },
+    currentIterationComments: currentIterationComments.length,
+    findingBatches: countAutomatedFindingBatches(findingBatchRequest),
+    headTransitionObserved:
+      currentHeadTransition.state === HeadTransitionState.Observed,
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
   };
+}
+
+type ReviewFindingComment = {
+  readonly isReply: boolean;
+  readonly reviewerLogin: string;
+  readonly reviewId: number;
+};
+
+type ReviewFindingReview = {
+  readonly active: boolean;
+  readonly actionable: boolean;
+  readonly reviewerLogin: string;
+  readonly reviewId: number;
+};
+
+type AutomatedFindingBatchRequest = {
+  readonly comments: readonly ReviewFindingComment[];
+  readonly reviews: readonly ReviewFindingReview[];
+};
+
+export function countAutomatedFindingBatches(
+  request: AutomatedFindingBatchRequest,
+): number {
+  const reviewIds = new Set<number>();
+  const activeAutomatedReviewIds = new Set(
+    request.reviews
+      .filter((review) => {
+        const reviewer = { login: review.reviewerLogin };
+        return (
+          review.active &&
+          (isCodexReviewer(reviewer) || isCursorReviewer(reviewer))
+        );
+      })
+      .map((review) => review.reviewId),
+  );
+  for (const comment of request.comments) {
+    if (comment.isReply) continue;
+    if (activeAutomatedReviewIds.has(comment.reviewId)) {
+      reviewIds.add(comment.reviewId);
+    }
+  }
+  for (const review of request.reviews) {
+    if (!review.actionable) continue;
+    const reviewer = { login: review.reviewerLogin };
+    if (!isCodexReviewer(reviewer) && !isCursorReviewer(reviewer)) continue;
+    if (review.reviewId > 0) reviewIds.add(review.reviewId);
+  }
+  return reviewIds.size;
 }
 
 function isNotFound(err: unknown): boolean {
@@ -419,19 +624,101 @@ function isMainPrIgnoredPath(path: string): boolean {
   );
 }
 
-function isRepositoryStatusComment(body: string): boolean {
-  const trimmed = body.trimStart();
+export function isRepositoryStatusComment(
+  input: RepositoryStatusCommentInput,
+): boolean {
+  const trimmed = input.body.trimStart();
   return (
-    trimmed.startsWith("### Preview deployed") ||
-    trimmed.startsWith("### Web research preview") ||
-    trimmed.startsWith("<!-- nook-ui-demo -->") ||
-    trimmed.startsWith("<!-- nook-core-coverage -->") ||
-    isExactHeadReviewRequestComment(trimmed) ||
+    (isGitHubActionsBot(input.user) &&
+      (trimmed.startsWith("### Preview deployed") ||
+        trimmed.startsWith("### Web research preview") ||
+        trimmed.startsWith("<!-- nook-ui-demo -->") ||
+        trimmed.startsWith("<!-- nook-core-coverage -->") ||
+        trimmed.startsWith("<!-- nook-head-transition:"))) ||
+    isTrustedCodexReviewRequestComment({
+      authorAssociation: input.authorAssociation,
+      body: input.body,
+      user: input.user,
+    }) ||
+    (["OWNER", "MEMBER", "COLLABORATOR"].includes(
+      input.authorAssociation,
+    ) &&
+      /^cursor review\n\n<!-- nook-cursor-review:[^\s<>]+ -->$/.test(
+        input.body.trim(),
+      )) ||
     isAgentImplementationHandoffComment(trimmed) ||
-    // Codex posts this when it cannot review; it is status, not a finding.
-    trimmed.includes("Codex usage limits for code reviews") ||
-    // Cursor posts this when Bugbot is not enabled; it is status, not a finding.
-    trimmed.includes("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->")
+    (isCodexReviewer(input.user) &&
+      trimmed.startsWith(
+        "You have reached your Codex usage limits for code reviews.",
+      )) ||
+    (isCursorReviewer(input.user) &&
+      trimmed.startsWith("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->"))
+  );
+}
+
+function headTransitionMarkerPrefix(headSha: string, baseRef: string): string {
+  return `<!-- nook-head-transition:${headSha}:${baseRef}:`;
+}
+
+function transitionTimeFromMarker(body: string, markerPrefix: string): string {
+  const markerLine = body.trimStart().split("\n", 1)[0] ?? "";
+  if (!markerLine.startsWith(markerPrefix) || !markerLine.endsWith(" -->")) {
+    return "";
+  }
+  const transitionTime = markerLine.slice(markerPrefix.length, -4);
+  return Number.isNaN(Date.parse(transitionTime)) ? "" : transitionTime;
+}
+
+function evidenceFollowsTransition(
+  evidenceAt: string,
+  transition: HeadTransitionBoundary,
+): boolean {
+  if (transition.state === HeadTransitionState.Pending) return false;
+  return evidenceAt.length === 0 || evidenceAt >= transition.at;
+}
+
+function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {
+  return (
+    typeof user === "object" &&
+    !!user &&
+    "login" in user &&
+    user.login === "github-actions[bot]"
+  );
+}
+
+export function isNonActionableReviewBody(body: string): boolean {
+  const normalized = body
+    .trim()
+    .toLowerCase()
+    .replace(/[.!\s]+$/g, "");
+  return [
+    "lgtm",
+    "looks good",
+    "looks good to me",
+    "nice work",
+    "no issues",
+    "no issues found",
+    "thank you",
+    "thanks",
+  ].includes(normalized);
+}
+
+function isActionableReviewBody(input: {
+  readonly body: string;
+  readonly state: string;
+  readonly user: unknown;
+}): boolean {
+  if (!isCodexReviewer(input.user) && !isCursorReviewer(input.user)) {
+    return false;
+  }
+  if (!isSubmittedReviewState(input.state)) return false;
+  if (input.state === "APPROVED") return false;
+  if (input.state === "CHANGES_REQUESTED") return true;
+  return (
+    input.body.length > 0 &&
+    !isCodexReviewStatusBody(input.body, input.user) &&
+    !isCursorReviewStatusBody(input.body, input.user) &&
+    !isNonActionableReviewBody(input.body)
   );
 }
 
@@ -441,4 +728,3 @@ const AGENT_IMPLEMENTATION_HANDOFF_COMMENT =
 function isAgentImplementationHandoffComment(body: string): boolean {
   return AGENT_IMPLEMENTATION_HANDOFF_COMMENT.test(body.trim());
 }
-

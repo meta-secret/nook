@@ -79,7 +79,9 @@ type GitHubText =
   | { kind: GitHubTextKind.Present; value: string };
 
 type IssueComment = {
+  authorAssociation: string;
   body: GitHubText;
+  createdAt: GitHubText;
   id: number;
   user: unknown;
 };
@@ -88,6 +90,7 @@ type PullReview = {
   body: GitHubText;
   commitId: GitHubText;
   state: GitHubText;
+  submittedAt: GitHubText;
   user: unknown;
 };
 
@@ -96,8 +99,11 @@ type CommentReaction = {
   user?: unknown;
 };
 
-export function codexReviewRequestMarker(headSha: string): string {
-  return `<!-- nook-codex-review:${headSha} -->`;
+export function codexReviewRequestMarker(
+  headSha: string,
+  baseSha = "base-sha",
+): string {
+  return `<!-- nook-codex-review:${headSha}:${baseSha} -->`;
 }
 
 export function cursorReviewRequestMarker(headSha: string): string {
@@ -108,6 +114,36 @@ export function isExactHeadReviewRequestComment(body: string): boolean {
   return (
     body.includes("<!-- nook-codex-review:") ||
     body.includes("<!-- nook-cursor-review:")
+  );
+}
+
+export function isTrustedExactHeadReviewRequest(input: {
+  readonly authorAssociation: string;
+  readonly body: string;
+  readonly marker: string;
+  readonly user: unknown;
+}): boolean {
+  return (
+    isTrustedCodexReviewRequestComment(input) &&
+    input.body.trim() === `@codex review\n\n${input.marker}`
+  );
+}
+
+export function isTrustedCodexReviewRequestComment(input: {
+  readonly authorAssociation: string;
+  readonly body: string;
+  readonly user: unknown;
+}): boolean {
+  const trustedAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+  const login = actorLogin(input.user);
+  const trustedWorkflowActor =
+    login.state === ActorLoginState.Found &&
+    login.value === "github-actions[bot]";
+  return (
+    (trustedAssociations.has(input.authorAssociation) || trustedWorkflowActor) &&
+    /^@codex review\n\n<!-- nook-codex-review:[^\s<>]+ -->$/.test(
+      input.body.trim(),
+    )
   );
 }
 
@@ -124,7 +160,9 @@ export async function requestExactHeadReview(
     pull_number: prNumber,
   });
   const headSha = pr.head.sha;
+  const baseSha = pr.base.sha;
   const snapshot = await loadReviewSnapshot({
+    baseSha,
     headSha,
     octokit,
     owner,
@@ -140,26 +178,14 @@ export async function requestExactHeadReview(
       settled: true,
     };
   }
-  if (snapshot.cursor.settled) {
-    return {
-      fallback: snapshot.codex.usageLimited
-        ? ExactHeadReviewFallback.CodexUsageLimit
-        : ExactHeadReviewFallback.None,
-      headSha,
-      provider: ExactHeadReviewProvider.Cursor,
-      requested: false,
-      settled: true,
-    };
-  }
   if (snapshot.codex.usageLimited) {
-    return requestCursorReview({
-      alreadyRequested: snapshot.cursor.requested,
+    return {
+      fallback: ExactHeadReviewFallback.CodexUsageLimit,
       headSha,
-      octokit,
-      owner,
-      prNumber,
-      repo,
-    });
+      provider: ExactHeadReviewProvider.Codex,
+      requested: false,
+      settled: false,
+    };
   }
   if (snapshot.codex.requested) {
     return {
@@ -171,7 +197,7 @@ export async function requestExactHeadReview(
     };
   }
 
-  const codexMarker = codexReviewRequestMarker(headSha);
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
   await octokit.rest.issues.createComment({
     owner,
     repo,
@@ -190,6 +216,7 @@ export async function requestExactHeadReview(
 
   const probed = await probeCodexAvailability({
     availability,
+    baseSha,
     headSha,
     octokit,
     owner,
@@ -197,14 +224,13 @@ export async function requestExactHeadReview(
     repo,
   });
   if (probed.kind === CodexProbeKind.UsageLimited) {
-    return requestCursorReview({
-      alreadyRequested: probed.cursorRequested,
+    return {
+      fallback: ExactHeadReviewFallback.CodexUsageLimit,
       headSha,
-      octokit,
-      owner,
-      prNumber,
-      repo,
-    });
+      provider: ExactHeadReviewProvider.Codex,
+      requested: true,
+      settled: false,
+    };
   }
   return {
     fallback: ExactHeadReviewFallback.None,
@@ -359,6 +385,7 @@ type ReviewSnapshot = {
 };
 
 async function loadReviewSnapshot(input: {
+  baseSha: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
@@ -369,49 +396,64 @@ async function loadReviewSnapshot(input: {
     listIssueComments(input),
     listPullReviews(input),
   ]);
-  return snapshotFrom(comments, reviews, input.headSha, input);
+  return snapshotFrom(comments, reviews, input.headSha, input.baseSha, input);
 }
 
 async function snapshotFrom(
   comments: IssueComment[],
   reviews: PullReview[],
   headSha: string,
+  baseSha: string,
   reactionSource: {
     octokit: Octokit;
     owner: string;
     repo: string;
   },
 ): Promise<ReviewSnapshot> {
-  const codexMarker = codexReviewRequestMarker(headSha);
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
   const cursorMarker = cursorReviewRequestMarker(headSha);
-  const codexRequests = comments.filter((comment) =>
-    githubTextIncludes({ marker: codexMarker, text: comment.body }),
+  const codexRequests = comments.filter(
+    (comment) =>
+      comment.body.kind === GitHubTextKind.Present &&
+      isTrustedExactHeadReviewRequest({
+        authorAssociation: comment.authorAssociation,
+        body: comment.body.value,
+        marker: codexMarker,
+        user: comment.user,
+      }),
   );
   const cursorRequests = comments.filter((comment) =>
     githubTextIncludes({ marker: cursorMarker, text: comment.body }),
   );
-  const codexReviewSettled = reviews.some((review) =>
-    isExactHeadSubmittedReview({
-      actorCheck: isCodexReviewer,
-      headSha,
-      review,
-    }),
-  );
+  const codexReviewSettled =
+    codexRequests.length > 0 &&
+    reviews.some((review) =>
+      isExactHeadSubmittedReview({
+        actorCheck: isCodexReviewer,
+        boundaryAt: latestRequestTime(codexRequests),
+        headSha,
+        review,
+      }),
+    );
   const cursorReviewSettled = reviews.some((review) =>
     isExactHeadSubmittedReview({
       actorCheck: isCursorReviewer,
+      boundaryAt: { kind: GitHubTextKind.Missing },
       headSha,
       review,
     }),
   );
-  const cleanComment = comments.some(
-    (comment) =>
-      comment.body.kind === GitHubTextKind.Present &&
-      isCleanCodexReviewComment(comment.body.value, comment.user, headSha),
-  );
+  const cleanComment =
+    codexRequests.length > 0 &&
+    comments.some(
+      (comment) =>
+        comment.body.kind === GitHubTextKind.Present &&
+        isAtOrAfter(comment.createdAt, latestRequestTime(codexRequests)) &&
+        isCleanCodexReviewComment(comment.body.value, comment.user, headSha),
+    );
   const lastCodexRequestIndex = comments.reduce(
     (lastIndex, comment, index) =>
-      githubTextIncludes({ marker: codexMarker, text: comment.body })
+      codexRequests.includes(comment)
         ? index
         : lastIndex,
     -1,
@@ -460,38 +502,6 @@ async function snapshotFrom(
   };
 }
 
-async function requestCursorReview(input: {
-  alreadyRequested: boolean;
-  headSha: string;
-  octokit: Octokit;
-  owner: string;
-  prNumber: number;
-  repo: string;
-}): Promise<ExactHeadReviewRequestResult> {
-  if (input.alreadyRequested) {
-    return {
-      fallback: ExactHeadReviewFallback.CodexUsageLimit,
-      headSha: input.headSha,
-      provider: ExactHeadReviewProvider.Cursor,
-      requested: false,
-      settled: false,
-    };
-  }
-  await input.octokit.rest.issues.createComment({
-    owner: input.owner,
-    repo: input.repo,
-    issue_number: input.prNumber,
-    body: `cursor review\n\n${cursorReviewRequestMarker(input.headSha)}`,
-  });
-  return {
-    fallback: ExactHeadReviewFallback.CodexUsageLimit,
-    headSha: input.headSha,
-    provider: ExactHeadReviewProvider.Cursor,
-    requested: true,
-    settled: false,
-  };
-}
-
 enum CodexProbeKind {
   Pending = "pending",
   Settled = "settled",
@@ -501,10 +511,11 @@ enum CodexProbeKind {
 type CodexProbeResult =
   | { kind: CodexProbeKind.Pending }
   | { kind: CodexProbeKind.Settled }
-  | { kind: CodexProbeKind.UsageLimited; cursorRequested: boolean };
+  | { kind: CodexProbeKind.UsageLimited };
 
 async function probeCodexAvailability(input: {
   availability: ExactHeadReviewAvailability;
+  baseSha: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
@@ -519,10 +530,7 @@ async function probeCodexAvailability(input: {
       return { kind: CodexProbeKind.Settled };
     }
     if (snapshot.codex.usageLimited) {
-      return {
-        kind: CodexProbeKind.UsageLimited,
-        cursorRequested: snapshot.cursor.requested,
-      };
+      return { kind: CodexProbeKind.UsageLimited };
     }
   }
   return { kind: CodexProbeKind.Pending };
@@ -549,6 +557,7 @@ function githubTextIncludes(input: GitHubTextIncludesInput): boolean {
 
 type ExactHeadSubmittedReviewInput = {
   actorCheck: (actor: unknown) => boolean;
+  boundaryAt: GitHubText;
   headSha: string;
   review: PullReview;
 };
@@ -561,8 +570,23 @@ function isExactHeadSubmittedReview(
     input.review.commitId.value === input.headSha &&
     input.review.state.kind === GitHubTextKind.Present &&
     isSubmittedReviewState(input.review.state.value) &&
+    isAtOrAfter(input.review.submittedAt, input.boundaryAt) &&
     input.actorCheck(input.review.user)
   );
+}
+
+function latestRequestTime(requests: IssueComment[]): GitHubText {
+  return requests.at(-1)?.createdAt ?? { kind: GitHubTextKind.Missing };
+}
+
+function isAtOrAfter(value: GitHubText, boundary: GitHubText): boolean {
+  if (
+    value.kind === GitHubTextKind.Missing ||
+    boundary.kind === GitHubTextKind.Missing
+  ) {
+    return true;
+  }
+  return Date.parse(value.value) >= Date.parse(boundary.value);
 }
 
 async function listIssueComments(input: {
@@ -581,7 +605,9 @@ async function listIssueComments(input: {
     },
   );
   return comments.map((comment) => ({
+    authorAssociation: comment.author_association,
     body: githubTextFrom(comment.body),
+    createdAt: githubTextFrom(comment.created_at),
     id: comment.id,
     user: comment.user,
   }));
@@ -606,6 +632,7 @@ async function listPullReviews(input: {
     body: githubTextFrom(review.body),
     commitId: githubTextFrom(review.commit_id),
     state: githubTextFrom(review.state),
+    submittedAt: githubTextFrom(review.submitted_at),
     user: review.user,
   }));
 }

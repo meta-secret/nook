@@ -19,6 +19,13 @@ See [issues.md](../../workflows/issues.md), [agent-statistics.md](../../workflow
   - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
+- **[`pr-head-stabilization.yml`](../../../.github/workflows/pr-head-stabilization.yml)**
+  - Trigger: PR head replacement through `pull_request_target`
+  - Purpose: Cancel active obsolete-head validation associated with that PR
+  - Permissions: `actions: write`, PR write, contents read. PR write maintains
+    the trusted exact-head boundary comment. The workflow never checks out PR
+    code.
+  - GitHub PAT: No
 - **[`repository-policy.yml`](../../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes
   - Purpose: Source architecture plus conditional Loom verification
@@ -103,6 +110,18 @@ See [issues.md](../../workflows/issues.md), [agent-statistics.md](../../workflow
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
 
+**`pr-head-stabilization.yml`**
+
+- Runs from trusted default-branch workflow code when a PR head is replaced.
+- Accepts a numbered manual dispatch from validation to backfill the current
+  boundary for pull requests that were already open during rollout.
+- Serializes boundary writes per pull request and derives manual transition
+  time from the server-created workflow run.
+- Reads the live PR head before each cancellation.
+- Cancels only active obsolete PR, Rust ecosystem, and Web research runs that
+  GitHub associates with the same PR.
+- Preserves current-head runs and never checks out or executes PR code.
+
 **`repository-policy.yml`**
 
 - Runs source architecture enforcement on every pull request.
@@ -141,7 +160,7 @@ See [issues.md](../../workflows/issues.md), [agent-statistics.md](../../workflow
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
-- Claims the shared `pr-<number>` concurrency group on close to cancel in-flight validation.
+- Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
 - Downloads the PR demo artifact.
 - Publishes its 10 largest WebMs to Linear.
 - Updates the PR comment and completes/cancels the matching Linear issue.
@@ -693,24 +712,8 @@ advisory: timing, animation, font rendering, and compression can make frame-only
 judgments flaky. A future AI reviewer should consume the video plus assertion
 results and traces, and must not receive real vault secrets.
 
-## Playwright projects
-
-Defined in `nook-app/nook-web/playwright.config.ts`:
-
-- **`stable`**
-  - Specs: IndexedDB-only specs (3 workers)
-  - CI: `main.yml`, `e2e-pr.yml` (manual/debug)
-- **`unstable`**
-  - Specs: Local-provider and sync specs (2 workers)
-  - CI: `main.yml`, `e2e-pr.yml` (manual)
-- **`sync-live`**
-  - Specs: `e2e/live/**/*.spec.ts`
-  - CI: `e2e-pr.yml` (manual)
-- **`ui-demo`**
-  - Specs: `e2e/demos/**/*.demo.spec.ts` (1 worker)
-  - CI: UI-changing PRs
-
-The `test:e2e` script runs `stable` then `unstable`; `test:e2e:local` runs `stable`, and `test:e2e:sync-stub` runs both groups.
+The Playwright project catalog and command grouping live in
+[Browser Validation](browser-validation.md).
 
 ## Task commands
 
@@ -870,19 +873,21 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
 - When the branch is ready, agents run `task pr:validate PR=<number>` or add
   `FULL_E2E=1`.
-- Validation dispatches repository-owned checks immediately.
-- It then requests one idempotent exact-head Cloud review.
-- The request prefers Codex and falls back to Cursor Bugbot when Codex reports
-  a usage limit.
-- Review-request failure does not block those checks.
+- Validation first requests one idempotent exact-head Codex review.
+- Current findings stop dispatch so they can be repaired as one coherent batch.
+- Review unavailability is bounded to 600 seconds when no current findings are
+  visible, after which repository-owned checks proceed.
+- Three finding batches open a circuit breaker and require comprehensive
+  stabilization before another complete validation attempt.
+- Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- The GitHub Actions runtime is the Cloud review window.
-- If no review feedback exists when checks finish, agents proceed without waiting.
+- Review belongs before GitHub Actions; do not request another review after
+  checks finish.
 - Claude, CodeRabbit, and other optional services are not requested or
-  awaited. Cursor Bugbot is requested only when Codex reports a usage limit.
+  awaited. Cursor Bugbot is not activated.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**
@@ -991,7 +996,3 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Before live probes, the workflow purges the affected URLs so a cached fallback cannot survive a deployment switch.
 - Extension metadata, ZIP, and checksum verification adds an attempt-specific exact-commit query to every mutable artifact URL and retries convergence on PR, main, and release.
 - This prevents a fresh metadata response from being paired with an older edge-cached archive that reused the same channel filename.
-
-## CI operator and agent operations
-[CI Operator and Agent Operations](ci-operations.md) owns cleanup, logs,
-secrets, providers, automation agents, and the remote-only execution rules.

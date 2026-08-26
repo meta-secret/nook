@@ -15,6 +15,7 @@ const repoRef = { owner: "meta-secret", repo: "nook" };
 const headSha = "0123456789abcdef0123456789abcdef01234567";
 
 type MockComment = {
+  author_association?: string;
   body: string;
   id: number;
   user?: { login: string };
@@ -36,6 +37,9 @@ function mockOctokit(input: {
   sha?: string;
 }): Octokit {
   const comments = input.comments ?? [];
+  for (const comment of comments) {
+    comment.author_association ??= "OWNER";
+  }
   const createdBodies = input.createdBodies ?? [];
   const reviews = input.reviews ?? [];
   const sha = input.sha ?? "head-sha";
@@ -47,13 +51,17 @@ function mockOctokit(input: {
             input.createCalls.count += 1;
           }
           createdBodies.push(body);
-          comments.push({ body, id: comments.length + 1 });
+          comments.push({
+            author_association: "OWNER",
+            body,
+            id: comments.length + 1,
+          });
           return { data: { id: comments.length } };
         },
         listComments: async () => ({ data: comments }),
       },
       pulls: {
-        get: async () => ({ data: { head: { sha } } }),
+        get: async () => ({ data: { base: { sha: "base-sha" }, head: { sha } } }),
         listReviews: async () => ({ data: reviews }),
       },
       reactions: {
@@ -91,8 +99,86 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
     settled: false,
   });
   assert.deepEqual(createdBodies, [
-    "@codex review\n\n<!-- nook-codex-review:head-sha -->",
+    "@codex review\n\n<!-- nook-codex-review:head-sha:base-sha -->",
   ]);
+});
+
+test("review request identity changes with the base revision", () => {
+  assert.notEqual(
+    codexReviewRequestMarker(headSha, "base-one"),
+    codexReviewRequestMarker(headSha, "base-two"),
+  );
+});
+
+test("an old same-head review cannot settle a new base-bound request", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha, "old-base")}`,
+        id: 1,
+      },
+    ],
+    createdBodies,
+    reviews: [
+      {
+        commit_id: headSha,
+        state: "COMMENTED",
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, true);
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha")}`,
+  ]);
+});
+
+test("requestExactHeadReview ignores an untrusted exact-head marker", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        author_association: "NONE",
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, true);
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+  ]);
+});
+
+test("requestExactHeadReview keeps a workflow-token request idempotent", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        author_association: "CONTRIBUTOR",
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+        user: { login: "github-actions[bot]" },
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, false);
+  assert.deepEqual(createdBodies, []);
 });
 
 test("requestExactHeadReview reports an exact-head Codex approval reaction as settled", async () => {
@@ -123,7 +209,30 @@ test("requestExactHeadReview reports an exact-head Codex approval reaction as se
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview switches to Cursor after a Codex usage-limit comment", async () => {
+test("requestExactHeadReview does not treat an eye reaction as settled", async () => {
+  const createCalls = { count: 0 };
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+    ],
+    createCalls,
+    reactions: [
+      { content: "eyes", user: { login: "chatgpt-codex-connector[bot]" } },
+    ],
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, false);
+  assert.equal(result.settled, false);
+  assert.equal(createCalls.count, 0);
+});
+
+test("requestExactHeadReview does not request a fallback after a Codex usage limit", async () => {
   const createdBodies: string[] = [];
   const octokit = mockOctokit({
     comments: [
@@ -147,20 +256,18 @@ test("requestExactHeadReview switches to Cursor after a Codex usage-limit commen
   assert.deepEqual(fallback, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
-    requested: true,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: false,
     settled: false,
   });
   assert.deepEqual(idempotent, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
+    provider: ExactHeadReviewProvider.Codex,
     requested: false,
     settled: false,
   });
-  assert.deepEqual(createdBodies, [
-    `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
-  ]);
+  assert.deepEqual(createdBodies, []);
 });
 
 test("requestExactHeadReview recognizes a clean Codex comment for the exact head", async () => {
@@ -168,8 +275,12 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
   const octokit = mockOctokit({
     comments: [
       {
-        body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
         id: 1,
+      },
+      {
+        body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+        id: 2,
         user: { login: "chatgpt-codex-connector[bot]" },
       },
     ],
@@ -189,7 +300,7 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview probes Codex and switches to Cursor when usage-limit appears", async () => {
+test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () => {
   const createdBodies: string[] = [];
   const comments: MockComment[] = [];
   const octokit = mockOctokit({ comments, createdBodies, sha: headSha });
@@ -211,13 +322,12 @@ test("requestExactHeadReview probes Codex and switches to Cursor when usage-limi
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
+    provider: ExactHeadReviewProvider.Codex,
     requested: true,
     settled: false,
   });
   assert.deepEqual(createdBodies, [
     `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
-    `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
   ]);
 });
 
@@ -278,7 +388,7 @@ test("requestExactHeadReview does not request Cursor while Codex is pending", as
   assert.deepEqual(createdBodies, []);
 });
 
-test("requestExactHeadReview treats an exact-head Cursor review as settled", async () => {
+test("requestExactHeadReview ignores an inactive Cursor review fallback", async () => {
   const createCalls = { count: 0 };
   const octokit = mockOctokit({
     comments: [
@@ -313,9 +423,9 @@ test("requestExactHeadReview treats an exact-head Cursor review as settled", asy
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
+    provider: ExactHeadReviewProvider.Codex,
     requested: false,
-    settled: true,
+    settled: false,
   });
   assert.equal(createCalls.count, 0);
 });

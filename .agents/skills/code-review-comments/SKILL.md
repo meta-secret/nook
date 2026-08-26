@@ -6,7 +6,7 @@ description: >-
   checklist from actionable items; verify each finding; fix or explain it;
   validate, push, reply on GitHub, and resolve conversations only after the
   agent's targeted reply is visible. This skill does not initiate reviews;
-  the exact-head Codex or Cursor request belongs to PR delivery.
+  the exact-head Codex request belongs to PR delivery.
 ---
 
 # Code Review Comments

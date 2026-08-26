@@ -6,9 +6,9 @@ Make PR review-comment handling auditable: every active actionable item from a
 human reviewer, Codex, or another automated reviewer must be verified, fixed or
 explicitly invalidated, and replied to on GitHub. Agents must leave their own
 targeted reply before resolving any PR comment or review conversation. This
-skill does not initiate reviews. The PR delivery workflow dispatches complete
-validation and requests exact-head Cloud review. That request prefers Codex and
-falls back to Cursor Bugbot when Codex reports a usage limit.
+skill does not initiate reviews. The PR delivery workflow stabilizes one
+exact-head Codex review before it dispatches complete validation. Codex is the
+sole automatic provider; Cursor Bugbot remains inactive.
 
 ## Problem Pattern
 
@@ -43,7 +43,8 @@ Applies to:
 
 - Pull requests in this repository.
 - Human PR review comments and conversations.
-- Codex and Cursor Bugbot review findings and submitted review bodies.
+- Codex review findings and submitted review bodies.
+- Findings already posted by any other reviewer, including Cursor Bugbot.
 - Equivalent automated review feedback with a concrete actionable finding.
 
 Does not apply to:
