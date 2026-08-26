@@ -8,6 +8,10 @@ Use this pipeline for **every coding request** unless the user explicitly wants 
 
 Additional routing rules apply:
 
+- Before implementation planning, apply the
+  [major architectural initiative rule](../dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
+  A broad problem statement does not authorize an agent-derived subsystem,
+  execution model, or other major architectural direction.
 - Delegated work follows
   [`subagent-delegation.md`](subagent-delegation.md). Outside a compiled Loom
   graph, finalize every reached child attempt with
@@ -25,10 +29,12 @@ AI agents must treat every implementation task as PR-bound from the start.
 - Fetch `origin/main`.
 - Synthesize the important request into a public-safe Workbench task plan and publish it before implementation edits.
 - Estimate authored changed lines and identify the owning module or layer.
-- Split work expected to exceed 5,000 authored changed lines into an ordered
+- Split work expected to exceed 3,000 authored changed lines into an ordered
   Workbench issue and PR sequence.
-- At 4,000 lines, stop and decide the semantic PR sequence before more scope is
-  added.
+- At 2,500 lines, stop, inventory the logical domain changes already present,
+  and decide the semantic stacked-PR sequence before more scope is added.
+- Recount the authored diff after each logical domain change and before every
+  commit or push.
 - If work reaches the limit, follow the linked-successor preservation protocol
   in [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 - Never compress docs, remove tests, or delete completed behavior to optimize a
@@ -54,6 +60,12 @@ Default PR-first loop:
 1. **Record the interpreted task:**
    - Fetch `origin/main`.
    - Write the important requirements in the agent's own words.
+   - Classify any agent-derived solution that appears large, novel,
+     cross-cutting, or architecturally difficult before treating it as
+     implementation scope.
+   - If it is a major architectural initiative, stop at analysis and proposals.
+     Continue only after the user discusses and explicitly selects the
+     direction for implementation.
    - For user-facing features, item types, or UX flows, find and read the owning specification in [`.cortex/product-specs/`](../product-specs/) (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
    - Apply [subagent-delegation.md](subagent-delegation.md).
    - Record the delegation decision, processing identity, parent lineage,
@@ -70,7 +82,7 @@ Default PR-first loop:
    - Create ignored session memory under `.cortex/.session/` for substantial
      work.
    - Never copy the raw prompt or chat transcript.
-2. **Prepare the PR path** — if the feature may approach 5,000 authored changed
+2. **Prepare the PR path** — if the feature may approach 3,000 authored changed
    lines, publish an ordered semantic issue and PR sequence. Map complete
    capabilities, tests, migrations, and documentation to each slice. Create a
    feature branch for the first cohesive slice and decide whether its PR will
@@ -566,7 +578,7 @@ Create the YAML from current Nook `main`:
   - Do not request Claude, CodeRabbit, or other optional reviewers.
 - **Never kill the Docker daemon** — only stop containers. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
-- **Plan bounded PRs** — target no more than 5,000 authored changed lines per
+- **Plan bounded PRs** — target no more than 3,000 authored changed lines per
   PR. Prefer one cohesive module, package, layer, or responsibility. Continue
   through every planned slice until the requested feature is complete. See
   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).

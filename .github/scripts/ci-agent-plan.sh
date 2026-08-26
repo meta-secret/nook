@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# Run the task-planning agent in a detached worktree and copy the plan file back.
+# Run the task-planning agent in a detached worktree and copy its one result
+# artifact back.
 #
 # Required env:
 #   WORKBENCH_PLAN_FILE — relative path of the plan artifact inside the checkout
+#   WORKBENCH_SUMMARY_FILE — relative path of the blocker artifact
 # Optional env:
 #   CI_AGENT_PROMPT_FILE, CI_AGENT_TIMEOUT_MS, CURSOR_API_KEY (consumed by ci-agent:run)
 set -euo pipefail
@@ -11,8 +13,9 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
 : "${WORKBENCH_PLAN_FILE:?WORKBENCH_PLAN_FILE is required}"
+: "${WORKBENCH_SUMMARY_FILE:?WORKBENCH_SUMMARY_FILE is required}"
 
-rm -f -- "$WORKBENCH_PLAN_FILE"
+rm -f -- "$WORKBENCH_PLAN_FILE" "$WORKBENCH_SUMMARY_FILE"
 planning_parent="$(mktemp -d)"
 planning_root="$planning_parent/checkout"
 cleanup() {
@@ -22,6 +25,21 @@ cleanup() {
 trap cleanup EXIT
 git worktree add --detach "$planning_root" HEAD
 REPO_ROOT="$planning_root" task ci-agent:run
-test -s "$planning_root/$WORKBENCH_PLAN_FILE"
-cp -- "$planning_root/$WORKBENCH_PLAN_FILE" "$WORKBENCH_PLAN_FILE"
-test -s "$WORKBENCH_PLAN_FILE"
+plan_path="$planning_root/$WORKBENCH_PLAN_FILE"
+blocker_path="$planning_root/$WORKBENCH_SUMMARY_FILE"
+if [ -s "$plan_path" ] && [ -s "$blocker_path" ]; then
+  echo "Planning agent produced both a plan and an authorization blocker." >&2
+  exit 1
+fi
+if [ -s "$plan_path" ]; then
+  cp -- "$plan_path" "$WORKBENCH_PLAN_FILE"
+  test -s "$WORKBENCH_PLAN_FILE"
+  exit 0
+fi
+if [ -s "$blocker_path" ]; then
+  cp -- "$blocker_path" "$WORKBENCH_SUMMARY_FILE"
+  test -s "$WORKBENCH_SUMMARY_FILE"
+  exit 0
+fi
+echo "Planning agent produced neither a plan nor an authorization blocker." >&2
+exit 1

@@ -181,6 +181,9 @@ The `task ci-agent:fix` step (`agentic-ai/ci-agent/`) emits **log4j-style** line
   - Behavior: Claims that exact eligible Workbench issue
 - **`workflow_dispatch.prompt`**
   - Behavior: Runs the explicit prompt without claiming an issue
+- **`workflow_dispatch.major_change_authorized`**
+  - Behavior: Confirms that the user discussed, selected, and requested the
+    dispatched major architectural solution
 
 Exactly one of `issue_path` or `prompt` is required. Empty or ambiguous
 dispatches fail before checkout. Issue eligibility requires `status: ready`,
@@ -191,16 +194,33 @@ in_progress` atomically before Docker setup. Prompt mode requires a valid
 independent run. A blob-SHA conflict rejects a duplicate claim of the same
 issue without collapsing unrelated pending dispatches.
 
+### Major-change authorization
+
+The gate enforces these rules:
+
+- The input defaults to false. Workbench text and other lifecycle records
+  cannot set it. Set it only when the user explicitly selected the major
+  direction and requested implementation. Ordinary fixes and bounded decisions
+  inside an accepted architecture do not require it.
+- Before implementation, the planning agent classifies the requested solution.
+  An unauthorized major direction produces a public-safe
+  authorization-blocker worklog instead of an implementation plan. The
+  workflow validates that worklog against the source task, skips the
+  implementation worker, publishes the blocker, and leaves any claimed issue
+  blocked for a later user decision.
+
 The workflow publishes a Workbench progress update and worklog whether
 implementation opens a PR or blocks. Drafts, manually owned issues, and
 historical imports cannot trigger it.
 
-Loop: claim Workbench record → `task setup` → **`task ci-agent:implement`**
-(direct Node process on ARC with persistent BuildKit) → push branch → open a Nook PR →
-assign and directly mention the continuing owner → publish Workbench
-progress/worklog → exit. The assigned owner then follows the standard
-failure/comment/conflict loop, exact-head readiness audit, squash merge, and
-final Workbench completion update. Agent secrets:
+Loop: claim Workbench record → `task setup` → classify and publish the planning
+result → either publish an authorization blocker or run
+**`task ci-agent:implement`** (direct Node process on ARC with persistent
+BuildKit) → push branch → open a Nook PR → assign and directly mention the
+continuing owner → publish Workbench progress/worklog → exit. The assigned
+owner then follows the standard failure/comment/conflict loop, exact-head
+readiness audit, squash merge, and final Workbench completion update. Agent
+secrets:
 `CURSOR_API_KEY`, `NOOK_GITHUB_PAT`. Prompt:
 [`.github/prompts/agent-implement.md`](../../.github/prompts/agent-implement.md).
 

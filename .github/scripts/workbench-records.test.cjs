@@ -40,6 +40,33 @@ Deliver a durable two-phase agent context record.
 - The record contains only public-safe development context.
 `
 
+const validWorklog = `# Work summary
+
+## Outcome
+
+Planning stopped at the user-authorization boundary.
+
+## Progress
+
+- Compared bounded alternatives.
+
+## Implementation problems
+
+- The major direction has not been authorized.
+
+## Decisions
+
+- No implementation decision was inferred.
+
+## Validation
+
+- Confirmed that no implementation plan was created.
+
+## Remaining work
+
+- The user must select and request a direction.
+`
+
 test('accepts a synthesized task plan', () => {
   assert.equal(validateAgentRecord(validPlan, 'plan'), '')
 })
@@ -77,6 +104,19 @@ test('rejects an unlabeled verbatim excerpt from the source task', () => {
   )
   assert.match(
     validateAgentRecord(copied, 'plan', [], sourceTask),
+    /verbatim source-task excerpt/,
+  )
+})
+
+test('rejects a source-task excerpt from a blocker worklog', () => {
+  const sourceTask =
+    'Please expose confidential deployment planning details before the implementation phase begins.'
+  const copied = validWorklog.replace(
+    'Planning stopped at the user-authorization boundary.',
+    sourceTask,
+  )
+  assert.match(
+    validateAgentRecord(copied, 'worklog', [], sourceTask),
     /verbatim source-task excerpt/,
   )
 })
@@ -210,7 +250,7 @@ test('rejects an over-budget one-PR plan', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /current PR estimate exceeds 5,000 authored changed lines/,
+    /current PR estimate exceeds 3,000 authored changed lines/,
   )
 })
 
@@ -221,7 +261,7 @@ test('rejects a one-PR shape for an over-budget feature', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan exceeds 5,000 authored changed lines/,
+    /one-PR plan exceeds 3,000 authored changed lines/,
   )
 })
 
@@ -233,7 +273,7 @@ test('rejects a feature estimate below its current PR estimate', () => {
     )
     .replace(
       'Current PR estimated authored changed lines: 240',
-      'Current PR estimated authored changed lines: 4,999',
+      'Current PR estimated authored changed lines: 2,999',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
