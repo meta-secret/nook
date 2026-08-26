@@ -62,6 +62,7 @@ describe('agent stats GitHub evidence', () => {
       pages,
       prNumber: 42,
       finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
     };
     const evidence = buildActionsEvidence(request);
 
@@ -102,9 +103,97 @@ describe('agent stats GitHub evidence', () => {
       pages,
       prNumber: 42,
       finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
     };
     const evidence = buildActionsEvidence(request);
     expect(evidence.runs).toHaveLength(1);
+  });
+
+  test('allows a final head with no applicable Actions workflow', () => {
+    const pages = asUntrustedYamlNode([{ total_count: 0, workflow_runs: [] }]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs).toHaveLength(0);
+    expect(evidence.heads).toHaveLength(1);
+    expect(evidence.heads[0]?.head_sha).toBe(finalHead);
+    expect(evidence.validationCycles).toHaveLength(0);
+  });
+
+  test('counts every repository validation workflow', () => {
+    const rustRun: ActionRunFixture = {
+      id: 201,
+      runAttempt: 1,
+      headSha: firstHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:01:00Z',
+      conclusion: 'success',
+      workflow: 'Rust ecosystem checks',
+    };
+    const researchRun: ActionRunFixture = {
+      id: 202,
+      runAttempt: 1,
+      headSha: finalHead,
+      startedAt: '2026-08-01T10:02:00Z',
+      finishedAt: '2026-08-01T10:03:00Z',
+      conclusion: 'success',
+      workflow: 'Web research',
+    };
+    const pages = asUntrustedYamlNode([
+      {
+        total_count: 2,
+        workflow_runs: [actionRun(rustRun), actionRun(researchRun)],
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.validationCycles).toHaveLength(2);
+  });
+
+  test('excludes workflow attempts started after merge', () => {
+    const deliveredRun: ActionRunFixture = {
+      id: 301,
+      runAttempt: 1,
+      headSha: finalHead,
+      startedAt: '2026-08-01T10:00:00Z',
+      finishedAt: '2026-08-01T10:01:00Z',
+      conclusion: 'success',
+    };
+    const postMergeRerun: ActionRunFixture = {
+      id: 301,
+      runAttempt: 2,
+      headSha: finalHead,
+      startedAt: '2026-08-01T10:06:00Z',
+      finishedAt: '2026-08-01T10:07:00Z',
+      conclusion: 'success',
+    };
+    const pages = asUntrustedYamlNode([
+      {
+        total_count: 1,
+        workflow_runs: [actionRun(deliveredRun), actionRun(postMergeRerun)],
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T10:05:00Z',
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs).toHaveLength(1);
+    expect(evidence.validationCycles).toHaveLength(1);
   });
 
   test('rejects nonterminal action attempts', () => {
@@ -127,6 +216,7 @@ describe('agent stats GitHub evidence', () => {
       pages,
       prNumber: 42,
       finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
     };
     expect(() => buildActionsEvidence(request)).toThrow(
       'retry collection after completion',
@@ -217,12 +307,13 @@ type ActionRunFixture = {
   readonly conclusion: string;
   readonly sourcePr?: number;
   readonly status?: string;
+  readonly workflow?: string;
 };
 
 function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
   return {
     id: fixture.id,
-    name: 'PR',
+    name: fixture.workflow ?? 'PR',
     run_attempt: fixture.runAttempt,
     head_sha: fixture.headSha,
     event: 'pull_request',
