@@ -7,6 +7,7 @@ import {
   type UntrustedYamlNode,
 } from './guards.ts';
 import {
+  collectDispatchedActionAttemptPages,
   expandActionAttemptPages,
   failGitHubCollection,
   flattenApiPages,
@@ -17,6 +18,7 @@ import {
   runGitHubApi,
   stringProperty,
   type ExpandActionAttemptPagesRequest,
+  type CollectDispatchedActionAttemptPagesRequest,
   type GitHubApiRequest,
   type GitHubPropertyRequest as PropertyRequest,
 } from './agent-stats-github-api.ts';
@@ -170,6 +172,22 @@ export function collectAgentStatsGitHubEvidence(
     pages: actionPages,
   };
   const expandedActionPages = expandActionAttemptPages(attemptPagesRequest);
+  const dispatchedApiRequest: GitHubApiRequest = {
+    repoRoot: request.repoRoot,
+    endpoint: 'repos/{owner}/{repo}/actions/workflows/e2e-pr.yml/runs',
+    fields: [createdRange, 'event=workflow_dispatch', 'per_page=100'],
+  };
+  const dispatchedRequest: CollectDispatchedActionAttemptPagesRequest = {
+    repoRoot: request.repoRoot,
+    pages: runGitHubApi(dispatchedApiRequest),
+    prNumber: request.prNumber,
+  };
+  const dispatchedActionPages =
+    collectDispatchedActionAttemptPages(dispatchedRequest);
+  const allActionPages: UntrustedYamlNode = [
+    ...flattenApiPages(expandedActionPages),
+    ...flattenApiPages(dispatchedActionPages),
+  ];
   const issueCommentsRequest: GitHubApiRequest = {
     repoRoot: request.repoRoot,
     endpoint: `repos/{owner}/{repo}/issues/${request.prNumber}/comments`,
@@ -216,7 +234,7 @@ export function collectAgentStatsGitHubEvidence(
   };
   const reviews = buildReviewEvidence(reviewRequest);
   const actionsRequest: BuildActionsEvidenceRequest = {
-    pages: expandedActionPages,
+    pages: allActionPages,
     prNumber: request.prNumber,
     finalHeadSha: request.finalHeadSha,
     mergedAt: request.mergedAt,

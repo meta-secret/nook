@@ -10,6 +10,7 @@ import {
   type BuildReviewEvidenceRequest,
 } from '../src/lib/agent-stats-github.ts';
 import { mergeReviewedDeliveryHeads } from '../src/lib/agent-stats-github-delivery.ts';
+import { dispatchedSourceHead } from '../src/lib/agent-stats-github-api.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -18,6 +19,18 @@ const finalHead = '2222222222222222222222222222222222222222';
 const thirdHead = '3333333333333333333333333333333333333333';
 
 describe('agent stats GitHub evidence', () => {
+  test('resolves exact manual E2E source provenance', () => {
+    const pages = asUntrustedYamlNode([
+      { artifacts: [{ name: `e2e-pr-source-42-${finalHead}` }] },
+    ]);
+    const request = {
+      pages,
+      prNumber: 42,
+      runId: 500,
+    };
+
+    expect(dispatchedSourceHead(request)).toBe(finalHead);
+  });
   test('groups validation by head and measures work after supersession', () => {
     const firstRun: ActionRunFixture = {
       id: 101,
