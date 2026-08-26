@@ -8,6 +8,14 @@ import {
   waitForPersistedAppLog,
 } from './helpers'
 
+type DelayedStorageWindow = Window & {
+  readonly __nookVault?: {
+    readonly isVerifying: boolean
+    enqueueStorage(operation: () => Promise<void>): Promise<void>
+  }
+  __nookE2eReleaseStorage?: () => void
+}
+
 async function revealDeviceProtectionCreateWorkflow(page: Page) {
   const createChoice = page.getByTestId('device-protection-create-new-choice')
   if (await createChoice.isVisible()) {
@@ -560,6 +568,64 @@ test.describe('passkey device-key protection', () => {
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toHaveCount(0)
     await expect(page.getByTestId('app-shell-content')).not.toBeEmpty()
+
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, invitation)
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.evaluate(() => {
+      const testWindow = window as DelayedStorageWindow
+      const vault = testWindow.__nookVault
+      if (!vault) throw new Error('Vault runtime is not exposed')
+      let releaseStorage: () => void = () => {}
+      const blocker = new Promise<void>((resolve) => {
+        releaseStorage = resolve
+      })
+      testWindow.__nookE2eReleaseStorage = releaseStorage
+      void vault.enqueueStorage(() => blocker)
+    })
+    await page.getByTestId('sentinel-genesis-connect-device').click()
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as DelayedStorageWindow).__nookVault?.isVerifying ??
+              false,
+          ),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(true)
+    await page.goBack()
+    await expect(page).toHaveURL(/\/vault$/)
+    await page.evaluate(() => {
+      const testWindow = window as DelayedStorageWindow
+      testWindow.__nookE2eReleaseStorage?.()
+      delete testWindow.__nookE2eReleaseStorage
+    })
+    await expect
+      .poll(
+        () =>
+          page.evaluate(
+            () =>
+              (window as DelayedStorageWindow).__nookVault?.isVerifying ?? true,
+          ),
+        { timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS },
+      )
+      .toBe(false)
+    await expect(
+      page.getByTestId('sentinel-genesis-generated-response'),
+    ).toHaveCount(0)
+    await expect(
+      page.getByTestId('sentinel-genesis-invitation-required'),
+    ).toBeVisible()
   })
 
   test('derives the device identity and requires passkey authorization after reload', async ({

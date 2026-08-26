@@ -872,18 +872,20 @@
           {/if}
 
           {#if wizardStep === VaultCreationWizardStep.Join}
-            <SentinelGenesisJoinFlow
-              {vault}
-              {isBusy}
-              {sentinelInvitationRequest}
-              {sentinelParticipantResponsePending}
-              {sentinelOnboardingPackage}
-              onCreateParticipantResponse={onCreateSentinelGenesisParticipantResponse}
-              onRememberRequest={onRememberSentinelGenesisRequest}
-              onReceiveShare={onReceiveSentinelGenesisShare}
-              onAcceptOnboardingPackage={onAcceptSentinelOnboardingPackage}
-              onFinishSentinelInvitation={finishSentinelInvitation}
-            />
+            {#key sentinelInvitationRequest}
+              <SentinelGenesisJoinFlow
+                {vault}
+                {isBusy}
+                {sentinelInvitationRequest}
+                {sentinelParticipantResponsePending}
+                {sentinelOnboardingPackage}
+                onCreateParticipantResponse={onCreateSentinelGenesisParticipantResponse}
+                onRememberRequest={onRememberSentinelGenesisRequest}
+                onReceiveShare={onReceiveSentinelGenesisShare}
+                onAcceptOnboardingPackage={onAcceptSentinelOnboardingPackage}
+                onFinishSentinelInvitation={finishSentinelInvitation}
+              />
+            {/key}
           {/if}
 
           {#if canGoBack && !sentinelDashboardActive}
