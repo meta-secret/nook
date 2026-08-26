@@ -6,6 +6,7 @@ import {
   listPersistentCortexMarkdownFiles,
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
+import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../src/lib/cortex-document-structure.ts';
 
 test('excludes temporary session memory from persistent Cortex documents', () => {
@@ -195,7 +196,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
-    expect(report).toEqual({
+    const expectedReport: CortexAuditReport = {
       brokenLinks: [],
       missingFromIndex: [],
       orphanIndexRows: [],
@@ -212,7 +213,8 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
       ],
       articleStructureFindings: [],
       auditOk: false,
-    });
+    };
+    expect(report).toEqual(expectedReport);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);
