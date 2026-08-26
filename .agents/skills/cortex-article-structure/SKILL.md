@@ -55,8 +55,12 @@ Run the focused provider and contract suite:
 task skills:verify
 ```
 
-The executable manifest is dormant. This layer defines and self-verifies the
-provider contract, but it does not register or execute the provider. It cannot
-schedule work, authorize writes, or mutate the repository. Later Loom-owned
-layers remain responsible for source policy, registration, isolation,
-deadlines, provenance, and activation.
+Discover the read-only host action and its exact YAML request:
+
+```bash
+task skills:tools-list
+task skills:run CONFIG=path/to/article-structure-request.yaml
+```
+
+The host command invokes the pure provider without action-specific flags. The
+provider cannot schedule work, authorize writes, or mutate the repository.

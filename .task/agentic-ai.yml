@@ -24,6 +24,27 @@ tasks:
     cmds:
       - bun run verify
 
+  skills:run:
+    desc: Run one executable skill action from a domain YAML request (CONFIG=<request.yaml>).
+    dir: .agents/skills
+    requires:
+      vars: [CONFIG]
+    cmds:
+      - |
+        set -euo pipefail
+        config="{{.CONFIG}}"
+        case "$config" in
+          /*) ;;
+          *) config="{{.REPO_ROOT}}/$config" ;;
+        esac
+        bun cli.ts "$config"
+
+  skills:tools-list:
+    desc: List executable skill actions, YAML examples, and request schemas.
+    dir: .agents/skills
+    cmds:
+      - bun cli.ts --default toolsList
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
