@@ -15,12 +15,14 @@ import { encodeSourceAnalysisResult } from '../../src/executable-skills/source-a
 import {
   createContainerCommand,
   resetSourceAnalysisImageCacheForTest,
+  resolveSealedSourceAnalysisContainerOutput,
   runSealedSourceAnalysisWithDependencies,
   type RunSealedSourceAnalysisContainerRequest,
   SOURCE_ANALYSIS_CONTAINER_LABEL,
   SOURCE_ANALYSIS_IMAGE_INPUTS,
   SOURCE_ANALYSIS_IMAGE_LABEL,
   type SealedSourceAnalysisDockerEnvironment,
+  type SealedSourceAnalysisContainerOutput,
   type SourceAnalysisDockerDependencies,
   type SourceAnalysisDockerProcessExecutor,
   sourceAnalysisBuildIdentity,
@@ -29,6 +31,7 @@ import type {
   BoundedProcessOutput,
   RunBoundedProcessRequest,
 } from '../../src/executable-skills/source-analysis-process.ts';
+import { readSourceAnalysisSnapshot } from '../../src/executable-skills/source-analysis-snapshot.ts';
 import type { ExecutableSkillSourceAnalysis } from '../../src/executable-skills/source-policy.ts';
 
 enum FakeDockerMode {
@@ -61,9 +64,9 @@ type FakeSourceMutation = {
 };
 
 const REPO_ROOT = findRepoRoot();
+const DOCKER_EXECUTABLE = '/trusted/docker';
 const IMAGE_ID = `sha256:${'a'.repeat(64)}`;
 const DOCKER_ENVIRONMENT: SealedSourceAnalysisDockerEnvironment = {
-  contextName: 'explicit-local',
   daemonId: '12345678-1234-1234-1234-123456789abc',
   endpoint: 'unix:///explicit/docker.sock',
 };
@@ -114,11 +117,6 @@ function fakeDockerExecutor(
     state.commands.push(command);
     state.deadlines.push(request.deadlineExpiresAt);
     const joined = command.join(' ');
-    if (joined.includes(' context inspect ')) {
-      return successfulOutput(
-        `${DOCKER_ENVIRONMENT.contextName}|${DOCKER_ENVIRONMENT.endpoint}|false\n`,
-      );
-    }
     if (joined.includes(' info --format ')) {
       if (
         state.mode === FakeDockerMode.TeardownAuthorityFailure &&
@@ -221,7 +219,9 @@ function fakeDependencies(
   state: FakeDockerState,
 ): SourceAnalysisDockerDependencies {
   return {
+    dockerExecutable: DOCKER_EXECUTABLE,
     executeProcess: fakeDockerExecutor(state),
+    readImageInputs: readSourceAnalysisSnapshot,
     repoRoot: state.repoRoot,
     uniqueId: () => 'fixture-id',
   };
@@ -251,15 +251,26 @@ function executionRequest(): RunSealedSourceAnalysisContainerRequest {
 }
 
 describe('sealed source analysis Docker boundary', () => {
+  test('rejects candidates that did not pass the production seal', () => {
+    const output: SealedSourceAnalysisContainerOutput = {
+      analysisId: 'forged',
+    };
+    const request = { output };
+    expect(() => resolveSealedSourceAnalysisContainerOutput(request)).toThrow(
+      'authority is invalid',
+    );
+  });
+
   test('builds the exact static containment command without mounts or privilege', () => {
     const request = {
       containerName: 'fixture',
       endpoint: DOCKER_ENVIRONMENT.endpoint,
+      executable: DOCKER_EXECUTABLE,
       imageId: IMAGE_ID,
     };
     const command = createContainerCommand(request);
     expect(command).toEqual([
-      'docker',
+      DOCKER_EXECUTABLE,
       '--host',
       DOCKER_ENVIRONMENT.endpoint,
       'create',
@@ -394,7 +405,7 @@ describe('sealed source analysis Docker boundary', () => {
     expect(state.removals).toBe(1);
     for (const command of state.commands) {
       expect(command.slice(0, 3)).toEqual([
-        'docker',
+        DOCKER_EXECUTABLE,
         '--host',
         DOCKER_ENVIRONMENT.endpoint,
       ]);
