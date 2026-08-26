@@ -27,10 +27,11 @@ Analyze in this order:
 5. Identify owning tests and focused validation.
 6. Report the smallest provider change and parent actions.
 
-Keep knowledge routing separate from write authorization.
-Invoke the profile only through Loom's isolated module-expert runtime.
-Do not treat a project role TOML or an ordinary native child spawn as a
-read-only capability boundary.
+Keep knowledge routing separate from write authorization. Invoke the registered
+profile through the active harness as a read-only role. A separate
+implementation worker may consume that evidence in a fresh isolated workspace
+at the exact accepted baseline. The parent verifies its commit handoff before
+integration.
 
 ## Scope
 
@@ -60,8 +61,9 @@ Do not use this skill to:
 1. Read `.cortex/knowledge-graph.md`.
 2. Resolve one profile in `architecture/module-experts.md`.
 3. Verify the profile against the exact source commit.
-4. Return the required semantic evidence to the parent.
-5. Let the parent record the attempt and decide continuation.
+4. Return findings directly through the harness.
+5. Let a separately authorized implementation worker apply accepted findings.
+6. Let the delivery parent verify acceptance and decide continuation.
 
 ## Validation
 

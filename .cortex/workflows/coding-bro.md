@@ -13,10 +13,11 @@ Additional routing rules apply:
   A broad problem statement does not authorize an agent-derived subsystem,
   execution model, or other major architectural direction.
 - Delegated work follows
-  [`subagent-delegation.md`](subagent-delegation.md). Outside a compiled Loom
-  graph, finalize every reached child attempt with
-  `task loom:agent-delegation:record REQUEST=<request.json>` and consume its
-  verified semantic view before continuing the parent workflow.
+  [`subagent-delegation.md`](subagent-delegation.md). The active Codex, Cursor,
+  or other capable harness owns child creation, communication, terminal
+  barriers, retries, and result delivery. Native child results may drive
+  continuation directly. JSONL action streams and Markdown views are optional
+  human evidence and never a second harness control path.
 - Cross-module implementation also follows
   [`module-oriented-development.md`](module-oriented-development.md). Plan
   behavior top-down, freeze the external contracts, and implement accepted
@@ -68,11 +69,11 @@ Default PR-first loop:
      direction for implementation.
    - For user-facing features, item types, or UX flows, find and read the owning specification in [`.cortex/product-specs/`](../product-specs/) (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
    - Apply [subagent-delegation.md](subagent-delegation.md).
-   - Record the delegation decision, processing identity, parent lineage,
-     terminal barriers, and planned joins.
-   - Require every reached agent to produce an attempt action stream and
-     semantic Markdown view.
-   - Aggregate child views before continuation, integration, or completion.
+   - Give the active harness explicit task ownership, parent lineage, depth
+     bounds, terminal barriers, and planned joins.
+   - Continue from native harness results after every required child is
+     terminal. Persist JSONL or Markdown only when it helps humans audit the
+     work; those artifacts do not authorize continuation.
    - Estimate authored changed lines.
    - Identify module and interface boundaries.
    - Record the feature module DAG, named experts, provider-consumer contract
@@ -263,10 +264,11 @@ Default agent flow:
    - Complete the canonical
      [agent self-improvement](../dynamic-skills/self-improvement.md) contract.
 10. **Resolve conflicts and merge:**
-   - Verify the branch is current with `origin/main`.
-   - Update and push it when stale.
-   - Re-run complete validation and readiness after the push.
-   - Squash-merge automatically when readiness passes.
+
+- Verify the branch is current with `origin/main`.
+- Update and push it when stale.
+- Re-run complete validation and readiness after the push.
+- Squash-merge automatically when readiness passes.
 
 Never merge until the latest pushed branch has green applicable repository-owned PR test checks. External checks do not affect readiness. After a Nook PR-test failure, the next push must be a completed fix, not an exploratory checkpoint.
 
