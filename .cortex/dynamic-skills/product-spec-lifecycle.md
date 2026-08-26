@@ -11,7 +11,8 @@ This is a P1 documentation integrity rule:
 
 ## Purpose
 
-Keep product specifications in [`.cortex/product-specs/`](../product-specs/) in the active loop of every AI agent.
+Keep product specifications in the responsible team's `product-specs/`
+directory and in the active loop of every AI agent.
 
 Product specifications are the living system of record for:
 
@@ -43,10 +44,11 @@ Integrate product specifications into every phase of agent work.
 
 Before planning or editing code for any product feature:
 
-1. Search [`.cortex/product-specs/`](../product-specs/) and [`.cortex/knowledge-graph.md`](../knowledge-graph.md).
-2. Read the owning specification for the feature, item type, or workflow.
-3. Understand existing invariants, user flows, and acceptance criteria.
-4. Align the task plan with the specification before making changes.
+1. Select the responsible team through [Engineering team ownership](../architecture/team-ownership.md).
+2. Search that team's knowledge graph and the global [product catalog](../product-specs/index.md).
+3. Read the owning specification for the feature, item type, or workflow.
+4. Understand existing invariants, user flows, and acceptance criteria.
+5. Align the task plan with the specification before making changes.
 
 ### 2. Update specifications on new product knowledge
 
@@ -61,10 +63,10 @@ Capture durable product knowledge in the owning specification in the same PR:
 
 If no specification exists for a new feature or item type:
 
-1. Create a new specification file in `.cortex/product-specs/<feature-name>.md`.
+1. Create the specification in the responsible team's `product-specs/` directory.
 2. Follow [cortex-writer.md](cortex-writer.md) and [cortex-article-structure.md](cortex-article-structure.md).
 3. Register the new specification in [`.cortex/product-specs/index.md`](../product-specs/index.md).
-4. Update navigation entries in [`.cortex/knowledge-graph.md`](../knowledge-graph.md).
+4. Update navigation entries in the owning team knowledge graph.
 
 ### 3. Maintain specification status and consistency
 
@@ -82,7 +84,8 @@ Applies to:
 - Vault item types, fields, and validation rules.
 - Authentication, enrollment, device joining, and recovery user flows.
 - Changes to feature requirements discussed in user chat or PR comments.
-- All files in [`.cortex/product-specs/`](../product-specs/).
+- All team-owned `product-specs/` files under `.cortex/dev-core/`,
+  `.cortex/sre/`, and `.cortex/web-dev/`.
 
 Does not apply to:
 
@@ -96,30 +99,30 @@ Before:
 
 - User explains in chat that secure notes must support search by custom tags.
 - Agent adds the tag search in code and tests, then opens a PR.
-- `.cortex/product-specs/secure-notes.md` is never updated and remains unaware of tag search.
+- `.cortex/dev-core/product-specs/secure-notes.md` is never updated and remains unaware of tag search.
 
 After:
 
 - User explains tag search requirements for secure notes in chat.
-- Agent reads `.cortex/product-specs/secure-notes.md`.
+- Agent reads `.cortex/dev-core/product-specs/secure-notes.md`.
 - Agent implements tag search in code and domain tests.
-- Agent updates `.cortex/product-specs/secure-notes.md` to document tag search behavior and rules in the same PR.
+- Agent updates `.cortex/dev-core/product-specs/secure-notes.md` to document tag search behavior and rules in the same PR.
 
 Before:
 
 - A PR review thread decides that credit card items must validate expiration month bounds (1–12).
 - Agent adds the validation to Rust code and resolves the comment.
-- `.cortex/product-specs/credit-card-items.md` is left unchanged.
+- `.cortex/dev-core/product-specs/credit-card-items.md` is left unchanged.
 
 After:
 
 - Agent fixes the code and adds regression tests.
-- Agent updates the validation rules section in `.cortex/product-specs/credit-card-items.md` in the same commit.
+- Agent updates the validation rules section in `.cortex/dev-core/product-specs/credit-card-items.md` in the same commit.
 
 ## Application Checklist
 
 - [ ] Identify if the task touches product behavior, item schemas, or UX flows.
-- [ ] Search and read the owning specification in `.cortex/product-specs/`.
+- [ ] Select the team and read the owning specification through its graph.
 - [ ] Incorporate specification requirements into the Workbench task plan.
 - [ ] Update the specification when new product knowledge is gained from chat, tasks, or PR feedback.
 - [ ] Create a new specification file if the feature or item type is new.

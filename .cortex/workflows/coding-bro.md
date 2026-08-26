@@ -12,6 +12,10 @@ Additional routing rules apply:
   [major architectural initiative rule](../dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
   A broad problem statement does not authorize an agent-derived subsystem,
   execution model, or other major architectural direction.
+- Every implementation request follows
+  [`team-oriented-development.md`](team-oriented-development.md). Classify each
+  functional unit as development core, SRE, or web development before assigning
+  files. Keep shared integration and lifecycle state with the delivery owner.
 - Delegated work follows
   [`subagent-delegation.md`](subagent-delegation.md). The active Codex, Cursor,
   or other capable harness owns child creation, communication, terminal
@@ -67,8 +71,14 @@ Default PR-first loop:
    - If it is a major architectural initiative, stop at analysis and proposals.
      Continue only after the user discusses and explicitly selects the
      direction for implementation.
-   - For user-facing features, item types, or UX flows, find and read the owning specification in [`.cortex/product-specs/`](../product-specs/) (see [`../dynamic-skills/product-spec-lifecycle.md`](../dynamic-skills/product-spec-lifecycle.md)).
+   - For user-facing features, item types, or UX flows, select the responsible
+     team and read the owning specification through its knowledge graph. Use
+     the [global product catalog](../product-specs/index.md) as a cross-team
+     lookup.
    - Apply [subagent-delegation.md](subagent-delegation.md).
+   - Apply [team-oriented-development.md](team-oriented-development.md).
+   - Record each functional unit's team owner, code scope, Cortex scope, tests,
+     cross-team dependencies, and parent-owned join.
    - Give the active harness explicit task ownership, parent lineage, depth
      bounds, terminal barriers, and planned joins.
    - Continue from native harness results after every required child is
@@ -89,13 +99,21 @@ Default PR-first loop:
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
 3. **Implement functionality:**
+   - Assign each independently bounded unit to its team agent when delegation
+     is available.
+   - Require each team agent to own implementation, tests, Cortex updates,
+     review fixes, and validation fixes inside its scope.
+   - Route a required foreign-team capability back through the delivery owner.
+     Do not let one team implement another team's responsibility.
    - Implement the lowest ready provider API and its owning tests first.
    - Continue upward by writing each immediate consumer against the accepted
      provider contract.
    - Keep the module DAG separate from the agent hierarchy.
    - Reject hierarchy depths greater than three.
    - Capture meaningful discoveries and evidence in temporary session memory.
-   - When implementation, chat dialogues, or debugging reveal new product requirements, rules, or edge cases, update the owning specification in [`.cortex/product-specs/`](../product-specs/) (or author a new specification) in the same PR.
+   - When implementation, chat dialogues, or debugging reveal new product
+     requirements, rules, or edge cases, update or create the specification in
+     the responsible team's `product-specs/` directory in the same PR.
    - Re-estimate when the scope changes.
 4. **Prepare the coherent commit:**
    - Run `task loom:pre-push`.
@@ -157,7 +175,7 @@ task loom:pre-push
 
 Never use `task extension:format` alone before push.
 
-See [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
+See [pre-push-hygiene.md](../sre/dynamic-skills/pre-push-hygiene.md).
 
 ### ⛔ Format, push, execute through GitHub Actions
 
@@ -220,7 +238,7 @@ If Actions fails:
 `task remote TASK_NAMES=<name>,<name>` to reuse one configured remote job for a
 batch.
 Interactive local servers remain appropriate when the investigation needs
-retained local state. See [remote-execution.md](remote-execution.md).
+retained local state. See [remote-execution.md](../sre/workflows/remote-execution.md).
 
 Default agent flow:
 
@@ -280,16 +298,18 @@ When investigating failures, use sources in order:
 2. **Static analysis findings from CI** — fmt, clippy, svelte-check, eslint, Knip unused, jscpd clones/duplicates, prettier (surfaced by `pr.yml` / Verify).
 3. **Persisted app logs** — **most important after 1–2.** Vault unlock, sync, WASM tracing, and console capture live in IndexedDB (`/app-logs`, `nook-app-logs.json`).
 
-Every failing finding in step 1–2 must be fixed in the same task (delete/wire dead code, extract shared code for clones, correct types/lints/tests). Do not raise Knip/jscpd thresholds or ignore authored sources to make the gate pass. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
+Every failing finding in step 1–2 must be fixed in the same task (delete/wire dead code, extract shared code for clones, correct types/lints/tests). Do not raise Knip/jscpd thresholds or ignore authored sources to make the gate pass. See [quality.md § Fix check findings](../sre/workflows/quality.md#fix-check-findings--not-silence-them).
 
 Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 ## How it works
 
-0. **Interpret the request** — Identify the important requirements without copying the raw prompt or chat. Read the owning specification in [`.cortex/product-specs/`](../product-specs/) when product behavior or user flows are touched.
+0. **Interpret the request** — Identify the important requirements without
+   copying the raw prompt or chat. Select the team graph and read the owning
+   specification when product behavior or user flows are touched.
 1. **Confirm ownership, fetch, and publish the task plan:**
    - Identify the assigned feature and focused issues.
-   - Read the relevant product specification in `.cortex/product-specs/`.
+   - Read the relevant product specification through the selected team graph.
    - Leave every other active task unchanged.
    - Sync with remote.
    - Estimate authored changed lines.
@@ -304,8 +324,8 @@ Do not guess from DOM or screenshots alone. See [logging.md § Debugging…](../
 3. **Implement** — Make the module-focused change. Follow dynamic skills in
    [dynamic-skills/](../dynamic-skills/) and package boundaries in
    [ARCHITECTURE.md](../ARCHITECTURE.md). Update relevant product specs in
-   `.cortex/product-specs/` in the same PR when product behavior or constraints
-   are refined. If work is risky, blocked, or outside the authorized scope,
+   responsible team's `product-specs/` directory in the same PR when product
+   behavior or constraints are refined. If work is risky, blocked, or outside the authorized scope,
    follow [issues.md](issues.md) before handoff:
    - update or create the Workbench feature;
    - add focused Markdown records for the missing work.
@@ -476,7 +496,7 @@ task loom:pr-land CONFIG=<pr-land-ready-request.yaml>
 
 Do not run `task ci:pr` locally. The explicitly triggered remote `pr.yml` run is the product gate.
 
-See [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation) and [ci-pipeline.md § Local vs remote CI](ci-pipeline.md#local-vs-remote-ci).
+See [pull-requests.md § Validation](pull-requests.md#5-hosted-iteration-and-explicit-validation) and [ci-pipeline.md § Local vs remote CI](../sre/workflows/ci-pipeline.md#local-vs-remote-ci).
 
 ### 5–7 — Push, open PR, monitor
 
@@ -555,19 +575,23 @@ Create the YAML from current Nook `main`:
 
 ## Non-negotiables
 
+- **Respect team ownership.** Development core, SRE, and web development each
+  own their complete bounded technical scope. Team agents must not change
+  another team's code or Cortex. Shared files and lifecycle state remain
+  parent-owned. See [team-oriented-development.md](team-oriented-development.md).
 - **Never push directly to `main`.** Branch → PR → squash merge.
 - **Always `task loom:pre-push` before every push.** It host-applies formatting
   and checks the UI demo contract. Never rely on sealed-only
   `task extension:format`. See
-  [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md).
+  [pre-push-hygiene.md](../sre/dynamic-skills/pre-push-hygiene.md).
 - **Never stop after push.** Use focused remote tasks for experimental
   diagnosis. Trigger complete PR validation when the head is ready for the
   final gate. Then own failures, comments, conflicts, and readiness through
   squash merge.
-- **GitHub Actions is the only product gate and heavy execution surface** — do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine. See [remote-execution.md](remote-execution.md).
+- **GitHub Actions is the only product gate and heavy execution surface** — do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine. See [remote-execution.md](../sre/workflows/remote-execution.md).
 - **Use persisted app logs for e2e analysis** — read `nook-app-logs.json`, call `fetchAppLogs`, or open `/app-logs`; see [logging.md](../references/logging.md).
 - **Never merge after a Nook PR-test failure without a green Actions run on the latest head.**
-- **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](quality.md#fix-check-findings--not-silence-them).
+- **Fix Knip, jscpd, and every other check finding** — unused code, clones/duplicates, lint, types, tests, coverage. Do not raise thresholds or ignore authored sources to silence a red gate. See [quality.md § Fix check findings](../sre/workflows/quality.md#fix-check-findings--not-silence-them).
 - **Never merge on checks alone.** Require the exact-head `task pr:ready` audit; once it succeeds, the task-owning agent must squash-merge without asking again. Workflows do not blindly merge based on a check event.
 - **Request exact-head review without delaying complete validation.**
   - Run local review before the first owner-authored push.
@@ -578,7 +602,7 @@ Create the YAML from current Nook `main`:
   - Require `task pr:ready` after repository-owned checks pass.
   - Never wait for Codex or Cursor after checks finish.
   - Do not request Claude, CodeRabbit, or other optional reviewers.
-- **Never kill the Docker daemon** — only stop containers. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
+- **Never kill the Docker daemon** — only stop containers. See [docker-container-harness.md](../sre/dynamic-skills/docker-container-harness.md).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
 - **Plan bounded PRs** — target no more than 3,000 authored changed lines per
   PR. Prefer one cohesive module, package, layer, or responsibility. Continue
@@ -594,9 +618,9 @@ Create the YAML from current Nook `main`:
 - [pull-requests.md](pull-requests.md) — squash merge policy, detailed agent pipeline, CLI reference
 - [product-spec-lifecycle.md](../dynamic-skills/product-spec-lifecycle.md) — read specs before work; update specs on new knowledge from chat, tasks, or PR iterations
 - [self-improvement.md](../dynamic-skills/self-improvement.md) — capture provisional discoveries, reflect, promote durable knowledge, and remove session memory
-- [pre-push-hygiene.md](../dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
-- [github-actions-only-validation.md](../dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
+- [pre-push-hygiene.md](../sre/dynamic-skills/pre-push-hygiene.md) — unconditional host-applied format + UI demo contract
+- [github-actions-only-validation.md](../sre/dynamic-skills/github-actions-only-validation.md) — format locally; product gates on GHA only
 - [issues.md](issues.md) — Workbench issues, required task-start plans, and completion worklogs
-- [ci-pipeline.md](ci-pipeline.md) — GitHub Actions workflow map
+- [ci-pipeline.md](../sre/workflows/ci-pipeline.md) — GitHub Actions workflow map
 - [agent-statistics.md](agent-statistics.md) — measurement schema, test inventory, comparison rules, waste analysis, and Workbench publication
 - [monorepo.md](monorepo.md) — cross-package change checklist (runs inside step 3)

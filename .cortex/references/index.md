@@ -13,21 +13,21 @@ Reference documents provide durable technology cheat sheets, runtime configurati
 - **[logging.md](logging.md)**
   - Description: Application logger architecture, IndexedDB persistence, `/app-logs`, and debugging protocols
   - Topics: `tracing`, `console.*`, `nook_logs`, Playwright logs
-- **[rust-wasm.md](rust-wasm.md)**
+- **[rust-wasm.md](../dev-core/references/rust-wasm.md)**
   - Description: Rust + WASM bridge reference, wasm-bindgen rules, and typed boundary contracts
   - Topics: `wasm-bindgen`, build modes, WASM exports
 - **[loom-tools.md](loom-tools.md)**
   - Description: Loom CLI tool runner, YAML protocol blueprints, and static agent workflow execution
   - Topics: Loom tools, static workflows, domain YAML
-- **[ai-debugging.md](ai-debugging.md)**
+- **[ai-debugging.md](../web-dev/references/ai-debugging.md)**
   - Description: Comprehensive AI-agent debugging cheat sheet, browser profiles, and failure triage
   - Topics: Post-mortem debugging, test triage, log replay
-- **[bun-svelte.md](bun-svelte.md)**
+- **[bun-svelte.md](../web-dev/references/bun-svelte.md)**
   - Description: Svelte 5 runes, Vite dev server, Bun tooling, and unused code enforcement
   - Topics: Svelte 5, Vite transforms, Knip, jscpd
-- **[cloudflare-operations.md](cloudflare-operations.md)**
+- **[cloudflare-operations.md](../sre/references/cloudflare-operations.md)**
   - Description: Cloudflare MCP connection, Pages deployment, and control-plane operation rules
   - Topics: MCP `cloudflare-api`, DNS, Pages, deployment verification
-- **[infrastructure-provider-operations.md](infrastructure-provider-operations.md)**
+- **[infrastructure-provider-operations.md](../sre/references/infrastructure-provider-operations.md)**
   - Description: Provider interface priority, automatic local credential persistence, and mutation verification
   - Topics: MCP, API, CLI, `~/.nook`, credential permissions, exact-target checks

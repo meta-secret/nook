@@ -97,6 +97,131 @@ test('accepts clean documents and valid centralized knowledge-graph.md', () => {
   expect(audit([INDEX_DOC, DOCUMENT_A, DOCUMENT_B])).toEqual([]);
 });
 
+test('accepts root routing plus complete team-owned knowledge graphs', () => {
+  const rootGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/knowledge-graph.md',
+    content: `# Cortex Knowledge Graph
+
+- [Common](a.md)
+- [Development core](dev-core/knowledge-graph.md)
+- [SRE](sre/knowledge-graph.md)
+- [Web development](web-dev/knowledge-graph.md)
+`,
+  };
+  const rootGraph = makeDocument(rootGraphArgs);
+  const devGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/dev-core/knowledge-graph.md',
+    content: `# Development Core Knowledge Graph
+
+- [Core policy](policy.md)
+`,
+  };
+  const devGraph = makeDocument(devGraphArgs);
+  const sreGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/sre/knowledge-graph.md',
+    content: '# SRE Knowledge Graph\n',
+  };
+  const sreGraph = makeDocument(sreGraphArgs);
+  const webGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/web-dev/knowledge-graph.md',
+    content: '# Web Development Knowledge Graph\n',
+  };
+  const webGraph = makeDocument(webGraphArgs);
+  const corePolicyArgs: MakeDocumentArgs = {
+    path: '.cortex/dev-core/policy.md',
+    content: '# Core Policy\n',
+  };
+  const corePolicy = makeDocument(corePolicyArgs);
+
+  expect(
+    audit([rootGraph, devGraph, sreGraph, webGraph, DOCUMENT_A, corePolicy]),
+  ).toEqual([]);
+});
+
+test('rejects root navigation that bypasses a team graph', () => {
+  const rootGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/knowledge-graph.md',
+    content: `# Cortex Knowledge Graph
+
+- [Development core](dev-core/knowledge-graph.md)
+- [Core policy](dev-core/policy.md)
+- [SRE](sre/knowledge-graph.md)
+- [Web development](web-dev/knowledge-graph.md)
+`,
+  };
+  const rootGraph = makeDocument(rootGraphArgs);
+  const devGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/dev-core/knowledge-graph.md',
+    content:
+      '# Development Core Knowledge Graph\n\n- [Core policy](policy.md)\n',
+  };
+  const devGraph = makeDocument(devGraphArgs);
+  const sreGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/sre/knowledge-graph.md',
+    content: '# SRE Knowledge Graph\n',
+  };
+  const sreGraph = makeDocument(sreGraphArgs);
+  const webGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/web-dev/knowledge-graph.md',
+    content: '# Web Development Knowledge Graph\n',
+  };
+  const webGraph = makeDocument(webGraphArgs);
+  const corePolicyArgs: MakeDocumentArgs = {
+    path: '.cortex/dev-core/policy.md',
+    content: '# Core Policy\n',
+  };
+  const corePolicy = makeDocument(corePolicyArgs);
+
+  const findings = audit([rootGraph, devGraph, sreGraph, webGraph, corePolicy]);
+  expect(findings.map((finding) => finding.code)).toContain(
+    CortexStructureFindingCode.InvalidIndexEntry,
+  );
+});
+
+test('rejects a team graph that indexes another team document', () => {
+  const rootGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/knowledge-graph.md',
+    content: `# Cortex Knowledge Graph
+
+- [Development core](dev-core/knowledge-graph.md)
+- [SRE](sre/knowledge-graph.md)
+- [Web development](web-dev/knowledge-graph.md)
+`,
+  };
+  const devGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/dev-core/knowledge-graph.md',
+    content: `# Development Core Knowledge Graph
+
+- [Foreign SRE policy](../sre/policy.md)
+`,
+  };
+  const sreGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/sre/knowledge-graph.md',
+    content: '# SRE Knowledge Graph\n\n- [SRE policy](policy.md)\n',
+  };
+  const webGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/web-dev/knowledge-graph.md',
+    content: '# Web Development Knowledge Graph\n',
+  };
+  const srePolicyArgs: MakeDocumentArgs = {
+    path: '.cortex/sre/policy.md',
+    content: '# SRE Policy\n',
+  };
+  const findings = audit([
+    makeDocument(rootGraphArgs),
+    makeDocument(devGraphArgs),
+    makeDocument(sreGraphArgs),
+    makeDocument(webGraphArgs),
+    makeDocument(srePolicyArgs),
+  ]);
+
+  const expectedFinding = {
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/dev-core/knowledge-graph.md',
+  };
+  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+});
+
 test('accepts k-graph.md as an alias for the centralized knowledge graph', () => {
   const kGraphDocArgs: MakeDocumentArgs = {
     path: '.cortex/k-graph.md',

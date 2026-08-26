@@ -2,7 +2,7 @@
 name: coding-bro
 description: >-
   Default agent workflow for every coding task in this repository: fetch repo,
-  read owning product specs in .cortex/product-specs/ for product tasks,
+  read owning product specs through the selected team knowledge graph,
   publish a public-safe task plan to Workbench before implementation, branch
   from origin/main, implement (and update specs on new product knowledge), always
   host-apply task format (and the UI demo contract when UI paths change), commit
@@ -23,16 +23,19 @@ skill. The active harness owns child lifecycle and delivers results directly.
 Optional JSONL or Markdown evidence exists for humans and never gates parent
 continuation.
 
-**Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
+**Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../../.cortex/workflows/coding-bro.md).
 
-Read [`.cortex/AGENTS.md`](../../.cortex/AGENTS.md) before starting.
+Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) before starting.
 
 Follow the delivery sequence in the cortex workflow:
 
-1. Fetch repo, read owning product specs, and publish the Workbench task plan.
+1. Fetch repo, classify work by engineering team, read owning product specs,
+   and publish the Workbench task plan.
 2. Branch and create ignored session memory for substantial work.
 3. Apply [subagent-delegation](../subagent-delegation/SKILL.md) when delegating.
    Use direct harness results and parent-owned acceptance before integration.
+   Apply [team-oriented-development](../team-oriented-development/SKILL.md) to
+   every implementation unit.
 4. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
 5. Commit and run advisory local Codex review.
 6. Push and use focused execution on the configured Actions runner when useful.
@@ -75,7 +78,7 @@ or less, and never let a child add tasks or tiers.
 
 | Step | Action                                                                                                                                                          |
 | ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 0    | Interpret the request; read owning product spec in `.cortex/product-specs/` when product flows are touched; never copy the raw prompt                           |
+| 0    | Interpret the request; select the team graph and read its owning product spec when product flows are touched; never copy the raw prompt                         |
 | 1    | `git fetch origin main`                                                                                                                                         |
 | 2    | Publish `plans/<feature>/<timestamp>-<task>.md`, then branch from `origin/main`                                                                                 |
 | 3    | Create session memory for substantial work; implement the plan; capture discoveries; update product specs when justified                                        |
@@ -89,8 +92,8 @@ or less, and never let a child add tasks or tiers.
 | 13   | Publish the issue update, plan-linked worklog, and Loom AI-agent stats to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
 | 14   | Duration report                                                                                                                                                 |
 
-Pre-push format/demo rules: [`.cortex/dynamic-skills/pre-push-hygiene.md`](../../.cortex/dynamic-skills/pre-push-hygiene.md).
+Pre-push format/demo rules: [`.cortex/sre/dynamic-skills/pre-push-hygiene.md`](../../../.cortex/sre/dynamic-skills/pre-push-hygiene.md).
 
-Hosted execution and validation: [`.cortex/workflows/remote-execution.md`](../../.cortex/workflows/remote-execution.md).
+Hosted execution and validation: [`.cortex/sre/workflows/remote-execution.md`](../../../.cortex/sre/workflows/remote-execution.md).
 
-Full commands, e2e helpers, and non-negotiables: [`.cortex/workflows/coding-bro.md`](../../.cortex/workflows/coding-bro.md).
+Full commands, e2e helpers, and non-negotiables: [`.cortex/workflows/coding-bro.md`](../../../.cortex/workflows/coding-bro.md).

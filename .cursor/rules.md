@@ -24,9 +24,9 @@ These files are the source of truth for how this project works.
 ### Get started paths
 - **Three mutually exclusive first-run intents:** Create Simple vault, Create Sentinel vault, Join Sentinel setup. Do not collapse create/join into one vault-type dropdown with footer links.
 - **Sync-provider import is secondary** (“already have a vault”), not a create/join path.
-- **Sentinel create** chooses `N`/`T`, waits for all participant public keys, then atomically creates an empty vault. See `.cortex/design-docs/sentinel-genesis.md`.
+- **Sentinel create** chooses `N`/`T`, waits for all participant public keys, then atomically creates an empty vault. See `.cortex/dev-core/design-docs/sentinel-genesis.md`.
 - **Sentinel join** primarily shares standalone public keys with the vault owner; initiator request is optional (session-bound response or share delivery only). Post-genesis share delivery and later Onboard+sync QR are separate steps.
-- Source of truth: `.cortex/design-docs/vault-architecture-modes.md` and issue #303.
+- Source of truth: `.cortex/dev-core/design-docs/vault-architecture-modes.md` and issue #303.
 
 ### Package boundaries
 - Dependency flow is strictly `nook-core` → `nook-wasm` → `nook-web`. Never reverse this.
@@ -38,8 +38,8 @@ These files are the source of truth for how this project works.
 - After changing `nook-wasm`, rebuild bindings: `task wasm:build` (or `task build`).
 
 ### Product specifications
-- **Read specifications before implementation.** Search `.cortex/product-specs/` and `.cortex/knowledge-graph.md` before planning or editing code for user-facing features, item types, or UX workflows.
-- **Update specifications on new knowledge.** Capture user requirements from chat, task execution, and PR review iterations in the owning `.cortex/product-specs/` document in the same PR.
+- **Read specifications before implementation.** Select the responsible team through `.cortex/knowledge-graph.md`, then read its team graph and owning product specification before planning or editing user-facing features, item types, or UX workflows.
+- **Update specifications on new knowledge.** Capture user requirements from chat, task execution, and PR review iterations in the owning team's `product-specs/` document in the same PR.
 - **Treat stale/missing specs as P1 defects.** Follow `.cortex/dynamic-skills/product-spec-lifecycle.md`.
 
 ### Tooling

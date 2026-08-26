@@ -6,7 +6,7 @@ You are updating all outdated direct Rust dependencies for the Nook monorepo.
 - Dependency-audit workflow run id: ${GITHUB_RUN_ID}
 - Fix branch (use exactly): `${FIX_BRANCH}`
 
-Read `.cortex/AGENTS.md`, `.cortex/dynamic-skills/docker-container-harness.md`, and
+Read `.cortex/AGENTS.md`, `.cortex/sre/dynamic-skills/docker-container-harness.md`, and
 `.cortex/workflows/coding-bro.md` before making changes.
 
 ## Required work

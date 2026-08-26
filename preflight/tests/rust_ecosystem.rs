@@ -36,7 +36,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;
     let main = read(".github/workflows/main.yml")?;
     let pr = read(".github/workflows/pr.yml")?;
-    let quality = read(".cortex/workflows/quality.md")?;
+    let quality = read(".cortex/sre/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
     let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
@@ -512,7 +512,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
 
 #[test]
 fn ecosystem_policy_replaces_generic_custom_scanners_only() -> anyhow::Result<()> {
-    let quality = read(".cortex/workflows/quality.md")?;
+    let quality = read(".cortex/sre/workflows/quality.md")?;
 
     assert!(quality.contains("Ecosystem tools before bespoke preflight"));
     assert!(quality.contains("Keep `preflight` for Nook-specific"));

@@ -60,7 +60,8 @@ delivery owner accepts that edit group.
 
 ## Collect Cortex-refactoring evidence
 
-The Cortex expert begins with the central knowledge graph.
+The Cortex expert begins with the root routing graph and the selected team's
+knowledge graph.
 
 1. Find the most specific authority for the topic.
 2. Read its one-hop authorities and executable skill mirrors.
@@ -106,7 +107,7 @@ The delivery owner reviews every finding before editing.
 5. Add or strengthen behavior-focused tests for code invariants.
 6. Update dependent consumers after their provider contract is accepted.
 7. Update Cortex and executable mirrors when durable guidance changes.
-8. Update `.cortex/knowledge-graph.md` when document headings or paths change.
+8. Update the owning knowledge graph when document headings or paths change.
 9. Run the validation owned by each edit group.
 
 Shared registries, lockfiles, generated bindings, and lifecycle state remain

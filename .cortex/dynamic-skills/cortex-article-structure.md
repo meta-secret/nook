@@ -107,7 +107,7 @@ Hierarchy represents containment, not decoration.
 Avoid H4-H6 unless the information remains useful as a navigable article.
 
 Every heading added, removed, renamed, reordered, or re-parented must receive the
-same change in `.cortex/knowledge-graph.md`.
+same change in the document's owning knowledge graph.
 
 ## Standard action blocks
 
@@ -191,7 +191,7 @@ The final state has no exemptions.
 - [ ] Use nested items only for real ownership or branching.
 - [ ] Keep explanations detailed where the reasoning matters.
 - [ ] Keep sentences and list items cognitively simple.
-- [ ] Update `.cortex/knowledge-graph.md` with every heading change.
+- [ ] Update the owning knowledge graph with every heading change.
 - [ ] Verify that the rewrite preserves exact product and policy meaning.
 
 ## Validation

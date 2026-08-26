@@ -9,7 +9,7 @@ description: >-
 # Pre-Push Hygiene
 
 Read and follow the canonical project skill at
-[`.cortex/dynamic-skills/pre-push-hygiene.md`](../../../.cortex/dynamic-skills/pre-push-hygiene.md).
+[`.cortex/sre/dynamic-skills/pre-push-hygiene.md`](../../../.cortex/sre/dynamic-skills/pre-push-hygiene.md).
 
 ## Quick commands
 

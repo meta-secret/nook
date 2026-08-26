@@ -90,10 +90,10 @@ export async function runCortexAuditFromDirectory(
       )
       .map((finding) => finding.file),
   );
-  const syntaxInvalidSkillNames = new Set(
-    [...syntaxInvalidPaths]
-      .filter((filePath) => filePath.startsWith('.cortex/dynamic-skills/'))
-      .map((filePath) => path.basename(filePath)),
+  const syntaxInvalidSkillPaths = new Set(
+    [...syntaxInvalidPaths].filter((filePath) =>
+      filePath.includes('/dynamic-skills/'),
+    ),
   );
   const documents = allDocuments.filter((document) => {
     const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
@@ -161,12 +161,13 @@ export async function runCortexAuditFromDirectory(
   );
 
   const skillsDir = path.join(cortexRoot, 'dynamic-skills');
-  const skillFiles = readdirSync(skillsDir)
-    .filter((name) => name.endsWith('.md'))
-    .filter((name) => name !== 'index.md' && name !== '_template.md')
-    .filter((name) =>
-      admittedDocumentPaths.has(path.join('.cortex', 'dynamic-skills', name)),
-    )
+  const skillFiles = documents
+    .map((document) => document.relativePath.replaceAll(path.sep, '/'))
+    .filter((relativePath) => relativePath.includes('/dynamic-skills/'))
+    .filter((relativePath) => {
+      const name = path.posix.basename(relativePath);
+      return name !== 'index.md' && name !== '_template.md';
+    })
     .sort();
   const indexPath = path.join(skillsDir, 'index.md');
   const indexRelativePath = path.relative(repoRoot, indexPath);
@@ -175,31 +176,43 @@ export async function runCortexAuditFromDirectory(
   const indexed = new Set(
     [...indexContent.matchAll(/\(([^)]+\.md)\)/g)]
       .map((match) => match[1] ?? '')
-      .filter((target) => !target.includes('/') && target.endsWith('.md')),
+      .filter((target) => !/^[a-z][a-z0-9+.-]*:/i.test(target))
+      .map((target) =>
+        path.posix.normalize(
+          path.posix.join('.cortex/dynamic-skills', target.split('#')[0] ?? ''),
+        ),
+      )
+      .filter((target) => target.includes('/dynamic-skills/'))
+      .filter((target) => {
+        const name = path.posix.basename(target);
+        return name !== 'index.md' && name !== '_template.md';
+      }),
   );
 
   const missingFromIndex = indexIsAdmitted
-    ? skillFiles.filter((name) => !indexed.has(name))
+    ? skillFiles.filter((skillPath) => !indexed.has(skillPath))
     : [];
   const orphanIndexRows = indexIsAdmitted
     ? [...indexed].filter(
-        (name) =>
-          name !== 'index.md' &&
-          name !== '_template.md' &&
-          !syntaxInvalidSkillNames.has(name) &&
-          !skillFiles.includes(name),
+        (skillPath) =>
+          !syntaxInvalidSkillPaths.has(skillPath) &&
+          !skillFiles.includes(skillPath),
       )
     : [];
 
   const missingExecutableSkills: string[] = [];
   for (const match of indexContent.matchAll(
-    /\(\.\.\/\.\.\/\.agents\/skills\/([^/]+)\/SKILL\.md\)/g,
+    /\([^)]*\.agents\/skills\/([^/]+)\/SKILL\.md(?:#[^)]*)?\)/g,
   )) {
     const slug = match[1];
     if (typeof slug !== 'string') {
       continue;
     }
-    if (syntaxInvalidSkillNames.has(`${slug}.md`)) {
+    if (
+      [...syntaxInvalidSkillPaths].some(
+        (skillPath) => path.posix.basename(skillPath) === `${slug}.md`,
+      )
+    ) {
       continue;
     }
     const skillPath = path.join(
@@ -223,7 +236,10 @@ export async function runCortexAuditFromDirectory(
       );
     const slug = mirrorMatch?.[1];
     return (
-      typeof slug !== 'string' || !syntaxInvalidSkillNames.has(`${slug}.md`)
+      typeof slug !== 'string' ||
+      ![...syntaxInvalidSkillPaths].some(
+        (skillPath) => path.posix.basename(skillPath) === `${slug}.md`,
+      )
     );
   });
 

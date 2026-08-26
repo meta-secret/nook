@@ -1,6 +1,6 @@
 export const MODULE_EXPERT_AGENT_INSTRUCTIONS = `Act only as the assigned read-only Nook module expert.
 This definition supplies expert identity. The active harness owns expert creation, communication, and lifecycle.
-Read .cortex/knowledge-graph.md first. Resolve your role in .cortex/architecture/module-experts.md, then load only the listed authority anchors and project skills. Verify every claim against source at the task's exact commit.
+Read .cortex/knowledge-graph.md first, then load the knowledge graph for the assigned engineering team. Resolve your role in .cortex/architecture/module-experts.md, then load only the listed authority anchors and project skills. Verify every claim against source at the task's exact commit.
 Report the external API, dependencies, consumers, invariants, tests, risks, and parent actions.
 Do not edit files, apply patches, or mutate Git, GitHub, Workbench, CI, deployment, or other external state. Delegate only inside the assigned task and harness-enforced depth bound. Optional Markdown is human evidence, never lifecycle state.`;
 
@@ -53,20 +53,28 @@ const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 const EVENT_LOG_ROOT = 'nook-app/nook-platform/nook-event-log';
 const REPLICATION_ROOT = 'nook-app/nook-platform/nook-replication';
 
-export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
+const MODULE_EXPERT_SHARED_CONTEXT_PATHS = [
   '.cortex/dynamic-skills/module-expert.md',
   '.cortex/workflows/module-oriented-development.md',
 ] as const;
 
+export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
+  '.cortex/dev-core/knowledge-graph.md',
+  ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
+] as const;
+
 export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
+  '.cortex/dev-core/knowledge-graph.md',
+  '.cortex/web-dev/knowledge-graph.md',
   '.cortex/dynamic-skills/internal-api-expert.md',
-  ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const WEB_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/AGENTS.md',
+  '.cortex/web-dev/knowledge-graph.md',
   '.cortex/dynamic-skills/browser-extension-release-security.md',
-  ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const WEB_EXPERT_SKILL_PATHS = [
@@ -79,7 +87,7 @@ export const WEB_EXPERT_SKILL_AUTHORITY_PATHS = [
   '.cortex/AGENTS.md',
   EXPERT_AUTHORITY_PATH,
   '.cortex/dynamic-skills/browser-extension-release-security.md',
-  ...MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
 export const WEB_EXPERT_AUTHORITY_PATHS = [
@@ -88,17 +96,17 @@ export const WEB_EXPERT_AUTHORITY_PATHS = [
 ] as const;
 
 export const WEB_EXPERT_PRODUCT_SPEC_PATHS = [
-  '.cortex/product-specs/authenticator-items.md',
-  '.cortex/product-specs/browser-extension.md',
-  '.cortex/product-specs/credit-card-items.md',
-  '.cortex/product-specs/decentralized-auth.md',
-  '.cortex/product-specs/devices-and-access.md',
-  '.cortex/product-specs/file-attachments.md',
-  '.cortex/product-specs/password-envelope.md',
-  '.cortex/product-specs/password-manager.md',
-  '.cortex/product-specs/secure-notes.md',
-  '.cortex/product-specs/slip39-recovery.md',
-  '.cortex/product-specs/vault-app-isolation.md',
+  '.cortex/dev-core/product-specs/authenticator-items.md',
+  '.cortex/web-dev/product-specs/browser-extension.md',
+  '.cortex/dev-core/product-specs/credit-card-items.md',
+  '.cortex/dev-core/product-specs/decentralized-auth.md',
+  '.cortex/dev-core/product-specs/devices-and-access.md',
+  '.cortex/dev-core/product-specs/file-attachments.md',
+  '.cortex/dev-core/product-specs/password-envelope.md',
+  '.cortex/dev-core/product-specs/password-manager.md',
+  '.cortex/dev-core/product-specs/secure-notes.md',
+  '.cortex/dev-core/product-specs/slip39-recovery.md',
+  '.cortex/web-dev/product-specs/vault-app-isolation.md',
 ] as const;
 
 export const WEB_EXPERT_RELEASE_AUTHORITY_PATHS = [

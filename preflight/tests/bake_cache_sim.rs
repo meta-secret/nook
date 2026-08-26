@@ -44,7 +44,7 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
     let bake = read(&format!("{sim}/docker-bake.hcl"));
     let tasks = read("infra/tasks/bake-cache.yml");
     let zot = read(&format!("{sim}/zot-config.json"));
-    let quality = read(".cortex/workflows/quality.md");
+    let quality = read(".cortex/sre/workflows/quality.md");
 
     assert!(
         zot.contains("\"compat\": [\"docker2s2\"]") && zot.contains("anonymousPolicy"),

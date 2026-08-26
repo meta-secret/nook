@@ -50,4 +50,4 @@ commands talk to the host daemon and run the sealed nook-web image.
 - Do **not** create or merge a PR — GitHub Actions opens the PR for explicit review and merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the CI failure root cause.
-- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).

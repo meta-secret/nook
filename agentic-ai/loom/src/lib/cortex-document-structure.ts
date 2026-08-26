@@ -72,6 +72,7 @@ type ValidateIndexArgs = {
   readonly catalog: ReadonlyMap<string, ParsedDocument>;
   readonly excludedDocumentPaths: ReadonlySet<string>;
   readonly findings: CortexStructureFinding[];
+  readonly indexedFiles: Set<string>;
   readonly repoRoot: string;
 };
 
@@ -97,7 +98,7 @@ export function auditCortexDocumentStructure(
     ]),
   );
 
-  const indexDoc =
+  const rootIndexDoc =
     catalog.get('.cortex/knowledge-graph.md') ??
     catalog.get('knowledge-graph.md') ??
     catalog.get('.cortex/k-graph.md') ??
@@ -106,7 +107,7 @@ export function auditCortexDocumentStructure(
     catalog.get('INDEX.md') ??
     false;
 
-  if (indexDoc === false) {
+  if (rootIndexDoc === false) {
     const findingArgs: AddFindingArgs = {
       findings,
       code: CortexStructureFindingCode.MissingIndex,
@@ -117,28 +118,125 @@ export function auditCortexDocumentStructure(
     };
     addFinding(findingArgs);
   } else {
-    const validateIndexArgs: ValidateIndexArgs = {
-      indexDocument: indexDoc,
-      catalog,
-      excludedDocumentPaths: args.excludedDocumentPaths,
-      findings,
-      repoRoot: args.repoRoot,
-    };
-    validateIndex(validateIndexArgs);
+    const distributedGraphPaths = [
+      '.cortex/dev-core/knowledge-graph.md',
+      '.cortex/sre/knowledge-graph.md',
+      '.cortex/web-dev/knowledge-graph.md',
+    ] as const;
+    const distributedTopology = distributedGraphPaths.some((graphPath) =>
+      catalog.has(graphPath),
+    );
+    const graphDocuments = new Map<string, ParsedDocument>();
+    const rootGraphPath = normalizeCortexRelativePath(
+      rootIndexDoc.relativePath,
+    );
+    graphDocuments.set(rootGraphPath, rootIndexDoc);
+    if (distributedTopology) {
+      for (const graphPath of distributedGraphPaths) {
+        const graphDocument = catalog.get(graphPath);
+        if (!graphDocument) {
+          const findingArgs: AddFindingArgs = {
+            findings,
+            code: CortexStructureFindingCode.MissingIndex,
+            file: graphPath,
+            line: 1,
+            message: `Required team knowledge graph is missing: ${graphPath}`,
+          };
+          addFinding(findingArgs);
+          continue;
+        }
+        graphDocuments.set(graphPath, graphDocument);
+      }
+    }
+
+    const indexedByGraph = new Map<string, ReadonlySet<string>>();
+    for (const [graphPath, graphDocument] of graphDocuments) {
+      const indexedFiles = new Set<string>();
+      const validateIndexArgs: ValidateIndexArgs = {
+        indexDocument: graphDocument,
+        catalog,
+        excludedDocumentPaths: args.excludedDocumentPaths,
+        findings,
+        indexedFiles,
+        repoRoot: args.repoRoot,
+      };
+      validateIndex(validateIndexArgs);
+      indexedByGraph.set(graphPath, indexedFiles);
+    }
+
+    for (const [normPath] of catalog) {
+      if (isKnowledgeGraphPath(normPath)) continue;
+      const canonicalOwnerGraphPath = owningKnowledgeGraphPath(normPath);
+      const ownerGraphPath =
+        canonicalOwnerGraphPath === '.cortex/knowledge-graph.md'
+          ? rootGraphPath
+          : canonicalOwnerGraphPath;
+      const indexedFiles = indexedByGraph.get(ownerGraphPath);
+      if (indexedFiles?.has(normPath)) continue;
+      const findingArgs: AddFindingArgs = {
+        findings,
+        code: CortexStructureFindingCode.MissingFromIndex,
+        file: ownerGraphPath,
+        line: 1,
+        message: `Document is not indexed in its owning knowledge graph ${ownerGraphPath}: ${normPath}`,
+      };
+      addFinding(findingArgs);
+    }
+
+    if (distributedTopology) {
+      const rootIndexedFiles = indexedByGraph.get(rootGraphPath) ?? new Set();
+      for (const teamGraphPath of distributedGraphPaths) {
+        if (!rootIndexedFiles.has(teamGraphPath)) {
+          const findingArgs: AddFindingArgs = {
+            findings,
+            code: CortexStructureFindingCode.MissingFromIndex,
+            file: rootGraphPath,
+            line: 1,
+            message: `Root knowledge graph must link the team graph: ${teamGraphPath}`,
+          };
+          addFinding(findingArgs);
+        }
+      }
+      for (const teamGraphPath of distributedGraphPaths) {
+        const graphOwner = cortexTeamOwner(teamGraphPath);
+        const teamIndexedFiles = indexedByGraph.get(teamGraphPath) ?? new Set();
+        for (const indexedPath of teamIndexedFiles) {
+          const indexedOwner = cortexTeamOwner(indexedPath);
+          if (indexedOwner === false || indexedOwner === graphOwner) continue;
+          const findingArgs: AddFindingArgs = {
+            findings,
+            code: CortexStructureFindingCode.InvalidIndexEntry,
+            file: teamGraphPath,
+            line: 1,
+            message: `Team knowledge graph cannot index another team's document: ${indexedPath}`,
+          };
+          addFinding(findingArgs);
+        }
+      }
+      for (const indexedPath of rootIndexedFiles) {
+        if (
+          distributedGraphPaths.some(
+            (teamGraphPath) =>
+              indexedPath.startsWith(`${path.posix.dirname(teamGraphPath)}/`) &&
+              indexedPath !== teamGraphPath,
+          )
+        ) {
+          const findingArgs: AddFindingArgs = {
+            findings,
+            code: CortexStructureFindingCode.InvalidIndexEntry,
+            file: rootGraphPath,
+            line: 1,
+            message: `Root knowledge graph must route through team graphs instead of indexing team documents directly: ${indexedPath}`,
+          };
+          addFinding(findingArgs);
+        }
+      }
+    }
   }
 
   for (const document of parsedDocuments) {
     const normPath = normalizeCortexRelativePath(document.relativePath);
-    if (
-      normPath === '.cortex/knowledge-graph.md' ||
-      normPath === 'knowledge-graph.md' ||
-      normPath === '.cortex/k-graph.md' ||
-      normPath === 'k-graph.md' ||
-      normPath === '.cortex/INDEX.md' ||
-      normPath === 'INDEX.md'
-    ) {
-      continue;
-    }
+    if (isKnowledgeGraphPath(normPath)) continue;
     const validateArgs: ValidateDocumentArgs = {
       document,
       findings,
@@ -256,8 +354,6 @@ function validateIndex(args: ValidateIndexArgs): void {
   }
 
   const allLinks = collectAllLinks(args.indexDocument.root);
-  const indexedFiles = new Set<string>();
-
   for (const link of allLinks) {
     const resolveArgs: ResolveIndexLinkArgs = {
       url: link.url,
@@ -269,7 +365,7 @@ function validateIndex(args: ValidateIndexArgs): void {
     }
 
     if (args.excludedDocumentPaths.has(resolved.targetRelativePath)) {
-      indexedFiles.add(resolved.targetRelativePath);
+      args.indexedFiles.add(resolved.targetRelativePath);
       continue;
     }
 
@@ -286,7 +382,7 @@ function validateIndex(args: ValidateIndexArgs): void {
       continue;
     }
 
-    indexedFiles.add(resolved.targetRelativePath);
+    args.indexedFiles.add(resolved.targetRelativePath);
 
     if (resolved.fragment !== false) {
       if (!targetDoc.fragments.has(resolved.fragment)) {
@@ -299,30 +395,6 @@ function validateIndex(args: ValidateIndexArgs): void {
         };
         addFinding(findingArgs);
       }
-    }
-  }
-
-  // Verify all documents in catalog (except knowledge graph) are present in index
-  for (const [normPath] of args.catalog) {
-    if (
-      normPath === '.cortex/knowledge-graph.md' ||
-      normPath === 'knowledge-graph.md' ||
-      normPath === '.cortex/k-graph.md' ||
-      normPath === 'k-graph.md' ||
-      normPath === '.cortex/INDEX.md' ||
-      normPath === 'INDEX.md'
-    ) {
-      continue;
-    }
-    if (!indexedFiles.has(normPath)) {
-      const findingArgs: AddFindingArgs = {
-        findings: args.findings,
-        code: CortexStructureFindingCode.MissingFromIndex,
-        file: args.indexDocument.relativePath,
-        line: 1,
-        message: `Document is not indexed in .cortex/knowledge-graph.md: ${normPath}`,
-      };
-      addFinding(findingArgs);
     }
   }
 }
@@ -348,12 +420,51 @@ function resolveIndexLink(
   }
 
   const cleanPath = pathPart.replace(/\\/g, '/');
-  const targetRelativePath = normalizeCortexRelativePath(cleanPath);
+  const normalizedIndexPath = normalizeCortexRelativePath(
+    args.indexRelativePath,
+  );
+  const targetRelativePath = normalizeCortexRelativePath(
+    path.posix.normalize(
+      path.posix.join(path.posix.dirname(normalizedIndexPath), cleanPath),
+    ),
+  );
 
   return {
     targetRelativePath,
     fragment: fragment && fragment.length > 0 ? fragment : false,
   };
+}
+
+function isKnowledgeGraphPath(filePath: string): boolean {
+  return (
+    filePath === '.cortex/knowledge-graph.md' ||
+    filePath === 'knowledge-graph.md' ||
+    filePath === '.cortex/k-graph.md' ||
+    filePath === 'k-graph.md' ||
+    filePath === '.cortex/INDEX.md' ||
+    filePath === 'INDEX.md' ||
+    /^\.cortex\/(?:dev-core|sre|web-dev)\/knowledge-graph\.md$/.test(filePath)
+  );
+}
+
+function owningKnowledgeGraphPath(filePath: string): string {
+  for (const team of ['dev-core', 'sre', 'web-dev'] as const) {
+    if (filePath.startsWith(`.cortex/${team}/`)) {
+      return `.cortex/${team}/knowledge-graph.md`;
+    }
+  }
+  return '.cortex/knowledge-graph.md';
+}
+
+function cortexTeamOwner(
+  filePath: string,
+): 'dev-core' | 'sre' | 'web-dev' | false {
+  const match = /^\.cortex\/(dev-core|sre|web-dev)\//.exec(filePath);
+  const owner = match?.[1];
+  if (owner === 'dev-core' || owner === 'sre' || owner === 'web-dev') {
+    return owner;
+  }
+  return false;
 }
 
 function collectAllLinks(root: Root): Link[] {

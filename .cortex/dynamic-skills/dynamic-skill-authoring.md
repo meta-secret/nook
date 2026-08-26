@@ -3,7 +3,7 @@
 ## Purpose
 
 Capture a user's concrete code feedback as durable project knowledge in the
-canonical `.cortex/dynamic-skills/` registry, then make that knowledge reusable
+canonical team-owned dynamic-skill registry, then make that knowledge reusable
 for future refactors.
 
 ## Problem Pattern
@@ -17,15 +17,18 @@ the rule instead of applying it from the repository.
 When the user invokes `/dynamic-skill` or explains a reusable mistake:
 
 1. Inspect the referenced code.
-2. Convert the explanation into a concise `.cortex/dynamic-skills/<skill>.md`
-   card. This card is the source of truth.
-3. Update `.cortex/dynamic-skills/index.md`.
-4. Create `.agents/skills/<skill>/SKILL.md` when the pattern should be invokable
+2. Select the responsible team through
+   [Engineering team ownership](../architecture/team-ownership.md).
+3. Convert the explanation into a concise card in that team's
+   `dynamic-skills/` directory. Use the common directory only for cross-team
+   guidance. This card is the source of truth.
+4. Update `.cortex/dynamic-skills/index.md`.
+5. Create `.agents/skills/<skill>/SKILL.md` when the pattern should be invokable
    directly by future agents.
    - Keep the wrapper concise and point it back to the `.cortex` card.
    - Keep `.cursor/skills/` and `.claude/skills/` as symlink mirrors of the
      canonical `.agents` wrapper.
-5. Apply the skill to code when the user asks for capture plus refactor.
+6. Apply the skill to code when the user asks for capture plus refactor.
 
 ## Scope
 
@@ -55,10 +58,13 @@ Does not apply to:
 - For a new card:
   - scaffold with
     `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>`;
+  - set `skillOwner` to the responsible team or to `common` for genuinely
+    cross-team knowledge;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
   - set `createExecutableWrappers: true` only when direct invocation is useful;
     and
-  - update `.cortex/dynamic-skills/index.md` if Loom did not.
+  - update `.cortex/dynamic-skills/index.md` and the owning knowledge graph if
+    Loom did not.
 - Run `task loom:cortex-audit` after the card and registry agree.
 
 ## Validation
