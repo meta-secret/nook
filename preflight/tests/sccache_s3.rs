@@ -226,8 +226,8 @@ fn assert_hosted_docker_builds_connect_scoped_compiler_cache() {
     for required in [
         "mode: 0o700",
         "mode: 0o600",
-        "delete process.env[accessKeyInput]",
-        "delete process.env[secretKeyInput]",
+        "delete process.env[\"INPUT_SCCACHE-ACCESS-KEY\"]",
+        "delete process.env[\"INPUT_SCCACHE-SECRET-KEY\"]",
         "SCCACHE_S3_ACCESS_KEY_FILE",
         "SCCACHE_S3_SECRET_KEY_FILE",
         "NOOK_SCCACHE_BACKEND=direct_compile",

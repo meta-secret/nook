@@ -33,6 +33,8 @@ const TYPESCRIPT_SOURCE = /\.(?:cts|mts|ts|tsx)$/u;
 const SHELL_SOURCE = /\.sh$/u;
 const SHELL_PROVIDER_EXECUTION =
   /(?:\b(?:bun|node|bash|sh|source)\s+|(?:^|[\n;&|])\s*\.\s+)["']?(?:\.\/|\.\.\/|\/)?[^\s"']*\.agents\/skills\//gmu;
+const SHELL_REPOSITORY_SCRIPT_EXECUTION =
+  /(?:^|[\n;&|])\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)(?:(?:exec|command)\s+)?(?:bun|node|bash|sh|source|\.)\s+(?!-)[^\n;&|]+/gmu;
 type BoundaryTranspilerOptions = { readonly loader: 'tsx' };
 const boundaryTranspilerOptions: BoundaryTranspilerOptions = { loader: 'tsx' };
 const BOUNDARY_TRANSPILER = new Bun.Transpiler(boundaryTranspilerOptions);
@@ -120,4 +122,9 @@ export function executableSourceReferencesProvider(
   }
   SHELL_PROVIDER_EXECUTION.lastIndex = 0;
   return SHELL_PROVIDER_EXECUTION.test(inspection.source);
+}
+
+export function shellExecutableLaunchesUnprovenScript(source: string): boolean {
+  SHELL_REPOSITORY_SCRIPT_EXECUTION.lastIndex = 0;
+  return SHELL_REPOSITORY_SCRIPT_EXECUTION.test(source);
 }
