@@ -328,6 +328,17 @@ Use `task skills:install`, `task skills:format`, and `task skills:verify` to
 install its pinned dependencies, apply formatting, and run its complete quality
 gate.
 
+Executable skill actions use the same domain-YAML command model as Loom. List
+the available actions before authoring a request:
+
+```sh
+task skills:tools-list
+task skills:run CONFIG=path/to/skill-request.yaml
+```
+
+Discovery returns each action's description, exact YAML example, and input
+schema. The command accepts one YAML document instead of action-specific flags.
+
 ```sh
 task web:dev
 ```

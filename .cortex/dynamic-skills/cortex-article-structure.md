@@ -196,6 +196,16 @@ The final state has no exemptions.
 
 ## Validation
 
+Inspect and invoke the skill-owned read-only action through domain YAML:
+
+```bash
+task skills:tools-list
+task skills:run CONFIG=path/to/article-structure-request.yaml
+```
+
+The discovery response owns the exact request example and input schema. Do not
+invent positional action flags.
+
 Run the focused checks:
 
 ```bash
