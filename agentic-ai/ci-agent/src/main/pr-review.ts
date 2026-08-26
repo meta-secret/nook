@@ -29,6 +29,7 @@ type ReviewStabilizationInput = {
 };
 
 export enum ReviewStabilizationState {
+  CircuitBreaker = "circuit-breaker",
   Clean = "clean",
   Findings = "findings",
   TimedOut = "timed-out",
@@ -81,6 +82,11 @@ export async function runPrReviewStabilization(): Promise<void> {
       `PR #${prNumber} has current-head review findings; address them as one coherent batch before validation`,
     );
   }
+  if (result.state === ReviewStabilizationState.CircuitBreaker) {
+    throw new Error(
+      `PR #${prNumber} has reached three Cloud-review finding batches; stop the rerun loop and perform comprehensive stabilization before another complete validation`,
+    );
+  }
   if (result.state === ReviewStabilizationState.TimedOut) {
     console.log(
       `::warning::Exact-head review did not settle within ${waitSeconds}s; continuing with validation so review availability cannot deadlock delivery.`,
@@ -111,9 +117,12 @@ export async function stabilizeExactHeadReview(
   return {
     feedback,
     headSha: review.headSha,
-    state: hasFindings
-      ? ReviewStabilizationState.Findings
-      : ReviewStabilizationState.Clean,
+    state:
+      hasFindings && feedback.findingBatches >= 3
+        ? ReviewStabilizationState.CircuitBreaker
+        : hasFindings
+          ? ReviewStabilizationState.Findings
+          : ReviewStabilizationState.Clean,
   };
 }
 

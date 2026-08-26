@@ -254,6 +254,7 @@ export type PrFeedbackSummary = {
     requested: boolean;
     settled: boolean;
   };
+  findingBatches: number;
   substantiveComments: number;
   substantiveReviews: number;
   unresolvedThreads: number;
@@ -302,7 +303,7 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
-  const [issueComments, reviews] = await Promise.all([
+  const [issueComments, reviews, reviewComments] = await Promise.all([
     octokit.paginate(octokit.rest.issues.listComments, {
       owner,
       repo,
@@ -310,6 +311,12 @@ export async function inspectPrFeedback(
       per_page: 100,
     }),
     octokit.paginate(octokit.rest.pulls.listReviews, {
+      owner,
+      repo,
+      pull_number: prNumber,
+      per_page: 100,
+    }),
+    octokit.paginate(octokit.rest.pulls.listReviewComments, {
       owner,
       repo,
       pull_number: prNumber,
@@ -389,10 +396,33 @@ export async function inspectPrFeedback(
       requested: cursorReviewRequests.length > 0,
       settled: currentHeadCursorReview,
     },
+    findingBatches: countAutomatedFindingBatches(reviewComments),
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
   };
+}
+
+type ReviewFindingComment = {
+  readonly in_reply_to_id?: number;
+  readonly pull_request_review_id?: number | null;
+  readonly user: { readonly login: string } | null;
+};
+
+export function countAutomatedFindingBatches(
+  comments: readonly ReviewFindingComment[],
+): number {
+  const reviewIds = new Set<number>();
+  for (const comment of comments) {
+    if (comment.in_reply_to_id !== undefined) continue;
+    if (!isCodexReviewer(comment.user) && !isCursorReviewer(comment.user)) {
+      continue;
+    }
+    if (typeof comment.pull_request_review_id === "number") {
+      reviewIds.add(comment.pull_request_review_id);
+    }
+  }
+  return reviewIds.size;
 }
 
 function isNotFound(err: unknown): boolean {
@@ -441,4 +471,3 @@ const AGENT_IMPLEMENTATION_HANDOFF_COMMENT =
 function isAgentImplementationHandoffComment(body: string): boolean {
   return AGENT_IMPLEMENTATION_HANDOFF_COMMENT.test(body.trim());
 }
-
