@@ -69,7 +69,6 @@ jobs:
                 )
               );
               for (const run of obsoleteRuns) {
-                inspectedRunIds.add(run.id);
                 obsoleteRunCount += 1;
                 const { data: latestPr } = await github.rest.pulls.get({
                   ...context.repo,
@@ -77,6 +76,7 @@ jobs:
                 });
                 liveHeadSha = latestPr.head.sha;
                 if (run.head_sha === latestPr.head.sha) {
+                  inspectedRunIds.add(run.id);
                   core.info(`Keeping current-head ${run.name} run ${run.id}.`);
                   continue;
                 }
@@ -89,6 +89,7 @@ jobs:
                     repo: context.repo.repo,
                     run_id: run.id,
                   });
+                  inspectedRunIds.add(run.id);
                 } catch (error) {
                   let latestRun;
                   try {
@@ -105,6 +106,7 @@ jobs:
                     continue;
                   }
                   if (latestRun.status === "completed") {
+                    inspectedRunIds.add(run.id);
                     core.info(
                       `${run.name} run ${run.id} completed before cancellation.`
                     );

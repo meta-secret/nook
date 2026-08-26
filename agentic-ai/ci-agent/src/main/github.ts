@@ -10,6 +10,7 @@ import {
   isCursorReviewStatusBody,
   isCursorReviewer,
   isSubmittedReviewState,
+  isTrustedCodexReviewRequestComment,
   isTrustedExactHeadReviewRequest,
 } from "./github-review.js";
 import { createLogger } from "./logger.js";
@@ -21,8 +22,9 @@ export {
   ExactHeadReviewProvider,
   codexReviewRequestMarker,
   cursorReviewRequestMarker,
-  requestExactHeadReview,
+  isTrustedCodexReviewRequestComment,
   isTrustedExactHeadReviewRequest,
+  requestExactHeadReview,
 } from "./github-review.js";
 
 const log = createLogger("github");
@@ -563,12 +565,16 @@ export function isRepositoryStatusComment(
     trimmed.startsWith("### Web research preview") ||
     trimmed.startsWith("<!-- nook-ui-demo -->") ||
     trimmed.startsWith("<!-- nook-core-coverage -->") ||
-    isTrustedExactHeadReviewRequest({
+    isTrustedCodexReviewRequestComment({
       authorAssociation: input.authorAssociation,
       body: input.body,
-      marker: input.marker,
     }) ||
-    input.body.trim() === `cursor review\n\n${input.cursorMarker}` ||
+    (["OWNER", "MEMBER", "COLLABORATOR"].includes(
+      input.authorAssociation,
+    ) &&
+      /^cursor review\n\n<!-- nook-cursor-review:[^\s<>]+ -->$/.test(
+        input.body.trim(),
+      )) ||
     isAgentImplementationHandoffComment(trimmed) ||
     (isCodexReviewer(input.user) &&
       trimmed.startsWith(

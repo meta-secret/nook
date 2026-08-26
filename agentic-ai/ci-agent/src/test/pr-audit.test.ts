@@ -461,6 +461,7 @@ function createMockOctokit(options: MockOptions): Octokit {
           user: { login: "chatgpt-codex-connector[bot]" },
         },
         {
+          author_association: "OWNER",
           body: `cursor review\n\n<!-- nook-cursor-review:${headSha} -->`,
         },
         {

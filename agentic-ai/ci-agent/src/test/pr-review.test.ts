@@ -191,6 +191,24 @@ test("stabilizeExactHeadReview preserves a bounded zero-wait feedback snapshot",
   assert.equal(result.feedback?.unresolvedThreads, 1);
 });
 
+test("stabilizeExactHeadReview still dispatches a zero-wait review request", async () => {
+  let requests = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => cleanFeedback,
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => {
+      requests += 1;
+      return { headSha: "head-sha", settled: false };
+    },
+    timeoutMs: 0,
+    waitMs: async () => {},
+  });
+
+  assert.equal(requests, 1);
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
+});
+
 test("stabilizeExactHeadReview stops on current-iteration comments", async () => {
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => ({

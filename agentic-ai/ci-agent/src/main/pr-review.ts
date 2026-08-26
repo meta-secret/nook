@@ -124,7 +124,7 @@ export async function stabilizeExactHeadReview(
           state: ReviewStabilizationState.Clean,
         };
       }
-      if (input.now() >= deadline) {
+      if (input.timeoutMs > 0 && input.now() >= deadline) {
         return { feedback, headSha, state: ReviewStabilizationState.TimedOut };
       }
     } catch {
@@ -135,7 +135,10 @@ export async function stabilizeExactHeadReview(
     if (!settled) {
       try {
         const request = await attemptBeforeDeadline({
-          deadline,
+          deadline:
+            input.timeoutMs === 0
+              ? input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
+              : deadline,
           now: input.now,
           operation: input.requestReview,
         });

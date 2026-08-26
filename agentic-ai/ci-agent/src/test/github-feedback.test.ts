@@ -159,6 +159,16 @@ test("only a trusted canonical request marker is repository status", () => {
     }),
     false,
   );
+  assert.equal(
+    isRepositoryStatusComment({
+      authorAssociation: "OWNER",
+      body: "@codex review\n\n<!-- nook-codex-review:older-head -->",
+      cursorMarker: "<!-- nook-cursor-review:head-sha -->",
+      marker,
+      user: { login: "cypherkitty" },
+    }),
+    true,
+  );
 });
 
 test("provider status text is authenticated before exclusion", () => {

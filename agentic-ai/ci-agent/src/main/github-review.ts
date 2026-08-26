@@ -117,10 +117,22 @@ export function isTrustedExactHeadReviewRequest(input: {
   readonly body: string;
   readonly marker: string;
 }): boolean {
+  return (
+    isTrustedCodexReviewRequestComment(input) &&
+    input.body.trim() === `@codex review\n\n${input.marker}`
+  );
+}
+
+export function isTrustedCodexReviewRequestComment(input: {
+  readonly authorAssociation: string;
+  readonly body: string;
+}): boolean {
   const trustedAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
   return (
     trustedAssociations.has(input.authorAssociation) &&
-    input.body.trim() === `@codex review\n\n${input.marker}`
+    /^@codex review\n\n<!-- nook-codex-review:[^\s<>]+ -->$/.test(
+      input.body.trim(),
+    )
   );
 }
 
