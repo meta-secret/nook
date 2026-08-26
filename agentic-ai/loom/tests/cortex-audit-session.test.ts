@@ -207,6 +207,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     ]);
     expect(report.orphanIndexRows).toEqual([]);
     expect(report.missingExecutableSkills).toEqual([]);
+    expect(report.brokenLinks).toEqual([]);
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);

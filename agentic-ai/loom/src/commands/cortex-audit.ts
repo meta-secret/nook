@@ -90,6 +90,11 @@ export async function runCortexAuditFromDirectory(
       )
       .map((finding) => finding.file),
   );
+  const syntaxInvalidSkillNames = new Set(
+    [...syntaxInvalidPaths]
+      .filter((filePath) => filePath.startsWith('.cortex/dynamic-skills/'))
+      .map((filePath) => path.basename(filePath)),
+  );
   const documents = allDocuments.filter((document) => {
     const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
       cortexRoot,
@@ -163,12 +168,6 @@ export async function runCortexAuditFromDirectory(
       admittedDocumentPaths.has(path.join('.cortex', 'dynamic-skills', name)),
     )
     .sort();
-  const syntaxInvalidSkillNames = new Set(
-    [...syntaxInvalidPaths]
-      .filter((filePath) => filePath.startsWith('.cortex/dynamic-skills/'))
-      .map((filePath) => path.basename(filePath)),
-  );
-
   const indexPath = path.join(skillsDir, 'index.md');
   const indexRelativePath = path.relative(repoRoot, indexPath);
   const indexIsAdmitted = admittedDocumentPaths.has(indexRelativePath);
@@ -214,9 +213,22 @@ export async function runCortexAuditFromDirectory(
       missingExecutableSkills.push(slug);
     }
   }
+  const admittedBrokenLinks = brokenLinks.filter((finding) => {
+    if (finding.file !== '.cortex/dynamic-skills/index.md') {
+      return true;
+    }
+    const mirrorMatch =
+      /^\.\.\/\.\.\/\.agents\/skills\/([^/]+)\/SKILL\.md(?:#.*)?$/.exec(
+        finding.target,
+      );
+    const slug = mirrorMatch?.[1];
+    return (
+      typeof slug !== 'string' || !syntaxInvalidSkillNames.has(`${slug}.md`)
+    );
+  });
 
   return {
-    brokenLinks,
+    brokenLinks: admittedBrokenLinks,
     missingFromIndex,
     orphanIndexRows,
     missingExecutableSkills,
@@ -224,7 +236,7 @@ export async function runCortexAuditFromDirectory(
     structureFindings,
     articleStructureFindings,
     auditOk:
-      brokenLinks.length === 0 &&
+      admittedBrokenLinks.length === 0 &&
       missingFromIndex.length === 0 &&
       orphanIndexRows.length === 0 &&
       missingExecutableSkills.length === 0 &&
