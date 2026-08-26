@@ -30,6 +30,126 @@ export type ExpandActionAttemptPagesRequest = {
   readonly pages: UntrustedYamlNode;
 };
 
+export type CollectDispatchedActionAttemptPagesRequest = {
+  readonly repoRoot: string;
+  readonly pages: UntrustedYamlNode;
+  readonly prNumber: number;
+};
+
+export function collectDispatchedActionAttemptPages(
+  request: CollectDispatchedActionAttemptPagesRequest,
+): UntrustedYamlNode {
+  const selectedRuns: UntrustedYamlMap[] = [];
+  const sourceHeadByRun = new Map<number, string>();
+  const titlePrefix = `E2E PR #${request.prNumber} ·`;
+  for (const page of flattenApiPages(request.pages)) {
+    if (!isRecord(page)) continue;
+    const runsRequest: GitHubPropertyRequest = {
+      record: page,
+      key: 'workflow_runs',
+    };
+    for (const run of requiredArrayProperty(runsRequest)) {
+      if (!isRecord(run)) continue;
+      const titleRequest: GitHubPropertyRequest = {
+        record: run,
+        key: 'display_title',
+      };
+      if (!requiredStringProperty(titleRequest).startsWith(titlePrefix)) {
+        continue;
+      }
+      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+      const runId = requiredNumberProperty(idRequest);
+      const artifactRequest: GitHubApiRequest = {
+        repoRoot: request.repoRoot,
+        endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/artifacts`,
+        fields: ['per_page=100'],
+      };
+      const sourceRequest: DispatchedSourceHeadRequest = {
+        pages: runGitHubApi(artifactRequest),
+        prNumber: request.prNumber,
+        runId,
+      };
+      const sourceHead = dispatchedSourceHead(sourceRequest);
+      sourceHeadByRun.set(runId, sourceHead);
+      selectedRuns.push(run);
+    }
+  }
+  const selectedPageRecord = {
+    total_count: selectedRuns.length,
+    workflow_runs: selectedRuns,
+  };
+  const selectedPage = sealUntrustedYamlMap(selectedPageRecord);
+  const expandRequest: ExpandActionAttemptPagesRequest = {
+    repoRoot: request.repoRoot,
+    pages: asUntrustedYamlNode([selectedPage]),
+  };
+  const expanded = expandActionAttemptPages(expandRequest);
+  const associatedRuns: UntrustedYamlMap[] = [];
+  for (const page of flattenApiPages(expanded)) {
+    if (!isRecord(page)) continue;
+    const runsRequest: GitHubPropertyRequest = {
+      record: page,
+      key: 'workflow_runs',
+    };
+    for (const run of requiredArrayProperty(runsRequest)) {
+      if (!isRecord(run)) continue;
+      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+      const runId = requiredNumberProperty(idRequest);
+      const headSha = sourceHeadByRun.get(runId) ?? '';
+      if (headSha.length === 0) {
+        failGitHubCollection(`E2E PR run ${runId} has no source head`);
+      }
+      const associatedRecord = {
+        ...run,
+        head_sha: headSha,
+        pull_requests: [{ number: request.prNumber }],
+      };
+      associatedRuns.push(sealUntrustedYamlMap(associatedRecord));
+    }
+  }
+  const associatedPageRecord = {
+    total_count: selectedRuns.length,
+    workflow_runs: associatedRuns,
+  };
+  const associatedPage = sealUntrustedYamlMap(associatedPageRecord);
+  return asUntrustedYamlNode([associatedPage]);
+}
+
+type DispatchedSourceHeadRequest = {
+  readonly pages: UntrustedYamlNode;
+  readonly prNumber: number;
+  readonly runId: number;
+};
+
+export function dispatchedSourceHead(
+  request: DispatchedSourceHeadRequest,
+): string {
+  const prefix = `e2e-pr-source-${request.prNumber}-`;
+  const matches: string[] = [];
+  for (const page of flattenApiPages(request.pages)) {
+    if (!isRecord(page)) continue;
+    const artifactsRequest: GitHubPropertyRequest = {
+      record: page,
+      key: 'artifacts',
+    };
+    for (const artifact of requiredArrayProperty(artifactsRequest)) {
+      if (!isRecord(artifact)) continue;
+      const nameRequest: GitHubPropertyRequest = {
+        record: artifact,
+        key: 'name',
+      };
+      const name = requiredStringProperty(nameRequest);
+      if (name.startsWith(prefix)) matches.push(name.slice(prefix.length));
+    }
+  }
+  if (matches.length !== 1 || !/^[0-9a-f]{40}$/.test(matches[0] ?? '')) {
+    failGitHubCollection(
+      `E2E PR run ${request.runId} must publish exactly one valid source artifact`,
+    );
+  }
+  return matches[0] ?? '';
+}
+
 export function expandActionAttemptPages(
   request: ExpandActionAttemptPagesRequest,
 ): UntrustedYamlNode {

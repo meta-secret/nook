@@ -13,6 +13,7 @@ import {
   gitHubCommitTimestamp,
   mergeReviewedDeliveryHeads,
 } from '../src/lib/agent-stats-github-delivery.ts';
+import { dispatchedSourceHead } from '../src/lib/agent-stats-github-api.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -27,6 +28,19 @@ describe('agent stats GitHub evidence', () => {
     const commitRecord = sealUntrustedYamlMap(rawCommitRecord);
 
     expect(gitHubCommitTimestamp(commitRecord)).toBe('2026-08-01T10:20:00Z');
+  });
+
+  test('resolves exact manual E2E source provenance', () => {
+    const pages = asUntrustedYamlNode([
+      { artifacts: [{ name: `e2e-pr-source-42-${finalHead}` }] },
+    ]);
+    const request = {
+      pages,
+      prNumber: 42,
+      runId: 500,
+    };
+
+    expect(dispatchedSourceHead(request)).toBe(finalHead);
   });
 
   test('groups validation by head and measures work after supersession', () => {
