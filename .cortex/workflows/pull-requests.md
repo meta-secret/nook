@@ -75,12 +75,14 @@ ownership until merge or a concrete blocked handoff:
 
 ### Size boundary
 
-- An implementation pull request targets no more than **5,000 authored changed
+- An implementation pull request targets no more than **3,000 authored changed
   lines**.
 - Treat this as a planning ceiling because review, validation, conflict
   resolution, and repair costs rise sharply above it.
 - Estimate before implementation.
 - Re-estimate when design changes or the diff grows unexpectedly.
+- Recalculate the actual authored diff after each logical domain change and
+  before every commit or push.
 
 Count additions and deletions against the intended base for:
 
@@ -106,8 +108,10 @@ Report these separately because they do not represent authored functionality:
 
 - Do not exclude tests or delete-heavy refactors from the authored estimate.
 - Do not pad, compress, or mechanically reorganize code to fit the number.
-- Treat 4,000 authored changed lines as a mandatory split-planning warning.
+- Treat 2,500 authored changed lines as a mandatory split-planning warning.
 - Stop implementation and re-estimate the complete requested outcome.
+- Inventory every logical domain, capability, package, layer, migration, and
+  public-interface change already present in the PR.
 - If the remaining work may cross the ceiling, define at least two semantic PR
   slices in Workbench before continuing.
 - Each slice owns complete capabilities or module responsibilities together
@@ -127,7 +131,7 @@ implementation crosses the ceiling:
 4. Record which complete implementation, tests, migrations, and documentation
    belong to each slice.
 5. Branch the successor from the full-work commit and open it as a linked draft
-   PR before changing the first PR.
+   stacked PR before changing the first PR.
 6. Cross-link all PR descriptions and Workbench records.
 7. Prove every file and behavior exists in the ordered PR sequence, using the
    Workbench checklist plus `numstat`, `name-status`, or `range-diff` evidence.
@@ -138,6 +142,8 @@ Sequence rules:
 - Local Git history is not preservation; a linked draft successor is.
 - Preserve a coherent bounded capability, not a line-count-selected portion.
 - Complete the first PR before its successor.
+- Model the stack with GitHub base branches: each successor temporarily targets
+  its predecessor branch and links the preceding and following PRs.
 - After the first PR merges, update the successor from `origin/main`, change its
   temporary stacked base to `main`, re-measure, and validate.
 - Continue until the complete Workbench outcome is merged.
