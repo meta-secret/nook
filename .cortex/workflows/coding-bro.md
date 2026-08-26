@@ -25,10 +25,12 @@ AI agents must treat every implementation task as PR-bound from the start.
 - Fetch `origin/main`.
 - Synthesize the important request into a public-safe Workbench task plan and publish it before implementation edits.
 - Estimate authored changed lines and identify the owning module or layer.
-- Split work expected to exceed 5,000 authored changed lines into an ordered
-  Workbench issue and PR sequence.
-- At 4,000 lines, stop and decide the semantic PR sequence before more scope is
+- Split work expected to exceed 3,000 authored changed lines into an ordered
+  Workbench issue and stacked PR sequence.
+- At 2,700 lines, stop and record the semantic PR stack before more scope is
   added.
+- The hard ceiling is 3,015 lines. The additional 15 lines tolerate estimation
+  noise only.
 - If work reaches the limit, follow the linked-successor preservation protocol
   in [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 - Never compress docs, remove tests, or delete completed behavior to optimize a
@@ -70,8 +72,8 @@ Default PR-first loop:
    - Create ignored session memory under `.cortex/.session/` for substantial
      work.
    - Never copy the raw prompt or chat transcript.
-2. **Prepare the PR path** — if the feature may approach 5,000 authored changed
-   lines, publish an ordered semantic issue and PR sequence. Map complete
+2. **Prepare the PR path** — if the feature may approach 2,700 authored changed
+   lines, publish an ordered semantic issue and stacked PR sequence. Map complete
    capabilities, tests, migrations, and documentation to each slice. Create a
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
@@ -566,9 +568,11 @@ Create the YAML from current Nook `main`:
   - Do not request Claude, CodeRabbit, or other optional reviewers.
 - **Never kill the Docker daemon** — only stop containers. See [docker-container-harness.md](../dynamic-skills/docker-container-harness.md).
 - **Never hide deferred scope** — if requested functionality is not fully implemented because it is large, risky, blocked, or out of scope, manage it in Workbench Markdown first. See [issues.md](issues.md).
-- **Plan bounded PRs** — target no more than 5,000 authored changed lines per
-  PR. Prefer one cohesive module, package, layer, or responsibility. Continue
-  through every planned slice until the requested feature is complete. See
+- **Plan bounded PRs** — target no more than 3,000 authored changed lines per
+  PR. Allow at most 15 extra lines for estimation noise. At 2,700 lines, record
+  the semantic stack before adding scope. Prefer one cohesive module, package,
+  layer, or responsibility. Continue through every planned slice until the
+  requested feature is complete. See
   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
 - **Workbench plan before implementation; summary and statistics after merge** — publish the public-safe task plan before edits, then publish the issue update, plan-linked worklog, and `stats/ai-agent/<pr-number>.yaml` directly to Workbench. See [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md).
 - **Curated self-improvement before readiness** — complete
