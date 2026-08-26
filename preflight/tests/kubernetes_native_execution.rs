@@ -39,7 +39,8 @@ fn read(path: &str) -> String {
 fn assert_no_nested_runtime(label: &str, source: &str) {
     let lowercase = source.to_ascii_lowercase();
     let without_continuations = lowercase.replace("\\\r\n", " ").replace("\\\n", " ");
-    let normalized = without_continuations
+    let without_shell_quotes = without_continuations.replace(['\'', '"'], "");
+    let normalized = without_shell_quotes
         .split_whitespace()
         .collect::<Vec<_>>()
         .join(" ");
@@ -85,6 +86,18 @@ fn assert_no_nested_runtime(label: &str, source: &str) {
 #[should_panic(expected = "must not control a nested container runtime: docker run")]
 fn nested_runtime_scan_rejects_shell_continuation_bypasses() {
     assert_no_nested_runtime("fixture", "docker \\\n        run --rm forbidden-image");
+}
+
+#[test]
+#[should_panic(expected = "must not control a nested container runtime: docker run")]
+fn nested_runtime_scan_rejects_double_quoted_verbs() {
+    assert_no_nested_runtime("fixture", "docker \"run\" forbidden-image");
+}
+
+#[test]
+#[should_panic(expected = "must not control a nested container runtime: docker run")]
+fn nested_runtime_scan_rejects_single_quoted_verbs() {
+    assert_no_nested_runtime("fixture", "docker 'run' forbidden-image");
 }
 
 fn cluster_job_blocks(workflow: &str) -> Vec<String> {
