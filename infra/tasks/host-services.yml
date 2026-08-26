@@ -244,6 +244,7 @@ tasks:
           --exclude='agentic-ai/minds/*/target' \
           -cf - \
           infra/k0s \
+          .github/formatting \
           agentic-ai/minds \
           nook-app/nook-platform/docker/sccache-wrapper.sh \
           nook-app/nook-platform/docker/sccache-report.sh |

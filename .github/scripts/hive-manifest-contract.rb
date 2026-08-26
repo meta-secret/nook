@@ -539,8 +539,12 @@ end
 unless infra_taskfile.include?(
          '--build-context "nook-sccache-helpers=$remote_dir/nook-app/nook-platform/docker"'
        ) &&
+       infra_taskfile.include?(
+         '--build-context "nook-formatter=$remote_dir/.github/formatting"'
+       ) &&
+       infra_taskfile.include?('"$remote_dir/.github/formatting"') &&
        infra_taskfile.include?("nook-app/nook-platform/docker/sccache-wrapper.sh")
-  raise "Hive deployment build is missing its named nook-sccache-helpers context"
+  raise "Hive deployment build is missing a named external tool context"
 end
 normalized_recovery_key = "tr -d '\\r\\n' > \"$recovery_key\""
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
@@ -893,14 +897,30 @@ if hive_taskfile.include?("host.docker.internal")
   raise "Hive verification must not depend on Docker Desktop host aliases"
 end
 
+hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
-unless root_agentic_taskfile.include?("hive:guest:format:") &&
-       root_agentic_taskfile.include?("cargo fmt --all") &&
-       root_agentic_taskfile.include?("bun run format")
+guest_changed_formatter = root_agentic_taskfile.match(
+  /^  hive:guest:format:changed:\n(?<body>.*?)(?=^  hive:guest:format:)/m
+)&.[](:body)
+guest_formatter = root_agentic_taskfile.match(
+  /^  hive:guest:format:\n(?<body>.*?)(?=^  hive:guest:pr:ready:)/m
+)&.[](:body)
+unless guest_changed_formatter&.include?('NOOK_FORMATTER_ROOT:-/opt/nook-formatter') &&
+       guest_changed_formatter.include?('bash "$formatter_root/format.sh"') &&
+       guest_formatter&.include?("bash .github/scripts/format-host-apply.sh") &&
+       !guest_changed_formatter.include?("bun install") &&
+       !guest_formatter.include?("bun install")
   raise "Hive native sealed-guest formatting task is incomplete"
 end
 
-hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
+unless hive_dockerfile.include?("COPY --from=nook-formatter") &&
+       hive_dockerfile.include?("/opt/nook-formatter/") &&
+       hive_taskfile.scan('--build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"').length == 8 &&
+       hive_workflow.scan(".github/formatting/**").length == 2 &&
+       infra_taskfile.include?(".github/formatting")
+  raise "Hive runtime must bake and track the canonical external formatter bundle"
+end
+
 unless hive_workflow.scan("agentic-ai/minds/hive/controller/reaper.test.ts").length == 2
   raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end

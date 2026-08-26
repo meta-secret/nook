@@ -60,12 +60,13 @@ for prohibited in 'COPY .' 'nook-app/' 'agentic-ai/' 'cargo build' 'cargo test';
   printf '%s\n' "$dockerfile" | grep -Fq "$prohibited" \
     && { echo "format-host-apply test: product work in formatter image: $prohibited" >&2; exit 1; }
 done
-for manifest in \
-  nook-app/nook-platform/Cargo.toml \
-  preflight/Cargo.toml \
-  agentic-ai/minds/Cargo.toml; do
-  printf '%s\n' "$formatter" | grep -Fq "$manifest" \
-    || { echo "format-host-apply test: missing Rust formatter: $manifest" >&2; exit 1; }
+for required in \
+  'nook-app/nook-platform/**/*.rs' \
+  'preflight/**/*.rs' \
+  'agentic-ai/minds/**/*.rs' \
+  'rustfmt --edition 2024 --config skip_children=true -- "${rust_files[@]}"'; do
+  printf '%s\n' "$formatter" | grep -Fq "$required" \
+    || { echo "format-host-apply test: missing changed-only Rust formatter: $required" >&2; exit 1; }
 done
 printf '%s\n' "$formatter" | grep -Fq 'prettier-plugin-svelte' \
   || { echo 'format-host-apply test: missing Svelte formatter' >&2; exit 1; }
@@ -83,33 +84,21 @@ for required in \
   '"$repo_root/.agents/skills"' \
   'tooling/eslint-rules/no-raw-object-arguments.js' \
   'shared_tooling_files+=' \
-  'done </tmp/nook-format-files'; do
+  'done <"$changed_files"'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
     || { echo "format-host-apply test: missing executable-skill formatter contract: $required" >&2; exit 1; }
 done
 
 for required in \
-  'cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile' \
-  'nook-app/nook-web/nook-web-app/node_modules/.bin/prettier' \
-  'rustfmt --edition 2024 --config skip_children=true -- "${rust_files[@]}"' \
-  'web_app_files+=' \
-  'web_shared_typescript_files+=' \
-  'extension_files+=' \
-  'research_files+=' \
-  'hive_console_files+=' \
-  'loom_files+=' \
-  'done <"$FORMAT_CHANGED_FILES"' \
-  'skill_files+=("${file_name#.agents/skills/}")' \
-  'tooling/eslint-rules/no-raw-object-arguments.js' \
-  'prettier-web.json' \
-  'prettier-default.json' \
-  'prettier-shared-typescript.json' \
-  'format_changed_files "$default_config" "$repo_root/.agents/skills"' \
-  'format_changed_files "$default_config" "$repo_root"' \
-  '-- "$@"'; do
+  'formatter_root="${NOOK_FORMATTER_ROOT:-/opt/nook-formatter}"' \
+  'NOOK_REPO_ROOT="$PWD"' \
+  'FORMAT_CHANGED_FILES="$FORMAT_CHANGED_FILES"' \
+  'bash "$formatter_root/format.sh"'; do
   printf '%s\n' "$guest_changed_formatter" | grep -Fq -- "$required" \
     || { echo "format-host-apply test: sealed guest misses skill formatter contract: $required" >&2; exit 1; }
 done
+printf '%s\n' "$guest_formatter" | grep -Fq 'bash .github/scripts/format-host-apply.sh' \
+  || { echo 'format-host-apply test: sealed guest must delegate changed-file selection' >&2; exit 1; }
 for package in "$web_package" "$loom_package"; do
   printf '%s\n' "$package" | grep -Fq '"prettier": "3.9.6"' \
     || { echo 'format-host-apply test: skill formatter Prettier version is not pinned consistently' >&2; exit 1; }
@@ -120,7 +109,7 @@ for loom_format_contract in \
   printf '%s\n' "$loom_package" | grep -Fq "$loom_format_contract" \
     || { echo 'format-host-apply test: Loom tooling formatter does not use its pinned config' >&2; exit 1; }
 done
-for forbidden in 'task skills:format' 'task skills:install' '.agents/skills && bun install' '.agents/skills/*/src/**/*.ts'; do
+for forbidden in 'task skills:format' 'task skills:install' 'bun install' '.agents/skills/*/src/**/*.ts'; do
   printf '%s\n%s\n' "$guest_formatter" "$guest_changed_formatter" | grep -Fq -- "$forbidden" \
     && { echo "format-host-apply test: sealed guest skill formatting recurses or installs: $forbidden" >&2; exit 1; }
 done
@@ -133,12 +122,11 @@ mkdir -p \
   "$fixture_root/agentic-ai/minds/hive-console/src" \
   "$fixture_root/agentic-ai/minds/hive/src" \
   "$fixture_root/.github/scripts" \
-  "$fixture_root/.github/formatting" \
+  "$fixture_root/.github/formatting/node_modules/.bin" \
+  "$fixture_root/.github/formatting/node_modules/prettier-plugin-svelte" \
   "$fixture_root/.task" \
   "$fixture_root/bin" \
   "$fixture_root/nook-app/nook-platform/src" \
-  "$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin" \
-  "$fixture_root/nook-app/nook-web/nook-web-app/node_modules/prettier-plugin-svelte" \
   "$fixture_root/nook-app/nook-web/nook-web-app/src" \
   "$fixture_root/nook-app/nook-web/nook-web-extension/src" \
   "$fixture_root/nook-app/nook-web/nook-web-research/src" \
@@ -149,6 +137,7 @@ mkdir -p \
   "$fixture_root/tooling/eslint-rules"
 cp "$scripts_dir/format-host-apply.sh" "$fixture_root/.github/scripts/format-host-apply.sh"
 cp "$scripts_dir/../../.task/agentic-ai.yml" "$fixture_root/.task/agentic-ai.yml"
+cp "$formatter_dir/format.sh" "$fixture_root/.github/formatting/format.sh"
 cat >"$fixture_root/bin/task" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -156,13 +145,6 @@ test "$#" -eq 1 && test "$1" = hive:guest:format:changed
 exec "$FORMAT_TEST_REAL_TASK" \
   --taskfile "$PWD/.task/agentic-ai.yml" \
   "$@"
-EOF
-cat >"$fixture_root/bin/bun" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-printf '%s\n' "$*" >>"$FORMAT_TEST_INSTALL_LOG"
-test "$#" -eq 2 && test "$1" = install && test "$2" = --frozen-lockfile
-: >"$FORMAT_TEST_READY"
 EOF
 cat >"$fixture_root/bin/rustfmt" <<'EOF'
 #!/usr/bin/env bash
@@ -173,10 +155,9 @@ shift 5
 printf '%s\n' "$@" >>"$FORMAT_TEST_RUST_LOG"
 "$FORMAT_TEST_REAL_RUSTFMT" --edition 2024 --config skip_children=true -- "$@"
 EOF
-cat >"$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier" <<'EOF'
+cat >"$fixture_root/.github/formatting/node_modules/.bin/prettier" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-test -f "$FORMAT_TEST_READY"
 record=false
 for argument in "$@"; do
   if [[ "$record" == true ]]; then
@@ -187,10 +168,9 @@ for argument in "$@"; do
 done
 EOF
 chmod +x \
-  "$fixture_root/bin/bun" \
   "$fixture_root/bin/rustfmt" \
   "$fixture_root/bin/task" \
-  "$fixture_root/nook-app/nook-web/nook-web-app/node_modules/.bin/prettier"
+  "$fixture_root/.github/formatting/node_modules/.bin/prettier"
 printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/changed.ts"
 printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/untouched.ts"
 printf '{}\n' >"$fixture_root/.agents/skills/.prettierrc"
@@ -242,19 +222,15 @@ printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments
   printf '<p>simple</p>\n' >nook-app/nook-web/nook-vault-simple/src/simple.svelte
   printf '<p>sentinel</p>\n' >nook-app/nook-web/nook-vault-sentinel/src/sentinel.svelte
   FORMAT_TEST_LOG="$fixture_root/format.log" \
-  FORMAT_TEST_INSTALL_LOG="$fixture_root/install.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
   FORMAT_TEST_REAL_RUSTFMT="$(command -v rustfmt)" \
-  FORMAT_TEST_READY="$fixture_root/prettier.ready" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   HIVE_SEALED_GUEST=1 \
+  NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
   test "$(git hash-object nook-app/nook-platform/src/child.rs)" = "$(git rev-parse HEAD:nook-app/nook-platform/src/child.rs)"
 )
-printf '%s\n' 'install --frozen-lockfile' >"$fixture_root/expected-install.log"
-cmp -s "$fixture_root/expected-install.log" "$fixture_root/install.log" \
-  || { echo 'format-host-apply test: sealed guest did not frozen-install pinned Prettier' >&2; exit 1; }
 printf '%s\n' \
   '../nook-vault-sentinel/src/sentinel.svelte' \
   '../nook-vault-simple/src/simple.svelte' \
@@ -286,17 +262,16 @@ if grep -Fq 'untouched.ts' "$fixture_root/format.log"; then
 fi
 (
   cd "$fixture_root"
-  rm -f format.log expected.log actual.log rust.log expected-rust.log actual-rust.log install.log expected-install.log prettier.ready
+  rm -f format.log expected.log actual.log rust.log expected-rust.log actual-rust.log
   git add -A
   git commit -qm formatted-state
   git update-ref refs/remotes/origin/main HEAD
   FORMAT_TEST_LOG="$fixture_root/format.log" \
-  FORMAT_TEST_INSTALL_LOG="$fixture_root/install.log" \
   FORMAT_TEST_RUST_LOG="$fixture_root/rust.log" \
   FORMAT_TEST_REAL_RUSTFMT="$(command -v rustfmt)" \
-  FORMAT_TEST_READY="$fixture_root/prettier.ready" \
   FORMAT_TEST_REAL_TASK="$(command -v task)" \
   HIVE_SEALED_GUEST=1 \
+  NOOK_FORMATTER_ROOT="$fixture_root/.github/formatting" \
   PATH="$fixture_root/bin:$PATH" \
     bash .github/scripts/format-host-apply.sh >/dev/null
 )

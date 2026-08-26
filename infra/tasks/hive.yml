@@ -20,6 +20,7 @@ tasks:
         source_id="$(find \
           "$remote_dir/agentic-ai/minds/hive" \
           "$remote_dir/agentic-ai/minds/lace" \
+          "$remote_dir/.github/formatting" \
           -type f -print0 |
           sort -z |
           xargs -0 sha256sum |
@@ -46,6 +47,7 @@ tasks:
           "${secret_args[@]}" \
           --tag "$image" \
           --build-context "nook-sccache-helpers=$remote_dir/nook-app/nook-platform/docker" \
+          --build-context "nook-formatter=$remote_dir/.github/formatting" \
           --file "$remote_dir/agentic-ai/minds/hive/Dockerfile" \
           "$remote_dir/agentic-ai/minds"
         push_output="$(docker push "$image")"

@@ -11,6 +11,9 @@ on:
       - .github/actions/nook-cache-connect/**
       - .github/actions/nook-docker-setup/**
       - .github/scripts/rust-deps-cache-fingerprint.sh
+      - .github/formatting/**
+      - .github/scripts/format-host-apply.sh
+      - .github/scripts/format-host-apply.test.sh
       - .github/scripts/hive-manifest-contract.rb
       - .github/scripts/ovh-dedicated-contract.ts
       - agentic-ai/minds/hive/controller/reaper.ts
@@ -37,6 +40,9 @@ on:
       - .github/actions/nook-cache-connect/**
       - .github/actions/nook-docker-setup/**
       - .github/scripts/rust-deps-cache-fingerprint.sh
+      - .github/formatting/**
+      - .github/scripts/format-host-apply.sh
+      - .github/scripts/format-host-apply.test.sh
       - .github/scripts/hive-manifest-contract.rb
       - .github/scripts/ovh-dedicated-contract.ts
       - agentic-ai/minds/hive/controller/reaper.ts
