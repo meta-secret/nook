@@ -2,6 +2,11 @@ import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
+  CORTEX_ARTICLE_BLOCK_LIMIT,
+  CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+  CORTEX_ARTICLE_DOCUMENT_LIMIT,
+  CORTEX_ARTICLE_HEADING_DEPTH_LIMIT,
+  CORTEX_ARTICLE_PATH_LIMIT,
   type CortexArticleStructureResult,
 } from './cortex-article-structure/src/domain.ts';
 import { decodeCortexArticleRequest } from './cortex-article-structure/src/codec.ts';
@@ -55,18 +60,38 @@ const EMPTY_OBJECT_SCHEMA: SkillObjectSchema = {
   properties: {},
 };
 
+const POSITIVE_SOURCE_LINE_SCHEMA = {
+  type: SkillSchemaType.Integer,
+  minimum: 1,
+  maximum: Number.MAX_SAFE_INTEGER,
+} as const;
+
+const CORTEX_MARKDOWN_PATH_SCHEMA = {
+  type: SkillSchemaType.String,
+  maxLength: CORTEX_ARTICLE_PATH_LIMIT,
+  pattern:
+    '^\\.cortex/(?!\\.\\.?/)(?!.*/\\.\\.?(?:/|$))(?!.*\\\\)(?!.*[\\u0000-\\u001f\\u007f])[^/]+(?:/[^/]+)*\\.md$',
+} as const;
+
 const HEADING_BLOCK_SCHEMA: SkillObjectSchema = {
   type: SkillSchemaType.Object,
   additionalProperties: false,
   required: ['depth', 'kind', 'line', 'text'],
   properties: {
-    depth: { type: SkillSchemaType.Integer, minimum: 1 },
+    depth: {
+      type: SkillSchemaType.Integer,
+      minimum: 1,
+      maximum: CORTEX_ARTICLE_HEADING_DEPTH_LIMIT,
+    },
     kind: {
       type: SkillSchemaType.String,
       enum: [CortexArticleSemanticKind.Heading],
     },
-    line: { type: SkillSchemaType.Integer, minimum: 1 },
-    text: { type: SkillSchemaType.String },
+    line: POSITIVE_SOURCE_LINE_SCHEMA,
+    text: {
+      type: SkillSchemaType.String,
+      maxLength: CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+    },
   },
 };
 
@@ -85,7 +110,7 @@ const SIMPLE_BLOCK_SCHEMA: SkillObjectSchema = {
         CortexArticleSemanticKind.DensitySeparator,
       ],
     },
-    line: { type: SkillSchemaType.Integer, minimum: 1 },
+    line: POSITIVE_SOURCE_LINE_SCHEMA,
   },
 };
 
@@ -94,12 +119,10 @@ const ARTICLE_DOCUMENT_SCHEMA: SkillObjectSchema = {
   additionalProperties: false,
   required: ['relativePath', 'blocks'],
   properties: {
-    relativePath: {
-      type: SkillSchemaType.String,
-      pattern: '^\\.cortex/.+\\.md$',
-    },
+    relativePath: CORTEX_MARKDOWN_PATH_SCHEMA,
     blocks: {
       type: SkillSchemaType.Array,
+      maxItems: CORTEX_ARTICLE_BLOCK_LIMIT,
       items: {
         oneOf: [HEADING_BLOCK_SCHEMA, SIMPLE_BLOCK_SCHEMA],
       },
@@ -136,13 +159,15 @@ const CORTEX_ARTICLE_AUDIT_SCHEMA: SkillObjectSchema = {
     },
     documents: {
       type: SkillSchemaType.Array,
+      maxItems: CORTEX_ARTICLE_DOCUMENT_LIMIT,
       items: ARTICLE_DOCUMENT_SCHEMA,
     },
     migrationBaselineEntries: {
       oneOf: [
         {
           type: SkillSchemaType.Array,
-          items: { type: SkillSchemaType.String },
+          maxItems: CORTEX_ARTICLE_DOCUMENT_LIMIT,
+          items: CORTEX_MARKDOWN_PATH_SCHEMA,
         },
         { const: false },
       ],

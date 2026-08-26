@@ -95,6 +95,7 @@ describe('executable skill YAML command protocol', () => {
     if (!documents) throw new Error('Missing documents schema.');
     expect('items' in documents).toBe(true);
     if (!('items' in documents)) throw new Error('Missing document schema.');
+    expect(documents.maxItems).toBe(10_000);
     const blocks = documents.items;
     expect('properties' in blocks).toBe(true);
     if (!('properties' in blocks)) throw new Error('Missing blocks schema.');
@@ -102,6 +103,7 @@ describe('executable skill YAML command protocol', () => {
     if (!blockItems) throw new Error('Missing block items schema.');
     expect('items' in blockItems).toBe(true);
     if (!('items' in blockItems)) throw new Error('Missing block item schema.');
+    expect(blockItems.maxItems).toBe(100_000);
     expect('oneOf' in blockItems.items).toBe(true);
     if (!('oneOf' in blockItems.items)) {
       throw new Error('Missing semantic block variants.');
@@ -119,6 +121,18 @@ describe('executable skill YAML command protocol', () => {
     }
     expect(headingSchema.additionalProperties).toBe(false);
     expect(headingSchema.required).toEqual(['depth', 'kind', 'line', 'text']);
+    const depthSchema = headingSchema.properties.depth;
+    const textSchema = headingSchema.properties.text;
+    expect(depthSchema).toBeDefined();
+    expect(textSchema).toBeDefined();
+    if (!depthSchema || !('maximum' in depthSchema)) {
+      throw new Error('Missing heading-depth bound.');
+    }
+    if (!textSchema || !('maxLength' in textSchema)) {
+      throw new Error('Missing heading-text bound.');
+    }
+    expect(depthSchema.maximum).toBe(6);
+    expect(textSchema.maxLength).toBe(3_800);
     expect(simpleBlockSchema.additionalProperties).toBe(false);
     expect(simpleBlockSchema.required).toEqual(['kind', 'line']);
   });

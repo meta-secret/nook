@@ -35,12 +35,14 @@ export enum SkillSchemaType {
 export type SkillStringSchema = {
   readonly type: SkillSchemaType.String;
   readonly enum?: readonly string[];
+  readonly maxLength?: number;
   readonly pattern?: string;
 };
 
 export type SkillIntegerSchema = {
   readonly type: SkillSchemaType.Integer;
   readonly minimum: number;
+  readonly maximum?: number;
 };
 
 export type SkillBooleanSchema = {
@@ -54,6 +56,7 @@ export type SkillFalseSchema = {
 export type SkillArraySchema = {
   readonly type: SkillSchemaType.Array;
   readonly items: SkillInputSchema;
+  readonly maxItems?: number;
 };
 
 export type SkillObjectSchema = {
