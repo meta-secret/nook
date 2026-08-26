@@ -9,6 +9,7 @@ import type {
   AuditCortexMarkdownSyntaxArgs,
   AuditCortexDocumentStructureArgs,
   CortexDocumentSource,
+  CortexStructureFinding,
 } from '../src/lib/cortex-document-structure.ts';
 
 const REPO_ROOT = '/repo';
@@ -155,13 +156,14 @@ test('requires complete section anchors in team-owned knowledge graphs', () => {
     DOCUMENT_A,
     corePolicy,
   ]);
-  expect(incompleteFindings).toContainEqual({
+  const expectedFinding: CortexStructureFinding = {
     code: CortexStructureFindingCode.MissingFromIndex,
     file: '.cortex/dev-core/knowledge-graph.md',
     line: 1,
     message:
       'Knowledge graph is missing section #boundary for .cortex/dev-core/policy.md',
-  });
+  };
+  expect(incompleteFindings).toContainEqual(expectedFinding);
 });
 
 test('rejects root navigation that bypasses a team graph', () => {
