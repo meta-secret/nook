@@ -21,7 +21,7 @@ export type OpenSettingsRequest = SettingsNavigationRequest & {
   readonly state: UiActionsContext;
 };
 
-function pushWorkspaceRoute(route: WorkspaceRoute): void {
+export function pushWorkspaceRoute(route: WorkspaceRoute): void {
   if (!("window" in globalThis)) return;
   const path = workspacePath(route);
   const nextUrl = new URL(path, window.location.href);
@@ -34,6 +34,7 @@ function pushWorkspaceRoute(route: WorkspaceRoute): void {
   }
   const pushStateArgs: Parameters<typeof window.history.pushState>[0] = {};
   window.history.pushState(pushStateArgs, "", path);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 type SettingsViewSelection = {
@@ -167,13 +168,13 @@ export function openSettings({
   section,
   accordion,
 }: OpenSettingsRequest): void {
+  pushWorkspaceRoute(workspaceRouteForSettings(section));
   const applySettingsArgs4: Parameters<typeof applySettings>[0] = {
     state,
     section,
     accordion,
   };
   applySettings(applySettingsArgs4);
-  pushWorkspaceRoute(workspaceRouteForSettings(section));
 }
 
 type AdminPanelOpening = {
@@ -182,17 +183,17 @@ type AdminPanelOpening = {
 };
 
 export function openAdmin({ state, accordion }: AdminPanelOpening): void {
+  pushWorkspaceRoute(WorkspaceRoute.Admin);
   const applyAdminArgs2: Parameters<typeof applyAdmin>[0] = {
     state,
     accordion,
   };
   applyAdmin(applyAdminArgs2);
-  pushWorkspaceRoute(WorkspaceRoute.Admin);
 }
 
 export function closeSettings(state: UiActionsContext): void {
-  applyVault(state);
   pushWorkspaceRoute(WorkspaceRoute.Vault);
+  applyVault(state);
 }
 
 export async function deleteLocalData(state: UiActionsContext): Promise<void> {
@@ -240,12 +241,12 @@ export async function handleRemoteLocalBrowserDataDeletion(
 }
 
 export function openHelp(state: UiActionsContext): void {
+  pushWorkspaceRoute(WorkspaceRoute.Help);
   state.settingsOpen = false;
   state.helpOpen = true;
-  pushWorkspaceRoute(WorkspaceRoute.Help);
 }
 
 export function closeHelp(state: UiActionsContext): void {
-  state.helpOpen = false;
   pushWorkspaceRoute(WorkspaceRoute.Vault);
+  state.helpOpen = false;
 }

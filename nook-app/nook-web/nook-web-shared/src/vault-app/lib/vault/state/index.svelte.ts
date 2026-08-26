@@ -56,6 +56,7 @@ const uiKeys = [
   "settingsOpen",
   "settingsSection",
   "devicesAccessIdentityProtectionOpen",
+  "devicesAccessIdentityTransitionPending",
   "settingsAccordionSection",
   "adminAccordionSection",
   "helpOpen",

@@ -32,6 +32,24 @@ export type VaultCreationQueue =
       request: PendingVaultCreation;
     };
 
+export function isSentinelParticipantResponsePending(
+  queue: VaultCreationQueue,
+): boolean {
+  return (
+    queue.kind === VaultCreationQueueKind.WaitingForDevice &&
+    queue.request.kind === PendingVaultCreationKind.SentinelParticipantResponse
+  );
+}
+
+export function isSentinelParticipantKeyPending(
+  queue: VaultCreationQueue,
+): boolean {
+  return (
+    queue.kind === VaultCreationQueueKind.WaitingForDevice &&
+    queue.request.kind === PendingVaultCreationKind.SentinelParticipantKey
+  );
+}
+
 export type PendingExistingVaultImport = {
   storeId: string;
   previousActiveVault: ActiveVault;

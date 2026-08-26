@@ -76,6 +76,23 @@ TypeScript only transports them and drives the browser UI.
 No vault is persisted until every configured participant response has been verified.
 The ceremony can then be finalized atomically.
 
+The participant invitation has explicit exit behavior:
+
+- Device protection may remount the authenticated shell without discarding the
+  invitation or its pending response generation.
+- Browser Back and the invitation's Back action discard the in-memory
+  invitation. An authenticated participant returns to the prior vault
+  workspace.
+- Done discards the invitation after response generation and returns an
+  authenticated participant to the vault workspace.
+- Reopening the participant flow requires another owner-issued invitation URL.
+
+Sentinel owner setup also treats an unfinished initiator-key protection step as
+route-local work. Leaving the Card Stack chooser for Devices & Access, Help,
+settings, onboarding, admin, legal, diagnostic, or extension workspaces cancels
+that queued key preparation. Returning requires the owner to re-enter Card
+Stack setup explicitly.
+
 ### 2.1 Local device-key protection
 
 Before provider credential or device-key work, follow this ceremony:

@@ -1,5 +1,8 @@
 <script lang="ts">
-  type SentinelGenesisParticipation = { readonly payload: string; readonly participantLabel?: string }
+  type SentinelGenesisParticipation = {
+    readonly payload: string
+    readonly participantLabel?: string
+  }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import { tick } from 'svelte'
@@ -63,9 +66,11 @@
     sentinelGenesisParticipants = [],
     sentinelGenesisDeliveries = [],
     sentinelInvitationRequest = '',
+    sentinelParticipantResponsePending = false,
     sentinelParticipantResponse = '',
     sentinelOnboardingPackage = '',
     onAcceptSentinelOnboardingPackage,
+    onFinishSentinelInvitation,
   }: {
     vault: VaultState
     appKind: VaultApplication
@@ -83,8 +88,7 @@
       requestPayload: string,
     ) => string | Promise<string>
     onCreateSentinelGenesisPublicKeyAnnouncement?: () =>
-      | string
-      | Promise<string>
+      string | Promise<string>
     onRememberSentinelGenesisRequest?: (
       requestPayload: string,
     ) => void | Promise<void>
@@ -97,11 +101,13 @@
     sentinelGenesisParticipants?: NookSentinelGenesisParticipantStatus[]
     sentinelGenesisDeliveries?: NookSentinelGenesisDelivery[]
     sentinelInvitationRequest?: string
+    sentinelParticipantResponsePending?: boolean
     sentinelParticipantResponse?: string
     sentinelOnboardingPackage?: string
     onAcceptSentinelOnboardingPackage?: (
       packageJson: string,
     ) => void | Promise<void>
+    onFinishSentinelInvitation?: () => void
   } = $props()
 
   const isBusy = $derived(isVerifying || isInitializing)
@@ -119,6 +125,12 @@
       sentinelDashboardState.kind === SentinelDashboardChoiceKind.Chosen &&
       sentinelDashboardState.dashboard === dashboard
     )
+  }
+
+  function finishSentinelInvitation(): void {
+    chosenPath = ChosenVaultPath.Undecided
+    wizardStep = VaultCreationWizardStep.Choose
+    onFinishSentinelInvitation?.()
   }
   let sentinelParticipantCount = $state(3)
   let sentinelThreshold = $state(2)
@@ -200,9 +212,9 @@
   )
   const sentinelGenesisInvitationLink = $derived(
     (() => {
-      const linkArgs: Parameters<
-        typeof buildSentinelGenesisRequestLink
-      >[0] = { requestJson: sentinelGenesisRequest }
+      const linkArgs: Parameters<typeof buildSentinelGenesisRequestLink>[0] = {
+        requestJson: sentinelGenesisRequest,
+      }
       return buildSentinelGenesisRequestLink(linkArgs)
     })(),
   )
@@ -239,8 +251,7 @@
     wizardStep === VaultCreationWizardStep.SimpleCreate ||
       wizardStep === VaultCreationWizardStep.SentinelDashboard ||
       wizardStep === VaultCreationWizardStep.SentinelPolicy ||
-      (wizardStep === VaultCreationWizardStep.Join &&
-        !sentinelInvitationRequest.trim()),
+      wizardStep === VaultCreationWizardStep.Join,
   )
 
   const stepIndex = $derived.by(() => {
@@ -331,6 +342,13 @@
   function goBack() {
     if (wizardStep === VaultCreationWizardStep.SentinelCeremony) return
     if (
+      wizardStep === VaultCreationWizardStep.Join &&
+      sentinelInvitationRequest.trim()
+    ) {
+      finishSentinelInvitation()
+      return
+    }
+    if (
       wizardStep === VaultCreationWizardStep.SimpleCreate ||
       wizardStep === VaultCreationWizardStep.Join
     ) {
@@ -370,11 +388,13 @@
     }
     sentinelActionBusy = true
     try {
-      const onStartSentinelGenesisArgs: Parameters<typeof onStartSentinelGenesis>[0] = {
+      const onStartSentinelGenesisArgs: Parameters<
+        typeof onStartSentinelGenesis
+      >[0] = {
         label: sentinelName.trim(),
         participantCount: sentinelParticipantCount,
         threshold: sentinelThreshold,
-      };
+      }
       const started = await onStartSentinelGenesis(onStartSentinelGenesisArgs)
       if (started !== false) {
         wizardStep = VaultCreationWizardStep.SentinelCeremony
@@ -529,9 +549,15 @@
                     : vault.t(I18N_KEYS.LoginSentinelDashboardCardStackTitle)}
                 </h2>
                 <p class="mt-2 max-w-2xl text-sm leading-6 text-current/65">
-                  {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelDashboardWorkspaceDescription, replacements: {
-                    name: sentinelName,
-                  } }; return vault.t(tArgs); })()}
+                  {(() => {
+                    const tArgs: Parameters<typeof vault.t>[0] = {
+                      key: I18N_KEYS.LoginSentinelDashboardWorkspaceDescription,
+                      replacements: {
+                        name: sentinelName,
+                      },
+                    }
+                    return vault.t(tArgs)
+                  })()}
                 </p>
               </div>
               {#if wizardStep === VaultCreationWizardStep.SentinelPolicy}
@@ -663,7 +689,9 @@
                               class="mb-3 flex items-center gap-3 text-muted-foreground before:h-px before:flex-1 before:bg-border after:h-px after:flex-1 after:bg-border"
                             >
                               <span class="text-center text-xs">
-                                {vault.t(I18N_KEYS.LoginExistingVaultAlternative)}
+                                {vault.t(
+                                  I18N_KEYS.LoginExistingVaultAlternative,
+                                )}
                               </span>
                             </div>
                             <button
@@ -727,11 +755,15 @@
                             <p
                               class="text-sm text-pretty text-muted-foreground"
                             >
-                              {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: usesExtensionDeviceIdentity
-                                  ? I18N_KEYS.LoginLandingCreateSimpleWithExtension
-                                  : I18N_KEYS.LoginLandingCreateSimpleLocally, replacements: { name: trimmedVaultName } }; return vault.t(
-                                tArgs2,
-                              ); })()}
+                              {(() => {
+                                const tArgs2: Parameters<typeof vault.t>[0] = {
+                                  key: usesExtensionDeviceIdentity
+                                    ? I18N_KEYS.LoginLandingCreateSimpleWithExtension
+                                    : I18N_KEYS.LoginLandingCreateSimpleLocally,
+                                  replacements: { name: trimmedVaultName },
+                                }
+                                return vault.t(tArgs2)
+                              })()}
                             </p>
                           {/if}
                           <Button
@@ -761,11 +793,15 @@
                         <p
                           class="text-sm leading-6 text-pretty text-muted-foreground"
                         >
-                          {(() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelDashboardChoiceDescription, replacements: {
-                              name: trimmedVaultName,
-                            } }; return vault.t(
-                            tArgs3,
-                          ); })()}
+                          {(() => {
+                            const tArgs3: Parameters<typeof vault.t>[0] = {
+                              key: I18N_KEYS.LoginSentinelDashboardChoiceDescription,
+                              replacements: {
+                                name: trimmedVaultName,
+                              },
+                            }
+                            return vault.t(tArgs3)
+                          })()}
                         </p>
                         <div class="grid gap-3 sm:grid-cols-2">
                           <button
@@ -836,16 +872,20 @@
           {/if}
 
           {#if wizardStep === VaultCreationWizardStep.Join}
-            <SentinelGenesisJoinFlow
-              {vault}
-              {isBusy}
-              {sentinelInvitationRequest}
-              {sentinelOnboardingPackage}
-              onCreateParticipantResponse={onCreateSentinelGenesisParticipantResponse}
-              onRememberRequest={onRememberSentinelGenesisRequest}
-              onReceiveShare={onReceiveSentinelGenesisShare}
-              onAcceptOnboardingPackage={onAcceptSentinelOnboardingPackage}
-            />
+            {#key sentinelInvitationRequest}
+              <SentinelGenesisJoinFlow
+                {vault}
+                {isBusy}
+                {sentinelInvitationRequest}
+                {sentinelParticipantResponsePending}
+                {sentinelOnboardingPackage}
+                onCreateParticipantResponse={onCreateSentinelGenesisParticipantResponse}
+                onRememberRequest={onRememberSentinelGenesisRequest}
+                onReceiveShare={onReceiveSentinelGenesisShare}
+                onAcceptOnboardingPackage={onAcceptSentinelOnboardingPackage}
+                onFinishSentinelInvitation={finishSentinelInvitation}
+              />
+            {/key}
           {/if}
 
           {#if canGoBack && !sentinelDashboardActive}

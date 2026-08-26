@@ -1,6 +1,5 @@
 import { ReplicationType } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { expect, test, type Page } from './fixtures'
-import { generateKeyPairSync, webcrypto } from 'node:crypto'
 import { createLocalE2eGoogleDriveVaultStub } from './drive-stub'
 import {
   addSecret,
@@ -20,6 +19,7 @@ import {
   seedGithubSyncProvidersWhileUnlocked,
   seedUnscopedOauthFileProvidersForEnrollment,
   seedOauthFileSyncProvidersWhileUnlocked,
+  signedSentinelInvitation,
   UI_TIMEOUT_MS,
   uniqueSecretKey,
   waitForVaultUnlocked,
@@ -31,40 +31,6 @@ const SHARED_JOINER_IDENTITY = 'joiner@example.com'
 const SHARED_SECRET_VALUE = 'architecture-shared-secret-value'
 const SHARED_JOINER_TOKEN = 'ya29.architecture-shared-joiner-token'
 
-async function signedSentinelInvitation(): Promise<string> {
-  const { privateKey, publicKey } = generateKeyPairSync('ed25519')
-  const signingPublicKey = publicKey
-    .export({ format: 'der', type: 'spki' })
-    .subarray(-32)
-    .toString('hex')
-  const request = {
-    version: 1,
-    sessionId: 'abcdefghijk',
-    policy: { participantCount: 3, threshold: 2 },
-    initiatorDeviceId: '0123456789abcdef',
-    initiatorSigningPublicKey: signingPublicKey,
-  }
-  const signingKey = await webcrypto.subtle.importKey(
-    'pkcs8',
-    privateKey.export({ format: 'der', type: 'pkcs8' }),
-    { name: 'Ed25519' },
-    false,
-    ['sign'],
-  )
-  const signaturePayload = Buffer.from(
-    JSON.stringify([
-      request.version,
-      request.sessionId,
-      request.policy,
-      request.initiatorDeviceId,
-      request.initiatorSigningPublicKey,
-    ]),
-  )
-  const signature = Buffer.from(
-    await webcrypto.subtle.sign('Ed25519', signingKey, signaturePayload),
-  ).toString('hex')
-  return JSON.stringify({ ...request, signature })
-}
 const PERSONAL_ONLY_PROVIDER = {
   id: 'architecture-personal-only-github',
   label: 'Personal-only GitHub',
@@ -572,9 +538,14 @@ test.describe('vault architecture modes', () => {
   }) => {
     await createLocalVaultOnLogin(page)
     const ownerRequest = await signedSentinelInvitation()
-    await page.goto(
-      `/app/?sentinel-request=${encodeURIComponent(ownerRequest)}`,
-    )
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, ownerRequest)
     await expect(
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible({ timeout: UI_TIMEOUT_MS })
@@ -585,6 +556,55 @@ test.describe('vault architecture modes', () => {
     await expect(
       page.getByTestId('sentinel-genesis-connect-device'),
     ).toBeVisible()
+    await page.goBack()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toHaveCount(0)
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, ownerRequest)
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await page.getByTestId('create-vault-wizard-back').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toHaveCount(0)
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, ownerRequest)
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await page.getByTestId('sentinel-genesis-connect-device').click()
+    await expect(
+      page.getByTestId('sentinel-genesis-generated-response'),
+    ).toHaveValue(/#sentinel-response=/, {
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('sentinel-genesis-finish-invitation').click()
+    await expect(page.getByTestId('vault-panel')).toBeVisible({
+      timeout: UI_TIMEOUT_MS,
+    })
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toHaveCount(0)
   })
 
   test('disables providers that cannot satisfy shared replication', async ({

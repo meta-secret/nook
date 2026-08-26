@@ -15,13 +15,13 @@
     type ExtensionConnectIntent,
   } from '$lib/app/route-state'
   import { ColorMode, manualColorMode, systemColorMode } from '$lib/app/theme'
-  import type {
-    EnrollmentSubmitQueue,
-    VaultCreationQueue,
-  } from '$lib/vault/creation-queue'
   import {
+    type EnrollmentSubmitQueue,
     EnrollmentSubmitQueueKind,
+    isSentinelParticipantKeyPending,
+    isSentinelParticipantResponsePending,
     PendingVaultCreationKind,
+    type VaultCreationQueue,
     VaultCreationQueueKind,
   } from '$lib/vault/creation-queue'
   import AppSurface from '$lib/components/app/AppSurface.svelte'
@@ -75,7 +75,10 @@
   } from '$lib/enrollment/sentinel-genesis-link'
   import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import { ExistingVaultImportLifecycle } from '$lib/vault/existing-vault-import.svelte'
+  import {
+    ExistingVaultImportLifecycle,
+    loginUnlockStoreId,
+  } from '$lib/vault/existing-vault-import.svelte'
   import {
     mountBrowserLifecycle,
     THEME_STORAGE_KEY,
@@ -83,9 +86,7 @@
   } from '$lib/app/browser-lifecycle'
   import {
     ActiveVaultKind,
-    LocalVaultCatalogKind,
     LoginSetupKind,
-    LoginVaultSelectionKind,
   } from '$lib/vault/state/provider.svelte'
   import {
     WorkspaceRoute,
@@ -155,30 +156,44 @@
       ? consumeSentinelOnboardingFromLocation()
       : '',
   )
-
-  function syncRoute() {
+  function syncRoute(event?: Event) {
     if (!IS_SIMPLE_APP) {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
-      if (invitationRequest) sentinelInvitationRequest = invitationRequest
+      if (invitationRequest || event?.type === 'popstate') {
+        sentinelInvitationRequest = invitationRequest
+        if (isSentinelParticipantResponsePending(pendingVaultCreationState))
+          finishPendingCreation()
+      }
       const participantResponse =
         consumeSentinelGenesisParticipantResponseFromLocation()
       if (participantResponse) sentinelParticipantResponse = participantResponse
       const onboardingPackage = consumeSentinelOnboardingFromLocation()
       if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
     }
-    const routeLegalPage = getLegalPageFromPath(window.location.pathname)
-    legalPageState = legalRoute(routeLegalPage)
+    legalPageState = legalRoute(getLegalPageFromPath(window.location.pathname))
     logsPage = isLogsPath(window.location.pathname)
     appLogsPage = isAppLogsPath(window.location.pathname)
     extensionConnectRoute =
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
+    const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
+    const leavesSentinelChooser =
+      legalPageState.kind !== LegalRouteKind.Application ||
+      logsPage ||
+      appLogsPage ||
+      extensionConnectRoute ||
+      (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace &&
+        workspaceRoute.route !== WorkspaceRoute.Vault)
+    if (
+      leavesSentinelChooser &&
+      isSentinelParticipantKeyPending(pendingVaultCreationState)
+    )
+      finishPendingCreation()
     if (
       legalPageState.kind === LegalRouteKind.Application &&
       !logsPage &&
       !appLogsPage &&
       !extensionConnectRoute
     ) {
-      const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
       if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
         const applyWorkspaceRouteArgs2: Parameters<
           typeof applyWorkspaceRoute
@@ -216,7 +231,6 @@
       }
     }
   }
-
   $effect(() => {
     if (!vault.isAuthenticated || !('window' in globalThis)) return
     const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
@@ -231,7 +245,6 @@
       )
     }
   })
-
   function navigateHome() {
     const applyWorkspaceRouteArgs4: Parameters<typeof applyWorkspaceRoute>[0] =
       { state: vault, route: WorkspaceRoute.Vault }
@@ -246,7 +259,6 @@
       kind: ExtensionConnectIntentKind.Absent,
     }
   }
-
   function finishExtensionConnect(approved = false) {
     if (!approved) {
       extensionIdentityRequestState = {
@@ -266,7 +278,6 @@
       kind: ExtensionConnectIntentKind.Absent,
     }
   }
-
   onMount(() => {
     const mountBrowserLifecycleArgs: Parameters<
       typeof mountBrowserLifecycle
@@ -283,7 +294,6 @@
     }
     return mountBrowserLifecycle(mountBrowserLifecycleArgs)
   })
-
   $effect(() => {
     const updateApplicationDocumentArgs: Parameters<
       typeof updateApplicationDocument
@@ -296,23 +306,6 @@
     }
     updateApplicationDocument(updateApplicationDocumentArgs)
   })
-
-  function loginUnlockStoreId(): string {
-    if (vault.activeVault.kind === ActiveVaultKind.Open) {
-      const storeId = vault.activeVault.storeId.trim()
-      if (storeId) return storeId
-    }
-    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
-      const storeId = vault.selectedLoginVault.storeId.trim()
-      if (storeId) return storeId
-    }
-    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
-      const storeId = vault.localVaultCatalog.first.storeId.trim()
-      if (storeId) return storeId
-    }
-    return ''
-  }
-
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
@@ -331,7 +324,7 @@
       await vault.connectStagedProvider()
       return
     }
-    let activeStoreId = loginUnlockStoreId()
+    let activeStoreId = loginUnlockStoreId(vault)
     if (existingVaultImport) {
       try {
         activeStoreId = await vault.discoverStagedVaultStoreId()
@@ -476,7 +469,6 @@
     }
     await vault.loadDb()
   }
-
   async function handleSettingsReconnect() {
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
       await vault.connectAndSyncStagedProvider()
@@ -484,7 +476,6 @@
     }
     await vault.manualSync()
   }
-
   function toggleColorMode() {
     followsSystemColorMode = false
     const manualColorModeArgs: Parameters<typeof manualColorMode>[0] = {
@@ -493,7 +484,6 @@
     }
     colorMode = manualColorMode(manualColorModeArgs)
   }
-
   const appVersion = APP_VERSION
   const shellWidth = $derived(
     vault.settingsOpen &&
@@ -512,7 +502,6 @@
     }
     return appShellSpacing(appShellSpacingArgs)
   })
-
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
   const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending)
   const requiresPasskeyFirst = $derived(
@@ -655,7 +644,7 @@
     window.setTimeout(() => {
       if (
         !vault.isAuthenticated &&
-        (loginUnlockStoreId() === request.storeId ||
+        (loginUnlockStoreId(vault) === request.storeId ||
           request.discoveringStagedImport) &&
         extensionDiscoveryStoreId === request.storeId
       ) {
@@ -719,7 +708,9 @@
     await vault.startSentinelGenesis(args)
     return true
   }
-
+  function finishPendingCreation(): void {
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+  }
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
@@ -728,10 +719,10 @@
       }
       return ''
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    return sentinelGenesisActions.createPublicKeyAnnouncement(vault)
+    return sentinelGenesisActions
+      .createPublicKeyAnnouncement(vault)
+      .finally(finishPendingCreation)
   }
-
   async function handleCreateSentinelParticipantResponse(
     requestPayload: string,
   ): Promise<string> {
@@ -745,15 +736,13 @@
       }
       return ''
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
     const createParticipantResponseArgs: Parameters<
       typeof sentinelGenesisActions.createParticipantResponse
     >[0] = { state: vault, requestPayload }
-    return sentinelGenesisActions.createParticipantResponse(
-      createParticipantResponseArgs,
-    )
+    return sentinelGenesisActions
+      .createParticipantResponse(createParticipantResponseArgs)
+      .finally(finishPendingCreation)
   }
-
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
@@ -812,6 +801,11 @@
 
   $effect(() => {
     if (
+      vault.helpOpen &&
+      isSentinelParticipantKeyPending(pendingVaultCreationState)
+    )
+      return finishPendingCreation()
+    if (
       pendingVaultCreationState.kind !==
         VaultCreationQueueKind.WaitingForDevice ||
       !vault.deviceProtectionReady ||
@@ -819,16 +813,16 @@
     )
       return
     const pending = pendingVaultCreationState.request
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    if (pending.kind === PendingVaultCreationKind.Simple) {
-      void vault.createLocalVaultWithDeviceKeys(pending.label)
-      return
-    }
     if (
       pending.kind === PendingVaultCreationKind.SentinelParticipantKey ||
       pending.kind === PendingVaultCreationKind.SentinelParticipantResponse
     )
       return
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    if (pending.kind === PendingVaultCreationKind.Simple) {
+      void vault.createLocalVaultWithDeviceKeys(pending.label)
+      return
+    }
     if (pending.kind === PendingVaultCreationKind.SentinelOnboarding) {
       void handleAcceptSentinelOnboarding(pending.packageJson)
       return
@@ -839,7 +833,7 @@
   })
 
   $effect(() => {
-    const storeId = loginUnlockStoreId()
+    const storeId = loginUnlockStoreId(vault)
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
@@ -928,6 +922,9 @@
   extensionSetupState={extensionSetupStateValue}
   {appVersion}
   {extensionConnectRequestState}
+  preserveAccessGate={pendingVaultCreationState.kind ===
+    VaultCreationQueueKind.WaitingForDevice ||
+    Boolean(sentinelInvitationRequest.trim())}
   accessGateProps={{
     vault,
     showAccessGate:
@@ -948,6 +945,9 @@
       showExistingVaultPasskeyOverlay ||
       showEnrollmentPasskeyOverlay,
     sentinelInvitationRequest,
+    sentinelParticipantResponsePending: isSentinelParticipantResponsePending(
+      pendingVaultCreationState,
+    ),
     sentinelParticipantResponse,
     sentinelOnboardingPackage,
     onUnlock: handleUnlock,
@@ -956,7 +956,10 @@
     onUnlockWithPassword: (unlockRequest) =>
       existingVaultImportLifecycle.unlockWithPassword(unlockRequest),
     onSwitchVault: () => existingVaultImportLifecycle.leave(),
-    onSentinelUnlocked: () => existingVaultImportLifecycle.finish(),
+    onSentinelUnlocked: () => {
+      sentinelInvitationRequest = ''
+      return existingVaultImportLifecycle.finish()
+    },
     onCreateDeviceVault: handleCreateDeviceVault,
     onStartSentinelGenesis: handleStartSentinelGenesis,
     onCreateSentinelParticipantKey: handleCreateSentinelParticipantKey,

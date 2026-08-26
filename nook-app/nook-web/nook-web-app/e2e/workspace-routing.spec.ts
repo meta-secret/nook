@@ -5,10 +5,21 @@ import {
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
 } from './helpers'
 
+type WorkspaceRoutingWindow = Window & {
+  __nookWorkspaceRouteEventCount: number
+}
+
 test.describe('persistent workspace routing', () => {
   test('routes between primary pages', async ({ page }) => {
     await connectLocalVault(page)
     const initialHistoryLength = await page.evaluate(() => history.length)
+    await page.evaluate(() => {
+      const testWindow = window as WorkspaceRoutingWindow
+      testWindow.__nookWorkspaceRouteEventCount = 0
+      window.addEventListener('popstate', () => {
+        testWindow.__nookWorkspaceRouteEventCount += 1
+      })
+    })
 
     await page.getByTestId('vault-devices-access-tab').click()
     await expect(page).toHaveURL(/\/devices-access$/)
@@ -33,6 +44,11 @@ test.describe('persistent workspace routing', () => {
     expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
       initialHistoryLength + 4,
     )
+    expect(
+      await page.evaluate(
+        () => (window as WorkspaceRoutingWindow).__nookWorkspaceRouteEventCount,
+      ),
+    ).toBeGreaterThanOrEqual(4)
 
     await page.evaluate(
       () =>

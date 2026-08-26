@@ -4,6 +4,7 @@ import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
+  prepareTwoProtectedIdentitiesWithoutVault,
 } from '../helpers'
 
 const BEAT_MS = 650
@@ -152,5 +153,39 @@ test('walk the access chain from passkey to app to vaults', async ({
   await expect(
     page.getByTestId('devices-access-strength-vaults'),
   ).toContainText('Verified way in')
+  await page.waitForTimeout(BEAT_MS)
+})
+
+test('switch protected identities before creating a vault', async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('nook_e2e_manual_passkey', 'true')
+  })
+  await installPasskeyMock(page)
+  await prepareTwoProtectedIdentitiesWithoutVault(page)
+
+  const identityOptions = page.getByTestId('devices-access-identity-option')
+  const personalIdentity = identityOptions.filter({ hasText: 'Identity 1' })
+  await personalIdentity.click()
+  await page.waitForTimeout(BEAT_MS)
+  await page.getByTestId('devices-access-use-identity').click()
+
+  const loginDashboard = page
+    .getByTestId('login-gate')
+    .getByTestId('devices-access-dashboard')
+  await expect(loginDashboard).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(
+    loginDashboard.getByTestId('devices-access-identity-protection-flow'),
+  ).toBeVisible()
+  await page.waitForTimeout(BEAT_MS)
+
+  await page.getByTestId('device-protection-unlock-btn').click()
+  await expect(personalIdentity).toHaveAttribute('data-selected', 'true', {
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+  await expect(page.getByTestId('devices-access-key-inventory')).toBeVisible()
   await page.waitForTimeout(BEAT_MS)
 })

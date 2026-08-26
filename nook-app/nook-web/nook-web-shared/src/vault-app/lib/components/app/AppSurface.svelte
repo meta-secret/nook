@@ -37,6 +37,7 @@
     extensionSetupState,
     appVersion,
     extensionConnectRequestState,
+    preserveAccessGate,
     accessGateProps,
     authenticatedWorkspaceProps,
     onNavigateHome,
@@ -55,6 +56,7 @@
     extensionSetupState: ExtensionSetupOffer
     appVersion: string
     extensionConnectRequestState: ExtensionConnectIntent
+    preserveAccessGate: boolean
     accessGateProps: AccessGateProps
     authenticatedWorkspaceProps: AuthenticatedWorkspaceProps
     onNavigateHome: () => void
@@ -100,7 +102,7 @@
         <AppHelpWorkspace {vault} {colorMode} {appVersion} />
       {:else if extensionConnectRoute && extensionConnectRequestState.kind === ExtensionConnectIntentKind.Absent}
         <InvalidExtensionConnectWorkspace {vault} onClose={onNavigateHome} />
-      {:else if !vault.isAuthenticated}
+      {:else if !vault.isAuthenticated || preserveAccessGate}
         <VaultAccessGate {...accessGateProps} />
       {:else if extensionConnectRequestState.kind === ExtensionConnectIntentKind.Requested}
         <ExtensionConnectConsentWorkspace

@@ -129,35 +129,120 @@ test.describe('local vault', () => {
   }) => {
     await addSecret(page, 'local-cleanup-proof', 'must-be-erased')
     await page.evaluate(async () => {
+      type CleanupProbeTarget = {
+        readonly databaseName: string
+        readonly storeName: string
+        readonly key: IDBValidKey
+        readonly value:
+          string | { readonly id: string; readonly handle: string }
+        readonly inlineKey: boolean
+      }
+
+      const seedProbe = (target: CleanupProbeTarget) =>
+        new Promise<void>((resolve, reject) => {
+          const request = indexedDB.open(target.databaseName)
+          request.onupgradeneeded = () => {
+            if (
+              target.databaseName === 'nook_file_sync' &&
+              !request.result.objectStoreNames.contains(target.storeName)
+            ) {
+              request.result.createObjectStore(target.storeName, {
+                keyPath: 'id',
+              })
+            }
+          }
+          request.onerror = () =>
+            reject(
+              request.error ??
+                new Error(`${target.databaseName} cleanup probe open failed`),
+            )
+          request.onsuccess = () => {
+            const db = request.result
+            const transaction = db.transaction(target.storeName, 'readwrite')
+            const store = transaction.objectStore(target.storeName)
+            if (target.inlineKey) {
+              store.put(target.value)
+            } else {
+              store.put(target.value, target.key)
+            }
+            transaction.oncomplete = () => {
+              db.close()
+              resolve()
+            }
+            transaction.onerror = () =>
+              reject(
+                transaction.error ??
+                  new Error(`${target.databaseName} cleanup probe seed failed`),
+              )
+          }
+        })
+
       localStorage.setItem('nook_cleanup_probe', 'local')
       sessionStorage.setItem('nook_cleanup_probe', 'session')
       document.cookie = 'nook_cleanup_probe=cookie; Path=/; SameSite=Lax'
       const cache = await caches.open('nook-cleanup-probe')
       await cache.put('/cleanup-probe', new Response('cached'))
-      await new Promise<void>((resolve, reject) => {
-        const request = indexedDB.open('nook_file_sync', 1)
-        request.onupgradeneeded = () => {
-          request.result.createObjectStore('directory_handles', {
-            keyPath: 'id',
-          })
-        }
-        request.onerror = () =>
-          reject(request.error ?? new Error('local folder db open failed'))
-        request.onsuccess = () => {
-          const db = request.result
-          const transaction = db.transaction('directory_handles', 'readwrite')
-          transaction.objectStore('directory_handles').put({
+      await Promise.all([
+        seedProbe({
+          databaseName: 'nook_db',
+          storeName: 'vault',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_db',
+          storeName: 'events',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_db',
+          storeName: 'projections',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_db',
+          storeName: 'provider_receipts',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_db',
+          storeName: 'outbox',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_auth',
+          storeName: 'auth',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_logs',
+          storeName: 'logs',
+          key: 'nook-cleanup-probe',
+          value: 'nook-cleanup-probe',
+          inlineKey: false,
+        }),
+        seedProbe({
+          databaseName: 'nook_file_sync',
+          storeName: 'directory_handles',
+          key: 'nook-cleanup-probe',
+          value: {
             id: 'nook-cleanup-probe',
             handle: 'probe',
-          })
-          transaction.oncomplete = () => {
-            db.close()
-            resolve()
-          }
-          transaction.onerror = () =>
-            reject(transaction.error ?? new Error('local folder seed failed'))
-        }
-      })
+          },
+          inlineKey: true,
+        }),
+      ])
     })
 
     const otherTab = await page.context().newPage()
@@ -195,51 +280,113 @@ test.describe('local vault', () => {
     ])
 
     const remaining = await page.evaluate(async () => {
-      const countRecords = (databaseName: string) =>
-        new Promise<number>((resolve, reject) => {
-          const request = indexedDB.open(databaseName)
+      type CleanupProbeTarget = {
+        readonly databaseName: string
+        readonly storeName: string
+        readonly key: IDBValidKey
+      }
+
+      const probeIsPresent = (target: CleanupProbeTarget) =>
+        new Promise<boolean>((resolve, reject) => {
+          const request = indexedDB.open(target.databaseName)
+          let recreated = false
+          request.onupgradeneeded = () => {
+            recreated = true
+          }
           request.onerror = () =>
-            reject(request.error ?? new Error(`${databaseName} open failed`))
+            reject(
+              request.error ??
+                new Error(`${target.databaseName} probe open failed`),
+            )
           request.onsuccess = () => {
             const db = request.result
-            const storeNames = Array.from(db.objectStoreNames)
-            if (storeNames.length === 0) {
+            if (recreated || !db.objectStoreNames.contains(target.storeName)) {
               db.close()
-              resolve(0)
+              resolve(false)
               return
             }
-            const transaction = db.transaction(storeNames, 'readonly')
-            let count = 0
-            for (const storeName of storeNames) {
-              const countRequest = transaction.objectStore(storeName).count()
-              countRequest.onsuccess = () => {
-                count += countRequest.result
+            try {
+              const transaction = db.transaction(target.storeName, 'readonly')
+              const read = transaction
+                .objectStore(target.storeName)
+                .get(target.key)
+              read.onsuccess = () => {
+                db.close()
+                resolve(Boolean(read.result))
               }
-            }
-            transaction.oncomplete = () => {
+              read.onerror = () =>
+                reject(
+                  read.error ??
+                    new Error(
+                      `${target.databaseName} cleanup probe read failed`,
+                    ),
+                )
+            } catch {
               db.close()
-              resolve(count)
+              resolve(false)
             }
-            transaction.onerror = () =>
-              reject(
-                transaction.error ?? new Error(`${databaseName} count failed`),
-              )
           }
         })
-      const recordCounts = await Promise.all(
-        ['nook_db', 'nook_auth', 'nook_logs', 'nook_file_sync'].map(
-          countRecords,
-        ),
-      )
+      const probePresence = await Promise.all([
+        probeIsPresent({
+          databaseName: 'nook_db',
+          storeName: 'vault',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_db',
+          storeName: 'events',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_db',
+          storeName: 'projections',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_db',
+          storeName: 'provider_receipts',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_db',
+          storeName: 'outbox',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_auth',
+          storeName: 'auth',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_logs',
+          storeName: 'logs',
+          key: 'nook-cleanup-probe',
+        }),
+        probeIsPresent({
+          databaseName: 'nook_file_sync',
+          storeName: 'directory_handles',
+          key: 'nook-cleanup-probe',
+        }),
+      ])
       return {
-        recordCounts,
+        probePresence,
         localPresent: Boolean(localStorage.getItem('nook_cleanup_probe')),
         sessionPresent: Boolean(sessionStorage.getItem('nook_cleanup_probe')),
         caches: await caches.keys(),
         cookie: document.cookie,
       }
     })
-    expect(remaining.recordCounts).toEqual([0, 0, 0, 0])
+    expect(remaining.probePresence).toEqual([
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+    ])
     expect(remaining.localPresent).toBe(false)
     expect(remaining.sessionPresent).toBe(false)
     expect(remaining.caches).not.toContain('nook-cleanup-probe')
@@ -264,9 +411,9 @@ test.describe('local vault', () => {
           }
           try {
             await vault.enqueueStorage(() => {})
-            return false
-          } catch {
             return true
+          } catch {
+            return false
           }
         }),
       )
