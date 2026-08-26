@@ -88,9 +88,10 @@ The participant invitation has explicit exit behavior:
 - Reopening the participant flow requires another owner-issued invitation URL.
 
 Sentinel owner setup also treats an unfinished initiator-key protection step as
-route-local work. Leaving the access gate for Help, legal, diagnostic, or
-extension workspaces cancels that queued key preparation. Returning requires
-the owner to re-enter Card Stack setup explicitly.
+route-local work. Leaving the Card Stack chooser for Devices & Access, Help,
+settings, onboarding, admin, legal, diagnostic, or extension workspaces cancels
+that queued key preparation. Returning requires the owner to re-enter Card
+Stack setup explicitly.
 
 ### 2.1 Local device-key protection
 

@@ -170,19 +170,21 @@
       const onboardingPackage = consumeSentinelOnboardingFromLocation()
       if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
     }
-    const routeLegalPage = getLegalPageFromPath(window.location.pathname)
-    legalPageState = legalRoute(routeLegalPage)
+    legalPageState = legalRoute(getLegalPageFromPath(window.location.pathname))
     logsPage = isLogsPath(window.location.pathname)
     appLogsPage = isAppLogsPath(window.location.pathname)
     extensionConnectRoute =
       SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
-    const leavesAccessGate =
+    const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
+    const leavesSentinelChooser =
       legalPageState.kind !== LegalRouteKind.Application ||
       logsPage ||
       appLogsPage ||
-      extensionConnectRoute
+      extensionConnectRoute ||
+      (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace &&
+        workspaceRoute.route !== WorkspaceRoute.Vault)
     if (
-      leavesAccessGate &&
+      leavesSentinelChooser &&
       isSentinelParticipantKeyPending(pendingVaultCreationState)
     )
       finishPendingCreation()
@@ -192,7 +194,6 @@
       !appLogsPage &&
       !extensionConnectRoute
     ) {
-      const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
       if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
         const applyWorkspaceRouteArgs2: Parameters<
           typeof applyWorkspaceRoute
@@ -501,7 +502,6 @@
     }
     return appShellSpacing(appShellSpacingArgs)
   })
-
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
   const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending)
   const requiresPasskeyFirst = $derived(

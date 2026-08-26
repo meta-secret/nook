@@ -471,6 +471,23 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
 
+    await page.getByTestId('login-devices-access').click()
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await page.getByTestId('devices-access-back').click()
+    await expect(page).toHaveURL(/\/vault$/)
+    await page.getByTestId('get-started-path-sentinel').click()
+    await page.getByTestId('sentinel-dashboard-card-stack').click()
+    await page.getByTestId('sentinel-onboarding-create-keys').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.goBack()
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('devices-access-back').click()
     await page.getByTestId('get-started-path-sentinel').click()
     await page.getByTestId('sentinel-dashboard-card-stack').click()
     await page.getByTestId('sentinel-onboarding-create-keys').click()
