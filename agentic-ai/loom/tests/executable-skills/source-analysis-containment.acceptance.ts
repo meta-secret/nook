@@ -6,11 +6,13 @@ import {
 } from '../../src/executable-skills/source-analysis-codec.ts';
 import {
   createContainerCommand,
+  resolveSealedSourceAnalysisContainerOutput,
   type RunSealedSourceAnalysisContainerRequest,
   runSealedSourceAnalysisContainer,
   SOURCE_ANALYSIS_CONTAINER_LABEL,
   type SealedSourceAnalysisDockerEnvironment,
 } from '../../src/executable-skills/source-analysis-docker.ts';
+import { resolveTrustedDockerExecutable } from '../../src/executable-skills/source-analysis-docker-executable.ts';
 import {
   type BoundedProcessOutput,
   type RunBoundedProcessRequest,
@@ -25,6 +27,7 @@ import { findRepoRoot } from '../../src/lib/repo.ts';
 type AcceptanceContainerRequest = {
   readonly deadlineExpiresAt: number;
   readonly dockerEnvironment: SealedSourceAnalysisDockerEnvironment;
+  readonly dockerExecutable: string;
   readonly imageId: string;
   readonly maximumStdoutBytes: number;
   readonly script: string;
@@ -39,6 +42,12 @@ type AcceptanceContainerOutput = {
 type AcceptanceDockerCommandRequest = {
   readonly arguments: readonly string[];
   readonly environment: SealedSourceAnalysisDockerEnvironment;
+  readonly executable: string;
+};
+
+type AcceptanceDockerAuthority = {
+  readonly environment: SealedSourceAnalysisDockerEnvironment;
+  readonly executable: string;
 };
 
 type SourceAnalysisContainmentReceipt = {
@@ -59,11 +68,9 @@ type SourceAnalysisContainmentReceipt = {
 const REPO_ROOT = findRepoRoot();
 
 function requireDockerEnvironment(): SealedSourceAnalysisDockerEnvironment {
-  const contextName = process.env.NOOK_SOURCE_ANALYSIS_DOCKER_CONTEXT;
   const daemonId = process.env.NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID;
   const endpoint = process.env.NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT;
   if (
-    typeof contextName !== 'string' ||
     typeof daemonId !== 'string' ||
     typeof endpoint !== 'string' ||
     process.env.NOOK_ARC_RUNNER === '1' ||
@@ -73,7 +80,7 @@ function requireDockerEnvironment(): SealedSourceAnalysisDockerEnvironment {
       'Source-analysis containment requires an explicit non-ARC Docker contract.',
     );
   }
-  return { contextName, daemonId, endpoint };
+  return { daemonId, endpoint };
 }
 
 async function runDocker(
@@ -86,15 +93,15 @@ function dockerCommand(
   request: AcceptanceDockerCommandRequest,
 ): readonly string[] {
   return [
-    'docker',
-    '--context',
-    request.environment.contextName,
+    request.executable,
+    '--host',
+    request.environment.endpoint,
     ...request.arguments,
   ];
 }
 
 async function assertNoOrphans(
-  environment: SealedSourceAnalysisDockerEnvironment,
+  authority: AcceptanceDockerAuthority,
 ): Promise<void> {
   const commandRequest: AcceptanceDockerCommandRequest = {
     arguments: [
@@ -105,7 +112,8 @@ async function assertNoOrphans(
       '--filter',
       `label=${SOURCE_ANALYSIS_CONTAINER_LABEL}`,
     ],
-    environment,
+    environment: authority.environment,
+    executable: authority.executable,
   };
   const request: RunBoundedProcessRequest = {
     command: dockerCommand(commandRequest),
@@ -129,6 +137,7 @@ async function runAcceptanceContainer(
   const createRequest = {
     containerName,
     endpoint: request.dockerEnvironment.endpoint,
+    executable: request.dockerExecutable,
     imageId: request.imageId,
   };
   const staticCommand = [...createContainerCommand(createRequest)];
@@ -160,6 +169,7 @@ async function runAcceptanceContainer(
     const startCommandRequest: AcceptanceDockerCommandRequest = {
       arguments: ['start', '--attach', containerName],
       environment: request.dockerEnvironment,
+      executable: request.dockerExecutable,
     };
     const startRequest: RunBoundedProcessRequest = {
       command: dockerCommand(startCommandRequest),
@@ -181,6 +191,7 @@ async function runAcceptanceContainer(
         containerName,
       ],
       environment: request.dockerEnvironment,
+      executable: request.dockerExecutable,
     };
     const stateRequest: RunBoundedProcessRequest = {
       ...startRequest,
@@ -198,6 +209,7 @@ async function runAcceptanceContainer(
     const removeCommandRequest: AcceptanceDockerCommandRequest = {
       arguments: ['rm', '--force', containerName],
       environment: request.dockerEnvironment,
+      executable: request.dockerExecutable,
     };
     const removeRequest: RunBoundedProcessRequest = {
       command: dockerCommand(removeCommandRequest),
@@ -210,7 +222,11 @@ async function runAcceptanceContainer(
       stdin: false,
     };
     await runDocker(removeRequest);
-    await assertNoOrphans(request.dockerEnvironment);
+    const authority: AcceptanceDockerAuthority = {
+      environment: request.dockerEnvironment,
+      executable: request.dockerExecutable,
+    };
+    await assertNoOrphans(authority);
   }
 }
 
@@ -234,7 +250,12 @@ describe('sealed source analysis live containment', () => {
     'proves normal, rejection, kernel receipt, bounds, abort, deadline, OOM, and teardown',
     async () => {
       const dockerEnvironment = requireDockerEnvironment();
-      await assertNoOrphans(dockerEnvironment);
+      const dockerExecutable = await resolveTrustedDockerExecutable();
+      const dockerAuthority: AcceptanceDockerAuthority = {
+        environment: dockerEnvironment,
+        executable: dockerExecutable,
+      };
+      await assertNoOrphans(dockerAuthority);
       const sourceRequest: AnalyzeExecutableSkillSourceRequest = {
         relativePath: '.agents/skills/acceptance/src/runner.ts',
         source: 'export {};',
@@ -245,7 +266,11 @@ describe('sealed source analysis live containment', () => {
         serializedRequest: encodeSourceAnalysisRequest(sourceRequest),
         signal: false,
       };
-      const normal = await runSealedSourceAnalysisContainer(containerRequest);
+      const normalOutput =
+        await runSealedSourceAnalysisContainer(containerRequest);
+      const normalResolveRequest = { output: normalOutput };
+      const normal =
+        resolveSealedSourceAnalysisContainerOutput(normalResolveRequest);
       const expectedAnalysis: ExecutableSkillSourceAnalysis = {
         moduleSpecifiers: [],
       };
@@ -263,8 +288,12 @@ describe('sealed source analysis live containment', () => {
           deadlineExpiresAt: Date.now() + 4 * 60 * 1_000,
           serializedRequest: encodeSourceAnalysisRequest(rejectedSourceRequest),
         };
-      const rejected = await runSealedSourceAnalysisContainer(
+      const rejectedOutput = await runSealedSourceAnalysisContainer(
         rejectedContainerRequest,
+      );
+      const rejectedResolveRequest = { output: rejectedOutput };
+      const rejected = resolveSealedSourceAnalysisContainerOutput(
+        rejectedResolveRequest,
       );
       expect(() =>
         decodeSourceAnalysisResult(rejected.serializedResult),
@@ -273,6 +302,7 @@ describe('sealed source analysis live containment', () => {
       const probeRequest: AcceptanceContainerRequest = {
         deadlineExpiresAt: Date.now() + 30_000,
         dockerEnvironment,
+        dockerExecutable,
         imageId: normal.imageId,
         maximumStdoutBytes: 64 * 1024,
         script: 'acceptance/source-analysis-containment-probe.ts',
@@ -337,7 +367,7 @@ describe('sealed source analysis live containment', () => {
       const oom = await runAcceptanceContainer(oomRequest);
       expect(oom.process.exitCode).not.toBe(0);
       expect(oom.oomKilled).toBe(true);
-      await assertNoOrphans(dockerEnvironment);
+      await assertNoOrphans(dockerAuthority);
     },
     8 * 60 * 1_000,
   );

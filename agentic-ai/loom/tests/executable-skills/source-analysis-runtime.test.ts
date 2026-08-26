@@ -16,7 +16,6 @@ import {
 import type { ExecutableSkillSourceAnalysis } from '../../src/executable-skills/source-policy.ts';
 
 const DOCKER_ENVIRONMENT: SealedSourceAnalysisDockerEnvironment = {
-  contextName: 'explicit-local',
   daemonId: '12345678-1234-1234-1234-123456789abc',
   endpoint: 'unix:///explicit/docker.sock',
 };

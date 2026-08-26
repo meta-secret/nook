@@ -431,10 +431,9 @@ workflow view.
 
 The opt-in executable-skill analyzer containment proof runs only against an
 explicit local, non-ARC Docker environment. Set
-**`NOOK_SOURCE_ANALYSIS_DOCKER_CONTEXT`**,
-**`NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID`**, and
-**`NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT`** to the exact context, daemon ID, and
-local Unix endpoint. Then run
+**`NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID`** and
+**`NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT`** to the exact daemon ID and local
+Unix endpoint. Docker context configuration is not inherited. Then run
 **`task loom:source-analysis:containment`**. The analyzer image is byte-bound to
 its minimal build context. Its disposable container has no network, mounts, or
 privilege; it runs read-only with bounded memory, processes, output, and time.

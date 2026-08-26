@@ -57,7 +57,6 @@ tasks:
     deps: [loom:install]
     requires:
       vars:
-        - NOOK_SOURCE_ANALYSIS_DOCKER_CONTEXT
         - NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID
         - NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT
     cmds:

@@ -4,6 +4,7 @@ import {
   encodeSourceAnalysisRequest,
 } from './source-analysis-codec.ts';
 import {
+  resolveSealedSourceAnalysisContainerOutput,
   runSealedSourceAnalysisContainer,
   type RunSealedSourceAnalysisContainerRequest,
   type SealedSourceAnalysisDockerEnvironment,
@@ -57,13 +58,21 @@ export async function runExecutableSkillSourceAnalysis(
   request: RunExecutableSkillSourceAnalysisRequest,
 ): Promise<ExecutableSkillSourceAnalysis> {
   const dependencies: SourceAnalysisRuntimeDependencies = {
-    executeContainer: runSealedSourceAnalysisContainer,
+    executeContainer: executeProductionContainer,
   };
   const executionRequest: RunSourceAnalysisWithDependenciesRequest = {
     dependencies,
     request,
   };
   return await runSourceAnalysisWithDependencies(executionRequest);
+}
+
+async function executeProductionContainer(
+  request: RunSealedSourceAnalysisContainerRequest,
+): Promise<{ readonly serializedResult: string }> {
+  const output = await runSealedSourceAnalysisContainer(request);
+  const resolveRequest = { output };
+  return resolveSealedSourceAnalysisContainerOutput(resolveRequest);
 }
 
 export async function runSourceAnalysisWithDependencies(
