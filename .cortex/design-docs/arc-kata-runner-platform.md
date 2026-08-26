@@ -249,10 +249,11 @@ Recovery preserves these boundaries:
   forces a reinstall when the reported OS already matches.
 - The recovery path removes the old Kubernetes node, WireGuard peer, routes,
   and stale mesh SSH identities before onboarding the replacement.
-- An unchanged installed server must already have its matching host identity
-  in the private store. The adapter refuses to invent an identity that was
-  never installed. Restore the identity backup or explicitly reinstall the
-  server.
+- Recovering an unchanged installed server has these requirements:
+  - Its matching host identity must already exist in the private store.
+  - The adapter refuses to invent an identity that was never installed.
+  - Restore the identity backup or explicitly reinstall the server when the
+    identity is missing.
 - Cloud-init user-data is not used with the standard OVH image. OVH exposes
   that customization only for BYOI and BYOLinux. Owning a custom image pipeline
   would add recovery risk. BYOI would also bypass the standard software RAID
