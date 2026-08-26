@@ -95,6 +95,29 @@ test('reports post-baseline entries with exact source details', () => {
   ]);
 });
 
+test('rejects exemptions when the migration baseline is unavailable', () => {
+  const request: MakeAuditRequest = {
+    documents: emptyDocuments,
+    migrationBaselineEntries: false,
+    migrationLedgerContent: '.cortex/legacy.md\n',
+  };
+  expect(audit(request)).toEqual([
+    {
+      code: CortexArticleFindingCode.InvalidMigrationLedger,
+      file: '.cortex/article-structure-migration.txt',
+      line: 1,
+      message:
+        'Article-structure exemption cannot be verified without the migration baseline: .cortex/legacy.md',
+    },
+    {
+      code: CortexArticleFindingCode.EmptyArticle,
+      file: '.cortex/legacy.md',
+      line: 1,
+      message: 'Article #Empty legacy article has no body content.',
+    },
+  ]);
+});
+
 test('missing ledgers do not exempt empty documents', () => {
   const request: MakeAuditRequest = {
     documents: emptyDocuments,

@@ -120,7 +120,10 @@ function invalidLedgerMessage(
   if (!request.catalog.has(request.entry)) {
     return `Article-structure exemption is not a Cortex Markdown file: ${request.entry}`;
   }
-  if (request.baseline !== false && !request.baseline.has(request.entry)) {
+  if (request.baseline === false) {
+    return `Article-structure exemption cannot be verified without the migration baseline: ${request.entry}`;
+  }
+  if (!request.baseline.has(request.entry)) {
     return `Article-structure exemption was added after the baseline: ${request.entry}`;
   }
   return false;
