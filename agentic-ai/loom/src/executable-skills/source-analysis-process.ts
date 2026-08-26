@@ -100,11 +100,11 @@ export async function runBoundedProcess(
   const stdout = readBoundedStream(stdoutRequest);
   const stderr = readBoundedStream(stderrRequest);
   const interruption = createProcessInterruption(request);
-  let input = Promise.resolve();
+  let input: Promise<number> | false = false;
   let streamsSettled = false;
   try {
     if (request.stdin !== false) subprocess.stdin.write(request.stdin);
-    input = Promise.resolve(subprocess.stdin.end()).then(() => undefined);
+    input = Promise.resolve(subprocess.stdin.end());
     const completion = Promise.all([
       subprocess.exited,
       input,
