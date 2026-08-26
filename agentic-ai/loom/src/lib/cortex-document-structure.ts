@@ -7,6 +7,7 @@ export enum CortexStructureFindingCode {
   InvalidMigrationLedger = 'invalid-migration-ledger',
   InvalidTitle = 'invalid-title',
   ProhibitedNavigation = 'prohibited-navigation',
+  ProhibitedHtml = 'prohibited-html',
   MissingIndex = 'missing-index',
   InvalidIndexEntry = 'invalid-index-entry',
   BrokenFragment = 'broken-fragment',
@@ -32,6 +33,7 @@ export type CortexDocumentSource = {
 
 export type AuditCortexDocumentStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
+  readonly excludedDocumentPaths: ReadonlySet<string>;
   readonly migrationBaselineEntries: readonly string[] | false;
   readonly migrationLedgerPath: string;
   readonly repoRoot: string;
@@ -56,9 +58,19 @@ type ValidateDocumentArgs = {
   readonly findings: CortexStructureFinding[];
 };
 
+type ValidateMarkdownSyntaxArgs = {
+  readonly document: ParsedDocument;
+  readonly findings: CortexStructureFinding[];
+};
+
+export type AuditCortexMarkdownSyntaxArgs = {
+  readonly documents: readonly CortexDocumentSource[];
+};
+
 type ValidateIndexArgs = {
   readonly indexDocument: ParsedDocument;
   readonly catalog: ReadonlyMap<string, ParsedDocument>;
+  readonly excludedDocumentPaths: ReadonlySet<string>;
   readonly findings: CortexStructureFinding[];
   readonly repoRoot: string;
 };
@@ -108,6 +120,7 @@ export function auditCortexDocumentStructure(
     const validateIndexArgs: ValidateIndexArgs = {
       indexDocument: indexDoc,
       catalog,
+      excludedDocumentPaths: args.excludedDocumentPaths,
       findings,
       repoRoot: args.repoRoot,
     };
@@ -134,6 +147,36 @@ export function auditCortexDocumentStructure(
   }
 
   return findings;
+}
+
+export function auditCortexMarkdownSyntax(
+  args: AuditCortexMarkdownSyntaxArgs,
+): CortexStructureFinding[] {
+  const findings: CortexStructureFinding[] = [];
+  for (const document of args.documents.map(parseDocument)) {
+    const syntaxArgs: ValidateMarkdownSyntaxArgs = { document, findings };
+    validateMarkdownSyntax(syntaxArgs);
+  }
+  return findings;
+}
+
+function validateMarkdownSyntax(args: ValidateMarkdownSyntaxArgs): void {
+  function visit(node: RootContent | Parent): void {
+    if (node.type === 'html') {
+      const findingArgs: AddFindingArgs = {
+        findings: args.findings,
+        code: CortexStructureFindingCode.ProhibitedHtml,
+        file: args.document.relativePath,
+        line: nodeLine(node),
+        message:
+          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
+      };
+      addFinding(findingArgs);
+    }
+    if (!('children' in node) || !Array.isArray(node.children)) return;
+    for (const child of node.children) visit(child as RootContent);
+  }
+  visit(args.document.root);
 }
 
 function normalizeCortexRelativePath(filePath: string): string {
@@ -222,6 +265,11 @@ function validateIndex(args: ValidateIndexArgs): void {
     };
     const resolved = resolveIndexLink(resolveArgs);
     if (resolved === false) {
+      continue;
+    }
+
+    if (args.excludedDocumentPaths.has(resolved.targetRelativePath)) {
+      indexedFiles.add(resolved.targetRelativePath);
       continue;
     }
 

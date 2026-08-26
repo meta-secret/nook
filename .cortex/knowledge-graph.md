@@ -168,7 +168,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Application Checklist](dynamic-skills/code-review-comments.md#application-checklist)
   - [GitHub Queries](dynamic-skills/code-review-comments.md#github-queries)
   - [Validation](dynamic-skills/code-review-comments.md#validation)
-- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md)
+- [Cortex Structured Articles](dynamic-skills/cortex-article-structure.md) — semantic Markdown with no HTML nodes; literal HTML belongs in inline or block code
   - [Priority](dynamic-skills/cortex-article-structure.md#priority)
   - [Purpose](dynamic-skills/cortex-article-structure.md#purpose)
   - [Body grammar](dynamic-skills/cortex-article-structure.md#body-grammar)
@@ -339,7 +339,7 @@ AI agents must always consult this knowledge graph first to discover relevant kn
   - [Scope](dynamic-skills/rust-typescript-code-separation.md#scope)
   - [Examples](dynamic-skills/rust-typescript-code-separation.md#examples)
     - [Model sum types as an enum-of-structs, wrap it for wasm](dynamic-skills/rust-typescript-code-separation.md#model-sum-types-as-an-enum-of-structs-wrap-it-for-wasm)
-    - [Option<T> is almost always a missing enum](dynamic-skills/rust-typescript-code-separation.md#optiont-is-almost-always-a-missing-enum)
+    - [`Option<T>` is almost always a missing enum](dynamic-skills/rust-typescript-code-separation.md#optiont-is-almost-always-a-missing-enum)
   - [Application Checklist](dynamic-skills/rust-typescript-code-separation.md#application-checklist)
   - [Validation](dynamic-skills/rust-typescript-code-separation.md#validation)
 - [Rust WASM Name Coherence](dynamic-skills/rust-wasm-name-coherence.md)

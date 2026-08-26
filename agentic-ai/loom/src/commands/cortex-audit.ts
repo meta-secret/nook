@@ -16,7 +16,10 @@ import type { LintProseDensityArgs } from '../lib/density.ts';
 import type { FindBrokenRelativeLinksArgs } from '../lib/links.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 import {
+  auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
+  CortexStructureFindingCode,
+  type AuditCortexMarkdownSyntaxArgs,
   type AuditCortexDocumentStructureArgs,
   type CortexDocumentSource,
   type CortexStructureFinding,
@@ -65,29 +68,59 @@ export async function runCortexAuditFromDirectory(
     loomFailureDetail(loomFailureDetailArgs);
   }
 
-  const mdFiles = listPersistentCortexMarkdownFiles(cortexRoot);
+  const allMarkdownFiles = listCortexMarkdownFiles(cortexRoot);
   const brokenLinks: BrokenLink[] = [];
   const densityFindings: DensityFinding[] = [];
-  const documents: CortexDocumentSource[] = [];
-
-  for (const filePath of mdFiles) {
-    const content = readFileSync(filePath, 'utf8');
+  const allDocuments = allMarkdownFiles.map((filePath) => {
     const documentSource: CortexDocumentSource = {
       absolutePath: filePath,
       relativePath: path.relative(repoRoot, filePath),
-      content,
+      content: readFileSync(filePath, 'utf8'),
     };
-    documents.push(documentSource);
+    return documentSource;
+  });
+  const syntaxAuditArgs: AuditCortexMarkdownSyntaxArgs = {
+    documents: allDocuments,
+  };
+  const syntaxFindings = auditCortexMarkdownSyntax(syntaxAuditArgs);
+  const syntaxInvalidPaths = new Set(
+    syntaxFindings
+      .filter(
+        (finding) => finding.code === CortexStructureFindingCode.ProhibitedHtml,
+      )
+      .map((finding) => finding.file),
+  );
+  const syntaxInvalidSkillNames = new Set(
+    [...syntaxInvalidPaths]
+      .filter((filePath) => filePath.startsWith('.cortex/dynamic-skills/'))
+      .map((filePath) => path.basename(filePath)),
+  );
+  const documents = allDocuments.filter((document) => {
+    const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
+      cortexRoot,
+      filePath: document.absolutePath,
+    };
+    return (
+      isPersistentCortexMarkdownFile(persistenceArgs) &&
+      !syntaxInvalidPaths.has(document.relativePath)
+    );
+  });
+  const admittedDocumentPaths = new Set(
+    documents.map((document) => document.relativePath),
+  );
+
+  for (const documentSource of documents) {
+    const filePath = documentSource.absolutePath;
     const findBrokenRelativeLinksArgs: FindBrokenRelativeLinksArgs = {
       filePath,
-      content,
+      content: documentSource.content,
       repoRoot,
     };
     brokenLinks.push(...findBrokenRelativeLinks(findBrokenRelativeLinksArgs));
     if (args.request.includeDensityLint) {
       const lintProseDensityArgs: LintProseDensityArgs = {
         filePath: path.relative(repoRoot, filePath),
-        content,
+        content: documentSource.content,
       };
       densityFindings.push(...lintProseDensity(lintProseDensityArgs));
     }
@@ -100,11 +133,15 @@ export async function runCortexAuditFromDirectory(
   };
   const structureAuditArgs: AuditCortexDocumentStructureArgs = {
     documents,
+    excludedDocumentPaths: syntaxInvalidPaths,
     migrationBaselineEntries: migrationBaselineEntries(documentMapBaselineArgs),
     migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
   };
-  const structureFindings = auditCortexDocumentStructure(structureAuditArgs);
+  const downstreamStructureFindings = auditCortexDocumentStructure(
+    structureAuditArgs,
+  ).filter((finding) => !syntaxInvalidPaths.has(finding.file));
+  const structureFindings = [...syntaxFindings, ...downstreamStructureFindings];
   const articleBaselineArgs: MigrationBaselineEntriesArgs = {
     ledgerPath: ARTICLE_MIGRATION_LEDGER_PATH,
     markerPath: ARTICLE_STRUCTURE_SKILL_PATH,
@@ -127,23 +164,32 @@ export async function runCortexAuditFromDirectory(
   const skillFiles = readdirSync(skillsDir)
     .filter((name) => name.endsWith('.md'))
     .filter((name) => name !== 'index.md' && name !== '_template.md')
+    .filter((name) =>
+      admittedDocumentPaths.has(path.join('.cortex', 'dynamic-skills', name)),
+    )
     .sort();
-
   const indexPath = path.join(skillsDir, 'index.md');
-  const indexContent = readFileSync(indexPath, 'utf8');
+  const indexRelativePath = path.relative(repoRoot, indexPath);
+  const indexIsAdmitted = admittedDocumentPaths.has(indexRelativePath);
+  const indexContent = indexIsAdmitted ? readFileSync(indexPath, 'utf8') : '';
   const indexed = new Set(
     [...indexContent.matchAll(/\(([^)]+\.md)\)/g)]
       .map((match) => match[1] ?? '')
       .filter((target) => !target.includes('/') && target.endsWith('.md')),
   );
 
-  const missingFromIndex = skillFiles.filter((name) => !indexed.has(name));
-  const orphanIndexRows = [...indexed].filter(
-    (name) =>
-      name !== 'index.md' &&
-      name !== '_template.md' &&
-      !skillFiles.includes(name),
-  );
+  const missingFromIndex = indexIsAdmitted
+    ? skillFiles.filter((name) => !indexed.has(name))
+    : [];
+  const orphanIndexRows = indexIsAdmitted
+    ? [...indexed].filter(
+        (name) =>
+          name !== 'index.md' &&
+          name !== '_template.md' &&
+          !syntaxInvalidSkillNames.has(name) &&
+          !skillFiles.includes(name),
+      )
+    : [];
 
   const missingExecutableSkills: string[] = [];
   for (const match of indexContent.matchAll(
@@ -151,6 +197,9 @@ export async function runCortexAuditFromDirectory(
   )) {
     const slug = match[1];
     if (typeof slug !== 'string') {
+      continue;
+    }
+    if (syntaxInvalidSkillNames.has(`${slug}.md`)) {
       continue;
     }
     const skillPath = path.join(
@@ -164,9 +213,22 @@ export async function runCortexAuditFromDirectory(
       missingExecutableSkills.push(slug);
     }
   }
+  const admittedBrokenLinks = brokenLinks.filter((finding) => {
+    if (finding.file !== '.cortex/dynamic-skills/index.md') {
+      return true;
+    }
+    const mirrorMatch =
+      /^\.\.\/\.\.\/\.agents\/skills\/([^/]+)\/SKILL\.md(?:#.*)?$/.exec(
+        finding.target,
+      );
+    const slug = mirrorMatch?.[1];
+    return (
+      typeof slug !== 'string' || !syntaxInvalidSkillNames.has(`${slug}.md`)
+    );
+  });
 
   return {
-    brokenLinks,
+    brokenLinks: admittedBrokenLinks,
     missingFromIndex,
     orphanIndexRows,
     missingExecutableSkills,
@@ -174,7 +236,7 @@ export async function runCortexAuditFromDirectory(
     structureFindings,
     articleStructureFindings,
     auditOk:
-      brokenLinks.length === 0 &&
+      admittedBrokenLinks.length === 0 &&
       missingFromIndex.length === 0 &&
       orphanIndexRows.length === 0 &&
       missingExecutableSkills.length === 0 &&
@@ -293,6 +355,31 @@ function ledgerEntries(content: string): readonly string[] {
 }
 
 export function listPersistentCortexMarkdownFiles(root: string): string[] {
+  return listCortexMarkdownFiles(root).filter((filePath) => {
+    const args: IsPersistentCortexMarkdownFileArgs = {
+      cortexRoot: root,
+      filePath,
+    };
+    return isPersistentCortexMarkdownFile(args);
+  });
+}
+
+type IsPersistentCortexMarkdownFileArgs = {
+  readonly cortexRoot: string;
+  readonly filePath: string;
+};
+
+function isPersistentCortexMarkdownFile(
+  args: IsPersistentCortexMarkdownFileArgs,
+): boolean {
+  const relativePath = path.relative(args.cortexRoot, args.filePath);
+  return (
+    relativePath !== '.session' &&
+    !relativePath.startsWith(`.session${path.sep}`)
+  );
+}
+
+export function listCortexMarkdownFiles(root: string): string[] {
   const out: string[] = [];
   const stack = [root];
   const directoryReadOptions: { readonly withFileTypes: true } = {
@@ -306,9 +393,6 @@ export function listPersistentCortexMarkdownFiles(root: string): string[] {
     for (const entry of readdirSync(current, directoryReadOptions)) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
-        if (path.relative(root, full) === '.session') {
-          continue;
-        }
         stack.push(full);
         continue;
       }

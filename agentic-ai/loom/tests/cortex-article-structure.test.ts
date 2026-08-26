@@ -236,32 +236,6 @@ test('rejects mapped articles with no body content', () => {
   );
 });
 
-test('does not count an invisible comment as article content', () => {
-  const documentArgs: MakeDocumentArgs = {
-    path: '.cortex/comment-only.md',
-    content: `# Comment only
-
-## Relationships
-
-- None.
-
-## Document map
-
-- [Empty article](#empty-article)
-  - Names the empty article.
-  - Read to find the failure.
-
-## Empty article
-
-<!-- TODO: write the article -->
-`,
-  };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.EmptyArticle,
-  );
-});
-
 test('rejects documents with no content articles after the map', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/no-articles.md',
@@ -277,44 +251,6 @@ test('rejects documents with no content articles after the map', () => {
   const document = makeDocument(documentArgs);
   expect(audit([document]).map((finding) => finding.code)).toContain(
     CortexArticleFindingCode.EmptyArticle,
-  );
-});
-
-test('treats Markdown comments as transparent to dense prose runs', () => {
-  const documentArgs: MakeDocumentArgs = {
-    path: '.cortex/commented-prose.md',
-    content: `# Commented prose
-
-## Relationships
-
-- None.
-
-## Document map
-
-- [Explanation](#explanation)
-  - Explains the topic.
-  - Read for rationale.
-
-## Explanation
-
-First paragraph.
-
-<!-- internal authoring note -->
-
-Second paragraph.
-
-<!-- another internal note -->
-
-Third paragraph.
-
-<!-- final internal note -->
-
-Fourth paragraph.
-`,
-  };
-  const document = makeDocument(documentArgs);
-  expect(audit([document]).map((finding) => finding.code)).toContain(
-    CortexArticleFindingCode.DenseArticle,
   );
 });
 

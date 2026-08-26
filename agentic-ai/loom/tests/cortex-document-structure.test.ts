@@ -1,10 +1,12 @@
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import {
+  auditCortexMarkdownSyntax,
   auditCortexDocumentStructure,
   CortexStructureFindingCode,
 } from '../src/lib/cortex-document-structure.ts';
 import type {
+  AuditCortexMarkdownSyntaxArgs,
   AuditCortexDocumentStructureArgs,
   CortexDocumentSource,
 } from '../src/lib/cortex-document-structure.ts';
@@ -27,6 +29,7 @@ function makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
 function audit(documents: readonly CortexDocumentSource[]) {
   const args: AuditCortexDocumentStructureArgs = {
     documents,
+    excludedDocumentPaths: new Set(),
     migrationBaselineEntries: false,
     migrationLedgerPath: path.join(
       REPO_ROOT,
@@ -36,6 +39,11 @@ function audit(documents: readonly CortexDocumentSource[]) {
     repoRoot: REPO_ROOT,
   };
   return auditCortexDocumentStructure(args);
+}
+
+function auditSyntax(documents: readonly CortexDocumentSource[]) {
+  const args: AuditCortexMarkdownSyntaxArgs = { documents };
+  return auditCortexMarkdownSyntax(args);
 }
 
 const INDEX_DOC_ARGS: MakeDocumentArgs = {
@@ -137,6 +145,76 @@ Text.
   const document = makeDocument(documentArgs);
   const codes = audit([INDEX_DOC, document]).map((finding) => finding.code);
   expect(codes).toContain(CortexStructureFindingCode.ProhibitedNavigation);
+});
+
+test('rejects block, inline, comment, and indexed Cortex HTML nodes', () => {
+  const htmlDocuments = [
+    '<details>Block HTML</details>',
+    'Before <span>inline HTML</span> after.',
+    '<!-- authoring note -->',
+    'Generic types such as Option<T> are still HTML syntax.',
+    '- Nested <mark>list HTML</mark>.',
+  ];
+  for (const content of htmlDocuments) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/html.md',
+      content: `# HTML\n\n## Policy\n\n${content}\n`,
+    };
+    const document = makeDocument(documentArgs);
+    expect(auditSyntax([document]).map((finding) => finding.code)).toContain(
+      CortexStructureFindingCode.ProhibitedHtml,
+    );
+  }
+
+  const indexArgs: MakeDocumentArgs = {
+    path: '.cortex/knowledge-graph.md',
+    content: '# Index\n\n<!-- hidden index note -->\n',
+  };
+  const index = makeDocument(indexArgs);
+  expect(auditSyntax([index]).map((finding) => finding.code)).toContain(
+    CortexStructureFindingCode.ProhibitedHtml,
+  );
+});
+
+test('allows escaped HTML text and HTML examples inside code', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/a.md',
+    content: `# A
+
+## Overview
+
+Escaped text: &lt;span&gt;not HTML&lt;/span&gt;.
+
+Inline code: \`<span>not HTML</span>\`.
+
+Autolink: <https://example.com>.
+
+\`\`\`html
+<!-- example only -->
+<span>example only</span>
+\`\`\`
+
+    <!-- indented example only -->
+    <span>indented example only</span>
+
+### Details
+
+Details text.
+`,
+  };
+  const document = makeDocument(documentArgs);
+  expect(auditSyntax([document])).toEqual([]);
+});
+
+test('does not exempt legacy documents from the HTML prohibition', () => {
+  const legacyArgs: MakeDocumentArgs = {
+    path: '.cortex/legacy.md',
+    content: '# Legacy\n\n## Policy\n\n<div>Legacy HTML</div>\n',
+  };
+  const legacy = makeDocument(legacyArgs);
+  expect(auditSyntax([legacy]).map((finding) => finding.code)).toContain(
+    CortexStructureFindingCode.ProhibitedHtml,
+  );
 });
 
 test('rejects index links pointing to non-existent documents', () => {
