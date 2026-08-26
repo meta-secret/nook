@@ -65,10 +65,25 @@ test("buildPrAudit blocks an actionable Cursor review body", async () => {
   assert.equal(audit.feedback.substantiveReviews, 1);
 });
 
-test("buildPrAudit preserves actionable comments before the first review request", async () => {
+test("buildPrAudit excludes historical comments before the first exact-head request", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
       codexReview: MockCodexReview.Missing,
+      preRequestFinding: true,
+    }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.feedback.substantiveComments, 1);
+  assert.equal(audit.feedback.currentIterationComments, 0);
+});
+
+test("buildPrAudit includes comments after the exact-head request", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({
+      codexReview: MockCodexReview.Reaction,
       preRequestFinding: true,
     }),
     repoRef,
@@ -461,6 +476,7 @@ function createMockOctokit(options: MockOptions): Octokit {
               {
                 author_association: "OWNER",
                 body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                created_at: "2026-08-08T00:00:00Z",
                 id: 77,
               },
               ...(options.codexReview === MockCodexReview.DuplicateReaction
@@ -468,6 +484,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                     {
                       author_association: "OWNER",
                       body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                      created_at: "2026-08-08T00:00:30Z",
                       id: 78,
                     },
                   ]

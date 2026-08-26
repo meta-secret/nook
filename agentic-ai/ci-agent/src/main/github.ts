@@ -408,12 +408,14 @@ export async function inspectPrFeedback(
       request.created_at > latest ? request.created_at : latest,
     "",
   );
-  const currentIterationComments = substantiveComments.filter(
-    (comment) =>
-      (latestRequestAt.length === 0 ||
-        comment.created_at >= latestRequestAt) &&
-      !isNonActionableReviewBody(comment.body ?? ""),
-  );
+  const currentIterationComments =
+    latestRequestAt.length === 0
+      ? []
+      : substantiveComments.filter(
+          (comment) =>
+            comment.created_at >= latestRequestAt &&
+            !isNonActionableReviewBody(comment.body ?? ""),
+        );
   const substantiveReviews = reviews.filter((review) => {
     if (
       review.commit_id !== pr.head.sha ||
