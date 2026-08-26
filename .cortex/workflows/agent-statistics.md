@@ -72,8 +72,8 @@ task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
   with `statsFile: "{agentTempDir}/123.yaml"`.
 - **Examples:** copy `exampleYaml` from `task loom:tools-list`.
 - **Protocol:** [Loom tools](../references/loom-tools.md).
-- **Loom owns:** PR metadata, Actions runs, optional test inventory, and summary
-  derivations.
+- **Loom owns:** PR metadata, paginated Actions and Codex review history,
+  per-head delivery evidence, optional test inventory, and summary derivations.
 - **The agent owns:** comparison quality and waste-assessment text in the
   scratch log before assembly.
 
@@ -85,15 +85,28 @@ Measure wall-clock time, including owned wait time.
 
 - **Local executions:** normally `task format` / Loom pre-push and the UI demo
   contract. Heavy checks belong in GitHub Actions.
-- **GitHub Actions:** every repository-owned workflow run for the PR head.
+- **GitHub Actions:** every repository-owned workflow run on every observed PR
+  head between PR creation and merge. Expand every rerun attempt. Include queue
+  time from attempt creation through completion.
   - Dispatch manual E2E with the exact current PR head SHA.
   - Retain that SHA in the workflow run title so reruns, early cancellation,
     and artifact expiry cannot change or erase source attribution.
-  - Retain malformed dispatches as unattributed run evidence. Never let one
-    invalid manual input block post-merge assembly.
+  - Attribute a manual run only after the server-observed source-resolution
+    step succeeds. Retain malformed or rejected dispatches as unattributed run
+    evidence so one invalid input cannot block post-merge assembly.
   - Measure attempt one from run creation and reruns from `run_started_at`.
   - Snapshot optional runs that outlive the PR at `merged_at` with conclusion
     `nonterminal_at_merge` so post-merge assembly does not wait for them.
+- **Delivery heads:** one exact commit SHA per observed PR revision, including
+  the final merged implementation head. Order revisions by their first Actions
+  event creation, never by a later queued or manually rerun start.
+- **Review events:** Codex review request, result, finding count, and latency for
+  each exact head. Count request markers only from repository owners, members,
+  or collaborators. Treat Codex's thumbs-up reaction on the request as a clean
+  review outcome when no submitted or clean-comment result exists.
+- **Validation cycles:** each PR workflow run attempt, its exact head, duration,
+  conclusion, and seconds spent running after a newer head was first observed.
+- **Cancelled validation:** total duration of cancelled PR validation cycles.
 - **Cache telemetry:** flatten `cache-telemetry-*` artifacts into the scratch
   log when available. Sum counters. Never average job percentages.
 - **PR retriggers:** count complete validation cycles after the first.
@@ -122,7 +135,7 @@ Loom `--inventory` runs the list commands when the toolchains are available.
 
 ## YAML contract
 
-Files must be valid YAML with schema version `3`.
+Files must be valid YAML with schema version `4`.
 
 Required top-level keys:
 
@@ -131,6 +144,9 @@ Required top-level keys:
 - `test_inventory`
 - `local_executions`
 - `github_actions_runs`
+- `delivery_heads`
+- `review_events`
+- `validation_cycles`
 - `cache_telemetry`
 - `pr_retriggers`
 - `merge_attempts`
@@ -140,7 +156,14 @@ Required top-level keys:
 - `summary` values must be derivable from the detailed lists.
 - `test_inventory.total` must equal the sum of `by_type`.
 - `test_inventory.head_sha` must match `source_pr.head_sha`.
-- Historical schema versions `1` and `2` remain valid baselines.
+- `source_pr.head_sha` is the final PR head. `source_pr.merge_sha` is the merge
+  commit. They must not be conflated after squash merge.
+- Review and validation summary values must match their detailed per-head
+  evidence.
+- Review latency must derive from its event timestamps. Every validation cycle
+  must match one exact PR Actions run attempt. Delivery heads must remain in
+  strictly increasing first-observed order.
+- Historical schema versions `1`, `2`, and `3` remain valid baselines.
 
 ## Comparison and required action
 
