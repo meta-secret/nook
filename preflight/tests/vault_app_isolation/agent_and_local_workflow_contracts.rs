@@ -141,8 +141,8 @@ fn pr_audit_wrappers_accept_pat_only_authentication() -> anyhow::Result<()> {
     );
     assert_eq!(
         tasks.matches("task: pr:ci-agent:audit").count(),
-        3,
-        "preflight, readiness, and review must use the authenticated PR audit wrapper"
+        4,
+        "preflight, readiness, review, and stabilization must use the authenticated PR audit wrapper"
     );
     assert!(
         audit.contains("git remote get-url origin")

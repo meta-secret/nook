@@ -1,6 +1,6 @@
 ---
 name: efficient-pr-delivery
-description: Ship Nook PRs efficiently with advisory local Codex review, an exact-head Cloud review request alongside hosted checks, focused tasks on the configured Actions runner, complete validation, and readiness audits.
+description: Ship Nook PRs efficiently with advisory local Codex review, bounded exact-head review stabilization before hosted checks, focused tasks on the configured Actions runner, complete validation, and readiness audits.
 ---
 
 # Efficient PR Delivery

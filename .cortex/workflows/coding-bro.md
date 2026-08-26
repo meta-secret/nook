@@ -234,8 +234,9 @@ Default agent flow:
 6. **Validate on GitHub Actions:**
    - Dispatch focused `task remote` jobs as useful.
    - Run `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
-   - Loom dispatches repository-owned PR checks through `task pr:validate`.
-   - It then attempts the non-blocking exact-head Cloud review request.
+   - Loom stabilizes one idempotent exact-head Codex review through
+     `task pr:validate` before it dispatches repository-owned PR checks.
+   - Current findings stop dispatch. Review unavailability is bounded.
    - Codex is the only automatic review provider. Do not activate Cursor Bugbot.
    - Green status is necessary, but the full readiness audit must also pass.
    - See [code-review.md](code-review.md).
@@ -416,9 +417,11 @@ Use a descriptive branch name (`feat/…`, `fix/…`, `chore/…`).
 - Review sequence:
   - Run `task pr:review-local` before the first owner-authored push.
   - For a harness-created PR, run it after handoff instead.
-  - Complete validation requests exact-head Cloud review.
-  - Fix actionable feedback that arrives while checks run.
-  - If no feedback exists when checks finish, continue without waiting.
+  - Complete validation first stabilizes one exact-head Codex review.
+  - Fix current findings as one coherent batch before checks run.
+  - After three finding batches, perform comprehensive stabilization instead
+    of requesting another review immediately.
+  - An unavailable review cannot block validation beyond the bounded timeout.
   - Do not request or wait for other external reviewers.
 
 Follow [code-review.md](code-review.md).

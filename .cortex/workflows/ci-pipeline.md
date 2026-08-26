@@ -19,6 +19,11 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
   - Trigger: Explicit `ci:validate` / `ci:full-e2e` label
   - Purpose: Exact-head PR gate, including Rust ecosystem jobs
   - GitHub PAT: No
+- **[`pr-head-stabilization.yml`](../../.github/workflows/pr-head-stabilization.yml)**
+  - Trigger: PR head replacement through `pull_request_target`
+  - Purpose: Cancel active obsolete-head validation associated with that PR
+  - Permissions: `actions: write`, PR read, contents read; never checks out PR code
+  - GitHub PAT: No
 - **[`repository-policy.yml`](../../.github/workflows/repository-policy.yml)**
   - Trigger: Every PR; path-filtered Main changes
   - Purpose: Source architecture plus conditional Loom verification
@@ -102,6 +107,14 @@ See [issues.md](issues.md), [agent-statistics.md](agent-statistics.md), and
 - `ci:full-e2e` additionally runs the Main-equivalent local-provider + extension browser suite.
 - Keep independent long-running gates on separate ARC Pods.
 - Combine jobs only when measured setup savings exceed lost parallelism.
+
+**`pr-head-stabilization.yml`**
+
+- Runs from trusted default-branch workflow code when a PR head is replaced.
+- Reads the live PR head before each cancellation.
+- Cancels only active obsolete PR, Rust ecosystem, and Web research runs that
+  GitHub associates with the same PR.
+- Preserves current-head runs and never checks out or executes PR code.
 
 **`repository-policy.yml`**
 
@@ -861,19 +874,21 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Agents use `task remote TASK_NAMES=<a>,<b>` to reuse one job for a batch.
 - When the branch is ready, agents run `task pr:validate PR=<number>` or add
   `FULL_E2E=1`.
-- Validation dispatches repository-owned checks immediately.
-- It then requests one idempotent exact-head Cloud review.
-- The request prefers Codex and falls back to Cursor Bugbot when Codex reports
-  a usage limit.
-- Review-request failure does not block those checks.
+- Validation first requests one idempotent exact-head Codex review.
+- Current findings stop dispatch so they can be repaired as one coherent batch.
+- Review unavailability is bounded to 600 seconds when no current findings are
+  visible, after which repository-owned checks proceed.
+- Three finding batches open a circuit breaker and require comprehensive
+  stabilization before another complete validation attempt.
+- Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - They wait only for applicable repository-owned exact-head PR checks.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- The GitHub Actions runtime is the Cloud review window.
-- If no review feedback exists when checks finish, agents proceed without waiting.
+- Review belongs before GitHub Actions; do not request another review after
+  checks finish.
 - Claude, CodeRabbit, and other optional services are not requested or
-  awaited. Cursor Bugbot is requested only when Codex reports a usage limit.
+  awaited. Cursor Bugbot is not activated.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**

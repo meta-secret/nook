@@ -1,8 +1,4 @@
-import {
-  CODEX_AVAILABILITY_PROBE,
-  DEFAULT_REVIEW_CLOCK,
-  requestExactHeadReview,
-} from "./github-review.js";
+import { DEFAULT_REVIEW_CLOCK, requestExactHeadReview } from "./github-review.js";
 import {
   createOctokit,
   inspectPrFeedback,
@@ -44,15 +40,10 @@ export type ReviewStabilizationResult = {
 export async function runPrReviewRequest(): Promise<void> {
   const { prNumber, repository } = readReviewContext();
 
-  const availability = {
-    clock: DEFAULT_REVIEW_CLOCK,
-    probe: CODEX_AVAILABILITY_PROBE,
-  };
   const result = await requestExactHeadReview(
     createOctokit(),
     parseRepository(repository),
     prNumber,
-    availability,
   );
   console.log(prettyJson({ number: prNumber, repository, ...result }));
 }
@@ -66,11 +57,7 @@ export async function runPrReviewStabilization(): Promise<void> {
     inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
     now: () => Date.now(),
     pollIntervalMs: STABILIZATION_POLL_INTERVAL_MS,
-    requestReview: () =>
-      requestExactHeadReview(octokit, repoRef, prNumber, {
-        clock: DEFAULT_REVIEW_CLOCK,
-        probe: CODEX_AVAILABILITY_PROBE,
-      }),
+    requestReview: () => requestExactHeadReview(octokit, repoRef, prNumber),
     timeoutMs: waitSeconds * 1000,
     waitMs: DEFAULT_REVIEW_CLOCK.waitMs,
   });
@@ -98,32 +85,71 @@ export async function stabilizeExactHeadReview(
   input: ReviewStabilizationInput,
 ): Promise<ReviewStabilizationResult> {
   const deadline = input.now() + input.timeoutMs;
-  let review = await input.requestReview();
-  while (!review.settled && input.now() < deadline) {
+  let headSha = "";
+  let settled = false;
+  while (true) {
+    try {
+      const feedback = await input.inspectFeedback();
+      const findingState = classifyFeedbackState(feedback);
+      if (findingState !== ReviewStabilizationState.Clean) {
+        return { feedback, headSha, state: findingState };
+      }
+      if (settled) {
+        return {
+          feedback,
+          headSha,
+          state: ReviewStabilizationState.Clean,
+        };
+      }
+    } catch {
+      // Retry feedback inspection until the bounded deadline. If GitHub remains
+      // unavailable, validation may continue only through the timed-out state.
+    }
+    let settledAfterRequest = false;
+    if (!settled) {
+      try {
+        const review = await input.requestReview();
+        headSha = review.headSha;
+        settled = review.settled;
+        settledAfterRequest = review.settled;
+      } catch {
+        // A transient GitHub or provider error is bounded by the same deadline
+        // as review availability. It must not turn review into an unbounded gate.
+      }
+    }
+    if (settledAfterRequest) {
+      try {
+        const feedback = await input.inspectFeedback();
+        const findingState = classifyFeedbackState(feedback);
+        return { feedback, headSha, state: findingState };
+      } catch {
+        // A settled provider response proves review state changed after the
+        // first inspection. Retry its classification through the same bounded
+        // deadline when GitHub's feedback endpoints are temporarily split.
+      }
+    }
+    if (input.now() >= deadline) {
+      return {
+        headSha,
+        state: ReviewStabilizationState.TimedOut,
+      };
+    }
     const remainingMs = deadline - input.now();
     await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
-    review = await input.requestReview();
   }
-  if (!review.settled) {
-    return {
-      headSha: review.headSha,
-      state: ReviewStabilizationState.TimedOut,
-    };
-  }
-  const feedback = await input.inspectFeedback();
+}
+
+function classifyFeedbackState(
+  feedback: PrFeedbackSummary,
+): ReviewStabilizationState {
   const hasFindings =
+    feedback.currentIterationComments > 0 ||
     feedback.substantiveReviews > 0 ||
     feedback.unresolvedThreads > 0;
-  return {
-    feedback,
-    headSha: review.headSha,
-    state:
-      hasFindings && feedback.findingBatches >= 3
-        ? ReviewStabilizationState.CircuitBreaker
-        : hasFindings
-          ? ReviewStabilizationState.Findings
-          : ReviewStabilizationState.Clean,
-  };
+  if (!hasFindings) return ReviewStabilizationState.Clean;
+  return feedback.findingBatches >= 3
+    ? ReviewStabilizationState.CircuitBreaker
+    : ReviewStabilizationState.Findings;
 }
 
 function readReviewContext(): { prNumber: number; repository: string } {

@@ -20,6 +20,7 @@ const cleanFeedback: PrFeedbackSummary = {
     requested: false,
     settled: false,
   },
+  currentIterationComments: 0,
   findingBatches: 0,
   substantiveComments: 0,
   substantiveReviews: 0,
@@ -67,6 +68,7 @@ test("stabilizeExactHeadReview rejects settled actionable feedback", async () =>
 });
 
 test("stabilizeExactHeadReview opens the circuit after three finding batches", async () => {
+  let requests = 0;
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => ({
       ...cleanFeedback,
@@ -75,12 +77,16 @@ test("stabilizeExactHeadReview opens the circuit after three finding batches", a
     }),
     now: () => 0,
     pollIntervalMs: 15,
-    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    requestReview: async () => {
+      requests += 1;
+      return { headSha: "head-sha", settled: true };
+    },
     timeoutMs: 60,
     waitMs: async () => {},
   });
 
   assert.equal(result.state, ReviewStabilizationState.CircuitBreaker);
+  assert.equal(requests, 0);
 });
 
 test("stabilizeExactHeadReview ignores historical top-level comments", async () => {
@@ -117,5 +123,105 @@ test("stabilizeExactHeadReview permits validation after the bounded timeout", as
   });
 
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
-  assert.equal(feedbackInspections, 0);
+  assert.equal(feedbackInspections, 3);
+});
+
+test("stabilizeExactHeadReview stops on findings discovered at timeout", async () => {
+  let now = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      unresolvedThreads: 1,
+    }),
+    now: () => now,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    timeoutMs: 0,
+    waitMs: async (milliseconds) => {
+      now += milliseconds;
+    },
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+  assert.equal(result.feedback?.unresolvedThreads, 1);
+});
+
+test("stabilizeExactHeadReview reinspects a review settled at the deadline", async () => {
+  let inspections = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      inspections += 1;
+      return inspections === 1
+        ? cleanFeedback
+        : { ...cleanFeedback, unresolvedThreads: 1 };
+    },
+    now: () => 30,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 0,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+  assert.equal(result.feedback?.unresolvedThreads, 1);
+  assert.equal(inspections, 2);
+});
+
+test("stabilizeExactHeadReview stops on current-iteration comments", async () => {
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      currentIterationComments: 1,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+});
+
+test("stabilizeExactHeadReview bounds transient request errors", async () => {
+  let now = 0;
+  let requests = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => cleanFeedback,
+    now: () => now,
+    pollIntervalMs: 15,
+    requestReview: async () => {
+      requests += 1;
+      throw new Error("transient GitHub failure");
+    },
+    timeoutMs: 30,
+    waitMs: async (milliseconds) => {
+      now += milliseconds;
+    },
+  });
+
+  assert.equal(requests, 3);
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
+  assert.equal(result.headSha, "");
+});
+
+test("stabilizeExactHeadReview bounds feedback errors after review settles", async () => {
+  let now = 0;
+  let feedbackInspections = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      feedbackInspections += 1;
+      throw new Error("review threads unavailable");
+    },
+    now: () => now,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 30,
+    waitMs: async (milliseconds) => {
+      now += milliseconds;
+    },
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
+  assert.equal(feedbackInspections, 4);
 });

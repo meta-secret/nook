@@ -64,7 +64,7 @@ hand-written `docker run` commands.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
   opens the PR after you finish. It assigns and directly mentions the continuing
   task owner. That owner runs advisory local review on the committed head, then
-  dispatches complete validation and requests exact-head Cloud review.
+  stabilizes one exact-head Codex review before dispatching complete validation.
   The owner fixes failures/comments/conflicts, runs the exact-head readiness
   audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.

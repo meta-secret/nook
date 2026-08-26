@@ -15,6 +15,7 @@ const repoRef = { owner: "meta-secret", repo: "nook" };
 const headSha = "0123456789abcdef0123456789abcdef01234567";
 
 type MockComment = {
+  author_association?: string;
   body: string;
   id: number;
   user?: { login: string };
@@ -36,6 +37,9 @@ function mockOctokit(input: {
   sha?: string;
 }): Octokit {
   const comments = input.comments ?? [];
+  for (const comment of comments) {
+    comment.author_association ??= "OWNER";
+  }
   const createdBodies = input.createdBodies ?? [];
   const reviews = input.reviews ?? [];
   const sha = input.sha ?? "head-sha";
@@ -47,7 +51,11 @@ function mockOctokit(input: {
             input.createCalls.count += 1;
           }
           createdBodies.push(body);
-          comments.push({ body, id: comments.length + 1 });
+          comments.push({
+            author_association: "OWNER",
+            body,
+            id: comments.length + 1,
+          });
           return { data: { id: comments.length } };
         },
         listComments: async () => ({ data: comments }),
@@ -92,6 +100,28 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
   });
   assert.deepEqual(createdBodies, [
     "@codex review\n\n<!-- nook-codex-review:head-sha -->",
+  ]);
+});
+
+test("requestExactHeadReview ignores an untrusted exact-head marker", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        author_association: "NONE",
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
+        id: 1,
+      },
+    ],
+    createdBodies,
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, true);
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
   ]);
 });
 

@@ -86,22 +86,32 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         .find("task pr:review:stabilize")
         .context("direct validation must stabilize exact-head review first")?;
     let stabilized_head_position = direct_validation
-        .find(
-            "stabilized_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-        )
-        .context("direct validation must recheck the stabilized PR head")?;
+        .find("stabilized_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
+        .context("direct validation must recheck the stabilized PR head and base")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
+    let refreshed_base_position = direct_validation[stabilization_position..]
+        .find(".github/scripts/require-current-base.sh origin \"$stabilized_base_ref\"")
+        .map(|position| position + stabilization_position)
+        .context("direct validation must recheck the base after review stabilization")?;
+    let dispatched_head_position = direct_validation
+        .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
+        .context("direct validation must recheck the head and base after label dispatch")?;
     assert!(
         stabilization_position < stabilized_head_position
-            && stabilized_head_position < validation_label_position,
+            && stabilized_head_position < refreshed_base_position
+            && refreshed_base_position < validation_label_position,
         "complete validation must start only after bounded exact-head review stabilization"
+    );
+    assert!(
+        validation_label_position < dispatched_head_position,
+        "complete validation must reject a head change during label dispatch"
     );
     for required in [
         "pr:review-local:",
         "codex review --base origin/main",
-        "Cloud review will request Cursor Bugbot if Codex reports a usage limit.",
+        "Cloud review remains Codex-only and its bounded wait cannot block delivery indefinitely.",
         "pr:review:",
         "CI_AGENT_CMD: pr-review",
         "pr:review:stabilize:",
@@ -118,23 +128,66 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
     );
     assert!(
         direct_validation.contains(
-            "changed head during review stabilization; validate the replacement head explicitly.\" >&2\n          exit 2"
+            "changed head or base during review stabilization; validate the replacement state explicitly.\" >&2\n          exit 2"
         ),
-        "a head change during stabilization must fail so the replacement head is validated"
+        "a head or base change during stabilization must fail so the replacement state is validated"
+    );
+    assert!(
+        direct_validation.contains(
+            "changed head or base while validation was dispatched; removed $validation_label from the replacement state."
+        ),
+        "a head or base change during label dispatch must remove the replacement-state label"
+    );
+    assert!(
+        direct_validation.contains("gh run cancel \"$run_id\""),
+        "a replacement-head validation dispatched during the race must be cancelled"
+    );
+    for required in [
+        "for run_status in requested waiting pending queued in_progress",
+        "any(.pull_requests[]?; .number == $REQUESTED_PR)",
+        "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\")",
+    ] {
+        assert!(
+            direct_validation.contains(required),
+            "replacement-head dispatch cleanup missing: {required}"
+        );
+    }
+    assert!(
+        !direct_validation.contains(
+            "select(.name == \\\"PR\\\" or .name == \\\"Rust ecosystem checks\\\" or .name == \\\"Web research\\\")"
+        ),
+        "label-race cleanup must preserve independently synchronized Web research runs"
     );
 
     let replacement_head = read_fallible(".github/workflows/pr-head-stabilization.yml")?;
     for required in [
-        "pull_request:",
+        "pull_request_target:",
         "types: [synchronize]",
-        "group: pr-${{ github.event.pull_request.number }}",
-        "cancel-in-progress: true",
+        "actions: write",
+        "pull-requests: read",
+        "github.rest.actions.listWorkflowRuns",
+        "github.rest.pulls.get",
+        "run.head_sha !== livePr.head.sha",
+        "run.head_sha === currentPr.head.sha",
+        "run.pull_requests.some",
+        "github.rest.actions.cancelWorkflowRun",
+        "\"PR\"",
+        "\"Rust ecosystem checks\"",
+        "\"Web research\"",
     ] {
         assert!(
             replacement_head.contains(required),
             "replacement-head cancellation contract missing: {required}"
         );
     }
+    assert!(
+        !replacement_head.contains("concurrency:"),
+        "a delayed synchronize run must not share a group that can cancel current-head validation"
+    );
+    assert!(
+        !replacement_head.contains("actions/checkout"),
+        "privileged replacement-head cancellation must never checkout PR code"
+    );
     Ok(())
 }
 
@@ -385,8 +438,8 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
         remote_tasks
             .matches(".github/scripts/require-current-base.sh")
             .count(),
-        2,
-        "focused expensive dispatch and complete PR validation must share the freshness guard"
+        3,
+        "focused expensive dispatch and both complete-validation boundaries must enforce freshness"
     );
     assert!(remote_tasks.contains("baseRefName"));
 
@@ -794,7 +847,7 @@ fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
         );
     }
     for required in [
-        "pr_sha=\"$(gh pr view \"$REQUESTED_PR\"",
+        "pr_state=\"$(gh pr view \"$REQUESTED_PR\"",
         "if [ \"$local_sha\" != \"$pr_sha\" ]",
         "--remove-label \"$validation_label\"",
         "--add-label \"$validation_label\"",

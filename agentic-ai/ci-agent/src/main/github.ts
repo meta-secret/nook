@@ -11,6 +11,7 @@ import {
   isCursorReviewer,
   isExactHeadReviewRequestComment,
   isSubmittedReviewState,
+  isTrustedExactHeadReviewRequest,
 } from "./github-review.js";
 import { createLogger } from "./logger.js";
 
@@ -22,6 +23,7 @@ export {
   codexReviewRequestMarker,
   cursorReviewRequestMarker,
   requestExactHeadReview,
+  isTrustedExactHeadReviewRequest,
 } from "./github-review.js";
 
 const log = createLogger("github");
@@ -254,6 +256,7 @@ export type PrFeedbackSummary = {
     requested: boolean;
     settled: boolean;
   };
+  currentIterationComments: number;
   findingBatches: number;
   substantiveComments: number;
   substantiveReviews: number;
@@ -327,7 +330,11 @@ export async function inspectPrFeedback(
   const marker = codexReviewRequestMarker(pr.head.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
   const reviewRequests = issueComments.filter((comment) =>
-    comment.body?.includes(marker),
+    isTrustedExactHeadReviewRequest({
+      authorAssociation: comment.author_association,
+      body: comment.body ?? "",
+      marker,
+    }),
   );
   const cursorReviewRequests = issueComments.filter((comment) =>
     comment.body?.includes(cursorMarker),
@@ -368,8 +375,23 @@ export async function inspectPrFeedback(
       !isRepositoryStatusComment(comment.body ?? "") &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
+  const latestRequestAt = reviewRequests.reduce(
+    (latest, request) =>
+      request.created_at > latest ? request.created_at : latest,
+    "",
+  );
+  const currentIterationComments = substantiveComments.filter(
+    (comment) =>
+      latestRequestAt.length > 0 &&
+      comment.created_at >= latestRequestAt &&
+      !isNonActionableReviewBody(comment.body ?? ""),
+  );
   const substantiveReviews = reviews.filter((review) => {
-    if (review.commit_id !== pr.head.sha || review.state === "APPROVED") {
+    if (
+      review.commit_id !== pr.head.sha ||
+      !isSubmittedReviewState(review.state) ||
+      review.state === "APPROVED"
+    ) {
       return false;
     }
     if (review.state === "CHANGES_REQUESTED") {
@@ -379,7 +401,8 @@ export async function inspectPrFeedback(
     return (
       body.length > 0 &&
       !isCodexReviewStatusBody(body, review.user) &&
-      !isCursorReviewStatusBody(body, review.user)
+      !isCursorReviewStatusBody(body, review.user) &&
+      !isNonActionableReviewBody(body)
     );
   });
 
@@ -397,6 +420,20 @@ export async function inspectPrFeedback(
       };
     },
   );
+  const normalizedReviews: ReviewFindingReview[] = reviews.map((review) => ({
+    active: isSubmittedReviewState(review.state),
+    actionable: isActionableReviewBody({
+      body: review.body?.trim() ?? "",
+      state: review.state,
+      user: review.user,
+    }),
+    reviewId: review.id,
+    reviewerLogin: review.user?.login ?? "",
+  }));
+  const findingBatchRequest: AutomatedFindingBatchRequest = {
+    comments: normalizedReviewComments,
+    reviews: normalizedReviews,
+  };
 
   return {
     codexReview: {
@@ -411,7 +448,8 @@ export async function inspectPrFeedback(
       requested: cursorReviewRequests.length > 0,
       settled: currentHeadCursorReview,
     },
-    findingBatches: countAutomatedFindingBatches(normalizedReviewComments),
+    currentIterationComments: currentIterationComments.length,
+    findingBatches: countAutomatedFindingBatches(findingBatchRequest),
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,
@@ -424,17 +462,44 @@ type ReviewFindingComment = {
   readonly reviewId: number;
 };
 
+type ReviewFindingReview = {
+  readonly active: boolean;
+  readonly actionable: boolean;
+  readonly reviewerLogin: string;
+  readonly reviewId: number;
+};
+
+type AutomatedFindingBatchRequest = {
+  readonly comments: readonly ReviewFindingComment[];
+  readonly reviews: readonly ReviewFindingReview[];
+};
+
 export function countAutomatedFindingBatches(
-  comments: readonly ReviewFindingComment[],
+  request: AutomatedFindingBatchRequest,
 ): number {
   const reviewIds = new Set<number>();
-  for (const comment of comments) {
+  const activeAutomatedReviewIds = new Set(
+    request.reviews
+      .filter((review) => {
+        const reviewer = { login: review.reviewerLogin };
+        return (
+          review.active &&
+          (isCodexReviewer(reviewer) || isCursorReviewer(reviewer))
+        );
+      })
+      .map((review) => review.reviewId),
+  );
+  for (const comment of request.comments) {
     if (comment.isReply) continue;
-    const reviewer = { login: comment.reviewerLogin };
-    if (!isCodexReviewer(reviewer) && !isCursorReviewer(reviewer)) {
-      continue;
+    if (activeAutomatedReviewIds.has(comment.reviewId)) {
+      reviewIds.add(comment.reviewId);
     }
-    if (comment.reviewId > 0) reviewIds.add(comment.reviewId);
+  }
+  for (const review of request.reviews) {
+    if (!review.actionable) continue;
+    const reviewer = { login: review.reviewerLogin };
+    if (!isCodexReviewer(reviewer) && !isCursorReviewer(reviewer)) continue;
+    if (review.reviewId > 0) reviewIds.add(review.reviewId);
   }
   return reviewIds.size;
 }
@@ -476,6 +541,35 @@ function isRepositoryStatusComment(body: string): boolean {
     trimmed.includes("Codex usage limits for code reviews") ||
     // Cursor posts this when Bugbot is not enabled; it is status, not a finding.
     trimmed.includes("<!-- BUGBOT_FREE_TIER_DISABLED_UPSELL -->")
+  );
+}
+
+function isNonActionableReviewBody(body: string): boolean {
+  const normalized = body
+    .trim()
+    .toLowerCase()
+    .replace(/[.!\s]+$/g, "");
+  return ["lgtm", "looks good", "nice work", "thank you", "thanks"].includes(
+    normalized,
+  );
+}
+
+function isActionableReviewBody(input: {
+  readonly body: string;
+  readonly state: string;
+  readonly user: unknown;
+}): boolean {
+  if (!isCodexReviewer(input.user) && !isCursorReviewer(input.user)) {
+    return false;
+  }
+  if (!isSubmittedReviewState(input.state)) return false;
+  if (input.state === "APPROVED") return false;
+  if (input.state === "CHANGES_REQUESTED") return true;
+  return (
+    input.body.length > 0 &&
+    !isCodexReviewStatusBody(input.body, input.user) &&
+    !isCursorReviewStatusBody(input.body, input.user) &&
+    !isNonActionableReviewBody(input.body)
   );
 }
 

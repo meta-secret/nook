@@ -1,25 +1,84 @@
 name: Cancel obsolete PR validation
 
 on:
-  pull_request:
+  # This workflow never checks out or executes PR code. pull_request_target
+  # preserves actions:write for safe cancellation of fork and Dependabot runs.
+  pull_request_target:
     types: [synchronize]
 
 permissions:
+  actions: write
   contents: read
-
-# PR validation uses this same repository-wide group. A replacement head therefore
-# cancels the prior expensive run before another validation request is made.
-concurrency:
-  group: pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  pull-requests: read
 
 jobs:
-  replacement-head:
-    name: Register replacement head
+  obsolete-heads:
+    name: Cancel obsolete validation heads
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
-    timeout-minutes: 1
+    timeout-minutes: 2
     steps:
-      - name: Record cancellation boundary
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: echo "Replacement PR head is ${HEAD_SHA}; obsolete validation is cancelled."
+      - name: Cancel active validation for replaced heads
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const prNumber = context.payload.pull_request.number;
+            const validationWorkflows = [
+              { file: "pr.yml", name: "PR" },
+              { file: "rust-ecosystem.yml", name: "Rust ecosystem checks" },
+              { file: "web-research.yml", name: "Web research" },
+            ];
+            const activeStatuses = [
+              "queued",
+              "in_progress",
+              "requested",
+              "waiting",
+              "pending",
+            ];
+            const { data: livePr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+            const runs = (
+              await Promise.all(
+                validationWorkflows.flatMap((workflow) =>
+                  activeStatuses.map((status) =>
+                    github.paginate(github.rest.actions.listWorkflowRuns, {
+                      ...context.repo,
+                      workflow_id: workflow.file,
+                      branch: livePr.head.ref,
+                      event: "pull_request",
+                      status,
+                      per_page: 100,
+                    })
+                  )
+                )
+              )
+            ).flat();
+            const obsoleteRuns = runs.filter((run) =>
+              run.head_sha !== livePr.head.sha &&
+              validationWorkflows.some((workflow) => workflow.name === run.name) &&
+              run.pull_requests.some((pullRequest) =>
+                pullRequest.number === prNumber
+              )
+            );
+            for (const run of obsoleteRuns) {
+              const { data: currentPr } = await github.rest.pulls.get({
+                ...context.repo,
+                pull_number: prNumber,
+              });
+              if (run.head_sha === currentPr.head.sha) {
+                core.info(`Keeping current-head ${run.name} run ${run.id}.`);
+                continue;
+              }
+              core.info(
+                `Cancelling obsolete ${run.name} run ${run.id} at ${run.head_sha}`
+              );
+              await github.rest.actions.cancelWorkflowRun({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                run_id: run.id,
+              });
+            }
+            core.info(
+              `Inspected ${obsoleteRuns.length} obsolete validation run(s) for PR #${prNumber}; live head is ${livePr.head.sha}.`
+            );

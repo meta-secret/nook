@@ -79,6 +79,7 @@ type GitHubText =
   | { kind: GitHubTextKind.Present; value: string };
 
 type IssueComment = {
+  authorAssociation: string;
   body: GitHubText;
   id: number;
   user: unknown;
@@ -108,6 +109,18 @@ export function isExactHeadReviewRequestComment(body: string): boolean {
   return (
     body.includes("<!-- nook-codex-review:") ||
     body.includes("<!-- nook-cursor-review:")
+  );
+}
+
+export function isTrustedExactHeadReviewRequest(input: {
+  readonly authorAssociation: string;
+  readonly body: string;
+  readonly marker: string;
+}): boolean {
+  const trustedAssociations = new Set(["OWNER", "MEMBER", "COLLABORATOR"]);
+  return (
+    trustedAssociations.has(input.authorAssociation) &&
+    input.body.trim() === `@codex review\n\n${input.marker}`
   );
 }
 
@@ -371,8 +384,14 @@ async function snapshotFrom(
 ): Promise<ReviewSnapshot> {
   const codexMarker = codexReviewRequestMarker(headSha);
   const cursorMarker = cursorReviewRequestMarker(headSha);
-  const codexRequests = comments.filter((comment) =>
-    githubTextIncludes({ marker: codexMarker, text: comment.body }),
+  const codexRequests = comments.filter(
+    (comment) =>
+      comment.body.kind === GitHubTextKind.Present &&
+      isTrustedExactHeadReviewRequest({
+        authorAssociation: comment.authorAssociation,
+        body: comment.body.value,
+        marker: codexMarker,
+      }),
   );
   const cursorRequests = comments.filter((comment) =>
     githubTextIncludes({ marker: cursorMarker, text: comment.body }),
@@ -398,7 +417,7 @@ async function snapshotFrom(
   );
   const lastCodexRequestIndex = comments.reduce(
     (lastIndex, comment, index) =>
-      githubTextIncludes({ marker: codexMarker, text: comment.body })
+      codexRequests.includes(comment)
         ? index
         : lastIndex,
     -1,
@@ -533,6 +552,7 @@ async function listIssueComments(input: {
     },
   );
   return comments.map((comment) => ({
+    authorAssociation: comment.author_association,
     body: githubTextFrom(comment.body),
     id: comment.id,
     user: comment.user,

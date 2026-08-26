@@ -106,8 +106,8 @@ Cursor, CodeRabbit, or another service:
 4. Commit and push the completed fix.
 5. Use focused hosted tasks as useful.
 6. If complete validation was already requested, restart it for the replacement
-   head. This also requests exact-head Cloud review. Otherwise start it when
-   that head is ready for the final gate.
+   head. This first stabilizes one exact-head Codex review. Otherwise start it
+   when that head is ready for the final gate.
 7. Reply on the original thread or comment with the fix and validation when a
    targeted reply is possible.
 8. Resolve only after the targeted reply is visible and the finding is fixed or

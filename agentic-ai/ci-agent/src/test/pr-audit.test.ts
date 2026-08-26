@@ -429,12 +429,14 @@ function createMockOctokit(options: MockOptions): Octokit {
         options.codexReview === MockCodexReview.DuplicateReaction
           ? [
               {
-                body: `Please review this exact head.\n\n@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                author_association: "OWNER",
+                body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
                 id: 77,
               },
               ...(options.codexReview === MockCodexReview.DuplicateReaction
                 ? [
                     {
+                      author_association: "OWNER",
                       body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
                       id: 78,
                     },
