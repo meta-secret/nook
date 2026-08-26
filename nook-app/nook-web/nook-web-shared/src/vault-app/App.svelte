@@ -157,8 +157,11 @@
   function syncRoute(event?: Event) {
     if (!IS_SIMPLE_APP) {
       const invitationRequest = consumeSentinelGenesisRequestFromLocation()
-      if (invitationRequest || event?.type === 'popstate')
+      if (invitationRequest || event?.type === 'popstate') {
         sentinelInvitationRequest = invitationRequest
+        if (isSentinelParticipantResponsePending(pendingVaultCreationState))
+          finishPendingCreation()
+      }
       const participantResponse =
         consumeSentinelGenesisParticipantResponseFromLocation()
       if (participantResponse) sentinelParticipantResponse = participantResponse
@@ -243,7 +246,6 @@
       kind: ExtensionConnectIntentKind.Absent,
     }
   }
-
   function finishExtensionConnect(approved = false) {
     if (!approved) {
       extensionIdentityRequestState = {
@@ -263,7 +265,6 @@
       kind: ExtensionConnectIntentKind.Absent,
     }
   }
-
   onMount(() => {
     const mountBrowserLifecycleArgs: Parameters<
       typeof mountBrowserLifecycle
@@ -280,7 +281,6 @@
     }
     return mountBrowserLifecycle(mountBrowserLifecycleArgs)
   })
-
   $effect(() => {
     const updateApplicationDocumentArgs: Parameters<
       typeof updateApplicationDocument

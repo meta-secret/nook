@@ -430,7 +430,35 @@ test.describe('passkey device-key protection', () => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })
     const invitation = await signedSentinelInvitation()
-    await page.goto(`/vault#sentinel-request=${encodeURIComponent(invitation)}`)
+    await page.goto('/vault')
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, invitation)
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await page.getByTestId('sentinel-genesis-connect-device').click()
+    await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.goBack()
+    await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
+    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, invitation)
     await expect(
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
