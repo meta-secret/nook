@@ -1,10 +1,14 @@
 import {
   appendFile,
+  mkdtemp,
   readFile,
+  rename,
+  rm,
   symlink,
   unlink,
   writeFile,
 } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, setDefaultTimeout, test } from 'bun:test';
 import { EXECUTABLE_SKILL_CLOSURE_LIMITS } from '../../src/executable-skills/closure.ts';
@@ -23,6 +27,7 @@ import {
 setDefaultTimeout(60_000);
 
 const SUPPORT_PATH = '.agents/skills/fixture/src/support.ts';
+const removeOptions = { force: true, recursive: true } as const;
 
 function closureRequest(
   repositoryRoot: string,
@@ -41,7 +46,7 @@ test('enforces exact closure file and import-edge bounds', async () => {
   const fixtureRequest = { runnerSource: 'export {};\n' };
   const fixture = await createExecutableSkillFixture(fixtureRequest);
   try {
-    const dependencyCount = EXECUTABLE_SKILL_CLOSURE_LIMITS.files - 4;
+    const dependencyCount = EXECUTABLE_SKILL_CLOSURE_LIMITS.files - 5;
     const imports: string[] = [];
     for (let index = 0; index < dependencyCount; index += 1) {
       const name = `dependency-${index}.ts`;
@@ -117,6 +122,7 @@ test('enforces the aggregate closure byte bound plus one', async () => {
       FIXTURE_REGISTRATION.manifestPath,
       '.agents/skills/package.json',
       '.agents/skills/bun.lock',
+      '.cortex/architecture/fixture.md',
     ];
     let fixedBytes = 0;
     for (const relativePath of metadataPaths) {
@@ -213,6 +219,29 @@ test('rejects no-follow, nonregular, oversized, and growing descriptors', async 
       if (growth !== false) clearInterval(growth);
       await fixture.dispose();
     }
+  }
+});
+
+test('rejects a symlink in a closure path ancestor', async () => {
+  const fixtureRequest = {};
+  const fixture = await createExecutableSkillFixture(fixtureRequest);
+  const outsideRoot = await mkdtemp(
+    path.join(tmpdir(), 'nook-skill-ancestor-symlink-'),
+  );
+  try {
+    const sourceDirectory = path.join(
+      fixture.repositoryRoot,
+      '.agents/skills/fixture/src',
+    );
+    const outsideDirectory = path.join(outsideRoot, 'src');
+    await rename(sourceDirectory, outsideDirectory);
+    await symlink(outsideDirectory, sourceDirectory);
+    await expect(
+      planExecutableSkillClosure(closureRequest(fixture.repositoryRoot)),
+    ).rejects.toThrow('worktree/index drift');
+  } finally {
+    await fixture.dispose();
+    await rm(outsideRoot, removeOptions);
   }
 });
 

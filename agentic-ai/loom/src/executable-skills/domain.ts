@@ -7,6 +7,7 @@ export enum ExecutableSkillClosureEntryRole {
   LockProvenance = 'lock-provenance',
   ManifestProvenance = 'manifest-provenance',
   PackageProvenance = 'package-provenance',
+  PolicyProvenance = 'policy-provenance',
 }
 
 export type ExecutableSkillClosureEntry = {

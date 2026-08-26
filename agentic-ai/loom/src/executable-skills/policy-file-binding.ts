@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -78,10 +78,14 @@ export async function isBoundPolicyFileSafe(
       request.repositoryRoot,
       request.relativePath,
     );
+    const canonicalRoot = await realpath(request.repositoryRoot);
+    const expectedPath = path.join(canonicalRoot, request.relativePath);
+    if ((await realpath(absolutePath)) !== expectedPath) return false;
     const flags =
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
     handle = await open(absolutePath, flags);
     const stat = await handle.stat();
+    if ((await realpath(absolutePath)) !== expectedPath) return false;
     assertPolicyAuditActive(request);
     if (
       !stat.isFile() ||

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { isUtf8 } from 'node:buffer';
 import { constants } from 'node:fs';
-import { open } from 'node:fs/promises';
+import { open, realpath } from 'node:fs/promises';
 import type { FileHandle } from 'node:fs/promises';
 import path from 'node:path';
 import { ExecutableSkillClosureEntryRole } from './domain.ts';
@@ -55,13 +55,20 @@ export type ExecutableSkillSourceAnalyzer = (
   request: RunExecutableSkillSourceAnalysisRequest,
 ) => Promise<ExecutableSkillSourceAnalysis>;
 
-export type ExecutableSkillClosureDependencies = {
+type ExecutableSkillClosureDependencies = {
   readonly analyzeSource: ExecutableSkillSourceAnalyzer;
 };
 
-export type PlanExecutableSkillClosureWithDependenciesRequest = {
+type PlanExecutableSkillClosureWithDependenciesRequest = {
   readonly dependencies: ExecutableSkillClosureDependencies;
   readonly request: PlanExecutableSkillClosureRequest;
+};
+
+export type ExecutableSkillClosureCandidate = {
+  readonly closureSha256: string;
+  readonly entries: readonly ExecutableSkillClosureEntry[];
+  readonly runnerRelativePath: string;
+  readonly sourceTree: string;
 };
 
 type ReadTreeFileRequest = {
@@ -73,6 +80,7 @@ type ReadTreeFileRequest = {
 const PACKAGE_PATH = '.agents/skills/package.json';
 const LOCK_PATH = '.agents/skills/bun.lock';
 const TREE_HASH = /^[0-9a-f]{40}$/u;
+const sealedClosurePlans = new WeakSet<ExecutableSkillClosurePlan>();
 const executableSkillClosureLimits = {
   bytes: 8 * 1024 * 1024,
   edges: 64,
@@ -92,12 +100,16 @@ export async function planExecutableSkillClosure(
     dependencies,
     request,
   };
-  return await planExecutableSkillClosureWithDependencies(execution);
+  const candidate = await buildExecutableSkillClosureCandidate(execution);
+  const planValue: ExecutableSkillClosurePlan = { ...candidate };
+  const plan = Object.freeze(planValue);
+  sealedClosurePlans.add(plan);
+  return plan;
 }
 
-export async function planExecutableSkillClosureWithDependencies(
+export async function buildExecutableSkillClosureCandidate(
   execution: PlanExecutableSkillClosureWithDependenciesRequest,
-): Promise<ExecutableSkillClosurePlan> {
+): Promise<ExecutableSkillClosureCandidate> {
   const request = execution.request;
   try {
     return await planExecutableSkillClosureInternal(execution);
@@ -110,9 +122,15 @@ export async function planExecutableSkillClosureWithDependencies(
   }
 }
 
+export function isExecutableSkillClosurePlanSealed(
+  plan: ExecutableSkillClosurePlan,
+): boolean {
+  return sealedClosurePlans.has(plan);
+}
+
 async function planExecutableSkillClosureInternal(
   execution: PlanExecutableSkillClosureWithDependenciesRequest,
-): Promise<ExecutableSkillClosurePlan> {
+): Promise<ExecutableSkillClosureCandidate> {
   const request = execution.request;
   assertClosureActive(request);
   if (!TREE_HASH.test(request.sourceTree)) {
@@ -256,8 +274,19 @@ async function planExecutableSkillClosureInternal(
     signal: request.signal,
   };
   const manifestText = await readClosureMetadata(manifestFileRequest);
+  const policyContents = new Map<string, string>();
+  for (const relativePath of request.definition.manifest.policyPaths) {
+    const policyRequest: ReadClosureFileRequest = {
+      deadlineExpiresAt: request.deadlineExpiresAt,
+      relativePath,
+      repositoryRoot: request.repositoryRoot,
+      signal: request.signal,
+      sourceTree,
+    };
+    policyContents.set(relativePath, await readClosureMetadata(policyRequest));
+  }
   try {
-    assertClosureFileCount(sources.size + 3);
+    assertClosureFileCount(sources.size + 3 + policyContents.size);
   } catch (error) {
     const failureRequest: ClosureAuditErrorRequest = {
       error: error instanceof Error ? error : '',
@@ -296,7 +325,14 @@ async function planExecutableSkillClosureInternal(
       current: aggregateBytes,
       content: manifestText,
     };
-    boundedClosureBytes(manifestBytesRequest);
+    aggregateBytes = boundedClosureBytes(manifestBytesRequest);
+    for (const content of policyContents.values()) {
+      const policyBytesRequest: BoundedClosureBytesRequest = {
+        current: aggregateBytes,
+        content,
+      };
+      aggregateBytes = boundedClosureBytes(policyBytesRequest);
+    }
   } catch (error) {
     const failureRequest: ClosureAuditErrorRequest = {
       error: error instanceof Error ? error : '',
@@ -358,6 +394,14 @@ async function planExecutableSkillClosureInternal(
     role: ExecutableSkillClosureEntryRole.ManifestProvenance,
   };
   entryInputs.set(request.definition.manifestPath, manifestEntry);
+  for (const [relativePath, content] of policyContents) {
+    const policyEntry: ClosureEntryInput = {
+      content,
+      relativePath,
+      role: ExecutableSkillClosureEntryRole.PolicyProvenance,
+    };
+    entryInputs.set(relativePath, policyEntry);
+  }
   const entries: ExecutableSkillClosureEntry[] = [];
   for (const relativePath of [...entryInputs.keys()].sort()) {
     const entryInput = entryInputs.get(relativePath);
@@ -484,10 +528,19 @@ async function assertWorktreeMatches(
   let handle: FileHandle | false = false;
   let worktreeMatches = false;
   try {
+    const canonicalRoot = await realpath(request.repositoryRoot);
+    const expectedPath = path.join(canonicalRoot, request.relativePath);
+    const canonicalPath = await realpath(absolutePath);
+    if (canonicalPath !== expectedPath) {
+      throw new Error('Executable skill closure path traverses a symlink.');
+    }
     const flags =
       constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK;
     handle = await open(absolutePath, flags);
     const stat = await handle.stat();
+    if ((await realpath(absolutePath)) !== expectedPath) {
+      throw new Error('Executable skill closure path traverses a symlink.');
+    }
     assertClosureActive(request);
     if (stat.isFile() && stat.size <= EXECUTABLE_SKILL_CLOSURE_LIMITS.bytes) {
       const indexedBytes = Buffer.byteLength(request.indexed, 'utf8');
@@ -771,18 +824,103 @@ function assertNoDeclaredRuntimePackages(packageText: string): void {
   if (!isRecord(transport)) {
     throw new Error('Executable skill package root must be an exact object.');
   }
-  const propertyRequest = { record: transport, key: 'dependencies' };
-  const dependencies = untrustedYamlProperty(propertyRequest);
-  if (dependencies.presence === UntrustedYamlPropertyPresence.Absent) return;
-  if (!isRecord(dependencies.value)) {
+  const allowedKeys = new Set([
+    'dependencies',
+    'devDependencies',
+    'name',
+    'packageManager',
+    'private',
+    'scripts',
+    'type',
+    'version',
+  ]);
+  const unexpectedKey = Object.keys(transport).find(
+    (key) => !allowedKeys.has(key),
+  );
+  if (unexpectedKey) {
     throw new Error(
-      'Executable skill package dependencies must be an exact object.',
+      `Executable skill package forbids authority field: ${unexpectedKey}`,
     );
   }
-  if (Object.keys(dependencies.value).length > 0) {
+  const propertyRequest = { record: transport, key: 'dependencies' };
+  const dependencies = untrustedYamlProperty(propertyRequest);
+  if (dependencies.presence === UntrustedYamlPropertyPresence.Present) {
+    if (!isRecord(dependencies.value)) {
+      throw new Error(
+        'Executable skill package dependencies must be an exact object.',
+      );
+    }
+    if (Object.keys(dependencies.value).length > 0) {
+      throw new Error(
+        'Executable skill forbids declared external runtime packages.',
+      );
+    }
+  }
+  assertSafeDevelopmentPackages(transport);
+  assertSafePackageScripts(transport);
+}
+
+type ExecutableSkillPackageTransport = Readonly<
+  Record<string, UntrustedYamlNode>
+>;
+
+function assertSafeDevelopmentPackages(
+  transport: ExecutableSkillPackageTransport,
+): void {
+  const propertyRequest = { record: transport, key: 'devDependencies' };
+  const development = untrustedYamlProperty(propertyRequest);
+  if (development.presence === UntrustedYamlPropertyPresence.Absent) return;
+  if (!isRecord(development.value)) {
     throw new Error(
-      'Executable skill forbids declared external runtime packages.',
+      'Executable skill devDependencies must be an exact object.',
     );
+  }
+  const allowed = new Set([
+    '@eslint/js',
+    '@types/bun',
+    'eslint',
+    'prettier',
+    'typescript',
+    'typescript-eslint',
+  ]);
+  for (const [name, version] of Object.entries(development.value)) {
+    if (
+      !allowed.has(name) ||
+      typeof version !== 'string' ||
+      !/^\d+\.\d+\.\d+$/u.test(version)
+    ) {
+      throw new Error(
+        `Executable skill package forbids development package: ${name}`,
+      );
+    }
+  }
+}
+
+function assertSafePackageScripts(
+  transport: ExecutableSkillPackageTransport,
+): void {
+  const propertyRequest = { record: transport, key: 'scripts' };
+  const scripts = untrustedYamlProperty(propertyRequest);
+  if (scripts.presence === UntrustedYamlPropertyPresence.Absent) return;
+  if (!isRecord(scripts.value)) {
+    throw new Error(
+      'Executable skill package scripts must be an exact object.',
+    );
+  }
+  const lifecycleNames = new Set([
+    'install',
+    'postinstall',
+    'preinstall',
+    'prepare',
+    'prepack',
+    'postpack',
+  ]);
+  for (const [name, command] of Object.entries(scripts.value)) {
+    if (lifecycleNames.has(name) || typeof command !== 'string') {
+      throw new Error(
+        `Executable skill package forbids lifecycle script: ${name}`,
+      );
+    }
   }
 }
 

@@ -1,5 +1,8 @@
 import { describe, expect, setDefaultTimeout, test } from 'bun:test';
-import type { PlanExecutableSkillClosureRequest } from '../../src/executable-skills/closure.ts';
+import {
+  isExecutableSkillClosurePlanSealed,
+  type PlanExecutableSkillClosureRequest,
+} from '../../src/executable-skills/closure.ts';
 import { ExecutableSkillClosureEntryRole } from '../../src/executable-skills/domain.ts';
 import {
   createExecutableSkillFixture,
@@ -46,6 +49,7 @@ describe('immutable executable skill closure', () => {
       expect(Object.isFrozen(first)).toBe(true);
       expect(Object.isFrozen(first.entries)).toBe(true);
       expect(first.entries.every((entry) => Object.isFrozen(entry))).toBe(true);
+      expect(isExecutableSkillClosurePlanSealed(first)).toBe(false);
       const paths = first.entries.map((entry) => entry.relativePath);
       expect(paths).toEqual([...paths].sort());
       const sourceEntries = first.entries.filter(
@@ -104,6 +108,33 @@ describe('immutable executable skill closure', () => {
     } finally {
       await first.dispose();
       await second.dispose();
+    }
+  });
+
+  test('binds declared policy bytes into the closure identity', async () => {
+    const fixture = await createDefaultFixture();
+    try {
+      const firstPlan = await planExecutableSkillClosure(
+        closureRequest(fixture.repositoryRoot),
+      );
+      const writeRequest = {
+        content: '# Changed fixture policy\n',
+        relativePath: '.cortex/architecture/fixture.md',
+        repositoryRoot: fixture.repositoryRoot,
+      };
+      await writeFixtureFile(writeRequest);
+      stageFixturePath(writeRequest);
+      const secondPlan = await planExecutableSkillClosure(
+        closureRequest(fixture.repositoryRoot),
+      );
+      expect(firstPlan.closureSha256).not.toBe(secondPlan.closureSha256);
+      expect(
+        secondPlan.entries.find(
+          (entry) => entry.relativePath === writeRequest.relativePath,
+        )?.role,
+      ).toBe(ExecutableSkillClosureEntryRole.PolicyProvenance);
+    } finally {
+      await fixture.dispose();
     }
   });
 
@@ -178,6 +209,12 @@ describe('immutable executable skill closure', () => {
       '{"dependencies":"package"}',
       '{"dependencies":[]}',
       '{"dependencies":{"left-pad":"1.3.0"}}',
+      '{"devDependencies":{"evil":"1.0.0"}}',
+      '{"optionalDependencies":{"evil":"1.0.0"}}',
+      '{"peerDependencies":{"evil":"1.0.0"}}',
+      '{"trustedDependencies":["evil"]}',
+      '{"workspaces":["packages/*"]}',
+      '{"scripts":{"postinstall":"echo unsafe"}}',
     ];
     for (const content of packages) {
       const fixture = await createDefaultFixture();

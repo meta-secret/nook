@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ExecutableSkillExecutionKind } from '../../src/executable-skills/domain.ts';
 import {
-  type ExecutableSkillClosureDependencies,
+  buildExecutableSkillClosureCandidate,
   type PlanExecutableSkillClosureRequest,
-  planExecutableSkillClosureWithDependencies,
 } from '../../src/executable-skills/closure.ts';
 import type { SealedSourceAnalysisDockerEnvironment } from '../../src/executable-skills/source-analysis-docker.ts';
+import type { RunExecutableSkillSourceAnalysisRequest } from '../../src/executable-skills/source-analysis-runtime.ts';
 import { analyzeExecutableSkillSource } from '../../src/executable-skills/source-policy.ts';
 import type {
   ExecutableSkillClosurePlan,
@@ -51,12 +51,13 @@ export const FIXTURE_DOCKER_ENVIRONMENT = Object.freeze(
 export async function planExecutableSkillClosure(
   request: PlanExecutableSkillClosureRequest,
 ): Promise<ExecutableSkillClosurePlan> {
-  const dependencies: ExecutableSkillClosureDependencies = {
-    analyzeSource: async (analysisRequest) =>
-      analyzeExecutableSkillSource(analysisRequest),
+  const dependencies = {
+    analyzeSource: async (
+      analysisRequest: RunExecutableSkillSourceAnalysisRequest,
+    ) => analyzeExecutableSkillSource(analysisRequest),
   };
   const execution = { dependencies, request };
-  return await planExecutableSkillClosureWithDependencies(execution);
+  return await buildExecutableSkillClosureCandidate(execution);
 }
 
 export type ExecutableSkillFixture = {
