@@ -530,8 +530,13 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
             !task_catalog.contains(unavailable),
             "Docker-backed task must remain unavailable to ARC: {unavailable}"
         );
+        assert!(
+            !batch_script
+                .lines()
+                .any(|line| line.trim_start().starts_with(&format!("{unavailable})"))),
+            "Docker-backed task must have no ARC command mapping: {unavailable}"
+        );
     }
-    assert!(!batch_script.contains("task remote:"));
     Ok(())
 }
 
