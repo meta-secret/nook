@@ -65,10 +65,27 @@ type ModuleGitInvocation = {
   readonly allowFailure?: boolean;
 };
 
+enum AbsoluteGitDirectoryOption {
+  Common = '--git-common-dir',
+  Worktree = '--git-dir',
+}
+
 type AbsoluteGitDirectoryRequest = {
   readonly cwd: string;
-  readonly option: '--git-common-dir' | '--git-dir';
+  readonly option: AbsoluteGitDirectoryOption;
 };
+
+enum WorktreeRegistrationPresence {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type WorktreeRegistrationLookup =
+  | { readonly presence: WorktreeRegistrationPresence.Absent }
+  | {
+      readonly presence: WorktreeRegistrationPresence.Present;
+      readonly registration: RegisteredWorktree;
+    };
 
 type BaselineCommitInspection = {
   readonly repositoryRoot: string;
@@ -76,7 +93,7 @@ type BaselineCommitInspection = {
 };
 
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
-  return invocation.allowFailure === undefined
+  return !('allowFailure' in invocation)
     ? { cwd: invocation.cwd, args: invocation.args }
     : {
         cwd: invocation.cwd,
@@ -179,12 +196,12 @@ function inspectWorkspaceIdentity(
   );
   const commonRequest: AbsoluteGitDirectoryRequest = {
     cwd: canonicalPath,
-    option: '--git-common-dir',
+    option: AbsoluteGitDirectoryOption.Common,
   };
   const commonDirectory = realpathSync(absoluteGitDirectory(commonRequest));
   const adminRequest: AbsoluteGitDirectoryRequest = {
     cwd: canonicalPath,
-    option: '--git-dir',
+    option: AbsoluteGitDirectoryOption.Worktree,
   };
   const adminDirectory = realpathSync(absoluteGitDirectory(adminRequest));
   if (
@@ -261,10 +278,13 @@ function worktreeRegistrations(
 
 function registrationForPath(
   workspace: ModuleWorktreeHandle,
-): RegisteredWorktree | undefined {
-  return worktreeRegistrations(workspace.sourceRepositoryRoot).find(
-    (registration) => registration.path === workspace.worktreePath,
-  );
+): WorktreeRegistrationLookup {
+  const registration = worktreeRegistrations(
+    workspace.sourceRepositoryRoot,
+  ).find((registration) => registration.path === workspace.worktreePath);
+  return registration
+    ? { presence: WorktreeRegistrationPresence.Present, registration }
+    : { presence: WorktreeRegistrationPresence.Absent };
 }
 
 export function prepareModuleWorktree(
@@ -279,7 +299,7 @@ export function prepareModuleWorktree(
   const ownedWorkspaceRoot = canonicalDirectory(ownedRootRequest);
   const commonRequest: AbsoluteGitDirectoryRequest = {
     cwd: sourceRepositoryRoot,
-    option: '--git-common-dir',
+    option: AbsoluteGitDirectoryOption.Common,
   };
   const gitCommonDirectory = realpathSync(absoluteGitDirectory(commonRequest));
   const sourcePair: DisjointPathsRequest = {
@@ -327,7 +347,7 @@ export function prepareModuleWorktree(
     const canonicalWorktreePath = realpathSync(worktreePath);
     const adminRequest: AbsoluteGitDirectoryRequest = {
       cwd: canonicalWorktreePath,
-      option: '--git-dir',
+      option: AbsoluteGitDirectoryOption.Worktree,
     };
     const worktreeAdminDirectory = realpathSync(
       absoluteGitDirectory(adminRequest),
@@ -392,13 +412,21 @@ export function cleanupModuleWorktree(
     label: 'Owned workspace root',
   };
   canonicalDirectory(ownedRootRequest);
-  const registration = registrationForPath(request.workspace);
+  const registrationLookup = registrationForPath(request.workspace);
   const exists = pathExists(request.workspace.worktreePath);
-  if (!exists && registration === undefined) return { removed: false };
-  if (!exists || registration === undefined) {
+  if (
+    !exists &&
+    registrationLookup.presence === WorktreeRegistrationPresence.Absent
+  ) {
+    return { removed: false };
+  }
+  if (
+    !exists ||
+    registrationLookup.presence === WorktreeRegistrationPresence.Absent
+  ) {
     throw new Error('Module worktree path and registration are asymmetric.');
   }
-  if (registration.locked) {
+  if (registrationLookup.registration.locked) {
     throw new Error('Locked module worktrees cannot be cleaned up.');
   }
   const identityInspection: WorkspaceIdentityInspection = {
@@ -417,7 +445,8 @@ export function cleanupModuleWorktree(
   runModuleDeliveryGit(gitRequest(removeInvocation));
   if (
     pathExists(request.workspace.worktreePath) ||
-    registrationForPath(request.workspace) !== undefined
+    registrationForPath(request.workspace).presence ===
+      WorktreeRegistrationPresence.Present
   ) {
     throw new Error(
       'Module worktree cleanup did not remove path and registration.',
