@@ -55,18 +55,37 @@ const EMPTY_OBJECT_SCHEMA: SkillObjectSchema = {
   properties: {},
 };
 
-const SEMANTIC_BLOCK_SCHEMA: SkillObjectSchema = {
+const HEADING_BLOCK_SCHEMA: SkillObjectSchema = {
   type: SkillSchemaType.Object,
   additionalProperties: false,
-  required: ['kind', 'line'],
+  required: ['depth', 'kind', 'line', 'text'],
   properties: {
     depth: { type: SkillSchemaType.Integer, minimum: 1 },
     kind: {
       type: SkillSchemaType.String,
-      enum: Object.values(CortexArticleSemanticKind),
+      enum: [CortexArticleSemanticKind.Heading],
     },
     line: { type: SkillSchemaType.Integer, minimum: 1 },
     text: { type: SkillSchemaType.String },
+  },
+};
+
+const SIMPLE_BLOCK_SCHEMA: SkillObjectSchema = {
+  type: SkillSchemaType.Object,
+  additionalProperties: false,
+  required: ['kind', 'line'],
+  properties: {
+    kind: {
+      type: SkillSchemaType.String,
+      enum: [
+        CortexArticleSemanticKind.Paragraph,
+        CortexArticleSemanticKind.VisibleOrderedList,
+        CortexArticleSemanticKind.Structure,
+        CortexArticleSemanticKind.Transparent,
+        CortexArticleSemanticKind.DensitySeparator,
+      ],
+    },
+    line: { type: SkillSchemaType.Integer, minimum: 1 },
   },
 };
 
@@ -81,7 +100,9 @@ const ARTICLE_DOCUMENT_SCHEMA: SkillObjectSchema = {
     },
     blocks: {
       type: SkillSchemaType.Array,
-      items: SEMANTIC_BLOCK_SCHEMA,
+      items: {
+        oneOf: [HEADING_BLOCK_SCHEMA, SIMPLE_BLOCK_SCHEMA],
+      },
     },
   },
 };

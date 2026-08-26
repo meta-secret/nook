@@ -83,6 +83,46 @@ describe('executable skill YAML command protocol', () => {
     expect(response.result?.findings).toEqual([]);
   });
 
+  test('publishes exact disjoint heading and simple-block schemas', () => {
+    const action = listDiscoverableSkillActions().actions.find(
+      (candidate) =>
+        candidate.family === SkillRequestFamily.CortexArticleStructure,
+    );
+    expect(action).toBeDefined();
+    if (!action) throw new Error('Missing article-structure action.');
+
+    const documents = action.inputSchema.properties.documents;
+    if (!documents) throw new Error('Missing documents schema.');
+    expect('items' in documents).toBe(true);
+    if (!('items' in documents)) throw new Error('Missing document schema.');
+    const blocks = documents.items;
+    expect('properties' in blocks).toBe(true);
+    if (!('properties' in blocks)) throw new Error('Missing blocks schema.');
+    const blockItems = blocks.properties.blocks;
+    if (!blockItems) throw new Error('Missing block items schema.');
+    expect('items' in blockItems).toBe(true);
+    if (!('items' in blockItems)) throw new Error('Missing block item schema.');
+    expect('oneOf' in blockItems.items).toBe(true);
+    if (!('oneOf' in blockItems.items)) {
+      throw new Error('Missing semantic block variants.');
+    }
+    expect(blockItems.items.oneOf).toHaveLength(2);
+    const headingSchema = blockItems.items.oneOf.at(0);
+    const simpleBlockSchema = blockItems.items.oneOf.at(1);
+    expect(headingSchema).toBeDefined();
+    expect(simpleBlockSchema).toBeDefined();
+    if (!headingSchema || !('required' in headingSchema)) {
+      throw new Error('Missing heading schema.');
+    }
+    if (!simpleBlockSchema || !('required' in simpleBlockSchema)) {
+      throw new Error('Missing simple-block schema.');
+    }
+    expect(headingSchema.additionalProperties).toBe(false);
+    expect(headingSchema.required).toEqual(['depth', 'kind', 'line', 'text']);
+    expect(simpleBlockSchema.additionalProperties).toBe(false);
+    expect(simpleBlockSchema.required).toEqual(['kind', 'line']);
+  });
+
   test('fails closed with a path and corrective blueprint', () => {
     const outcome = dispatchSkillYamlText(
       'cortexArticleStructure:\n  unsupported: {}\n',
