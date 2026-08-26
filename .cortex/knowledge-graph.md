@@ -48,7 +48,7 @@
     - [Review and audit behavior](architecture/engineering-harness.md#review-and-audit-behavior)
     - [Merge policy](architecture/engineering-harness.md#merge-policy)
   - [4. Remote Execution and Validation](architecture/engineering-harness.md#4-remote-execution-and-validation)
-    - [Focused dispatches (rust:test, web:check, web:test, extension:check)](architecture/engineering-harness.md#focused-dispatches-rusttest-webcheck-webtest-extensioncheck)
+    - [Focused dispatches](architecture/engineering-harness.md#focused-dispatches)
   - [5. Split Rust/WASM and Web Images](architecture/engineering-harness.md#5-split-rustwasm-and-web-images)
     - [Rust/WASM Lineage](architecture/engineering-harness.md#rustwasm-lineage)
     - [PR Consumer Behavior](architecture/engineering-harness.md#pr-consumer-behavior)

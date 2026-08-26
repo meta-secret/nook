@@ -97,12 +97,15 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 - Validation starts after the coherent pushed iteration is explicitly selected with a validation label.
 - Agents do not run local `task check` or `task ci:pr` gates.
 
-### Focused dispatches (`rust:test`, `web:check`, `web:test`, `extension:check`)
+### Focused dispatches
 
-- Use narrow source-sealed images.
-- Native tests branch from the manifest-keyed Rust dependency image.
-- Web checks consume only web dependencies plus the generated WASM package.
-- They do not join unrelated coverage, WASM-test, browser, full verification, or production-build stages.
+- The remote catalog exposes only build-only tasks or tasks that execute
+  directly in ordinary Kubernetes Pods.
+- Docker-backed local selectors such as `rust:test`, `web:check`, `web:test`,
+  and `extension:check` remain unavailable remotely until they have direct Pod
+  implementations.
+- Complete validation provides their required merge evidence without granting a
+  nested runtime to an ARC runner.
 
 Trusted same-repository PR native Rust plus Rust ecosystem validation and Main
 build producers execute in disposable ordinary Pods through ARC. Focused

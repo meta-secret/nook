@@ -8,18 +8,8 @@ catalog() {
 preflight
 arc:runtime
 rust:ci
-bake-cache:prove
-rust:test
-rust:lint
-rust:coverage
-wasm:build
-wasm:test
-wasm:test:browser
-web:check
-web:test
 web:build
 web:e2e
-extension:check
 extension:e2e
 hive:verify
 check
@@ -92,18 +82,8 @@ task_command() {
     preflight) echo "task preflight" ;;
     arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
     rust:ci) echo "task ci:pr:rust" ;;
-    bake-cache:prove) echo "task infra:bake-cache:prove" ;;
-    rust:test) echo "task remote:rust:test" ;;
-    rust:lint) echo "task remote:rust:lint" ;;
-    rust:coverage) echo "task remote:rust:coverage" ;;
-    wasm:build) echo "task wasm:build" ;;
-    wasm:test) echo "task wasm:test" ;;
-    wasm:test:browser) echo "task wasm:test:browser" ;;
-    web:check) echo "task remote:web:check" ;;
-    web:test) echo "task remote:web:test" ;;
     web:build) echo "task web:build" ;;
     web:e2e) echo "task web:test:e2e" ;;
-    extension:check) echo "task remote:extension:check" ;;
     extension:e2e) echo "task extension:test:e2e" ;;
     hive:verify) echo "task hive:verify" ;;
     check) echo "task check" ;;
@@ -117,9 +97,9 @@ task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
     preflight) echo 15 ;;
-    bake-cache:prove|rust:ci|rust:test|rust:lint|wasm:build|wasm:test|web:check|web:test|extension:check|hive:verify) echo 20 ;;
-    wasm:test:browser|web:build) echo 25 ;;
-    rust:coverage|web:e2e|extension:e2e) echo 30 ;;
+    rust:ci|hive:verify) echo 20 ;;
+    web:build) echo 25 ;;
+    web:e2e|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
     ci:pr:e2e) echo 45 ;;
     *) return 2 ;;
@@ -164,18 +144,8 @@ run_task() {
     preflight) run_with_timeout "$timeout_minutes" task preflight ;;
     arc:runtime) run_with_timeout "$timeout_minutes" bash .github/scripts/arc-runtime-smoke.sh ;;
     rust:ci) run_with_timeout "$timeout_minutes" env CI_ARTIFACT_DIR="$artifact_root/rust-ci" task ci:pr:rust ;;
-    bake-cache:prove) run_with_timeout "$timeout_minutes" task infra:bake-cache:prove ;;
-    rust:test) run_with_timeout "$timeout_minutes" task remote:rust:test ;;
-    rust:lint) run_with_timeout "$timeout_minutes" task remote:rust:lint ;;
-    rust:coverage) run_with_timeout "$timeout_minutes" task remote:rust:coverage ;;
-    wasm:build) run_with_timeout "$timeout_minutes" task wasm:build ;;
-    wasm:test) run_with_timeout "$timeout_minutes" task wasm:test ;;
-    wasm:test:browser) run_with_timeout "$timeout_minutes" task wasm:test:browser ;;
-    web:check) run_with_timeout "$timeout_minutes" task remote:web:check ;;
-    web:test) run_with_timeout "$timeout_minutes" task remote:web:test ;;
     web:build) run_with_timeout "$timeout_minutes" task web:build ;;
     web:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/web-e2e" task web:test:e2e ;;
-    extension:check) run_with_timeout "$timeout_minutes" task remote:extension:check ;;
     extension:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/extension-e2e" task extension:test:e2e ;;
     hive:verify) run_with_timeout "$timeout_minutes" env HIVE_CACHE_TO= task hive:verify ;;
     check) run_with_timeout "$timeout_minutes" task check ;;

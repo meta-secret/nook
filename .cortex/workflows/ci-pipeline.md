@@ -427,9 +427,10 @@ Main's portable WASM cache writer/proof uses the general ARC scale set.
   rejected before repository commands execute.
 - Other `remote.yml` selections use the general or Hive ARC scale set. Browser
   tasks use the container scale set.
-- Common Rust test and web/extension check routes use smaller source-sealed image targets.
-- Their solve graphs stop before unrelated coverage, WASM-test, browser, full-verification, and production-build stages.
-- These remote-only routes preserve the exact check command while reducing preparation work.
+- Common Rust test and web/extension check image targets remain available to
+  local workflows.
+- Their Docker-backed task selectors are not exposed through ARC until a direct
+  ordinary-Pod implementation exists.
 - Complete trusted PR, Main, manual, agent, and release graphs run on ARC.
 
 **BuildKit cache propagation:**
