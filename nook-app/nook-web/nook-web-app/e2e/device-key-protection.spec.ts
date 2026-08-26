@@ -447,10 +447,14 @@ test.describe('passkey device-key protection', () => {
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
     await page.goBack()
+    await expect(page).toHaveURL(/\/vault$/)
     await expect(page.getByTestId('passkey-auth-overlay')).toHaveCount(0)
-    await expect(page.getByTestId('get-started-path-chooser')).toBeVisible({
-      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
-    })
+    await expect(page.getByTestId('sentinel-genesis-connect-card')).toHaveCount(
+      0,
+    )
+    await expect(
+      page.getByTestId('sentinel-genesis-invitation-required'),
+    ).toBeVisible()
     await page.evaluate((request) => {
       history.pushState(
         {},
