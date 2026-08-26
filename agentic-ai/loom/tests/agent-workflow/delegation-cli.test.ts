@@ -179,14 +179,46 @@ describe('delegated agent journal CLI', () => {
             ),
         ),
       ).toBe(true);
+      const finalizationPath = join(workingDirectory, 'finalization.json');
+      const finalizationRequest = {
+        runId: request.runId,
+        sourceCommit: request.sourceCommit,
+        barrierEvidence: [
+          {
+            parent: plan.rootMaterializer,
+            children: [],
+          },
+        ],
+      };
+      await writeFile(
+        finalizationPath,
+        JSON.stringify(finalizationRequest),
+        'utf8',
+      );
+      const finalizeCommand = [
+        process.execPath,
+        delegationCli,
+        'finalize',
+        '--request',
+        finalizationPath,
+        '--working-directory',
+        workingDirectory,
+      ];
+      const finalizeProcess = Bun.spawn(finalizeCommand, spawnOptions);
+      expect(await finalizeProcess.exited).toBe(0);
+      await new Response(finalizeProcess.stdout).text();
+      const runDirectory = join(
+        workingDirectory,
+        'workflow',
+        'processing',
+        DelegatedAgentWorkflowName.AgentWork,
+        request.runId,
+      );
+      expect(await readFile(join(runDirectory, 'view.md'), 'utf8')).toBe(
+        '# Contract view\n\nConsistent.\n',
+      );
       const verificationRequest: ReadParentAttemptArgs = {
-        runDirectory: join(
-          workingDirectory,
-          'workflow',
-          'processing',
-          DelegatedAgentWorkflowName.AgentWork,
-          request.runId,
-        ),
+        runDirectory,
         runId: request.runId,
         workflowVersion: CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION,
         sourceCommit: request.sourceCommit,

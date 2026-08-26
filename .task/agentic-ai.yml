@@ -257,6 +257,22 @@ tasks:
         bun run --cwd agentic-ai/loom agent-delegation -- \
           record --request "$request" --working-directory "{{.REPO_ROOT}}"
 
+  loom:agent-delegation:finalize:
+    desc: Verify and materialize one complete ordinary delegation run (REQUEST=<request.json>).
+    deps: [loom:install]
+    requires:
+      vars: [REQUEST]
+    cmds:
+      - |
+        set -euo pipefail
+        request="{{.REQUEST}}"
+        case "$request" in
+          /*) ;;
+          *) request="{{.REPO_ROOT}}/$request" ;;
+        esac
+        bun run --cwd agentic-ai/loom agent-delegation -- \
+          finalize --request "$request" --working-directory "{{.REPO_ROOT}}"
+
   loom:skill-scaffold:
     desc: Scaffold a dynamic-skill card via Loom (CONFIG=<request.yaml>).
     deps: [loom:install]

@@ -39,6 +39,11 @@ import type {
   WorkflowAttemptNumber,
 } from './domain.ts';
 import { CURRENT_AGENT_ATTEMPT_WORKFLOW_VERSION } from './agent-attempt-version.ts';
+import {
+  decodeDelegationFinalizationRequest,
+  finalizeDelegationRun,
+} from './delegation-aggregation.ts';
+import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -46,17 +51,20 @@ Usage:
   loom-agent-delegation start --plan <plan.json> --working-directory <repo-root>
   loom-agent-delegation admit --request <request.json> --working-directory <repo-root>
   loom-agent-delegation record --request <request.json> --working-directory <repo-root>
+  loom-agent-delegation finalize --request <request.json> --working-directory <repo-root>
 
 Start persists one immutable source-bound delegation plan. Admit authorizes one
 exactly declared attempt before dispatch. Record requires that admission,
 creates the finalized content-addressed journal, and then rereads and verifies
-its persisted event, result, and semantic view.
+its persisted event, result, and semantic view. Finalize verifies the planned
+all-terminal hierarchy and materializes its root semantic view.
 `;
 
 enum DelegationCommandKind {
   Start = 'start',
   Admit = 'admit',
   Record = 'record',
+  Finalize = 'finalize',
 }
 
 type DelegationStartCommandLine = {
@@ -77,10 +85,17 @@ type DelegationAdmitCommandLine = {
   readonly workingDirectory: string;
 };
 
+type DelegationFinalizeCommandLine = {
+  readonly kind: DelegationCommandKind.Finalize;
+  readonly requestPath: string;
+  readonly workingDirectory: string;
+};
+
 type DelegationCommandLine =
   | DelegationStartCommandLine
   | DelegationAdmitCommandLine
-  | DelegationRecordCommandLine;
+  | DelegationRecordCommandLine
+  | DelegationFinalizeCommandLine;
 
 type DelegationStartResponse = {
   readonly receipt: Awaited<ReturnType<typeof startDelegationRun>>;
@@ -120,6 +135,9 @@ async function main(): Promise<number> {
   }
   if (commandLine.kind === DelegationCommandKind.Admit) {
     return admit(commandLine);
+  }
+  if (commandLine.kind === DelegationCommandKind.Finalize) {
+    return finalize(commandLine);
   }
   return record(commandLine);
 }
@@ -164,6 +182,20 @@ async function admit(commandLine: DelegationAdmitCommandLine): Promise<number> {
     request,
   };
   const receipt = await admitDelegationAttempt(input);
+  console.log(JSON.stringify(receipt));
+  return 0;
+}
+
+async function finalize(
+  commandLine: DelegationFinalizeCommandLine,
+): Promise<number> {
+  const serialized = await readFile(commandLine.requestPath, 'utf8');
+  const request = decodeDelegationFinalizationRequest(serialized);
+  const input: FinalizeDelegationRunInput = {
+    workingDirectory: commandLine.workingDirectory,
+    request,
+  };
+  const receipt = await finalizeDelegationRun(input);
   console.log(JSON.stringify(receipt));
   return 0;
 }
@@ -285,7 +317,8 @@ function parseCommandLine(
   }
   if (
     (command !== DelegationCommandKind.Admit &&
-      command !== DelegationCommandKind.Record) ||
+      command !== DelegationCommandKind.Record &&
+      command !== DelegationCommandKind.Finalize) ||
     argv[1] !== '--request'
   ) {
     return false;
