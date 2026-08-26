@@ -33,3 +33,12 @@ Authored HTML is prohibited in every `.cortex/**/*.md` file.
 5. Update `.cortex/knowledge-graph.md` whenever the heading hierarchy changes.
 6. Run the structured-article and consistency checks before completion.
 7. Run the global Cortex audit and fix every prohibited HTML finding.
+
+Loom audits every substantive H2 and H3, including mapless articles. Use
+Markdown-native visible content. Empty containers, definitions, footnote
+definitions, and thematic breaks do not make an article substantive. A
+thematic break may reset prose density. Ordered procedure actions may nest
+through normal Markdown lists and containers, but examples inside quotes, code,
+or footnotes do not satisfy the procedure rule. Treat image-only paragraphs as
+structural relief. A task checkbox alone is not a procedure action. Continue H3
+density auditing below H4-H6 headings.
