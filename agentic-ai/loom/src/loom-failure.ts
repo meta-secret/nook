@@ -11,6 +11,7 @@ export enum LoomFailureCode {
   StatsFilenameInvalid = 'statsFilenameInvalid',
   SkillScaffoldFailed = 'skillScaffoldFailed',
   CortexAuditFailed = 'cortexAuditFailed',
+  ExecutableSkillRuntimeFailed = 'executableSkillRuntimeFailed',
 }
 
 export enum LoomFailureDetailKind {
@@ -70,6 +71,8 @@ function defaultMessage(code: LoomFailureCode): string {
       return 'Skill scaffold failed';
     case LoomFailureCode.CortexAuditFailed:
       return 'Cortex audit failed';
+    case LoomFailureCode.ExecutableSkillRuntimeFailed:
+      return 'Executable skill runtime failed';
   }
 }
 

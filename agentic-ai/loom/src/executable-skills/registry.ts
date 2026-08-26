@@ -78,8 +78,14 @@ export type ExecutableSkillRegistryInspection =
       readonly findings: readonly [];
     };
 
+type AuditedExecutableSkill = {
+  readonly closurePlan: ExecutableSkillClosurePlan;
+  readonly registration: RegisteredExecutableSkill;
+};
+
 type AuditedExecutableSkillRegistryBinding = {
-  readonly skills: readonly ResolvedAuditedExecutableSkill[];
+  readonly dockerEnvironment: SealedSourceAnalysisDockerEnvironment;
+  readonly skills: readonly AuditedExecutableSkill[];
   readonly sourceTree: string;
 };
 
@@ -91,6 +97,11 @@ const auditedRegistryBindings = new WeakMap<
 export async function inspectExecutableSkillRegistry(
   request: ExecutableSkillRegistryAuditRequest,
 ): Promise<ExecutableSkillRegistryInspection> {
+  const dockerEnvironmentValue: SealedSourceAnalysisDockerEnvironment = {
+    daemonId: request.dockerEnvironment.daemonId,
+    endpoint: request.dockerEnvironment.endpoint,
+  };
+  const dockerEnvironment = Object.freeze(dockerEnvironmentValue);
   let repositoryRoot: string;
   try {
     repositoryRoot = await canonicalRepositoryRoot(request);
@@ -109,6 +120,7 @@ export async function inspectExecutableSkillRegistry(
   }
   const auditRequest: ExecutableSkillRegistryAuditRequest = {
     ...request,
+    dockerEnvironment,
     repositoryRoot,
   };
   const canonicalAuditRequest: AuditExecutableSkillRegistryCanonicalRequest = {
@@ -131,6 +143,7 @@ export async function inspectExecutableSkillRegistry(
   };
   const authority = Object.freeze(authorityValue);
   const bindingValue: AuditedExecutableSkillRegistryBinding = {
+    dockerEnvironment,
     skills: Object.freeze([...audit.skills]),
     sourceTree: audit.sourceTree,
   };
@@ -168,8 +181,15 @@ export type ResolveAuditedExecutableSkillRequest = {
   readonly skillId: string;
 };
 
+export type ResolveAuditedExecutableSkillDockerEnvironmentRequest = {
+  readonly authority: AuditedExecutableSkillRegistry;
+  readonly deadlineExpiresAt: number;
+  readonly signal: AbortSignal | false;
+};
+
 export type ResolvedAuditedExecutableSkill = {
   readonly closurePlan: ExecutableSkillClosurePlan;
+  readonly dockerEnvironment: SealedSourceAnalysisDockerEnvironment;
   readonly registration: RegisteredExecutableSkill;
 };
 
@@ -187,7 +207,22 @@ export function resolveAuditedExecutableSkill(
   if (!skill) {
     throw new Error(`Unregistered executable skill: ${request.skillId}`);
   }
-  return skill;
+  const resolved: ResolvedAuditedExecutableSkill = {
+    ...skill,
+    dockerEnvironment: binding.dockerEnvironment,
+  };
+  return Object.freeze(resolved);
+}
+
+export function resolveAuditedExecutableSkillDockerEnvironment(
+  request: ResolveAuditedExecutableSkillDockerEnvironmentRequest,
+): SealedSourceAnalysisDockerEnvironment {
+  assertRegistryResolutionActive(request);
+  const binding = auditedRegistryBindings.get(request.authority);
+  if (!binding) {
+    throw new Error('Executable skill registry authority is invalid.');
+  }
+  return binding.dockerEnvironment;
 }
 
 export async function auditExecutableSkillRegistry(
@@ -312,7 +347,7 @@ async function auditExecutableSkillRegistryCanonical(
     sourceTree: discovery.sourceTree,
   };
   const findings = await worktreeManifestDriftFindings(driftRequest);
-  const skills: ResolvedAuditedExecutableSkill[] = [];
+  const skills: AuditedExecutableSkill[] = [];
   const discoveredIds = new Set<string>();
   for (const manifestPath of manifestPaths) {
     assertRegistryActive(request);
@@ -372,7 +407,7 @@ async function auditExecutableSkillRegistryCanonical(
 
 type ExecutableSkillRegistryAudit = {
   readonly findings: ExecutableSkillRegistryFinding[];
-  readonly skills: ResolvedAuditedExecutableSkill[];
+  readonly skills: AuditedExecutableSkill[];
   readonly sourceTree: string;
 };
 
@@ -446,7 +481,7 @@ async function auditRegistration(
     if (!request.collectAuthority) {
       return { findings: [], skill: false };
     }
-    const skill: ResolvedAuditedExecutableSkill = {
+    const skill: AuditedExecutableSkill = {
       closurePlan,
       registration: request.registration,
     };
@@ -478,7 +513,7 @@ async function auditRegistration(
 
 type AuditRegistrationResult = {
   readonly findings: readonly ExecutableSkillRegistryFinding[];
-  readonly skill: ResolvedAuditedExecutableSkill | false;
+  readonly skill: AuditedExecutableSkill | false;
 };
 
 async function discoverManifestPaths(
@@ -726,8 +761,13 @@ function assertRegistryActive(
   }
 }
 
+type RegistryResolutionLifecycleRequest = {
+  readonly deadlineExpiresAt: number;
+  readonly signal: AbortSignal | false;
+};
+
 function assertRegistryResolutionActive(
-  request: ResolveAuditedExecutableSkillRequest,
+  request: RegistryResolutionLifecycleRequest,
 ): void {
   if (request.signal !== false && request.signal.aborted) {
     throw new Error('Executable skill registry resolution was cancelled.');

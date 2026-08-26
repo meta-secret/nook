@@ -1,5 +1,6 @@
 import {
   ExecutableSkillExecutionKind,
+  MINIMUM_EXECUTABLE_SKILL_TIMEOUT_MS,
   type ExecutableSkillLimits,
   type ExecutableSkillManifest,
 } from './domain.ts';
@@ -106,7 +107,7 @@ function decodeLimits(
   };
   const timeoutMs: BoundedIntegerRequest = {
     value: transport.timeoutMs,
-    minimum: 1,
+    minimum: MINIMUM_EXECUTABLE_SKILL_TIMEOUT_MS,
     maximum: 300_000,
   };
   if (

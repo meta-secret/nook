@@ -438,6 +438,15 @@ Unix endpoint. Docker context configuration is not inherited. Then run
 its minimal build context. Its disposable container has no network, mounts, or
 privilege; it runs read-only with bounded memory, processes, output, and time.
 
+The separate executable-skill execution runtime is still dormant. Its
+production catalog is empty, so no repository skill can execute through it.
+The runtime already binds audited source closure and local Docker authority,
+serializes container lifecycles, rejects competing processes through an
+owner-token Docker volume before image build, fails closed on stale labeled
+containers, and mints only opaque receipts after static host-result validation.
+Registration and real-Docker lifecycle acceptance must land together before
+activation.
+
 Project-scoped module experts are named Codex roles backed by one typed registry
 and an isolated read-only Loom runtime. Direct native child spawning is not the
 capability boundary because it inherits the delivery session's permissions.

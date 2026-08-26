@@ -1,7 +1,10 @@
 import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ExecutableSkillExecutionKind } from '../../src/executable-skills/domain.ts';
+import {
+  ExecutableSkillExecutionKind,
+  ExecutableSkillResultValidation,
+} from '../../src/executable-skills/domain.ts';
 import {
   buildExecutableSkillClosureCandidate,
   type PlanExecutableSkillClosureRequest,
@@ -13,12 +16,27 @@ import type {
   ExecutableSkillClosurePlan,
   ExecutableSkillManifest,
   RegisteredExecutableSkill,
+  ExecutableSkillResultValidationRequest,
 } from '../../src/executable-skills/domain.ts';
+
+export function validateFixtureResult(
+  request: ExecutableSkillResultValidationRequest,
+): ExecutableSkillResultValidation | false {
+  const parsed: { readonly kind?: string; readonly schemaVersion?: number } =
+    JSON.parse(request.serializedResult);
+  if (
+    parsed.kind !== request.expectedKind ||
+    parsed.schemaVersion !== request.schemaVersion
+  ) {
+    return false;
+  }
+  return ExecutableSkillResultValidation.Valid;
+}
 
 const skillLimits = {
   requestBytes: 1024,
   resultBytes: 1024,
-  timeoutMs: 1000,
+  timeoutMs: 2_000,
 };
 const skillManifestValue: ExecutableSkillManifest = {
   schemaVersion: 1,
@@ -36,6 +54,7 @@ const fixtureRegistrationValue: RegisteredExecutableSkill = {
   manifest: skillManifest,
   manifestPath: '.agents/skills/fixture/executable-skill.json',
   runnerPath: '.agents/skills/fixture/src/runner.ts',
+  validateResult: validateFixtureResult,
 };
 export const FIXTURE_REGISTRATION = Object.freeze(fixtureRegistrationValue);
 

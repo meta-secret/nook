@@ -263,6 +263,28 @@ three repository tools. The enforced security claim is that the model has no
 process or write path. It is not a defense against a separate hostile process
 already running under the same operating-system account.
 
+## Dormant executable-skill runtime
+
+The production executable-skill catalog is empty. The dormant runtime accepts
+only opaque registry authority bound to an exact Git tree, audited source
+closure, and copied local Docker identity. It snapshots request values before
+execution and materializes only audited TypeScript sources.
+
+Disposable skill containers run without network, mounts, privilege,
+capabilities, or a writable root. Resource, output, and lifecycle limits are
+mandatory. Admission and teardown both require an empty labeled-container
+inventory. One bounded slot serializes local lifecycles. An owner-token named
+volume on the audited Docker daemon rejects competing processes before image
+build and stays held through teardown. A fixed container name provides a
+second Docker-side exclusion boundary. A static host validator must
+synchronously return `Valid` for serialized output before verified receipts
+bind request, result, tree, closure, and image digests through a production-only
+opaque authority.
+
+Diagnostic dependency seams cannot mint that authority. Activation remains
+blocked until a static registration and real-Docker success, failure,
+cancellation, containment, and teardown acceptance land together.
+
 ## Prerequisites
 
 Bun must be installed (`bun --version`). Stop and install Bun if it is missing.

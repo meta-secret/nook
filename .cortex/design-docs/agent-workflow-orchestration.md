@@ -146,6 +146,41 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 - The repository Task wrapper is the canonical entrypoint.
 - The bare `loom-agent-workflow` binary is an internal package entrypoint.
 
+### Dormant executable-skill runtime boundary
+
+Loom contains a dormant execution runtime for repository-owned TypeScript
+skills. The production catalog is empty. No executable skill can run until a
+reviewed registration and real-Docker acceptance land together.
+
+Admission binds one immutable authority to:
+
+- the exact Git tree and matching worktree bytes;
+- the registered manifest, package, lockfile, policy, and recursive source
+  closure;
+- the sealed source-analysis result; and
+- one copied and frozen local Docker daemon identity and Unix endpoint.
+
+Execution snapshots caller-owned scalar request fields synchronously. It
+materializes only audited execution sources with canonical modes and
+timestamps. It builds from a digest-pinned Bun base and runs as UID 65532 in a
+no-network, read-only, capability-free container with bounded CPU, memory,
+processes, output, and time.
+
+One bounded in-process slot serializes lifecycles. An owner-token named-volume
+lease on the audited Docker daemon rejects competing processes before image
+build. A fixed container name remains a second Docker-side exclusion boundary.
+Loom fails closed when any executable-skill-labeled container exists before
+admission or remains after exact-container teardown. Teardown uses bounded
+force-removal attempts and confirmed absence. The Docker lease remains held
+through resource teardown.
+
+The static registration owns a synchronous host-side result validator. It must
+return the explicit `Valid` result. Only validated serialized output can reach
+receipt construction. Production execution
+receipts are opaque `WeakMap` authorities bound to the request hash, result
+hash, Git tree, closure digest, and runtime image digest. Injectable diagnostic
+seams return unsealed candidates and cannot mint execution authority.
+
 ### Codex worker adapter
 
 The Codex SDK is the local worker adapter.

@@ -2,6 +2,8 @@ export enum ExecutableSkillExecutionKind {
   DockerReadOnly = 'docker-read-only',
 }
 
+export const MINIMUM_EXECUTABLE_SKILL_TIMEOUT_MS = 2_000;
+
 export enum ExecutableSkillClosureEntryRole {
   ExecutionSource = 'execution-source',
   LockProvenance = 'lock-provenance',
@@ -50,11 +52,26 @@ export type ExecutableSkillManifest = {
   readonly limits: ExecutableSkillLimits;
 };
 
+export type ExecutableSkillResultValidationRequest = {
+  readonly expectedKind: string;
+  readonly schemaVersion: 1;
+  readonly serializedResult: string;
+};
+
+export enum ExecutableSkillResultValidation {
+  Valid = 'valid',
+}
+
+export type ExecutableSkillResultValidator = (
+  request: ExecutableSkillResultValidationRequest,
+) => ExecutableSkillResultValidation | false;
+
 export type RegisteredExecutableSkill = {
   readonly skillId: string;
   readonly manifest: ExecutableSkillManifest;
   readonly manifestPath: string;
   readonly runnerPath: string;
+  readonly validateResult: ExecutableSkillResultValidator;
 };
 
 export type ExecutableSkillRegistryFinding = {

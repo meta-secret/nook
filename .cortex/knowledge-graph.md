@@ -631,6 +631,7 @@
   - [Responsibilities](design-docs/agent-workflow-orchestration.md#responsibilities)
     - [Cortex Markdown](design-docs/agent-workflow-orchestration.md#cortex-markdown)
     - [Loom static workflow module](design-docs/agent-workflow-orchestration.md#loom-static-workflow-module)
+    - [Dormant executable-skill runtime boundary](design-docs/agent-workflow-orchestration.md#dormant-executable-skill-runtime-boundary)
     - [Codex worker adapter](design-docs/agent-workflow-orchestration.md#codex-worker-adapter)
     - [Event store and materialized views](design-docs/agent-workflow-orchestration.md#event-store-and-materialized-views)
     - [Delivery owner](design-docs/agent-workflow-orchestration.md#delivery-owner)

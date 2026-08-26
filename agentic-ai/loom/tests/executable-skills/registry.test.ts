@@ -15,12 +15,14 @@ import {
   inspectExecutableSkillRegistry,
   MAXIMUM_REGISTERED_EXECUTABLE_SKILL_TIMEOUT_MS,
   resolveAuditedExecutableSkill,
+  resolveAuditedExecutableSkillDockerEnvironment,
 } from '../../src/executable-skills/registry.ts';
 import { createExecutableSkillRegistry } from '../../src/executable-skills/registration.ts';
 import type { AuditedExecutableSkillRegistry } from '../../src/executable-skills/registry.ts';
 import type {
   AuditExecutableSkillCatalogRequest,
   ResolveAuditedExecutableSkillRequest,
+  ResolveAuditedExecutableSkillDockerEnvironmentRequest,
 } from '../../src/executable-skills/registry.ts';
 import {
   createExecutableSkillFixture,
@@ -147,7 +149,7 @@ describe('executable skill registry trust boundary', () => {
       expect(await auditExecutableSkillCatalog(acceptedRequest)).toEqual([]);
       const changedManifest: ExecutableSkillManifest = {
         ...reordered,
-        limits: { ...reordered.limits, timeoutMs: 2_000 },
+        limits: { ...reordered.limits, timeoutMs: 2_001 },
       };
       const changedRegistration: RegisteredExecutableSkill = {
         ...registration,
@@ -497,15 +499,35 @@ describe('executable skill registry trust boundary', () => {
         repositoryRoot: fixture.repositoryRoot,
       };
       await deleteFixturePath(deleteRequest);
-      const inspection = await inspectExecutableSkillRegistry(
-        auditRequest(fixture.repositoryRoot),
-      );
+      const mutableEnvironment = {
+        daemonId: FIXTURE_DOCKER_ENVIRONMENT.daemonId,
+        endpoint: FIXTURE_DOCKER_ENVIRONMENT.endpoint,
+      };
+      const inspectionRequest: ExecutableSkillRegistryAuditRequest = {
+        ...auditRequest(fixture.repositoryRoot),
+        dockerEnvironment: mutableEnvironment,
+      };
+      const inspectionPromise =
+        inspectExecutableSkillRegistry(inspectionRequest);
+      mutableEnvironment.daemonId = 'mutated-daemon-identity';
+      mutableEnvironment.endpoint = 'unix:///mutated/docker.sock';
+      const inspection = await inspectionPromise;
       expect(inspection.kind).toBe(
         ExecutableSkillRegistryInspectionKind.Verified,
       );
       if (inspection.kind !== ExecutableSkillRegistryInspectionKind.Verified) {
         throw new Error('Expected verified empty registry fixture.');
       }
+      const environmentRequest: ResolveAuditedExecutableSkillDockerEnvironmentRequest =
+        {
+          authority: inspection.authority,
+          deadlineExpiresAt: Date.now() + 30_000,
+          signal: false,
+        };
+      const boundEnvironment =
+        resolveAuditedExecutableSkillDockerEnvironment(environmentRequest);
+      expect(boundEnvironment).toEqual(FIXTURE_DOCKER_ENVIRONMENT);
+      expect(Object.isFrozen(boundEnvironment)).toBe(true);
       const resolveRequest: ResolveAuditedExecutableSkillRequest = {
         authority: inspection.authority,
         deadlineExpiresAt: Date.now() + 30_000,
