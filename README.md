@@ -432,15 +432,6 @@ bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
 
-The opt-in executable-skill analyzer containment proof runs only against an
-explicit local, non-ARC Docker environment. Set
-**`NOOK_SOURCE_ANALYSIS_DOCKER_DAEMON_ID`** and
-**`NOOK_SOURCE_ANALYSIS_DOCKER_ENDPOINT`** to the exact daemon ID and local
-Unix endpoint. Docker context configuration is not inherited. Then run
-**`task loom:source-analysis:containment`**. The analyzer image is byte-bound to
-its minimal build context. Its disposable container has no network, mounts, or
-privilege; it runs read-only with bounded memory, processes, output, and time.
-
 Project-scoped module experts are named Codex roles backed by one typed registry
 and an isolated read-only Loom runtime. Direct native child spawning is not the
 capability boundary because it inherits the delivery session's permissions.
@@ -491,7 +482,6 @@ task loom:pre-push         # required local agent action (host-applied)
 task loom:cortex-session-clean # assert temporary agent memory is removed
 task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha> # event streams plus hierarchical read models
 task loom:agent-delegation:record REQUEST=<request.json> # ordinary delegated attempt journal and view
-task loom:source-analysis:containment # explicit local Docker containment proof
 task loom:module-experts:validate # named read-only expert and production-module routing audit
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
