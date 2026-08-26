@@ -22,13 +22,9 @@ import {
 } from './agent-stats-github-api.ts';
 
 import type { UntrustedYamlPropertyArgs } from './guards.ts';
+import { isValidationWorkflow } from './agent-stats-github-validation.ts';
 
 const CODEX_LOGIN = 'chatgpt-codex-connector[bot]';
-const VALIDATION_WORKFLOWS = new Set([
-  'PR',
-  'Rust ecosystem checks',
-  'Web research',
-]);
 const TRUSTED_REVIEW_ASSOCIATIONS = new Set([
   'OWNER',
   'MEMBER',
@@ -308,7 +304,7 @@ export function buildActionsEvidence(
   const runs = observations.map(actionObservationRecord);
   const heads = headObservations.map(headObservationRecord);
   const validationObservations = observations.filter((run) =>
-    VALIDATION_WORKFLOWS.has(run.workflow),
+    isValidationWorkflow(run.workflow),
   );
   const validationCycles = validationObservations.map((run) => {
     const supersededRequest: HeadSupersededRequest = {
