@@ -42,3 +42,21 @@ through normal Markdown lists and containers, but examples inside quotes, code,
 or footnotes do not satisfy the procedure rule. Treat image-only paragraphs as
 structural relief. A task checkbox alone is not a procedure action. Continue H3
 density auditing below H4-H6 headings.
+
+## Mechanical capability
+
+This skill owns a deterministic semantic audit provider under `src/`.
+Its independent verifier derives the exact expected diagnostics from the typed
+semantic request without invoking the production audit implementation.
+
+Run the focused provider and contract suite:
+
+```bash
+task skills:verify
+```
+
+The executable manifest is dormant. This layer defines and self-verifies the
+provider contract, but it does not register or execute the provider. It cannot
+schedule work, authorize writes, or mutate the repository. Later Loom-owned
+layers remain responsible for source policy, registration, isolation,
+deadlines, provenance, and activation.
