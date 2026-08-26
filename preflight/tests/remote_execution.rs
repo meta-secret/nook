@@ -79,30 +79,24 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_starts_before_non_blocking_review_request() -> Result<()> {
+fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
-    let direct_review_position = direct_validation
-        .find("if ! task pr:review PR=\"$REQUESTED_PR\"; then")
-        .context("direct validation must request review without making it a gate")?;
-    let head_recheck_position = direct_validation
+    let stabilization_position = direct_validation
+        .find("task pr:review:stabilize")
+        .context("direct validation must stabilize exact-head review first")?;
+    let stabilized_head_position = direct_validation
         .find(
-            "pre_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
+            "stabilized_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
         )
-        .context("direct validation must recheck the PR head before requesting review")?;
-    let post_review_recheck_position = direct_validation
-        .find(
-            "post_review_pr_sha=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid --jq .headRefOid)\"",
-        )
-        .context("direct validation must recheck the PR head after requesting review")?;
+        .context("direct validation must recheck the stabilized PR head")?;
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
     assert!(
-        validation_label_position < head_recheck_position
-            && head_recheck_position < direct_review_position
-            && direct_review_position < post_review_recheck_position,
-        "validation must start before the non-blocking exact-head review request"
+        stabilization_position < stabilized_head_position
+            && stabilized_head_position < validation_label_position,
+        "complete validation must start only after bounded exact-head review stabilization"
     );
     for required in [
         "pr:review-local:",
@@ -110,6 +104,8 @@ fn complete_validation_starts_before_non_blocking_review_request() -> Result<()>
         "Cloud review will request Cursor Bugbot if Codex reports a usage limit.",
         "pr:review:",
         "CI_AGENT_CMD: pr-review",
+        "pr:review:stabilize:",
+        "CI_AGENT_CMD: pr-review-stabilize",
     ] {
         assert!(
             agentic_tasks.contains(required),
@@ -117,21 +113,28 @@ fn complete_validation_starts_before_non_blocking_review_request() -> Result<()>
         );
     }
     assert!(
-        direct_validation.contains("validation is already running"),
-        "review-request failure must not block validation"
+        direct_validation.contains("REQUEST_REVIEW_WAIT_SECONDS"),
+        "review stabilization must expose a bounded wait"
     );
     assert!(
         direct_validation.contains(
-            "changed head after validation dispatch; validate the replacement head explicitly.\" >&2\n          exit 2"
+            "changed head during review stabilization; validate the replacement head explicitly.\" >&2\n          exit 2"
         ),
-        "a head change after dispatch must fail so the replacement head is validated"
+        "a head change during stabilization must fail so the replacement head is validated"
     );
-    assert!(
-        direct_validation.contains(
-            "changed head while requesting review; validate the replacement head explicitly.\" >&2\n          exit 2"
-        ),
-        "a head change during the review request must fail so the replacement head is validated"
-    );
+
+    let replacement_head = read_fallible(".github/workflows/pr-head-stabilization.yml")?;
+    for required in [
+        "pull_request:",
+        "types: [synchronize]",
+        "group: pr-${{ github.event.pull_request.number }}",
+        "cancel-in-progress: true",
+    ] {
+        assert!(
+            replacement_head.contains(required),
+            "replacement-head cancellation contract missing: {required}"
+        );
+    }
     Ok(())
 }
 
