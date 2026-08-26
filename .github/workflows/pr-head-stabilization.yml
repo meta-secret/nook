@@ -89,6 +89,7 @@ jobs:
                 const runCreatedAt = Date.parse(run.created_at);
                 const predatesBaseRetarget =
                   baseRetargeted &&
+                  run.name !== "Web research" &&
                   Number.isFinite(baseRetargetedAt) &&
                   Number.isFinite(runCreatedAt) &&
                   runCreatedAt <= baseRetargetedAt;
@@ -119,6 +120,7 @@ jobs:
                 const runCreatedAt = Date.parse(run.created_at);
                 const staleForBaseRetarget =
                   baseRetargeted &&
+                  run.name !== "Web research" &&
                   latestPr.head.sha === eventHeadSha &&
                   latestPr.base.ref === eventBaseRef &&
                   Number.isFinite(baseRetargetedAt) &&

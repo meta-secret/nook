@@ -169,6 +169,7 @@ fn complete_validation_waits_for_bounded_review_stabilization() -> Result<()> {
         "pull-requests: read",
         "context.payload.changes?.base?.ref?.from",
         "Ignoring PR edit without a base-ref change.",
+        "run.name !== \"Web research\"",
         "runCreatedAt <= baseRetargetedAt",
         "latestPr.base.ref === eventBaseRef",
         "github.rest.actions.listWorkflowRuns",
