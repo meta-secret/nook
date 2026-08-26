@@ -841,7 +841,6 @@
   - [Task commands](workflows/ci-pipeline.md#task-commands)
   - [Portable Rust crate coverage export](workflows/ci-pipeline.md#portable-rust-crate-coverage-export)
   - [Agent host vs GitHub-hosted execution](workflows/ci-pipeline.md#agent-host-vs-github-hosted-execution)
-  - [CI operator and agent operations](workflows/ci-pipeline.md#ci-operator-and-agent-operations)
 - [CI Operator and Agent Operations](workflows/ci-operations.md)
   - [Overview](workflows/ci-operations.md#overview)
   - [Storage reclamation](workflows/ci-operations.md#storage-reclamation)

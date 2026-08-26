@@ -34,51 +34,83 @@ jobs:
               "waiting",
               "pending",
             ];
-            const { data: livePr } = await github.rest.pulls.get({
-              ...context.repo,
-              pull_number: prNumber,
-            });
-            const runs = (
-              await Promise.all(
-                validationWorkflows.flatMap((workflow) =>
-                  activeStatuses.map((status) =>
-                    github.paginate(github.rest.actions.listWorkflowRuns, {
-                      ...context.repo,
-                      workflow_id: workflow.file,
-                      branch: livePr.head.ref,
-                      event: "pull_request",
-                      status,
-                      per_page: 100,
-                    })
-                  )
-                )
-              )
-            ).flat();
-            const obsoleteRuns = runs.filter((run) =>
-              run.head_sha !== livePr.head.sha &&
-              validationWorkflows.some((workflow) => workflow.name === run.name) &&
-              run.pull_requests.some((pullRequest) =>
-                pullRequest.number === prNumber
-              )
-            );
-            for (const run of obsoleteRuns) {
+            const inspectionDeadline = Date.now() + 45_000;
+            const inspectedRunIds = new Set();
+            let obsoleteRunCount = 0;
+            let liveHeadSha = context.payload.pull_request.head.sha;
+            do {
               const { data: currentPr } = await github.rest.pulls.get({
                 ...context.repo,
                 pull_number: prNumber,
               });
-              if (run.head_sha === currentPr.head.sha) {
-                core.info(`Keeping current-head ${run.name} run ${run.id}.`);
-                continue;
-              }
-              core.info(
-                `Cancelling obsolete ${run.name} run ${run.id} at ${run.head_sha}`
+              liveHeadSha = currentPr.head.sha;
+              const runs = (
+                await Promise.all(
+                  validationWorkflows.flatMap((workflow) =>
+                    activeStatuses.map((status) =>
+                      github.paginate(github.rest.actions.listWorkflowRuns, {
+                        ...context.repo,
+                        workflow_id: workflow.file,
+                        branch: currentPr.head.ref,
+                        event: "pull_request",
+                        status,
+                        per_page: 100,
+                      })
+                    )
+                  )
+                )
+              ).flat();
+              const obsoleteRuns = runs.filter((run) =>
+                !inspectedRunIds.has(run.id) &&
+                run.head_sha !== currentPr.head.sha &&
+                validationWorkflows.some((workflow) => workflow.name === run.name) &&
+                run.pull_requests.some((pullRequest) =>
+                  pullRequest.number === prNumber
+                )
               );
-              await github.rest.actions.cancelWorkflowRun({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                run_id: run.id,
-              });
-            }
+              for (const run of obsoleteRuns) {
+                inspectedRunIds.add(run.id);
+                obsoleteRunCount += 1;
+                const { data: latestPr } = await github.rest.pulls.get({
+                  ...context.repo,
+                  pull_number: prNumber,
+                });
+                liveHeadSha = latestPr.head.sha;
+                if (run.head_sha === latestPr.head.sha) {
+                  core.info(`Keeping current-head ${run.name} run ${run.id}.`);
+                  continue;
+                }
+                core.info(
+                  `Cancelling obsolete ${run.name} run ${run.id} at ${run.head_sha}`
+                );
+                try {
+                  await github.rest.actions.cancelWorkflowRun({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    run_id: run.id,
+                  });
+                } catch (error) {
+                  const { data: latestRun } =
+                    await github.rest.actions.getWorkflowRun({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      run_id: run.id,
+                    });
+                  if (latestRun.status === "completed") {
+                    core.info(
+                      `${run.name} run ${run.id} completed before cancellation.`
+                    );
+                  } else {
+                    core.warning(
+                      `Could not cancel obsolete ${run.name} run ${run.id}: ${error.message}`
+                    );
+                  }
+                }
+              }
+              if (Date.now() < inspectionDeadline) {
+                await new Promise((resolve) => setTimeout(resolve, 5_000));
+              }
+            } while (Date.now() < inspectionDeadline);
             core.info(
-              `Inspected ${obsoleteRuns.length} obsolete validation run(s) for PR #${prNumber}; live head is ${livePr.head.sha}.`
+              `Inspected ${obsoleteRunCount} obsolete validation run(s) for PR #${prNumber}; live head is ${liveHeadSha}.`
             );

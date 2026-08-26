@@ -225,3 +225,37 @@ test("stabilizeExactHeadReview bounds feedback errors after review settles", asy
   assert.equal(result.state, ReviewStabilizationState.TimedOut);
   assert.equal(feedbackInspections, 4);
 });
+
+test("stabilizeExactHeadReview bounds a stalled feedback request", async () => {
+  let now = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: () => new Promise(() => {}),
+    now: () => now,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    timeoutMs: 30,
+    waitMs: async (milliseconds) => {
+      now += milliseconds;
+    },
+  });
+
+  assert.equal(now, 0);
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
+});
+
+test("stabilizeExactHeadReview bounds a stalled review request", async () => {
+  let now = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => cleanFeedback,
+    now: () => now,
+    pollIntervalMs: 15,
+    requestReview: () => new Promise(() => {}),
+    timeoutMs: 30,
+    waitMs: async (milliseconds) => {
+      now += milliseconds;
+    },
+  });
+
+  assert.equal(now, 0);
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
+});

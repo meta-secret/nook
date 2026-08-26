@@ -24,6 +24,16 @@ type ReviewStabilizationInput = {
   waitMs: (milliseconds: number) => Promise<void>;
 };
 
+type BoundedAttempt<T> =
+  | { completed: true; value: T }
+  | { completed: false };
+
+type BoundedAttemptInput<T> = {
+  deadline: number;
+  now: () => number;
+  operation: () => Promise<T>;
+};
+
 export enum ReviewStabilizationState {
   CircuitBreaker = "circuit-breaker",
   Clean = "clean",
@@ -89,7 +99,15 @@ export async function stabilizeExactHeadReview(
   let settled = false;
   while (true) {
     try {
-      const feedback = await input.inspectFeedback();
+      const inspection = await attemptBeforeDeadline({
+        deadline,
+        now: input.now,
+        operation: input.inspectFeedback,
+      });
+      if (!inspection.completed) {
+        return { headSha, state: ReviewStabilizationState.TimedOut };
+      }
+      const feedback = inspection.value;
       const findingState = classifyFeedbackState(feedback);
       if (findingState !== ReviewStabilizationState.Clean) {
         return { feedback, headSha, state: findingState };
@@ -108,7 +126,15 @@ export async function stabilizeExactHeadReview(
     let settledAfterRequest = false;
     if (!settled) {
       try {
-        const review = await input.requestReview();
+        const request = await attemptBeforeDeadline({
+          deadline,
+          now: input.now,
+          operation: input.requestReview,
+        });
+        if (!request.completed) {
+          return { headSha, state: ReviewStabilizationState.TimedOut };
+        }
+        const review = request.value;
         headSha = review.headSha;
         settled = review.settled;
         settledAfterRequest = review.settled;
@@ -119,7 +145,15 @@ export async function stabilizeExactHeadReview(
     }
     if (settledAfterRequest) {
       try {
-        const feedback = await input.inspectFeedback();
+        const inspection = await attemptBeforeDeadline({
+          deadline,
+          now: input.now,
+          operation: input.inspectFeedback,
+        });
+        if (!inspection.completed) {
+          return { headSha, state: ReviewStabilizationState.TimedOut };
+        }
+        const feedback = inspection.value;
         const findingState = classifyFeedbackState(feedback);
         return { feedback, headSha, state: findingState };
       } catch {
@@ -137,6 +171,28 @@ export async function stabilizeExactHeadReview(
     const remainingMs = deadline - input.now();
     await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
   }
+}
+
+async function attemptBeforeDeadline<T>(
+  input: BoundedAttemptInput<T>,
+): Promise<BoundedAttempt<T>> {
+  const remainingMs = Math.max(0, input.deadline - input.now());
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => resolve({ completed: false }),
+      remainingMs,
+    );
+    Promise.resolve()
+      .then(input.operation)
+      .then((value) => {
+        clearTimeout(timer);
+        resolve({ completed: true, value });
+      })
+      .catch((error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+  });
 }
 
 function classifyFeedbackState(

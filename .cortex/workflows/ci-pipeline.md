@@ -997,7 +997,3 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Before live probes, the workflow purges the affected URLs so a cached fallback cannot survive a deployment switch.
 - Extension metadata, ZIP, and checksum verification adds an attempt-specific exact-commit query to every mutable artifact URL and retries convergence on PR, main, and release.
 - This prevents a fresh metadata response from being paired with an older edge-cached archive that reused the same channel filename.
-
-## CI operator and agent operations
-[CI Operator and Agent Operations](ci-operations.md) owns cleanup, logs,
-secrets, providers, automation agents, and the remote-only execution rules.
