@@ -215,6 +215,41 @@ describe('sealed source analysis runtime', () => {
     await expect(Promise.all([first, ...pending])).resolves.toHaveLength(9);
   });
 
+  test('does not invoke a queued executor after its execution reserve expires', async () => {
+    let releaseFirst = (): void => {};
+    const firstWait = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const analysis: ExecutableSkillSourceAnalysis = { moduleSpecifiers: [] };
+    const serializedResult = encodeSourceAnalysisResult(analysis);
+    let invocation = 0;
+    const executeContainer: SourceAnalysisContainerExecutor = async () => {
+      invocation += 1;
+      if (invocation === 1) await firstWait;
+      return { serializedResult };
+    };
+    const dependencies: SourceAnalysisRuntimeDependencies = {
+      executeContainer,
+    };
+    const firstExecution = {
+      dependencies,
+      request: analysisRequest('export {};'),
+    };
+    const first = runSourceAnalysisWithDependencies(firstExecution);
+    await Bun.sleep(5);
+    const queuedRequest: RunExecutableSkillSourceAnalysisRequest = {
+      ...analysisRequest('export {};'),
+      deadlineExpiresAt: Date.now() + 20_050,
+    };
+    const queuedExecution = { dependencies, request: queuedRequest };
+    await expect(
+      runSourceAnalysisWithDependencies(queuedExecution),
+    ).rejects.toThrow('execution budget expired');
+    expect(invocation).toBe(1);
+    releaseFirst();
+    await expect(first).resolves.toEqual(analysis);
+  });
+
   test('rejects expired and unbounded total deadlines before queueing', async () => {
     const executeContainer: SourceAnalysisContainerExecutor = async () => {
       throw new Error('executor must remain unreachable');

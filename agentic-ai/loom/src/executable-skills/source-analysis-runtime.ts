@@ -51,6 +51,7 @@ type SlotWaitOutcome = SlotWaitKind.Interrupted | SlotWaitKind.Ready;
 let sourceAnalysisTail: Promise<void> = Promise.resolve();
 let sourceAnalysisPending = 0;
 const MINIMUM_SOURCE_ANALYSIS_MILLISECONDS = 20_000;
+const MINIMUM_SOURCE_ANALYSIS_EXECUTION_MILLISECONDS = 20_000;
 const MAXIMUM_SOURCE_ANALYSIS_MILLISECONDS = 5 * 60 * 1_000;
 const MAXIMUM_PENDING_SOURCE_ANALYSES = 8;
 
@@ -88,7 +89,7 @@ export async function runSourceAnalysisWithDependencies(
   };
   const slot = await acquireSourceAnalysisSlot(slotRequest);
   try {
-    assertSourceAnalysisActive(request);
+    assertSourceAnalysisExecutionBudget(request);
     const serializedRequest = encodeSourceAnalysisRequest(request);
     const containerRequest: RunSealedSourceAnalysisContainerRequest = {
       deadlineExpiresAt: request.deadlineExpiresAt,
@@ -144,7 +145,7 @@ async function acquireSourceAnalysisSlot(
   }
   if (outcome === SlotWaitKind.Interrupted) {
     releaseCurrent();
-    assertSourceAnalysisActive(request);
+    assertSourceAnalysisExecutionBudget(request);
     throw new Error('Sealed source analysis slot wait was interrupted.');
   }
   let released = false;
@@ -173,7 +174,12 @@ function waitForSourceAnalysisSlot(
   let listener: (() => void) | false = false;
   const promise = new Promise<SlotWaitOutcome>((resolve) => {
     request.previous.then(() => resolve(SlotWaitKind.Ready));
-    const delay = Math.max(0, request.deadlineExpiresAt - Date.now());
+    const delay = Math.max(
+      0,
+      request.deadlineExpiresAt -
+        MINIMUM_SOURCE_ANALYSIS_EXECUTION_MILLISECONDS -
+        Date.now(),
+    );
     timer = setTimeout(() => resolve(SlotWaitKind.Interrupted), delay);
     if (request.signal !== false) {
       listener = () => resolve(SlotWaitKind.Interrupted);
@@ -189,6 +195,18 @@ function waitForSourceAnalysisSlot(
     },
     promise,
   };
+}
+
+function assertSourceAnalysisExecutionBudget(
+  request: RunExecutableSkillSourceAnalysisRequest | SourceAnalysisSlotRequest,
+): void {
+  assertSourceAnalysisActive(request);
+  if (
+    request.deadlineExpiresAt - Date.now() <
+    MINIMUM_SOURCE_ANALYSIS_EXECUTION_MILLISECONDS
+  ) {
+    throw new Error('Sealed source analysis execution budget expired.');
+  }
 }
 
 function assertSourceAnalysisActive(
