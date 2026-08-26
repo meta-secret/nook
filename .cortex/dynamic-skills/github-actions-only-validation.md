@@ -27,11 +27,15 @@ Validation has three layers:
   `task remote TASK_NAME=<name>` only when one isolated gate gives faster
   feedback than complete validation.
   - Do not batch broad gates sequentially before complete validation.
+  - Use only selectors listed by `task remote:list`. A local Docker-backed task
+    remains unavailable until it has a Kubernetes-native Pod implementation.
 - **Required remotely:** explicitly trigger complete exact-head PR validation.
   - Trusted same-repository native Rust and Rust ecosystem PR jobs and Main
     build producers select ARC.
   - General ARC provides persistent BuildKit for image producers.
   - Container ARC creates an ordinary Kubernetes job Pod from each exact image.
+  - Playwright executes directly inside that Pod. It never launches a nested Docker or Podman container.
+  - BuildKit builds and exports images only. It does not execute workloads.
   - Main's portable WASM cache proof uses the general ARC scale set.
   - Fork and Dependabot code stays on secret-free GitHub-hosted workers.
 

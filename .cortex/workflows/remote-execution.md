@@ -5,7 +5,8 @@
 Trusted focused tasks run on Nook's ARC scale sets in the k0s cluster.
 
 General `nook-k0s` runners are disposable ordinary Pods. Their Docker CLI
-connects to the persistent rootless BuildKit shard on the selected node.
+connects to the persistent rootless BuildKit shard on the selected node for
+build and export operations only. It is not a container runtime.
 
 ARC runners receive no:
 
@@ -44,10 +45,10 @@ List the allowlisted catalog:
 task remote:list
 ```
 
-Dispatch one task:
+Dispatch one Kubernetes-native task:
 
 ```bash
-task remote TASK_NAME=rust:test
+task remote TASK_NAME=rust:ci
 ```
 
 Dispatch one ARC-native Rust task:
@@ -56,10 +57,10 @@ Dispatch one ARC-native Rust task:
 task remote TASK_NAME=rust:ci
 ```
 
-Reuse one ARC job for a batch:
+Reuse one ARC job for a Kubernetes-native batch:
 
 ```bash
-task remote TASK_NAMES=rust:test,web:check,web:test
+task remote TASK_NAMES=preflight,rust:ci
 ```
 
 Routing rules:
@@ -71,6 +72,10 @@ Routing rules:
 - Other mixed batches use the general `nook-k0s` scale set.
 - Fork and Dependabot jobs stay hosted and secret-free.
 - Browser jobs use ordinary Pods on `nook-k0s-container`.
+- Do not expose selectors whose Taskfile path reaches `docker run`, `docker
+  create`, `docker start`, `docker exec`, or another runtime lifecycle command.
+- Keep a selector unavailable until it has a direct ordinary-Pod or build-only
+  implementation.
 
 Batch rules:
 
@@ -107,17 +112,22 @@ Security rules:
 - Disable runner Kubernetes service-account tokens.
 - Prohibit DinD, Docker daemons, Podman, Sysbox, host runtime sockets, runner
   host paths, privileged runners, and Kata runtime classes.
+- Prohibit `docker run`, `docker create`, `docker start`, `docker exec`, and equivalent container runtime lifecycle commands inside cluster Pods.
+- Run Playwright directly in a purpose-built browser Pod image. Installing Playwright directly in an Actions Pod is the slower fallback; never launch a browser container from another Pod.
+- Treat BuildKit as a build-only service. A produced image executes later as an ordinary Kubernetes Pod or Job.
 - Give Remote read-only access to Main cache refs.
 - Give Remote write access only to commit-scoped refs.
 - Mount SeaweedFS credentials only as fixed BuildKit secrets.
 - Never place credential bytes in build arguments, layers, or cache checksums.
 
-The narrow ARC tasks avoid a general container-runtime requirement:
+The allowlisted ARC tasks avoid a general container-runtime requirement:
 
 - `rust:ci` executes formatting, Clippy, tests, and coverage in BuildKit stages.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
 - `hive:verify` executes exported tests through its pinned native runtime
   sidecar.
+- `web:build`, `web:e2e`, `extension:e2e`, `check`, `ci:pr`, and `ci:pr:e2e`
+  execute directly inside an ordinary exact-image Pod.
 
 Every dispatch requires:
 
