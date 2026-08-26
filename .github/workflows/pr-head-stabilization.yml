@@ -1,0 +1,25 @@
+name: Cancel obsolete PR validation
+
+on:
+  pull_request:
+    types: [synchronize]
+
+permissions:
+  contents: read
+
+# PR validation uses this same repository-wide group. A replacement head therefore
+# cancels the prior expensive run before another validation request is made.
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  replacement-head:
+    name: Register replacement head
+    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    timeout-minutes: 1
+    steps:
+      - name: Record cancellation boundary
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: echo "Replacement PR head is ${HEAD_SHA}; obsolete validation is cancelled."

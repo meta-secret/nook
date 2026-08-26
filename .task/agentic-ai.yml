@@ -552,6 +552,18 @@ tasks:
           PR: '{{.PR}}'
           CI_AGENT_CMD: pr-review
 
+  pr:review:stabilize:
+    desc: Wait for an exact-head Cloud review before expensive validation, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600).
+    requires:
+      vars: [PR]
+    env:
+      REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
+    cmds:
+      - task: pr:ci-agent:audit
+        vars:
+          PR: '{{.PR}}'
+          CI_AGENT_CMD: pr-review-stabilize
+
   pr:review-local:
     desc: Run an advisory local Codex review against origin/main; unavailable Codex access skips without blocking delivery.
     cmds:
