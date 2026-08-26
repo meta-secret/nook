@@ -263,6 +263,7 @@ export type PrFeedbackSummary = {
   };
   currentIterationComments: number;
   findingBatches: number;
+  headTransitionObserved: boolean;
   substantiveComments: number;
   substantiveReviews: number;
   unresolvedThreads: number;
@@ -277,9 +278,23 @@ type RepositoryStatusCommentInput = {
 };
 
 type PullRequestHeadIdentity = {
-  createdAt: string;
   ref: string;
   sha: string;
+};
+
+enum HeadTransitionState {
+  Observed = "observed",
+  Pending = "pending",
+}
+
+type HeadTransitionBoundary =
+  | { at: string; state: HeadTransitionState.Observed }
+  | { state: HeadTransitionState.Pending };
+
+type CurrentHeadTransitionInput = {
+  head: PullRequestHeadIdentity;
+  octokit: Octokit;
+  repoRef: RepoRef;
 };
 
 type PushEventPayload = {
@@ -287,11 +302,10 @@ type PushEventPayload = {
   readonly ref?: string;
 };
 
-async function loadCurrentHeadTransitionAt(
-  octokit: Octokit,
-  repoRef: RepoRef,
-  head: PullRequestHeadIdentity,
-): Promise<string> {
+async function loadCurrentHeadTransition(
+  input: CurrentHeadTransitionInput,
+): Promise<HeadTransitionBoundary> {
+  const { head, octokit, repoRef } = input;
   const { owner, repo } = repoRef;
   const repositoryEvents = await octokit.paginate(
     octokit.rest.activity.listRepoEvents,
@@ -303,22 +317,10 @@ async function loadCurrentHeadTransitionAt(
     const payload = event.payload as typeof event.payload & PushEventPayload;
     return payload.ref === expectedRef && payload.head === head.sha;
   });
-  if (pushEvent?.created_at) return pushEvent.created_at;
-
-  const { data: workflowRunsPage } =
-    await octokit.rest.actions.listWorkflowRunsForRepo({
-      branch: head.ref,
-      event: "pull_request",
-      head_sha: head.sha,
-      owner,
-      per_page: 100,
-      repo,
-    });
-  const workflowRuns = workflowRunsPage.workflow_runs;
-  const indexedAt = workflowRuns
-    .map((run) => run.created_at)
-    .sort()[0];
-  return indexedAt ?? head.createdAt;
+  if (pushEvent?.created_at) {
+    return { at: pushEvent.created_at, state: HeadTransitionState.Observed };
+  }
+  return { state: HeadTransitionState.Pending };
 }
 
 export async function inspectPrFeedback(
@@ -332,11 +334,16 @@ export async function inspectPrFeedback(
     repo,
     pull_number: prNumber,
   });
-  const currentHeadAt = await loadCurrentHeadTransitionAt(octokit, repoRef, {
-    createdAt: pr.created_at,
+  const currentHeadIdentity: PullRequestHeadIdentity = {
     ref: pr.head.ref,
     sha: pr.head.sha,
-  });
+  };
+  const transitionInput: CurrentHeadTransitionInput = {
+    head: currentHeadIdentity,
+    octokit,
+    repoRef,
+  };
+  const currentHeadTransition = await loadCurrentHeadTransition(transitionInput);
 
   let unresolvedThreads = 0;
   enum PaginationKind {
@@ -444,11 +451,14 @@ export async function inspectPrFeedback(
       }) &&
       !isCodexCleanReviewStatusComment(comment.body ?? "", comment.user),
   );
-  const currentIterationComments = substantiveComments.filter(
-    (comment) =>
-      comment.created_at >= currentHeadAt &&
-      !isNonActionableReviewBody(comment.body ?? ""),
-  );
+  const currentIterationComments =
+    currentHeadTransition.state === HeadTransitionState.Observed
+      ? substantiveComments.filter(
+          (comment) =>
+            comment.created_at >= currentHeadTransition.at &&
+            !isNonActionableReviewBody(comment.body ?? ""),
+        )
+      : [];
   const substantiveReviews = reviews.filter((review) => {
     if (
       review.commit_id !== pr.head.sha ||
@@ -513,6 +523,8 @@ export async function inspectPrFeedback(
     },
     currentIterationComments: currentIterationComments.length,
     findingBatches: countAutomatedFindingBatches(findingBatchRequest),
+    headTransitionObserved:
+      currentHeadTransition.state === HeadTransitionState.Observed,
     substantiveComments: substantiveComments.length,
     substantiveReviews: substantiveReviews.length,
     unresolvedThreads,

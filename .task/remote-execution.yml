@@ -119,11 +119,16 @@ tasks:
         .github/scripts/require-current-base.sh origin "$stabilized_base_ref"
 
         validation_label="ci:validate"
+        stale_validation_label="ci:full-e2e"
         if [ "$REQUEST_FULL_E2E" = "1" ]; then
           validation_label="ci:full-e2e"
+          stale_validation_label="ci:validate"
         fi
 
         current_labels="$(gh pr view "$REQUESTED_PR" --json labels --jq '.labels[].name')"
+        if printf '%s\n' "$current_labels" | grep -Fxq "$stale_validation_label"; then
+          gh pr edit "$REQUESTED_PR" --remove-label "$stale_validation_label"
+        fi
         if printf '%s\n' "$current_labels" | grep -Fxq "$validation_label"; then
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi

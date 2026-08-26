@@ -80,7 +80,7 @@ test("buildPrAudit excludes historical comments before the first exact-head requ
   assert.equal(audit.feedback.currentIterationComments, 0);
 });
 
-test("buildPrAudit includes comments on the current head before its exact-head request", async () => {
+test("buildPrAudit leaves comments unclassified while the head transition is pending", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
       codexReview: MockCodexReview.Missing,
@@ -92,7 +92,9 @@ test("buildPrAudit includes comments on the current head before its exact-head r
   );
 
   assert.equal(audit.ready, false);
-  assert.equal(audit.feedback.currentIterationComments, 1);
+  assert.equal(audit.feedback.currentIterationComments, 0);
+  assert.equal(audit.feedback.headTransitionObserved, false);
+  assert.equal(audit.feedback.substantiveComments, 1);
 });
 
 test("buildPrAudit does not wait for a current-head Codex review", async () => {
@@ -615,17 +617,6 @@ function createMockOctokit(options: MockOptions): Octokit {
                 id: 42,
                 pull_requests: [{ number: 410 }],
                 status: options.runStatus ?? MockRunStatus.Completed,
-              },
-            ],
-          },
-        }),
-        listWorkflowRunsForRepo: async () => ({
-          data: {
-            total_count: 1,
-            workflow_runs: [
-              {
-                created_at: "2026-08-08T00:01:05Z",
-                head_sha: headSha,
               },
             ],
           },

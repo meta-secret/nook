@@ -22,6 +22,7 @@ const cleanFeedback: PrFeedbackSummary = {
   },
   currentIterationComments: 0,
   findingBatches: 0,
+  headTransitionObserved: true,
   substantiveComments: 0,
   substantiveReviews: 0,
   unresolvedThreads: 0,
@@ -300,6 +301,64 @@ test("stabilizeExactHeadReview stops on current-iteration comments", async () =>
   });
 
   assert.equal(result.state, ReviewStabilizationState.Findings);
+});
+
+test("stabilizeExactHeadReview waits for the exact head transition boundary", async () => {
+  let inspections = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      inspections += 1;
+      return inspections === 1
+        ? {
+            ...cleanFeedback,
+            headTransitionObserved: false,
+            substantiveComments: 1,
+          }
+        : { ...cleanFeedback, currentIterationComments: 1 };
+    },
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(inspections, 2);
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+});
+
+test("stabilizeExactHeadReview fails closed when comments cannot be assigned before timeout", async () => {
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      headTransitionObserved: false,
+      substantiveComments: 1,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    timeoutMs: 0,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+  assert.equal(result.feedback?.substantiveComments, 1);
+});
+
+test("stabilizeExactHeadReview permits a comment-free pending boundary to time out", async () => {
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => ({
+      ...cleanFeedback,
+      headTransitionObserved: false,
+    }),
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: false }),
+    timeoutMs: 0,
+    waitMs: async () => {},
+  });
+
+  assert.equal(result.state, ReviewStabilizationState.TimedOut);
 });
 
 test("stabilizeExactHeadReview bounds transient request errors", async () => {

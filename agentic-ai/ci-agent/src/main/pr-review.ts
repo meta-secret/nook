@@ -43,6 +43,13 @@ export enum ReviewStabilizationState {
   TimedOut = "timed-out",
 }
 
+enum FeedbackClassificationState {
+  CircuitBreaker = "circuit-breaker",
+  Clean = "clean",
+  Findings = "findings",
+  PendingHeadTransition = "pending-head-transition",
+}
+
 export type ReviewStabilizationResult = {
   feedback?: PrFeedbackSummary;
   headSha: string;
@@ -103,6 +110,7 @@ export async function stabilizeExactHeadReview(
       ? deadline + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
       : deadline;
   let headSha = "";
+  let latestFeedback: PrFeedbackSummary | undefined;
   let settled = false;
   while (true) {
     try {
@@ -115,14 +123,26 @@ export async function stabilizeExactHeadReview(
         return { headSha, state: ReviewStabilizationState.TimedOut };
       }
       const feedback = inspection.value;
+      latestFeedback = feedback;
       const findingState = classifyFeedbackState(
         feedback,
         input.circuitBreakerAcknowledged ?? false,
       );
-      if (findingState !== ReviewStabilizationState.Clean) {
-        return { feedback, headSha, state: findingState };
+      if (findingState === FeedbackClassificationState.CircuitBreaker) {
+        return {
+          feedback,
+          headSha,
+          state: ReviewStabilizationState.CircuitBreaker,
+        };
       }
-      if (settled && feedback.codexReview.settled) {
+      if (findingState === FeedbackClassificationState.Findings) {
+        return { feedback, headSha, state: ReviewStabilizationState.Findings };
+      }
+      if (
+        findingState === FeedbackClassificationState.Clean &&
+        settled &&
+        feedback.codexReview.settled
+      ) {
         return {
           feedback,
           headSha,
@@ -130,7 +150,7 @@ export async function stabilizeExactHeadReview(
         };
       }
       if (input.timeoutMs > 0 && input.now() >= deadline) {
-        return { feedback, headSha, state: ReviewStabilizationState.TimedOut };
+        return finalizeAtDeadline({ feedback, headSha });
       }
     } catch {
       // Retry feedback inspection until the bounded deadline. If GitHub remains
@@ -174,14 +194,29 @@ export async function stabilizeExactHeadReview(
           return { headSha, state: ReviewStabilizationState.TimedOut };
         }
         const feedback = inspection.value;
+        latestFeedback = feedback;
         const findingState = classifyFeedbackState(
           feedback,
           input.circuitBreakerAcknowledged ?? false,
         );
-        if (findingState !== ReviewStabilizationState.Clean) {
-          return { feedback, headSha, state: findingState };
+        if (findingState === FeedbackClassificationState.CircuitBreaker) {
+          return {
+            feedback,
+            headSha,
+            state: ReviewStabilizationState.CircuitBreaker,
+          };
         }
-        if (feedback.codexReview.settled) {
+        if (findingState === FeedbackClassificationState.Findings) {
+          return {
+            feedback,
+            headSha,
+            state: ReviewStabilizationState.Findings,
+          };
+        }
+        if (
+          findingState === FeedbackClassificationState.Clean &&
+          feedback.codexReview.settled
+        ) {
           return { feedback, headSha, state: ReviewStabilizationState.Clean };
         }
       } catch {
@@ -191,10 +226,7 @@ export async function stabilizeExactHeadReview(
       }
     }
     if (input.now() >= deadline) {
-      return {
-        headSha,
-        state: ReviewStabilizationState.TimedOut,
-      };
+      return finalizeAtDeadline({ feedback: latestFeedback, headSha });
     }
     const remainingMs = deadline - input.now();
     await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
@@ -226,16 +258,45 @@ async function attemptBeforeDeadline<T>(
 function classifyFeedbackState(
   feedback: PrFeedbackSummary,
   circuitBreakerAcknowledged: boolean,
-): ReviewStabilizationState {
+): FeedbackClassificationState {
   if (feedback.findingBatches >= 3 && !circuitBreakerAcknowledged) {
-    return ReviewStabilizationState.CircuitBreaker;
+    return FeedbackClassificationState.CircuitBreaker;
   }
   const hasFindings =
     feedback.currentIterationComments > 0 ||
     feedback.substantiveReviews > 0 ||
     feedback.unresolvedThreads > 0;
-  if (!hasFindings) return ReviewStabilizationState.Clean;
-  return ReviewStabilizationState.Findings;
+  if (hasFindings) return FeedbackClassificationState.Findings;
+  if (!feedback.headTransitionObserved) {
+    return FeedbackClassificationState.PendingHeadTransition;
+  }
+  return FeedbackClassificationState.Clean;
+}
+
+type DeadlineFinalizationInput = {
+  feedback?: PrFeedbackSummary;
+  headSha: string;
+};
+
+function finalizeAtDeadline(
+  input: DeadlineFinalizationInput,
+): ReviewStabilizationResult {
+  if (
+    input.feedback &&
+    !input.feedback.headTransitionObserved &&
+    input.feedback.substantiveComments > 0
+  ) {
+    return {
+      feedback: input.feedback,
+      headSha: input.headSha,
+      state: ReviewStabilizationState.Findings,
+    };
+  }
+  return {
+    feedback: input.feedback,
+    headSha: input.headSha,
+    state: ReviewStabilizationState.TimedOut,
+  };
 }
 
 function readCircuitBreakerAcknowledgement(): boolean {
