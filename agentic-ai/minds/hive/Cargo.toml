@@ -20,7 +20,7 @@ axum = "0.8.8"
 clap = { version = "4.6.4", features = ["derive", "env"] }
 # Latest-derived security revision based on openai/codex
 # 37f4bb94c9f4e180535a12e3f2c2f93f4a773df0.
-codex = { package = "codex-core-api", git = "https://github.com/meta-secret/codex.git", rev = "398892dc1f7a3e030fe62d0b2318ab0f15d6aab1" }
+codex = { package = "codex-core-api", git = "https://github.com/meta-secret/codex.git", rev = "2ed034b49634797c1e8cfd57a6a4ad9d5af606e8" }
 futures = "0.3.31"
 neo4rs = "0.8.0"
 rand = "0.10.0"
