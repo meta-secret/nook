@@ -295,7 +295,10 @@ describe('ordinary delegation run aggregation', () => {
 
   test('recovers killed lock owners and their written temporary projections', async () => {
     const workingDirectory = await mkdtemp(join(tmpdir(), 'loom-aggregate-'));
-    const boundaries: readonly CrashBoundary[] = ['lock-held', 'temp-written'];
+    const boundaries: readonly CrashBoundary[] = [
+      CrashBoundary.LockHeld,
+      CrashBoundary.TempWritten,
+    ];
     try {
       for (const boundary of boundaries) {
         const fixtureInput: FixtureInput = {
@@ -309,7 +312,7 @@ describe('ordinary delegation run aggregation', () => {
           boundary,
         };
         await killCrashHolder(crashInput);
-        if (boundary === 'lock-held') {
+        if (boundary === CrashBoundary.LockHeld) {
           await proveConcurrentSuccessorSerialization(fixture.runDirectory);
           const admissionFixture: AdmissionForInput = {
             workingDirectory,
@@ -375,7 +378,10 @@ describe('ordinary delegation run aggregation', () => {
   });
 });
 
-type CrashBoundary = 'lock-held' | 'temp-written';
+enum CrashBoundary {
+  LockHeld = 'lock-held',
+  TempWritten = 'temp-written',
+}
 
 type KillCrashHolderInput = {
   readonly runDirectory: string;
@@ -446,7 +452,7 @@ async function proveConcurrentSuccessorSerialization(
     crashHolderPath,
     runDirectory,
     firstPaths.readyPath,
-    'lock-held',
+    CrashBoundary.LockHeld,
     firstPaths.releasePath,
   ];
   const secondCommand = [
@@ -454,7 +460,7 @@ async function proveConcurrentSuccessorSerialization(
     crashHolderPath,
     runDirectory,
     secondPaths.readyPath,
-    'lock-held',
+    CrashBoundary.LockHeld,
     secondPaths.releasePath,
   ];
   const spawnOptions = { stdout: 'pipe', stderr: 'pipe' } as const;
