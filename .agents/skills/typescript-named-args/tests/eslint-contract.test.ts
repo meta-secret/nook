@@ -8,7 +8,7 @@ interface SkillLintTextOptions {
 type SkillLintResults = ESLint.LintResult[];
 
 const sourceOptions: SkillLintTextOptions = {
-  filePath: 'typescript-named-args/tests/eslint-contract.test.ts',
+  filePath: 'cortex-article-structure/src/audit.ts',
 };
 
 function ruleIds(results: SkillLintResults): Array<string> {
