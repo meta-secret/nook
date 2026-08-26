@@ -382,6 +382,7 @@ describe('agent stats GitHub evidence', () => {
       runAttempt: 2,
       headSha: finalHead,
       startedAt: '2026-08-01T10:06:00Z',
+      createdAt: '2026-08-01T10:00:00Z',
       finishedAt: '2026-08-01T10:07:00Z',
       conclusion: 'success',
       status: 'in_progress',
@@ -406,7 +407,34 @@ describe('agent stats GitHub evidence', () => {
     expect(evidence.validationCycles).toHaveLength(1);
   });
 
-  test('includes queued time in action duration', () => {
+  test('measures a rerun from its attempt-specific start', () => {
+    const pages = actionPages([
+      {
+        id: 302,
+        runAttempt: 2,
+        headSha: finalHead,
+        createdAt: '2026-08-01T09:00:00Z',
+        startedAt: '2026-08-01T10:00:00Z',
+        finishedAt: '2026-08-01T10:02:00Z',
+        conclusion: 'success',
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [finalHead],
+    };
+
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs[0]?.started_at).toBe('2026-08-01T10:00:00Z');
+    expect(evidence.runs[0]?.duration_seconds).toBe(120);
+  });
+
+  test('includes queued time through the merge boundary', () => {
     const queuedRun: ActionRunFixture = {
       id: 401,
       runAttempt: 1,
@@ -429,7 +457,7 @@ describe('agent stats GitHub evidence', () => {
     };
     const evidence = buildActionsEvidence(request);
 
-    expect(evidence.runs[0]?.duration_seconds).toBe(720);
+    expect(evidence.runs[0]?.duration_seconds).toBe(600);
   });
 
   test('uses review-only heads to supersede running validation', () => {
@@ -487,35 +515,6 @@ describe('agent stats GitHub evidence', () => {
 
     expect(evidence.obsoleteValidationSeconds).toBe(0);
     expect(evidence.heads[1]?.head_sha).toBe(finalHead);
-  });
-
-  test('rejects nonterminal action attempts', () => {
-    const nonterminalRun: ActionRunFixture = {
-      id: 101,
-      runAttempt: 1,
-      headSha: finalHead,
-      startedAt: '2026-08-01T10:00:00Z',
-      finishedAt: '2026-08-01T10:01:00Z',
-      conclusion: 'success',
-      status: 'in_progress',
-    };
-    const pages = asUntrustedYamlNode([
-      {
-        total_count: 1,
-        workflow_runs: [actionRun(nonterminalRun)],
-      },
-    ]);
-    const request: BuildActionsEvidenceRequest = {
-      pages,
-      prNumber: 42,
-      finalHeadSha: finalHead,
-      mergedAt: '2026-08-01T11:00:00Z',
-      reviewEvents: [],
-      deliveryHeadOrder: [finalHead],
-    };
-    expect(() => buildActionsEvidence(request)).toThrow(
-      'retry collection after completion',
-    );
   });
 
   test('pairs review requests and outcomes with exact delivery heads', () => {

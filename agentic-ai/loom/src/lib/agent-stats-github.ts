@@ -7,6 +7,7 @@ import {
   type UntrustedYamlNode,
 } from './guards.ts';
 import {
+  collectDispatchedActionAttemptPages,
   expandActionAttemptPages,
   failGitHubCollection,
   flattenApiPages,
@@ -17,6 +18,7 @@ import {
   runGitHubApi,
   stringProperty,
   type ExpandActionAttemptPagesRequest,
+  type CollectDispatchedActionAttemptPagesRequest,
   type GitHubApiRequest,
   type GitHubPropertyRequest as PropertyRequest,
 } from './agent-stats-github-api.ts';
@@ -43,6 +45,7 @@ import {
 import {
   actionObservation,
   actionObservationRecord,
+  actionAttemptStartedAt,
   actionRunId,
   isSourcePrRun,
   validationCycleRecord,
@@ -170,6 +173,22 @@ export function collectAgentStatsGitHubEvidence(
     pages: actionPages,
   };
   const expandedActionPages = expandActionAttemptPages(attemptPagesRequest);
+  const dispatchedApiRequest: GitHubApiRequest = {
+    repoRoot: request.repoRoot,
+    endpoint: 'repos/{owner}/{repo}/actions/workflows/e2e-pr.yml/runs',
+    fields: [createdRange, 'event=workflow_dispatch', 'per_page=100'],
+  };
+  const dispatchedRequest: CollectDispatchedActionAttemptPagesRequest = {
+    repoRoot: request.repoRoot,
+    pages: runGitHubApi(dispatchedApiRequest),
+    prNumber: request.prNumber,
+  };
+  const dispatchedActionPages =
+    collectDispatchedActionAttemptPages(dispatchedRequest);
+  const allActionPages: UntrustedYamlNode = [
+    ...flattenApiPages(expandedActionPages),
+    ...flattenApiPages(dispatchedActionPages),
+  ];
   const issueCommentsRequest: GitHubApiRequest = {
     repoRoot: request.repoRoot,
     endpoint: `repos/{owner}/{repo}/issues/${request.prNumber}/comments`,
@@ -216,7 +235,7 @@ export function collectAgentStatsGitHubEvidence(
   };
   const reviews = buildReviewEvidence(reviewRequest);
   const actionsRequest: BuildActionsEvidenceRequest = {
-    pages: expandedActionPages,
+    pages: allActionPages,
     prNumber: request.prNumber,
     finalHeadSha: request.finalHeadSha,
     mergedAt: request.mergedAt,
@@ -280,22 +299,22 @@ export function buildActionsEvidence(
       prNumber: request.prNumber,
     };
     if (!isSourcePrRun(associationRequest)) continue;
-    const startedRequest: PropertyRequest = {
-      record: rawRun,
-      key: 'created_at',
-    };
-    if (requiredStringProperty(startedRequest) > request.mergedAt) continue;
+    if (actionAttemptStartedAt(rawRun) > request.mergedAt) continue;
     const observationRequest: ActionObservationRequest = {
       record: rawRun,
       prNumber: request.prNumber,
+      observedThrough: request.mergedAt,
     };
     const observation = actionObservation(observationRequest);
     const observationKey = `${observation.runId}:${observation.runAttempt}`;
     deduplicatedRuns.set(observationKey, observation);
   }
   const observations = [...deduplicatedRuns.values()];
+  const attributedObservations = observations.filter(
+    (observation) => observation.sourceAttributed,
+  );
   const headStartsRequest = {
-    actions: observations,
+    actions: attributedObservations,
     reviewEvents: request.reviewEvents,
     finalHeadSha: request.finalHeadSha,
     deliveryHeadOrder: request.deliveryHeadOrder,
@@ -305,7 +324,9 @@ export function buildActionsEvidence(
   if (!headShas.includes(request.finalHeadSha))
     headShas.push(request.finalHeadSha);
   const headObservations = headShas.map((headSha) => {
-    const runs = observations.filter((run) => run.headSha === headSha);
+    const runs = attributedObservations.filter(
+      (run) => run.headSha === headSha,
+    );
     const headRequest: BuildHeadObservationRequest = {
       headSha,
       runs,

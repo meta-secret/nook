@@ -4,11 +4,11 @@ import {
   type UntrustedYamlMap,
 } from './guards.ts';
 import {
-  failGitHubCollection,
   numberProperty,
   requiredArrayProperty,
   requiredNumberProperty,
   requiredStringProperty,
+  stringProperty,
   type GitHubPropertyRequest as PropertyRequest,
 } from './agent-stats-github-api.ts';
 
@@ -23,21 +23,19 @@ export type ActionObservation = {
   readonly durationSeconds: number;
   readonly conclusion: string;
   readonly sourcePr: number;
+  readonly sourceAttributed: boolean;
   readonly validationRequested: boolean;
 };
 
 export type ActionObservationRequest = {
   readonly record: UntrustedYamlMap;
   readonly prNumber: number;
+  readonly observedThrough: string;
 };
 
 export function actionObservation(
   request: ActionObservationRequest,
 ): ActionObservation {
-  const startedRequest: PropertyRequest = {
-    record: request.record,
-    key: 'created_at',
-  };
   const updatedRequest: PropertyRequest = {
     record: request.record,
     key: 'updated_at',
@@ -72,27 +70,44 @@ export function actionObservation(
     key: 'status',
   };
   const status = requiredStringProperty(statusRequest);
-  if (status !== 'completed') {
-    failGitHubCollection(
-      `GitHub Actions attempt ${requiredNumberProperty(runIdRequest)}:${requiredNumberProperty(attemptRequest)} is ${status}; retry collection after completion`,
-    );
-  }
-  const startedAt = requiredStringProperty(startedRequest);
-  const finishedAt = requiredStringProperty(updatedRequest);
+  const runAttempt = requiredNumberProperty(attemptRequest);
+  const recordedFinishedAt = requiredStringProperty(updatedRequest);
+  const crossesObservationBoundary =
+    recordedFinishedAt > request.observedThrough;
+  const startedAt = actionAttemptStartedAt(request.record);
+  const headSha = stringProperty(headRequest);
+  const finishedAt =
+    status !== 'completed' || crossesObservationBoundary
+      ? request.observedThrough
+      : recordedFinishedAt;
   const durationRequest: DurationSecondsRequest = { startedAt, finishedAt };
   return {
     workflow: requiredStringProperty(workflowRequest),
     runId: requiredNumberProperty(runIdRequest),
-    runAttempt: requiredNumberProperty(attemptRequest),
-    headSha: requiredStringProperty(headRequest),
+    runAttempt,
+    headSha,
     trigger: requiredStringProperty(triggerRequest),
     startedAt,
     finishedAt,
     durationSeconds: durationSeconds(durationRequest),
-    conclusion: requiredStringProperty(conclusionRequest),
+    conclusion:
+      status !== 'completed' || crossesObservationBoundary
+        ? 'nonterminal_at_merge'
+        : requiredStringProperty(conclusionRequest),
     sourcePr: request.prNumber,
+    sourceAttributed: headSha.length > 0,
     validationRequested: requiredStringProperty(validationRequest) === 'true',
   };
+}
+
+export function actionAttemptStartedAt(record: UntrustedYamlMap): string {
+  const attemptRequest: PropertyRequest = { record, key: 'run_attempt' };
+  const key =
+    requiredNumberProperty(attemptRequest) === 1
+      ? 'created_at'
+      : 'run_started_at';
+  const startedRequest: PropertyRequest = { record, key };
+  return requiredStringProperty(startedRequest);
 }
 
 export function actionRunId(run: UntrustedYamlMap): number {
@@ -147,6 +162,8 @@ export function actionObservationRecord(
     duration_seconds: observation.durationSeconds,
     conclusion: observation.conclusion,
     source_pr: observation.sourcePr,
+    source_attributed: observation.sourceAttributed,
+    validation_requested: observation.validationRequested,
   };
   return sealUntrustedYamlMap(record);
 }

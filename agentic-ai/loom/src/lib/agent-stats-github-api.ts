@@ -30,6 +30,106 @@ export type ExpandActionAttemptPagesRequest = {
   readonly pages: UntrustedYamlNode;
 };
 
+export type CollectDispatchedActionAttemptPagesRequest = {
+  readonly repoRoot: string;
+  readonly pages: UntrustedYamlNode;
+  readonly prNumber: number;
+};
+
+export function collectDispatchedActionAttemptPages(
+  request: CollectDispatchedActionAttemptPagesRequest,
+): UntrustedYamlNode {
+  const selectedRuns: UntrustedYamlMap[] = [];
+  const sourceHeadByRun = new Map<number, string>();
+  const titlePrefix = `E2E PR #${request.prNumber} @ `;
+  for (const page of flattenApiPages(request.pages)) {
+    if (!isRecord(page)) continue;
+    const runsRequest: GitHubPropertyRequest = {
+      record: page,
+      key: 'workflow_runs',
+    };
+    for (const run of requiredArrayProperty(runsRequest)) {
+      if (!isRecord(run)) continue;
+      const titleRequest: GitHubPropertyRequest = {
+        record: run,
+        key: 'display_title',
+      };
+      const displayTitle = requiredStringProperty(titleRequest);
+      if (!displayTitle.startsWith(titlePrefix)) {
+        continue;
+      }
+      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+      const runId = requiredNumberProperty(idRequest);
+      const sourceRequest: DispatchedSourceHeadRequest = {
+        displayTitle,
+        prNumber: request.prNumber,
+        runId,
+      };
+      sourceHeadByRun.set(runId, dispatchedSourceHead(sourceRequest));
+      selectedRuns.push(run);
+    }
+  }
+  const selectedPageRecord = {
+    total_count: selectedRuns.length,
+    workflow_runs: selectedRuns,
+  };
+  const selectedPage = sealUntrustedYamlMap(selectedPageRecord);
+  const expandRequest: ExpandActionAttemptPagesRequest = {
+    repoRoot: request.repoRoot,
+    pages: asUntrustedYamlNode([selectedPage]),
+  };
+  const expanded = expandActionAttemptPages(expandRequest);
+  const associatedRuns: UntrustedYamlMap[] = [];
+  for (const page of flattenApiPages(expanded)) {
+    if (!isRecord(page)) continue;
+    const runsRequest: GitHubPropertyRequest = {
+      record: page,
+      key: 'workflow_runs',
+    };
+    for (const run of requiredArrayProperty(runsRequest)) {
+      if (!isRecord(run)) continue;
+      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
+      const runId = requiredNumberProperty(idRequest);
+      const verifiedRequest: GitHubPropertyRequest = {
+        record: run,
+        key: 'source_verified',
+      };
+      const sourceVerified = stringProperty(verifiedRequest) === 'true';
+      const headSha = sourceHeadByRun.get(runId) ?? '';
+      const associatedRecord = {
+        ...run,
+        head_sha: sourceVerified ? headSha : '',
+        pull_requests: [{ number: request.prNumber }],
+      };
+      associatedRuns.push(sealUntrustedYamlMap(associatedRecord));
+    }
+  }
+  const associatedPageRecord = {
+    total_count: selectedRuns.length,
+    workflow_runs: associatedRuns,
+  };
+  const associatedPage = sealUntrustedYamlMap(associatedPageRecord);
+  return asUntrustedYamlNode([associatedPage]);
+}
+
+type DispatchedSourceHeadRequest = {
+  readonly displayTitle: string;
+  readonly prNumber: number;
+  readonly runId: number;
+};
+
+export function dispatchedSourceHead(
+  request: DispatchedSourceHeadRequest,
+): string {
+  const prefix = `E2E PR #${request.prNumber} @ `;
+  const suffixStart = request.displayTitle.indexOf(' · ', prefix.length);
+  const headSha =
+    suffixStart < 0
+      ? ''
+      : request.displayTitle.slice(prefix.length, suffixStart);
+  return /^[0-9a-f]{40}$/.test(headSha) ? headSha : '';
+}
+
 export function expandActionAttemptPages(
   request: ExpandActionAttemptPagesRequest,
 ): UntrustedYamlNode {
@@ -84,9 +184,20 @@ export function expandActionAttemptPages(
         };
         const validationRequested =
           actionAttemptRequestedValidation(validationRequest);
+        const sourceVerificationRequest: ActionAttemptSourceVerificationRequest =
+          {
+            repoRoot: request.repoRoot,
+            runId,
+            attempt,
+            attemptRecord,
+          };
+        const sourceVerified = actionAttemptSourceVerified(
+          sourceVerificationRequest,
+        );
         const expandedRecord = {
           ...attemptRecord,
           validation_requested: validationRequested ? 'true' : 'false',
+          source_verified: sourceVerified ? 'true' : 'false',
         };
         expandedRuns.push(sealUntrustedYamlMap(expandedRecord));
       }
@@ -98,6 +209,79 @@ export function expandActionAttemptPages(
   };
   const expandedPage = sealUntrustedYamlMap(expandedPageRecord);
   return asUntrustedYamlNode([expandedPage]);
+}
+
+type ActionAttemptSourceVerificationRequest = {
+  readonly repoRoot: string;
+  readonly runId: number;
+  readonly attempt: number;
+  readonly attemptRecord: UntrustedYamlMap;
+};
+
+function actionAttemptSourceVerified(
+  request: ActionAttemptSourceVerificationRequest,
+): boolean {
+  const workflowRequest: GitHubPropertyRequest = {
+    record: request.attemptRecord,
+    key: 'name',
+  };
+  if (requiredStringProperty(workflowRequest) !== 'E2E (PR)') return true;
+  const jobsRequest: GitHubApiRequest = {
+    repoRoot: request.repoRoot,
+    endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
+    fields: ['per_page=100'],
+  };
+  for (const page of flattenApiPages(runGitHubApi(jobsRequest))) {
+    if (!isRecord(page)) {
+      failGitHubCollection('GitHub Actions jobs page must be a mapping');
+    }
+    const jobsProperty: GitHubPropertyRequest = { record: page, key: 'jobs' };
+    const verificationRequest: ActionJobsVerifiedSourceRequest = {
+      jobs: requiredArrayProperty(jobsProperty),
+    };
+    if (actionJobsVerifiedSource(verificationRequest)) return true;
+  }
+  return false;
+}
+
+export type ActionJobsVerifiedSourceRequest = {
+  readonly jobs: readonly UntrustedYamlNode[];
+};
+
+export function actionJobsVerifiedSource(
+  request: ActionJobsVerifiedSourceRequest,
+): boolean {
+  return request.jobs.some((job) => {
+    if (!isRecord(job)) return false;
+    const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
+    if (requiredStringProperty(nameRequest) !== 'Build PR browser image') {
+      return false;
+    }
+    const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
+    const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
+    const stepsProperty = untrustedYamlProperty(stepsArgs);
+    if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
+      return false;
+    }
+    if (!Array.isArray(stepsProperty.value)) {
+      failGitHubCollection('GitHub field steps must be a list');
+    }
+    return stepsProperty.value.some((step) => {
+      if (!isRecord(step)) return false;
+      const stepNameRequest: GitHubPropertyRequest = {
+        record: step,
+        key: 'name',
+      };
+      const conclusionRequest: GitHubPropertyRequest = {
+        record: step,
+        key: 'conclusion',
+      };
+      return (
+        requiredStringProperty(stepNameRequest) === 'Resolve PR head SHA' &&
+        stringProperty(conclusionRequest) === 'success'
+      );
+    });
+  });
 }
 
 type ActionAttemptRequestedValidationRequest = {
