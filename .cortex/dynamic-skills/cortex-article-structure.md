@@ -142,13 +142,28 @@ Loom parses the Markdown syntax tree.
 
 It rejects mechanically provable failures:
 
-- empty mapped articles;
+- empty substantive H2 or H3 articles, including mapless articles;
 - excessive consecutive prose blocks without structural relief;
 - explicitly procedure-labeled articles that contain no ordered list;
 - invalid or growing migration-ledger entries.
 
-Loom ignores headings and lists inside block code and block quotes when they are
-examples rather than document structure.
+The audit uses Markdown syntax semantics only.
+
+- Empty code blocks, block quotes, lists, list items, and tables do not make an
+  article substantive.
+- Definitions and footnote definitions are transparent to emptiness and prose
+  density.
+- A thematic break provides structural relief between prose blocks but does not
+  make an article substantive.
+- Image-only paragraphs provide structural relief rather than prose density.
+- A GFM task control makes an article visible but does not by itself state a
+  procedure action.
+- H4-H6 headings reset prose density inside their owning H3. Their content
+  remains part of that H3 audit.
+- Procedure actions may be nested through normal Markdown containers.
+- Ordered examples inside block quotes, block code, or footnotes do not satisfy
+  a procedure article.
+- An H1 title alone does not create a substantive article.
 
 The canonical document audit rejects every Markdown AST HTML node before
 article-structure findings are accepted.

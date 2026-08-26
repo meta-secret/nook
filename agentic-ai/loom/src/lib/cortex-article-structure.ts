@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import type { Heading, Root, RootContent } from 'mdast';
+import type { Heading, Nodes, Root, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
@@ -57,9 +57,15 @@ type AuditArticleArgs = AuditDocumentArgs & {
   readonly sectionNodes: readonly RootContent[];
 };
 
+type MarkdownContentInspection = {
+  readonly node: Nodes;
+  readonly excludeProcedureExamples: boolean;
+};
+
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const PROCEDURE_HEADING =
   /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
+const INVISIBLE_TEXT = /[\s\p{Default_Ignorable_Code_Point}]/gu;
 
 export function auditCortexArticleStructure(
   args: AuditCortexArticleStructureArgs,
@@ -163,36 +169,14 @@ function invalidLedgerMessage(args: InvalidLedgerMessageArgs): string | false {
 }
 
 function auditDocument(args: AuditDocumentArgs): void {
-  const headings = args.document.root.children.filter(isHeading);
-  const mapHeading =
-    headings.find(
-      (heading) => heading.depth === 2 && nodeText(heading) === 'Document map',
-    ) ?? false;
-  if (mapHeading === false) {
-    return;
-  }
-  const mapIndex = args.document.root.children.indexOf(mapHeading);
-  const contentStartArgs: FindContentStartArgs = {
-    children: args.document.root.children,
-    mapIndex,
-  };
-  const contentStart = findContentStart(contentStartArgs);
-  if (contentStart < 0) {
-    const findingArgs: AddFindingArgs = {
-      findings: args.findings,
-      code: CortexArticleFindingCode.EmptyArticle,
-      file: args.document.relativePath,
-      line: nodeLine(mapHeading),
-      message: 'Document has no content articles after its Document map.',
-    };
-    addFinding(findingArgs);
-    return;
-  }
-
   const children = args.document.root.children;
-  for (let index = contentStart; index < children.length; index += 1) {
+  for (let index = 0; index < children.length; index += 1) {
     const node = children[index] ?? false;
-    if (node === false || node.type !== 'heading') {
+    if (
+      node === false ||
+      node.type !== 'heading' ||
+      (node.depth !== 2 && node.depth !== 3)
+    ) {
       continue;
     }
     const sectionNodeArgs: OwnedSectionNodesArgs = {
@@ -208,25 +192,6 @@ function auditDocument(args: AuditDocumentArgs): void {
     };
     auditArticle(articleArgs);
   }
-}
-
-type FindContentStartArgs = {
-  readonly children: readonly RootContent[];
-  readonly mapIndex: number;
-};
-
-function findContentStart(args: FindContentStartArgs): number {
-  for (
-    let index = args.mapIndex + 1;
-    index < args.children.length;
-    index += 1
-  ) {
-    const node = args.children[index];
-    if (node?.type === 'heading' && node.depth === 2) {
-      return index;
-    }
-  }
-  return -1;
 }
 
 type OwnedSectionNodesArgs = {
@@ -274,19 +239,44 @@ function auditArticle(args: AuditArticleArgs): void {
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
-  return node.type !== 'heading' && !isTransparentArticleNode(node);
+  if (node.type === 'heading' || isTransparentArticleNode(node)) {
+    return false;
+  }
+  const inspection: MarkdownContentInspection = {
+    excludeProcedureExamples: false,
+    node,
+  };
+  return hasVisibleMarkdownContent(inspection);
 }
 
 function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
   let consecutive = 0;
   for (const node of args.sectionNodes) {
     if (node.type === 'heading') {
-      break;
+      if (node.depth <= 3) {
+        break;
+      }
+      consecutive = 0;
+      continue;
     }
     if (isTransparentArticleNode(node)) {
       continue;
     }
+    if (node.type === 'thematicBreak') {
+      consecutive = 0;
+      continue;
+    }
     if (node.type !== 'paragraph') {
+      if (!isVisibleArticleNode(node)) {
+        continue;
+      }
+      consecutive = 0;
+      continue;
+    }
+    if (!isVisibleArticleNode(node)) {
+      continue;
+    }
+    if (!hasVisibleProseContent(node)) {
       consecutive = 0;
       continue;
     }
@@ -305,16 +295,14 @@ function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
 }
 
 function isTransparentArticleNode(node: RootContent): boolean {
-  return node.type === 'definition';
+  return node.type === 'definition' || node.type === 'footnoteDefinition';
 }
 
 function auditProcedure(args: AuditArticleArgs): void {
   if (!PROCEDURE_HEADING.test(nodeText(args.heading))) {
     return;
   }
-  const hasOrderedList = args.sectionNodes.some(
-    (node) => node.type === 'list' && node.ordered === true,
-  );
+  const hasOrderedList = args.sectionNodes.some(hasVisibleOrderedProcedureList);
   if (hasOrderedList) {
     return;
   }
@@ -328,8 +316,101 @@ function auditProcedure(args: AuditArticleArgs): void {
   addFinding(findingArgs);
 }
 
-function isHeading(node: RootContent): node is Heading {
-  return node.type === 'heading';
+function hasVisibleOrderedProcedureList(node: Nodes): boolean {
+  if (
+    node.type === 'blockquote' ||
+    node.type === 'code' ||
+    node.type === 'footnoteDefinition' ||
+    node.type === 'html'
+  ) {
+    return false;
+  }
+  if (node.type === 'list' && node.ordered === true) {
+    const inspection: MarkdownContentInspection = {
+      excludeProcedureExamples: true,
+      node,
+    };
+    if (hasVisibleMarkdownContent(inspection)) {
+      return true;
+    }
+  }
+  if (!('children' in node)) {
+    return false;
+  }
+  return node.children.some(hasVisibleOrderedProcedureList);
+}
+
+function hasVisibleMarkdownContent(args: MarkdownContentInspection): boolean {
+  const node = args.node;
+  if (
+    args.excludeProcedureExamples &&
+    (node.type === 'blockquote' || node.type === 'code')
+  ) {
+    return false;
+  }
+  if (
+    node.type === 'definition' ||
+    node.type === 'footnoteDefinition' ||
+    node.type === 'heading' ||
+    node.type === 'html' ||
+    node.type === 'thematicBreak' ||
+    node.type === 'break'
+  ) {
+    return false;
+  }
+  if (node.type === 'image' || node.type === 'imageReference') {
+    return true;
+  }
+  if (node.type === 'footnoteReference') {
+    return true;
+  }
+  if (
+    !args.excludeProcedureExamples &&
+    node.type === 'listItem' &&
+    typeof node.checked === 'boolean'
+  ) {
+    return true;
+  }
+  if ('value' in node && typeof node.value === 'string') {
+    return visibleText(node.value);
+  }
+  if (!('children' in node)) {
+    return false;
+  }
+  return node.children.some((child) => {
+    const childArgs: MarkdownContentInspection = {
+      excludeProcedureExamples: args.excludeProcedureExamples,
+      node: child,
+    };
+    return hasVisibleMarkdownContent(childArgs);
+  });
+}
+
+function hasVisibleProseContent(node: Nodes): boolean {
+  if (
+    node.type === 'definition' ||
+    node.type === 'footnoteDefinition' ||
+    node.type === 'footnoteReference' ||
+    node.type === 'heading' ||
+    node.type === 'html' ||
+    node.type === 'image' ||
+    node.type === 'imageReference' ||
+    node.type === 'thematicBreak' ||
+    node.type === 'break'
+  ) {
+    return false;
+  }
+  if ('value' in node && typeof node.value === 'string') {
+    return visibleText(node.value);
+  }
+  if (!('children' in node)) {
+    return false;
+  }
+  return node.children.some(hasVisibleProseContent);
+}
+
+function visibleText(value: string): boolean {
+  return value.replaceAll(INVISIBLE_TEXT, '').length > 0;
 }
 
 function nodeText(node: RootContent): string {

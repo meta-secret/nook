@@ -212,20 +212,10 @@ test('allows workflow and migration headings that define unordered rules', () =>
   expect(audit([document])).toEqual([]);
 });
 
-test('rejects mapped articles with no body content', () => {
+test('rejects mapless substantive articles with no body content', () => {
   const documentArgs: MakeDocumentArgs = {
     path: '.cortex/empty.md',
     content: `# Empty
-
-## Relationships
-
-- None.
-
-## Document map
-
-- [Empty article](#empty-article)
-  - Names the empty article.
-  - Read to find the failure.
 
 ## Empty article
 `,
@@ -234,6 +224,75 @@ test('rejects mapped articles with no body content', () => {
   expect(audit([document]).map((finding) => finding.code)).toContain(
     CortexArticleFindingCode.EmptyArticle,
   );
+});
+
+test('audits an empty H3 independently from its parent article', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/empty-subarticle.md',
+    content: `# Empty subarticle
+
+## Parent article
+
+The parent has content.
+
+### Empty child
+`,
+  };
+  const findings = audit([makeDocument(documentArgs)]);
+  expect(findings).toHaveLength(1);
+  expect(findings[0]?.code).toBe(CortexArticleFindingCode.EmptyArticle);
+  expect(findings[0]?.line).toBe(7);
+});
+
+test('does not treat an H1 title as a substantive article', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/title-only.md',
+    content: '# Title only\n',
+  };
+  const document = makeDocument(documentArgs);
+  expect(audit([document])).toEqual([]);
+});
+
+test('rejects Markdown containers without visible content', () => {
+  const emptyBodies = [
+    '```text\n```',
+    '    \u200B',
+    '> \u200B',
+    '- \u200B',
+    '1. \u200B',
+    '| | |\n| --- | --- |\n| | |',
+    '`\u200B`',
+    '[](https://example.com)',
+  ];
+  for (const [index, body] of emptyBodies.entries()) {
+    const documentArgs: MakeDocumentArgs = {
+      path: `.cortex/empty-${index}.md`,
+      content: `# Empty\n\n## Empty article\n\n${body}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((item) => item.code),
+    ).toEqual([CortexArticleFindingCode.EmptyArticle]);
+  }
+});
+
+test('accepts Markdown content that renders a visible image or link', () => {
+  for (const body of ['![](asset.png)', '[manual](https://example.com)']) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/visible-reference.md',
+      content: `# Visible\n\n## Reference\n\n${body}\n`,
+    };
+    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+  }
+});
+
+test('treats GFM task checkboxes as visible article content', () => {
+  for (const taskItem of ['- [x] \u200B', '- [ ] \u200B']) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/task-item.md',
+      content: `# Task item\n\n## Checklist\n\n${taskItem}\n`,
+    };
+    expect(audit([makeDocument(documentArgs)])).toEqual([]);
+  }
 });
 
 test('rejects documents with no content articles after the map', () => {
@@ -307,6 +366,8 @@ test('does not count a link definition as article content', () => {
 ## Empty article
 
 [manual]: https://example.com
+
+[^note]: Hidden explanation.
 `,
   };
   const document = makeDocument(documentArgs);
@@ -340,6 +401,8 @@ Second paragraph.
 
 [second]: https://example.com/second
 
+[^note]: Hidden explanation.
+
 Third paragraph.
 
 [third]: https://example.com/third
@@ -351,6 +414,136 @@ Fourth paragraph.
   expect(audit([document]).map((finding) => finding.code)).toContain(
     CortexArticleFindingCode.DenseArticle,
   );
+});
+
+test('uses a thematic break as structural relief but not article content', () => {
+  const structuredArgs: MakeDocumentArgs = {
+    path: '.cortex/thematic-density.md',
+    content: `# Thematic density
+
+## Explanation
+
+First paragraph.
+
+Second paragraph.
+
+* * *
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  expect(audit([makeDocument(structuredArgs)])).toEqual([]);
+
+  const emptyArgs: MakeDocumentArgs = {
+    path: '.cortex/thematic-empty.md',
+    content: '# Thematic empty\n\n## Empty article\n\n* * *\n',
+  };
+  expect(audit([makeDocument(emptyArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.EmptyArticle,
+  ]);
+});
+
+test('treats image-only paragraphs as structural rather than prose', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/image-structure.md',
+    content: `# Image structure
+
+## Reference
+
+![](one.png)
+
+![](two.png)
+
+![](three.png)
+
+![](four.png)
+`,
+  };
+  expect(audit([makeDocument(documentArgs)])).toEqual([]);
+});
+
+test('continues H3 density auditing below an H4 heading', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/h4-density.md',
+    content: `# H4 density
+
+## Parent
+
+Parent introduction.
+
+### Explanation
+
+#### Detail
+
+First paragraph.
+
+Second paragraph.
+
+Third paragraph.
+
+Fourth paragraph.
+`,
+  };
+  expect(
+    audit([makeDocument(documentArgs)]).map((item) => item.code),
+  ).toContain(CortexArticleFindingCode.DenseArticle);
+});
+
+test('recognizes ordered actions nested in normal Markdown containers', () => {
+  const acceptedArgs: MakeDocumentArgs = {
+    path: '.cortex/nested-procedure.md',
+    content:
+      '# Nested\n\n## Recovery procedure\n\n- When recovery is required:\n  1. Restore the backup.\n',
+  };
+  expect(audit([makeDocument(acceptedArgs)])).toEqual([]);
+
+  const rejectedArgs: MakeDocumentArgs = {
+    path: '.cortex/example-procedure.md',
+    content:
+      '# Example\n\n## Recovery procedure\n\n> 1. Quoted.\n\n```markdown\n1. Fenced.\n```\n\n[^hidden]:\n    1. Footnote.\n',
+  };
+  expect(audit([makeDocument(rejectedArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
+test('does not satisfy a procedure with an empty ordered item', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/empty-procedure-list.md',
+    content:
+      '# Procedure\n\n## Recovery procedure\n\nExplanation.\n\n1. \u200B\n',
+  };
+  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
+test('does not treat a checkbox alone as a procedure action', () => {
+  const documentArgs: MakeDocumentArgs = {
+    path: '.cortex/checkbox-procedure.md',
+    content: '# Procedure\n\n## Recovery procedure\n\n1. [ ] \u200B\n',
+  };
+  expect(audit([makeDocument(documentArgs)]).map((item) => item.code)).toEqual([
+    CortexArticleFindingCode.UnorderedProcedure,
+  ]);
+});
+
+test('does not qualify ordered items containing only excluded examples', () => {
+  const exampleBodies = [
+    '1. > 1. Quoted example.',
+    '1. ```markdown\n   1. Fenced example.\n   ```',
+  ];
+  for (const body of exampleBodies) {
+    const documentArgs: MakeDocumentArgs = {
+      path: '.cortex/ordered-example.md',
+      content: `# Example\n\n## Recovery procedure\n\n${body}\n`,
+    };
+    expect(
+      audit([makeDocument(documentArgs)]).map((item) => item.code),
+    ).toEqual([CortexArticleFindingCode.UnorderedProcedure]);
+  }
 });
 
 test('ignores procedure-like headings inside examples and quotes', () => {
@@ -381,10 +574,6 @@ Literal examples do not create structural articles.
 > ## Quoted procedure
 >
 > - This is quoted text.
-
-<div>
-## HTML procedure
-</div>
 `,
   };
   const document = makeDocument(documentArgs);
