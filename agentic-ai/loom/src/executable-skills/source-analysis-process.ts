@@ -34,10 +34,6 @@ type ProcessInterruption = {
   readonly promise: Promise<ProcessRaceOutcome>;
 };
 
-type StreamFailureRequest = {
-  readonly streams: readonly Promise<string>[];
-};
-
 type WaitForProcessExitRequest = {
   readonly deadlineExpiresAt: number;
   readonly exited: Promise<number>;
@@ -59,20 +55,17 @@ const MAXIMUM_BOUNDED_PROCESS_MILLISECONDS = 5 * 60 * 1_000;
 enum ProcessRaceKind {
   Completed = 'completed',
   Interrupted = 'interrupted',
-  StreamFailed = 'streamFailed',
 }
 
 type ProcessRaceOutcome =
   | {
       readonly exitCode: number;
       readonly kind: ProcessRaceKind.Completed;
+      readonly stderr: string;
+      readonly stdout: string;
     }
   | {
       readonly kind: ProcessRaceKind.Interrupted;
-    }
-  | {
-      readonly error: Error;
-      readonly kind: ProcessRaceKind.StreamFailed;
     };
 
 export async function runBoundedProcess(
@@ -107,64 +100,56 @@ export async function runBoundedProcess(
   const stdout = readBoundedStream(stdoutRequest);
   const stderr = readBoundedStream(stderrRequest);
   const interruption = createProcessInterruption(request);
+  let input = Promise.resolve();
+  let streamsSettled = false;
   try {
     if (request.stdin !== false) subprocess.stdin.write(request.stdin);
-    const input = Promise.resolve(subprocess.stdin.end());
-    const completion = subprocess.exited.then((exitCode) => {
+    input = Promise.resolve(subprocess.stdin.end()).then(() => undefined);
+    const completion = Promise.all([
+      subprocess.exited,
+      input,
+      stdout,
+      stderr,
+    ]).then(([exitCode, , completedStdout, completedStderr]) => {
       const outcome: ProcessRaceOutcome = {
         exitCode,
         kind: ProcessRaceKind.Completed,
+        stderr: completedStderr,
+        stdout: completedStdout,
       };
       return outcome;
     });
-    const streamFailureRequest: StreamFailureRequest = {
-      streams: [stdout, stderr],
-    };
-    const streamFailure = firstStreamFailure(streamFailureRequest);
     const raceCandidates: readonly Promise<ProcessRaceOutcome>[] = [
       completion,
       interruption.promise,
-      streamFailure,
     ];
     const outcome = await Promise.race(raceCandidates);
     if (outcome.kind !== ProcessRaceKind.Completed) {
-      const killRequest: KillProcessGroupRequest = { pid: subprocess.pid };
-      killProcessGroup(killRequest);
-      subprocess.kill(9);
-      const exitRequest: WaitForProcessExitRequest = {
-        deadlineExpiresAt: request.deadlineExpiresAt,
-        exited: subprocess.exited,
-      };
-      await waitForProcessExit(exitRequest);
-      const pending = [input, stdout, stderr];
-      await Promise.allSettled(pending);
-      if (outcome.kind === ProcessRaceKind.StreamFailed) throw outcome.error;
       if (request.signal !== false && request.signal.aborted) {
         throw new Error('Sealed source analysis was aborted.');
       }
       throw new Error('Sealed source analysis deadline expired.');
     }
-    await input;
-    const output = await stdout;
-    const errors = await stderr;
+    streamsSettled = true;
     assertProcessActive(request);
     return {
       exitCode: outcome.exitCode,
-      stderr: errors,
-      stdout: output,
+      stderr: outcome.stderr,
+      stdout: outcome.stdout,
     };
   } finally {
     interruption.dispose();
+    const killRequest: KillProcessGroupRequest = { pid: subprocess.pid };
+    killProcessGroup(killRequest);
     if (typeof subprocess.exitCode !== 'number') {
-      const killRequest: KillProcessGroupRequest = { pid: subprocess.pid };
-      killProcessGroup(killRequest);
       subprocess.kill(9);
-      const exitRequest: WaitForProcessExitRequest = {
-        deadlineExpiresAt: request.deadlineExpiresAt,
-        exited: subprocess.exited,
-      };
-      await waitForProcessExit(exitRequest);
     }
+    const exitRequest: WaitForProcessExitRequest = {
+      deadlineExpiresAt: request.deadlineExpiresAt,
+      exited: subprocess.exited,
+    };
+    await waitForProcessExit(exitRequest);
+    if (!streamsSettled) await Promise.allSettled([input, stdout, stderr]);
   }
 }
 
@@ -242,26 +227,6 @@ function createProcessInterruption(
     },
     promise,
   };
-}
-
-async function firstStreamFailure(
-  request: StreamFailureRequest,
-): Promise<ProcessRaceOutcome> {
-  const failures = request.streams.map(async (stream) => {
-    try {
-      await stream;
-      return await new Promise<ProcessRaceOutcome>(() => false);
-    } catch (error) {
-      const failure =
-        error instanceof Error ? error : new Error('Bounded stream failed.');
-      const outcome: ProcessRaceOutcome = {
-        error: failure,
-        kind: ProcessRaceKind.StreamFailed,
-      };
-      return outcome;
-    }
-  });
-  return await Promise.race(failures);
 }
 
 async function waitForProcessExit(

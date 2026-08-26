@@ -83,7 +83,7 @@ type RemoveSourceAnalysisContainerRequest = DockerAuthorityRequest & {
 
 type DockerCommandRequest = {
   readonly arguments: readonly string[];
-  readonly contextName: string;
+  readonly endpoint: string;
 };
 
 type ExecuteDockerCommandRequest = DockerAuthorityRequest & {
@@ -100,7 +100,7 @@ type DockerCommandSuccessRequest = {
 
 export type CreateContainerCommandRequest = {
   readonly containerName: string;
-  readonly contextName: string;
+  readonly endpoint: string;
   readonly imageId: string;
 };
 
@@ -186,7 +186,7 @@ export async function runSealedSourceAnalysisWithDependencies(
   const containerName = `nook-source-analysis-${execution.dependencies.uniqueId()}`;
   const createCommandRequest: CreateContainerCommandRequest = {
     containerName,
-    contextName: request.dockerEnvironment.contextName,
+    endpoint: request.dockerEnvironment.endpoint,
     imageId: image.imageId,
   };
   const createCommand = createContainerCommand(createCommandRequest);
@@ -554,7 +554,7 @@ export function createContainerCommand(
       'private',
       request.imageId,
     ],
-    contextName: request.contextName,
+    endpoint: request.endpoint,
   };
   return dockerCommand(commandRequest);
 }
@@ -775,7 +775,7 @@ async function executeDockerCommand(
 ): Promise<BoundedProcessOutput> {
   const commandRequest: DockerCommandRequest = {
     arguments: request.arguments,
-    contextName: request.environment.contextName,
+    endpoint: request.environment.endpoint,
   };
   const processRequest: RunBoundedProcessRequest = {
     command: dockerCommand(commandRequest),
@@ -792,7 +792,7 @@ async function executeDockerCommand(
 }
 
 function dockerCommand(request: DockerCommandRequest): readonly string[] {
-  return [DOCKER, '--context', request.contextName, ...request.arguments];
+  return [DOCKER, '--host', request.endpoint, ...request.arguments];
 }
 
 function assertDockerCommandSucceeded(

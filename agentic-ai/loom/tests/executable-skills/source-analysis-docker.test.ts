@@ -238,14 +238,14 @@ describe('sealed source analysis Docker boundary', () => {
   test('builds the exact static containment command without mounts or privilege', () => {
     const request = {
       containerName: 'fixture',
-      contextName: DOCKER_ENVIRONMENT.contextName,
+      endpoint: DOCKER_ENVIRONMENT.endpoint,
       imageId: IMAGE_ID,
     };
     const command = createContainerCommand(request);
     expect(command).toEqual([
       'docker',
-      '--context',
-      DOCKER_ENVIRONMENT.contextName,
+      '--host',
+      DOCKER_ENVIRONMENT.endpoint,
       'create',
       '--interactive',
       '--name',
@@ -285,7 +285,9 @@ describe('sealed source analysis Docker boundary', () => {
     ]);
     expect(command).not.toContain('--privileged');
     expect(command).not.toContain('--volume');
-    expect(command.join(' ')).not.toContain('docker.sock');
+    expect(
+      command.filter((argument) => argument === DOCKER_ENVIRONMENT.endpoint),
+    ).toHaveLength(1);
   });
 
   test('binds the image identity to every byte in the minimal build context', async () => {
@@ -300,6 +302,13 @@ describe('sealed source analysis Docker boundary', () => {
         await copyFile(path.join(REPO_ROOT, relativePath), destination);
       }
       const baseline = await sourceAnalysisBuildIdentity(temporaryDirectory);
+      const dockerfile = await readFile(
+        path.join(temporaryDirectory, SOURCE_ANALYSIS_IMAGE_INPUTS[0]),
+        'utf8',
+      );
+      expect(dockerfile.split('\n')[0]).toMatch(
+        /dockerfile:1@sha256:[a-f0-9]{64}$/,
+      );
       for (const relativePath of SOURCE_ANALYSIS_IMAGE_INPUTS) {
         const target = path.join(temporaryDirectory, relativePath);
         const original = await readFile(target);
@@ -367,6 +376,13 @@ describe('sealed source analysis Docker boundary', () => {
     expect(output.imageId).toBe(IMAGE_ID);
     expect(state.active).toBe(false);
     expect(state.removals).toBe(1);
+    for (const command of state.commands) {
+      expect(command.slice(0, 3)).toEqual([
+        'docker',
+        '--host',
+        DOCKER_ENVIRONMENT.endpoint,
+      ]);
+    }
     const allCommands = state.commands.flat().join(' ');
     expect(allCommands).toContain(SOURCE_ANALYSIS_IMAGE_LABEL);
   });

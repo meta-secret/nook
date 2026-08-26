@@ -104,6 +104,38 @@ describe('sealed source analysis bounded process', () => {
     }
   });
 
+  test('keeps inherited output pipes inside the deadline race', async () => {
+    const temporaryDirectory = await mkdtemp(
+      path.join(tmpdir(), 'source-analysis-pipe-'),
+    );
+    const pidFile = path.join(temporaryDirectory, 'child-pid');
+    try {
+      const script = [
+        'const options = { stdout: "inherit", stderr: "inherit" } as const;',
+        'const child = Bun.spawn(["sleep", "30"], options);',
+        `await Bun.write(${JSON.stringify(pidFile)}, String(child.pid));`,
+      ].join('\n');
+      const request: RunBoundedProcessRequest = {
+        command: [process.execPath, '-e', script],
+        cwd: REPO_ROOT,
+        deadlineExpiresAt: Date.now() + 1_500,
+        maximumStderrBytes: 16,
+        maximumStdinBytes: 0,
+        maximumStdoutBytes: 16,
+        signal: false,
+        stdin: false,
+      };
+      await expect(runBoundedProcess(request)).rejects.toThrow(
+        'deadline expired',
+      );
+      const childPid = Number(await readFile(pidFile, 'utf8'));
+      expect(() => process.kill(childPid, 0)).toThrow();
+    } finally {
+      const removalOptions: RmOptions = { force: true, recursive: true };
+      await rm(temporaryDirectory, removalOptions);
+    }
+  });
+
   test('aborts and rejects unbounded deadline inputs', async () => {
     const controller = new AbortController();
     const abortedRequest: RunBoundedProcessRequest = {

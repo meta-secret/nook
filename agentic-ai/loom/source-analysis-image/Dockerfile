@@ -1,4 +1,4 @@
-# syntax=registry.dev.nokey.sh/docker/dockerfile:1
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1@sha256:ecfaec9ed6d810b56388c508f4121597bfbba70d41a6dfeee4d8cad5f295fc32
 
 FROM registry.dev.nokey.sh/oven/bun:1.3.14@sha256:e10577f0db68676a7024391c6e5cb4b879ebd17188ab750cf10024a6d700e5c4 AS dependencies
 
