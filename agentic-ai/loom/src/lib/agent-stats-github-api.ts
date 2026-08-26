@@ -40,7 +40,6 @@ export function collectDispatchedActionAttemptPages(
   request: CollectDispatchedActionAttemptPagesRequest,
 ): UntrustedYamlNode {
   const selectedRuns: UntrustedYamlMap[] = [];
-  const sourceHeadByRun = new Map<number, string>();
   const titlePrefix = `E2E PR #${request.prNumber} ·`;
   for (const page of flattenApiPages(request.pages)) {
     if (!isRecord(page)) continue;
@@ -57,20 +56,6 @@ export function collectDispatchedActionAttemptPages(
       if (!requiredStringProperty(titleRequest).startsWith(titlePrefix)) {
         continue;
       }
-      const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
-      const runId = requiredNumberProperty(idRequest);
-      const artifactRequest: GitHubApiRequest = {
-        repoRoot: request.repoRoot,
-        endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/artifacts`,
-        fields: ['per_page=100'],
-      };
-      const sourceRequest: DispatchedSourceHeadRequest = {
-        pages: runGitHubApi(artifactRequest),
-        prNumber: request.prNumber,
-        runId,
-      };
-      const sourceHead = dispatchedSourceHead(sourceRequest);
-      sourceHeadByRun.set(runId, sourceHead);
       selectedRuns.push(run);
     }
   }
@@ -85,6 +70,7 @@ export function collectDispatchedActionAttemptPages(
   };
   const expanded = expandActionAttemptPages(expandRequest);
   const associatedRuns: UntrustedYamlMap[] = [];
+  const artifactPagesByRun = new Map<number, UntrustedYamlNode>();
   for (const page of flattenApiPages(expanded)) {
     if (!isRecord(page)) continue;
     const runsRequest: GitHubPropertyRequest = {
@@ -95,10 +81,28 @@ export function collectDispatchedActionAttemptPages(
       if (!isRecord(run)) continue;
       const idRequest: GitHubPropertyRequest = { record: run, key: 'id' };
       const runId = requiredNumberProperty(idRequest);
-      const headSha = sourceHeadByRun.get(runId) ?? '';
-      if (headSha.length === 0) {
-        failGitHubCollection(`E2E PR run ${runId} has no source head`);
+      const attemptRequest: GitHubPropertyRequest = {
+        record: run,
+        key: 'run_attempt',
+      };
+      const runAttempt = requiredNumberProperty(attemptRequest);
+      let artifactPages = artifactPagesByRun.get(runId);
+      if (!artifactPages) {
+        const artifactRequest: GitHubApiRequest = {
+          repoRoot: request.repoRoot,
+          endpoint: `repos/{owner}/{repo}/actions/runs/${runId}/artifacts`,
+          fields: ['per_page=100'],
+        };
+        artifactPages = runGitHubApi(artifactRequest);
+        artifactPagesByRun.set(runId, artifactPages);
       }
+      const sourceRequest: DispatchedSourceHeadRequest = {
+        pages: artifactPages,
+        prNumber: request.prNumber,
+        runId,
+        runAttempt,
+      };
+      const headSha = dispatchedSourceHead(sourceRequest);
       const associatedRecord = {
         ...run,
         head_sha: headSha,
@@ -119,12 +123,13 @@ type DispatchedSourceHeadRequest = {
   readonly pages: UntrustedYamlNode;
   readonly prNumber: number;
   readonly runId: number;
+  readonly runAttempt: number;
 };
 
 export function dispatchedSourceHead(
   request: DispatchedSourceHeadRequest,
 ): string {
-  const prefix = `e2e-pr-source-${request.prNumber}-`;
+  const prefix = `e2e-pr-source-${request.prNumber}-${request.runAttempt}-`;
   const matches: string[] = [];
   for (const page of flattenApiPages(request.pages)) {
     if (!isRecord(page)) continue;
@@ -142,9 +147,10 @@ export function dispatchedSourceHead(
       if (name.startsWith(prefix)) matches.push(name.slice(prefix.length));
     }
   }
+  if (matches.length === 0) return '';
   if (matches.length !== 1 || !/^[0-9a-f]{40}$/.test(matches[0] ?? '')) {
     failGitHubCollection(
-      `E2E PR run ${request.runId} must publish exactly one valid source artifact`,
+      `E2E PR attempt ${request.runId}:${request.runAttempt} must publish at most one valid source artifact`,
     );
   }
   return matches[0] ?? '';

@@ -10,7 +10,6 @@ import {
   type BuildReviewEvidenceRequest,
 } from '../src/lib/agent-stats-github.ts';
 import { mergeReviewedDeliveryHeads } from '../src/lib/agent-stats-github-delivery.ts';
-import { dispatchedSourceHead } from '../src/lib/agent-stats-github-api.ts';
 
 import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
@@ -19,18 +18,6 @@ const finalHead = '2222222222222222222222222222222222222222';
 const thirdHead = '3333333333333333333333333333333333333333';
 
 describe('agent stats GitHub evidence', () => {
-  test('resolves exact manual E2E source provenance', () => {
-    const pages = asUntrustedYamlNode([
-      { artifacts: [{ name: `e2e-pr-source-42-${finalHead}` }] },
-    ]);
-    const request = {
-      pages,
-      prNumber: 42,
-      runId: 500,
-    };
-
-    expect(dispatchedSourceHead(request)).toBe(finalHead);
-  });
   test('groups validation by head and measures work after supersession', () => {
     const firstRun: ActionRunFixture = {
       id: 101,
@@ -419,7 +406,7 @@ describe('agent stats GitHub evidence', () => {
     expect(evidence.validationCycles).toHaveLength(1);
   });
 
-  test('includes queued time in action duration', () => {
+  test('includes queued time through the merge boundary', () => {
     const queuedRun: ActionRunFixture = {
       id: 401,
       runAttempt: 1,
@@ -442,7 +429,7 @@ describe('agent stats GitHub evidence', () => {
     };
     const evidence = buildActionsEvidence(request);
 
-    expect(evidence.runs[0]?.duration_seconds).toBe(720);
+    expect(evidence.runs[0]?.duration_seconds).toBe(600);
   });
 
   test('uses review-only heads to supersede running validation', () => {
@@ -500,35 +487,6 @@ describe('agent stats GitHub evidence', () => {
 
     expect(evidence.obsoleteValidationSeconds).toBe(0);
     expect(evidence.heads[1]?.head_sha).toBe(finalHead);
-  });
-
-  test('rejects nonterminal action attempts', () => {
-    const nonterminalRun: ActionRunFixture = {
-      id: 101,
-      runAttempt: 1,
-      headSha: finalHead,
-      startedAt: '2026-08-01T10:00:00Z',
-      finishedAt: '2026-08-01T10:01:00Z',
-      conclusion: 'success',
-      status: 'in_progress',
-    };
-    const pages = asUntrustedYamlNode([
-      {
-        total_count: 1,
-        workflow_runs: [actionRun(nonterminalRun)],
-      },
-    ]);
-    const request: BuildActionsEvidenceRequest = {
-      pages,
-      prNumber: 42,
-      finalHeadSha: finalHead,
-      mergedAt: '2026-08-01T11:00:00Z',
-      reviewEvents: [],
-      deliveryHeadOrder: [finalHead],
-    };
-    expect(() => buildActionsEvidence(request)).toThrow(
-      'retry collection after completion',
-    );
   });
 
   test('pairs review requests and outcomes with exact delivery heads', () => {

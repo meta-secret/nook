@@ -8,7 +8,7 @@
 #   suite     — e2e-pr, e2e, sync-live, or all
 
 name: E2E (PR)
-run-name: E2E PR #${{ inputs.pr_number }} · ${{ inputs.suite }}
+run-name: "E2E PR #${{ inputs.pr_number }} · ${{ inputs.suite }}"
 
 on:
   workflow_dispatch:
@@ -49,11 +49,18 @@ jobs:
       - name: Resolve PR head SHA
         id: pr
         uses: actions/github-script@v9
+        env:
+          RAW_PR_NUMBER: ${{ inputs.pr_number }}
         with:
           script: |
-            const prNumber = Number('${{ inputs.pr_number }}')
-            if (!Number.isFinite(prNumber) || prNumber <= 0) {
-              core.setFailed(`Invalid pr_number: ${'${{ inputs.pr_number }}'}`)
+            const rawPrNumber = process.env.RAW_PR_NUMBER || ''
+            if (!/^[1-9][0-9]*$/.test(rawPrNumber)) {
+              core.setFailed(`Invalid pr_number: ${rawPrNumber}`)
+              return
+            }
+            const prNumber = Number(rawPrNumber)
+            if (!Number.isSafeInteger(prNumber)) {
+              core.setFailed(`Invalid pr_number: ${rawPrNumber}`)
               return
             }
             const { data: pr } = await github.rest.pulls.get({
@@ -71,11 +78,12 @@ jobs:
             }
             core.setOutput('ref', pr.head.sha)
             core.setOutput('branch', pr.head.ref)
+            core.setOutput('number', String(prNumber))
             core.info(`PR #${prNumber}: ${pr.head.ref} @ ${pr.head.sha}`)
 
       - name: Materialize PR source metadata
         env:
-          SOURCE_PR_NUMBER: ${{ inputs.pr_number }}
+          SOURCE_PR_NUMBER: ${{ steps.pr.outputs.number }}
           SOURCE_HEAD_SHA: ${{ steps.pr.outputs.ref }}
         run: |
           jq -n \
@@ -87,7 +95,7 @@ jobs:
       - name: Publish PR source metadata
         uses: actions/upload-artifact@v7
         with:
-          name: e2e-pr-source-${{ inputs.pr_number }}-${{ steps.pr.outputs.ref }}
+          name: e2e-pr-source-${{ steps.pr.outputs.number }}-${{ github.run_attempt }}-${{ steps.pr.outputs.ref }}
           path: ${{ runner.temp }}/e2e-pr-source.json
           if-no-files-found: error
           retention-days: 30
