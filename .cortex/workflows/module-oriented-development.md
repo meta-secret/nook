@@ -156,6 +156,7 @@ Before implementation, verify:
 Run:
 
 ```bash
+task loom:module-delivery:validate PLAN=path/to/plan.json
 task loom:module-experts:validate
 task loom:verify
 task loom:cortex-audit
