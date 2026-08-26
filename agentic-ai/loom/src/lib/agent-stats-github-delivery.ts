@@ -54,8 +54,8 @@ export function mergeReviewedDeliveryHeads(
       action_seconds: 0,
       obsolete_action_seconds: 0,
     };
-    const existingIndex = indexByHead.get(headSha);
-    if (existingIndex === undefined) {
+    const existingIndex = indexByHead.get(headSha) ?? -1;
+    if (existingIndex < 0) {
       indexByHead.set(headSha, heads.length);
       heads.push(sealUntrustedYamlMap(headRecord));
       continue;
