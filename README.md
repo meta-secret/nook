@@ -497,8 +497,9 @@ task loom:structural-experts:validate # exact structural role and bounded-scope 
 task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
 task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
-task remote TASK_NAME=rust:test # narrow sealed image, exact pushed HEAD
-task remote TASK_NAMES=web:check,web:test # one runner, one setup, two tasks
+task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
+task remote TASK_NAMES=web:build,web:e2e # direct-Pod web build and browser proof
+task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
 task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
 task pr:validate PR=410 FULL_E2E=1 # complete gate plus Main-fix browser suites
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)

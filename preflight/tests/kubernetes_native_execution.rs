@@ -37,7 +37,12 @@ fn read(path: &str) -> String {
 }
 
 fn assert_no_nested_runtime(label: &str, source: &str) {
-    let normalized = source.to_ascii_lowercase();
+    let lowercase = source.to_ascii_lowercase();
+    let without_continuations = lowercase.replace("\\\r\n", " ").replace("\\\n", " ");
+    let normalized = without_continuations
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
     for runtime in ["docker", "podman", "nerdctl"] {
         for namespace in ["", "container ", "compose "] {
             for verb in [
@@ -74,6 +79,12 @@ fn assert_no_nested_runtime(label: &str, source: &str) {
             "{label} must not expose or control a nested runtime: {command}"
         );
     }
+}
+
+#[test]
+#[should_panic(expected = "must not control a nested container runtime: docker run")]
+fn nested_runtime_scan_rejects_shell_continuation_bypasses() {
+    assert_no_nested_runtime("fixture", "docker \\\n        run --rm forbidden-image");
 }
 
 fn cluster_job_blocks(workflow: &str) -> Vec<String> {
