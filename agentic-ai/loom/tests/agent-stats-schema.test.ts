@@ -83,6 +83,7 @@ review_events:
     latency_seconds: 60
 validation_cycles:
   - head_sha: 0123456789abcdef0123456789abcdef01234567
+    workflow: PR
     run_id: 123
     run_attempt: 1
     started_at: 2026-07-18T18:25:00Z
