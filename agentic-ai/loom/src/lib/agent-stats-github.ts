@@ -766,10 +766,9 @@ type ResolveHeadShaRequest = {
 };
 
 function resolveHeadSha(request: ResolveHeadShaRequest): string {
-  if (
-    /^[0-9a-f]{40}$/.test(request.candidate) &&
-    request.knownHeadShas.includes(request.candidate)
-  ) {
+  // Full SHAs arrive only through trusted request markers or Codex-authored
+  // results. Keep them even when a later rebase removes them from PR ancestry.
+  if (/^[0-9a-f]{40}$/.test(request.candidate)) {
     return request.candidate;
   }
   const matches = request.knownHeadShas.filter((headSha) =>

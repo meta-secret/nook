@@ -321,6 +321,32 @@ Preserve this actionable text.
     expect(evidence.runs).toHaveLength(1);
   });
 
+  test('retains branch-scoped runs whose PR association was cleared', () => {
+    const pages = actionPages([
+      {
+        id: 106,
+        runAttempt: 1,
+        headSha: finalHead,
+        startedAt: '2026-08-01T10:00:00Z',
+        finishedAt: '2026-08-01T10:01:00Z',
+        conclusion: 'success',
+        sourcePr: false,
+      },
+    ]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [finalHead],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.runs).toHaveLength(1);
+    expect(evidence.runs[0]?.source_pr).toBe(42);
+  });
+
   test('allows a final head with no applicable Actions workflow', () => {
     const pages = asUntrustedYamlNode([{ total_count: 0, workflow_runs: [] }]);
     const request: BuildActionsEvidenceRequest = {
@@ -721,6 +747,39 @@ Preserve this actionable text.
     expect(evidence.events[1]?.outcome).toBe('findings');
   });
 
+  test('retains trusted review evidence for a rebased-away full SHA', () => {
+    const rebasedHead = '3333333333333333333333333333333333333333';
+    const request: BuildReviewEvidenceRequest = {
+      issueCommentPages: yamlPages([
+        {
+          id: 22,
+          body: `<!-- nook-codex-review:${rebasedHead} -->`,
+          created_at: '2026-08-01T10:00:00Z',
+          author_association: 'MEMBER',
+          user: { login: 'github-actions[bot]' },
+        },
+      ]),
+      reviewPages: yamlPages([
+        {
+          id: 504,
+          body: 'Finding on a head removed by rebase.',
+          commit_id: rebasedHead,
+          submitted_at: '2026-08-01T10:05:00Z',
+          user: { login: 'chatgpt-codex-connector[bot]' },
+        },
+      ]),
+      reviewCommentPages: yamlPages([]),
+      reviewReactionPages: yamlPages([]),
+      knownHeadShas: [finalHead],
+      mergedAt: '2026-08-01T11:00:00Z',
+    };
+    const evidence = buildReviewEvidence(request);
+
+    expect(evidence.requestCount).toBe(1);
+    expect(evidence.findingBatchCount).toBe(1);
+    expect(evidence.events[0]?.head_sha).toBe(rebasedHead);
+  });
+
   test('excludes review results completed after merge', () => {
     const request: BuildReviewEvidenceRequest = {
       issueCommentPages: yamlPages([
@@ -880,7 +939,7 @@ type ActionRunFixture = {
   readonly createdAt?: string;
   readonly finishedAt: string;
   readonly conclusion: string;
-  readonly sourcePr?: number;
+  readonly sourcePr?: number | false;
   readonly status?: string;
   readonly workflow?: string;
   readonly validationRequested?: boolean;
@@ -899,7 +958,8 @@ function actionRun(fixture: ActionRunFixture): UntrustedYamlNode {
     updated_at: fixture.finishedAt,
     conclusion: fixture.conclusion,
     status: fixture.status ?? 'completed',
-    pull_requests: [{ number: fixture.sourcePr ?? 42 }],
+    pull_requests:
+      fixture.sourcePr === false ? [] : [{ number: fixture.sourcePr ?? 42 }],
     validation_requested:
       fixture.validationRequested === false ? 'false' : 'true',
   };

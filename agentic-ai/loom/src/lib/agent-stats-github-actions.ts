@@ -111,6 +111,9 @@ export function isSourcePrRun(request: SourcePrRunRequest): boolean {
     key: 'pull_requests',
   };
   const pullRequests = requiredArrayProperty(pullRequestsRequest);
+  // The branch-and-merge-window Actions query is the outer source boundary.
+  // GitHub clears this association for some old attempts after squash merge.
+  if (pullRequests.length === 0) return true;
   return pullRequests.some((candidate) => {
     if (!isRecord(candidate)) return false;
     const numberRequest: PropertyRequest = { record: candidate, key: 'number' };
