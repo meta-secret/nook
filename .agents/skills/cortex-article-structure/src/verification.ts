@@ -147,7 +147,10 @@ function invalidLedgerMessage(
   if (!request.catalog.has(request.entry)) {
     return `Article-structure exemption is not a Cortex Markdown file: ${request.entry}`;
   }
-  if (request.baseline !== false && !request.baseline.has(request.entry)) {
+  if (request.baseline === false) {
+    return `Article-structure exemption cannot be verified without the migration baseline: ${request.entry}`;
+  }
+  if (!request.baseline.has(request.entry)) {
     return `Article-structure exemption was added after the baseline: ${request.entry}`;
   }
   return false;
@@ -233,7 +236,11 @@ function verifyArticle(request: VerifyArticleRequest): void {
 function verifyParagraphDensity(request: VerifyArticleRequest): void {
   let consecutive = 0;
   for (const block of request.sectionBlocks) {
-    if (block.kind === CortexArticleSemanticKind.Heading) break;
+    if (block.kind === CortexArticleSemanticKind.Heading) {
+      if (block.depth <= 3) break;
+      consecutive = 0;
+      continue;
+    }
     if (block.kind === CortexArticleSemanticKind.Transparent) continue;
     if (block.kind === CortexArticleSemanticKind.DensitySeparator) {
       consecutive = 0;

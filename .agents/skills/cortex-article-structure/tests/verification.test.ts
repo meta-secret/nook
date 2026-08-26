@@ -224,6 +224,83 @@ test('treats semantic separators and visible ordered lists as policy inputs', ()
   expectVerified(verificationRequest);
 });
 
+test('independently verifies fail-closed missing-baseline findings', () => {
+  const auditRequest: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents: [
+      {
+        relativePath: '.cortex/legacy.md',
+        blocks: [
+          {
+            depth: 2,
+            kind: CortexArticleSemanticKind.Heading,
+            line: 1,
+            text: 'Legacy article',
+          },
+        ],
+      },
+    ],
+    migrationBaselineEntries: false,
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: '.cortex/legacy.md\n',
+    },
+  };
+  const result = resultWith(auditCortexArticleStructure(auditRequest));
+  const verificationRequest: VerifyCortexArticleStructureResultRequest = {
+    auditRequest,
+    result,
+  };
+  expect(result.findings.map((finding) => finding.code)).toEqual([
+    CortexArticleFindingCode.InvalidMigrationLedger,
+    CortexArticleFindingCode.EmptyArticle,
+  ]);
+  expectVerified(verificationRequest);
+});
+
+test('continues independent density verification below nested headings', () => {
+  const auditRequest: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents: [
+      {
+        relativePath: '.cortex/nested.md',
+        blocks: [
+          {
+            depth: 3,
+            kind: CortexArticleSemanticKind.Heading,
+            line: 1,
+            text: 'Explanation',
+          },
+          {
+            depth: 4,
+            kind: CortexArticleSemanticKind.Heading,
+            line: 3,
+            text: 'Nested detail',
+          },
+          { kind: CortexArticleSemanticKind.Paragraph, line: 5 },
+          { kind: CortexArticleSemanticKind.Paragraph, line: 7 },
+          { kind: CortexArticleSemanticKind.Paragraph, line: 9 },
+          { kind: CortexArticleSemanticKind.Paragraph, line: 11 },
+        ],
+      },
+    ],
+    migrationBaselineEntries: false,
+    migrationLedger: {
+      relativePath: '.cortex/article-structure-migration.txt',
+      content: false,
+    },
+  };
+  const result = resultWith(auditCortexArticleStructure(auditRequest));
+  const verificationRequest: VerifyCortexArticleStructureResultRequest = {
+    auditRequest,
+    result,
+  };
+  expect(result.findings.map((finding) => finding.code)).toEqual([
+    CortexArticleFindingCode.DenseArticle,
+  ]);
+  expectVerified(verificationRequest);
+});
+
 test('rejects findings rebound to a different semantic request', () => {
   const reboundRequest: AuditCortexArticleStructureRequest = {
     ...AUDIT_REQUEST,
