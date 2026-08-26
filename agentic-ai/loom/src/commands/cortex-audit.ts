@@ -128,6 +128,7 @@ export async function runCortexAuditFromDirectory(
   };
   const structureAuditArgs: AuditCortexDocumentStructureArgs = {
     documents,
+    excludedDocumentPaths: syntaxInvalidPaths,
     migrationBaselineEntries: migrationBaselineEntries(documentMapBaselineArgs),
     migrationLedgerPath: path.join(cortexRoot, 'document-map-migration.txt'),
     repoRoot,
@@ -162,6 +163,11 @@ export async function runCortexAuditFromDirectory(
       admittedDocumentPaths.has(path.join('.cortex', 'dynamic-skills', name)),
     )
     .sort();
+  const syntaxInvalidSkillNames = new Set(
+    [...syntaxInvalidPaths]
+      .filter((filePath) => filePath.startsWith('.cortex/dynamic-skills/'))
+      .map((filePath) => path.basename(filePath)),
+  );
 
   const indexPath = path.join(skillsDir, 'index.md');
   const indexRelativePath = path.relative(repoRoot, indexPath);
@@ -181,6 +187,7 @@ export async function runCortexAuditFromDirectory(
         (name) =>
           name !== 'index.md' &&
           name !== '_template.md' &&
+          !syntaxInvalidSkillNames.has(name) &&
           !skillFiles.includes(name),
       )
     : [];
@@ -191,6 +198,9 @@ export async function runCortexAuditFromDirectory(
   )) {
     const slug = match[1];
     if (typeof slug !== 'string') {
+      continue;
+    }
+    if (syntaxInvalidSkillNames.has(`${slug}.md`)) {
       continue;
     }
     const skillPath = path.join(

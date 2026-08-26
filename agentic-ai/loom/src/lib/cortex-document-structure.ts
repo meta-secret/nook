@@ -33,6 +33,7 @@ export type CortexDocumentSource = {
 
 export type AuditCortexDocumentStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
+  readonly excludedDocumentPaths: ReadonlySet<string>;
   readonly migrationBaselineEntries: readonly string[] | false;
   readonly migrationLedgerPath: string;
   readonly repoRoot: string;
@@ -69,6 +70,7 @@ export type AuditCortexMarkdownSyntaxArgs = {
 type ValidateIndexArgs = {
   readonly indexDocument: ParsedDocument;
   readonly catalog: ReadonlyMap<string, ParsedDocument>;
+  readonly excludedDocumentPaths: ReadonlySet<string>;
   readonly findings: CortexStructureFinding[];
   readonly repoRoot: string;
 };
@@ -118,6 +120,7 @@ export function auditCortexDocumentStructure(
     const validateIndexArgs: ValidateIndexArgs = {
       indexDocument: indexDoc,
       catalog,
+      excludedDocumentPaths: args.excludedDocumentPaths,
       findings,
       repoRoot: args.repoRoot,
     };
@@ -262,6 +265,11 @@ function validateIndex(args: ValidateIndexArgs): void {
     };
     const resolved = resolveIndexLink(resolveArgs);
     if (resolved === false) {
+      continue;
+    }
+
+    if (args.excludedDocumentPaths.has(resolved.targetRelativePath)) {
+      indexedFiles.add(resolved.targetRelativePath);
       continue;
     }
 

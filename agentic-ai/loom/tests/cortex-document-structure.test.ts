@@ -29,6 +29,7 @@ function makeDocument(args: MakeDocumentArgs): CortexDocumentSource {
 function audit(documents: readonly CortexDocumentSource[]) {
   const args: AuditCortexDocumentStructureArgs = {
     documents,
+    excludedDocumentPaths: new Set(),
     migrationBaselineEntries: false,
     migrationLedgerPath: path.join(
       REPO_ROOT,

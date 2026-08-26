@@ -161,3 +161,54 @@ test('admits session Markdown only through the global HTML syntax gate', async (
     rmSync(repoRoot, removeOptions);
   }
 });
+
+test('does not cascade from an indexed skill rejected by syntax admission', async () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-'));
+  try {
+    const cortexRoot = path.join(repoRoot, '.cortex');
+    const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(skillsRoot, directoryOptions);
+    writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
+    writeFileSync(
+      path.join(cortexRoot, 'knowledge-graph.md'),
+      `# Knowledge Graph
+
+- [Agent Map](AGENTS.md)
+- [Skill index](dynamic-skills/index.md)
+- [Rejected skill](dynamic-skills/bad.md)
+`,
+    );
+    writeFileSync(
+      path.join(skillsRoot, 'index.md'),
+      `# Skills
+
+- [Rejected skill](bad.md)
+- [Rejected executable](../../.agents/skills/bad/SKILL.md)
+`,
+    );
+    writeFileSync(
+      path.join(skillsRoot, 'bad.md'),
+      '# Rejected skill\n\n<div>forbidden</div>\n',
+    );
+
+    const request = { includeDensityLint: false };
+    const auditArgs = { request, startDirectory: repoRoot };
+    const report = await runCortexAuditFromDirectory(auditArgs);
+    expect(report.auditOk).toBe(false);
+    expect(report.structureFindings).toEqual([
+      {
+        code: CortexStructureFindingCode.ProhibitedHtml,
+        file: '.cortex/dynamic-skills/bad.md',
+        line: 3,
+        message:
+          'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
+      },
+    ]);
+    expect(report.orphanIndexRows).toEqual([]);
+    expect(report.missingExecutableSkills).toEqual([]);
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(repoRoot, removeOptions);
+  }
+});
