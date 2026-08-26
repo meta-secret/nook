@@ -93,6 +93,7 @@ export type BuildActionsEvidenceRequest = {
   readonly reviewEvents: readonly UntrustedYamlMap[];
   readonly finalHeadObservedAt?: string;
   readonly deliveryHeadOrder?: readonly string[];
+  readonly commitHeads?: readonly DeliveryHeadStart[];
 };
 
 export type BuildReviewEvidenceRequest = {
@@ -193,14 +194,18 @@ export function collectAgentStatsGitHubEvidence(
   };
   const commitPages = runGitHubApi(commitsRequest);
   const knownHeadShas: string[] = [];
+  const commitHeads: DeliveryHeadStart[] = [];
   let finalHeadObservedAt = '';
   for (const commit of flattenApiPages(commitPages)) {
     if (!isRecord(commit)) continue;
     const propertyRequest: PropertyRequest = { record: commit, key: 'sha' };
     const headSha = requiredStringProperty(propertyRequest);
+    const observedAt = gitHubCommitTimestamp(commit);
     knownHeadShas.push(headSha);
+    const commitHead: DeliveryHeadStart = { headSha, observedAt };
+    commitHeads.push(commitHead);
     if (headSha === request.finalHeadSha) {
-      finalHeadObservedAt = gitHubCommitTimestamp(commit);
+      finalHeadObservedAt = observedAt;
     }
   }
   if (!knownHeadShas.includes(request.finalHeadSha)) {
@@ -228,6 +233,7 @@ export function collectAgentStatsGitHubEvidence(
     reviewEvents: reviews.events,
     finalHeadObservedAt,
     deliveryHeadOrder: knownHeadShas,
+    commitHeads,
   };
   const actions = buildActionsEvidence(actionsRequest);
   const deliveryHeadsRequest = {
@@ -288,7 +294,7 @@ export function buildActionsEvidence(
     if (!isSourcePrRun(associationRequest)) continue;
     const startedRequest: PropertyRequest = {
       record: rawRun,
-      key: 'run_started_at',
+      key: 'created_at',
     };
     if (requiredStringProperty(startedRequest) > request.mergedAt) continue;
     const observationRequest: ActionObservationRequest = {
@@ -306,6 +312,7 @@ export function buildActionsEvidence(
     finalHeadSha: request.finalHeadSha,
     finalHeadObservedAt: request.finalHeadObservedAt ?? '',
     deliveryHeadOrder: request.deliveryHeadOrder ?? [],
+    commitHeads: request.commitHeads ?? [],
   };
   const headStarts = deliveryHeadStarts(headStartsRequest);
   const headShas = headStarts.map((head) => head.headSha);
@@ -530,6 +537,10 @@ function buildHeadObservation(
     run.startedAt,
     run.finishedAt,
   ]);
+  const deliveryStart = request.headStarts.find(
+    (head) => head.headSha === request.headSha,
+  );
+  if (deliveryStart) timestamps.push(deliveryStart.observedAt);
   const timestampRequest = { values: timestamps };
   const firstObservedAt = minimumTimestamp(timestampRequest);
   const lastObservedAt = maximumTimestamp(timestampRequest);

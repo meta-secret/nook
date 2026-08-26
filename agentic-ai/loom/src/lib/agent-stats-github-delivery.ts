@@ -33,6 +33,7 @@ type DeliveryHeadStartsRequest = {
   readonly finalHeadSha: string;
   readonly finalHeadObservedAt: string;
   readonly deliveryHeadOrder: readonly string[];
+  readonly commitHeads: readonly DeliveryHeadStart[];
 };
 
 type RetainEarlierStartRequest = {
@@ -92,13 +93,23 @@ export function mergeReviewedDeliveryHeads(
     }
     const existing = heads[existingIndex];
     if (!existing) continue;
-    const observedRequest: PropertyRequest = {
+    const firstRequest: PropertyRequest = {
       record: existing,
       key: 'first_observed_at',
     };
-    if (property(observedRequest).length === 0) {
-      heads[existingIndex] = sealUntrustedYamlMap(headRecord);
-    }
+    const lastRequest: PropertyRequest = {
+      record: existing,
+      key: 'last_observed_at',
+    };
+    const combinedRequest: TimestampExtremaRequest = {
+      values: [property(firstRequest), property(lastRequest), ...timestamps],
+    };
+    const mergedRecord = {
+      ...existing,
+      first_observed_at: minimumTimestamp(combinedRequest),
+      last_observed_at: maximumTimestamp(combinedRequest),
+    };
+    heads[existingIndex] = sealUntrustedYamlMap(mergedRecord);
   }
   return chronologicallySortedHeads(heads);
 }
@@ -125,6 +136,14 @@ export function deliveryHeadStarts(
       starts: earliestByHead,
       headSha: property(headRequest),
       observedAt: property(observedRequest),
+    };
+    retainEarlierStart(retainRequest);
+  }
+  for (const commitHead of request.commitHeads) {
+    const retainRequest: RetainEarlierStartRequest = {
+      starts: earliestByHead,
+      headSha: commitHead.headSha,
+      observedAt: commitHead.observedAt,
     };
     retainEarlierStart(retainRequest);
   }

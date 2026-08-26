@@ -80,6 +80,7 @@ describe('agent stats GitHub evidence', () => {
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
       reviewEvents: [],
+      finalHeadObservedAt: '2026-08-01T10:20:00Z',
     };
     const evidence = buildActionsEvidence(request);
 
@@ -197,13 +198,38 @@ describe('agent stats GitHub evidence', () => {
       finalHeadSha: finalHead,
       mergedAt: '2026-08-01T11:00:00Z',
       reviewEvents: [],
+      finalHeadObservedAt: '2026-08-01T10:20:00Z',
     };
     const evidence = buildActionsEvidence(request);
 
     expect(evidence.runs).toHaveLength(0);
     expect(evidence.heads).toHaveLength(1);
     expect(evidence.heads[0]?.head_sha).toBe(finalHead);
+    expect(evidence.heads[0]?.first_observed_at).toBe('2026-08-01T10:20:00Z');
     expect(evidence.validationCycles).toHaveLength(0);
+  });
+
+  test('retains commit-observed heads without Actions or review', () => {
+    const pages = asUntrustedYamlNode([{ total_count: 0, workflow_runs: [] }]);
+    const request: BuildActionsEvidenceRequest = {
+      pages,
+      prNumber: 42,
+      finalHeadSha: finalHead,
+      mergedAt: '2026-08-01T11:00:00Z',
+      reviewEvents: [],
+      deliveryHeadOrder: [firstHead, finalHead],
+      commitHeads: [
+        { headSha: firstHead, observedAt: '2026-08-01T10:00:00Z' },
+        { headSha: finalHead, observedAt: '2026-08-01T10:20:00Z' },
+      ],
+    };
+    const evidence = buildActionsEvidence(request);
+
+    expect(evidence.heads.map((head) => head.head_sha)).toEqual([
+      firstHead,
+      finalHead,
+    ]);
+    expect(evidence.heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
   });
 
   test('counts every repository validation workflow', () => {
@@ -290,8 +316,8 @@ describe('agent stats GitHub evidence', () => {
       runAttempt: 1,
       headSha: finalHead,
       createdAt: '2026-08-01T09:55:00Z',
-      startedAt: '2026-08-01T10:00:00Z',
-      finishedAt: '2026-08-01T10:01:00Z',
+      startedAt: '2026-08-01T10:06:00Z',
+      finishedAt: '2026-08-01T10:07:00Z',
       conclusion: 'success',
     };
     const pages = asUntrustedYamlNode([
@@ -301,12 +327,12 @@ describe('agent stats GitHub evidence', () => {
       pages,
       prNumber: 42,
       finalHeadSha: finalHead,
-      mergedAt: '2026-08-01T11:00:00Z',
+      mergedAt: '2026-08-01T10:05:00Z',
       reviewEvents: [],
     };
     const evidence = buildActionsEvidence(request);
 
-    expect(evidence.runs[0]?.duration_seconds).toBe(360);
+    expect(evidence.runs[0]?.duration_seconds).toBe(720);
   });
 
   test('uses review-only heads to supersede running validation', () => {
@@ -603,6 +629,33 @@ describe('agent stats GitHub evidence', () => {
     expect(heads).toHaveLength(1);
     expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
     expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
+  });
+
+  test('merges earlier review timestamps into an action head', () => {
+    const actionHeadRecord = {
+      head_sha: finalHead,
+      first_observed_at: '2026-08-01T10:20:00Z',
+      last_observed_at: '2026-08-01T10:25:00Z',
+      final: true,
+      action_run_count: 1,
+      action_seconds: 300,
+      obsolete_action_seconds: 0,
+    };
+    const reviewEventRecord = {
+      head_sha: finalHead,
+      requested_at: '2026-08-01T10:00:00Z',
+      completed_at: '2026-08-01T10:05:00Z',
+    };
+    const mergeRequest = {
+      actionHeads: [sealUntrustedYamlMap(actionHeadRecord)],
+      reviewEvents: [sealUntrustedYamlMap(reviewEventRecord)],
+      finalHeadSha: finalHead,
+    };
+    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+
+    expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
+    expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:25:00Z');
+    expect(heads[0]?.action_run_count).toBe(1);
   });
 });
 
