@@ -367,6 +367,33 @@ describe('agent stats GitHub evidence', () => {
     expect(heads[1]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
     expect(heads[1]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
   });
+
+  test('enriches a zero-Actions final head with review timestamps', () => {
+    const emptyHeadRecord = {
+      head_sha: finalHead,
+      first_observed_at: '',
+      last_observed_at: '',
+      final: true,
+      action_run_count: 0,
+      action_seconds: 0,
+      obsolete_action_seconds: 0,
+    };
+    const reviewEventRecord = {
+      head_sha: finalHead,
+      requested_at: '2026-08-01T10:00:00Z',
+      completed_at: '2026-08-01T10:05:00Z',
+    };
+    const mergeRequest = {
+      actionHeads: [sealUntrustedYamlMap(emptyHeadRecord)],
+      reviewEvents: [sealUntrustedYamlMap(reviewEventRecord)],
+      finalHeadSha: finalHead,
+    };
+    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+
+    expect(heads).toHaveLength(1);
+    expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
+    expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
+  });
 });
 
 type ActionRunFixture = {

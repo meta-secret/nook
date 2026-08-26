@@ -20,19 +20,17 @@ export function mergeReviewedDeliveryHeads(
   request: MergeReviewedDeliveryHeadsRequest,
 ): UntrustedYamlMap[] {
   const heads = [...request.actionHeads];
-  const known = new Set(
-    heads.map((head) => {
-      const propertyRequest: PropertyRequest = {
-        record: head,
-        key: 'head_sha',
-      };
-      return property(propertyRequest);
-    }),
-  );
+  const indexByHead = new Map<string, number>();
+  for (const [index, head] of heads.entries()) {
+    const propertyRequest: PropertyRequest = {
+      record: head,
+      key: 'head_sha',
+    };
+    indexByHead.set(property(propertyRequest), index);
+  }
   for (const event of request.reviewEvents) {
     const headRequest: PropertyRequest = { record: event, key: 'head_sha' };
     const headSha = property(headRequest);
-    if (known.has(headSha)) continue;
     const requestedRequest: PropertyRequest = {
       record: event,
       key: 'requested_at',
@@ -56,8 +54,21 @@ export function mergeReviewedDeliveryHeads(
       action_seconds: 0,
       obsolete_action_seconds: 0,
     };
-    heads.push(sealUntrustedYamlMap(headRecord));
-    known.add(headSha);
+    const existingIndex = indexByHead.get(headSha);
+    if (existingIndex === undefined) {
+      indexByHead.set(headSha, heads.length);
+      heads.push(sealUntrustedYamlMap(headRecord));
+      continue;
+    }
+    const existing = heads[existingIndex];
+    if (!existing) continue;
+    const observedRequest: PropertyRequest = {
+      record: existing,
+      key: 'first_observed_at',
+    };
+    if (property(observedRequest).length === 0) {
+      heads[existingIndex] = sealUntrustedYamlMap(headRecord);
+    }
   }
   return heads;
 }
