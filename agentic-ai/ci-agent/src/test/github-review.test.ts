@@ -146,7 +146,7 @@ test("requestExactHeadReview does not treat an eye reaction as settled", async (
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview switches to Cursor after a Codex usage-limit comment", async () => {
+test("requestExactHeadReview does not request a fallback after a Codex usage limit", async () => {
   const createdBodies: string[] = [];
   const octokit = mockOctokit({
     comments: [
@@ -170,20 +170,18 @@ test("requestExactHeadReview switches to Cursor after a Codex usage-limit commen
   assert.deepEqual(fallback, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
-    requested: true,
+    provider: ExactHeadReviewProvider.Codex,
+    requested: false,
     settled: false,
   });
   assert.deepEqual(idempotent, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
+    provider: ExactHeadReviewProvider.Codex,
     requested: false,
     settled: false,
   });
-  assert.deepEqual(createdBodies, [
-    `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
-  ]);
+  assert.deepEqual(createdBodies, []);
 });
 
 test("requestExactHeadReview recognizes a clean Codex comment for the exact head", async () => {
@@ -212,7 +210,7 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
   assert.equal(createCalls.count, 0);
 });
 
-test("requestExactHeadReview probes Codex and switches to Cursor when usage-limit appears", async () => {
+test("requestExactHeadReview keeps a Codex usage limit non-blocking", async () => {
   const createdBodies: string[] = [];
   const comments: MockComment[] = [];
   const octokit = mockOctokit({ comments, createdBodies, sha: headSha });
@@ -234,13 +232,12 @@ test("requestExactHeadReview probes Codex and switches to Cursor when usage-limi
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
+    provider: ExactHeadReviewProvider.Codex,
     requested: true,
     settled: false,
   });
   assert.deepEqual(createdBodies, [
     `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
-    `cursor review\n\n${cursorReviewRequestMarker(headSha)}`,
   ]);
 });
 
@@ -301,7 +298,7 @@ test("requestExactHeadReview does not request Cursor while Codex is pending", as
   assert.deepEqual(createdBodies, []);
 });
 
-test("requestExactHeadReview treats an exact-head Cursor review as settled", async () => {
+test("requestExactHeadReview ignores an inactive Cursor review fallback", async () => {
   const createCalls = { count: 0 };
   const octokit = mockOctokit({
     comments: [
@@ -336,9 +333,9 @@ test("requestExactHeadReview treats an exact-head Cursor review as settled", asy
   assert.deepEqual(result, {
     fallback: ExactHeadReviewFallback.CodexUsageLimit,
     headSha,
-    provider: ExactHeadReviewProvider.Cursor,
+    provider: ExactHeadReviewProvider.Codex,
     requested: false,
-    settled: true,
+    settled: false,
   });
   assert.equal(createCalls.count, 0);
 });

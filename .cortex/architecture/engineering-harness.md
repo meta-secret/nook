@@ -74,7 +74,8 @@ PR delivery helpers live in `agentic-ai/ci-agent`.
 - The review command posts an idempotent SHA-bound Codex request.
 - Codex's eye reaction is liveness evidence only. It never settles review or
   blocks validation beyond the bounded stabilization timeout.
-- If Codex reports a usage limit, the same command posts a SHA-bound Cursor Bugbot request instead of retrying Codex.
+- A Codex usage limit does not activate another review provider. The bounded
+  stabilization timeout keeps review unavailability from deadlocking delivery.
 - Complete validation first requests an idempotent exact-head review and waits
   for a clean result or the bounded stabilization timeout.
 - Current-head findings stop the dispatch so the agent can address one coherent
