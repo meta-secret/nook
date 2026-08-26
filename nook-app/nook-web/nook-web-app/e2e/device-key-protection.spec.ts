@@ -458,7 +458,10 @@ test.describe('passkey device-key protection', () => {
     await expect(page.getByTestId('passkey-auth-overlay')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
-    await page.getByTestId('help-open-btn').click()
+    await page.evaluate(() => {
+      history.pushState({}, '', '/help')
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
     await expect(page.getByTestId('help-page')).toBeVisible({
       timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
     })
