@@ -83,8 +83,7 @@ It receives no live repository access.
 
 Before the role starts, Loom verifies every supplied result and view against the
 declared baseline, lineage, paths, and hashes.
-
-The synthesizer:
+The synthesizer then:
 
 1. Preserves failed-lane evidence and disagreements.
 2. Deduplicates equivalent findings.

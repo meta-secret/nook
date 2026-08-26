@@ -90,20 +90,22 @@ Each replica uses:
 - a 4 CPU request without a CPU limit; and
 - an 8 GiB memory request with a 48 GiB limit.
 
-Each build host must persist these kernel key limits in
-`/etc/sysctl.d/91-nook-buildkit-keyring.conf`:
+Build-host key quotas follow these rules:
 
-- `kernel.keys.maxkeys=20000`; and
-- `kernel.keys.maxbytes=2000000`.
-
-Rootless shards concentrate their processes under host UID 1000. The Debian
-default allows only 200 keys per user. Concurrent solves can exhaust that quota
-and make runc report a misleading `disk quota exceeded` error.
-
-`task infra:arc:deploy` quarantines every declared build host before applying
-the persistent settings and starting BuildKit storage convergence. It verifies
-the effective runtime values on every host before reactivating any of them.
-Deployment fails closed when either value is below its declared floor.
+- **Persistent floor**
+  - Store `kernel.keys.maxkeys=20000` in
+    `/etc/sysctl.d/91-nook-buildkit-keyring.conf`.
+  - Store `kernel.keys.maxbytes=2000000` in the same file.
+- **Reason**
+  - Rootless shards concentrate their processes under host UID 1000.
+  - Debian permits only 200 keys per user by default.
+  - Concurrent solves can exhaust that quota.
+  - runc then reports a misleading `disk quota exceeded` error.
+- **Deployment**
+  - `task infra:arc:deploy` quarantines every declared build host before
+    applying the settings or starting BuildKit storage convergence.
+  - It verifies the effective values before reactivating any host.
+  - Deployment fails closed when either value is below its declared floor.
 
 Rootless BuildKit uses `--oci-worker-no-process-sandbox`. An unprivileged
 Kubernetes Pod cannot mount the nested `/proc` required by BuildKit's normal
@@ -150,37 +152,34 @@ Jobs must keep publication identities separate:
 - Pull requests use exact-commit refs under `nook/remote-buildcache/**`.
 - Hive keeps its independent cache lineage.
 
-A job scheduled on another node may miss the local shard. It imports from Zot
-once. Later jobs on that node reuse the hydrated local state.
+Distribution follows these rules:
 
-This design avoids copying a fixed-size cache image. Only referenced
-content-addressed blobs move through Zot.
-
-Production Dockerfiles name Zot directly where practical. BuildKit also mirrors
-unqualified `docker.io` pulls through `registry.dev.nokey.sh`.
-
-Zot is an on-demand Docker Hub mirror. It preserves upstream digests. A missing
-public blob is fetched centrally once and then retained.
-
-Main build producers run on ARC and retain their persistent local graph. One
-narrow GitHub-hosted job creates a fresh BuildKit builder and alone publishes
-the portable WASM dependency ref. Zot then proves child manifest digest/size
-plus every declared blob's size and readability. A second fresh cache-only
-builder requires each expensive dependency vertex to hit. This hosted exception
-prevents a persistent ARC shard from masking missing registry data.
+- A job scheduled on another node may miss the local shard. It imports from Zot
+  once. Later jobs on that node reuse the hydrated local state.
+- The design avoids copying a fixed-size cache image. Only referenced
+  content-addressed blobs move through Zot.
+- Production Dockerfiles name Zot directly where practical. BuildKit also
+  mirrors unqualified `docker.io` pulls through `registry.dev.nokey.sh`.
+- Zot is an on-demand Docker Hub mirror. It preserves upstream digests. A
+  missing public blob is fetched centrally once and then retained.
+- Main build producers run on ARC and retain their persistent local graph. One
+  narrow GitHub-hosted job creates a fresh BuildKit builder and alone publishes
+  the portable WASM dependency ref. Zot then proves child manifest digest/size
+  plus every declared blob's size and readability. A second fresh cache-only
+  builder requires each expensive dependency vertex to hit. This hosted
+  exception prevents a persistent ARC shard from masking missing registry data.
 
 ## Resource envelopes
 
-General runner Pods may use up to 4 CPU and 6 GiB. Their ephemeral work volume
-is limited to 32 GiB.
+The initial resource envelopes are:
 
-The persistent BuildKit shard performs compilation, layer extraction, import,
-and export. It must not inherit fractional control-plane CPU limits.
-
-Hive's Rust test-runtime sidecar receives 4 CPU and 4 GiB. The runner container
-coordinates that work and remains smaller.
-
-Zot may use up to 8 CPU and 12 GiB because it serves all nodes.
+- General runner Pods may use up to 4 CPU and 6 GiB. Their ephemeral work
+  volume is limited to 32 GiB.
+- The persistent BuildKit shard performs compilation, layer extraction,
+  import, and export. It must not inherit fractional control-plane CPU limits.
+- Hive's Rust test-runtime sidecar receives 4 CPU and 4 GiB. The runner
+  container coordinates that work and remains smaller.
+- Zot may use up to 8 CPU and 12 GiB because it serves all nodes.
 
 These are operational starting points. Live CPU, memory, disk, and network
 measurements decide future changes.
@@ -194,16 +193,16 @@ Store it in:
 - the `arc-runners/nook-arc-github` Kubernetes Secret; and
 - `~/.nook/github/arc-controller-token` with mode `0600`.
 
-The token needs repository runner-registration authority. It receives no
-organization permission.
+Credential rules are:
 
-Runner Pods do not receive that token.
-
-BuildKit uses the existing narrow registry and compiler-cache credentials
-provided by trusted workflows. Fork and Dependabot jobs remain on hosted
-runners without private credentials.
-
-Run `task infra:arc:fallback` before emergency ARC credential revocation.
+- The token needs repository runner-registration authority. It receives no
+  organization permission.
+- Runner Pods do not receive that token.
+- BuildKit uses the existing narrow registry and compiler-cache credentials
+  provided by trusted workflows.
+- Fork and Dependabot jobs remain on hosted runners without private
+  credentials.
+- Run `task infra:arc:fallback` before emergency ARC credential revocation.
 
 ## Operations and validation
 
@@ -219,16 +218,18 @@ Provision a declared OVH worker from provider-ready state with:
 task infra:ovh:server:deploy INFRA_OVH_SERVER=nook-rise-s-2
 ```
 
-The provider adapter reads OVH credentials from `~/.nook/ovh-api.json`. A
-candidate credential is authenticated before it atomically replaces that file.
-OVH's standard installer owns Debian and software RAID. The Taskfile owns the
-generic SSH and sudo baseline plus all later convergence.
+Provisioning preserves these boundaries:
 
-Each declared worker has a stable Ed25519 SSH host identity under
-`~/.nook/infra/ovh-host-identities`. The standard installer receives that key
-through its provider-authenticated post-install customization. Bootstrap accepts
-only the matching SHA-256 fingerprint. It never trusts an unauthenticated
-`ssh-keyscan` result.
+- The provider adapter reads OVH credentials from `~/.nook/ovh-api.json`. A
+  candidate credential is authenticated before it atomically replaces that
+  file.
+- OVH's standard installer owns Debian and software RAID. The Taskfile owns the
+  generic SSH and sudo baseline plus all later convergence.
+- Each declared worker has a stable Ed25519 SSH host identity under
+  `~/.nook/infra/ovh-host-identities`. The standard installer receives that key
+  through its provider-authenticated post-install customization.
+- Bootstrap accepts only the matching SHA-256 fingerprint. It never trusts an
+  unauthenticated `ssh-keyscan` result.
 
 The workflow then performs these operations:
 
@@ -241,22 +242,23 @@ The workflow then performs these operations:
 7. Require effective SSH hardening and a non-degraded two-member RAID1 array.
 8. Reconcile WireGuard, k0s, ARC storage, and runner placement.
 
-Replacing an installed OS requires the explicit
-`INFRA_OVH_ALLOW_REINSTALL=true` disaster-recovery input.
-That input also forces a reinstall when the reported OS already matches. The
-recovery path removes the old Kubernetes node, WireGuard peer, routes, and
-stale mesh SSH identities before onboarding the replacement.
+Recovery preserves these boundaries:
 
-An unchanged installed server must already have its matching host identity in
-the private store. The adapter refuses to invent an identity that was never
-installed. Restore the identity backup or explicitly reinstall the server.
-
-Cloud-init user-data is not used with the standard OVH image. OVH exposes that
-customization only for BYOI and BYOLinux. Owning a custom image pipeline would
-add recovery risk. BYOI would also bypass the standard software RAID install.
-
-Ironic is not part of this boundary. OVH already owns PXE, BMC, and physical
-installation lifecycle.
+- Replacing an installed OS requires the explicit
+  `INFRA_OVH_ALLOW_REINSTALL=true` disaster-recovery input. That input also
+  forces a reinstall when the reported OS already matches.
+- The recovery path removes the old Kubernetes node, WireGuard peer, routes,
+  and stale mesh SSH identities before onboarding the replacement.
+- An unchanged installed server must already have its matching host identity
+  in the private store. The adapter refuses to invent an identity that was
+  never installed. Restore the identity backup or explicitly reinstall the
+  server.
+- Cloud-init user-data is not used with the standard OVH image. OVH exposes
+  that customization only for BYOI and BYOLinux. Owning a custom image pipeline
+  would add recovery risk. BYOI would also bypass the standard software RAID
+  install.
+- Ironic is not part of this boundary. OVH already owns PXE, BMC, and physical
+  installation lifecycle.
 
 Inspect the live state with:
 

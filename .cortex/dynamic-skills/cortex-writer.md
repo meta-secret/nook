@@ -31,10 +31,14 @@ one long sentence, or uses multi-column tables that create horizontal clutter.
 
 Static directory trees and ASCII box diagrams are embedded into documentation.
 
-Readers must hold too many clauses at once, tables wrap poorly and cram complex facts, static trees quickly become
-stale, and ASCII graphics confuse AI agents.
+The pattern creates predictable costs:
 
-Warning signs:
+- Readers must hold too many clauses at once.
+- Tables wrap poorly and cram complex facts.
+- Static trees quickly become stale.
+- ASCII graphics confuse AI agents.
+
+Warning signs include:
 
 - multiple independent facts joined by semicolons or "and";
 - one sentence that names several actors with different credentials;

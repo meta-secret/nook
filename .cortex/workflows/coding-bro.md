@@ -6,16 +6,17 @@
 
 Use this pipeline for **every coding request** unless the user explicitly wants a read-only answer, review-only feedback, or a question with no code changes.
 
-Delegated work follows
-[`subagent-delegation.md`](subagent-delegation.md). Outside a compiled Loom
-graph, finalize every reached child attempt with
-`task loom:agent-delegation:record REQUEST=<request.json>` and consume its
-verified semantic view before continuing the parent workflow.
+Additional routing rules apply:
 
-Cross-module implementation also follows
-[`module-oriented-development.md`](module-oriented-development.md).
-Plan behavior top-down, freeze the external contracts, and implement accepted
-providers before their consumers.
+- Delegated work follows
+  [`subagent-delegation.md`](subagent-delegation.md). Outside a compiled Loom
+  graph, finalize every reached child attempt with
+  `task loom:agent-delegation:record REQUEST=<request.json>` and consume its
+  verified semantic view before continuing the parent workflow.
+- Cross-module implementation also follows
+  [`module-oriented-development.md`](module-oriented-development.md). Plan
+  behavior top-down, freeze the external contracts, and implement accepted
+  providers before their consumers.
 
 ## PR-first mandate
 

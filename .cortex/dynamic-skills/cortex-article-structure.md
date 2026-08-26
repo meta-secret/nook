@@ -142,7 +142,7 @@ Loom parses the Markdown syntax tree.
 
 It rejects mechanically provable failures:
 
-- empty mapped articles;
+- empty substantive articles;
 - excessive consecutive prose blocks without structural relief;
 - explicitly procedure-labeled articles that contain no ordered list;
 - invalid or growing migration-ledger entries.
