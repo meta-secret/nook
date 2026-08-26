@@ -6,6 +6,24 @@ vars:
   CI_AGENT_DIR: agentic-ai/ci-agent
 
 tasks:
+  skills:install:
+    desc: Install executable skill TypeScript dependencies with a frozen lockfile.
+    dir: .agents/skills
+    cmds:
+      - bun install --frozen-lockfile
+
+  skills:format:
+    desc: Format executable skill files through the shared pinned host formatter.
+    cmds:
+      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
+
+  skills:verify:
+    desc: Format-check, lint, typecheck, and test executable skill capability packages.
+    dir: .agents/skills
+    deps: [skills:install]
+    cmds:
+      - bun run verify
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
@@ -51,6 +69,7 @@ tasks:
     desc: Format-check, lint, typecheck, and unit-test Loom.
     deps: [loom:install]
     cmds:
+      - task: skills:verify
       - task: loom:format:check
       - task: loom:lint
       - task: loom:check
@@ -258,17 +277,32 @@ tasks:
     cmds:
       - task --taskfile agentic-ai/minds/hive/Taskfile.yml format
 
+  hive:guest:format:changed:
+    desc: Format canonical changed files with the tool bundle baked into a sealed Hive guest.
+    dir: '{{.REPO_ROOT}}'
+    preconditions:
+      - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
+        msg: hive:guest:format:changed is available only inside a sealed Hive guest
+      - sh: test -n "${FORMAT_CHANGED_FILES:-}" && test -r "$FORMAT_CHANGED_FILES"
+        msg: hive:guest:format:changed requires the canonical changed-file list
+    cmds:
+      - |
+        bash <<'FORMAT_CHANGED_BASH'
+        set -euo pipefail
+        formatter_root="${NOOK_FORMATTER_ROOT:-/opt/nook-formatter}"
+        NOOK_FORMATTER_ROOT="$formatter_root" \
+        NOOK_REPO_ROOT="$PWD" \
+        FORMAT_CHANGED_FILES="$FORMAT_CHANGED_FILES" \
+          bash "$formatter_root/format.sh"
+        FORMAT_CHANGED_BASH
+
   hive:guest:format:
-    desc: Format the repository natively inside a sealed Hive Kata guest.
+    desc: Apply the canonical changed-file formatter inside a sealed Hive Kata guest.
     preconditions:
       - sh: test "${HIVE_SEALED_GUEST:-}" = "1"
         msg: hive:guest:format is available only inside a sealed Hive guest
     cmds:
-      - cd nook-app/nook-platform && cargo fmt --all
-      - cd nook-app/nook-web/nook-web-app && bun install --frozen-lockfile
-      - cd nook-app/nook-web/nook-web-app && bun run format
-      - cd nook-app/nook-web/nook-web-extension && bun run format
-      - cd agentic-ai/minds && cargo fmt --all
+      - bash .github/scripts/format-host-apply.sh
 
   hive:guest:pr:ready:
     desc: Run the existing PR readiness audit natively inside a sealed Hive guest (PR=<number>).

@@ -78,13 +78,13 @@ or less, and never let a child add tasks or tiers.
 | 0    | Interpret the request; read owning product spec in `.cortex/product-specs/` when product flows are touched; never copy the raw prompt                           |
 | 1    | `git fetch origin main`                                                                                                                                         |
 | 2    | Publish `plans/<feature>/<timestamp>-<task>.md`, then branch from `origin/main`                                                                                 |
-| 3    | Create session memory for substantial work; implement the plan; capture discoveries; update product specs when justified                                     |
+| 3    | Create session memory for substantial work; implement the plan; capture discoveries; update product specs when justified                                        |
 | 4    | **Always** `task loom:pre-push`                                                                                                                                 |
 | 5    | Commit; run local review; then push/open or update PR. For a harness PR, run local review immediately after handoff                                             |
 | 6    | Run focused `task remote` jobs as useful; then `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>` to dispatch validation and request review             |
 | 7    | Watch exact-head repository-owned checks and inspect feedback already present                                                                                   |
 | 8–10 | On failure: CI logs → fix → `task loom:pre-push` → commit/push → focused remote proof → explicit validation                                                     |
-| 11   | Reflect; promote durable knowledge; update the graph when needed; delete session memory; revalidate a changed head                                               |
+| 11   | Reflect; promote durable knowledge; update the graph when needed; delete session memory; revalidate a changed head                                              |
 | 12   | `gh pr merge --squash` when repository checks are green, threads are resolved, and Loom/Task readiness succeeds                                                 |
 | 13   | Publish the issue update, plan-linked worklog, and Loom AI-agent stats to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
 | 14   | Duration report                                                                                                                                                 |

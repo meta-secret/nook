@@ -9,6 +9,7 @@ Multi-argument APIs must use a named object type.
 
 - Apply to:
   - `agentic-ai/loom` authored TypeScript;
+  - executable-skill TypeScript under `.agents/skills`;
   - all authored production TypeScript and Svelte under `nook-app/nook-web`.
 - Exclude generated bindings.
 - Host callback signatures may require multiple positional values.
@@ -76,10 +77,12 @@ Rules:
 ESLint `max-params: [error, 1]` enforces the rule in:
 
 - `agentic-ai/loom/eslint.config.js`;
+- `.agents/skills/eslint.config.js`;
 - `nook-app/nook-web/eslint.config.js`.
 
 ```bash
 task loom:verify
+task skills:verify
 # or
 bun run --cwd agentic-ai/loom lint
 ```
@@ -90,4 +93,4 @@ bun run --cwd agentic-ai/loom lint
 - [ ] Multi-value inputs use a typed object argument.
 - [ ] Every object-shaped parameter refers to a named semantic contract.
 - [ ] Any host-callback exception is local and explains the host contract.
-- [ ] The applicable Loom or web lint task stays green.
+- [ ] The applicable Loom, executable-skill, or web lint task stays green.

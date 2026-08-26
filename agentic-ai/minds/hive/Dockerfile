@@ -78,6 +78,18 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 COPY --from=node /usr/local/lib/node_modules /usr/local/lib/node_modules
 RUN ln -s ../lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && ln -s ../lib/node_modules/npm/bin/npx-cli.js /usr/local/bin/npx
+
+COPY --from=nook-formatter \
+  package.json \
+  bun.lock \
+  prettier-default.json \
+  prettier-shared-typescript.json \
+  prettier-web.json \
+  format.sh \
+  /opt/nook-formatter/
+RUN cd /opt/nook-formatter \
+    && bun install --frozen-lockfile --ignore-scripts \
+    && chmod 0755 format.sh
 RUN curl -fsSL \
       "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/cargo-chef-x86_64-unknown-linux-musl.tar.xz" \
       -o /tmp/cargo-chef.tar.xz \

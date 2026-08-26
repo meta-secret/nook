@@ -4,6 +4,8 @@
 require "yaml"
 require "json"
 require "tmpdir"
+require "fileutils"
+require "open3"
 
 root = File.expand_path("../..", __dir__)
 load_yaml = lambda do |path|
@@ -536,11 +538,40 @@ raise "k0s status task is missing" unless k0s_status_task
 unless infra_taskfile.include?("--exclude='agentic-ai/minds/target'")
   raise "Hive source synchronization does not exclude Rust build output"
 end
+formatter_sync_program = infra_taskfile.match(
+  /IFS= read -r -d '' formatter_sync_program <<'FORMATTER_SYNC' \|\| true\n(?<body>.*?)^        FORMATTER_SYNC$/m
+)&.[](:body)
+raise "Formatter sync replacement program is missing" unless formatter_sync_program
+Dir.mktmpdir("nook-formatter-sync-source") do |source|
+  Dir.mktmpdir("nook-formatter-sync-remote") do |remote_parent|
+    remote = File.join(remote_parent, "home", "nook", ".local", "share", "nook-infra")
+    source_formatter = File.join(source, ".github", "formatting")
+    remote_formatter = File.join(remote, ".github", "formatting")
+    FileUtils.mkdir_p(source_formatter)
+    FileUtils.mkdir_p(remote_formatter)
+    File.write(File.join(source_formatter, "current"), "current\n")
+    File.write(File.join(remote_formatter, "removed"), "stale\n")
+    pipeline = Open3.pipeline(
+      ["tar", "-cf", "-", ".github/formatting"],
+      ["bash", "-c", formatter_sync_program, "--", remote, File.join(remote_parent, "home")],
+      chdir: source
+    )
+    unless pipeline.all?(&:success?) &&
+           File.read(File.join(remote_formatter, "current")) == "current\n" &&
+           !File.exist?(File.join(remote_formatter, "removed"))
+      raise "Formatter sync must replace the staged directory and remove stale files"
+    end
+  end
+end
 unless infra_taskfile.include?(
          '--build-context "nook-sccache-helpers=$remote_dir/nook-app/nook-platform/docker"'
        ) &&
+       infra_taskfile.include?(
+         '--build-context "nook-formatter=$remote_dir/.github/formatting"'
+       ) &&
+       infra_taskfile.include?('"$remote_dir/.github/formatting"') &&
        infra_taskfile.include?("nook-app/nook-platform/docker/sccache-wrapper.sh")
-  raise "Hive deployment build is missing its named nook-sccache-helpers context"
+  raise "Hive deployment build is missing a named external tool context"
 end
 normalized_recovery_key = "tr -d '\\r\\n' > \"$recovery_key\""
 unless infra_taskfile.include?("neo4j-secrets.yaml.hmac") &&
@@ -893,14 +924,30 @@ if hive_taskfile.include?("host.docker.internal")
   raise "Hive verification must not depend on Docker Desktop host aliases"
 end
 
+hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
-unless root_agentic_taskfile.include?("hive:guest:format:") &&
-       root_agentic_taskfile.include?("cargo fmt --all") &&
-       root_agentic_taskfile.include?("bun run format")
+guest_changed_formatter = root_agentic_taskfile.match(
+  /^  hive:guest:format:changed:\n(?<body>.*?)(?=^  hive:guest:format:)/m
+)&.[](:body)
+guest_formatter = root_agentic_taskfile.match(
+  /^  hive:guest:format:\n(?<body>.*?)(?=^  hive:guest:pr:ready:)/m
+)&.[](:body)
+unless guest_changed_formatter&.include?('NOOK_FORMATTER_ROOT:-/opt/nook-formatter') &&
+       guest_changed_formatter.include?('bash "$formatter_root/format.sh"') &&
+       guest_formatter&.include?("bash .github/scripts/format-host-apply.sh") &&
+       !guest_changed_formatter.include?("bun install") &&
+       !guest_formatter.include?("bun install")
   raise "Hive native sealed-guest formatting task is incomplete"
 end
 
-hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
+unless hive_dockerfile.include?("COPY --from=nook-formatter") &&
+       hive_dockerfile.include?("/opt/nook-formatter/") &&
+       hive_taskfile.scan('--build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"').length == 8 &&
+       hive_workflow.scan(".github/formatting/**").length == 2 &&
+       infra_taskfile.include?(".github/formatting")
+  raise "Hive runtime must bake and track the canonical external formatter bundle"
+end
+
 unless hive_workflow.scan("agentic-ai/minds/hive/controller/reaper.test.ts").length == 2
   raise "Hive controller behavior-test changes must trigger PR and Main verification"
 end

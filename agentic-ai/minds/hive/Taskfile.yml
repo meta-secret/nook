@@ -4,6 +4,8 @@ vars:
   HIVE_DIR: ..
   HIVE_TASK_DIR:
     sh: 'cd "{{.TASKFILE_DIR}}" && pwd'
+  NOOK_FORMATTER_CONTEXT:
+    sh: 'cd "{{.TASKFILE_DIR}}/../../../.github/formatting" && pwd'
   HIVE_IMAGE: '{{default "nook-hive:local" .HIVE_IMAGE}}'
   HIVE_FORMAT_IMAGE: '{{default "nook-hive-format:local" .HIVE_FORMAT_IMAGE}}'
   HIVE_RUST_VERSION: '1.97'
@@ -44,6 +46,7 @@ tasks:
           --target formatter \
           --tag "$image" \
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         container="$(docker create "$image")"
@@ -66,6 +69,7 @@ tasks:
           --target console-formatter \
           --tag "$console_image" \
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         console_container="$(docker create "$console_image")"
@@ -116,6 +120,7 @@ tasks:
         fi
         command+=(
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -166,6 +171,7 @@ tasks:
         fi
         command+=(
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -216,6 +222,7 @@ tasks:
           --target builder \
           --output type=cacheonly \
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         BASH
@@ -265,6 +272,7 @@ tasks:
         fi
         command+=(
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -335,6 +343,7 @@ tasks:
         fi
         command+=(
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"
           --file hive/Dockerfile
           .)
         "${command[@]}"
@@ -357,6 +366,7 @@ tasks:
           --platform linux/amd64 \
           --tag "$HIVE_IMAGE" \
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT" \
+          --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}" \
           --file hive/Dockerfile \
           .
         BASH

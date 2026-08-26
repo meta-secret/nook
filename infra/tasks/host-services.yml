@@ -249,4 +249,38 @@ tasks:
           nook-app/nook-platform/docker/sccache-report.sh |
           ssh -o BatchMode=yes "$ssh_target" \
             "tar -xf - -C '$remote_dir'"
+        IFS= read -r -d '' formatter_sync_program <<'FORMATTER_SYNC' || true
+        set -euo pipefail
+        remote_dir="${1:-}"
+        validated_home="${2:-/home}"
+        case "$remote_dir" in "$validated_home"/*/.local/share/nook-infra) ;; *) exit 2 ;; esac
+        formatter_stage="$(mktemp -d "$remote_dir/.formatter-sync.XXXXXX")"
+        formatter_sync_id="${formatter_stage##*.formatter-sync.}"
+        formatter_next="$remote_dir/.github/.formatting.next.$formatter_sync_id"
+        formatter_previous="$remote_dir/.github/.formatting.previous.$formatter_sync_id"
+        cleanup_formatter_sync() {
+          rm -rf -- "$formatter_stage" "$formatter_next"
+          if test -d "$formatter_previous"; then
+            if test -e "$remote_dir/.github/formatting"; then
+              rm -rf -- "$formatter_previous"
+            else
+              mv -- "$formatter_previous" "$remote_dir/.github/formatting"
+            fi
+          fi
+        }
+        trap cleanup_formatter_sync EXIT
+        tar -xf - -C "$formatter_stage"
+        test -d "$formatter_stage/.github/formatting"
+        install -d -m 0750 "$remote_dir/.github"
+        mv -- "$formatter_stage/.github/formatting" "$formatter_next"
+        if test -e "$remote_dir/.github/formatting"; then
+          mv -- "$remote_dir/.github/formatting" "$formatter_previous"
+        fi
+        mv -- "$formatter_next" "$remote_dir/.github/formatting"
+        rm -rf -- "$formatter_previous"
+        FORMATTER_SYNC
+        formatter_sync_command="$(printf 'bash -c %q -- %q' "$formatter_sync_program" "$remote_dir")"
+        COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" \
+          -cf - .github/formatting |
+          ssh -o BatchMode=yes "$ssh_target" "$formatter_sync_command"
         BASH

@@ -10,6 +10,7 @@ must both be named and typed.
 Applies to:
 
 - `agentic-ai/loom` authored TypeScript;
+- executable-skill TypeScript under `.agents/skills`;
 - all authored production TypeScript and Svelte under `nook-app/nook-web`.
 
 There is no production-source migration allowlist. Every function-valued prop,
@@ -132,11 +133,14 @@ The rule is configured in:
 
 - `agentic-ai/loom/eslint.config.js` defines
   `loom/no-raw-object-arguments`;
+- `.agents/skills/eslint.config.js` applies the same shared rule to
+  executable-skill TypeScript;
 - `nook-app/nook-web/eslint.config.js` uses
   `nook-typed-api/no-raw-object-arguments`.
 
 ```bash
 task loom:verify
+task skills:verify
 ```
 
 ## Application Checklist

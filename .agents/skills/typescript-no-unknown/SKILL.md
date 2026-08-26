@@ -1,15 +1,17 @@
 ---
 name: typescript-no-unknown
 description: >-
-  Loom and migrated Nook web TypeScript: ban authored unknown and object.
-  Ban generic value bags in domain or application code. Treat existing bags as
-  migration debt, not precedent. Allow unknown only inside a dedicated
-  transport adapter that narrows immediately. The object type has no exception.
+  Loom, executable-skill, and migrated Nook web TypeScript: ban authored
+  unknown and object. Ban generic value bags in domain or application code.
+  Treat existing bags as migration debt, not precedent. Allow unknown only
+  inside a dedicated transport adapter that narrows immediately. The object
+  type has no exception.
 ---
 
 # TypeScript No Unknown
 
-Use this skill when editing Loom or migrated Nook web TypeScript.
+Use this skill when editing Loom, executable-skill, or migrated Nook web
+TypeScript.
 
 Read `.cortex/dynamic-skills/typescript-no-unknown.md` and apply it:
 
@@ -19,6 +21,6 @@ Read `.cortex/dynamic-skills/typescript-no-unknown.md` and apply it:
 4. Allow `unknown` only inside a dedicated parser, codec, or message guard.
 5. Do not use `object` at that boundary. It claims structure before validation.
 6. Narrow that value immediately to a domain type or typed failure.
-7. Keep the applicable Loom or web lint task green.
+7. Keep the applicable Loom, executable-skill, or web lint task green.
 8. Treat existing generic domain APIs as staged migration debt. Do not expand
    them or cite them as precedent.

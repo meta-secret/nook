@@ -1,5 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { evaluatePopularity } from '../src/lib/dependency-popularity/evaluate.ts';
+import { scanRepositoryNpmPackages } from '../src/lib/dependency-popularity/scan.ts';
 import {
   DependencyEcosystem,
   GitHubStarsPresence,
@@ -7,12 +11,77 @@ import {
 } from '../src/lib/dependency-popularity/types.ts';
 
 import type { EvaluatePopularityArgs } from '../src/lib/dependency-popularity/evaluate.ts';
+import type { MakeDirectoryOptions, RmOptions } from 'node:fs';
+
+interface PackageManifestFixture {
+  readonly dependencies?: Readonly<Record<string, string>>;
+  readonly devDependencies?: Readonly<Record<string, string>>;
+}
+
+interface WriteManifestArgs {
+  readonly root: string;
+  readonly relativePath: string;
+  readonly manifest: PackageManifestFixture;
+}
+
+const temporaryRoots: string[] = [];
+
+afterEach(() => {
+  for (const root of temporaryRoots.splice(0)) {
+    const removalOptions: RmOptions = { force: true, recursive: true };
+    rmSync(root, removalOptions);
+  }
+});
+
+function writeManifest({
+  root,
+  relativePath,
+  manifest,
+}: WriteManifestArgs): void {
+  const absolutePath = path.join(root, relativePath);
+  const directoryOptions: MakeDirectoryOptions = { recursive: true };
+  mkdirSync(path.dirname(absolutePath), directoryOptions);
+  writeFileSync(absolutePath, JSON.stringify(manifest));
+}
+
 const thresholds = {
   minNpmWeeklyDownloads: 10_000,
   minGitHubStars: 100,
   minCratesIoDownloads: 50_000,
   minCratesIoRecentDownloads: 1_000,
 };
+
+describe('scanRepositoryNpmPackages', () => {
+  test('unions Loom and executable-skill dependencies', () => {
+    const root = mkdtempSync(path.join(tmpdir(), 'nook-dependency-scan-'));
+    temporaryRoots.push(root);
+    const loomManifest: PackageManifestFixture = {
+      dependencies: { alpha: '1.0.0', shared: '1.0.0' },
+      devDependencies: { '@types/ignored': '1.0.0' },
+    };
+    const skillManifest: PackageManifestFixture = {
+      dependencies: { beta: '1.0.0', shared: '1.0.0' },
+    };
+    const loomWrite: WriteManifestArgs = {
+      root,
+      relativePath: 'agentic-ai/loom/package.json',
+      manifest: loomManifest,
+    };
+    const skillWrite: WriteManifestArgs = {
+      root,
+      relativePath: '.agents/skills/package.json',
+      manifest: skillManifest,
+    };
+    writeManifest(loomWrite);
+    writeManifest(skillWrite);
+
+    expect(scanRepositoryNpmPackages(root)).toEqual([
+      'alpha',
+      'beta',
+      'shared',
+    ]);
+  });
+});
 
 describe('evaluatePopularity', () => {
   test('passes a popular npm package', () => {
