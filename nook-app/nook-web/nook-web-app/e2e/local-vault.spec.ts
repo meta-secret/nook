@@ -289,6 +289,10 @@ test.describe('local vault', () => {
       const probeIsPresent = (target: CleanupProbeTarget) =>
         new Promise<boolean>((resolve, reject) => {
           const request = indexedDB.open(target.databaseName)
+          let recreated = false
+          request.onupgradeneeded = () => {
+            recreated = true
+          }
           request.onerror = () =>
             reject(
               request.error ??
@@ -296,24 +300,31 @@ test.describe('local vault', () => {
             )
           request.onsuccess = () => {
             const db = request.result
-            if (!db.objectStoreNames.contains(target.storeName)) {
+            if (recreated || !db.objectStoreNames.contains(target.storeName)) {
               db.close()
               resolve(false)
               return
             }
-            const transaction = db.transaction(target.storeName, 'readonly')
-            const read = transaction
-              .objectStore(target.storeName)
-              .get(target.key)
-            read.onsuccess = () => {
+            try {
+              const transaction = db.transaction(target.storeName, 'readonly')
+              const read = transaction
+                .objectStore(target.storeName)
+                .get(target.key)
+              read.onsuccess = () => {
+                db.close()
+                resolve(Boolean(read.result))
+              }
+              read.onerror = () =>
+                reject(
+                  read.error ??
+                    new Error(
+                      `${target.databaseName} cleanup probe read failed`,
+                    ),
+                )
+            } catch {
               db.close()
-              resolve(Boolean(read.result))
+              resolve(false)
             }
-            read.onerror = () =>
-              reject(
-                read.error ??
-                  new Error(`${target.databaseName} cleanup probe read failed`),
-              )
           }
         })
       const probePresence = await Promise.all([

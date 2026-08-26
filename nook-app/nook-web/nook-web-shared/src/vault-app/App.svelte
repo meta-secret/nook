@@ -305,7 +305,6 @@
     }
     updateApplicationDocument(updateApplicationDocumentArgs)
   })
-
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
@@ -801,6 +800,11 @@
   })
 
   $effect(() => {
+    if (
+      vault.helpOpen &&
+      isSentinelParticipantKeyPending(pendingVaultCreationState)
+    )
+      return finishPendingCreation()
     if (
       pendingVaultCreationState.kind !==
         VaultCreationQueueKind.WaitingForDevice ||
