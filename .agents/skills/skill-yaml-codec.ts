@@ -41,7 +41,7 @@ export function parseSkillYamlText(text: string): SkillYamlParseOutcome {
 }
 
 export function stringifySkillYaml(value: UntrustedSkillYamlNode): string {
-  return `${Bun.YAML.stringify(value, undefined, 2).trimEnd()}\n`;
+  return `${Bun.YAML.stringify(value, void 0, 2).trimEnd()}\n`;
 }
 
 export function isSkillYamlMap(

@@ -73,7 +73,7 @@ describe('executable skill YAML command protocol', () => {
       (candidate) =>
         candidate.family === SkillRequestFamily.CortexArticleStructure,
     );
-    expect(action).toBeDefined();
+    expect(Boolean(action)).toBe(true);
     if (!action) throw new Error('Missing article-structure action.');
 
     const outcome = dispatchSkillYamlText(action.exampleYaml);
@@ -88,7 +88,7 @@ describe('executable skill YAML command protocol', () => {
       (candidate) =>
         candidate.family === SkillRequestFamily.CortexArticleStructure,
     );
-    expect(action).toBeDefined();
+    expect(Boolean(action)).toBe(true);
     if (!action) throw new Error('Missing article-structure action.');
 
     const documents = action.inputSchema.properties.documents;
@@ -111,8 +111,8 @@ describe('executable skill YAML command protocol', () => {
     expect(blockItems.items.oneOf).toHaveLength(2);
     const headingSchema = blockItems.items.oneOf.at(0);
     const simpleBlockSchema = blockItems.items.oneOf.at(1);
-    expect(headingSchema).toBeDefined();
-    expect(simpleBlockSchema).toBeDefined();
+    expect(Boolean(headingSchema)).toBe(true);
+    expect(Boolean(simpleBlockSchema)).toBe(true);
     if (!headingSchema || !('required' in headingSchema)) {
       throw new Error('Missing heading schema.');
     }
@@ -123,8 +123,8 @@ describe('executable skill YAML command protocol', () => {
     expect(headingSchema.required).toEqual(['depth', 'kind', 'line', 'text']);
     const depthSchema = headingSchema.properties.depth;
     const textSchema = headingSchema.properties.text;
-    expect(depthSchema).toBeDefined();
-    expect(textSchema).toBeDefined();
+    expect(Boolean(depthSchema)).toBe(true);
+    expect(Boolean(textSchema)).toBe(true);
     if (!depthSchema || !('maximum' in depthSchema)) {
       throw new Error('Missing heading-depth bound.');
     }
