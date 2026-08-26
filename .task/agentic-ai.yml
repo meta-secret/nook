@@ -198,6 +198,21 @@ tasks:
             --working-directory "{{.REPO_ROOT}}"
         fi
 
+  loom:module-delivery:validate:
+    desc: Validate and dry-run one reviewed module delivery plan (PLAN=<plan.json>).
+    deps: [loom:install]
+    requires:
+      vars: [PLAN]
+    cmds:
+      - |
+        set -euo pipefail
+        plan="{{.PLAN}}"
+        case "$plan" in
+          /*) ;;
+          *) plan="{{.REPO_ROOT}}/$plan" ;;
+        esac
+        bun run --cwd agentic-ai/loom module-delivery -- --plan "$plan"
+
   loom:agent-delegation:start:
     desc: Start one declared ordinary delegation run (PLAN=<plan.json>).
     deps: [loom:install]
