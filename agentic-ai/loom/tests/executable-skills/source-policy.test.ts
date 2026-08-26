@@ -191,6 +191,46 @@ describe('executable skill source policy', () => {
     expect(analyzeFixture(request)).toEqual(['./local.ts', '../domain.ts']);
   });
 
+  test('rejects runtime imports that normalize outside the owning skill root', () => {
+    const sources = [
+      "import value from './safe.ts/../../../../outside.ts'; value;",
+      "export { value } from '../../../../agentic-ai/loom/src/cli.ts';",
+    ];
+    for (const source of sources) {
+      const request: AnalyzeFixtureRequest = { source };
+      expect(() => analyzeFixture(request)).toThrow(
+        'inside their owning skill root',
+      );
+    }
+  });
+
+  test('rejects noncanonical source paths and invalid TypeScript syntax', () => {
+    const noncanonicalPaths = [
+      '.agents/skills/fixture/src/run.tsx',
+      '.agents/skills/fixture/src/../run.ts',
+      '.agents\\skills\\fixture\\src\\run.ts',
+      '/.agents/skills/fixture/src/run.ts',
+      'agentic-ai/loom/src/run.ts',
+    ];
+    for (const relativePath of noncanonicalPaths) {
+      const request = {
+        relativePath,
+        source: "const view = <div>{fetch('https://example.com')}</div>;",
+      };
+      expect(() => analyzeExecutableSkillSource(request)).toThrow(
+        'canonical TypeScript source path',
+      );
+    }
+
+    const invalidSyntaxRequest = {
+      relativePath: '.agents/skills/fixture/src/run.ts',
+      source: "const view = <div>{fetch('https://example.com')}</div>;",
+    };
+    expect(() => analyzeExecutableSkillSource(invalidSyntaxRequest)).toThrow(
+      'invalid TypeScript syntax',
+    );
+  });
+
   test('rejects import attributes and non-TypeScript relative modules', () => {
     const attributedSources = [
       "import secret from './secret.txt' with { type: 'text' };",

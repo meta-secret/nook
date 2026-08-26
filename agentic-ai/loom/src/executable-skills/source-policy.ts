@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { posix } from 'node:path';
 
 export type AnalyzeExecutableSkillSourceRequest = {
   readonly relativePath: string;
@@ -167,6 +168,7 @@ export function analyzeExecutableSkillSource(
   request: AnalyzeExecutableSkillSourceRequest,
 ): ExecutableSkillSourceAnalysis {
   assertExecutableSkillSourceBounds(request);
+  assertCanonicalExecutableSkillSourcePath(request.relativePath);
   const context = createExecutableSkillSourceContext(request);
   const sourceFile = context.sourceFile;
   const moduleSpecifiers: string[] = [];
@@ -239,6 +241,13 @@ export function analyzeExecutableSkillSource(
       'Executable skill permits only relative TypeScript source imports.',
     );
   }
+  for (const moduleSpecifier of moduleSpecifiers) {
+    const containmentRequest: AssertContainedModuleSpecifierRequest = {
+      moduleSpecifier,
+      sourcePath: request.relativePath,
+    };
+    assertContainedModuleSpecifier(containmentRequest);
+  }
   const analysis: ExecutableSkillSourceAnalysis = {
     moduleSpecifiers: Object.freeze([...moduleSpecifiers]),
   };
@@ -282,6 +291,44 @@ function assertExecutableSkillSourceBounds(
 
 function utf8ByteLength(value: string): number {
   return new TextEncoder().encode(value).byteLength;
+}
+
+function assertCanonicalExecutableSkillSourcePath(relativePath: string): void {
+  const segments = relativePath.split('/');
+  if (
+    !relativePath.endsWith(ExecutableSkillSourceModuleSuffix.TypeScript) ||
+    posix.isAbsolute(relativePath) ||
+    posix.normalize(relativePath) !== relativePath ||
+    relativePath.includes('\\') ||
+    segments.length < 4 ||
+    segments[0] !== '.agents' ||
+    segments[1] !== 'skills' ||
+    !segments[2]
+  ) {
+    throw new Error(
+      'Executable skill requires a canonical TypeScript source path inside its skill root.',
+    );
+  }
+}
+
+type AssertContainedModuleSpecifierRequest = {
+  readonly moduleSpecifier: string;
+  readonly sourcePath: string;
+};
+
+function assertContainedModuleSpecifier(
+  request: AssertContainedModuleSpecifierRequest,
+): void {
+  const sourceSegments = request.sourcePath.split('/');
+  const skillRoot = sourceSegments.slice(0, 3).join('/');
+  const resolvedPath = posix.normalize(
+    posix.join(posix.dirname(request.sourcePath), request.moduleSpecifier),
+  );
+  if (resolvedPath !== skillRoot && !resolvedPath.startsWith(`${skillRoot}/`)) {
+    throw new Error(
+      'Executable skill runtime imports must remain inside their owning skill root.',
+    );
+  }
 }
 
 type AssertNoForbiddenCapabilityRequest = {
@@ -844,6 +891,11 @@ function createExecutableSkillSourceContext(
       : missingText.get(fileName);
   const rootNames = [request.relativePath];
   const program = ts.createProgram(rootNames, compilerOptions, compilerHost);
+  if (program.getSyntacticDiagnostics(sourceFile).length > 0) {
+    throw new Error(
+      'Executable skill source contains invalid TypeScript syntax.',
+    );
+  }
   return {
     checker: program.getTypeChecker(),
     sourceFile,
