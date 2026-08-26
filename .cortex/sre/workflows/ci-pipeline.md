@@ -113,6 +113,10 @@ See [issues.md](../../workflows/issues.md), [agent-statistics.md](../../workflow
 **`pr-head-stabilization.yml`**
 
 - Runs from trusted default-branch workflow code when a PR head is replaced.
+- Accepts a numbered manual dispatch from validation to backfill the current
+  boundary for pull requests that were already open during rollout.
+- Serializes boundary writes per pull request and derives manual transition
+  time from the server-created workflow run.
 - Reads the live PR head before each cancellation.
 - Cancels only active obsolete PR, Rust ecosystem, and Web research runs that
   GitHub associates with the same PR.
@@ -156,7 +160,7 @@ See [issues.md](../../workflows/issues.md), [agent-statistics.md](../../workflow
 **`linear-ui-demo.yml`**
 
 - Runs from the trusted default branch.
-- Claims the shared `pr-<number>` concurrency group on close to cancel in-flight validation.
+- Claims the current `pr-<number>-<head-sha>` concurrency group on close to cancel in-flight validation.
 - Downloads the PR demo artifact.
 - Publishes its 10 largest WebMs to Linear.
 - Updates the PR comment and completes/cancels the matching Linear issue.

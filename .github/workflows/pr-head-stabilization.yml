@@ -5,6 +5,20 @@ on:
   # preserves actions:write for safe cancellation of fork and Dependabot runs.
   pull_request_target:
     types: [edited, opened, reopened, synchronize]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: Existing open pull request to backfill
+        required: true
+        type: number
+      head_sha:
+        description: Expected pull request head SHA
+        required: true
+        type: string
+      base_sha:
+        description: Expected pull request base SHA
+        required: true
+        type: string
 
 permissions:
   actions: write
@@ -15,9 +29,9 @@ jobs:
   head-boundary:
     name: Record exact PR head boundary
     concurrency:
-      group: pr-head-boundary-${{ github.event.pull_request.number }}
+      group: pr-head-boundary-${{ github.event.pull_request.number || inputs.pr_number }}
       cancel-in-progress: false
-    runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Record the exact PR head boundary
@@ -32,26 +46,45 @@ jobs:
               core.info("Ignoring PR edit without a base-ref change.");
               return;
             }
-            const pullRequest = context.payload.pull_request;
+            const dispatchedPrNumber = Number(context.payload.inputs?.pr_number ?? 0);
+            const eventPullRequest = context.payload.pull_request;
+            const prNumber = eventPullRequest?.number ?? dispatchedPrNumber;
+            if (!Number.isInteger(prNumber) || prNumber <= 0) {
+              core.setFailed("A positive pull request number is required.");
+              return;
+            }
             const { data: livePullRequest } = await github.rest.pulls.get({
               ...context.repo,
-              pull_number: pullRequest.number,
+              pull_number: prNumber,
             });
-            if (
-              livePullRequest.head.sha !== pullRequest.head.sha ||
-              livePullRequest.base.ref !== pullRequest.base.ref
-            ) {
+            if (!eventPullRequest && (
+              livePullRequest.head.sha !== context.payload.inputs.head_sha ||
+              livePullRequest.base.sha !== context.payload.inputs.base_sha
+            )) {
+              core.info("Skipping obsolete head-boundary backfill.");
+              return;
+            }
+            if (eventPullRequest && (
+              livePullRequest.head.sha !== eventPullRequest.head.sha ||
+              livePullRequest.base.ref !== eventPullRequest.base.ref
+            )) {
               core.info("Skipping obsolete head-boundary event.");
               return;
             }
+            const transitionAt = eventPullRequest
+              ? eventPullRequest.updated_at
+              : (await github.rest.actions.getWorkflowRun({
+                  ...context.repo,
+                  run_id: context.runId,
+                })).data.created_at;
             const markerPrefix = "<!-- nook-head-transition:";
-            const marker = `${markerPrefix}${pullRequest.head.sha}:${pullRequest.base.ref}:${pullRequest.updated_at} -->`;
+            const marker = `${markerPrefix}${livePullRequest.head.sha}:${livePullRequest.base.ref}:${transitionAt} -->`;
             const body = `${marker}\nExact-head delivery boundary (automated).`;
             const comments = await github.paginate(
               github.rest.issues.listComments,
               {
                 ...context.repo,
-                issue_number: pullRequest.number,
+                issue_number: prNumber,
                 per_page: 100,
               }
             );
@@ -69,7 +102,7 @@ jobs:
             } else {
               await github.rest.issues.createComment({
                 ...context.repo,
-                issue_number: pullRequest.number,
+                issue_number: prNumber,
                 body,
               });
             }
@@ -95,21 +128,14 @@ jobs:
               core.info("Ignoring PR edit without a base-ref change.");
               return;
             }
-            const baseRetargetedAt = Date.parse(
-              context.payload.pull_request.updated_at
-            );
             const validationWorkflows = [
               { file: "pr.yml", name: "PR" },
               { file: "rust-ecosystem.yml", name: "Rust ecosystem checks" },
               { file: "web-research.yml", name: "Web research" },
             ];
-            const activeStatuses = [
-              "queued",
-              "in_progress",
-              "requested",
-              "waiting",
-              "pending",
-            ];
+            const activeStatuses = new Set([
+              "queued", "in_progress", "requested", "waiting", "pending",
+            ]);
             const inspectionDeadline = Date.now() + 45_000;
             const inspectedRunIds = new Set();
             let obsoleteRunCount = 0;
@@ -122,22 +148,18 @@ jobs:
               liveHeadSha = currentPr.head.sha;
               let runs;
               try {
-                runs = (
-                  await Promise.all(
-                  validationWorkflows.flatMap((workflow) =>
-                    activeStatuses.map((status) =>
-                      github.paginate(github.rest.actions.listWorkflowRuns, {
-                        ...context.repo,
-                        workflow_id: workflow.file,
-                        branch: currentPr.head.ref,
-                        event: "pull_request",
-                        status,
-                        per_page: 100,
-                      })
-                    )
+                runs = (await Promise.all(
+                  validationWorkflows.map((workflow) =>
+                    github.rest.actions.listWorkflowRuns({
+                      ...context.repo,
+                      workflow_id: workflow.file,
+                      branch: currentPr.head.ref,
+                      event: "pull_request",
+                      per_page: 100,
+                    })
                   )
-                  )
-                ).flat();
+                )).flatMap((response) => response.data.workflow_runs)
+                  .filter((run) => activeStatuses.has(run.status));
               } catch (error) {
                 core.warning(
                   `Could not enumerate active validation runs; retrying within the registration window: ${String(error)}`
@@ -149,20 +171,18 @@ jobs:
                 break;
               }
               const obsoleteRuns = runs.filter((run) => {
-                const runCreatedAt = Date.parse(run.created_at);
+                const associatedPullRequest = run.pull_requests.find(
+                  (pullRequest) => pullRequest.number === prNumber
+                );
                 const predatesBaseRetarget =
                   baseRetargeted &&
                   run.name !== "Web research" &&
-                  Number.isFinite(baseRetargetedAt) &&
-                  Number.isFinite(runCreatedAt) &&
-                  runCreatedAt <= baseRetargetedAt;
+                  associatedPullRequest?.base?.sha !== currentPr.base.sha;
                 return (
                   !inspectedRunIds.has(run.id) &&
                   (run.head_sha !== currentPr.head.sha || predatesBaseRetarget) &&
                   validationWorkflows.some((workflow) => workflow.name === run.name) &&
-                  run.pull_requests.some((pullRequest) =>
-                    pullRequest.number === prNumber
-                  )
+                  associatedPullRequest
                 );
               });
               for (const run of obsoleteRuns) {
@@ -180,15 +200,15 @@ jobs:
                   continue;
                 }
                 liveHeadSha = latestPr.head.sha;
-                const runCreatedAt = Date.parse(run.created_at);
+                const associatedPullRequest = run.pull_requests.find(
+                  (pullRequest) => pullRequest.number === prNumber
+                );
                 const staleForBaseRetarget =
                   baseRetargeted &&
                   run.name !== "Web research" &&
                   latestPr.head.sha === eventHeadSha &&
                   latestPr.base.ref === eventBaseRef &&
-                  Number.isFinite(baseRetargetedAt) &&
-                  Number.isFinite(runCreatedAt) &&
-                  runCreatedAt <= baseRetargetedAt;
+                  associatedPullRequest?.base?.sha !== latestPr.base.sha;
                 if (
                   run.head_sha === latestPr.head.sha &&
                   !staleForBaseRetarget

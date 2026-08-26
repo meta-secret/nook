@@ -61,7 +61,7 @@ function mockOctokit(input: {
         listComments: async () => ({ data: comments }),
       },
       pulls: {
-        get: async () => ({ data: { head: { sha } } }),
+        get: async () => ({ data: { base: { sha: "base-sha" }, head: { sha } } }),
         listReviews: async () => ({ data: reviews }),
       },
       reactions: {
@@ -99,7 +99,42 @@ test("requestExactHeadReview posts one exact-head Codex marker", async () => {
     settled: false,
   });
   assert.deepEqual(createdBodies, [
-    "@codex review\n\n<!-- nook-codex-review:head-sha -->",
+    "@codex review\n\n<!-- nook-codex-review:head-sha:base-sha -->",
+  ]);
+});
+
+test("review request identity changes with the base revision", () => {
+  assert.notEqual(
+    codexReviewRequestMarker(headSha, "base-one"),
+    codexReviewRequestMarker(headSha, "base-two"),
+  );
+});
+
+test("an old same-head review cannot settle a new base-bound request", async () => {
+  const createdBodies: string[] = [];
+  const octokit = mockOctokit({
+    comments: [
+      {
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha, "old-base")}`,
+        id: 1,
+      },
+    ],
+    createdBodies,
+    reviews: [
+      {
+        commit_id: headSha,
+        state: "COMMENTED",
+        user: { login: "chatgpt-codex-connector[bot]" },
+      },
+    ],
+    sha: headSha,
+  });
+
+  const result = await requestExactHeadReview(octokit, repoRef, 410);
+
+  assert.equal(result.requested, true);
+  assert.deepEqual(createdBodies, [
+    `@codex review\n\n${codexReviewRequestMarker(headSha, "base-sha")}`,
   ]);
 });
 
@@ -240,8 +275,12 @@ test("requestExactHeadReview recognizes a clean Codex comment for the exact head
   const octokit = mockOctokit({
     comments: [
       {
-        body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+        body: `@codex review\n\n${codexReviewRequestMarker(headSha)}`,
         id: 1,
+      },
+      {
+        body: `Codex Review: Didn't find any major issues. What shall we delve into next?\n\n**Reviewed commit:** \`${headSha.slice(0, 10)}\``,
+        id: 2,
         user: { login: "chatgpt-codex-connector[bot]" },
       },
     ],

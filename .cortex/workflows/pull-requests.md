@@ -62,6 +62,9 @@ ownership until merge or a concrete blocked handoff:
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
    - It requests one idempotent exact-head Codex review before dispatching
      complete validation.
+   - For a pull request already open when the protocol is deployed, validation
+     dispatches the trusted default-branch boundary workflow once. Actionable
+     comments found before that boundary still stop the first attempt.
    - The eye reaction is liveness evidence only. It never settles review.
    - Current-iteration findings stop validation so they can be fixed as one
      coherent batch.

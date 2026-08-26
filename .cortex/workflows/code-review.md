@@ -45,15 +45,17 @@ task pr:validate PR=<number>
 The command:
 
 1. Requests one idempotent exact-head Codex review.
-2. Waits for a clean result, current-head findings, or the bounded 600-second
+2. Backfills the trusted head boundary through default-branch workflow code
+   when the pull request predates this protocol.
+3. Waits for a clean result, current-head findings, or the bounded 600-second
    stabilization timeout.
-3. Stops before validation when findings exist so the agent can address one
+4. Stops before validation when findings exist so the agent can address one
    coherent batch.
-4. Opens a circuit breaker after three finding batches and requires a
+5. Opens a circuit breaker after three finding batches and requires a
    comprehensive stabilization pass. After resolving its coherent batch, the
    delivery owner explicitly acknowledges that pass with
    `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation.
-5. Rechecks that the PR head did not change, then dispatches repository-owned
+6. Rechecks that the PR head did not change, then dispatches repository-owned
    GitHub Actions.
 
 Review unavailability does not deadlock validation: the bounded timeout allows

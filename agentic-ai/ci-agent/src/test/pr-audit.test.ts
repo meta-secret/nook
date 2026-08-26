@@ -327,6 +327,17 @@ test("buildPrAudit rejects when a required PR job is missing from the latest run
   );
 });
 
+test("buildPrAudit rejects validation from a previous base revision", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ staleBaseRun: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.match(audit.reasons.join("\n"), /not indexed for the current head/);
+});
+
 enum MockCodexReview {
   CleanComment = "clean-comment",
   Dismissed = "dismissed",
@@ -375,6 +386,7 @@ type MockOptions = {
   omitNativeJob?: boolean;
   omitHeadTransition?: boolean;
   runStatus?: MockRunStatus;
+  staleBaseRun?: boolean;
   untrustedHeadTransition?: boolean;
   unresolvedThreads?: number;
 };
@@ -527,7 +539,7 @@ function createMockOctokit(options: MockOptions): Octokit {
           ? [
               {
                 author_association: "OWNER",
-                body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                body: `@codex review\n\n<!-- nook-codex-review:${headSha}:base-sha -->`,
                 created_at: "2026-08-08T00:00:00Z",
                 id: 77,
               },
@@ -535,7 +547,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                 ? [
                     {
                       author_association: "OWNER",
-                      body: `@codex review\n\n<!-- nook-codex-review:${headSha} -->`,
+                      body: `@codex review\n\n<!-- nook-codex-review:${headSha}:base-sha -->`,
                       created_at: "2026-08-08T00:00:30Z",
                       id: 78,
                     },
@@ -643,7 +655,17 @@ function createMockOctokit(options: MockOptions): Octokit {
                 head_sha: headSha,
                 html_url: "https://github.com/meta-secret/nook/actions/runs/42",
                 id: 42,
-                pull_requests: [{ number: 410 }],
+                pull_requests: [
+                  {
+                    base: {
+                      sha:
+                        options.staleBaseRun === true
+                          ? "previous-base-sha"
+                          : "base-sha",
+                    },
+                    number: 410,
+                  },
+                ],
                 status: options.runStatus ?? MockRunStatus.Completed,
               },
             ],

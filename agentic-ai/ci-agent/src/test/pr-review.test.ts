@@ -290,6 +290,29 @@ test("stabilizeExactHeadReview classifies a review settled during zero-wait disp
   assert.equal(inspections, 2);
 });
 
+test("stabilizeExactHeadReview confirms clean settlement after thread indexing", async () => {
+  let inspections = 0;
+  let now = 0;
+  const result = await stabilizeExactHeadReview({
+    inspectFeedback: async () => {
+      inspections += 1;
+      return inspections < 3
+        ? cleanFeedback
+        : { ...cleanFeedback, unresolvedThreads: 1 };
+    },
+    now: () => now,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async (milliseconds) => {
+      now += milliseconds;
+    },
+  });
+
+  assert.equal(inspections, 3);
+  assert.equal(result.state, ReviewStabilizationState.Findings);
+});
+
 test("stabilizeExactHeadReview stops on current-iteration comments", async () => {
   const result = await stabilizeExactHeadReview({
     inspectFeedback: async () => ({
@@ -306,9 +329,13 @@ test("stabilizeExactHeadReview stops on current-iteration comments", async () =>
   assert.equal(result.state, ReviewStabilizationState.Findings);
 });
 
-test("stabilizeExactHeadReview waits for the exact head transition boundary", async () => {
+test("stabilizeExactHeadReview exposes pre-boundary actionable comments", async () => {
   let inspections = 0;
+  let backfills = 0;
   const result = await stabilizeExactHeadReview({
+    ensureHeadTransition: async () => {
+      backfills += 1;
+    },
     inspectFeedback: async () => {
       inspections += 1;
       return inspections === 1
@@ -326,12 +353,41 @@ test("stabilizeExactHeadReview waits for the exact head transition boundary", as
     waitMs: async () => {},
   });
 
-  assert.equal(inspections, 2);
+  assert.equal(inspections, 1);
+  assert.equal(backfills, 0);
   assert.equal(result.state, ReviewStabilizationState.Findings);
 });
 
-test("stabilizeExactHeadReview fails closed when comments cannot be assigned before timeout", async () => {
+test("stabilizeExactHeadReview backfills an existing open pull request once", async () => {
+  let inspections = 0;
+  let backfills = 0;
   const result = await stabilizeExactHeadReview({
+    ensureHeadTransition: async () => {
+      backfills += 1;
+    },
+    inspectFeedback: async () => {
+      inspections += 1;
+      return inspections === 1
+        ? { ...cleanFeedback, headTransitionObserved: false }
+        : cleanFeedback;
+    },
+    now: () => 0,
+    pollIntervalMs: 15,
+    requestReview: async () => ({ headSha: "head-sha", settled: true }),
+    timeoutMs: 60,
+    waitMs: async () => {},
+  });
+
+  assert.equal(backfills, 1);
+  assert.equal(result.state, ReviewStabilizationState.Clean);
+});
+
+test("stabilizeExactHeadReview fails closed when comments cannot be assigned before timeout", async () => {
+  let backfills = 0;
+  const result = await stabilizeExactHeadReview({
+    ensureHeadTransition: async () => {
+      backfills += 1;
+    },
     inspectFeedback: async () => ({
       ...cleanFeedback,
       headTransitionObserved: false,
@@ -346,6 +402,7 @@ test("stabilizeExactHeadReview fails closed when comments cannot be assigned bef
 
   assert.equal(result.state, ReviewStabilizationState.Findings);
   assert.equal(result.feedback?.substantiveComments, 1);
+  assert.equal(backfills, 0);
 });
 
 test("stabilizeExactHeadReview permits a comment-free pending boundary to time out", async () => {

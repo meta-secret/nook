@@ -389,9 +389,14 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
 
     let linear_ui_demo = read(root, ".github/workflows/linear-ui-demo.yml");
     assert!(
-        linear_ui_demo.contains("format('pr-{0}', github.event.pull_request.number)")
+        pr.contains(
+            "group: pr-${{ github.event.pull_request.number }}-${{ github.event.pull_request.head.sha }}"
+        )
+            && linear_ui_demo.contains(
+                "format('pr-{0}-{1}', github.event.pull_request.number, github.event.pull_request.head.sha)"
+            )
             && linear_ui_demo.contains("cancel-in-progress: true"),
-        "the trusted close workflow must cancel the shared PR concurrency group"
+        "PR validation must isolate replacement heads while the trusted close workflow cancels the current exact-head group"
     );
 
     let trusted_handoff = read(root, ".github/workflows/pr-validation-handoff.yml");

@@ -7,6 +7,7 @@ import {
   createOctokit,
   inspectPrFeedback,
   parseRepository,
+  requestHeadTransitionBackfill,
   type PrFeedbackSummary,
 } from "./github.js";
 import { prettyJson } from "./json.js";
@@ -23,6 +24,7 @@ type ReviewStabilizationRequest = () => Promise<{
 
 type ReviewStabilizationInput = {
   circuitBreakerAcknowledged?: boolean;
+  ensureHeadTransition?: () => Promise<void>;
   inspectFeedback: () => Promise<PrFeedbackSummary>;
   now: () => number;
   pollIntervalMs: number;
@@ -88,6 +90,8 @@ export async function runPrReviewStabilization(): Promise<void> {
   const repoRef = parseRepository(repository);
   const result = await stabilizeExactHeadReview({
     circuitBreakerAcknowledged: readCircuitBreakerAcknowledgement(),
+    ensureHeadTransition: () =>
+      requestHeadTransitionBackfill({ octokit, prNumber, repoRef }),
     inspectFeedback: () => inspectPrFeedback(octokit, repoRef, prNumber),
     now: () => Date.now(),
     pollIntervalMs: STABILIZATION_POLL_INTERVAL_MS,
@@ -125,6 +129,7 @@ export async function stabilizeExactHeadReview(
       : deadline;
   let headSha = "";
   let latestFeedback: LatestFeedback = { state: LatestFeedbackState.Missing };
+  let headTransitionBackfillRequested = false;
   let settled = false;
   while (true) {
     try {
@@ -151,6 +156,23 @@ export async function stabilizeExactHeadReview(
       }
       if (findingState === FeedbackClassificationState.Findings) {
         return { feedback, headSha, state: ReviewStabilizationState.Findings };
+      }
+      if (
+        findingState === FeedbackClassificationState.PendingHeadTransition &&
+        !headTransitionBackfillRequested &&
+        input.ensureHeadTransition
+      ) {
+        headTransitionBackfillRequested = true;
+        try {
+          await attemptBeforeDeadline({
+            deadline: initialFeedbackDeadline,
+            now: input.now,
+            operation: input.ensureHeadTransition,
+          });
+        } catch {
+          // The workflow may not exist on the base branch during its own
+          // rollout. The same bounded timeout remains the safe fallback.
+        }
       }
       if (
         findingState === FeedbackClassificationState.Clean &&
@@ -238,12 +260,8 @@ export async function stabilizeExactHeadReview(
             state: ReviewStabilizationState.Findings,
           };
         }
-        if (
-          findingState === FeedbackClassificationState.Clean &&
-          feedback.codexReview.settled
-        ) {
-          return { feedback, headSha, state: ReviewStabilizationState.Clean };
-        }
+        // A submitted review can appear before its inline threads are indexed.
+        // Require the next ordinary poll to confirm a clean settled snapshot.
         if (unavailableAfterRequest) {
           return finalizeAtDeadline({ feedback: latestFeedback, headSha });
         }
@@ -296,7 +314,8 @@ function classifyFeedbackState(
   const hasFindings =
     feedback.currentIterationComments > 0 ||
     feedback.substantiveReviews > 0 ||
-    feedback.unresolvedThreads > 0;
+    feedback.unresolvedThreads > 0 ||
+    (!feedback.headTransitionObserved && feedback.substantiveComments > 0);
   if (hasFindings) return FeedbackClassificationState.Findings;
   if (!feedback.headTransitionObserved) {
     return FeedbackClassificationState.PendingHeadTransition;

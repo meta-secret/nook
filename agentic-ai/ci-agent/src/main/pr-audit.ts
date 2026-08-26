@@ -58,6 +58,15 @@ type WorkflowAudit = RequiredPrWorkflow &
       }
   );
 
+type WorkflowAuditRequest = {
+  baseSha: string;
+  headSha: string;
+  octokit: Octokit;
+  prNumber: number;
+  repoRef: RepoRef;
+  workflows: RequiredPrWorkflow[];
+};
+
 type BranchProtectionAudit = {
   available: boolean;
   requiresApprovingReviews?: boolean;
@@ -126,13 +135,14 @@ export async function buildPrAudit(
     }),
   ]);
   const changedFiles = files.map((file) => file.filename);
-  const requiredWorkflows = await auditWorkflows(
+  const requiredWorkflows = await auditWorkflows({
+    baseSha: pr.base.sha,
+    headSha: pr.head.sha,
     octokit,
-    repoRef,
     prNumber,
-    pr.head.sha,
-    requiredPrWorkflows(changedFiles),
-  );
+    repoRef,
+    workflows: requiredPrWorkflows(changedFiles),
+  });
   const [comparison, feedback, branchProtection, exactHeadDeployment] =
     await Promise.all([
       octokit.rest.repos.compareCommitsWithBasehead({
@@ -250,28 +260,28 @@ export async function buildPrAudit(
 }
 
 async function auditWorkflows(
-  octokit: Octokit,
-  { owner, repo }: RepoRef,
-  prNumber: number,
-  headSha: string,
-  workflows: RequiredPrWorkflow[],
+  request: WorkflowAuditRequest,
 ): Promise<WorkflowAudit[]> {
+  const { owner, repo } = request.repoRef;
   return Promise.all(
-    workflows.map(async (workflow) => {
-      const { data } = await octokit.rest.actions.listWorkflowRuns({
+    request.workflows.map(async (workflow) => {
+      const { data } = await request.octokit.rest.actions.listWorkflowRuns({
         owner,
         repo,
         workflow_id: workflow.workflowFile,
         event: "pull_request",
-        head_sha: headSha,
+        head_sha: request.headSha,
         per_page: 20,
       });
       const runs = data.workflow_runs
         .filter(
           (candidate) =>
-            candidate.head_sha === headSha &&
+            candidate.head_sha === request.headSha &&
             (candidate.pull_requests ?? []).some(
-              (pullRequest) => pullRequest.number === prNumber,
+              (pullRequest) =>
+                pullRequest.number === request.prNumber &&
+                (workflow.workflowFile === "web-research.yml" ||
+                  pullRequest.base.sha === request.baseSha),
             ),
         )
         .sort(
@@ -295,7 +305,7 @@ async function auditWorkflows(
             ? { state: WorkflowRunStatusState.Other, value: run.status }
             : { state: WorkflowRunStatusState.Unavailable };
       const requiredJobAudits = await auditRequiredJobs(
-        octokit,
+        request.octokit,
         { owner, repo },
         run.id,
         workflow.requiredJobs ?? [],

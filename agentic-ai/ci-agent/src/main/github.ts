@@ -31,6 +31,12 @@ const log = createLogger("github");
 
 export type RepoRef = { owner: string; repo: string };
 
+type HeadTransitionBackfillInput = {
+  octokit: Octokit;
+  prNumber: number;
+  repoRef: RepoRef;
+};
+
 export enum OpenPrLookupKind {
   Found = "found",
   NotFound = "not-found",
@@ -62,6 +68,28 @@ export function resolveGitHubToken(): string {
 
 export function createOctokit(): Octokit {
   return new Octokit({ auth: resolveGitHubToken() });
+}
+
+export async function requestHeadTransitionBackfill(
+  input: HeadTransitionBackfillInput,
+): Promise<void> {
+  const { owner, repo } = input.repoRef;
+  const { data: pr } = await input.octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: input.prNumber,
+  });
+  await input.octokit.rest.actions.createWorkflowDispatch({
+    owner,
+    repo,
+    workflow_id: "pr-head-stabilization.yml",
+    ref: pr.base.ref,
+    inputs: {
+      base_sha: pr.base.sha,
+      head_sha: pr.head.sha,
+      pr_number: String(input.prNumber),
+    },
+  });
 }
 
 export async function findOpenPr(
@@ -384,7 +412,7 @@ export async function inspectPrFeedback(
         : { kind: PaginationKind.Complete };
   }
 
-  const marker = codexReviewRequestMarker(pr.head.sha);
+  const marker = codexReviewRequestMarker(pr.head.sha, pr.base.sha);
   const cursorMarker = cursorReviewRequestMarker(pr.head.sha);
   const reviewRequests = issueComments.filter((comment) =>
     isTrustedExactHeadReviewRequest({
@@ -401,6 +429,10 @@ export async function inspectPrFeedback(
     (review) =>
       review.commit_id === pr.head.sha &&
       isSubmittedReviewState(review.state) &&
+      evidenceFollowsTransition(
+        review.submitted_at ?? "",
+        currentHeadTransition,
+      ) &&
       isCodexReviewer(review.user),
   );
   const currentHeadCursorReview = reviews.some(
@@ -425,6 +457,7 @@ export async function inspectPrFeedback(
     (reaction) => reaction.content === "+1" && isCodexReviewer(reaction.user),
   );
   const cleanComment = issueComments.some((comment) =>
+    evidenceFollowsTransition(comment.created_at ?? "", currentHeadTransition) &&
     isCleanCodexReviewComment(comment.body ?? "", comment.user, pr.head.sha),
   );
 
@@ -634,6 +667,14 @@ function transitionTimeFromMarker(body: string, markerPrefix: string): string {
   }
   const transitionTime = markerLine.slice(markerPrefix.length, -4);
   return Number.isNaN(Date.parse(transitionTime)) ? "" : transitionTime;
+}
+
+function evidenceFollowsTransition(
+  evidenceAt: string,
+  transition: HeadTransitionBoundary,
+): boolean {
+  if (transition.state === HeadTransitionState.Pending) return false;
+  return evidenceAt.length === 0 || evidenceAt >= transition.at;
 }
 
 function isGitHubActionsBot(user: RepositoryStatusCommentInput["user"]): boolean {

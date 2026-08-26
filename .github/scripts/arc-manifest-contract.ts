@@ -85,6 +85,7 @@ interface ArcValues {
 interface WorkflowJob {
   if?: string;
   "runs-on"?: string;
+  steps?: Array<{ run?: string; uses?: string }>;
   uses?: string;
 }
 
@@ -511,10 +512,13 @@ workerTasks.requireAll([
 
 await assertHiveRenderContract({ root });
 
-const hostedTrustBoundary = new Set([
+const hostedUntrustedBoundary = new Set([
   "hive.yml#verify-fork",
   "hive.yml#console-untrusted",
   "web-research.yml#validate-untrusted",
+]);
+const hostedControlPlaneBoundary = new Set([
+  "pr-head-stabilization.yml#head-boundary",
 ]);
 const workflowsDir = resolve(root, ".github/workflows");
 const workflowFiles = (await readdir(workflowsDir))
@@ -534,7 +538,24 @@ for (const workflowFile of workflowFiles) {
     }
     const identity = `${workflowFile}#${jobName}`;
     if (placement === "ubuntu-latest") {
-      if (!hostedTrustBoundary.has(identity)) {
+      if (hostedControlPlaneBoundary.has(identity)) {
+        const steps = job.steps ?? [];
+        if (
+          steps.length === 0 ||
+          steps.some(
+            (step) =>
+              "run" in step ||
+              !step.uses?.startsWith("actions/github-script@"),
+          )
+        ) {
+          throw new Error(
+            `${identity} must remain checkout-free GitHub API control-plane work`,
+          );
+        }
+        observedHostedExceptions.add(identity);
+        continue;
+      }
+      if (!hostedUntrustedBoundary.has(identity)) {
         throw new Error(`${identity} routes trusted work to GitHub cloud`);
       }
       observedHostedExceptions.add(identity);
@@ -556,7 +577,10 @@ for (const workflowFile of workflowFiles) {
   }
 }
 
-for (const exception of hostedTrustBoundary) {
+for (const exception of [
+  ...hostedUntrustedBoundary,
+  ...hostedControlPlaneBoundary,
+]) {
   if (!observedHostedExceptions.has(exception)) {
     throw new Error(`stale hosted runner exception: ${exception}`);
   }

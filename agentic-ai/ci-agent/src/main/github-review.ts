@@ -81,6 +81,7 @@ type GitHubText =
 type IssueComment = {
   authorAssociation: string;
   body: GitHubText;
+  createdAt: GitHubText;
   id: number;
   user: unknown;
 };
@@ -89,6 +90,7 @@ type PullReview = {
   body: GitHubText;
   commitId: GitHubText;
   state: GitHubText;
+  submittedAt: GitHubText;
   user: unknown;
 };
 
@@ -97,8 +99,11 @@ type CommentReaction = {
   user?: unknown;
 };
 
-export function codexReviewRequestMarker(headSha: string): string {
-  return `<!-- nook-codex-review:${headSha} -->`;
+export function codexReviewRequestMarker(
+  headSha: string,
+  baseSha = "base-sha",
+): string {
+  return `<!-- nook-codex-review:${headSha}:${baseSha} -->`;
 }
 
 export function cursorReviewRequestMarker(headSha: string): string {
@@ -155,7 +160,9 @@ export async function requestExactHeadReview(
     pull_number: prNumber,
   });
   const headSha = pr.head.sha;
+  const baseSha = pr.base.sha;
   const snapshot = await loadReviewSnapshot({
+    baseSha,
     headSha,
     octokit,
     owner,
@@ -190,7 +197,7 @@ export async function requestExactHeadReview(
     };
   }
 
-  const codexMarker = codexReviewRequestMarker(headSha);
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
   await octokit.rest.issues.createComment({
     owner,
     repo,
@@ -209,6 +216,7 @@ export async function requestExactHeadReview(
 
   const probed = await probeCodexAvailability({
     availability,
+    baseSha,
     headSha,
     octokit,
     owner,
@@ -377,6 +385,7 @@ type ReviewSnapshot = {
 };
 
 async function loadReviewSnapshot(input: {
+  baseSha: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
@@ -387,20 +396,21 @@ async function loadReviewSnapshot(input: {
     listIssueComments(input),
     listPullReviews(input),
   ]);
-  return snapshotFrom(comments, reviews, input.headSha, input);
+  return snapshotFrom(comments, reviews, input.headSha, input.baseSha, input);
 }
 
 async function snapshotFrom(
   comments: IssueComment[],
   reviews: PullReview[],
   headSha: string,
+  baseSha: string,
   reactionSource: {
     octokit: Octokit;
     owner: string;
     repo: string;
   },
 ): Promise<ReviewSnapshot> {
-  const codexMarker = codexReviewRequestMarker(headSha);
+  const codexMarker = codexReviewRequestMarker(headSha, baseSha);
   const cursorMarker = cursorReviewRequestMarker(headSha);
   const codexRequests = comments.filter(
     (comment) =>
@@ -415,25 +425,32 @@ async function snapshotFrom(
   const cursorRequests = comments.filter((comment) =>
     githubTextIncludes({ marker: cursorMarker, text: comment.body }),
   );
-  const codexReviewSettled = reviews.some((review) =>
-    isExactHeadSubmittedReview({
-      actorCheck: isCodexReviewer,
-      headSha,
-      review,
-    }),
-  );
+  const codexReviewSettled =
+    codexRequests.length > 0 &&
+    reviews.some((review) =>
+      isExactHeadSubmittedReview({
+        actorCheck: isCodexReviewer,
+        boundaryAt: latestRequestTime(codexRequests),
+        headSha,
+        review,
+      }),
+    );
   const cursorReviewSettled = reviews.some((review) =>
     isExactHeadSubmittedReview({
       actorCheck: isCursorReviewer,
+      boundaryAt: { kind: GitHubTextKind.Missing },
       headSha,
       review,
     }),
   );
-  const cleanComment = comments.some(
-    (comment) =>
-      comment.body.kind === GitHubTextKind.Present &&
-      isCleanCodexReviewComment(comment.body.value, comment.user, headSha),
-  );
+  const cleanComment =
+    codexRequests.length > 0 &&
+    comments.some(
+      (comment) =>
+        comment.body.kind === GitHubTextKind.Present &&
+        isAtOrAfter(comment.createdAt, latestRequestTime(codexRequests)) &&
+        isCleanCodexReviewComment(comment.body.value, comment.user, headSha),
+    );
   const lastCodexRequestIndex = comments.reduce(
     (lastIndex, comment, index) =>
       codexRequests.includes(comment)
@@ -498,6 +515,7 @@ type CodexProbeResult =
 
 async function probeCodexAvailability(input: {
   availability: ExactHeadReviewAvailability;
+  baseSha: string;
   headSha: string;
   octokit: Octokit;
   owner: string;
@@ -539,6 +557,7 @@ function githubTextIncludes(input: GitHubTextIncludesInput): boolean {
 
 type ExactHeadSubmittedReviewInput = {
   actorCheck: (actor: unknown) => boolean;
+  boundaryAt: GitHubText;
   headSha: string;
   review: PullReview;
 };
@@ -551,8 +570,23 @@ function isExactHeadSubmittedReview(
     input.review.commitId.value === input.headSha &&
     input.review.state.kind === GitHubTextKind.Present &&
     isSubmittedReviewState(input.review.state.value) &&
+    isAtOrAfter(input.review.submittedAt, input.boundaryAt) &&
     input.actorCheck(input.review.user)
   );
+}
+
+function latestRequestTime(requests: IssueComment[]): GitHubText {
+  return requests.at(-1)?.createdAt ?? { kind: GitHubTextKind.Missing };
+}
+
+function isAtOrAfter(value: GitHubText, boundary: GitHubText): boolean {
+  if (
+    value.kind === GitHubTextKind.Missing ||
+    boundary.kind === GitHubTextKind.Missing
+  ) {
+    return true;
+  }
+  return Date.parse(value.value) >= Date.parse(boundary.value);
 }
 
 async function listIssueComments(input: {
@@ -573,6 +607,7 @@ async function listIssueComments(input: {
   return comments.map((comment) => ({
     authorAssociation: comment.author_association,
     body: githubTextFrom(comment.body),
+    createdAt: githubTextFrom(comment.created_at),
     id: comment.id,
     user: comment.user,
   }));
@@ -597,6 +632,7 @@ async function listPullReviews(input: {
     body: githubTextFrom(review.body),
     commitId: githubTextFrom(review.commit_id),
     state: githubTextFrom(review.state),
+    submittedAt: githubTextFrom(review.submitted_at),
     user: review.user,
   }));
 }
