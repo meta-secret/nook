@@ -69,12 +69,35 @@ describe('agent stats GitHub evidence', () => {
         { name: 'Native Rust verification', conclusion: 'skipped' },
       ],
     };
+    const supportedThenFailedRequest: ActionJobsRequestedValidationRequest = {
+      gateJobName: 'Validate explicit ecosystem request',
+      jobs: [
+        {
+          name: 'Validate explicit ecosystem request',
+          conclusion: 'failure',
+          steps: [
+            {
+              name: 'Reject unsupported label events',
+              conclusion: 'success',
+            },
+            {
+              name: 'Keep mixed PRs in the product workflow',
+              conclusion: 'failure',
+            },
+          ],
+        },
+        { name: 'Rust ecosystem', conclusion: 'skipped' },
+      ],
+    };
 
     expect(actionJobsRequestedValidation(skippedRequest)).toBe(false);
     expect(actionJobsRequestedValidation(requestedRequest)).toBe(true);
     expect(actionJobsRequestedValidation(cancelledRequest)).toBe(true);
     expect(actionJobsRequestedValidation(unsupportedCancelledRequest)).toBe(
       false,
+    );
+    expect(actionJobsRequestedValidation(supportedThenFailedRequest)).toBe(
+      true,
     );
   });
 
@@ -730,7 +753,7 @@ Preserve this actionable text.
     expect(evidence.events[0]?.outcome).toBe('unavailable');
   });
 
-  test('adds reviewed heads without Actions to delivery evidence', () => {
+  test('appends unexpected review-only heads without reordering actions', () => {
     const actionHeadRecord = {
       head_sha: finalHead,
       first_observed_at: '2026-08-01T10:20:00Z',
@@ -755,10 +778,11 @@ Preserve this actionable text.
     const heads = mergeReviewedDeliveryHeads(mergeRequest);
 
     expect(heads).toHaveLength(2);
-    expect(heads[0]?.head_sha).toBe(firstHead);
-    expect(heads[0]?.action_run_count).toBe(0);
-    expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
-    expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
+    expect(heads[0]?.head_sha).toBe(finalHead);
+    expect(heads[1]?.head_sha).toBe(firstHead);
+    expect(heads[1]?.action_run_count).toBe(0);
+    expect(heads[1]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
+    expect(heads[1]?.last_observed_at).toBe('2026-08-01T10:05:00Z');
   });
 
   test('enriches a zero-Actions final head with review timestamps', () => {
@@ -813,6 +837,38 @@ Preserve this actionable text.
     expect(heads[0]?.first_observed_at).toBe('2026-08-01T10:00:00Z');
     expect(heads[0]?.last_observed_at).toBe('2026-08-01T10:25:00Z');
     expect(heads[0]?.action_run_count).toBe(1);
+  });
+
+  test('preserves delivery sequence while enriching head timestamps', () => {
+    const firstActionHeadRecord = {
+      head_sha: firstHead,
+      first_observed_at: '2026-08-01T10:30:00Z',
+      last_observed_at: '2026-08-01T10:32:00Z',
+      final: false,
+      action_run_count: 1,
+      action_seconds: 120,
+      obsolete_action_seconds: 120,
+    };
+    const finalActionHeadRecord = {
+      head_sha: finalHead,
+      first_observed_at: '2026-08-01T10:20:00Z',
+      last_observed_at: '2026-08-01T10:25:00Z',
+      final: true,
+      action_run_count: 0,
+      action_seconds: 0,
+      obsolete_action_seconds: 0,
+    };
+    const mergeRequest = {
+      actionHeads: [
+        sealUntrustedYamlMap(firstActionHeadRecord),
+        sealUntrustedYamlMap(finalActionHeadRecord),
+      ],
+      reviewEvents: [],
+      finalHeadSha: finalHead,
+    };
+    const heads = mergeReviewedDeliveryHeads(mergeRequest);
+
+    expect(heads.map((head) => head.head_sha)).toEqual([firstHead, finalHead]);
   });
 });
 

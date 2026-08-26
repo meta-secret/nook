@@ -149,21 +149,22 @@ export type ActionJobsRequestedValidationRequest = {
 export function actionJobsRequestedValidation(
   request: ActionJobsRequestedValidationRequest,
 ): boolean {
-  const gateCancelledAfterValidation = request.jobs.some((job) => {
+  const supportedGateRequest = request.jobs.some((job) => {
     if (!isRecord(job)) return false;
     const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-    const conclusionRequest: GitHubPropertyRequest = {
-      record: job,
-      key: 'conclusion',
-    };
-    if (
-      requiredStringProperty(nameRequest) !== request.gateJobName ||
-      stringProperty(conclusionRequest) !== 'cancelled'
-    ) {
+    if (requiredStringProperty(nameRequest) !== request.gateJobName) {
       return false;
     }
     const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
-    return requiredArrayProperty(stepsRequest).some((step) => {
+    const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
+    const stepsProperty = untrustedYamlProperty(stepsArgs);
+    if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
+      return false;
+    }
+    if (!Array.isArray(stepsProperty.value)) {
+      failGitHubCollection('GitHub field steps must be a list');
+    }
+    return stepsProperty.value.some((step) => {
       if (!isRecord(step)) return false;
       const stepNameRequest: GitHubPropertyRequest = {
         record: step,
@@ -180,7 +181,7 @@ export function actionJobsRequestedValidation(
       );
     });
   });
-  if (gateCancelledAfterValidation) return true;
+  if (supportedGateRequest) return true;
   return request.jobs.some((job) => {
     if (!isRecord(job)) return false;
     const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };

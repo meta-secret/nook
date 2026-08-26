@@ -103,7 +103,7 @@ export function mergeReviewedDeliveryHeads(
     };
     heads[existingIndex] = sealUntrustedYamlMap(mergedRecord);
   }
-  return chronologicallySortedHeads(heads);
+  return heads;
 }
 
 export function deliveryHeadStarts(
@@ -169,37 +169,6 @@ function retainEarlierStart(request: RetainEarlierStartRequest): void {
   if (existing.length === 0 || request.observedAt < existing) {
     request.starts.set(request.headSha, request.observedAt);
   }
-}
-
-function chronologicallySortedHeads(
-  heads: readonly UntrustedYamlMap[],
-): UntrustedYamlMap[] {
-  const sorted: UntrustedYamlMap[] = [];
-  for (const head of heads) {
-    const candidateRequest: PropertyRequest = {
-      record: head,
-      key: 'first_observed_at',
-    };
-    const candidateTime = property(candidateRequest);
-    let inserted = false;
-    for (const [index, existing] of sorted.entries()) {
-      const existingRequest: PropertyRequest = {
-        record: existing,
-        key: 'first_observed_at',
-      };
-      const existingTime = property(existingRequest);
-      if (
-        candidateTime.length > 0 &&
-        (existingTime.length === 0 || candidateTime < existingTime)
-      ) {
-        sorted.splice(index, 0, head);
-        inserted = true;
-        break;
-      }
-    }
-    if (!inserted) sorted.push(head);
-  }
-  return sorted;
 }
 
 export function minimumTimestamp(request: TimestampExtremaRequest): string {
