@@ -89,6 +89,23 @@ describe('sealed source analysis bounded process', () => {
     expect(output.exitCode).toBe(7);
   });
 
+  test('scrubs ambient executable and Docker helper configuration', async () => {
+    const script =
+      'console.log([process.env.HOME, process.env.PATH, process.env.TMPDIR, process.env.DOCKER_CONFIG ?? ""].join("|"));';
+    const request: RunBoundedProcessRequest = {
+      command: [process.execPath, '-e', script],
+      cwd: REPO_ROOT,
+      deadlineExpiresAt: Date.now() + 5_000,
+      maximumStderrBytes: 16,
+      maximumStdinBytes: 0,
+      maximumStdoutBytes: 128,
+      signal: false,
+      stdin: false,
+    };
+    const output = await runBoundedProcess(request);
+    expect(output.stdout.trim()).toBe('/var/empty|/usr/bin:/bin|/tmp|');
+  });
+
   test('terminates the entire process group before its finite deadline', async () => {
     const temporaryDirectory = await mkdtemp(
       path.join(tmpdir(), 'source-analysis-process-'),

@@ -14,9 +14,17 @@ import {
   MAXIMUM_SOURCE_ANALYSIS_STDIN_BYTES,
   MAXIMUM_SOURCE_ANALYSIS_STDOUT_BYTES,
 } from './source-analysis-codec.ts';
+import { resolveTrustedDockerExecutable } from './source-analysis-docker-executable.ts';
+import {
+  MAXIMUM_SNAPSHOT_FILE_BYTES,
+  MAXIMUM_SNAPSHOT_TOTAL_BYTES,
+  readSourceAnalysisSnapshot,
+  type ReadSourceAnalysisSnapshotRequest,
+  type SourceAnalysisSnapshotInput,
+} from './source-analysis-snapshot.ts';
+import { readBoundedSourceAnalysisSnapshot } from './source-analysis-snapshot-process.ts';
 
 export type SealedSourceAnalysisDockerEnvironment = {
-  readonly contextName: string;
   readonly daemonId: string;
   readonly endpoint: string;
 };
@@ -28,9 +36,17 @@ export type RunSealedSourceAnalysisContainerRequest = {
   readonly signal: AbortSignal | false;
 };
 
-export type SealedSourceAnalysisContainerOutput = {
+export type SourceAnalysisContainerCandidate = {
   readonly imageId: string;
   readonly serializedResult: string;
+};
+
+export type SealedSourceAnalysisContainerOutput = {
+  readonly analysisId: string;
+};
+
+export type ResolveSealedSourceAnalysisContainerOutputRequest = {
+  readonly output: SealedSourceAnalysisContainerOutput;
 };
 
 export type SourceAnalysisDockerProcessExecutor = (
@@ -38,15 +54,26 @@ export type SourceAnalysisDockerProcessExecutor = (
 ) => Promise<BoundedProcessOutput>;
 
 export type SourceAnalysisDockerDependencies = {
+  readonly dockerExecutable: string;
   readonly executeProcess: SourceAnalysisDockerProcessExecutor;
+  readonly readImageInputs: SourceAnalysisImageInputReader;
   readonly repoRoot: string;
   readonly uniqueId: () => string;
 };
+
+export type SourceAnalysisImageInputReader = (
+  request: ReadSourceAnalysisSnapshotRequest,
+) => Promise<readonly SourceAnalysisSnapshotInput[]>;
 
 type RunSealedSourceAnalysisWithDependenciesRequest = {
   readonly dependencies: SourceAnalysisDockerDependencies;
   readonly request: RunSealedSourceAnalysisContainerRequest;
 };
+
+const sealedSourceAnalysisOutputs = new WeakMap<
+  SealedSourceAnalysisContainerOutput,
+  SourceAnalysisContainerCandidate
+>();
 
 type DockerAuthorityRequest = {
   readonly deadlineExpiresAt: number;
@@ -62,14 +89,9 @@ type SourceAnalysisImageReceipt = {
   readonly imageTag: string;
 };
 
-type SourceAnalysisImageInputSnapshot = {
-  readonly contents: Uint8Array;
-  readonly relativePath: string;
-};
-
 type SourceAnalysisImageSnapshot = {
   readonly buildIdentity: string;
-  readonly inputs: readonly SourceAnalysisImageInputSnapshot[];
+  readonly inputs: readonly SourceAnalysisSnapshotInput[];
 };
 
 type InspectSourceAnalysisContainerRequest = DockerAuthorityRequest & {
@@ -84,6 +106,7 @@ type RemoveSourceAnalysisContainerRequest = DockerAuthorityRequest & {
 type DockerCommandRequest = {
   readonly arguments: readonly string[];
   readonly endpoint: string;
+  readonly executable: string;
 };
 
 type ExecuteDockerCommandRequest = DockerAuthorityRequest & {
@@ -101,6 +124,7 @@ type DockerCommandSuccessRequest = {
 export type CreateContainerCommandRequest = {
   readonly containerName: string;
   readonly endpoint: string;
+  readonly executable: string;
   readonly imageId: string;
 };
 
@@ -109,7 +133,6 @@ type SourceAnalysisContainerState = {
   readonly oomKilled: boolean;
 };
 
-const DOCKER = 'docker';
 export const SOURCE_ANALYSIS_CONTAINER_LABEL =
   'dev.nokey.loom.source-analysis=sealed';
 export const SOURCE_ANALYSIS_IMAGE_LABEL =
@@ -156,8 +179,11 @@ export async function runSealedSourceAnalysisContainer(
   request: RunSealedSourceAnalysisContainerRequest,
 ): Promise<SealedSourceAnalysisContainerOutput> {
   assertSourceAnalysisDockerHostAllowed();
+  const dockerExecutable = await resolveTrustedDockerExecutable();
   const dependencies: SourceAnalysisDockerDependencies = {
+    dockerExecutable,
     executeProcess: runBoundedProcess,
+    readImageInputs: readBoundedSourceAnalysisSnapshot,
     repoRoot: findRepoRoot(),
     uniqueId: randomUUID,
   };
@@ -165,12 +191,33 @@ export async function runSealedSourceAnalysisContainer(
     dependencies,
     request,
   };
-  return await runSealedSourceAnalysisWithDependencies(executionRequest);
+  const candidate =
+    await runSealedSourceAnalysisWithDependencies(executionRequest);
+  const outputValue: SealedSourceAnalysisContainerOutput = {
+    analysisId: randomUUID(),
+  };
+  const output = Object.freeze(outputValue);
+  const bindingValue: SourceAnalysisContainerCandidate = {
+    imageId: candidate.imageId,
+    serializedResult: candidate.serializedResult,
+  };
+  sealedSourceAnalysisOutputs.set(output, Object.freeze(bindingValue));
+  return output;
+}
+
+export function resolveSealedSourceAnalysisContainerOutput(
+  request: ResolveSealedSourceAnalysisContainerOutputRequest,
+): SourceAnalysisContainerCandidate {
+  const candidate = sealedSourceAnalysisOutputs.get(request.output);
+  if (!candidate) {
+    throw new Error('Sealed source analysis output authority is invalid.');
+  }
+  return candidate;
 }
 
 export async function runSealedSourceAnalysisWithDependencies(
   execution: RunSealedSourceAnalysisWithDependenciesRequest,
-): Promise<SealedSourceAnalysisContainerOutput> {
+): Promise<SourceAnalysisContainerCandidate> {
   const request = execution.request;
   assertTotalDeadline(request.deadlineExpiresAt);
   const operationDeadlineExpiresAt =
@@ -189,6 +236,7 @@ export async function runSealedSourceAnalysisWithDependencies(
   const createCommandRequest: CreateContainerCommandRequest = {
     containerName,
     endpoint: request.dockerEnvironment.endpoint,
+    executable: execution.dependencies.dockerExecutable,
     imageId: image.imageId,
   };
   const createCommand = createContainerCommand(createCommandRequest);
@@ -285,29 +333,6 @@ async function assertDockerAuthority(
   request: DockerAuthorityRequest,
 ): Promise<void> {
   assertDockerEnvironment(request.environment);
-  const contextRequest: ExecuteDockerCommandRequest = {
-    ...request,
-    arguments: [
-      'context',
-      'inspect',
-      request.environment.contextName,
-      '--format',
-      '{{.Name}}|{{.Endpoints.docker.Host}}|{{.Endpoints.docker.SkipTLSVerify}}',
-    ],
-    maximumStderrBytes: DOCKER_CONTROL_STDERR_BYTES,
-    maximumStdoutBytes: DOCKER_CONTROL_STDOUT_BYTES,
-    stdin: false,
-  };
-  const context = await executeDockerCommand(contextRequest);
-  const contextSuccessRequest: DockerCommandSuccessRequest = {
-    label: 'context inspect',
-    output: context,
-  };
-  assertDockerCommandSucceeded(contextSuccessRequest);
-  const expectedContext = `${request.environment.contextName}|${request.environment.endpoint}|false`;
-  if (context.stdout.trim() !== expectedContext) {
-    throw new Error('Sealed source analysis Docker context drifted.');
-  }
   const infoRequest: ExecuteDockerCommandRequest = {
     ...request,
     arguments: [
@@ -344,7 +369,6 @@ function assertDockerEnvironment(
   environment: SealedSourceAnalysisDockerEnvironment,
 ): void {
   if (
-    !/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/.test(environment.contextName) ||
     !/^[A-Za-z0-9-]{16,128}$/.test(environment.daemonId) ||
     !environment.endpoint.startsWith('unix:///')
   ) {
@@ -363,9 +387,13 @@ function assertDockerEnvironment(
 async function requireSourceAnalysisImage(
   request: DockerAuthorityRequest,
 ): Promise<SourceAnalysisImageReceipt> {
-  const snapshot = await readSourceAnalysisImageSnapshot(
-    request.dependencies.repoRoot,
-  );
+  const snapshotRequest: ReadSourceAnalysisImageSnapshotRequest = {
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    readImageInputs: request.dependencies.readImageInputs,
+    repoRoot: request.dependencies.repoRoot,
+    signal: request.signal,
+  };
+  const snapshot = await readSourceAnalysisImageSnapshot(snapshotRequest);
   const authorityKey = dockerAuthorityKey(request.environment);
   if (sourceAnalysisImage !== false) {
     const cachedPromise = sourceAnalysisImage;
@@ -576,6 +604,7 @@ export function createContainerCommand(
       request.imageId,
     ],
     endpoint: request.endpoint,
+    executable: request.executable,
   };
   return dockerCommand(commandRequest);
 }
@@ -816,6 +845,7 @@ async function executeDockerCommand(
   const commandRequest: DockerCommandRequest = {
     arguments: request.arguments,
     endpoint: request.environment.endpoint,
+    executable: request.dependencies.dockerExecutable,
   };
   const processRequest: RunBoundedProcessRequest = {
     command: dockerCommand(commandRequest),
@@ -832,7 +862,7 @@ async function executeDockerCommand(
 }
 
 function dockerCommand(request: DockerCommandRequest): readonly string[] {
-  return [DOCKER, '--host', request.endpoint, ...request.arguments];
+  return [request.executable, '--host', request.endpoint, ...request.arguments];
 }
 
 function assertDockerCommandSucceeded(
@@ -846,25 +876,53 @@ function assertDockerCommandSucceeded(
 export async function sourceAnalysisBuildIdentity(
   repoRoot: string,
 ): Promise<string> {
-  return (await readSourceAnalysisImageSnapshot(repoRoot)).buildIdentity;
+  const request: ReadSourceAnalysisImageSnapshotRequest = {
+    deadlineExpiresAt: Date.now() + 5_000,
+    readImageInputs: readSourceAnalysisSnapshot,
+    repoRoot,
+    signal: false,
+  };
+  return (await readSourceAnalysisImageSnapshot(request)).buildIdentity;
 }
 
+type ReadSourceAnalysisImageSnapshotRequest = {
+  readonly deadlineExpiresAt: number;
+  readonly readImageInputs: SourceAnalysisImageInputReader;
+  readonly repoRoot: string;
+  readonly signal: AbortSignal | false;
+};
+
 async function readSourceAnalysisImageSnapshot(
-  repoRoot: string,
+  request: ReadSourceAnalysisImageSnapshotRequest,
 ): Promise<SourceAnalysisImageSnapshot> {
   const digest = createHash('sha256');
-  const inputs: SourceAnalysisImageInputSnapshot[] = [];
-  for (const relativePath of SOURCE_ANALYSIS_IMAGE_INPUTS) {
-    const contents = await readFile(path.join(repoRoot, relativePath));
+  const readRequest: ReadSourceAnalysisSnapshotRequest = {
+    deadlineExpiresAt: request.deadlineExpiresAt,
+    relativePaths: SOURCE_ANALYSIS_IMAGE_INPUTS,
+    repoRoot: request.repoRoot,
+    signal: request.signal,
+  };
+  const inputs = await request.readImageInputs(readRequest);
+  if (inputs.length !== SOURCE_ANALYSIS_IMAGE_INPUTS.length) {
+    throw new Error('Sealed source analysis image snapshot is invalid.');
+  }
+  let totalBytes = 0;
+  for (const [index, input] of inputs.entries()) {
+    const contents = input.contents;
+    const relativePath = input.relativePath;
+    if (
+      !(contents instanceof Uint8Array) ||
+      relativePath !== SOURCE_ANALYSIS_IMAGE_INPUTS[index] ||
+      contents.byteLength > MAXIMUM_SNAPSHOT_FILE_BYTES ||
+      totalBytes + contents.byteLength > MAXIMUM_SNAPSHOT_TOTAL_BYTES
+    ) {
+      throw new Error('Sealed source analysis image snapshot is invalid.');
+    }
+    totalBytes += contents.byteLength;
     digest.update(
       `${relativePath.length}:${relativePath}:${contents.byteLength}:`,
     );
     digest.update(contents);
-    const input: SourceAnalysisImageInputSnapshot = {
-      contents: Uint8Array.from(contents),
-      relativePath,
-    };
-    inputs.push(input);
   }
   return { buildIdentity: digest.digest('hex'), inputs };
 }
@@ -872,7 +930,7 @@ async function readSourceAnalysisImageSnapshot(
 function dockerAuthorityKey(
   environment: SealedSourceAnalysisDockerEnvironment,
 ): string {
-  return `${environment.contextName}|${environment.endpoint}|${environment.daemonId}`;
+  return `${environment.endpoint}|${environment.daemonId}`;
 }
 
 export function resetSourceAnalysisImageCacheForTest(): void {

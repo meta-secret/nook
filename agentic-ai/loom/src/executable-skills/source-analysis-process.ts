@@ -73,9 +73,9 @@ export async function runBoundedProcess(
 ): Promise<BoundedProcessOutput> {
   assertBoundedProcessRequest(request);
   const environment: BoundedProcessEnvironment = {
-    HOME: process.env.HOME ?? '',
-    PATH: process.env.PATH ?? '/usr/bin:/bin',
-    TMPDIR: process.env.TMPDIR ?? '/tmp',
+    HOME: '/var/empty',
+    PATH: '/usr/bin:/bin',
+    TMPDIR: '/tmp',
   };
   const options = {
     cwd: request.cwd,
