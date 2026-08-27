@@ -13,9 +13,10 @@ Additional routing rules apply:
   A broad problem statement does not authorize an agent-derived subsystem,
   execution model, or other major architectural direction.
 - Every implementation request follows
-  [`team-oriented-development.md`](team-oriented-development.md). Classify each
-  functional unit as development core, SRE, or web development before assigning
-  files. Keep shared integration and lifecycle state with the delivery owner.
+  [`team-oriented-development.md`](team-oriented-development.md). Assign one
+  functional owner to each capability. Name an expertise provider when another
+  team should implement a bounded unit. Keep shared integration and lifecycle
+  state with the delivery owner.
 - Delegated work follows
   [`subagent-delegation.md`](subagent-delegation.md). The active Codex, Cursor,
   or other capable harness owns child creation, communication, terminal
@@ -77,8 +78,9 @@ Default PR-first loop:
      lookup.
    - Apply [subagent-delegation.md](subagent-delegation.md).
    - Apply [team-oriented-development.md](team-oriented-development.md).
-   - Record each functional unit's team owner, code scope, Cortex scope, tests,
-     cross-team dependencies, and parent-owned join.
+   - Record each capability's functional owner, optional expertise provider,
+     code scope, Cortex scope, tests, cross-team dependencies, and parent-owned
+     join.
    - Give the active harness explicit task ownership, parent lineage, depth
      bounds, terminal barriers, and planned joins.
    - Continue from native harness results after every required child is
@@ -99,12 +101,15 @@ Default PR-first loop:
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
 3. **Implement functionality:**
-   - Assign each independently bounded unit to its team agent when delegation
-     is available.
+   - Assign each independently bounded unit to its functional owner or declared
+     expertise provider when delegation is available.
    - Require each team agent to own implementation, tests, Cortex updates,
      review fixes, and validation fixes inside its scope.
    - Route a required foreign-team capability back through the delivery owner.
      Do not let one team implement another team's responsibility.
+   - Route a required foreign-team expertise unit through the delivery owner.
+     The provider may edit only declared code and tests. It must not redefine
+     consumer semantics or edit consumer Cortex.
    - Implement the lowest ready provider API and its owning tests first.
    - Continue upward by writing each immediate consumer against the accepted
      provider contract.
@@ -580,10 +585,11 @@ Create the YAML from current Nook `main`:
 
 ## Non-negotiables
 
-- **Respect team ownership.** Development core, SRE, and web development each
-  own their complete bounded technical scope. Team agents must not change
-  another team's code or Cortex. Shared files and lifecycle state remain
-  parent-owned. See [team-oriented-development.md](team-oriented-development.md).
+- **Respect team ownership.** Every capability has one functional owner. An
+  explicitly contracted expertise provider may change only the named consumer
+  code and tests in its bounded unit. It must not change consumer Cortex,
+  capability semantics, shared files, or lifecycle state. See
+  [team-oriented-development.md](team-oriented-development.md).
 - **Never push directly to `main`.** Branch → PR → squash merge.
 - **Always `task loom:pre-push` before every push.** It host-applies formatting
   and checks the UI demo contract. Never rely on sealed-only

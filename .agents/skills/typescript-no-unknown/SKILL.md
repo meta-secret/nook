@@ -13,7 +13,7 @@ description: >-
 Use this skill when editing Loom, executable-skill, or migrated Nook web
 TypeScript.
 
-Read `.cortex/shared/dynamic-skills/typescript-no-unknown.md` and apply it:
+Read `.cortex/teams/web-dev/dynamic-skills/typescript-no-unknown.md` and apply it:
 
 1. Do not author the `unknown` or `object` type token.
 2. Use concrete domain types in state, results, services, commands, and UI APIs.

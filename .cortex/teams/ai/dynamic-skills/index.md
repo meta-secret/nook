@@ -15,7 +15,7 @@ source of truth.
 ## Skill catalog
 
 - **[team-oriented-development.md](team-oriented-development.md)**
-  - Purpose: Route implementation through development-core, SRE, and web-development ownership boundaries with team-scoped tests, Cortex, review fixes, and parent-owned cross-team joins
+  - Purpose: Route capabilities through AI, development-core, SRE, and web-development functional owners with optional bounded expertise providers and parent-owned cross-team joins
   - Executable skill: [`.agents/skills/team-oriented-development/SKILL.md`](../../../../.agents/skills/team-oriented-development/SKILL.md)
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
@@ -92,17 +92,17 @@ source of truth.
   - Purpose: Use concise Svelte rune declarations for optional UI state and keep closed domain states in Rust/WASM
 - **[typescript-serial-operation-queues.md](../../web-dev/dynamic-skills/typescript-serial-operation-queues.md)**
   - Purpose: Encapsulate serial async work behind enqueue, idle, and reset operations instead of exposing mutable promise chains
-- **[typescript-explicit-state.md](../../../shared/dynamic-skills/typescript-explicit-state.md)**
+- **[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md)**
   - Purpose: Replace authored `undefined`/`null` state with semantic unions while retaining complete `void` unit/effect returns; reject every value-or-void contract, including nested generics and returns
-- **[typescript-domain-structure.md](../../../shared/dynamic-skills/typescript-domain-structure.md)**
+- **[typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md)**
   - Purpose: Nest same-prefix closed vocabularies into parent objects + operation enums; use field enums instead of string sets; ban hand-rolled TypeScript `Result`/`Maybe`
-- **[typescript-single-parameter.md](../../../shared/dynamic-skills/typescript-single-parameter.md)**
+- **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
   - Executable skill: [`.agents/skills/typescript-single-parameter/SKILL.md`](../../../../.agents/skills/typescript-single-parameter/SKILL.md)
-- **[typescript-no-unknown.md](../../../shared/dynamic-skills/typescript-no-unknown.md)**
+- **[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md)**
   - Purpose: Ban `unknown`, `object`, and generic domain values; allow `unknown` only for immediate boundary narrowing
   - Executable skill: [`.agents/skills/typescript-no-unknown/SKILL.md`](../../../../.agents/skills/typescript-no-unknown/SKILL.md)
-- **[typescript-named-args.md](../../../shared/dynamic-skills/typescript-named-args.md)**
+- **[typescript-named-args.md](../../web-dev/dynamic-skills/typescript-named-args.md)**
   - Purpose: Require semantic named object parameter contracts and named typed values at object call boundaries
   - Executable skill: [`.agents/skills/typescript-named-args/SKILL.md`](../../../../.agents/skills/typescript-named-args/SKILL.md)
 - **[prefer-popular-libraries.md](../../../shared/dynamic-skills/prefer-popular-libraries.md)**

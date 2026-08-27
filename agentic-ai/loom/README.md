@@ -360,7 +360,7 @@ in. Use the resolved path when creating the scratch JSON before `assemble`.
 
 ## TypeScript domain structure
 
-Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/shared/dynamic-skills/typescript-domain-structure.md):
+Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-domain-structure.md):
 
 - nested request families (`agentStats.assemble`, `prLand.validate`)
 - field-name enums for deny-unknown-key checks
@@ -370,16 +370,16 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
 - prefer popular libraries over hand-rolled commodity helpers
   ([prefer-popular-libraries.md](../../.cortex/shared/dynamic-skills/prefer-popular-libraries.md))
 - at most one function/method parameter; multi-value inputs use a typed object
-  ([typescript-single-parameter.md](../../.cortex/shared/dynamic-skills/typescript-single-parameter.md))
+  ([typescript-single-parameter.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-single-parameter.md))
 - no authored `unknown`, `object`, or generic domain values; the only narrow
   exception is `UntrustedYamlNode` / `UntrustedYamlMap` inside YAML, JSON, or
   host-response adapters, where it must be decoded immediately into a domain
   value
-  ([typescript-no-unknown.md](../../.cortex/shared/dynamic-skills/typescript-no-unknown.md))
+  ([typescript-no-unknown.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-no-unknown.md))
 - discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
   `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
 - call sites pass named typed args values, never inline `{ ... }` object
-  literals ([typescript-named-args.md](../../.cortex/shared/dynamic-skills/typescript-named-args.md))
+  literals ([typescript-named-args.md](../../.cortex/teams/web-dev/dynamic-skills/typescript-named-args.md))
 
 Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.

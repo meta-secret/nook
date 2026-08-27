@@ -35,7 +35,8 @@ Follow the delivery sequence in the cortex workflow:
 3. Apply [subagent-delegation](../subagent-delegation/SKILL.md) when delegating.
    Use direct harness results and parent-owned acceptance before integration.
    Apply [team-oriented-development](../team-oriented-development/SKILL.md) to
-   every implementation unit.
+   every implementation unit. Separate the functional owner from an optional
+   expertise provider.
 4. Implement, capture discoveries, update specs when justified, and run `task loom:pre-push`.
 5. Commit and run advisory local Codex review.
 6. Push and use focused execution on the configured Actions runner when useful.

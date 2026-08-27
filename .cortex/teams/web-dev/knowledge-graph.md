@@ -24,6 +24,18 @@ Load only the category that owns the assigned browser-facing functionality.
 - [User-facing security abstractions](dynamic-skills/user-facing-security-abstractions.md)
 - [Web unused-code enforcement](dynamic-skills/web-unused-code.md)
 
+## TypeScript engineering
+
+Use these skills for TypeScript implementation in web-owned code, an explicitly
+delegated cross-team expertise unit, or direct functional-owner implementation
+when the selected authority links them as read-only engineering policy.
+
+- [TypeScript domain structure](dynamic-skills/typescript-domain-structure.md)
+- [TypeScript explicit state](dynamic-skills/typescript-explicit-state.md)
+- [TypeScript named call arguments](dynamic-skills/typescript-named-args.md)
+- [TypeScript concrete values](dynamic-skills/typescript-no-unknown.md)
+- [TypeScript single parameter](dynamic-skills/typescript-single-parameter.md)
+
 ## Frontend references
 
 - [Playwright MCP annotation and debugging](references/ai-debugging.md)

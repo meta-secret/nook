@@ -10,19 +10,29 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 ## Preferred pattern
 
 1. Read [Engineering team ownership](../architecture/team-ownership.md).
-2. Classify every functional unit before assigning files.
-3. Delegate each independently bounded unit to its team agent when available.
-4. Keep every team agent inside its declared code and Cortex scope.
-5. Route cross-team dependencies through the delivery owner.
-6. Require each team to implement its own tests, Cortex updates, and review fixes.
-7. Keep shared files and lifecycle mutations in the parent-owned join.
-8. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
+2. Assign one functional owner to every capability unit.
+3. Identify whether another team should provide implementation expertise.
+4. Freeze every capability or expertise contract before assigning files.
+5. Delegate each independently bounded unit to its team agent when available.
+6. Keep every team agent inside its declared task scope.
+7. Route cross-team dependencies through the delivery owner.
+8. Require each team to implement its own tests, Cortex updates, and review
+   fixes for its owned unit.
+9. Keep shared files and lifecycle mutations in the parent-owned join.
+10. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
 
 ## Context boundary
 
 Each team agent loads only its own `AGENTS.md`, knowledge graph, and exact
 task-relevant documents. Shared and foreign-team documents are opt-in
 dependencies. They are never default context.
+
+An expertise provider may additionally load one named consumer contract. That
+contract is read-only. It does not authorize loading the consumer team's graph.
+
+A functional owner may load a foreign-team skill when its selected authority
+names that skill as required engineering policy. The skill remains read-only.
+Applying it to owner-written code does not create an expertise provider.
 
 ## Scope
 
@@ -34,4 +44,5 @@ This skill does not replace module ownership, internal API review, or subagent e
 
 ## Validation
 
-Confirm that every changed path has one team owner and that no team agent crossed its declared boundary.
+Confirm that every capability has one functional owner. Confirm that every
+expertise provider stayed inside its explicit code and test scope.

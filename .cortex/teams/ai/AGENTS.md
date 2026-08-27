@@ -14,7 +14,11 @@ The AI team owns Nook's agent knowledge system and deterministic agent tooling.
 
 Load a foreign-team document only when an explicit provider or consumer
 contract requires it. Treat that document as read-only unless the delivery
-owner assigns a separate unit to its team.
+owner assigns a bounded expertise unit to its team.
+
+An exact AI authority may require a foreign-team engineering skill. Load that
+skill read-only and apply it to AI-owned code. This does not require an
+expertise provider unless the foreign team will implement the unit.
 
 ## Owned responsibilities
 
@@ -27,12 +31,17 @@ owner assigns a separate unit to its team.
   workflows.
 - AI-focused tests and preflight contracts.
 
+AI owns the meaning and acceptance of AI capabilities. It may request
+web-development expertise for a bounded TypeScript implementation unit without
+transferring AI capability ownership.
+
 ## Forbidden responsibilities
 
 - Portable product, cryptographic, authorization, or storage implementation.
 - Browser presentation and frontend interaction behavior.
 - CI/CD platforms, clusters, deployments, and provider operations.
 - Foreign-team Cortex edits inside one AI-owned work unit.
+- Implementation outside the exact files granted by an expertise contract.
 - Independent mutation of shared lifecycle state by a child agent.
 
 ## Complete team scope
@@ -47,6 +56,8 @@ For an assigned AI unit, own:
 - a bounded evidence handoff.
 
 Report product-core, SRE, web, or shared dependencies to the delivery owner.
+When an expertise provider implements part of the unit, AI supplies the frozen
+consumer contract and validates the resulting AI behavior.
 
 ## Validation
 

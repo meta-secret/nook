@@ -3,6 +3,12 @@ const test = require('node:test')
 
 const { validateAgentRecord } = require('./workbench-records.cjs')
 
+const baseOwnershipUnit =
+  '1. Capability: Workbench agent record validation; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass'
+
+const expertiseOwnershipUnit =
+  '1. Capability: Workbench agent record validation; Functional owner: AI; Expertise provider: Web development; Expertise allowed code paths: .github/scripts/workbench-records.cjs; Expertise allowed test paths: .github/scripts/workbench-records.test.cjs; Expertise forbidden paths: .cortex/teams/ai,.cortex/shared; Expertise consumer interfaces: Plan input and validation result; Expertise acceptance evidence: Focused validator tests pass; Capability acceptance evidence: Published plans reject incomplete contracts'
+
 const validPlan = `# Task plan
 
 ## Interpreted request
@@ -21,6 +27,8 @@ Deliver a durable two-phase agent context record.
 
 - Estimated authored changed lines: 240
 - Owning modules, packages, or layers: Workbench agent records
+- Ownership units:
+${baseOwnershipUnit}
 - Public or cross-module interfaces: Plan validation contract
 - Delivery shape: One PR
 - Current PR estimated authored changed lines: 240
@@ -196,6 +204,7 @@ test('rejects empty required sections', () => {
 for (const field of [
   'Estimated authored changed lines',
   'Owning modules, packages, or layers',
+  'Ownership units',
   'Public or cross-module interfaces',
   'Delivery shape',
   'Current PR estimated authored changed lines',
@@ -210,6 +219,104 @@ for (const field of [
     assert.match(
       validateAgentRecord(missing, 'plan'),
       new RegExp(`missing or empty plan field: ${field}`),
+    )
+  })
+}
+
+test('accepts a complete cross-team expertise contract', () => {
+  const expertisePlan = validPlan.replace(
+    baseOwnershipUnit,
+    expertiseOwnershipUnit,
+  )
+  assert.equal(validateAgentRecord(expertisePlan, 'plan'), '')
+})
+
+test('rejects an expertise provider without a complete contract', () => {
+  const invalid = validPlan.replace(
+    baseOwnershipUnit,
+    baseOwnershipUnit.replace(
+      'Expertise provider: None',
+      'Expertise provider: Web development',
+    ),
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /expertise paths must be exact comma-separated repository-relative paths/,
+  )
+})
+
+test('rejects expertise fields without an expertise provider', () => {
+  const invalid = validPlan.replace(
+    baseOwnershipUnit,
+    baseOwnershipUnit.replace(
+      'Expertise forbidden paths: None',
+      'Expertise forbidden paths: .cortex/teams/ai',
+    ),
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /ownership unit expertise fields require a provider/,
+  )
+})
+
+test('rejects the functional owner as its own expertise provider', () => {
+  const invalid = validPlan.replace(
+    baseOwnershipUnit,
+    expertiseOwnershipUnit.replace('Web development', 'AI'),
+  )
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /expertise provider must differ from the functional owner/,
+  )
+})
+
+test('accepts multiple independently owned capability units', () => {
+  const secondUnit =
+    '2. Capability: Deployment validation; Functional owner: SRE; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Hosted deployment checks pass'
+  const multiTeamPlan = validPlan.replace(
+    baseOwnershipUnit,
+    `${baseOwnershipUnit}\n${secondUnit}`,
+  )
+  assert.equal(validateAgentRecord(multiTeamPlan, 'plan'), '')
+})
+
+test('rejects broad prose instead of exact expertise paths', () => {
+  const invalidUnit = expertiseOwnershipUnit.replace(
+    '.github/scripts/workbench-records.cjs',
+    'all TypeScript files',
+  )
+  const invalid = validPlan.replace(baseOwnershipUnit, invalidUnit)
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /expertise paths must be exact comma-separated repository-relative paths/,
+  )
+})
+
+test('rejects expertise paths that are both allowed and forbidden', () => {
+  const invalidUnit = expertiseOwnershipUnit.replace(
+    '.cortex/teams/ai,.cortex/shared',
+    '.github/scripts/workbench-records.cjs,.cortex/shared',
+  )
+  const invalid = validPlan.replace(baseOwnershipUnit, invalidUnit)
+  assert.match(
+    validateAgentRecord(invalid, 'plan'),
+    /expertise allowed and forbidden paths must not overlap/,
+  )
+})
+
+for (const forbiddenPath of [
+  '.github',
+  '.github/scripts/workbench-records.cjs/generated',
+]) {
+  test(`rejects nested expertise path overlap: ${forbiddenPath}`, () => {
+    const invalidUnit = expertiseOwnershipUnit.replace(
+      '.cortex/teams/ai,.cortex/shared',
+      `${forbiddenPath},.cortex/shared`,
+    )
+    const invalid = validPlan.replace(baseOwnershipUnit, invalidUnit)
+    assert.match(
+      validateAgentRecord(invalid, 'plan'),
+      /expertise allowed and forbidden paths must not overlap/,
     )
   })
 }

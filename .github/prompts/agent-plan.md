@@ -66,6 +66,8 @@ body, with each heading exactly once and in this order:
 
 - Estimated authored changed lines:
 - Owning modules, packages, or layers:
+- Ownership units:
+1. Capability: ; Functional owner: ; Expertise provider: ; Expertise allowed code paths: ; Expertise allowed test paths: ; Expertise forbidden paths: ; Expertise consumer interfaces: ; Expertise acceptance evidence: ; Capability acceptance evidence:
 - Public or cross-module interfaces:
 - Delivery shape:
 - Current PR estimated authored changed lines:
@@ -94,6 +96,25 @@ separately. Its estimate must not exceed 3,000 authored changed lines. At 2,500
 lines, inventory the logical domain changes and require an ordered stacked-PR
 sequence before implementation expands further. Use `None` when no public or
 cross-module interface changes.
+
+Add one consecutively numbered `Ownership units` row per capability. Set each
+`Functional owner` to exactly `AI`, `Development core`, `SRE`, or `Web
+development`.
+
+When another team will implement a bounded unit:
+
+- set `Expertise provider` to one different team;
+- enumerate comma-separated, exact repository-relative code paths;
+- enumerate comma-separated, exact repository-relative test paths;
+- enumerate comma-separated, exact repository-relative forbidden paths;
+- name the consumer input/output interfaces; and
+- name provider-owned acceptance evidence.
+
+Do not use globs, directory-wide prose, or implied paths. When the functional
+owner will implement the capability, set `Expertise provider` and every
+expertise field to `None`. Every unit still requires capability acceptance
+evidence. Read-only consumption of a linked foreign-team skill does not create
+an expertise provider.
 
 If planning replaces an in-progress oversized PR, require a successor branch
 and linked draft PR from the last full-work commit before any scope reduction.
