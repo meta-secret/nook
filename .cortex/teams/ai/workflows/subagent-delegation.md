@@ -22,7 +22,8 @@ A capable agent environment MUST delegate when all of these conditions hold:
   - Do not use a movable branch name as a worker baseline.
 - Record the delegation decision in the task plan.
 - If the host has no bounded worker capability:
-  - execute the work serially; and
+  - report an implementation blocker;
+  - do not let the Mission Lead implement the worker unit; and
   - do not invent an undocumented runner.
 
 ## Deterministic work belongs to tools

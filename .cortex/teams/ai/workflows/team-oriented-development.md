@@ -63,9 +63,12 @@ When implementation changes a security boundary, the contract also names the
 security invariant and security acceptance evidence. Security review is not a
 foreign-team write grant.
 
-If bounded delegation is unavailable, the delivery owner executes each team unit serially.
-It must preserve the same ownership boundaries.
-It must not invent an undocumented worker runtime.
+If bounded delegation is unavailable, the Mission Lead reports an
+implementation blocker.
+
+- It must not implement the team unit itself.
+- It must not invent an undocumented worker runtime.
+- It resumes after delegation becomes available or a human changes the mission.
 
 ## Execute within one team
 
