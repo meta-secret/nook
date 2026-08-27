@@ -1,73 +1,85 @@
-# UI Design Skill
+# UI Design
 
-## Rule
+## Purpose
 
-Every task that designs, implements, or reviews user-visible UI must first read
-and use:
+Produce accessible, responsive, and visually coherent Nook interfaces without
+changing product semantics or crossing the typed Rust/WASM boundary.
 
-- [`design-taste-frontend`](../../../../.agents/skills/design-taste-frontend/SKILL.md)
+## Scope
+
+Apply this guidance when a task designs, implements, or reviews user-visible UI.
 
 This includes:
 
 - website and browser-extension pages;
 - Svelte components, layouts, styles, and responsive behavior;
-- loading, empty, error, disabled, focus, hover, and active states;
+- loading, empty, error, disabled, focus, hover, and active states; and
 - redesigns, visual polish, and UI-focused code review.
 
-## Impeccable Is Opt-In
+## Canonical Authorities
 
-Impeccable is disabled as a default Nook workflow dependency. Do not install or
-load it, run its context, playbook, craft-floor, hook, or detector commands, or
-delegate its finish-review process merely because the skill exists locally.
+Start with the [Web development team contract](../AGENTS.md) and select the
+smallest relevant authority from the
+[Web development knowledge graph](../knowledge-graph.md).
 
-Use Impeccable only when the user explicitly requests it by name. An existing
-generated `.agents/skills/impeccable/` directory may remain installed and
-ignored; deleting it is unnecessary and would not durably disable future
-installation.
+Use the task-relevant web authorities:
 
-## Apply It In Nook
+- [Browser extension](../product-specs/browser-extension.md) for extension
+  presentation and interaction behavior;
+- [Website passkey manager](../design-docs/passkey-manager.md) for the website's
+  established interaction design;
+- [Svelte state modeling](svelte-state-modeling.md) for component-local visual
+  and browser lifecycle state; and
+- [Svelte, Vite, and Bun](../references/bun-svelte.md) for web implementation
+  and UI evidence workflows.
 
-1. Read the complete `design-taste-frontend` entry point before changing UI.
-2. Inspect the target at runtime when possible and inspect an incumbent source
-   of visual truth: the nearest shipping component, shared primitive, token
-   stylesheet, or user-provided reference.
-3. State the concise design read required by the skill before implementation.
-4. Preserve Nook's established visual language, components, tokens, copy,
-   routes, accessibility behavior, analytics contracts, and interaction
-   semantics unless the task explicitly changes them.
-5. Apply the skill's Svelte implementation, hierarchy, spacing, responsive,
-   accessibility, interaction-state, asset, motion, and visual pre-flight
-   guidance.
-6. Inspect the result at representative desktop and mobile sizes and exercise
-   all changed states. Add the focused Playwright demo coverage required by
-   Nook's UI demo contract.
+Inspect the nearest shipping component, shared primitive, token stylesheet, or
+user-provided reference as the incumbent visual source of truth.
 
-## Nook Takes Precedence
+## External Design Capabilities
 
-The installed design skill is tailored to Nook's Svelte 5 product and
-marketing surfaces. Its examples and visual rules remain subordinate to the
-specific user brief and `.cortex`; they do not authorize architecture,
-dependency, behavior, copy, or product changes outside the requested scope.
+The active harness may expose native design analysis, generation, or review
+capabilities. Use a relevant capability when the user requests it or when the
+task contract makes it part of the required workflow.
 
-Repository rules remain authoritative, especially:
+External capabilities supplement the canonical Web Cortex authorities. They do
+not define repository architecture, product behavior, dependencies, copy, or
+validation policy.
 
-- domain and validation policy belongs in typed Rust/WASM rather than
-  TypeScript or Svelte;
-- visible copy uses shared translation catalogs;
-- accessibility and existing product behavior must not regress;
-- changed domain behavior needs Rust tests, and changed user flows need focused
-  web coverage; and
-- the repository's hosted remote execution, explicit complete validation, and
-  pre-push UI demo workflow override generic local commands.
+## Procedure
 
-## Review And Validation
+1. Read the task-relevant authorities and inspect the incumbent visual source
+   of truth.
+2. State a concise design read before implementation.
+   - Identify the visual hierarchy, interaction model, responsive constraints,
+     and changed states.
+3. Preserve established components, tokens, copy, routes, accessibility
+   behavior, analytics contracts, and interaction semantics.
+   - Change them only when the task explicitly requires it.
+4. Implement the hierarchy, spacing, responsive behavior, accessibility,
+   interaction states, assets, and motion within the requested scope.
+5. Inspect representative desktop and mobile sizes.
+   - Exercise every changed state.
+   - Add focused Playwright demo coverage required by the UI demo contract.
 
-A UI change is incomplete when `design-taste-frontend` was skipped, when Nook's
-Svelte or typed Rust/WASM boundaries were bypassed, or when the result was not
-visually inspected in the changed states and responsive layouts.
+## Engineering Rules
 
-Before push:
+- Domain and validation policy belongs in typed Rust/WASM.
+- TypeScript and Svelte consume public typed projections.
+- Visible copy uses shared translation catalogs.
+- Accessibility and established product behavior must not regress.
+- Changed domain behavior needs Rust tests.
+- Changed user flows need focused web coverage.
+- Repository-owned validation workflows override generic capability advice.
 
-1. Run `task loom:pre-push`.
-2. Run the UI demo contract against `origin/main`.
-3. Let repository-owned GitHub Actions run product gates.
+## Validation
+
+A UI change is complete when:
+
+- the relevant Web Cortex authorities were applied;
+- the Svelte and typed Rust/WASM boundaries remain intact;
+- every changed state was visually inspected at representative sizes; and
+- focused web evidence covers the changed user flow.
+
+Run `task loom:cortex-audit` for Cortex edits. Before a parent-owned push, run
+the repository's pre-push and UI demo workflows required by the task contract.
