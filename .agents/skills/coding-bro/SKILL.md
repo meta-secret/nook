@@ -23,7 +23,7 @@ skill. The active harness owns child lifecycle and delivers results directly.
 Optional JSONL or Markdown evidence exists for humans and never gates parent
 continuation.
 
-**Default workflow for all implementation tasks.** System of record: [`.cortex/workflows/coding-bro.md`](../../../.cortex/workflows/coding-bro.md).
+**Default workflow for all implementation tasks.** System of record: [`.cortex/teams/ai/workflows/coding-bro.md`](../../../.cortex/teams/ai/workflows/coding-bro.md).
 
 Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) before starting.
 
@@ -66,12 +66,12 @@ module or layer. Target no more than 5,000 authored changed lines per PR. Split
 larger features into ordered Workbench issues and independently mergeable PRs.
 Continue through every slice until the complete feature is delivered. Full
 contract:
-[`.cortex/workflows/pull-requests.md`](../../../.cortex/workflows/pull-requests.md#pull-request-size-and-modularity).
+[`.cortex/teams/ai/workflows/pull-requests.md`](../../../.cortex/teams/ai/workflows/pull-requests.md#pull-request-size-and-modularity).
 
 For cross-module work, also load
-[module-oriented development](../../../.cortex/workflows/module-oriented-development.md)
+[module-oriented development](../../../.cortex/teams/ai/workflows/module-oriented-development.md)
 and the
-[module expert registry](../../../.cortex/architecture/module-experts.md).
+[module expert registry](../../../.cortex/teams/ai/architecture/module-experts.md).
 Record the feature module DAG and external contracts top-down. Implement and
 validate accepted providers before their consumers. Keep agent depth at three
 or less, and never let a child add tasks or tiers.
@@ -94,8 +94,8 @@ or less, and never let a child add tasks or tiers.
 | 13   | Publish the issue update, plan-linked worklog, and Loom AI-agent stats to Nook Workbench; open a separate normal performance PR for actionable waste/regression |
 | 14   | Duration report                                                                                                                                                 |
 
-Pre-push format/demo rules: [`.cortex/sre/dynamic-skills/pre-push-hygiene.md`](../../../.cortex/sre/dynamic-skills/pre-push-hygiene.md).
+Pre-push format/demo rules: [`.cortex/teams/sre/dynamic-skills/pre-push-hygiene.md`](../../../.cortex/teams/sre/dynamic-skills/pre-push-hygiene.md).
 
-Hosted execution and validation: [`.cortex/sre/workflows/remote-execution.md`](../../../.cortex/sre/workflows/remote-execution.md).
+Hosted execution and validation: [`.cortex/teams/sre/workflows/remote-execution.md`](../../../.cortex/teams/sre/workflows/remote-execution.md).
 
-Full commands, e2e helpers, and non-negotiables: [`.cortex/workflows/coding-bro.md`](../../../.cortex/workflows/coding-bro.md).
+Full commands, e2e helpers, and non-negotiables: [`.cortex/teams/ai/workflows/coding-bro.md`](../../../.cortex/teams/ai/workflows/coding-bro.md).

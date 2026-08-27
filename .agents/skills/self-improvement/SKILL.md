@@ -10,7 +10,7 @@ description: >-
 # Self Improvement
 
 Read and follow the canonical project skill at
-[`.cortex/dynamic-skills/self-improvement.md`](../../../.cortex/dynamic-skills/self-improvement.md).
+[`.cortex/teams/ai/dynamic-skills/self-improvement.md`](../../../.cortex/teams/ai/dynamic-skills/self-improvement.md).
 
 For every substantial task, apply the canonical card in full before final
 readiness.

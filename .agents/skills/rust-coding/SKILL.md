@@ -9,7 +9,7 @@ description: >-
 
 Use this skill when editing Rust domain or WASM-boundary code in Nook.
 
-Read [the canonical development-core skill](../../../.cortex/dev-core/dynamic-skills/rust-coding.md)
+Read [the canonical development-core skill](../../../.cortex/teams/dev-core/dynamic-skills/rust-coding.md)
 before making changes. Apply its
 core rule aggressively: if a Rust struct contains `Option<T>`, ask what named
 state the absence represents. Prefer enums with per-variant structs over shared

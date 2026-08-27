@@ -18,10 +18,12 @@ export enum CortexStructureFindingCode {
   InvalidMapEntry = 'invalid-map-entry',
 }
 
-enum CortexTeamOwner {
+enum CortexGraphOwner {
+  Ai = 'ai',
   DevCore = 'dev-core',
   Sre = 'sre',
   WebDev = 'web-dev',
+  Shared = 'shared',
 }
 
 export type CortexStructureFinding = {
@@ -48,7 +50,6 @@ export type AuditCortexDocumentStructureArgs = {
 type ParsedDocument = CortexDocumentSource & {
   readonly root: Root;
   readonly fragments: ReadonlySet<string>;
-  readonly sectionSlugs: readonly string[];
 };
 
 type AddFindingArgs = {
@@ -125,9 +126,11 @@ export function auditCortexDocumentStructure(
     addFinding(findingArgs);
   } else {
     const distributedGraphPaths = [
-      '.cortex/dev-core/knowledge-graph.md',
-      '.cortex/sre/knowledge-graph.md',
-      '.cortex/web-dev/knowledge-graph.md',
+      '.cortex/teams/ai/knowledge-graph.md',
+      '.cortex/teams/dev-core/knowledge-graph.md',
+      '.cortex/teams/sre/knowledge-graph.md',
+      '.cortex/teams/web-dev/knowledge-graph.md',
+      '.cortex/shared/knowledge-graph.md',
     ] as const;
     const distributedTopology = distributedGraphPaths.some((graphPath) =>
       catalog.has(graphPath),
@@ -204,17 +207,17 @@ export function auditCortexDocumentStructure(
         }
       }
       for (const teamGraphPath of distributedGraphPaths) {
-        const graphOwner = cortexTeamOwner(teamGraphPath);
+        const graphOwner = cortexGraphOwner(teamGraphPath);
         const teamIndexedFiles = indexedByGraph.get(teamGraphPath) ?? new Set();
         for (const indexedPath of teamIndexedFiles) {
-          const indexedOwner = cortexTeamOwner(indexedPath);
+          const indexedOwner = cortexGraphOwner(indexedPath);
           if (indexedOwner === false || indexedOwner === graphOwner) continue;
           const findingArgs: AddFindingArgs = {
             findings,
             code: CortexStructureFindingCode.InvalidIndexEntry,
             file: teamGraphPath,
             line: 1,
-            message: `Team knowledge graph cannot index another team's document: ${indexedPath}`,
+            message: `Owning knowledge graph cannot index another context's document: ${indexedPath}`,
           };
           addFinding(findingArgs);
         }
@@ -298,16 +301,14 @@ function parseDocument(document: CortexDocumentSource): ParsedDocument {
   const root = fromMarkdown(document.content);
   const slugger = new GithubSlugger();
   const fragments = new Set<string>();
-  const sectionSlugs: string[] = [];
   for (const node of root.children) {
     if (node.type === 'heading') {
       const headingText = nodeText(node);
       const slug = slugger.slug(headingText);
       fragments.add(slug);
-      if (node.depth > 1) sectionSlugs.push(slug);
     }
   }
-  return { ...document, root, fragments, sectionSlugs };
+  return { ...document, root, fragments };
 }
 
 function validateDocument(args: ValidateDocumentArgs): void {
@@ -360,7 +361,7 @@ function validateIndex(args: ValidateIndexArgs): void {
   }
 
   const allLinks = collectAllLinks(args.indexDocument.root);
-  const indexedFragments = new Map<string, Set<string>>();
+  const indexedLinkCounts = new Map<string, number>();
   for (const link of allLinks) {
     const resolveArgs: ResolveIndexLinkArgs = {
       url: link.url,
@@ -390,12 +391,10 @@ function validateIndex(args: ValidateIndexArgs): void {
     }
 
     args.indexedFiles.add(resolved.targetRelativePath);
-    const fragments =
-      indexedFragments.get(resolved.targetRelativePath) ?? new Set();
-    indexedFragments.set(resolved.targetRelativePath, fragments);
+    const linkCount = indexedLinkCounts.get(resolved.targetRelativePath) ?? 0;
+    indexedLinkCounts.set(resolved.targetRelativePath, linkCount + 1);
 
     if (resolved.fragment !== false) {
-      fragments.add(resolved.fragment);
       if (!targetDoc.fragments.has(resolved.fragment)) {
         const findingArgs: AddFindingArgs = {
           findings: args.findings,
@@ -406,27 +405,27 @@ function validateIndex(args: ValidateIndexArgs): void {
         };
         addFinding(findingArgs);
       }
-    }
-  }
-
-  const indexPath = normalizeCortexRelativePath(
-    args.indexDocument.relativePath,
-  );
-  for (const [targetPath, linkedFragments] of indexedFragments) {
-    if (owningKnowledgeGraphPath(targetPath) !== indexPath) continue;
-    const targetDocument = args.catalog.get(targetPath);
-    if (!targetDocument) continue;
-    for (const sectionSlug of targetDocument.sectionSlugs) {
-      if (linkedFragments.has(sectionSlug)) continue;
       const findingArgs: AddFindingArgs = {
         findings: args.findings,
-        code: CortexStructureFindingCode.MissingFromIndex,
-        file: indexPath,
-        line: 1,
-        message: `Knowledge graph is missing section #${sectionSlug} for ${targetPath}`,
+        code: CortexStructureFindingCode.InvalidIndexEntry,
+        file: args.indexDocument.relativePath,
+        line: nodeLine(link),
+        message: `Knowledge graphs route at document level and must not duplicate section links: ${resolved.targetRelativePath}#${resolved.fragment}`,
       };
       addFinding(findingArgs);
     }
+  }
+
+  for (const [targetPath, linkCount] of indexedLinkCounts) {
+    if (linkCount <= 1) continue;
+    const findingArgs: AddFindingArgs = {
+      findings: args.findings,
+      code: CortexStructureFindingCode.InvalidIndexEntry,
+      file: args.indexDocument.relativePath,
+      line: 1,
+      message: `Knowledge graph must index each document once: ${targetPath}`,
+    };
+    addFinding(findingArgs);
   }
 }
 
@@ -474,26 +473,38 @@ function isKnowledgeGraphPath(filePath: string): boolean {
     filePath === 'k-graph.md' ||
     filePath === '.cortex/INDEX.md' ||
     filePath === 'INDEX.md' ||
-    /^\.cortex\/(?:dev-core|sre|web-dev)\/knowledge-graph\.md$/.test(filePath)
+    /^\.cortex\/(?:teams\/(?:ai|dev-core|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
+      filePath,
+    )
   );
 }
 
 function owningKnowledgeGraphPath(filePath: string): string {
-  for (const team of Object.values(CortexTeamOwner)) {
-    if (filePath.startsWith(`.cortex/${team}/`)) {
-      return `.cortex/${team}/knowledge-graph.md`;
+  for (const team of [
+    CortexGraphOwner.Ai,
+    CortexGraphOwner.DevCore,
+    CortexGraphOwner.Sre,
+    CortexGraphOwner.WebDev,
+  ] as const) {
+    if (filePath.startsWith(`.cortex/teams/${team}/`)) {
+      return `.cortex/teams/${team}/knowledge-graph.md`;
     }
+  }
+  if (filePath.startsWith('.cortex/shared/')) {
+    return '.cortex/shared/knowledge-graph.md';
   }
   return '.cortex/knowledge-graph.md';
 }
 
-function cortexTeamOwner(filePath: string): CortexTeamOwner | false {
-  const match = /^\.cortex\/(dev-core|sre|web-dev)\//.exec(filePath);
+function cortexGraphOwner(filePath: string): CortexGraphOwner | false {
+  if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
+  const match = /^\.cortex\/teams\/(ai|dev-core|sre|web-dev)\//.exec(filePath);
   const owner = match?.[1];
   if (
-    owner === CortexTeamOwner.DevCore ||
-    owner === CortexTeamOwner.Sre ||
-    owner === CortexTeamOwner.WebDev
+    owner === CortexGraphOwner.Ai ||
+    owner === CortexGraphOwner.DevCore ||
+    owner === CortexGraphOwner.Sre ||
+    owner === CortexGraphOwner.WebDev
   ) {
     return owner;
   }

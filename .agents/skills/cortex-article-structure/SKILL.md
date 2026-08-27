@@ -10,7 +10,7 @@ description: >-
 # Cortex Structured Articles
 
 Read and follow the canonical project rule at
-[`.cortex/dynamic-skills/cortex-article-structure.md`](../../../.cortex/dynamic-skills/cortex-article-structure.md).
+[`.cortex/teams/ai/dynamic-skills/cortex-article-structure.md`](../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure.md).
 
 Every Cortex edit must make the body's real hierarchy visible.
 

@@ -4,7 +4,9 @@
   "executionKind": "docker-read-only",
   "requestKind": "cortex-article-structure-audit-v1",
   "resultKind": "cortex-article-structure-findings-v1",
-  "policyPaths": [".cortex/dynamic-skills/cortex-article-structure.md"],
+  "policyPaths": [
+    ".cortex/teams/ai/dynamic-skills/cortex-article-structure.md"
+  ],
   "limits": {
     "requestBytes": 4194304,
     "resultBytes": 1048576,

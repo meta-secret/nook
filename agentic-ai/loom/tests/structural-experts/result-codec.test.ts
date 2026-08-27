@@ -572,7 +572,7 @@ function instructionClassification(): StructuralInstructionClassification {
   return {
     instructionId: 'instruction-policy',
     classification: StructuralInstructionClassificationKind.SemanticPolicy,
-    authorityPath: '.cortex/architecture/refactoring-experts.md',
+    authorityPath: '.cortex/teams/ai/architecture/refactoring-experts.md',
     summary: 'Ownership selection remains semantic policy.',
     evidence: structuralFindingFor(StructuralFindingCategory.Architecture)(
       'instruction-evidence',

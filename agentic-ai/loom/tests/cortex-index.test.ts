@@ -24,8 +24,8 @@ Golden text.
 `,
     },
     {
-      absolutePath: '/repo/.cortex/product-specs/spec-a.md',
-      relativePath: '.cortex/product-specs/spec-a.md',
+      absolutePath: '/repo/.cortex/shared/product-specs/spec-a.md',
+      relativePath: '.cortex/shared/product-specs/spec-a.md',
       content: `# Spec A
 
 Spec intro.
@@ -43,12 +43,11 @@ Model text.
 
   const renderArgs = { index };
   const markdown = renderCortexIndexMarkdown(renderArgs);
-  expect(markdown).toContain('# Cortex Knowledge Graph & Navigation Map');
-  expect(markdown).toContain('- [Rules](rules.md)');
-  expect(markdown).toContain('- [Spec A](product-specs/spec-a.md)');
-  expect(markdown).toContain('rules.md#overview');
-  expect(markdown).toContain('rules.md#golden-principles');
-  expect(markdown).toContain('product-specs/spec-a.md#product-model');
+  expect(markdown).toContain('# Cortex Context Router');
+  expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
+  expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
+  expect(markdown).not.toContain('rules.md');
+  expect(markdown).not.toContain('#overview');
 });
 
 test('stripDocumentNavigation strips relationships and document map', () => {

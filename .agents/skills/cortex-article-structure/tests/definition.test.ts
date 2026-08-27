@@ -32,7 +32,9 @@ test('keeps the dormant manifest aligned with the semantic contract', async () =
     executionKind: 'docker-read-only',
     requestKind: CortexArticleContractKind.Request,
     resultKind: CortexArticleContractKind.Result,
-    policyPaths: ['.cortex/dynamic-skills/cortex-article-structure.md'],
+    policyPaths: [
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure.md',
+    ],
     limits: {
       requestBytes: CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
       resultBytes: CORTEX_ARTICLE_RESULT_BYTE_LIMIT,

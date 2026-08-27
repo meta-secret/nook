@@ -20,7 +20,8 @@ import type { ModuleExpertRuntimeIsolationRequest } from '../../src/module-exper
 import { runCommand } from '../../src/lib/run.ts';
 import type { RunCommandArgs } from '../../src/lib/run.ts';
 
-const UNRELATED_PRODUCT_SPEC = '.cortex/sre/product-specs/monorepo-setup.md';
+const UNRELATED_PRODUCT_SPEC =
+  '.cortex/teams/sre/product-specs/monorepo-setup.md';
 const UNRELATED_CI_AUTHORITY = '.github/workflows/unrelated.yml';
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 

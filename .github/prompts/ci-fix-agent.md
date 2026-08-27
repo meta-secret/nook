@@ -41,7 +41,7 @@ commands talk to the host daemon and run the sealed nook-web image.
      task ci:main:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
      task web:e2e:restore-prod-dist
      ```
-4. Implement the minimal correct fix (match existing conventions). E2e sync flakes often need `triggerVaultSyncRefresh`, `dismissSyncConflictIfVisible`, or `waitForVaultSyncIdle` from `nook-app/nook-web/nook-web-app/e2e/helpers.ts` — see `password-envelope-sync.spec.ts`. Failing specs auto-attach the app's persisted logs (`nook-app-logs.json`) via `e2e/fixtures.ts`; to capture more detail rebuild with `VITE_LOG_LEVEL=debug` or add `page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`. See [.cortex/references/logging.md](../../.cortex/references/logging.md).
+4. Implement the minimal correct fix (match existing conventions). E2e sync flakes often need `triggerVaultSyncRefresh`, `dismissSyncConflictIfVisible`, or `waitForVaultSyncIdle` from `nook-app/nook-web/nook-web-app/e2e/helpers.ts` — see `password-envelope-sync.spec.ts`. Failing specs auto-attach the app's persisted logs (`nook-app-logs.json`) via `e2e/fixtures.ts`; to capture more detail rebuild with `VITE_LOG_LEVEL=debug` or add `page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`. See [.cortex/shared/references/logging.md](../../.cortex/shared/references/logging.md).
 5. Re-run **only** the CI tasks that failed in steps 2–3 — do not run full main CI unless multiple stages failed.
 
 ## Rules
@@ -50,4 +50,4 @@ commands talk to the host daemon and run the sealed nook-web image.
 - Do **not** create or merge a PR — GitHub Actions opens the PR for explicit review and merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the CI failure root cause.
-- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/teams/ai/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).

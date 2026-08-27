@@ -10,7 +10,7 @@ description: >-
 
 Use this skill before inventing helpers or adding a new dependency.
 
-Read `.cortex/dynamic-skills/prefer-popular-libraries.md` and apply it:
+Read `.cortex/shared/dynamic-skills/prefer-popular-libraries.md` and apply it:
 
 1. Search for a popular library before hand-rolling diffs, parsers, or similar
    commodity code.

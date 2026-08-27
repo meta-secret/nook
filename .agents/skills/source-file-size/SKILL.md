@@ -14,7 +14,7 @@ description: >-
 # Critical Source File Size
 
 Read and follow the canonical project rule at
-[`.cortex/dynamic-skills/source-file-size.md`](../../../.cortex/dynamic-skills/source-file-size.md).
+[`.cortex/shared/dynamic-skills/source-file-size.md`](../../../.cortex/shared/dynamic-skills/source-file-size.md).
 
 Every authored source file has the same 1,000-line hard limit. Rust has no
 larger allowance: an oversized Rust module indicates excessive domain

@@ -9,9 +9,9 @@ description: >-
 
 The delivery owner configures this role from:
 
-- [the canonical skill](../../../.cortex/dynamic-skills/system-coherence-synthesizer.md);
-- [the structural expert registry](../../../.cortex/architecture/refactoring-experts.md);
-- [the structural refactoring workflow](../../../.cortex/workflows/structural-refactoring.md).
+- [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md);
+- [the structural expert registry](../../../.cortex/teams/ai/architecture/refactoring-experts.md);
+- [the structural refactoring workflow](../../../.cortex/teams/ai/workflows/structural-refactoring.md).
 
 The synthesizer does not open these or any other repository paths during its
 attempt.

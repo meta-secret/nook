@@ -11,7 +11,7 @@ Minds is the home for Nook's isolated agent-worker platform.
   thread in one Kata-backed Kubernetes Pod for each claimed task.
 
 Agent workflow policy lives in
-[`agent-workflow-orchestration.md`](../../.cortex/design-docs/agent-workflow-orchestration.md).
+[`agent-workflow-orchestration.md`](../../.cortex/teams/ai/design-docs/agent-workflow-orchestration.md).
 
 Loom remains a mechanical leaf-tool runner.
 

@@ -167,25 +167,50 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-'));
   try {
     const cortexRoot = path.join(repoRoot, '.cortex');
-    const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
+    const teamsRoot = path.join(cortexRoot, 'teams');
+    const aiRoot = path.join(teamsRoot, 'ai');
+    const skillsRoot = path.join(aiRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
+    mkdirSync(path.join(teamsRoot, 'dev-core'), directoryOptions);
+    mkdirSync(path.join(teamsRoot, 'sre'), directoryOptions);
+    mkdirSync(path.join(teamsRoot, 'web-dev'), directoryOptions);
+    mkdirSync(path.join(cortexRoot, 'shared'), directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
     writeFileSync(
       path.join(cortexRoot, 'knowledge-graph.md'),
       `# Knowledge Graph
 
 - [Agent Map](AGENTS.md)
+- [AI](teams/ai/knowledge-graph.md)
+- [Development core](teams/dev-core/knowledge-graph.md)
+- [SRE](teams/sre/knowledge-graph.md)
+- [Web development](teams/web-dev/knowledge-graph.md)
+- [Shared](shared/knowledge-graph.md)
+`,
+    );
+    writeFileSync(
+      path.join(aiRoot, 'knowledge-graph.md'),
+      `# AI Knowledge Graph
+
 - [Skill index](dynamic-skills/index.md)
 - [Rejected skill](dynamic-skills/bad.md)
 `,
     );
+    for (const graphPath of [
+      path.join(teamsRoot, 'dev-core', 'knowledge-graph.md'),
+      path.join(teamsRoot, 'sre', 'knowledge-graph.md'),
+      path.join(teamsRoot, 'web-dev', 'knowledge-graph.md'),
+      path.join(cortexRoot, 'shared', 'knowledge-graph.md'),
+    ]) {
+      writeFileSync(graphPath, '# Knowledge Graph\n');
+    }
     writeFileSync(
       path.join(skillsRoot, 'index.md'),
       `# Skills
 
 - [Rejected skill](bad.md)
-- [Rejected executable](../../.agents/skills/bad/SKILL.md)
+- [Rejected executable](../../../../.agents/skills/bad/SKILL.md)
 `,
     );
     writeFileSync(
@@ -205,7 +230,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
       structureFindings: [
         {
           code: CortexStructureFindingCode.ProhibitedHtml,
-          file: '.cortex/dynamic-skills/bad.md',
+          file: '.cortex/teams/ai/dynamic-skills/bad.md',
           line: 3,
           message:
             'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',

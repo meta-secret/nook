@@ -33,7 +33,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
   const report: CortexAuditReport = {
     brokenLinks: [
       {
-        file: '.cortex/workflows/example.md',
+        file: '.cortex/teams/ai/workflows/example.md',
         line: 12,
         target: '../missing.md',
       },

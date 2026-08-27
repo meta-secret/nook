@@ -9,7 +9,7 @@ description: >-
 # Agent Feature Ownership
 
 Read and follow the canonical project skill at
-[.cortex/dynamic-skills/agent-feature-ownership.md](../../../.cortex/dynamic-skills/agent-feature-ownership.md).
+[.cortex/teams/ai/dynamic-skills/agent-feature-ownership.md](../../../.cortex/teams/ai/dynamic-skills/agent-feature-ownership.md).
 
 Before any remote mutation:
 

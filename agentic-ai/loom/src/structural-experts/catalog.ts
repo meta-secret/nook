@@ -34,9 +34,9 @@ export const SYSTEM_COHERENCE_BEHAVIOR_CONTRACT = [
 const COMMON_CONTEXT = [
   '.cortex/AGENTS.md',
   '.cortex/knowledge-graph.md',
-  '.cortex/architecture/refactoring-experts.md',
-  '.cortex/workflows/structural-refactoring.md',
-  '.cortex/workflows/subagent-delegation.md',
+  '.cortex/teams/ai/architecture/refactoring-experts.md',
+  '.cortex/teams/ai/workflows/structural-refactoring.md',
+  '.cortex/teams/ai/workflows/subagent-delegation.md',
 ] as const;
 
 const CODE_REFACTORING_FILES = [

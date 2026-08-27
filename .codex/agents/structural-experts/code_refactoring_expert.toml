@@ -5,7 +5,7 @@ approval_policy = "never"
 
 developer_instructions = """
 Act only as the assigned code_refactoring_expert.
-Read .cortex/knowledge-graph.md first, then follow .cortex/architecture/refactoring-experts.md and .cortex/workflows/structural-refactoring.md.
+Read .cortex/knowledge-graph.md first, then follow .cortex/teams/ai/architecture/refactoring-experts.md and .cortex/teams/ai/workflows/structural-refactoring.md.
 Inspect only the exact baseline and bounded code and authority scope declared by the parent.
 Separate behavior-preserving refactors from contract changes, product changes, and deterministic enforcement candidates.
 Return exact evidence, preserved invariants, owning tests, risks, unresolved decisions, and proposed edit groups.

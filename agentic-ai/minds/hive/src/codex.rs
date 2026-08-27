@@ -656,7 +656,7 @@ mod tests {
             vec![
                 "/bin/zsh".into(),
                 "-lc".into(),
-                "sed -n '1,220p' .cortex/ARCHITECTURE.md".into(),
+                "sed -n '1,220p' .cortex/shared/architecture/system.md".into(),
             ],
         ];
 

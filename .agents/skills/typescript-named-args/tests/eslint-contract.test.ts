@@ -29,7 +29,7 @@ describe('executable-skill named argument contract', () => {
         declare function audit(...requests: ArticleRequestSequence): void;
         const inferredRequests = [{ path: '.cortex/AGENTS.md' }];
         audit(...[{ path: '.cortex/knowledge-graph.md' }]);
-        audit(...[...[{ path: '.cortex/architecture/index.md' }]]);
+        audit(...[...[{ path: '.cortex/shared/architecture/index.md' }]]);
         audit(...inferredRequests);
       `,
       sourceOptions,

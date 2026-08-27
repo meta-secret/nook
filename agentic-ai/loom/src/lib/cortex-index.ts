@@ -277,89 +277,25 @@ export function extractCortexIndex(args: ExtractCortexIndexArgs): CortexIndex {
   return { documents };
 }
 
-type CategoryDefinition = {
-  readonly heading: string;
-  readonly filter: (doc: CortexDocumentIndex) => boolean;
-};
-
-const CATEGORIES: readonly CategoryDefinition[] = [
-  {
-    heading: 'Golden Principles & Entry Points',
-    filter: (doc) => !doc.relativePath.includes('/'),
-  },
-  {
-    heading: 'Architecture Specifications (`architecture/`)',
-    filter: (doc) => doc.relativePath.startsWith('architecture/'),
-  },
-  {
-    heading: 'Dynamic Skills (`dynamic-skills/`)',
-    filter: (doc) => doc.relativePath.startsWith('dynamic-skills/'),
-  },
-  {
-    heading: 'Product Specifications (`product-specs/`)',
-    filter: (doc) => doc.relativePath.startsWith('product-specs/'),
-  },
-  {
-    heading: 'Design Documents (`design-docs/`)',
-    filter: (doc) => doc.relativePath.startsWith('design-docs/'),
-  },
-  {
-    heading: 'Workflows (`workflows/`)',
-    filter: (doc) => doc.relativePath.startsWith('workflows/'),
-  },
-  {
-    heading: 'References (`references/`)',
-    filter: (doc) => doc.relativePath.startsWith('references/'),
-  },
-];
-
 export function renderCortexIndexMarkdown(
-  args: RenderCortexIndexMarkdownArgs,
+  _args: RenderCortexIndexMarkdownArgs,
 ): string {
-  const lines: string[] = [];
-  lines.push('# Cortex Knowledge Graph & Navigation Map');
-  lines.push('');
-  lines.push(
-    'Central knowledge graph and index of all specifications, architecture documents, rules, skills, workflows, and references in Nook Cortex.',
-  );
-  lines.push('');
-  lines.push('## Overview');
-  lines.push('');
-  lines.push(
-    'This central knowledge graph provides complete hierarchical navigation across all Cortex documents.',
-  );
-  lines.push(
-    'AI agents must always consult this knowledge graph first to discover relevant knowledge and retrieve exact section anchors without loading entire documents into context.',
-  );
-  lines.push('');
+  return `# Cortex Context Router
 
-  for (const category of CATEGORIES) {
-    const matchingDocs = args.index.documents.filter(category.filter);
-    if (matchingDocs.length === 0) {
-      continue;
-    }
-    lines.push(`## ${category.heading}`);
-    lines.push('');
-    for (const doc of matchingDocs) {
-      lines.push(`- [${doc.title}](${doc.relativePath})`);
-      if (doc.intro !== false) {
-        lines.push(`  - ${doc.intro}`);
-      }
-      for (const entry of doc.mapEntries) {
-        const indent = '  '.repeat(entry.depth + 1);
-        const url = entry.url.startsWith('#')
-          ? `${doc.relativePath}${entry.url}`
-          : entry.url;
-        lines.push(`${indent}- [${entry.text}](${url})`);
-        for (const explanation of entry.explanations) {
-          lines.push(`${indent}  - ${explanation}`);
-        }
-      }
-    }
-    lines.push('');
-  }
+Use this file only to select one owning context. Do not preload every linked
+graph.
 
-  return `${lines.join('\n').trimEnd()}\n`;
+## Team routes
+
+- [AI](teams/ai/knowledge-graph.md)
+- [Development core](teams/dev-core/knowledge-graph.md)
+- [SRE](teams/sre/knowledge-graph.md)
+- [Web development](teams/web-dev/knowledge-graph.md)
+
+## Shared route
+
+- [Shared knowledge](shared/knowledge-graph.md)
+`;
 }
 
 export function stripDocumentNavigation(

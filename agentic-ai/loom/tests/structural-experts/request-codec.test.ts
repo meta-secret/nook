@@ -135,7 +135,7 @@ function cortexEvidenceRequest(): StructuralEvidenceInvocationRequest {
     ...evidenceRequest(),
     expert: 'cortex_refactoring_expert',
     task: 'inspect-cortex-structure',
-    evidencePaths: ['.cortex/architecture/refactoring-experts.md'],
+    evidencePaths: ['.cortex/teams/ai/architecture/refactoring-experts.md'],
   };
 }
 

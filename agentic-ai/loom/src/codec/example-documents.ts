@@ -165,7 +165,7 @@ export const CORTEX_SESSION_CLEAN_EXAMPLE_DOCUMENT: CortexSessionCleanExampleDoc
 export const SKILL_SCAFFOLD_EXAMPLE_DOCUMENT: SkillScaffoldExampleDocument = {
   skillScaffold: {
     skillSlug: 'example-skill',
-    skillOwner: SkillOwner.Common,
+    skillOwner: SkillOwner.Ai,
     createExecutableWrappers: false,
   },
 };

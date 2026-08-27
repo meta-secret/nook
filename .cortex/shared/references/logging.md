@@ -1,0 +1,237 @@
+# Reference: Application Logging
+
+## Overview
+
+Nook's application logger is **owned by WASM** and persisted in the browser's
+IndexedDB. Use it for post-mortem debugging (e2e failures, user reports) without
+re-instrumenting the code.
+
+## Debugging, troubleshooting, and CI verification
+
+When a test fails, CI goes red, or the UI misbehaves, work through sources in
+this order:
+
+1. **Test output** — failed focused or complete GitHub Actions job logs, Rust
+   and web reports, Playwright report, and failure attachments.
+2. **Static analysis** — fmt, clippy, svelte-check, eslint, and type errors from
+   focused or complete GitHub Actions execution.
+3. **Persisted application logs** — **the most important source after steps
+   1–2.**
+
+- **Persisted layer:** Vault unlock, sync reconciliation, WASM tracing, and
+  captured `console.*` output live in application logs.
+  - Test output and linters do not surface this layer.
+- **Agent rule:** Always check app logs before changing production code or
+  guessing from DOM snapshots or screenshot diffs alone.
+- **Playwright evidence:** Every result includes `nook-app-logs.json`.
+  - Failed tests also print a readable tail.
+  - Locally use `fetchAppLogs(page)`, `/app-logs`, or the `/logs` viewer.
+- **Thin trail:** Lower capture level and reproduce with
+  `VITE_LOG_LEVEL=debug` or `localStorage.nook_log_level=trace`.
+
+See [Agent rule: use app logs](#agent-rule-use-app-logs-for-playwright-debug-and-analysis) below for the preferred read order and helpers.
+
+## Architecture
+
+- **Logger core**
+  - File: [`nook-app/nook-platform/nook-wasm/src/logger.rs`](../../../nook-app/nook-platform/nook-wasm/src/logger.rs)
+  - Responsibility: `tracing` subscriber + reloadable level filter, `IndexedDbLayer` persistence (rexie), dump/flush/clear
+- **Web shim / console authority**
+  - File: [`runtime/log.ts`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/runtime/log.ts)
+  - Responsibility: `createLogger(scope)`, `console.*` capture, `window.__nookConsole.echo`, initial level, flush loop, `window.__nookLog`
+- **Viewer**
+  - File: [`LogsPage.svelte`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/LogsPage.svelte)
+  - Responsibility: `/logs` page: filter, pagination, copy, clear
+- **JSON export**
+  - Files: [`app/logs-api.ts`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/app/logs-api.ts), [`AppLogsApiPage.svelte`](../../../nook-app/nook-web/nook-web-shared/src/vault-app/lib/components/AppLogsApiPage.svelte)
+  - Responsibility: `/app-logs` — machine-readable JSON export for agents and log pipelines
+- **e2e**
+  - Files: [`nook-web-app/e2e/fixtures.ts`](../../../nook-app/nook-web/nook-web-app/e2e/fixtures.ts), [`helpers.ts`](../../../nook-app/nook-web/nook-web-app/e2e/helpers.ts)
+  - Responsibility: Attach canonical `nook-app-logs.json` to every test result, print on failure; `fetchAppLogs()` via `/app-logs`
+
+- **Built on `tracing`:** `nook-core` and `nook-wasm` emit structured events via
+  `tracing::debug!/info!/warn!/error!` (use a `scope = "…"` field to set the log
+  scope). In WASM a global subscriber routes them through a **reloadable level
+  filter** into `IndexedDbLayer` (persist) plus the `tracing-web` performance
+  timeline. On native (Rust tests) no subscriber is installed, so the macros are
+  near-free no-ops.
+- **Single console authority:** `log.ts` captures the original `console.*`
+  methods, then patches `console.*` so every call still prints AND is persisted
+  under the `console` scope. Rust events echo through `window.__nookConsole.echo`
+  (the originals). This means **any** `console.log`/library output is captured —
+  prefer `createLogger(scope)` in app code, but stray console calls are not lost.
+- **Storage:** IndexedDB database `nook_logs`, store `logs` (auto-increment ring
+  buffer, newest ~5000 entries kept). Separate from the vault DB (`nook_db`).
+- **Entry shape:** `{ ts, level, scope, message, data? }`.
+- **Bindings:** `log_record` (message-only persist), `log_record_with_data`
+  (serialized context persist), `log_init`, `log_set_level`, `log_get_level`,
+  `log_dump`, `log_count`, `log_flush`, and `log_clear`. They are exported from
+  `nook-app/nook-platform/nook-wasm/src/logger.rs`. The web shim wraps them. Do
+  not call them directly from app code.
+
+## Levels are persistence-gated
+
+Levels (most → least severe): `error`, `warn`, `info`, `debug`, `trace`.
+
+**Only entries at or above the active level are echoed and persisted.** The
+default is `info`. Almost all app logs today are `debug` (`wasm` status drain,
+`connect`/`vault` flows), so at the default level the store stays small.
+
+> To capture more for a post-mortem, **lower the level and reproduce** — nothing
+> below the threshold is stored, so there is no "everything" firehose.
+
+### Setting the level
+
+- **Runtime (persists across reloads):** `localStorage.nook_log_level = 'debug'`,
+  or the **Capture** selector on `/logs`, or `window.__nookLog.setLevel('debug')`.
+- **Build time (dev/CI default):** `VITE_LOG_LEVEL=debug`.
+
+## Viewing logs
+
+- **`/logs` page** (human UI, works logged-out): filter by minimum level, paginate
+  (Newer/Older, 100/page), **Copy** all as JSON, **Clear**. Good for users and
+  manual inspection at [nokey.sh/logs](https://nokey.sh/logs).
+- **`/app-logs` JSON export** (machine-readable, works logged-out): raw persisted
+  logs in a stable envelope suitable for AI agents, Playwright helpers, and log
+  aggregation. The page body is JSON only — no app chrome.
+
+  Query parameters (all optional):
+
+  | Param      | Default | Description                                     |
+  | ---------- | ------- | ----------------------------------------------- |
+  | `minLevel` | `trace` | Minimum severity to include (`error` … `trace`) |
+  | `limit`    | `500`   | Max entries returned (cap `5000`)               |
+  | `offset`   | `0`     | Skip oldest N entries (pagination)              |
+
+  Example: `/app-logs?minLevel=debug&limit=1000`
+
+  Response shape (`schema: nook.app-logs.v1`):
+
+  ```json
+  {
+    "meta": {
+      "schema": "nook.app-logs.v1",
+      "generatedAt": "2026-07-02T20:00:00.000Z",
+      "activeLevel": "debug",
+      "minLevel": "debug",
+      "limit": 500,
+      "offset": 0,
+      "returned": 42,
+      "total": 120
+    },
+    "entries": [
+      {
+        "ts": "…",
+        "level": "debug",
+        "scope": "vault",
+        "message": "…",
+        "data": "{\"outcome\":\"passkey_unavailable\"}"
+      }
+    ]
+  }
+  ```
+
+  Each `entries[]` item matches the IndexedDB store:
+  `{ ts, level, scope, message, data? }`. `data` is an optional serialized JSON
+  string. It is not a generic domain value.
+
+- **Devtools:** `await window.__nookLog.dump({ minLevel: 'trace', limit: 500 })`,
+  `window.__nookLog.count()`, `window.__nookLog.clear()`.
+
+## Logging from code
+
+- **Web:** `const log = createLogger('scope')` then `log.info(message)` /
+  `log.debug(message)` etc. Messages are domain-specific strings. Stray
+  `console.*` calls are also captured (scope `console`), but a scoped logger is
+  preferred. Use `infoWithContext({ message, serializedContext })` or
+  `warnWithContext({ message, serializedContext })` only at the logging adapter
+  boundary when a typed, sanitized domain context must remain queryable as the
+  entry's separate `data` field. Serialize the domain value before calling the
+  logger. Do not pass generic value bags into application
+  code.
+- **Common web scopes:** `vault` (session lifecycle), `connect` (unlock/connect),
+  `vault-sync`, `vault-local`, `vault-password`, `vault-devices`, `vault-providers`,
+  `vault-session`, `vault-lifecycle`, `wasm` (status channel), `wasm-connect`,
+  `wasm-sync`, `wasm-secrets` (Rust tracing scopes).
+- **Prefer `info` for user-visible milestones** (unlock, lock, connect, secret
+  CRUD, provider changes, sync conflicts). Use `debug` for background ticks,
+  assess/re-assess details, and swallowed errors. At the default capture level
+  (`info`), only `info`/`warn`/`error` are persisted — lower the level on `/logs`
+  to see the full `debug` trail.
+- **Rust (`nook-core`/`nook-wasm`):** use `tracing` macros with a `scope` field,
+  e.g. `tracing::debug!(scope = "vault-sync", action = %label, "reconciled")`.
+  Never log secrets/keys/passwords. Prefer instrumenting spots already covered by
+  tests so the `nook-core` coverage floor holds.
+- **Rust status channel:** the manager `status_tx` channel is still drained by
+  `$lib/nook` into the `wasm` scope at `debug`.
+
+## e2e integration (per-test log attachment)
+
+Specs import `test`/`expect` from [`e2e/fixtures.ts`](../../../nook-app/nook-web/nook-web-app/e2e/fixtures.ts)
+(not `@playwright/test`). The fixture attaches `nook-app-logs.json` to every
+test result using the same canonical `nook.app-logs.v1` envelope exposed by
+`/app-logs` (up to the IndexedDB ring-buffer cap of 5000 entries). On failure it
+also prints the last 500 attached entries to the test output.
+
+### Agent rule: use app logs for Playwright debug and analysis
+
+**AI agents MUST use persisted application logs** when debugging or analyzing
+Playwright/e2e failures, flaky flows, or vault sync regressions. Do not guess
+from DOM snapshots or screenshot diffs alone.
+
+Preferred order:
+
+1. **Playwright attachments** — read `nook-app-logs.json` from the test result
+   first. The fixture attaches it for both passing and failing e2e tests.
+2. **`fetchAppLogs(page, { minLevel: 'trace' })`** — navigate to `/app-logs` and
+   parse the JSON body (`data-testid="app-logs-json"`). Use in specs and local
+   debug scripts.
+3. **`dumpNookLogs(page, label)`** — print the last N entries to test output
+   mid-flow without leaving the current page.
+4. **`/logs` UI** — human inspection only; agents should prefer `/app-logs` or
+   the helpers above for structured analysis.
+
+When CI e2e fails, read app logs **before** changing production code. Lower the
+capture level (`VITE_LOG_LEVEL=debug`, `localStorage.nook_log_level=trace`) when
+the default trail is too thin.
+
+- The **dev** web server sets `VITE_LOG_LEVEL=debug`, so local runs
+  (`E2E_SPEC=… task web:test:e2e:file`) capture a useful trail automatically.
+- The **CI preview** server serves a prebuilt `dist/` (level `info`). To capture
+  more on CI, rebuild with `VITE_LOG_LEVEL=debug`, or in a spec:
+  `await page.addInitScript(() => localStorage.setItem('nook_log_level', 'trace'))`.
+- `dumpNookLogs(page, label)` in [`e2e/helpers.ts`](../../../nook-app/nook-web/nook-web-app/e2e/helpers.ts)
+  prints logs at any point during a flow.
+- `fetchAppLogs(page, options)` in the same file loads `/app-logs` and returns
+  the parsed `nook.app-logs.v1` payload.
+
+### Milestone assertions in e2e specs
+
+Use **`waitForPersistedAppLog(page, filter)`** for a single milestone, or
+**`expectAppLogMilestones(page, [...])`** when the order matters. Both helpers
+assert persisted `info` milestones **in-page** (via `window.__nookLog` + flush).
+Do not navigate to `/app-logs` mid-flow — that tears down vault UI state.
+
+Add log checks **sparingly** alongside DOM assertions: one or two milestones per
+meaningful step, not a full log transcript. Prefer `info`-level messages (stable
+at default capture level in CI). Ordered assertions should cover causality that
+the UI does not show directly, for example "manual sync started" before "secret
+added" in an event-log sync flow.
+
+| Spec                                                                                              | When                  | Scope           | Message (includes)                      |
+| ------------------------------------------------------------------------------------------------- | --------------------- | --------------- | --------------------------------------- |
+| [`connect.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/connect.spec.ts)                     | Local vault created   | `vault-local`   | `local vault created`                   |
+|                                                                                                   | WASM connect finished | `wasm-connect`  | `connect complete`                      |
+|                                                                                                   | Session unlocked      | `vault`         | `vault session unlocked`                |
+|                                                                                                   | User locks vault      | `vault-session` | `vault locked`                          |
+| [`idle-session-lock.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/idle-session-lock.spec.ts) | Idle timeout          | `vault-session` | `vault locked`                          |
+|                                                                                                   | Re-unlock             | `vault`         | `vault session unlocked`                |
+| [`event-log-sync.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/event-log-sync.spec.ts)       | Manual sync           | `vault-sync`    | `manual sync started`                   |
+|                                                                                                   | Secret saved          | `connect`       | `secret added`                          |
+| [`logs-page.spec.ts`](../../../nook-app/nook-web/nook-web-app/e2e/logs-page.spec.ts)                 | Logging infra         | (multiple)      | See spec — owns `/logs` and `/app-logs` |
+
+**Note:** `connect` / `vault connected` is emitted by `loadDb` (provider unlock
+path), not device-key local vault creation (`vault-local` + `wasm-connect` instead).
+
+See also: [rust-wasm.md](../../teams/dev-core/references/rust-wasm.md), [bun-svelte.md](../../teams/web-dev/references/bun-svelte.md),
+[../workflows/ci-pipeline.md](../../teams/sre/workflows/ci-pipeline.md).

@@ -228,7 +228,7 @@ export async function waitForPersistedAppLog(
   return searchState.entry
 }
 
-/** Wait for each persisted log milestone in order (see `.cortex/references/logging.md`). */
+/** Wait for each persisted log milestone in order (see `.cortex/shared/references/logging.md`). */
 export async function expectAppLogMilestones(
   page: Page,
   milestones: Array<{

@@ -164,7 +164,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.WorkflowAuditor,
         instruction:
-          'Inspect .cortex/workflows and .cortex/references. Find obsolete rules, conflicting ordering, broken ownership boundaries, commands that disagree with code, duplicated procedures, deterministic leaf candidates, compiled workflow candidates, and safe parallel evidence lanes. Identify policy that must remain semantic judgment. Return precise file and line evidence. Do not edit files.',
+          'Use .cortex/knowledge-graph.md to route this AI-team audit. Inspect only .cortex/teams/ai/workflows and .cortex/teams/ai/references. Load a named shared or SRE authority only when one workflow directly depends on it. Find obsolete rules, conflicting ordering, broken ownership boundaries, commands that disagree with code, duplicated procedures, deterministic leaf candidates, compiled workflow candidates, and safe parallel evidence lanes. Identify policy that must remain semantic judgment. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {
@@ -184,7 +184,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.ArchitectureAuditor,
         instruction:
-          'Inspect .cortex/design-docs and .cortex/product-specs. Compare active product and architecture claims with their owning nook-app implementation and workflow policy. Find contradictions and stale implementation claims. Return precise file and line evidence. Do not edit files.',
+          'Use .cortex/knowledge-graph.md to select one owning team before inspection. Within that team, inspect only task-relevant design documents and product specifications. Load one named shared authority only when required by the selected contract. Compare active claims with their owning implementation and workflow policy. Do not scan every team tree. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {
@@ -204,7 +204,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.SkillAuditor,
         instruction:
-          'Inspect .cortex/dynamic-skills, .agents/skills, .cursor executable mirrors, .claude executable mirrors, .cortex/AGENTS.md, and AGENTS.md. Find stale skills, missing or divergent executable wrappers and mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
+          'Use the AI knowledge graph to inspect its dynamic-skill catalog and only the exact team or shared skill cards named by that catalog. Compare those cards with .agents/skills, .cursor executable mirrors, .claude executable mirrors, .cortex/AGENTS.md, and AGENTS.md. Do not preload all team graphs or all Cortex documents. Find stale skills, missing or divergent wrappers and mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {

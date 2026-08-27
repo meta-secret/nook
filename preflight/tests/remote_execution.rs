@@ -830,7 +830,7 @@ fn broad_remote_tasks_export_native_layers_without_main_write_access() {
 fn complete_pr_validation_is_explicit_and_exact_head_bound() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let pr = read(".github/workflows/pr.yml");
-    let remote_doc = read(".cortex/sre/workflows/remote-execution.md");
+    let remote_doc = read(".cortex/teams/sre/workflows/remote-execution.md");
 
     assert!(pr.contains("types: [labeled]"));
     assert!(
