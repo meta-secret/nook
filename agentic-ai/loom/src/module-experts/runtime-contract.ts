@@ -8,6 +8,8 @@ import { join } from 'node:path';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import { MODULE_EXPERT_CATALOG } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
+import { validatedModuleExpertContextPaths } from './context-selection.ts';
+import type { ModuleExpertContextSelection } from './context-selection.ts';
 import {
   MODULE_EXPERT_READ_CONTEXT_TOOLS,
   createModuleExpertReadContextServer,
@@ -128,6 +130,7 @@ export type ModuleExpertRuntimeIsolationRequest = {
   readonly expertName: string;
   readonly parentEnvironment: NodeJS.ProcessEnv;
   readonly sourceCommit: string;
+  readonly selectedContextPaths: readonly string[];
   readonly temporaryRoot?: string;
   readonly workingDirectory: string;
 };
@@ -153,12 +156,16 @@ export type ReadOnlyExpertRuntimeIsolationRequest = {
   readonly workingDirectory: string;
 };
 
-export type ModuleExpertRuntimeIsolation = {
+export type ReadOnlyExpertRuntimeIsolation = {
   readonly codexHome: string;
   readonly codexOptions: ModuleExpertCodexOptions;
   readonly repositorySnapshot: string;
   readonly threadOptions: ThreadOptions;
   readonly dispose: () => Promise<void>;
+};
+
+export type ModuleExpertRuntimeIsolation = ReadOnlyExpertRuntimeIsolation & {
+  readonly selectedContextPaths: readonly string[];
 };
 
 export type ModuleExpertRuntimeIsolationUse<TResult> = {
@@ -201,6 +208,16 @@ export async function createModuleExpertRuntimeIsolation(
   request: ModuleExpertRuntimeIsolationRequest,
 ): Promise<ModuleExpertRuntimeIsolation> {
   const profile = moduleExpertProfile(request.expertName);
+  const contextSelection: ModuleExpertContextSelection = {
+    expertName: request.expertName,
+    selectedContextPaths: request.selectedContextPaths,
+  };
+  const selectedContextPaths =
+    validatedModuleExpertContextPaths(contextSelection);
+  const snapshotRequest: ModuleExpertSnapshotPathsRequest = {
+    profile,
+    selectedContextPaths,
+  };
   const sharedRequest: ReadOnlyExpertRuntimeIsolationRequest = {
     expertName: request.expertName,
     parentEnvironment: request.parentEnvironment,
@@ -209,19 +226,20 @@ export async function createModuleExpertRuntimeIsolation(
       optionalScopePaths: profile.generatedScopePaths.map(
         (scope) => scope.path,
       ),
-      scopePaths: moduleExpertSnapshotPaths(profile),
+      scopePaths: moduleExpertSnapshotPaths(snapshotRequest),
       contextFiles: [],
     },
     sourceCommit: request.sourceCommit,
     workingDirectory: request.workingDirectory,
     ...(request.temporaryRoot ? { temporaryRoot: request.temporaryRoot } : {}),
   };
-  return createReadOnlyExpertRuntimeIsolation(sharedRequest);
+  const isolation = await createReadOnlyExpertRuntimeIsolation(sharedRequest);
+  return { ...isolation, selectedContextPaths };
 }
 
 export async function createReadOnlyExpertRuntimeIsolation(
   request: ReadOnlyExpertRuntimeIsolationRequest,
-): Promise<ModuleExpertRuntimeIsolation> {
+): Promise<ReadOnlyExpertRuntimeIsolation> {
   assertSourceCommit(request.sourceCommit);
   const temporaryRoot = request.temporaryRoot ?? tmpdir();
   const codexHome = mkdtempSync(
@@ -693,24 +711,29 @@ function moduleExpertProfile(expertName: string): ModuleExpertProfile {
   return profile;
 }
 
+type ModuleExpertSnapshotPathsRequest = {
+  readonly profile: ModuleExpertProfile;
+  readonly selectedContextPaths: readonly string[];
+};
+
 function moduleExpertSnapshotPaths(
-  profile: ModuleExpertProfile,
+  request: ModuleExpertSnapshotPathsRequest,
 ): readonly string[] {
-  const generatedProducerPaths = profile.generatedScopePaths.map(
+  const generatedProducerPaths = request.profile.generatedScopePaths.map(
     (scope) => scope.producerPath,
   );
   return [
     ...new Set([
       '.cortex/knowledge-graph.md',
-      profile.agentDefinitionPath,
-      ...profile.boundaryScopePaths,
-      ...profile.canonicalContextPaths,
-      ...profile.moduleRoots,
-      ...profile.scopePaths,
+      ...request.profile.boundaryScopePaths,
+      ...request.profile.canonicalContextPaths,
+      ...request.profile.moduleRoots,
+      ...request.profile.scopePaths,
+      ...request.selectedContextPaths,
       ...generatedProducerPaths,
-      ...profile.publicEntryPoints,
-      ...profile.authorityPaths,
-      ...profile.skillPaths,
+      ...request.profile.publicEntryPoints,
+      ...request.profile.authorityPaths,
+      ...request.profile.skillPaths,
     ]),
   ];
 }

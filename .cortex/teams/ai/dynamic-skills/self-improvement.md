@@ -151,7 +151,8 @@ Ephemeral knowledge must die with the session file.
 
 ## Self-improvement review
 
-Before final readiness, read the complete session file and answer:
+Before returning promotion and cleanup evidence to Gizmo, the AI team reads the
+complete session file and answers:
 
 1. What did I learn about the project?
 2. What did I learn about agent work in this repository?
@@ -163,8 +164,8 @@ Before final readiness, read the complete session file and answer:
 The answers produce candidates. They do not automatically become permanent
 documentation.
 
-If review or CI produces another discovery after reflection, add it to the
-session file and repeat the review before readiness.
+If review or CI produces another discovery after reflection, the AI team adds it
+to the session file and repeats the review before returning evidence to Gizmo.
 
 ## Promotion criteria
 
@@ -327,12 +328,12 @@ Classify each candidate instruction before changing its owner.
 - **Compiled workflow candidate:** Consider it only when task identities,
   dependencies, parallel groups, joins, resources, timeouts, results, and
   terminal routes are stable.
-- **Delivery-owner-only action:** Keep shared edits, synthesis, Workbench,
-  GitHub, readiness, and merge with one task owner.
+- **Delivery-owner-only action:** Return shared-edit and synthesis evidence to
+  Gizmo. Gizmo owns Workbench, GitHub, readiness, and merge.
 - **Ephemeral instruction:** Reject it when it is task-specific, speculative,
   or insufficiently evidenced.
 
-Follow [Subagent delegation](../workflows/subagent-delegation.md) for the full
+Follow [Subagent delegation](../../../gizmo/workflows/subagent-delegation.md) for the full
 worker contract and safe parallelism rules.
 
 ### Loom extraction procedure
@@ -371,10 +372,11 @@ They are execution evidence, not durable Cortex authority by themselves.
 - `workflow/processing/` keeps run events and semantic projections through
   aggregation and handoff.
 - `.cortex/.session/` keeps disposable task reflection memory.
-- Promote a processing discovery only after the delivery owner validates it
+- Promote a processing discovery only after Gizmo validates it
   against code, tests, and the owning Cortex documents.
 
-The audit may propose a graph. The delivery owner reviews and authors it.
+The audit may propose a graph. Gizmo reviews it and assigns accepted Cortex
+changes to an AI team subagent.
 
 Never parse Markdown, YAML, prompts, session notes, or model output into
 executable topology. Never let a workflow rewrite its own compiled graph at
@@ -399,17 +401,18 @@ For every substantial task:
 9. Promote only evidence-backed durable knowledge.
 10. Synchronize skills, workflows, and the knowledge graph when their contracts
    changed.
-11. Validate Cortex consistency and the updated exact head.
+11. Validate Cortex consistency and the updated documentation head.
 12. Delete the session file.
 13. Confirm no `.cortex/.session/` file is tracked.
-14. Finish readiness, merge, or the requested handoff.
+14. Return promotion, validation, and cleanup evidence to Gizmo.
+15. Gizmo performs exact-head readiness, merge, or the requested handoff.
 
-If promotion changes the pushed head, repeat exact-head validation before
+If promotion changes the pushed head, Gizmo repeats exact-head validation before
 readiness.
 
 ## Pull-request completion contract
 
-Before a substantial PR is ready:
+Before the AI team returns self-improvement evidence to Gizmo:
 
 - [ ] Implementation is complete.
 - [ ] Required validation is complete on the current head.
@@ -498,7 +501,7 @@ List existing authorities first. Name new files only when no authority exists.
 
 ## Validation
 
-Before final readiness:
+Before returning promotion and cleanup evidence to Gizmo:
 
 1. Run the focused checks for every promoted Cortex authority.
 2. Run `task loom:cortex-audit`.
@@ -514,4 +517,7 @@ Before final readiness:
 6. Delete the local session file.
 7. Run `task loom:cortex-session-clean`.
 8. Confirm `git ls-files .cortex/.session` prints nothing.
-9. Repeat exact-head hosted validation when promotion changed the PR head.
+9. Return the promotion, validation, and cleanup evidence to Gizmo.
+
+Gizmo repeats exact-head hosted validation when promotion changed the PR head.
+Gizmo then performs readiness, merge, or the requested handoff.

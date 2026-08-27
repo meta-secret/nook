@@ -2,28 +2,31 @@
 
 ## Overview
 
-- Use this workflow when a task may contain independent reasoning or
-  implementation units.
-- Keep one task-owning agent as the delivery owner.
-- Treat child workers as bounded contributors, not independent delivery owners.
+- Use this workflow when different subagents can complete separate tasks.
+- Keep Gizmo as the delivery owner.
+- Team subagents implement their assigned tasks. They do not control delivery.
 
 ## Decision rule
 
 A capable agent environment MUST delegate when all of these conditions hold:
 
-1. The task contains at least two semantic work units.
-2. Each work unit can start from the same immutable baseline.
-3. Each work unit is read-only or has a disjoint write scope.
-4. Each work unit has explicit inputs and outputs.
-5. Each work unit has its own acceptance evidence.
-6. The parent can define the join before workers start.
+1. The request contains at least two separate team tasks.
+2. Each subagent can start from the same exact Git commit.
+3. Each subagent is read-only or changes different files.
+4. Each subagent has explicit inputs and expected outputs.
+5. Each subagent has its own acceptance evidence.
+6. Gizmo can state how the returned results will be integrated before work
+   starts.
 
 - Use an exact Git commit as the normal immutable baseline.
   - Do not use a movable branch name as a worker baseline.
 - Record the delegation decision in the task plan.
-- If the host has no bounded worker capability:
-  - execute the work serially; and
-  - do not invent an undocumented runner.
+- Let the active harness own model inheritance or selection.
+- Do not encode model selection in the repository task contract.
+- If the host cannot start the required subagents:
+  - report an implementation blocker;
+  - do not let Gizmo implement the assigned task; and
+  - do not invent an undocumented subagent runner.
 
 ## Deterministic work belongs to tools
 
@@ -55,11 +58,11 @@ It makes these properties deterministic:
 - result shape;
 - lifecycle state.
 
-## Delivery owner
+## Gizmo
 
-Exactly one agent owns delivery.
+Exactly one Gizmo owns delivery.
 
-The delivery owner owns:
+Gizmo owns:
 
 - Workbench planning and lifecycle records;
 - architectural synthesis;
@@ -71,17 +74,18 @@ The delivery owner owns:
 - readiness and merge;
 - the final completion report.
 
-Child workers must not mutate those surfaces.
-The active harness may coordinate children on the delivery owner's behalf.
+Team subagents must not mutate those surfaces.
+The active harness may coordinate subagents on Gizmo's behalf.
 
 This rule preserves
 [agent feature ownership](../dynamic-skills/agent-feature-ownership.md).
 
-## Child-worker contract
+## Subagent task contract
 
-Every delegated work unit must declare:
+Every subagent task must declare:
 
 - a stable task ID;
+- one semantic role or team identity;
 - its exact baseline;
 - its purpose;
 - its allowed files or evidence surface;
@@ -119,8 +123,8 @@ Module-oriented work follows
 [module-oriented-development.md](module-oriented-development.md).
 
 - Keep the feature dependency DAG separate from agent parent lineage.
-- Use the named read-only profiles in the
-  [module expert registry](../architecture/module-experts.md).
+- Use the named read-only semantic roles in the
+  [module expert registry](../../teams/ai/architecture/module-experts.md).
 - Use the active harness to create and coordinate module experts and
   implementation workers.
 - Invoke `internal_api_expert` when a changed contract crosses a module
@@ -130,7 +134,7 @@ Module-oriented work follows
 - Give every write-capable worker an isolated workspace.
 - Verify every returned commit against its exact baseline and allowed paths.
 - Bind every downstream task to the exact integrated provider commit.
-- Keep shared files and lifecycle state with the delivery owner.
+- Keep shared files and lifecycle state with Gizmo.
 
 The plan declares a task-specific hierarchy depth bound.
 The harness enforces that bound.
@@ -145,19 +149,23 @@ They do not authorize descendants or lifecycle mutations.
 Implementation delegation also follows
 [Team-oriented development](team-oriented-development.md).
 
-- Classify each functional unit as `ai`, `dev-core`, `security`, `sre`, or
-  `web-dev` before dispatch.
-- Give every team agent one team identity and explicit code and Cortex paths.
+- Assign each task to AI, development core, security, SRE, or web development
+  before starting workers.
+- Give every team worker one exact team identity and explicit code and Cortex
+  paths.
 - Keep write-capable team agents in isolated workspaces with disjoint scopes.
 - Require each team agent to own its implementation, tests, Cortex updates,
   review fixes, and validation fixes.
-- Let a team agent report a dependency on another team to the delivery owner.
+- Let a team agent report a dependency on another team to Gizmo.
 - Do not let the requesting team implement the foreign provider in its own
   layer.
 - Keep shared files and GitHub, Workbench, validation, readiness, and merge
-  state with the delivery owner.
+  state with Gizmo.
 - Give each worker only its team entry contract and exact task-relevant Cortex
   authorities. Do not attach every graph or the shared corpus.
+- Treat the parent task contract as the portable routing and capability
+  authority.
+- Treat repository profile files as non-authoritative.
 
 Team ownership does not add hierarchy depth or scheduling authority.
 
@@ -173,6 +181,8 @@ Its native control path includes:
 - terminal barriers;
 - nested delegation within declared bounds;
 - parent and root synthesis.
+
+It also owns native worker labels or names and model inheritance or selection.
 
 Repository event streams and semantic views are optional human evidence.
 They are not lifecycle authority for native harness delegation.
@@ -265,18 +275,22 @@ Useful read-only partitions include:
 - dynamic skills and entry points;
 - code, Task, and CI evidence.
 
-One parent resolves conflicting findings and authors the final edit.
+Gizmo resolves conflicting findings and assigns the final edit to an AI team
+subagent.
 
 A topic-local one-hop consistency check does not require fan-out.
 
 ### Structural coherence
 
-Use the [structural refactoring workflow](structural-refactoring.md) when code
+Use the
+[structural refactoring workflow](../../teams/ai/workflows/structural-refactoring.md)
+when code
 or Cortex structure is the requested maintenance surface.
 
 - The registry contains two repository-reading structural experts.
 - `system_coherence_synthesizer` receives only verified evidence.
-- The delivery owner predeclares all tasks and applies accepted corrections.
+- Gizmo declares all tasks and integrates accepted corrections from the
+  responsible team subagents.
 - Structural roles do not delegate or create another tier.
 
 ### Broad repository inventory
@@ -294,9 +308,9 @@ lower-layer contract is stable.
 - Two or more unrelated failed job families MUST use one diagnostic worker per
   family.
 - Workers inspect exact-head evidence.
-- The delivery owner:
-  - correlates root causes; and
-  - implements the fixes.
+- Gizmo correlates root causes.
+- Gizmo sends each fix to the responsible team subagent.
+- The responsible team subagent implements and tests the fix.
 - Workers do not push or trigger replacement checks.
 
 ### Review findings
@@ -346,7 +360,7 @@ Keep one owner when work is:
 ## Machine-managed workflows
 
 During reflection, apply the
-[workflow improvement review](../dynamic-skills/self-improvement.md#workflow-improvement-review)
+[workflow improvement review](../../teams/ai/dynamic-skills/self-improvement.md#workflow-improvement-review)
 to repeated and stable procedures.
 
 This delegation workflow still owns the worker boundary:
@@ -354,17 +368,19 @@ This delegation workflow still owns the worker boundary:
 - semantic work uses bounded child workers;
 - deterministic work uses tools;
 - the active harness owns native worker coordination;
-- one delivery owner defines and reviews the join; and
+- Gizmo defines and reviews the integration; and
 - child workers do not acquire delivery authority.
 
 The architecture boundary is defined in
-[agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
+[agent-workflow-orchestration.md](../../teams/ai/design-docs/agent-workflow-orchestration.md).
 
 ## Validation
 
 Before integration, verify:
 
 - every worker used its declared exact baseline;
+- every team worker used its declared team identity;
+- the repository task contract did not prescribe a native label or model;
 - every reached task has a harness-visible terminal result;
 - every child records the correct parent lineage;
 - every task stayed inside its declared hierarchy depth bound;
@@ -379,4 +395,4 @@ Before integration, verify:
 - integration follows deterministic dependency order;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - the parent reviewed all evidence;
-- only the delivery owner mutated shared lifecycle state.
+- only Gizmo mutated shared lifecycle state.

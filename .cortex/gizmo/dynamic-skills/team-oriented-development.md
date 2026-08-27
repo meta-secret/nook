@@ -2,24 +2,30 @@
 
 ## Purpose
 
-Route Nook work through the `ai`, `dev-core`, `security`, `sre`, and `web-dev`
-ownership boundaries.
+Route Nook work through the five semantic team identities:
+
+- AI;
+- development core;
+- security;
+- SRE; and
+- web development.
 
 Use this skill whenever a request touches code, scripts, infrastructure, tests, or Cortex owned by one or more engineering teams.
 
 ## Preferred pattern
 
 1. Read [Engineering team ownership](../architecture/team-ownership.md).
-2. Assign one functional owner to every capability unit.
+2. Turn the request into concrete tasks and assign each task to one team.
 3. Identify whether another team should provide implementation expertise.
 4. Freeze every capability or expertise contract before assigning files.
-5. Delegate each independently bounded unit to its team agent when available.
-6. Keep every team agent inside its declared task scope.
-7. Route cross-team dependencies through the delivery owner.
+5. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+6. Follow [subagent delegation](../workflows/subagent-delegation.md) for
+   dispatch and integration.
+7. Route cross-team dependencies through Gizmo.
 8. Require each team to implement its own tests, Cortex updates, and review
-   fixes for its owned unit.
-9. Keep shared files and lifecycle mutations in the parent-owned join.
-10. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
+   fixes for its assigned task.
+9. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+   for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
 from implementation ownership. Security review does not transfer the
@@ -44,7 +50,7 @@ This skill does not replace module ownership, internal API review, or subagent e
 
 - Use module experts inside the selected team when a production module boundary changes.
 - Use the internal API expert when a contract crosses modules or teams.
-- Follow the universal subagent workflow for baselines, isolation, views, and joins.
+- Follow the universal subagent workflow for operational worker rules.
 
 ## Validation
 

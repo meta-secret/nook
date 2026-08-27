@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
@@ -20,6 +19,7 @@ import {
 } from '../agent-workflow/domain.ts';
 import type {
   AgentAttemptEvent,
+  AgentRuntimeActivityEvent,
   AgentAttemptTerminalRecordedEvent,
 } from '../agent-workflow/agent-events.ts';
 import type {
@@ -52,20 +52,22 @@ import {
   decodeModuleExpertInvocationRequest,
   validatedModuleExpertInvocationRequest,
 } from './request-codec.ts';
-import type { ModuleExpertInvocationRequest } from './request-codec.ts';
+import type {
+  ModuleExpertInvocationRequest,
+  ValidatedModuleExpertInvocationRequest,
+} from './request-codec.ts';
 
 export { decodeModuleExpertInvocationRequest } from './request-codec.ts';
 export type { ModuleExpertInvocationRequest } from './request-codec.ts';
 
 const MAX_ACTIVITY_COUNT = 256;
-const MAX_AGENT_DEFINITION_BYTES = 65_536;
+const SELECTED_CONTEXT_EVIDENCE_PREFIX = 'Module expert selected context: ';
 
 export type ModuleExpertInvocationResult = {
   readonly runDirectory: string;
   readonly runId: string;
   readonly expert: string;
-  readonly agentDefinitionPath: string;
-  readonly agentDefinitionSha256: string;
+  readonly selectedContextPaths: readonly string[];
   readonly sourceCommit: string;
   readonly task: string;
   readonly attempt: number;
@@ -88,8 +90,7 @@ export type VerifyModuleExpertInvocationResultArgs = {
 type ModuleExpertResultContext = {
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
-  readonly definitionSha256: string;
-  readonly request: ModuleExpertInvocationRequest;
+  readonly request: ValidatedModuleExpertInvocationRequest;
   readonly terminal: TaskTerminal<string>;
   readonly processing: AgentAttemptProcessingReference;
 };
@@ -115,8 +116,7 @@ type FinalizeFailedAttemptContext = {
   readonly activityCount: number;
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
-  readonly definitionSha256: string;
-  readonly request: ModuleExpertInvocationRequest;
+  readonly request: ValidatedModuleExpertInvocationRequest;
 };
 
 export async function invokeModuleExpert(
@@ -134,11 +134,6 @@ export async function invokeModuleExpert(
   const audit = auditModuleExperts(auditArgs);
   if (!audit.auditOk) {
     throw new Error('Module expert catalog validation failed.');
-  }
-  const definitionPath = join(repoRoot, profile.agentDefinitionPath);
-  const definition = readFileSync(definitionPath, 'utf8');
-  if (Buffer.byteLength(definition, 'utf8') > MAX_AGENT_DEFINITION_BYTES) {
-    throw new Error('Module expert agent definition exceeds its size bound.');
   }
   const runDirectory = join(
     repoRoot,
@@ -193,7 +188,13 @@ export async function invokeModuleExpert(
   };
   const journal = createModuleExpertAttemptJournal<string>(journalArgs);
   await journal.initialize();
-  let activityCount = 0;
+  const selectedContextObservation: RuntimeActivityObservation = {
+    activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
+    detail: `${SELECTED_CONTEXT_EVIDENCE_PREFIX}${JSON.stringify(request.selectedContextPaths)}`,
+  };
+  const selectedContextEvent = runtimeActivityEvent(selectedContextObservation);
+  await journal.append(selectedContextEvent);
+  let activityCount = 1;
   const observe = async (
     observation: RuntimeActivityObservation,
   ): Promise<void> => {
@@ -218,7 +219,6 @@ export async function invokeModuleExpert(
       activityCount,
       runDirectory,
       profile,
-      definitionSha256: sha256(definition),
       request,
     };
     return finalizeFailedAttempt(failureContext);
@@ -236,7 +236,6 @@ export async function invokeModuleExpert(
       activityCount,
       runDirectory,
       profile,
-      definitionSha256: sha256(definition),
       request,
     };
     return finalizeFailedAttempt(failureContext);
@@ -260,7 +259,6 @@ export async function invokeModuleExpert(
         activityCount,
         runDirectory,
         profile,
-        definitionSha256: sha256(definition),
         request,
       };
       return finalizeFailedAttempt(failureContext);
@@ -270,7 +268,6 @@ export async function invokeModuleExpert(
   const resultContext: ModuleExpertResultContext = {
     runDirectory,
     profile,
-    definitionSha256: sha256(definition),
     request,
     terminal,
     processing,
@@ -288,8 +285,7 @@ function invocationResult(
     runDirectory: context.runDirectory,
     runId: context.request.runId,
     expert: context.profile.name,
-    agentDefinitionPath: context.profile.agentDefinitionPath,
-    agentDefinitionSha256: context.definitionSha256,
+    selectedContextPaths: context.request.selectedContextPaths,
     sourceCommit: context.request.sourceCommit,
     task: context.request.task,
     attempt: context.request.attempt,
@@ -321,7 +317,6 @@ async function finalizeFailedAttempt(
   const resultContext: ModuleExpertResultContext = {
     runDirectory: context.runDirectory,
     profile: context.profile,
-    definitionSha256: context.definitionSha256,
     request: context.request,
     terminal,
     processing,
@@ -433,12 +428,14 @@ export async function verifyModuleExpertInvocationResult(
     processingVerificationFailed();
   }
   const firstEvent = events[0];
+  const selectedContextEvent = events[1] as AgentRuntimeActivityEvent;
   const terminalEvents = events.filter(
     (event) => event.kind === AgentAttemptEventKind.AttemptTerminalRecorded,
   ) as readonly AgentAttemptTerminalRecordedEvent[];
   const terminalEvent = terminalEvents[0];
   if (
     !firstEvent ||
+    !selectedContextEvent ||
     terminalEvents.length !== 1 ||
     !terminalEvent ||
     firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
@@ -451,6 +448,11 @@ export async function verifyModuleExpertInvocationResult(
     firstEvent.attempt !== result.attempt ||
     firstEvent.depth !== result.depth ||
     JSON.stringify(firstEvent.parent) !== JSON.stringify(result.parent) ||
+    selectedContextEvent.kind !== AgentAttemptEventKind.RuntimeActivity ||
+    selectedContextEvent.activity !==
+      WorkflowRuntimeActivityKind.SourceReadCompleted ||
+    selectedContextEvent.detail !==
+      `${SELECTED_CONTEXT_EVIDENCE_PREFIX}${JSON.stringify(result.selectedContextPaths)}` ||
     projectedTerminal.task !== result.task ||
     projectedTerminal.attempt !== result.attempt ||
     projectedTerminal.kind !== result.terminal.kind ||

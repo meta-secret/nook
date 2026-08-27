@@ -79,7 +79,8 @@ Default task scope:
 
 A full-tree GC follows this ownership model:
 
-1. Follow [subagent-delegation.md](../workflows/subagent-delegation.md).
+1. Follow
+   [subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 2. When multiple document families are in scope, delegate read-only evidence
    collection by family.
 3. Keep one task owner responsible for conflict resolution and the final edit.

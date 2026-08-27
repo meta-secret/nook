@@ -3,7 +3,7 @@
 ## Overview
 
 - Use this checklist for every change that lands on `main`.
-- AI agents must follow [Coding bro](coding-bro.md) and the detailed
+- Gizmo follows [mission delivery](mission-delivery.md) and the detailed
   [agent pipeline](#agent-pipeline) below.
   - Do not stop at push.
 - Apply this workflow only to the current task's owned feature and focused
@@ -26,11 +26,12 @@ Full ownership policy:
 
 ## PR-first agent contract
 
-For implementation tasks, the agent's default job is not "make local edits".
-It is "land a PR with Nook's applicable GitHub Actions PR test checks green."
+For implementation tasks, Gizmo's default job is to land an integrated PR with
+Nook's applicable GitHub Actions PR test checks green. Team subagents make the
+implementation edits.
 
 Before establishing a PR path, apply the
-[major architectural initiative rule](../dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
+[major architectural initiative rule](../../teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
 Stop at analysis and proposals when a major direction comes from agent
 reasoning rather than an explicit user-selected implementation request.
 Lifecycle records and an agent-authored plan do not grant that authority.
@@ -46,7 +47,10 @@ ownership until merge or a concrete blocked handoff:
    - Create the first feature branch.
    - Define the first PR's title, body, and scope.
    - Create ignored `.cortex/.session/` memory for substantial work.
-2. **Implement functionality** — make the requested code/docs/tests changes on the feature branch. Focused build/test feedback runs through the configured GitHub Actions runner.
+2. **Implement functionality** — dispatch the requested code, documentation,
+   and test changes to the responsible teams. Integrate only verified commit
+   handoffs. Focused build and test feedback runs through the configured
+   GitHub Actions runner.
 3. **Prepare a coherent commit:**
    - Run `task loom:pre-push`.
    - Commit the formatted change.
@@ -78,14 +82,16 @@ ownership until merge or a concrete blocked handoff:
    - Do not request Claude, CodeRabbit, or other optional reviewers.
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
-6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Fix the
-   failure, run pre-push hygiene, and push the complete fix. Request review and
-   validate the replacement head together.
-7. **Complete agent self-improvement for substantial work.** Follow the
-   canonical [completion contract](../dynamic-skills/self-improvement.md#pull-request-completion-contract).
+6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Dispatch the
+   finding to its responsible team. Integrate the verified fix commit, run
+   pre-push hygiene, and push the complete fix. Validate the replacement head.
+7. **Complete agent self-improvement for substantial work.** Ask the AI team
+   to follow the canonical
+   [completion contract](../../teams/ai/dynamic-skills/self-improvement.md#pull-request-completion-contract).
 8. **Merge automatically when ready.** Require a current branch, green
-   repository-owned checks, resolved actionable comments, and the exact-head
-   readiness audit. Then squash-merge without separate permission.
+   repository-owned checks, resolved actionable comments, every required team
+   and security verdict, and the exact-head readiness audit. Then squash-merge
+   without separate permission.
 
 ## Pull request size and modularity
 
@@ -253,19 +259,20 @@ If you merge a PR for the user, **confirm squash** before completing the merge. 
 
 ## Agent pipeline
 
-Named **coding bro** in [coding-bro.md](coding-bro.md). End-to-end flow for autonomous agents working on a task:
+Defined by [mission delivery](mission-delivery.md). End-to-end flow for Gizmo
+and its team subagents:
 
 ```mermaid
 flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
-  A --> I[2 Implement]
+  A --> I[2 Delegate team implementation]
   I --> E[3 Format + push + open/update PR]
   E --> X[4 Focused task remote jobs as useful]
   X --> V[5 Explicit loom/pr validate]
   V --> F[6 Monitor applicable Nook PR checks on GHA]
   F --> G{Nook PR checks green?}
-  G -->|no| H[7 Read app logs + fix + loom pre-push]
-  H --> PUSH[8 Push completed fix]
+  G -->|no| H[7 Route finding to owner team]
+  H --> PUSH[8 Integrate fix + loom pre-push + push]
   PUSH --> X
   G -->|yes| C[9 Address comments]
   C --> R[Run exact-head readiness audit]
@@ -297,8 +304,8 @@ Never commit directly on `main`.
 
 ### 2. Implement
 
-Implement only the bounded slice described by the task plan and preserve its
-owning interfaces and acceptance evidence.
+Gizmo dispatches the bounded slice described by the task plan. The responsible
+team implements it and preserves its owning interfaces and acceptance evidence.
 
 Capture meaningful discoveries and evidence in `.cortex/.session/`. The session
 file remains provisional and untracked.
@@ -328,7 +335,7 @@ git push -u origin HEAD
 gh pr create --title "…" --body "…"
 ```
 
-See [pre-push-hygiene.md](../../sre/dynamic-skills/pre-push-hygiene.md).
+See [pre-push hygiene](../../teams/sre/dynamic-skills/pre-push-hygiene.md).
 
 - Before the first owner-authored push, run `task pr:review-local` on the
   coherent head.
@@ -399,9 +406,10 @@ task pr:validate PR=<number> FULL_E2E=1
   - Command: Fix → `task loom:pre-push` → commit → push → trigger validation again
   - Purpose: Pushing alone does not start `pr.yml`
 
-See [ci-pipeline.md § Local vs remote CI](../../sre/workflows/ci-pipeline.md#local-vs-remote-ci) and [github-actions-only-validation.md](../../sre/dynamic-skills/github-actions-only-validation.md).
+See [CI pipeline](../../teams/sre/workflows/ci-pipeline.md#local-vs-remote-ci)
+and [GitHub Actions validation](../../teams/sre/dynamic-skills/github-actions-only-validation.md).
 
-- Follow [workflow concurrency policy](../../sre/workflows/ci-pipeline.md#workflow-concurrency-policy)
+- Follow [workflow concurrency policy](../../teams/sre/workflows/ci-pipeline.md#workflow-concurrency-policy)
   for cancellation.
 - Explicit validation cancels only an older labeled run for the same PR.
   - Unrelated PRs keep independent required checks.
@@ -463,7 +471,7 @@ task pr:preflight PR=<number>
 - Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or
   `task pr:ready` for read-only exact-head readiness.
   - The command never merges by itself.
-  - Success tells the task owner to squash-merge immediately.
+  - Success tells Gizmo to squash-merge immediately.
 - Codex review is not a readiness requirement.
   - Its bounded pre-validation lane must not deadlock delivery.
   - Do not request Claude, CodeRabbit, or other optional external reviews.
@@ -539,16 +547,19 @@ gh api repos/meta-secret/nook/pulls/<pr-number>/reviews \
 
 ### 7. Fix loop on failure
 
-Investigation order: **test output** → **static analysis** → **app logs** (most important after the first two). See [logging.md § Debugging…](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
+Investigation order: **test output** → **static analysis** → **app logs** (most important after the first two). See [logging](../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
-Static analysis includes Knip unused findings and jscpd clone/duplicate findings. Fix those problems in code; do not silence the gate. See [quality.md § Fix check findings](../../sre/workflows/quality.md#fix-check-findings--not-silence-them).
+Static analysis includes Knip unused findings and jscpd clone/duplicate
+findings. Route those problems to the responsible team. Do not silence the
+gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not-silence-them).
 
 1. Read the failed job log: `gh run view <run-id> --log-failed`
 2. For **e2e / web failures**, read persisted app logs before changing code.
    Use the Playwright `nook-app-logs.json` attachment. Local sources include
    `fetchAppLogs(page)`, `/app-logs`, and `dumpNookLogs(page)`.
-3. Fix the root cause.
-4. Run `task loom:pre-push`, commit, and push the completed fix.
+3. Dispatch the root cause to its responsible team.
+4. Integrate the verified fix commit. Run `task loom:pre-push`, commit, and
+   push the completed fix.
 5. Run Loom/Task validate and return to monitoring Nook's complete exact-head PR checks. Use a focused `task remote` job only when it shortens diagnosis.
 6. Complete validation stabilizes one exact-head Codex review before dispatch.
    Current findings stop the dispatch. Review unavailability is bounded, and
@@ -559,13 +570,17 @@ If the failure was obviously fmt-only, `task loom:pre-push` before re-push is en
 ### 8. Merge and finish
 
 For a substantial task, complete the checklist in
-[Agent self-improvement](../dynamic-skills/self-improvement.md#pull-request-completion-contract).
+[Agent self-improvement](../../teams/ai/dynamic-skills/self-improvement.md#pull-request-completion-contract).
 
 Merge only when all readiness conditions pass:
 
 - Nook's applicable repository-owned PR test checks are green.
 - The branch is current with `origin/main`.
 - All actionable comments are resolved.
+- Gizmo's final integrated verdict is ready for the exact head.
+- Every required team verdict is satisfied.
+- Every required security verdict is satisfied.
+- Gizmo has not overridden a required blocking verdict.
 - `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or `task pr:ready`
   succeeds.
 
@@ -596,7 +611,9 @@ After merge, `main.yml` independently runs full local-provider and extension **e
 
 ### 9. Post-merge Workbench context and statistics
 
-Every normal AI-agent-owned PR continues through a Workbench publication after merge. Follow [issues.md](issues.md) and [agent-statistics.md](agent-statistics.md):
+Every normal Gizmo-owned PR continues through a Workbench publication after
+merge. Follow [issues](issues.md) and
+[agent statistics](agent-statistics.md):
 
 - Update the associated issue.
 - Add the agent worklog.
@@ -615,7 +632,7 @@ Do not:
 
 If the comparison identifies actionable performance regression or workflow waste, create a separate normal Nook build-performance PR and take it through the full pipeline.
 
-Completed Main attempts independently commit one automated `stats/main-build/<run-id>-attempt-<attempt>.yaml` record to Workbench after the workflow finishes. Because no Nook ref changes, publication cannot recurse. See [main-build-statistics.md](../../sre/workflows/main-build-statistics.md).
+Completed Main attempts independently commit one automated `stats/main-build/<run-id>-attempt-<attempt>.yaml` record to Workbench after the workflow finishes. Because no Nook ref changes, publication cannot recurse. See [main build statistics](../../teams/sre/workflows/main-build-statistics.md).
 
 ### 10. Task completion report
 
@@ -643,14 +660,14 @@ Rules:
 - If the task was blocked waiting on the user, exclude idle wait time and note `active time: …` vs `elapsed: …`.
 - For question-only turns with no implementation, a duration line is optional.
 
-**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [docker-container-harness.md](../../sre/dynamic-skills/docker-container-harness.md).
+**Docker:** Never kill the Docker daemon — only stop containers (`docker stop`). See [Docker container harness](../../teams/sre/dynamic-skills/docker-container-harness.md).
 
 ## Standard flow (summary)
 
-See [coding-bro.md](coding-bro.md) for the numbered 0–13 checklist.
+See [mission delivery](mission-delivery.md) for the delivery procedure.
 
 1. Fetch `origin/main` and branch from it.
-2. Implement the focused change.
+2. Dispatch the focused change to the responsible team.
 3. Run `task loom:pre-push`.
 4. Commit the formatted change.
 5. Run `task pr:review-local` before the first owner-authored push.
@@ -664,9 +681,10 @@ See [coding-bro.md](coding-bro.md) for the numbered 0–13 checklist.
 12. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
     Claude, CodeRabbit, or other optional reviews.
 13. Address and resolve actionable comments.
-14. Complete the canonical self-improvement contract for substantial work.
-15. On failure, fix the issue and repeat pre-push hygiene.
-16. Push the fix and explicitly validate the replacement head.
+14. Ask the AI team to complete the canonical self-improvement contract for
+    substantial work.
+15. On failure, dispatch the issue to its responsible team.
+16. Integrate and push the verified fix, then validate the replacement head.
 17. Squash-merge after the exact-head readiness audit succeeds.
 18. Publish the Workbench completion records.
 19. Report task duration.
@@ -681,4 +699,4 @@ gh pr create --title "…" --body "…"
 gh pr merge <number> --squash
 ```
 
-See also [coding-bro.md](coding-bro.md).
+See also [mission delivery](mission-delivery.md).

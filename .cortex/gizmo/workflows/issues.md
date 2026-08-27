@@ -264,8 +264,8 @@ The plan must contain:
 
 Each ownership unit uses the exact field order from
 `.github/prompts/agent-plan.md`. It names one functional owner and capability
-acceptance contract. When an expertise provider will write a bounded unit, it
-also enumerates exact repository-relative code, test, and forbidden paths,
+acceptance contract. When an expertise provider will change files, it also
+enumerates exact repository-relative code, test, and forbidden paths,
 consumer interfaces, and provider-owned evidence. Otherwise every expertise
 field is `None`.
 

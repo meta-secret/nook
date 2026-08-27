@@ -1,5 +1,8 @@
 #![allow(clippy::unnecessary_wraps)]
 
+#[path = "workbench/harness_neutral.rs"]
+mod harness_neutral;
+
 use anyhow::Context as _;
 use std::{
     fs,
@@ -153,10 +156,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/teams/ai/workflows/coding-bro.md");
-    let issue_workflow = read(".cortex/teams/ai/workflows/issues.md");
-    let pull_request_workflow = read(".cortex/teams/ai/workflows/pull-requests.md");
-    let ownership_skill = read(".cortex/teams/ai/dynamic-skills/agent-feature-ownership.md");
+    let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
+    let issue_workflow = read(".cortex/gizmo/workflows/issues.md");
+    let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
+    let ownership_skill = read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
 
     for required in [
         "agents mutate only their owned feature",
@@ -204,11 +207,11 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 }
 
 #[test]
-fn team_work_separates_functional_ownership_from_implementation_expertise() -> anyhow::Result<()> {
+fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
-    let ownership = read(".cortex/teams/ai/architecture/team-ownership.md");
+    let ownership = read(".cortex/gizmo/architecture/team-ownership.md");
     let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map.md");
-    let workflow = read(".cortex/teams/ai/workflows/team-oriented-development.md");
+    let workflow = read(".cortex/gizmo/workflows/team-oriented-development.md");
     let web_contract = read(".cortex/teams/web-dev/AGENTS.md");
     let sre_contract = read(".cortex/teams/sre/AGENTS.md");
     let security_contract = read(".cortex/teams/security/AGENTS.md");
@@ -219,9 +222,15 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
     let web_graph = read(".cortex/teams/web-dev/knowledge-graph.md");
     let shared_graph = read(".cortex/shared/knowledge-graph.md");
     let agent_plan = read(".github/prompts/agent-plan.md");
-    let issues_workflow = read(".cortex/teams/ai/workflows/issues.md");
+    let issues_workflow = read(".cortex/gizmo/workflows/issues.md");
     let loom_tools = read(".cortex/teams/ai/references/loom-tools.md");
     let workbench_validator = read(".github/scripts/workbench-records.cjs");
+    let normalized_agent_map = agent_map.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized_agent_plan = agent_plan.split_whitespace().collect::<Vec<_>>().join(" ");
+    let normalized_web_contract = web_contract
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
 
     for required in [
         "functional owner",
@@ -231,10 +240,10 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
         "smallest explicitly linked set of",
         "foreign-team skills as required read-only engineering policy",
         "read-only engineering policy",
-        "only when the foreign team will write",
+        "only when the foreign team will change files",
     ] {
         assert!(
-            agent_map.contains(required),
+            normalized_agent_map.contains(required),
             "root agent routing is missing matrix ownership contract: {required}"
         );
     }
@@ -276,7 +285,9 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
 
     assert!(
         web_contract.contains("TypeScript and Svelte engineering expertise")
-            && web_contract.contains("Bounded TypeScript implementation units")
+            && normalized_web_contract.contains(
+                "bounded TypeScript implementation when web development is the expertise provider"
+            )
             && web_contract.contains("does not authorize changes to consumer-team Cortex"),
         "web development must own TypeScript expertise without taking consumer capability authority"
     );
@@ -347,6 +358,28 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
             "automated planning must require expertise contract field: {required}"
         );
     }
+    // The planning prompt carries the review policy for Gizmo's delivery semantics.
+    assert!(
+        normalized_agent_plan.contains(
+            "`Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
+        ) && normalized_agent_plan.contains(
+            "Use `Gizmo` only for coordination, integration, or lifecycle capabilities"
+        ) && normalized_agent_plan.contains(
+                "An `Expertise provider` must be exactly `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
+            ) && normalized_agent_plan.contains("Gizmo is never an expertise provider"),
+        "planning review policy must reserve Gizmo for coordination, integration, or lifecycle and exclude it from expertise provision"
+    );
+    // The JavaScript validator enforces only role vocabularies, not capability semantics.
+    assert!(
+        workbench_validator.contains("const functionalOwnerPattern =")
+            && workbench_validator
+                .contains("'Gizmo|AI|Development core|Security|SRE|Web development'")
+            && workbench_validator.contains("const expertiseProviderPattern =")
+            && workbench_validator.contains("'AI|Development core|Security|SRE|Web development'")
+            && workbench_validator.contains("(${functionalOwnerPattern})")
+            && workbench_validator.contains("(None|${expertiseProviderPattern})"),
+        "Workbench validation must include Gizmo in the functional-owner vocabulary and exclude it from the expertise-provider vocabulary"
+    );
 
     for skill in [
         "typescript-domain-structure.md",
@@ -422,8 +455,8 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
 fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/teams/ai/workflows/coding-bro.md");
-    let pull_request_workflow = read(".cortex/teams/ai/workflows/pull-requests.md");
+    let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
+    let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
     let self_improvement = read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
     let skill_wrapper = read(".agents/skills/self-improvement/SKILL.md");
     let agent_tasks = read(".task/agentic-ai.yml");

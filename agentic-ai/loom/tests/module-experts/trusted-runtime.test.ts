@@ -285,6 +285,7 @@ function directRequest(runId: string): ModuleExpertInvocationRequest {
   return {
     runId,
     expert: 'core_expert',
+    selectedContextPaths: [],
     sourceCommit: SOURCE_COMMIT,
     task: 'inspect-core-contract',
     attempt: 1,

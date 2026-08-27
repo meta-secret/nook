@@ -285,6 +285,10 @@ export function renderCortexIndexMarkdown(
 Use this file only to select one owning context. Do not preload every linked
 graph.
 
+## Gizmo route
+
+- [Gizmo](gizmo/knowledge-graph.md)
+
 ## Team routes
 
 - [AI](teams/ai/knowledge-graph.md)

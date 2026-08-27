@@ -4,12 +4,16 @@
 
 Use this workflow for feature work that touches more than one package.
 
-0. Follow [coding-bro.md](coding-bro.md) — fetch `origin/main`, branch, never push to `main` (see [pull-requests.md](pull-requests.md)).
-   0b. **Merge with squash only.** When a PR is merged, use **Squash and merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See [pull-requests.md](pull-requests.md#squash-merge-only---no-exceptions).
+0. Follow [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+   Fetch `origin/main`, branch, and never push to `main`. See
+   [pull requests](../../../gizmo/workflows/pull-requests.md).
+   0b. **Merge with squash only.** When a PR is merged, use **Squash and
+   merge** (`gh pr merge --squash`). Never merge commit or rebase merge. See
+   [pull requests](../../../gizmo/workflows/pull-requests.md#squash-merge-only---no-exceptions).
    0c. Estimate authored changed lines and map package ownership before editing.
    If the change approaches 3,000 lines, split it into ordered package- or
    layer-focused PRs. Follow
-   [pull-requests.md](pull-requests.md#pull-request-size-and-modularity).
+   [pull request size](../../../gizmo/workflows/pull-requests.md#pull-request-size-and-modularity).
 1. Identify the lowest package that should own the behavior.
 2. Put portable logic and domain models in `nook-core`; keep browser I/O and JS-friendly conversion in `nook-wasm`.
 3. Expose typed core DTOs/enums through WASM when possible instead of recreating their tags in TypeScript.

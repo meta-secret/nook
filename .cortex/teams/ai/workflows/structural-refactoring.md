@@ -8,10 +8,11 @@ system coherence.
 The workflow routes evidence through the
 [structural refactoring expert registry](../architecture/refactoring-experts.md).
 It follows the universal
-[subagent delegation contract](subagent-delegation.md).
+[subagent delegation contract](../../../gizmo/workflows/subagent-delegation.md).
 
-One delivery owner plans, applies, validates, and delivers every correction.
-Experts remain read-only and nondelegating.
+Gizmo plans and delivers the correction process. Gizmo assigns every accepted
+edit to the responsible team subagent. Experts remain read-only and
+nondelegating.
 
 ## Select the maintenance surface
 
@@ -56,7 +57,7 @@ The code expert starts from the consumer-visible behavior.
 8. Return bounded findings and proposed edit groups.
 
 If a boundary may change, require `internal_api_expert` evidence before the
-delivery owner accepts that edit group.
+Gizmo accepts that edit group.
 
 ## Collect Cortex-refactoring evidence
 
@@ -91,21 +92,23 @@ The synthesizer then:
 3. Correlates code findings with Cortex findings.
 4. Orders provider work before consumer work.
 5. Builds independent edit groups with non-overlapping resource claims.
-6. Returns unresolved decisions to the delivery owner.
+6. Returns unresolved decisions to Gizmo.
 
 The synthesis is a proposed plan.
 It does not authorize mutation.
 
 ## Apply accepted corrections
 
-The delivery owner reviews every finding before editing.
+Gizmo reviews every finding before assigning edits.
 
 1. Reject unsupported or out-of-scope findings.
 2. Resolve decisions that affect product behavior or public contracts.
 3. Freeze the accepted edit groups and their order.
-4. Apply the lowest provider or canonical authority correction first.
-5. Add or strengthen behavior-focused tests for code invariants.
-6. Update dependent consumers after their provider contract is accepted.
+4. Assign the lowest provider or canonical authority correction first.
+5. Require the responsible team subagent to add or strengthen behavior-focused
+   tests for code invariants.
+6. Assign dependent consumer changes after their provider contract is
+   accepted.
 7. Update Cortex and executable mirrors when durable guidance changes.
 8. Update the owning knowledge graph when document headings or paths change.
 9. Run the validation owned by each edit group.

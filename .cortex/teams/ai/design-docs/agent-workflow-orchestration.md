@@ -53,14 +53,9 @@ Runtime inputs have bounded authority:
 
 ### Hierarchy semantics
 
-The active harness owns native subagent hierarchy.
-
-- Every delegated task declares parent lineage.
-- Every task declares a hierarchy depth bound.
-- A child may delegate only inside its assigned task and ownership scope.
-- Descendants inherit the exact baseline and delivery owner.
-- The harness owns communication, scheduling, retries, cancellation, barriers,
-  nested delegation, and synthesis.
+Native hierarchy follows the root
+[team worker contract](../../../AGENTS.md#team-worker-contract) and
+[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
 A compiled Loom graph still declares its own fixed hierarchy.
 That hierarchy is an optional separate workflow.
@@ -70,12 +65,12 @@ task contract and ownership rules.
 ### Local feature-development boundary
 
 Feature planning uses the
-[module-oriented development workflow](../workflows/module-oriented-development.md).
+[module-oriented development workflow](../../../gizmo/workflows/module-oriented-development.md).
 
 - The feature dependency DAG controls readiness.
 - The agent hierarchy records semantic parentage.
 - Dependency chains do not increase hierarchy depth.
-- Named profiles come from the
+- Named semantic roles come from the
   [module expert registry](../architecture/module-experts.md).
 - `internal_api_expert` owns changed inter-module and WASM consumer contracts.
 - Expert catalog paths route knowledge and do not grant write authority.
@@ -101,7 +96,7 @@ It defines:
 Markdown does not schedule workers.
 
 The canonical decision contract is
-[subagent-delegation.md](../workflows/subagent-delegation.md).
+[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
 ### Loom static workflow module
 
@@ -149,20 +144,9 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 The active Codex, Cursor, or other capable harness is the primary worker
 adapter.
 
-It owns:
-
-- native subagent creation and communication;
-- dependency-ready scheduling and barriers;
-- retry and cancellation behavior;
-- nested delegation within declared depth and ownership bounds;
-- child-result synthesis;
-- context transfer to downstream tasks.
-
-Nook does not start another Codex or Cursor process to coordinate those native
-subagents.
-
-Project role TOMLs remain thin routing instructions.
-They do not grant filesystem capability or delivery ownership.
+Its universal responsibilities are defined by the root worker contract and
+subagent delegation workflow. This architecture adds one boundary: Nook does
+not start another Codex or Cursor process to coordinate native subagents.
 
 The existing Loom Codex SDK adapter remains available for reviewed static
 read-only workflows.
@@ -261,7 +245,8 @@ The parallel wave contains these tasks:
     same join before synthesis.
 - **Mutation boundary:** The workflow edits no repository file and mutates no
   GitHub or Workbench state.
-  - The delivery owner reviews the report and authors any later correction.
+  - Gizmo reviews the report and assigns any later correction to the
+    responsible team subagent.
 
 ## Reviewed catalog growth
 

@@ -13,7 +13,6 @@ export type StructuralExpertProfile = {
     | WorkflowResultKind.CodeRefactoringEvidence
     | WorkflowResultKind.CortexRefactoringEvidence
     | WorkflowResultKind.SystemCoherenceSynthesis;
-  readonly agentDefinitionPath: string;
   readonly skillPath: string;
   readonly requiredContextPaths: readonly string[];
   readonly allowedEvidenceFiles: readonly string[];
@@ -36,7 +35,7 @@ const COMMON_CONTEXT = [
   '.cortex/knowledge-graph.md',
   '.cortex/teams/ai/architecture/refactoring-experts.md',
   '.cortex/teams/ai/workflows/structural-refactoring.md',
-  '.cortex/teams/ai/workflows/subagent-delegation.md',
+  '.cortex/gizmo/workflows/subagent-delegation.md',
 ] as const;
 
 const CODE_REFACTORING_FILES = [
@@ -94,8 +93,6 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
       'Read-only evidence expert for architecture, design, code quality, stronger types, and tests in explicitly authorized code scopes.',
     kind: StructuralExpertKind.RepositoryEvidence,
     resultKind: WorkflowResultKind.CodeRefactoringEvidence,
-    agentDefinitionPath:
-      '.codex/agents/structural-experts/code_refactoring_expert.toml',
     skillPath: '.agents/skills/code-refactoring-expert/SKILL.md',
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CODE_REFACTORING_FILES,
@@ -118,8 +115,6 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
       'Read-only evidence expert for Cortex authority, conflicts, legacy content, complexity, and deterministic Loom extraction candidates.',
     kind: StructuralExpertKind.RepositoryEvidence,
     resultKind: WorkflowResultKind.CortexRefactoringEvidence,
-    agentDefinitionPath:
-      '.codex/agents/structural-experts/cortex_refactoring_expert.toml',
     skillPath: '.agents/skills/cortex-refactoring-expert/SKILL.md',
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CORTEX_REFACTORING_FILES,
@@ -134,8 +129,6 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
       'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
-    agentDefinitionPath:
-      '.codex/agents/structural-experts/system_coherence_synthesizer.toml',
     skillPath: '.agents/skills/system-coherence-synthesizer/SKILL.md',
     requiredContextPaths: [],
     allowedEvidenceFiles: [],

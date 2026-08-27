@@ -11,6 +11,9 @@ import type {
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
+import { validatedModuleExpertContextPaths } from './context-selection.ts';
+import type { ModuleExpertContextSelection } from './context-selection.ts';
+import type { ModuleExpertTaskContextPath } from './catalog.ts';
 
 const MAX_REQUEST_BYTES = 65_536;
 const MAX_INSTRUCTION_LENGTH = 16_384;
@@ -24,12 +27,32 @@ export type ModuleExpertInvocationRequest = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly instruction: string;
+  readonly selectedContextPaths?: readonly ModuleExpertTaskContextPath[];
+};
+
+export type ValidatedModuleExpertInvocationRequest = Omit<
+  ModuleExpertInvocationRequest,
+  'selectedContextPaths'
+> & {
+  readonly selectedContextPaths: readonly ModuleExpertTaskContextPath[];
 };
 
 type ModuleExpertRequestProperty = {
   readonly record: UntrustedYamlMap;
   readonly key: string;
 };
+
+enum OptionalStringListPresence {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type OptionalStringList =
+  | { readonly presence: OptionalStringListPresence.Absent }
+  | {
+      readonly presence: OptionalStringListPresence.Present;
+      readonly value: readonly string[];
+    };
 
 type ParentLineageValidation = {
   readonly task: string;
@@ -41,7 +64,7 @@ type ParentLineageValidation = {
 
 export function decodeModuleExpertInvocationRequest(
   serialized: string,
-): ModuleExpertInvocationRequest {
+): ValidatedModuleExpertInvocationRequest {
   if (Buffer.byteLength(serialized, 'utf8') > MAX_REQUEST_BYTES) {
     invalidRequest();
   }
@@ -52,7 +75,7 @@ export function decodeModuleExpertInvocationRequest(
     invalidRequest();
   }
   if (!isRecord(node)) invalidRequest();
-  const expectedKeys = [
+  const requiredKeys = [
     'attempt',
     'depth',
     'expert',
@@ -63,7 +86,11 @@ export function decodeModuleExpertInvocationRequest(
     'task',
   ];
   const actualKeys = Object.keys(node).sort();
-  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+  const allowedKeys = [...requiredKeys, 'selectedContextPaths'];
+  if (
+    requiredKeys.some((key) => !actualKeys.includes(key)) ||
+    actualKeys.some((key) => !allowedKeys.includes(key))
+  ) {
     invalidRequest();
   }
   const runIdProperty: ModuleExpertRequestProperty = {
@@ -98,6 +125,10 @@ export function decodeModuleExpertInvocationRequest(
     record: node,
     key: 'parent',
   };
+  const selectedContextPathsProperty: ModuleExpertRequestProperty = {
+    record: node,
+    key: 'selectedContextPaths',
+  };
   const runId = requiredString(runIdProperty);
   const expert = requiredString(expertProperty);
   const sourceCommit = requiredString(sourceCommitProperty);
@@ -106,6 +137,23 @@ export function decodeModuleExpertInvocationRequest(
   const attempt = requiredNumber(attemptProperty);
   const depth = requiredNumber(depthProperty);
   const parent = requiredParent(parentProperty);
+  const selectedContextPathSelection = optionalStringList(
+    selectedContextPathsProperty,
+  );
+  const selectedContextPathValues =
+    selectedContextPathSelection.presence === OptionalStringListPresence.Absent
+      ? []
+      : selectedContextPathSelection.value;
+  const contextSelection: ModuleExpertContextSelection = {
+    expertName: expert,
+    selectedContextPaths: selectedContextPathValues,
+  };
+  let selectedContextPaths: readonly ModuleExpertTaskContextPath[];
+  try {
+    selectedContextPaths = validatedModuleExpertContextPaths(contextSelection);
+  } catch {
+    invalidRequest();
+  }
   const lineageValidation: ParentLineageValidation = {
     task,
     expert,
@@ -134,12 +182,13 @@ export function decodeModuleExpertInvocationRequest(
     depth,
     parent,
     instruction,
+    selectedContextPaths,
   };
 }
 
 export function validatedModuleExpertInvocationRequest(
   request: ModuleExpertInvocationRequest,
-): ModuleExpertInvocationRequest {
+): ValidatedModuleExpertInvocationRequest {
   let serialized: string;
   try {
     const encoded = JSON.stringify(request);
@@ -179,6 +228,30 @@ function requiredNumber(property: ModuleExpertRequestProperty): number {
     invalidRequest();
   }
   return value.value;
+}
+
+function optionalStringList(
+  property: ModuleExpertRequestProperty,
+): OptionalStringList {
+  const propertyArgs: UntrustedYamlPropertyArgs = {
+    record: property.record,
+    key: property.key,
+  };
+  const value = untrustedYamlProperty(propertyArgs);
+  if (
+    value.presence !== UntrustedYamlPropertyPresence.Absent &&
+    (!Array.isArray(value.value) ||
+      value.value.some((entry) => typeof entry !== 'string'))
+  ) {
+    invalidRequest();
+  }
+  if (value.presence === UntrustedYamlPropertyPresence.Absent) {
+    return { presence: OptionalStringListPresence.Absent };
+  }
+  return {
+    presence: OptionalStringListPresence.Present,
+    value: value.value as readonly string[],
+  };
 }
 
 function requiredParent(

@@ -6,11 +6,14 @@ Use this workflow when the user explains a codebase-specific mistake, invariant,
 or refactor pattern that should become durable agent knowledge.
 
 Nook's canonical repository-local skill cards live in `dynamic-skills/`
-directories under common Cortex or one engineering team.
+directories under Gizmo, shared Cortex, or one engineering team.
 
+- Delivery-control cards live under `.cortex/gizmo/dynamic-skills/`.
 - Shared ownerless repository-wide cards live under
   `.cortex/shared/dynamic-skills/`.
+- AI cards live under `.cortex/teams/ai/dynamic-skills/`.
 - Development-core cards live under `.cortex/teams/dev-core/dynamic-skills/`.
+- Security cards live under `.cortex/teams/security/dynamic-skills/`.
 - SRE cards live under `.cortex/teams/sre/dynamic-skills/`.
 - Web-development cards live under `.cortex/teams/web-dev/dynamic-skills/`.
 
@@ -66,7 +69,7 @@ For a new card scaffold, prefer Loom:
 ```yaml
 skillScaffold:
   skillSlug: example-skill
-  skillOwner: ai # or shared, dev-core, security, sre, or web-dev
+  skillOwner: gizmo # or ai, shared, dev-core, security, sre, or web-dev
   createExecutableWrappers: false
 ```
 

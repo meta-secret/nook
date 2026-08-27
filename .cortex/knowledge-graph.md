@@ -7,9 +7,17 @@ graph.
 
 - [Agent routing contract](AGENTS.md) defines the mandatory loading boundary.
 
+## Gizmo route
+
+Choose Gizmo for mission planning, delegation, integration, review
+coordination, Workbench, pull requests, readiness, and merge state.
+
+- [Gizmo](gizmo/knowledge-graph.md) owns delivery control and the final
+  integrated PR verdict.
+
 ## Team routes
 
-Choose the team that owns the requested functionality.
+Gizmo chooses the team agent that owns the requested functionality.
 
 - [AI](teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills, agent
   workflows, expert routing, and AI automation.
@@ -34,18 +42,20 @@ authority.
 
 ## Routing rules
 
-1. Select one primary team before opening another graph.
-2. Load that team's `AGENTS.md` and knowledge graph.
+1. Gizmo keeps delivery-control work in its own context. For functional work,
+   Gizmo chooses one primary team agent.
+2. The assigned worker loads only its own context's `AGENTS.md` and knowledge
+   graph.
 3. Open only documents needed for the assigned functionality.
 4. Load a shared document only for a named cross-team dependency.
 5. Do not open another team's graph for background context.
-6. Return foreign-team requirements to the delivery owner.
+6. Return foreign-team requirements to Gizmo.
 7. Load a foreign-team skill read-only when the selected team's task-relevant
    authority names it as required engineering policy.
-8. Require an expertise contract only when the foreign team will implement a
-   bounded unit.
+8. Require an expertise contract only when the foreign team will change files.
 9. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
-For a multi-team request, the delivery owner performs this procedure once per
-bounded team unit. Each team agent receives only its own context.
+For a multi-team request, Gizmo loads only its own graph. Gizmo creates one
+task for each required team subagent. Each team subagent receives only its own
+team context.

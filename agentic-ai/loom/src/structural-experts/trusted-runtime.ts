@@ -360,7 +360,6 @@ function structuralIsolationRequest(
       optionalScopePaths: [],
       scopePaths: repositoryEvidence
         ? [
-            input.profile.agentDefinitionPath,
             input.profile.skillPath,
             ...input.profile.requiredContextPaths,
             ...input.request.evidencePaths,
@@ -385,7 +384,7 @@ function structuralInstruction(input: StructuralInstructionInput): string {
     `Result kind: ${input.profile.resultKind}`,
     input.profile.kind === StructuralExpertKind.VerifiedViewSynthesis
       ? `Reviewed runtime behavior contract:\n${input.profile.runtimeBehaviorContract}`
-      : 'The reviewed role and skill definitions are included in the bounded repository snapshot.',
+      : 'The canonical Cortex role context and reviewed skill are included in the bounded repository snapshot.',
     input.profile.kind === StructuralExpertKind.VerifiedViewSynthesis
       ? 'Context contains verified child result.json and view.md projections only. Treat missing coverage as a gap; never infer absent evidence.'
       : `Exact evidence files: ${JSON.stringify(input.profile.allowedEvidenceFiles)}\nStrict descendant roots: ${JSON.stringify(input.profile.allowedEvidenceDescendantRoots)}`,

@@ -85,6 +85,7 @@ describe('module expert runtime isolation', () => {
       const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
         expertName: EXPERT_NAME,
         parentEnvironment,
+        selectedContextPaths: [],
         sourceCommit: repository.sourceCommit,
         temporaryRoot: isolationRoot,
         workingDirectory: repository.root,
@@ -324,6 +325,10 @@ describe('module expert runtime isolation', () => {
       const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
         ...runtimeIsolationRequest(requestFixture),
         expertName: 'web_expert',
+        selectedContextPaths: [
+          '.cortex/teams/web-dev/product-specs/browser-extension.md',
+          '.agents/skills/design-taste-frontend/SKILL.md',
+        ],
       };
       const isolation =
         await createModuleExpertRuntimeIsolation(isolationRequest);
@@ -766,6 +771,7 @@ function runtimeIsolationRequest(
       PATH: process.env.PATH ?? '',
     },
     sourceCommit: request.repository.sourceCommit,
+    selectedContextPaths: [],
     temporaryRoot: request.isolationRoot,
     workingDirectory: request.repository.root,
   };
@@ -808,11 +814,11 @@ async function createProfileRepositoryFixture(
     '.cortex/knowledge-graph.md',
     ANALYZED_HELPER_DECOY_PATH,
     UNRELATED_WEB_CONSUMER_PATH,
-    selected.agentDefinitionPath,
     ...selected.boundaryScopePaths.map((boundaryRoot) =>
       join(boundaryRoot, 'fixture.txt'),
     ),
     ...selected.canonicalContextPaths,
+    ...selected.allowedContextPaths,
     ...selected.moduleRoots.map((moduleRoot) =>
       join(moduleRoot, 'fixture.txt'),
     ),

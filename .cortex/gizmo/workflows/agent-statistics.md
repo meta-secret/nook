@@ -1,9 +1,14 @@
-# AI Agent PR Statistics
+# Agent PR Statistics
 
 ## Overview
 
-Every task-owning AI agent must measure the work required to land each normal
-pull request.
+The statistics contract has explicit owners:
+
+- **Gizmo:** Measures normal pull-request delivery. It owns the lifecycle,
+  publication, and performance follow-up.
+- **AI team:** Owns the Loom tooling, schema, and analysis implementation.
+- **Responsible teams:** Return scoped execution evidence through implementation
+  handoffs.
 
 The record is repository evidence for slow builds, avoidable validation loops,
 and waste in the agent workflow.
@@ -12,14 +17,15 @@ It is not a free-form task diary.
 
 ## Lifecycle
 
-1. Start an out-of-tree scratch event log when PR-bound work begins.
-2. Append every local lightweight execution, focused remote run, complete
+1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
+2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Squash-merge the implementation PR through the normal readiness workflow.
-4. Assemble `stats/ai-agent/<pr-number>.yaml` with Loom immediately after merge.
-5. Compare with one or two recent comparable records.
-6. Publish the YAML to Workbench `main` with Loom.
-7. Open a separate build-performance PR when waste or regression is actionable.
+3. Gizmo squash-merges the implementation PR through the readiness workflow.
+4. Gizmo assembles `stats/ai-agent/<pr-number>.yaml` with Loom after merge.
+5. Gizmo compares the record with one or two recent comparable records.
+6. Gizmo publishes the YAML to Workbench `main` with Loom.
+7. Gizmo opens a separate build-performance PR when waste or regression is
+   actionable.
 
 ## Mechanical entrypoint — Loom
 
@@ -71,10 +77,11 @@ task loom:agent-stats CONFIG=path/to/agent-owned/assemble-request.yaml
 - **Validate and publish:** use `agentStats.validate` or `agentStats.publish`
   with `statsFile: "{agentTempDir}/123.yaml"`.
 - **Examples:** copy `exampleYaml` from `task loom:tools-list`.
-- **Protocol:** [Loom tools](../references/loom-tools.md).
-- **Loom owns:** PR metadata, paginated Actions and Codex review history,
-  per-head delivery evidence, optional test inventory, and summary derivations.
-- **The agent owns:** comparison quality and waste-assessment text in the
+- **Protocol:** [Loom tools](../../teams/ai/references/loom-tools.md).
+- **AI-owned Loom tooling provides:** PR metadata, paginated Actions and Codex
+  review history, per-head delivery evidence, optional test inventory, and
+  summary derivations.
+- **Gizmo owns:** comparison quality and waste-assessment text in the
   scratch log before assembly.
 
 ## What to measure
@@ -182,13 +189,16 @@ reruns, premature merge attempts, and unexpected `direct_compile` use.
 If waste is actionable, `waste_assessment.required_actions` must name the
 concrete change.
 
-Open a separate normal PR for that change.
+Gizmo opens a separate normal PR for that change. It routes implementation to
+the responsible team.
 
 ## Workbench publication contract
 
-Filename must be `stats/ai-agent/<source-pr-number>.yaml`.
+Publication requires:
 
-The source Nook PR must already be merged.
+- Gizmo owns and performs the procedure.
+- The filename is `stats/ai-agent/<source-pr-number>.yaml`.
+- The source Nook PR is already merged.
 
 Before publishing:
 

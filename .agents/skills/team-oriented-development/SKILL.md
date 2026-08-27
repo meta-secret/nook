@@ -10,18 +10,18 @@ description: >-
 
 Read and follow:
 
-- [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/team-oriented-development.md);
-- [engineering team ownership](../../../.cortex/teams/ai/architecture/team-ownership.md);
-- [the team development workflow](../../../.cortex/teams/ai/workflows/team-oriented-development.md); and
+- [the universal worker contract](../../../.cortex/AGENTS.md#team-worker-contract);
+- [the canonical skill](../../../.cortex/gizmo/dynamic-skills/team-oriented-development.md);
+- [engineering team ownership](../../../.cortex/gizmo/architecture/team-ownership.md);
+- [the team development workflow](../../../.cortex/gizmo/workflows/team-oriented-development.md); and
+- [subagent delegation](../../../.cortex/gizmo/workflows/subagent-delegation.md); and
 - the selected team's `AGENTS.md` and knowledge graph.
 
-Classify functional ownership before assigning files.
-Name an expertise provider when another team should implement a bounded unit.
-Allow a functional owner to consume a specifically linked foreign-team skill
-as read-only policy without delegating implementation.
-Keep each team agent inside one declared task scope.
-Route cross-team dependencies through the delivery owner.
-Require each team to own implementation, tests, Cortex updates, review fixes,
-and validation fixes for its bounded unit.
-Keep consumer capability semantics and Cortex with the functional owner.
-Keep shared files and lifecycle state in the parent-owned join.
+This wrapper adds no worker type, native label, model rule, or lifecycle rule.
+The active harness owns native worker creation, labels or names, model
+inheritance or selection, scheduling, communication, retries, cancellation,
+and barriers.
+
+Select one semantic team identity through Cortex. Keep capability semantics
+with the functional owner. Use an expertise provider only for an explicit
+foreign-team write scope.

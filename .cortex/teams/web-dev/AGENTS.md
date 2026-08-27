@@ -17,7 +17,7 @@ also owns browser presentation and frontend interaction behavior.
 
 Load a development-core specification only when an explicit typed consumer
 contract requires it. Treat that authority as read-only and return provider
-changes to the delivery owner.
+changes to Gizmo.
 
 For an expertise request, load the named consumer contract as read-only. Do not
 load the consumer team's complete graph.
@@ -26,8 +26,8 @@ load the consumer team's complete graph.
 
 - Svelte and TypeScript presentation packages.
 - General TypeScript modeling, API, state, and refactoring practices.
-- Bounded TypeScript implementation units delegated by AI, SRE, or development
-  core.
+- TypeScript files assigned by AI, SRE, or development core through an
+  expertise contract.
 - Browser application and extension user journeys.
 - Frontend state, accessibility, responsive behavior, motion, and visual
   hierarchy.

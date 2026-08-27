@@ -12,7 +12,7 @@ Read and follow:
 
 - [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/internal-api-expert.md);
 - [the internal API registry entry](../../../.cortex/teams/ai/architecture/module-experts.md#internal-api-expert);
-- [the module-oriented workflow](../../../.cortex/teams/ai/workflows/module-oriented-development.md).
+- [the module-oriented workflow](../../../.cortex/gizmo/workflows/module-oriented-development.md).
 
 Return a bounded provider-consumer contract brief.
 Do not implement, delegate, schedule work, or mutate lifecycle state while

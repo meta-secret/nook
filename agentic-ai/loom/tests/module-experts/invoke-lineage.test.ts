@@ -690,6 +690,7 @@ async function createDepthThreeLineage(
   const intermediateRequest: ModuleExpertInvocationRequest = {
     runId: args.request.runId,
     expert: immediate.agent,
+    selectedContextPaths: [],
     sourceCommit: args.request.sourceCommit,
     task: immediate.task,
     attempt: immediate.attempt,
@@ -766,6 +767,7 @@ function directRequest(runId: string): ModuleExpertInvocationRequest {
   return {
     runId,
     expert: 'core_expert',
+    selectedContextPaths: [],
     sourceCommit: SOURCE_COMMIT,
     task: 'inspect-core-contract',
     attempt: 1,

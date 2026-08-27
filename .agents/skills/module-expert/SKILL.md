@@ -10,23 +10,25 @@ description: >-
 
 Read and follow:
 
+- [the universal worker contract](../../../.cortex/AGENTS.md#team-worker-contract);
 - [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/module-expert.md);
 - [the module expert registry](../../../.cortex/teams/ai/architecture/module-experts.md);
-- [the module-oriented workflow](../../../.cortex/teams/ai/workflows/module-oriented-development.md).
+- [the module-oriented workflow](../../../.cortex/gizmo/workflows/module-oriented-development.md); and
+- [subagent delegation](../../../.cortex/gizmo/workflows/subagent-delegation.md).
 
-Resolve one named profile before exploring its source.
-Load only that profile's authorities and task-relevant skills.
+Resolve one stable semantic role before exploring its source.
+Load only the task-selected authorities and skills allowed by that role's
+Cortex contract.
 
-Every module expert profile remains read-only. When the delivery plan assigns
-write-capable module work, a separate implementation worker receives the
-isolated workspace and explicit path scope.
+Every module expert remains read-only. Write-capable module work belongs to a
+separate implementation task.
 
-Use the active Codex, Cursor, or other capable harness to create and coordinate
-the expert. The harness owns communication, scheduling, retries, cancellation,
-nested delegation, and synthesis.
+The active harness owns native worker creation, labels or names, model
+inheritance or selection, scheduling, communication, retries, cancellation,
+and barriers.
 
-The profile routes domain knowledge. It does not grant filesystem capability,
-write ownership, successor scheduling, or lifecycle authority.
+This wrapper adds no native label, model rule, capability grant, write
+ownership, successor scheduling, or lifecycle authority.
 
 Optional Loom journals and Markdown views may support human inspection. They
 must not gate expert dispatch, continuation, retry, join, or completion.

@@ -923,6 +923,6 @@ and exclusive intent creation prevents retries from refreshing its deadline.
   [`.github/workflows/hive.yml`](../../../../.github/workflows/hive.yml)
 - **Main coalescing and delivery:**
   [`.github/workflows/main.yml`](../../../../.github/workflows/main.yml)
-- **Workbench issue contract:** [`workflows/issues.md`](../../ai/workflows/issues.md)
+- **Workbench issue contract:** [issues](../../../gizmo/workflows/issues.md)
 - **Pull-request ownership contract:**
-  [`workflows/pull-requests.md`](../../ai/workflows/pull-requests.md)
+  [pull requests](../../../gizmo/workflows/pull-requests.md)

@@ -9,9 +9,9 @@ It does not schedule work.
 It does not replace package responsibilities in
 [packages.md](../../../shared/architecture/packages.md).
 
-The active Codex, Cursor, or other capable harness owns expert scheduling and
-communication.
-The delivery owner owns integration and lifecycle state.
+Universal worker behavior follows the root
+[team worker contract](../../../AGENTS.md#team-worker-contract) and
+[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
 ## Engineering team routing
 
@@ -30,7 +30,7 @@ The expert must not expand into another team's implementation scope.
 
 ## Registry contract
 
-Each profile names:
+Each named role contract defines:
 
 - production module roots;
 - cross-module boundary scope when the role owns boundary analysis;
@@ -47,7 +47,8 @@ Each profile names:
 
 The executable catalog lives in
 `agentic-ai/loom/src/module-experts/catalog.ts`.
-Project role files live under `.codex/agents/module-experts/`.
+This Cortex registry is the semantic authority for role capability and context.
+The typed catalog is a deterministic implementation mirror.
 
 Every successful native-harness role completion returns equivalent semantic
 evidence fields. Optional compiled Loom runs use the dedicated
@@ -71,44 +72,30 @@ The lists are bounded, unique, and free of control characters.
 `parentActions` is evidence for the delivery owner.
 It does not grant scheduling or mutation authority.
 
-Every invocation uses a declared task contract.
-The contract binds:
+Every invocation follows the universal worker contract.
+This registry adds:
 
-- task and expert identity;
-- exact source commit;
-- parent lineage and hierarchy depth bound;
-- evidence or write scope;
-- dependencies and resource claims;
-- acceptance evidence;
-- parent-owned join.
+- one stable semantic expert role;
+- a bounded read-only evidence surface;
+- task-selected authority and skill context;
+- module resource claims; and
+- role-specific acceptance evidence.
 
-The active harness owns native expert creation, communication, scheduling,
-retries, cancellation, barriers, nested delegation, and synthesis. Native
-semantic evidence, optional `ModuleExpertEvidence`, and `parentActions` remain
-recommendations.
-They do not authorize descendants, writes, integration, or lifecycle changes.
+Native semantic evidence, optional `ModuleExpertEvidence`, and `parentActions`
+remain recommendations. They do not authorize descendants, writes,
+integration, or lifecycle changes.
 
-Role definitions preserve two structural rules:
+Role contracts preserve two structural rules:
 
 - Every role is read-only.
-- Role files contain thin routing instructions instead of copied domain facts.
+- Every role loads only the context named by this registry and its bounded task
+  contract.
 
-The role TOML is an identity and behavioral default.
-It routes the harness to the relevant domain context.
-It does not grant filesystem capability or delivery ownership.
+The stable role name identifies semantic expertise.
+It is not a native worker label or harness configuration key.
 
-Read-only experts receive a bounded evidence surface from the exact source
-commit.
-Write-capable module tasks are separate implementation assignments.
-They require:
-
-- an isolated disposable worktree or workspace;
-- an explicit allowed-path scope;
-- a fresh workspace for every retry;
-- a commit whose ancestry begins at the declared baseline;
-- verification that the commit changed only allowed paths;
-- task-specific tests and acceptance evidence;
-- deterministic parent-owned integration.
+Write-capable module tasks are separate implementation assignments governed by
+subagent delegation.
 
 Loom may still run reviewed read-only static workflows.
 Its JSONL streams, result files, and Markdown views are optional human or audit
@@ -228,36 +215,48 @@ It identifies:
 - **Dependencies:** Published Rust/WASM contracts and shared web components.
 - **Consumers:** Browser users, extension contexts, and hosted test harnesses.
 - **Entry points:** Each production package's `package.json`.
-- **Skills:** The profile receives one exact fixed bundle.
-  - `module-expert` owns read-only module analysis.
-  - `design-taste-frontend` owns production Svelte interface guidance.
-  - `browser-extension-release-security` owns extension release boundaries.
-- **Skill routing:** Every `web_expert` invocation receives the full bundle.
-  The catalog audit rejects missing, reordered, or additional skill paths.
+- **Allowed skill catalog:** The task selects the smallest applicable set.
+  - `module-expert` is always required for module analysis.
+  - `design-taste-frontend` is required for user-visible Svelte or interaction
+    work.
+  - `browser-extension-release-security` is required when hosted extension
+    origins, identity, archives, redirects, injection exclusions, isolated
+    browser profiles, or release artifacts are in scope.
+- **Skill routing:** The role rejects skills outside the allowed catalog.
+  It also rejects a task that omits an applicable required skill.
+- **Selection field:** `selectedContextPaths` carries optional product
+  authorities, release authorities, and task-applicable skill paths.
+  - An empty selection represents ordinary module analysis.
+  - Selecting a product authority requires `design-taste-frontend`.
+  - Selecting a release authority requires
+    `browser-extension-release-security` and its canonical security authority.
+  - The role rejects duplicate, reordered, unknown, or incomplete selections.
 - **Skill authority:** `design-taste-frontend` is complete in its executable
-  skill card. `browser-extension-release-security` routes to a canonical
-  Cortex authority. The exact-commit snapshot contains both the executable
-  cards and that linked authority.
-- **Canonical skill context:** The fixed profile adds these exact authorities.
-  - `.cortex/AGENTS.md`
-  - `.cortex/teams/security/dynamic-skills/browser-extension-release-security.md`
+  skill card. `browser-extension-release-security` routes to its canonical
+  security authority. The task-selected snapshot includes that authority when
+  the security skill is required.
+- **Base context:** Every invocation receives these authorities.
+  - `.cortex/teams/web-dev/AGENTS.md`
+  - `.cortex/teams/web-dev/knowledge-graph.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
-  - `.cortex/teams/ai/workflows/module-oriented-development.md`
-- **Product specification scope:** The profile receives every exact
-  user-facing product authority that can own production web work.
-  - `authenticator-items.md`
-  - `browser-extension.md`
-  - `credit-card-items.md`
-  - `decentralized-auth.md`
-  - `devices-and-access.md`
-  - `file-attachments.md`
-  - `password-envelope.md`
-  - `password-manager.md`
-  - `secure-notes.md`
-  - `slip39-recovery.md`
-  - `vault-app-isolation.md`
-- **Extension release authority:** The profile receives only the exact
-  release-critical paths required by its extension security skill.
+  - `.cortex/gizmo/workflows/module-oriented-development.md`
+  - `.agents/skills/module-expert/SKILL.md`
+- **Allowed product authority catalog:** The task selects only the authorities
+  that own its assigned functionality.
+  - `.cortex/teams/dev-core/product-specs/authenticator-items.md`
+  - `.cortex/teams/web-dev/product-specs/browser-extension.md`
+  - `.cortex/teams/dev-core/product-specs/credit-card-items.md`
+  - `.cortex/teams/dev-core/product-specs/decentralized-auth.md`
+  - `.cortex/teams/dev-core/product-specs/devices-and-access.md`
+  - `.cortex/teams/dev-core/product-specs/file-attachments.md`
+  - `.cortex/teams/dev-core/product-specs/password-envelope.md`
+  - `.cortex/teams/dev-core/product-specs/password-manager.md`
+  - `.cortex/teams/dev-core/product-specs/secure-notes.md`
+  - `.cortex/teams/dev-core/product-specs/slip39-recovery.md`
+  - `.cortex/teams/web-dev/product-specs/vault-app-isolation.md`
+- **Extension release authority:** When extension release security is
+  required, the task selects only the relevant release paths from this
+  catalog.
   - `.github/scripts/ci-release-verify-extension.sh`
   - `.github/workflows/main.yml`
   - `.github/workflows/pr.yml`
@@ -265,11 +264,14 @@ It identifies:
   - `.task/ci-workflows.yml`
   - `Taskfile.yml`
   - `nook-app/ci/Taskfile.yml`
+- **Security routing:** A task cannot omit
+  `browser-extension-release-security` or its canonical security authority when
+  an extension release boundary is in scope.
 - **Validation:** `web:check`, `web:test`, and `extension:check`.
 - **Negative space:** `nook-web-research`, generated-binding adaptation,
   monorepo setup policy, unrelated product records, and unrelated CI files.
 
-Split this grouped profile only when stable public interfaces and disjoint
+Split this grouped role only when stable public interfaces and disjoint
 resource claims make independent ownership useful.
 
 ## Excluded surfaces
@@ -291,11 +293,15 @@ task loom:module-experts:validate
 
 The audit rejects:
 
-- malformed role definitions and runtime routing drift;
+- malformed typed catalog entries or drift from this Cortex registry;
 - missing or duplicate production-module routes;
 - missing authority, skill, authored scope, or entry-point paths;
+- a `web_expert` skill outside its allowed catalog;
+- a missing task-required web or extension-security skill;
+- a `web_expert` product or release authority outside its allowed catalog;
+- unbounded web product or release context that the task does not require;
 - generated scope producer, selector, or marker drift;
 - production routing for `nook-web-research`;
-- any recursively discovered uncataloged or symlinked project role;
+- any uncataloged executable role;
 - a separate WASM or bridge role;
 - incomplete `internal_api_expert` scope.

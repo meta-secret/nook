@@ -220,9 +220,10 @@ ignored `.cortex/.session/` memory.
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
-The request requires `skillOwner` with one of `ai`, `shared`, `dev-core`, `sre`,
-or `web-dev`. Loom creates the canonical card in that owner's dynamic-skill
-directory and registers it in the AI skill catalog.
+The request requires `skillOwner` with one of `gizmo`, `ai`, `shared`,
+`dev-core`, `security`, `sre`, or `web-dev`. Loom creates the canonical card in
+that owner's dynamic-skill directory. It registers the card in the AI skill
+catalog. Security remains the owner for security policy and acceptance.
 
 ### agentStats (assemble / validate / publish)
 
@@ -233,7 +234,7 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
-[AI Agent PR Statistics](../workflows/agent-statistics.md#mechanical-entrypoint--loom).
+[Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
 ### prLand (status / validate / ready / mergeCheck)
 

@@ -10,6 +10,8 @@ const expertiseOwnershipUnit =
   '1. Capability: Workbench agent record validation; Functional owner: AI; Expertise provider: Web development; Expertise allowed code paths: .github/scripts/workbench-records.cjs; Expertise allowed test paths: .github/scripts/workbench-records.test.cjs; Expertise forbidden paths: .cortex/teams/ai,.cortex/shared; Expertise consumer interfaces: Plan input and validation result; Expertise acceptance evidence: Focused validator tests pass; Capability acceptance evidence: Published plans reject incomplete contracts'
 const securityOwnershipUnit =
   '1. Capability: Cryptographic architecture review; Functional owner: Security; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Security architecture evidence is current'
+const gizmoOwnershipUnit =
+  '1. Capability: Integrated pull request delivery; Functional owner: Gizmo; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integrated readiness evidence is complete'
 
 const validPlan = `# Task plan
 
@@ -239,6 +241,38 @@ test('accepts security as a functional owner', () => {
     securityOwnershipUnit,
   )
   assert.equal(validateAgentRecord(securityPlan, 'plan'), '')
+})
+
+test('accepts security as an expertise provider', () => {
+  const securityExpertiseUnit = expertiseOwnershipUnit.replace(
+    'Expertise provider: Web development',
+    'Expertise provider: Security',
+  )
+  const securityExpertisePlan = validPlan.replace(
+    baseOwnershipUnit,
+    securityExpertiseUnit,
+  )
+  assert.equal(validateAgentRecord(securityExpertisePlan, 'plan'), '')
+})
+
+test('accepts Gizmo as a functional owner', () => {
+  const gizmoPlan = validPlan.replace(baseOwnershipUnit, gizmoOwnershipUnit)
+  assert.equal(validateAgentRecord(gizmoPlan, 'plan'), '')
+})
+
+test('rejects Gizmo as an expertise provider', () => {
+  const gizmoExpertiseUnit = expertiseOwnershipUnit.replace(
+    'Expertise provider: Web development',
+    'Expertise provider: Gizmo',
+  )
+  const gizmoExpertisePlan = validPlan.replace(
+    baseOwnershipUnit,
+    gizmoExpertiseUnit,
+  )
+  assert.match(
+    validateAgentRecord(gizmoExpertisePlan, 'plan'),
+    /ownership units must be consecutive and match the required contract shape/,
+  )
 })
 
 test('rejects an expertise provider without a complete contract', () => {

@@ -16,7 +16,8 @@ Duplicated per-agent prompts then become stale copies of architecture rules.
 
 Resolve the module in
 [the expert registry](../architecture/module-experts.md).
-Load only its listed authorities and relevant source at the exact baseline.
+Load only the task-selected authorities and skills allowed by that role.
+Inspect only the relevant source at the exact baseline.
 
 Analyze in this order:
 
@@ -28,7 +29,7 @@ Analyze in this order:
 6. Report the smallest provider change and parent actions.
 
 Keep knowledge routing separate from write authorization. Invoke the registered
-profile through the active harness as a read-only role. A separate
+semantic role through the active harness as read-only. A separate
 implementation worker may consume that evidence in a fresh isolated workspace
 at the exact accepted baseline. The parent verifies its commit handoff before
 integration.
@@ -59,13 +60,14 @@ Do not use this skill to:
 ## Application procedure
 
 1. Read `.cortex/knowledge-graph.md` and the assigned team's knowledge graph.
-2. Resolve one profile in `architecture/module-experts.md`.
-3. Verify the profile against the exact source commit.
-4. Return findings directly through the harness.
-5. Let a separately authorized implementation worker apply accepted findings.
-6. Let the delivery parent verify acceptance and decide continuation.
+2. Resolve one role contract in `architecture/module-experts.md`.
+3. Select the smallest allowed authority and skill context for the task.
+4. Verify the role contract and selection against the exact source commit.
+5. Return findings directly through the harness.
+6. Let a separately authorized implementation worker apply accepted findings.
+7. Let the delivery parent verify acceptance and decide continuation.
 
 ## Validation
 
 Run `task loom:module-experts:validate` after registry or role changes.
-Run the profile's focused validation selectors for product changes.
+Run the role's focused validation selectors for product changes.

@@ -71,23 +71,26 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
 - **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done).
-- See [workflows/pull-requests.md § Task completion report](../../../teams/ai/workflows/pull-requests.md#10-task-completion-report).
+- See [pull request task completion](../../../gizmo/workflows/pull-requests.md#10-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
 
-- **Every implementation task** follows [workflows/coding-bro.md](../../../teams/ai/workflows/coding-bro.md).
+- **Every implementation mission** follows
+  [mission delivery](../../../gizmo/workflows/mission-delivery.md).
+- Responsible team agents own implementation and scoped fixes.
+- Gizmo owns delivery planning, team dispatch, integration, review coordination,
+  validation, readiness, and merge.
 - The delivery pipeline has these ordered steps:
-  1. Fetch the repository.
-  2. Branch from `origin/main`.
-  3. Implement the change.
-  4. Run Loom pre-push.
-  5. Commit and push or update the PR.
-  6. Run focused hosted execution.
-  7. Run final complete PR validation.
-  8. Fix failures, comments, and conflicts.
-  9. Run the exact-head readiness audit.
-  10. Complete the automatic agent-owned squash merge.
-- **Do not stop at push or readiness.** The agent owns the PR through squash merge unless concretely blocked.
+  1. Gizmo fetches the repository and plans from `origin/main`.
+  2. Gizmo dispatches implementation to the responsible team agent.
+  3. Gizmo integrates the verified implementation handoff.
+  4. Gizmo runs Loom pre-push and updates the PR.
+  5. Gizmo runs focused hosted execution and complete PR validation.
+  6. Gizmo dispatches failures, comments, and conflicts to responsible teams.
+  7. Gizmo integrates verified fixes and repeats exact-head validation.
+  8. Gizmo runs readiness and completes the squash merge.
+- **Do not stop at push or readiness.** Gizmo owns the PR through squash merge
+  unless concretely blocked.
 - **Question-only turns** (no code changes) skip the pipeline.
 
 ## 9. Unit Tests Own Domain Correctness; E2e Is Smoke Only

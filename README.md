@@ -412,25 +412,31 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 ## Development
 
-Engineering work is divided among four Cortex team domains:
+Delivery uses one Gizmo context and five Cortex engineering team domains:
+
+- [Gizmo](.cortex/gizmo/knowledge-graph.md) owns coordination, integration,
+  lifecycle state, and the final integrated PR verdict.
 
 - [AI](.cortex/teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills,
-  agent workflows, expert routing, and deterministic AI automation.
+  expert routing, self-improvement, and deterministic AI automation.
 
 - [Development core](.cortex/teams/dev-core/knowledge-graph.md) owns portable Rust,
   Rust/WASM domain contracts, security logic, and core product specifications.
+- [Security](.cortex/teams/security/knowledge-graph.md) owns security
+  architecture, cryptographic policy, trust boundaries, and security
+  acceptance.
 - [SRE](.cortex/teams/sre/knowledge-graph.md) owns CI/CD, runners, containers, k0s,
   Kubernetes, deployments, and provider operations.
 - [Web development](.cortex/teams/web-dev/knowledge-graph.md) owns browser apps,
   extension presentation, Svelte/TypeScript interaction behavior, browser
   evidence, and repository-wide TypeScript/Svelte engineering practices.
 
-The [root Cortex graph](.cortex/knowledge-graph.md) routes each request to one
-functional owner. That owner may request a bounded implementation unit from an
-expertise provider, such as web development implementing TypeScript for an
-AI-owned capability. Each worker loads only its own team graph and the explicit
-expertise contract. [Shared knowledge](.cortex/shared/knowledge-graph.md) is
-loaded only for a named cross-team dependency; it is not a fifth implementation
+The [root Cortex graph](.cortex/knowledge-graph.md) routes delivery control to
+Gizmo and implementation to one functional team owner. That owner may request
+a bounded unit from another implementation team as an expertise provider.
+Gizmo is never an expertise provider. Each worker loads only its own team graph
+and the explicit expertise contract. [Shared knowledge](.cortex/shared/knowledge-graph.md)
+is loaded only for a named cross-team dependency. It is not an implementation
 team.
 
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
@@ -453,9 +459,10 @@ bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
 
-Project-scoped module experts are named Codex roles backed by one typed registry
-and an isolated read-only Loom runtime. Direct native child spawning is not the
-capability boundary because it inherits the delivery session's permissions.
+Project-scoped module experts use stable semantic role names defined by the
+[Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
+worker behavior follows the [root Cortex contract](.cortex/AGENTS.md). The
+typed Loom catalog mirrors the roles for isolated read-only execution.
 Run **`task loom:module-experts:validate`** to verify complete production-module
 routing, runtime isolation, generated WASM binding contracts, the
 `internal_api_expert` boundary, and research exclusions. Loom journal creation
@@ -489,7 +496,7 @@ authority.
 Structural refactoring uses a separate read-only expert registry so overlapping
 maintenance scopes do not pretend to own production modules. Run
 **`task loom:structural-experts:validate`** to verify the exact code, Cortex,
-and synthesis profiles. Invoke one preauthorized role with
+and synthesis role contracts. Invoke one preauthorized role with
 **`task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json`**.
 `code_refactoring_expert` and `cortex_refactoring_expert` inspect only bounded
 exact-commit evidence. `system_coherence_synthesizer` receives only

@@ -416,6 +416,7 @@ function directExpertRequest(runId: string): ModuleExpertInvocationRequest {
   return {
     runId,
     expert: 'core_expert',
+    selectedContextPaths: [],
     sourceCommit: SOURCE_COMMIT,
     task: 'inspect-stream-failure',
     attempt: 1,

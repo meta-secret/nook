@@ -127,10 +127,13 @@ Hive is outside this workflow architecture.
 
 ## Module expert catalog
 
-Named read-only project agents live under `.codex/agents/module-experts/`.
+Named read-only semantic roles are defined in
+`.cortex/teams/ai/architecture/module-experts.md`.
 
-The typed catalog owns production module routes, boundary scope, canonical
+The typed catalog mirrors production module routes, boundary scope, canonical
 context, authorities, skills, entry points, and focused validation selectors.
+Universal worker behavior remains defined by `.cortex/AGENTS.md` and the
+subagent-delegation workflow.
 
 Validate the catalog from the repository root:
 
@@ -184,6 +187,25 @@ the ordinary Loom delegation journal before invoking the child.
 }
 ```
 
+Existing non-web requests may omit `selectedContextPaths`. Loom normalizes the
+omitted field to `[]`.
+
+`web_expert` accepts an empty selection for ordinary module analysis. Product
+authorities require the design skill. Release authorities require the
+extension-release skill and its canonical security authority. For example:
+
+```json
+{
+  "selectedContextPaths": [
+    ".cortex/teams/web-dev/product-specs/browser-extension.md",
+    ".github/workflows/release.yml",
+    ".agents/skills/design-taste-frontend/SKILL.md",
+    ".agents/skills/browser-extension-release-security/SKILL.md",
+    ".cortex/teams/security/dynamic-skills/browser-extension-release-security.md"
+  ]
+}
+```
+
 ```bash
 task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
 ```
@@ -195,12 +217,13 @@ from the Codex process environment, provider configuration, arguments, and
 disposable repository snapshot. The helper source is embedded in the running
 Loom module instead of loaded from the analyzed commit or live worktree.
 
-The command validates the complete catalog and selected TOML definition before
-starting one isolated Codex thread. The request accepts no runtime permissions,
-tools, model, successors, or graph. It must declare the run, attempt, depth, and
-parent agent-attempt lineage. Direct named experts run only at depth two or
-three; workflow-root, depth-one, self-parent, and invalid parent-attempt
-lineage are rejected before runtime. Loom replay-verifies the completed parent,
+The command validates the complete typed catalog and selected semantic role
+before starting one isolated Codex thread. The request accepts no runtime
+permissions, tools, model, successors, or graph. It must declare the run,
+attempt, depth, and parent agent-attempt lineage. Direct named experts run only
+at depth two or three. Workflow-root, depth-one, self-parent, and invalid
+parent-attempt lineage are rejected before runtime. Loom replay-verifies the
+completed parent,
 its source commit and projections, and the exact typed child authorization
 before creating the child journal. A depth-three child must also have a
 completed immediate parent named by the depth-one plan. Expert evidence and
@@ -221,7 +244,8 @@ view under
 `workflow/processing/delegated-agent-work/<runId>/agents/<task>/attempt-<n>/`.
 The JSON response contains the typed terminal and content-addressed processing
 references. Before returning them, Loom rereads all three projections, verifies
-their digests and exact identity, and replays the terminal stream. Runtime
+their digests and exact identity, and replays the terminal stream. The replayed
+invocation evidence binds the normalized `selectedContextPaths`. Runtime
 errors and invalid resolved completions produce a sanitized failed terminal and
 a Loom-authored failure view. The delivery owner remains responsible for
 aggregation, continuation, and lifecycle state.

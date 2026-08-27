@@ -539,7 +539,7 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
 }
 
 #[test]
-fn rust_dependency_updates_are_audited_and_fully_validated_by_the_ai_agent() -> anyhow::Result<()> {
+fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> anyhow::Result<()> {
     let root = repository_root();
     let workflow = read(&root, ".github/workflows/rust-dependency-updates.yml");
     for required in [

@@ -7,34 +7,27 @@ Use this workflow whenever a request touches one or more Nook engineering teams.
 Use [Engineering team ownership](../architecture/team-ownership.md) for the
 boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 
-## Plan the team work graph
+## Assign team subagents
 
-The delivery owner creates one immutable work graph before team execution.
+Gizmo writes the team assignments before implementation starts.
 
-1. Classify each capability unit under one functional owner: `ai`, `dev-core`,
-   `security`, `sre`, or `web-dev`.
-2. Name an expertise provider when another team should implement a bounded
-   slice.
-3. Declare shared integration and lifecycle work separately.
-4. Freeze provider-consumer and expertise contracts between teams.
-5. Give every team unit an exact baseline and bounded read/write scope.
-6. Give every unit explicit forbidden paths, tests, and acceptance evidence.
-7. Declare the all-terminal barrier and parent-owned integration join.
+1. Turn the request into concrete team tasks.
+2. Assign each task to exactly one semantic team identity.
+3. Name a second team when that team's expertise is required to change files.
+4. Keep shared integration and delivery actions as Gizmo tasks.
+5. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+6. Apply [subagent delegation](subagent-delegation.md) for operational worker
+   rules and integration.
 
-Team work units may run in parallel only when their write scopes are isolated and disjoint.
-Provider work completes before a dependent consumer starts.
+Team subagents may run in parallel only when they change different files.
+A dependent subagent waits for the provider subagent to finish.
 
 ## Dispatch team agents
 
-Use a team agent whenever delegation is available and the unit is independently bounded.
+Use a team subagent when the task has clear ownership, files, and proof.
 
-- A `dev-core` agent loads `.cortex/teams/dev-core/AGENTS.md` and its team knowledge graph.
-- An `sre` agent loads `.cortex/teams/sre/AGENTS.md` and its team knowledge graph.
-- A `web-dev` agent loads `.cortex/teams/web-dev/AGENTS.md` and its team knowledge graph.
-- A `security` agent loads `.cortex/teams/security/AGENTS.md` and its team
-  knowledge graph.
-- An `ai` agent loads `.cortex/teams/ai/AGENTS.md` and its team knowledge
-  graph.
+The root [context selection contract](../../AGENTS.md#mandatory-context-selection)
+maps each team identity to its entry points.
 
 These are entry points, not bulk context manifests.
 
@@ -47,25 +40,20 @@ These are entry points, not bulk context manifests.
   names that skill as required engineering policy.
 - Skill consumption alone does not create an expertise provider.
 
-Each team agent receives:
+This workflow adds team-specific context to the universal worker contract:
 
-- one team identity;
-- one functional-owner or expertise-provider role;
-- one exact commit;
-- allowed code and Cortex paths;
-- forbidden paths;
-- accepted input contracts;
-- required outputs and tests;
-- review and validation findings in that team's scope; and
-- the parent-owned handoff contract.
+- one functional-owner team identity;
+- an optional expertise-provider identity;
+- that team's entry points and task-relevant authorities;
+- team-owned review and validation findings; and
+- the consumer contract when expertise crosses a team boundary.
 
 When implementation changes a security boundary, the contract also names the
 security invariant and security acceptance evidence. Security review is not a
 foreign-team write grant.
 
-If bounded delegation is unavailable, the delivery owner executes each team unit serially.
-It must preserve the same ownership boundaries.
-It must not invent an undocumented worker runtime.
+If the required team cannot act, follow the blocker rule in
+[subagent delegation](subagent-delegation.md).
 
 ## Execute within one team
 
@@ -91,7 +79,7 @@ When a team needs a provider owned elsewhere:
 1. Stop before implementing the foreign responsibility.
 2. Report the provider team and required external contract.
 3. State acceptance evidence and affected consumer work.
-4. Return the dependency to the delivery owner.
+4. Return the dependency to Gizmo.
 5. Resume only after the provider contract is accepted and the parent authorizes continuation.
 
 Cross-team requests do not authorize direct edits in the provider team's paths.
@@ -119,7 +107,7 @@ permission to edit another team's code.
 
 ## Integrate and deliver
 
-The delivery owner waits for the declared barrier.
+Gizmo waits for every required team subagent to finish.
 
 1. Verify each team's role, baseline, scope, result, tests, and semantic view.
 2. Reconcile cross-team contract disagreements.
@@ -127,12 +115,17 @@ The delivery owner waits for the declared barrier.
 4. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
 5. Route review and validation failures back to the responsible team.
 6. Repeat until every team-owned correction is complete.
-7. Run exact-head validation and readiness through the AI-owned delivery workflow.
-8. Keep GitHub, Workbench, push, check, readiness, and merge mutations with the delivery owner.
+7. Run exact-head validation and readiness through Gizmo's delivery workflow.
+8. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
+   Gizmo.
+
+Gizmo owns the final integrated verdict. Gizmo cannot override a required
+blocking team verdict or a required blocking security verdict.
 
 ## Validation
 
-Completion requires one functional owner per capability and at most one
-expertise provider per implementation unit. It also requires explicit
-cross-team contracts, team-owned tests and review fixes, one shared-state
-writer, root aggregation, and green exact-head delivery gates.
+Completion requires one exact team identity per team task.
+Each capability has one owner team and at most one expertise provider for each
+set of delegated files. Completion also requires explicit cross-team
+contracts, team-owned tests and review fixes, one shared-state writer, root
+aggregation, and green exact-head delivery gates.

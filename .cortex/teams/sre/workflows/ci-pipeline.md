@@ -6,7 +6,8 @@ System of record for how Nook validates changes in GitHub Actions. Agents must u
 
 Agent worklogs and statistics live in `meta-secret/nook-workbench`, so they do
 not create Nook branches, PRs, product validation, or recursive Main builds.
-See [issues.md](../../ai/workflows/issues.md), [agent-statistics.md](../../ai/workflows/agent-statistics.md), and
+See [issues](../../../gizmo/workflows/issues.md),
+[agent statistics](../../../gizmo/workflows/agent-statistics.md), and
 [main-build-statistics.md](main-build-statistics.md).
 
 ## Workflow map

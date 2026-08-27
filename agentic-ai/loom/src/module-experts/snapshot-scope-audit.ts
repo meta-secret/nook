@@ -1,13 +1,16 @@
 import {
   INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS,
   MODULE_EXPERT_CANONICAL_CONTEXT_PATHS,
+  WEB_EXPERT_ALLOWED_CONTEXT_PATHS,
   WEB_EXPERT_AUTHORITY_PATHS,
   WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
-  WEB_EXPERT_SCOPE_PATHS,
   WEB_EXPERT_SKILL_AUTHORITY_PATHS,
   WEB_EXPERT_SKILL_PATHS,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
+
+const MODULE_EXPERT_CATALOG_PATH =
+  'agentic-ai/loom/src/module-experts/catalog.ts';
 
 const INTERNAL_API_EXPERT_NAME = 'internal_api_expert';
 const WEB_EXPERT_NAME = 'web_expert';
@@ -52,7 +55,7 @@ export function auditModuleExpertSnapshotScopes(
     if (!contextMatches) {
       const finding: ModuleExpertSnapshotScopeFinding = {
         code: 'invalid-canonical-expert-context',
-        path: profile.agentDefinitionPath,
+        path: MODULE_EXPERT_CATALOG_PATH,
         message:
           'Module expert snapshots require the exact transitive canonical skill and workflow context.',
       };
@@ -66,7 +69,7 @@ export function auditModuleExpertSnapshotScopes(
       if (!sameOrderedPaths(authorityComparison)) {
         const finding: ModuleExpertSnapshotScopeFinding = {
           code: 'invalid-web-expert-authorities',
-          path: profile.agentDefinitionPath,
+          path: MODULE_EXPERT_CATALOG_PATH,
           message:
             'web_expert requires the exact cataloged package and module-expert authorities.',
         };
@@ -74,27 +77,40 @@ export function auditModuleExpertSnapshotScopes(
       }
       const scopeComparison: OrderedSnapshotPaths = {
         actual: profile.scopePaths,
-        expected: WEB_EXPERT_SCOPE_PATHS,
+        expected: [],
       };
       if (!sameOrderedPaths(scopeComparison)) {
         const finding: ModuleExpertSnapshotScopeFinding = {
           code: 'invalid-web-expert-scope',
-          path: profile.agentDefinitionPath,
+          path: MODULE_EXPERT_CATALOG_PATH,
           message:
-            'web_expert requires the exact cataloged product specifications and extension release authorities.',
+            'web_expert fixed scope must not preload task-selectable context.',
+        };
+        findings.push(finding);
+      }
+      const allowedContextComparison: OrderedSnapshotPaths = {
+        actual: profile.allowedContextPaths,
+        expected: WEB_EXPERT_ALLOWED_CONTEXT_PATHS,
+      };
+      if (!sameOrderedPaths(allowedContextComparison)) {
+        const finding: ModuleExpertSnapshotScopeFinding = {
+          code: 'invalid-web-expert-allowed-context',
+          path: MODULE_EXPERT_CATALOG_PATH,
+          message:
+            'web_expert requires the exact typed catalog of task-selectable context paths.',
         };
         findings.push(finding);
       }
       const skillComparison: OrderedSnapshotPaths = {
         actual: profile.skillPaths,
-        expected: WEB_EXPERT_SKILL_PATHS,
+        expected: [WEB_EXPERT_SKILL_PATHS[0]],
       };
       if (!sameOrderedPaths(skillComparison)) {
         const finding: ModuleExpertSnapshotScopeFinding = {
           code: 'invalid-web-expert-skills',
-          path: profile.agentDefinitionPath,
+          path: MODULE_EXPERT_CATALOG_PATH,
           message:
-            'web_expert requires the exact cataloged module, frontend, and browser-extension skill bundle.',
+            'web_expert requires only the fixed module-expert skill; task-applicable web skills must remain selectable.',
         };
         findings.push(finding);
       }
@@ -110,7 +126,7 @@ export function auditModuleExpertSnapshotScopes(
       ) {
         const finding: ModuleExpertSnapshotScopeFinding = {
           code: 'missing-web-expert-skill-authority',
-          path: profile.agentDefinitionPath,
+          path: MODULE_EXPERT_CATALOG_PATH,
           message:
             'web_expert snapshots must resolve every authority linked by the fixed skill bundle.',
         };
@@ -123,7 +139,7 @@ export function auditModuleExpertSnapshotScopes(
     ) {
       const finding: ModuleExpertSnapshotScopeFinding = {
         code: 'unexpected-boundary-scope',
-        path: profile.agentDefinitionPath,
+        path: MODULE_EXPERT_CATALOG_PATH,
         message:
           'Only internal_api_expert may receive cross-module Rust boundary scope.',
       };
@@ -143,7 +159,7 @@ export function auditModuleExpertSnapshotScopes(
   if (!sameOrderedPaths(boundaryComparison)) {
     const finding: ModuleExpertSnapshotScopeFinding = {
       code: 'invalid-internal-api-rust-boundary-scope',
-      path: internalApiProfile.agentDefinitionPath,
+      path: MODULE_EXPERT_CATALOG_PATH,
       message:
         'internal_api_expert requires every registered portable Rust module root in exact sorted order, and no broader scope.',
     };

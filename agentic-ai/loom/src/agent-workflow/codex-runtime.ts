@@ -72,6 +72,7 @@ export class ModuleExpertCodexSdkAgentRuntime<
   ): Promise<AgentExecutionCompletion> {
     const executionArgs: RunIsolatedModuleExpertCodexArgs<TTask, TAgent> = {
       invocation,
+      selectedContextPaths: [],
     };
     return runIsolatedModuleExpertCodex(executionArgs);
   }
@@ -82,6 +83,7 @@ export type RunIsolatedModuleExpertCodexArgs<
   TAgent extends string,
 > = {
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly selectedContextPaths: readonly string[];
 };
 
 export async function runIsolatedModuleExpertCodex<
@@ -94,6 +96,7 @@ export async function runIsolatedModuleExpertCodex<
   const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
     expertName: invocation.agentProfile.name,
     parentEnvironment: process.env,
+    selectedContextPaths: args.selectedContextPaths,
     sourceCommit: invocation.sourceCommit,
     workingDirectory: invocation.workingDirectory,
   };

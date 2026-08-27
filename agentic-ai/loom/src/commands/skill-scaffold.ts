@@ -54,21 +54,46 @@ type FindExistingSkillCardArgs = {
   readonly slug: string;
 };
 
+export type SkillOwnerDynamicSkillsDirectoryArgs = {
+  readonly cortexRoot: string;
+  readonly skillOwner: SkillOwner;
+};
+
 export function markdownPath(filePath: string): string {
   return filePath.replaceAll('\\', '/');
+}
+
+export function skillOwnerDynamicSkillsDirectory(
+  args: SkillOwnerDynamicSkillsDirectoryArgs,
+): string {
+  if (args.skillOwner === SkillOwner.Shared) {
+    return path.join(args.cortexRoot, 'shared', 'dynamic-skills');
+  }
+  if (args.skillOwner === SkillOwner.Gizmo) {
+    return path.join(args.cortexRoot, SkillOwner.Gizmo, 'dynamic-skills');
+  }
+  return path.join(args.cortexRoot, 'teams', args.skillOwner, 'dynamic-skills');
 }
 
 export function findExistingSkillCard(
   args: FindExistingSkillCardArgs,
 ): string | false {
-  const ownerRoots = [
-    path.join(args.cortexRoot, 'shared', 'dynamic-skills'),
-    path.join(args.cortexRoot, 'teams', SkillOwner.Ai, 'dynamic-skills'),
-    path.join(args.cortexRoot, 'teams', SkillOwner.DevCore, 'dynamic-skills'),
-    path.join(args.cortexRoot, 'teams', SkillOwner.Security, 'dynamic-skills'),
-    path.join(args.cortexRoot, 'teams', SkillOwner.Sre, 'dynamic-skills'),
-    path.join(args.cortexRoot, 'teams', SkillOwner.WebDev, 'dynamic-skills'),
-  ];
+  const owners = [
+    SkillOwner.Shared,
+    SkillOwner.Gizmo,
+    SkillOwner.Ai,
+    SkillOwner.DevCore,
+    SkillOwner.Security,
+    SkillOwner.Sre,
+    SkillOwner.WebDev,
+  ] as const;
+  const ownerRoots = owners.map((skillOwner) => {
+    const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
+      cortexRoot: args.cortexRoot,
+      skillOwner,
+    };
+    return skillOwnerDynamicSkillsDirectory(directoryArgs);
+  });
   return (
     ownerRoots
       .map((ownerRoot) => path.join(ownerRoot, `${args.slug}.md`))
@@ -111,10 +136,11 @@ export async function runSkillScaffold(
 
   const cortexRoot = path.join(repoRoot, '.cortex');
   const aiSkillsDir = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
-  const skillsDir =
-    request.skillOwner === SkillOwner.Shared
-      ? path.join(cortexRoot, 'shared', 'dynamic-skills')
-      : path.join(cortexRoot, 'teams', request.skillOwner, 'dynamic-skills');
+  const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
+    cortexRoot,
+    skillOwner: request.skillOwner,
+  };
+  const skillsDir = skillOwnerDynamicSkillsDirectory(directoryArgs);
   const templatePath = path.join(aiSkillsDir, '_template.md');
   const cardPath = path.join(skillsDir, `${slug}.md`);
   const indexPath = path.join(aiSkillsDir, 'index.md');
