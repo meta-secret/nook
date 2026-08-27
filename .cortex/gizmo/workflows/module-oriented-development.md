@@ -48,16 +48,22 @@ known graph before dispatch. Every reached node receives one team identity. A
 ready selected node receives one worker attempt only after its exact starting
 frontier exists.
 
+### Wave admission
+
 Every graph mutation runs deterministic topology and cycle validation before
 dispatch. A cycle fails closed and reports the blocked dependency to Gizmo.
 
-Active attempts lease their resource claims until terminal completion or
-confirmed cancellation. The harness visits ready nodes in stable task order. It
-excludes conflicts with active leases, then greedily selects a maximal set whose
-claims do not conflict. It snapshots all selected frontiers before creating the
-wave's worker attempts.
-A child may delegate only within its assigned node and declared depth bound.
-Nested delegation cannot add graph nodes, change edges, or widen write scope.
+Every attempt leases its resource claims. A consumer lease also includes the
+evidence-surface claims it relies on. Worker termination does not release the
+lease. Gizmo releases it only after accepted write integration, accepted
+read-only evidence, or a recorded unusable rejection or cancellation.
+
+The harness visits ready nodes in stable task order. It excludes conflicts with
+active leases, then greedily selects a maximal set whose claims do not conflict.
+It snapshots all selected frontiers before creating the wave's worker attempts.
+
+- A child may delegate only within its assigned node and declared depth bound.
+- Nested delegation cannot add graph nodes, change edges, or widen write scope.
 
 ## Contract-first planning
 
@@ -100,20 +106,26 @@ Implementation follows dependency readiness.
 2. Validate the provider against the frozen edge contract.
 3. Verify the provider commit against its starting frontier and write scope.
 4. Integrate accepted provider commits in deterministic task order.
-5. Accept read-only provider evidence into parent task state.
-6. Check affected read-only evidence surfaces after each write integration.
-7. Rerun and reaccept stale evidence against the consumer frontier.
-8. Recompute readiness after Git integration, evidence acceptance, or
+5. Check affected read-only evidence surfaces after each write integration.
+6. Invalidate active and terminal-but-unaccepted consumers of stale evidence.
+7. Stop or cancel active consumers and reject unaccepted terminal outputs.
+8. Accept read-only provider evidence into parent task state.
+9. Record rejected or cancelled output as unusable.
+10. Release each lease after conclusive output disposition.
+11. Recompute readiness and wave selection after every lease release.
+12. Rerun and reaccept stale evidence against the new consumer frontier.
+13. Retry affected consumers as fresh attempts.
+14. Recompute readiness after evidence acceptance or
    reacceptance.
-9. Bind each ready consumer to the exact integrated frontier containing its
+15. Bind each ready consumer to the exact integrated frontier containing its
    complete write-predecessor closure.
-10. Select the next deterministic maximal safe wave against active leases.
-11. Snapshot selected frontiers and create one attempt per selected node.
-12. Write each immediate consumer against the accepted external API.
-13. Add consumer tests for integration behavior.
-14. Repeat toward the feature root without waiting for unrelated nodes.
-15. Use the all-task barrier only for the final parent-owned join.
-16. Run repository delivery gates.
+16. Select the next deterministic maximal safe wave against active leases.
+17. Snapshot selected frontiers and create one attempt per selected node.
+18. Write each immediate consumer against the accepted external API.
+19. Add consumer tests for integration behavior.
+20. Repeat toward the feature root without waiting for unrelated nodes.
+21. Use the all-task barrier only for the final parent-owned join.
+22. Run repository delivery gates.
 
 Independent ready providers may be analyzed in parallel.
 Independent write-capable providers may run in parallel only when their
@@ -137,7 +149,11 @@ The task record names the exact resource claims used by read-only evidence.
 Before consumer dispatch, each claimed resource must have the same content
 identity at the provider source commit and consumer frontier. An overlapping
 write integration triggers this check. Changed evidence is invalidated, rerun
-against the consumer frontier, and accepted again in parent task state.
+only after every active or terminal-but-unaccepted consumer attempt that relied
+on it is invalidated. Active consumers stop or cancel. Completed-but-unaccepted
+outputs are rejected as unusable. Evidence reruns against the new consumer
+frontier and is accepted again in parent task state. Each affected consumer
+retries as a fresh attempt.
 
 For example, `nook-core` must be accepted and integrated before `nook-wasm`
 starts. The web consumer then starts from the integrated frontier containing
@@ -210,13 +226,18 @@ Before implementation, verify:
   write-predecessor closure;
 - read-only evidence is accepted in parent task state without Git ancestry;
 - each wave is greedily maximal under stable task order and resource claims;
-- each wave excludes claims leased by every active attempt;
-- leases persist until terminal completion or confirmed cancellation;
+- each wave excludes claims in every unreleased lease;
+- consumer leases include relied-on evidence-surface claims;
+- leases persist through worker termination until conclusive output disposition;
+- every lease release triggers readiness and wave recomputation;
 - every graph mutation passes deterministic topology and cycle validation;
 - late providers invalidate affected attempts before replanning;
 - read-only evidence is head-stable for each consumer frontier;
 - overlapping write integrations trigger evidence-surface checks;
 - stale evidence is rerun and reaccepted against the exact consumer frontier;
+- stale evidence invalidates active and terminal-but-unaccepted consumers;
+- invalidated consumer outputs are recorded as unusable;
+- affected consumers retry as fresh attempts;
 - readiness is recomputed after integration, acceptance, or reacceptance;
 - only the final parent-owned join uses an all-task barrier;
 - the delivery owner owns the join.

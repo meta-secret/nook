@@ -41,13 +41,22 @@ Team identity is task-scoped.
 - A mission may reach many tasks with the same or different team identities.
 - Discovery creates task records. It does not create worker attempts.
 - Each ready selected task receives one worker attempt.
-- Every active attempt leases its resource claims until terminal completion or
-  confirmed cancellation.
+- Every attempt leases its claims until Gizmo conclusively dispositions its
+  output.
+- Accepted write output is verified and integrated before release.
+- Accepted read-only evidence is verified and accepted into parent state before
+  release.
+- Rejected or cancelled output is recorded as unusable before release.
+- Every lease release triggers readiness and wave recomputation.
 - A read-only task record names the exact resource claims used as its evidence
   surface.
 - Accepted read-only evidence must remain unchanged at the consumer frontier.
 - An overlapping write triggers the check.
 - Changed evidence is rerun and accepted again at the consumer frontier.
+- A consumer lease includes relied-on evidence-surface claims.
+- Stale evidence invalidates active and terminal-but-unaccepted consumers.
+- Active consumers stop or cancel. Unaccepted terminal outputs are rejected.
+- Affected consumers retry as fresh attempts.
 - Worker attempt count follows ready selected tasks. It does not follow team
   count.
 - Team ownership does not collapse several tasks into one mission-wide worker.
@@ -290,10 +299,14 @@ The final integration must prove:
 - every reached task had one team identity;
 - every ready selected task had one worker attempt and an exact frontier;
 - every active claim lease participated in wave conflict checks;
+- every lease release followed a conclusive output disposition;
+- every lease release triggered readiness and wave recomputation;
 - every graph mutation passed deterministic topology and cycle validation;
 - every late provider invalidated the affected attempt before replanning;
 - every read-only task declared an evidence surface;
 - every accepted read-only result was head-stable for its consumer frontier;
+- stale evidence invalidated every active or terminal-but-unaccepted consumer;
+- invalidated consumer outputs were recorded as unusable;
 - every successor Git frontier contained its full write-predecessor closure;
 - every successor had accepted and current read-only predecessor evidence in
   parent task state; and

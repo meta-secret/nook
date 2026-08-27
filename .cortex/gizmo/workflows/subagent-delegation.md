@@ -159,8 +159,10 @@ Dispatch follows these rules:
 - A task becomes ready when every direct provider satisfies its edge barrier.
 - A task is not selectable until its exact starting Git frontier exists.
 - Read-only evidence is not required in Git ancestry.
-- Every active attempt leases its resource claims.
-- A lease remains held until terminal completion or confirmed cancellation.
+- Every attempt leases its resource claims.
+- A consumer lease also includes evidence-surface claims it relies on.
+- Worker termination does not release the lease.
+- Gizmo releases it only after conclusively dispositioning the output.
 - The harness visits ready pending tasks in stable task order.
 - It first excludes tasks that conflict with any active lease from prior waves.
 - It then greedily selects a task when its claims do not conflict with claims
@@ -180,6 +182,20 @@ Dispatch follows these rules:
 - Unrelated work continues. No global wait separates waves.
 - The all-task terminal barrier exists only for the final parent-owned join.
 
+### Output disposition and lease release
+
+Gizmo records exactly one conclusive disposition for each terminal output.
+
+- **Accepted write:** verify the commit and scope, then integrate it.
+  Complete any resulting stale-evidence and consumer invalidation before lease
+  release.
+- **Accepted read-only:** verify the exact source, then accept the evidence into
+  parent task state.
+- **Rejected or cancelled:** record that the output cannot be used.
+
+The attempt lease remains held until its disposition is complete. Every lease
+release triggers readiness and wave recomputation.
+
 ### Read-only evidence stability
 
 The task record names every resource claim used to produce read-only evidence.
@@ -193,11 +209,19 @@ Before consumer dispatch:
    same content identity.
 3. Trigger this check whenever a write integration overlaps the evidence
    surface.
-4. If the surface changed, invalidate the accepted evidence.
-5. Rerun the read-only provider against the exact consumer frontier.
-6. Verify the exact source commit and accept the replacement evidence in parent
+4. If the surface changed, identify every consumer attempt that relied on the
+   evidence.
+5. Invalidate every active or terminal-but-unaccepted consumer attempt.
+6. Stop or cancel active attempts.
+7. Reject completed-but-unaccepted outputs.
+8. Record every invalidated output as unusable.
+9. Release each consumer lease only after that disposition is recorded.
+10. Invalidate the accepted evidence.
+11. Rerun the read-only provider against the exact new consumer frontier.
+12. Verify the exact source commit and accept the replacement evidence in parent
    task state.
-7. Recompute readiness after acceptance or reacceptance.
+13. Retry each affected consumer as a fresh attempt.
+14. Recompute readiness after reacceptance and every lease release.
 
 Only consumers of the changed evidence surface are delayed. Independent claims
 remain eligible for parallel work.
@@ -348,11 +372,17 @@ Before integration, the parent:
 7. accepts read-only evidence into parent task state or integrates a write
    commit into the Git frontier;
 8. checks affected read-only evidence surfaces after a write integration;
-9. invalidates and reruns stale read-only evidence at the consumer frontier;
-10. recomputes readiness after integration, acceptance, or reacceptance;
-11. binds downstream work to the exact integrated frontier containing its
+9. invalidates active and terminal-but-unaccepted consumers of stale evidence;
+10. stops or cancels active consumers and rejects unaccepted terminal outputs;
+11. records rejected or cancelled output as unusable;
+12. releases each lease after its conclusive disposition;
+13. recomputes readiness and wave selection after every lease release;
+14. reruns stale evidence at the consumer frontier;
+15. retries affected consumers as fresh attempts;
+16. recomputes readiness after acceptance or reacceptance;
+17. binds downstream work to the exact integrated frontier containing its
    complete write-predecessor closure; and
-12. selects the next deterministic maximal safe wave against active leases.
+18. selects the next deterministic maximal safe wave against active leases.
 
 The parent may author a Markdown summary for humans.
 That summary is optional.
@@ -527,9 +557,14 @@ Before integration, verify:
   requirement;
 - integration follows deterministic dependency order;
 - every wave was greedily maximal under stable task order and resource claims;
-- every wave excluded conflicts with all claim leases held by active attempts;
-- every claim lease remained held until terminal completion or confirmed
-  cancellation;
+- every wave excluded conflicts with every unreleased claim lease;
+- every consumer lease included relied-on evidence-surface claims;
+- worker termination did not release a claim lease;
+- every claim lease remained held until conclusive output disposition;
+- accepted writes were verified and integrated before lease release;
+- accepted read-only evidence was verified and accepted before lease release;
+- rejected or cancelled output was recorded as unusable before lease release;
+- every lease release triggered readiness and wave recomputation;
 - every selected frontier was snapshotted before wave attempts were created;
 - conflict-excluded ready tasks remained pending for recomputation;
 - every late provider invalidated and stopped or cancelled the affected attempt;
@@ -539,8 +574,12 @@ Before integration, verify:
   frontier;
 - readiness was recomputed after every Git integration or evidence acceptance;
 - overlapping write integrations triggered evidence-surface stability checks;
+- stale evidence invalidated every active or terminal-but-unaccepted consumer;
+- active consumers were stopped or cancelled;
+- completed-but-unaccepted consumer outputs were rejected as unusable;
 - stale read-only evidence was rerun and reaccepted at the exact consumer
   frontier;
+- each affected consumer retried as a fresh attempt;
 - readiness was recomputed after read-only evidence reacceptance;
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
