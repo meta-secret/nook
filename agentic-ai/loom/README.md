@@ -200,7 +200,6 @@ extension-release skill and its canonical security authority. For example:
     ".cortex/teams/web-dev/product-specs/browser-extension.md",
     ".github/workflows/release.yml",
     ".cortex/teams/web-dev/dynamic-skills/ui-design-skills.md",
-    ".cortex/teams/security/dynamic-skills/browser-extension-release-security.md",
     ".cortex/teams/security/dynamic-skills/browser-extension-release-security.md"
   ]
 }
