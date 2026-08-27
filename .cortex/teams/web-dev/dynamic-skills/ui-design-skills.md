@@ -38,6 +38,9 @@ Use the surface mode that matches the task:
 Existing product rhythm and the brief win. Ask one focused aesthetic question
 only when two materially different directions remain plausible.
 
+- Preserve established routes, analytics contracts, and interaction semantics
+  unless the task scope changes them.
+
 ## Fixed Stack
 
 - Use Svelte 5 with `$props`, `$state`, `$derived`, and focused `$effect` runes.
@@ -52,6 +55,8 @@ only when two materially different directions remain plausible.
   components, or a parallel component system.
 - Do not add a design or animation dependency when the fixed stack suffices.
 - Inspect the owning `package.json` and justify any new dependency.
+- Impeccable is opt-in. Do not load, install, or run it unless the user
+  explicitly requests it by name.
 
 ## Svelte 5 Rules
 
@@ -121,6 +126,8 @@ Any visual shortcut that weakens these boundaries is a failed design.
 - Preserve focus after inline changes and return focus when dialogs close.
 - Design loading, empty, error, disabled, pending, success, offline, locked,
   stale, conflict, and recovery states without layout collapse.
+- Empty states expose the next useful action.
+- Success acknowledgment must not obscure the next task.
 - Design focus, hover, and active states for every interactive control.
 - Never polish only the successful static state while leaving real failure or
   recovery paths unfinished.
