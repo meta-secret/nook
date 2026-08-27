@@ -18,7 +18,6 @@ cleanup_timeout="${NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS:-15}"
 # BuildKit default. Taskfiles must never pass --builder; this wrapper selects
 # the active default with `docker buildx use` when a job builder is present.
 builder="${NOOK_PR_BUILDX_BUILDER:-}"
-remote_builder="${NOOK_BUILDKIT_REMOTE:-}"
 
 case "$builder" in
   nook-pr)
@@ -132,11 +131,6 @@ else
     echo "BuildKit builder $builder did not respond within ${health_timeout}s" >&2
   else
     echo "BuildKit builder $builder is missing or unhealthy" >&2
-  fi
-
-  if [ "$remote_builder" = "1" ]; then
-    echo "ARC private BuildKit sidecar is unhealthy; refusing Docker-daemon recovery" >&2
-    exit 1
   fi
 
   remove_unhealthy_builder

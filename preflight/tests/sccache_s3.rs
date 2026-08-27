@@ -276,7 +276,7 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
         main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 3
             && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 3
             && !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
-        "trusted Main Rust, WASM, and portable-cache producers must populate SeaweedFS compiler objects"
+        "trusted Main Rust, WASM, and portable-proof jobs must populate SeaweedFS compiler objects"
     );
     assert!(!main.contains("NOOK_CLOUDFLARE_ACCESS"));
 

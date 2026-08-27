@@ -54,18 +54,17 @@ target "builder-wasm-deps-restore" {
   cache-from = rust_wasm_deps_cache_from
 }
 
-// Portable hosted writer/proof target. The trusted hosted job owns this cache
-// ref because ARC's persistent BuildKit metadata is not portable across the
-// hosted BuildKit worker boundary. A cache-only solve avoids hydrating hundreds
-// of megabytes merely to prove that every dependency vertex is reusable.
+// Portable writer/proof target. A distinct ARC job owns this cache ref so
+// source-cache publication and portable dependency proof remain visible gates.
+// A cache-only solve avoids hydrating hundreds of megabytes merely to prove
+// that every dependency vertex is reusable.
 target "builder-wasm-deps-cache-proof" {
   inherits   = ["builder-wasm-deps-restore"]
   target     = "builder-wasm-deps"
 }
 
 // Explicit non-Main writer retained for isolated/local cache candidates. The
-// trusted portable Main ref is written only by verify-wasm-gha-cache.sh on a
-// hosted BuildKit worker.
+// trusted portable Main ref is written only by verify-wasm-gha-cache.sh.
 target "builder-wasm-deps-publish" {
   inherits = ["builder-wasm-deps-restore"]
   cache-to   = rust_wasm_deps_cache_to

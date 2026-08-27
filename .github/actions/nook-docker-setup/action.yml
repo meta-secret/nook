@@ -124,6 +124,7 @@ runs:
           "$NOOK_BUILDKIT_ADDR"
         docker buildx inspect "$builder" --bootstrap
         echo "name=$builder" >> "$GITHUB_OUTPUT"
+        echo "NOOK_BUILDKIT_REMOTE=1" >> "$GITHUB_ENV"
 
     - name: Connect SeaweedFS compiler cache
       uses: ./.github/actions/nook-cache-connect
@@ -229,7 +230,7 @@ runs:
           exit 1
         fi
         echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
-        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint" >> "$GITHUB_ENV"
+        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
 
         # cache-from entries are merged, not ordered. Importing exact and Main
         # together can select Main's parent and orphan an exact source leaf.
@@ -295,23 +296,23 @@ runs:
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
 
-        wasm_deps_exact_scope="nook-rust-wasm-deps-v5-$rust_deps_fingerprint"
+        wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
         if [ -n "$scope_suffix" ]; then
-          wasm_deps_exact_scope="nook-rust-wasm-deps-v5$scope_suffix"
+          wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
         fi
-        publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v1$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v3$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v3$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v4$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v1$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v1$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v3$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v3$scope_suffix"
-        publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v3"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v2$scope_suffix"
-        publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v2"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v1$scope_suffix"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
+        publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
+        publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
+        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v2$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
         publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
         echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"

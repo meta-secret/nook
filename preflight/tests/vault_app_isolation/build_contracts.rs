@@ -375,9 +375,30 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     }
     assert!(
         !wrapper.contains("NOOK_PR_BUILDX_BUILDER:-nook-pr")
+            && !wrapper.contains("NOOK_BUILDKIT_REMOTE")
             && !wrapper.contains("trap cleanup EXIT")
             && !wrapper.contains("BUILDX_BUILDER="),
-        "delivery must not default to shared nook-pr or export BUILDX_BUILDER for Taskfiles"
+        "hosted/local recovery must not contain the ARC remote branch or shared builder defaults"
+    );
+    let remote_wrapper = read(&root, ".github/scripts/with-remote-buildkit.sh");
+    for required in [
+        "ARC requires a valid job-scoped remote BuildKit builder",
+        "buildx inspect \"$builder\" --bootstrap",
+        "buildx build",
+        "--output type=cacheonly",
+        "buildx use \"$builder\"",
+        "refusing hosted or local daemon recovery from an ARC Pod",
+    ] {
+        assert!(
+            remote_wrapper.contains(required),
+            "ARC remote BuildKit wrapper missing client-only contract: {required}"
+        );
+    }
+    assert!(
+        ci.contains("if test \"${NOOK_BUILDKIT_REMOTE:-}\" = \"1\"; then")
+            && ci.contains(".github/scripts/with-remote-buildkit.sh")
+            && ci.contains(".github/scripts/with-healthy-buildkit.sh"),
+        "delivery CI must route ARC to the remote-only wrapper and keep recovery off that path"
     );
     Ok(())
 }
@@ -532,6 +553,98 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     assert!(
         String::from_utf8_lossy(&refused.stderr).contains("refusing shared BuildKit builder name"),
         "refusal must name the shared builder hazard"
+    );
+
+    fs::remove_dir_all(temp)?;
+    Ok(())
+}
+
+#[test]
+fn arc_delivery_uses_only_remote_buildkit_client_operations() -> anyhow::Result<()> {
+    let root = repository_root();
+    let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let temp = std::env::temp_dir().join(format!(
+        "nook-remote-buildkit-health-{}-{unique}",
+        std::process::id()
+    ));
+    fs::create_dir_all(&temp)?;
+
+    let fake_docker = temp.join("docker");
+    let docker_log = temp.join("docker.log");
+    let command_marker = temp.join("command-ran");
+    fs::write(
+        &fake_docker,
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
+if [ "${FAIL_REMOTE_PROBE:-}" = 1 ] && [ "${1:-}" = buildx ] && [ "${2:-}" = inspect ]; then
+  exit 19
+fi
+"#,
+    )?;
+    let mut permissions = fs::metadata(&fake_docker)?.permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&fake_docker, permissions)?;
+
+    let wrapper = root.join(".github/scripts/with-remote-buildkit.sh");
+    let output = Command::new("bash")
+        .arg(&wrapper)
+        .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
+        .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
+        .env("FAKE_DOCKER_LOG", &docker_log)
+        .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-1")
+        .output()?;
+    assert!(
+        output.status.success(),
+        "remote wrapper failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(fs::read_to_string(&command_marker)?, "ok");
+    let calls = fs::read_to_string(&docker_log)?;
+    for required in [
+        "buildx inspect nook-arc-run-1 --bootstrap",
+        "buildx build --builder nook-arc-run-1",
+        "buildx use nook-arc-run-1",
+    ] {
+        assert!(
+            calls.contains(required),
+            "missing remote client call: {required}"
+        );
+    }
+    for forbidden in [
+        "buildx create",
+        "buildx rm",
+        "rm --force",
+        "volume rm",
+        "--driver docker-container",
+    ] {
+        assert!(
+            !calls.contains(forbidden),
+            "ARC remote wrapper attempted daemon recovery: {forbidden}"
+        );
+    }
+
+    fs::write(&docker_log, "")?;
+    fs::remove_file(&command_marker)?;
+    let failed = Command::new("bash")
+        .arg(&wrapper)
+        .args(["bash", "-c", "printf bad > \"$1\"", "nook-test"])
+        .arg(&command_marker)
+        .env("DOCKER", &fake_docker)
+        .env("FAKE_DOCKER_LOG", &docker_log)
+        .env("FAIL_REMOTE_PROBE", "1")
+        .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")
+        .output()?;
+    assert_eq!(failed.status.code(), Some(19));
+    assert!(!command_marker.exists());
+    let failed_calls = fs::read_to_string(&docker_log)?;
+    assert!(failed_calls.contains("buildx inspect nook-arc-run-2 --bootstrap"));
+    assert!(!failed_calls.contains("buildx create"));
+    assert!(!failed_calls.contains("buildx rm"));
+    assert!(
+        String::from_utf8_lossy(&failed.stderr)
+            .contains("refusing hosted or local daemon recovery from an ARC Pod")
     );
 
     fs::remove_dir_all(temp)?;

@@ -28,7 +28,7 @@ cleanup() {
 trap cleanup EXIT
 
 for graph in native wasm; do
-  repository="$registry_host/nook/remote-buildcache/nook-rust-${graph}-deps-input-v2"
+  repository="$registry_host/nook/remote-buildcache/nook-rust-${graph}-deps-input-v3"
   candidate_tag="candidate-${fingerprint}-${candidate}"
   verified_tag="verified-${fingerprint}-${run_id}-${run_attempt}"
   stable_tag="fingerprint-${fingerprint}"

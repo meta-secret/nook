@@ -8,6 +8,139 @@ fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn read_sre_cortex(root: &Path) -> anyhow::Result<String> {
+    let mut pending = vec![root.join(".cortex/teams/sre")];
+    let mut markdown = Vec::new();
+    while let Some(path) = pending.pop() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "md") {
+                markdown.push(path);
+            }
+        }
+    }
+    markdown.sort();
+    markdown
+        .into_iter()
+        .map(fs::read_to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|documents| documents.join("\n"))
+        .map_err(Into::into)
+}
+
+#[test]
+fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Result<()> {
+    let root = repository_root();
+    let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
+    let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
+    let fingerprint = read(&root, ".github/scripts/rust-deps-cache-fingerprint.sh");
+    let promoter = read(&root, ".github/scripts/rust-deps-cache-promote.sh");
+    let root_tasks = read(&root, "Taskfile.yml");
+    let sre_cortex = read_sre_cortex(&root)?;
+    let contract = format!(
+        "{rust_bake}\n{setup}\n{verifier}\n{fingerprint}\n{promoter}\n{root_tasks}\n{sre_cortex}"
+    );
+
+    let registry_writers = rust_bake
+        .lines()
+        .filter(|line| line.contains("type=registry,ref=") && line.contains("timeout=10m"))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        registry_writers.len(),
+        13,
+        "the Rust Bake family must keep the complete writer inventory explicit"
+    );
+    assert!(
+        registry_writers.iter().all(|line| {
+            line.contains("compression=zstd,force-compression=true")
+                && (line.contains("mode=${GHA_CACHE_EXPORT_MODE}") || line.contains("mode=max"))
+        }),
+        "every Rust/WASM registry writer must force zstd in the same generation"
+    );
+
+    let active_refs = [
+        "nook-rust-base-v2",
+        "nook-rust-ecosystem-dylint-v4",
+        "nook-rust-ecosystem-fuzz-v4",
+        "nook-rust-ecosystem-policy-tools-v5",
+        "nook-rust-ecosystem-deterministic-v2",
+        "nook-rust-ecosystem-kani-v2",
+        "nook-rust-deps-v4",
+        "nook-rust-native-deps-input-v3",
+        "nook-rust-wasm-deps-v6",
+        "nook-rust-wasm-deps-input-v3",
+        "nook-rust-native-source-v4",
+        "nook-rust-wasm-source-v3",
+        "nook-rust-wasm-node-v2",
+    ];
+    for current in &active_refs {
+        assert!(
+            contract.contains(*current),
+            "rotated Rust/WASM cache contract is missing {current}"
+        );
+    }
+    for retired in [
+        "nook-rust-base-v1",
+        "nook-rust-ecosystem-dylint-v3",
+        "nook-rust-ecosystem-fuzz-v3",
+        "nook-rust-ecosystem-policy-tools-v4",
+        "nook-rust-ecosystem-deterministic-v1",
+        "nook-rust-ecosystem-kani-v1",
+        "nook-rust-deps-v3",
+        "nook-rust-native-deps-input-v2",
+        "nook-rust-wasm-deps-v5",
+        "nook-rust-wasm-deps-input-v2",
+        "nook-rust-native-source-v3",
+        "nook-rust-wasm-source-v2",
+        "nook-rust-wasm-node-v1",
+    ] {
+        assert!(
+            !contract.contains(retired),
+            "rotated Rust/WASM contract must not import retired mixed-compression ref {retired}"
+        );
+    }
+    let documented_refs = sre_cortex
+        .split(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
+        .filter(|token| {
+            token.starts_with("nook-rust-")
+                && token.rsplit_once("-v").is_some_and(|(_, generation)| {
+                    !generation.is_empty()
+                        && generation
+                            .chars()
+                            .all(|character| character.is_ascii_digit())
+                })
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        !documented_refs.is_empty(),
+        "owning SRE Cortex must retain explicit operational cache references"
+    );
+    for documented in documented_refs {
+        assert!(
+            active_refs.contains(&documented),
+            "owning SRE Cortex names a cache ref outside the active forced-zstd generation: {documented}"
+        );
+    }
+    assert!(
+        fingerprint.contains("nook-rust-deps-input-v3")
+            && verifier.contains("compression=zstd,force-compression=true")
+            && verifier.contains("nook-rust-wasm-deps-input-v3")
+            && verifier.contains("nook-rust-wasm-source-v3"),
+        "fingerprint and portable WASM proof must share the rotated forced-zstd generation"
+    );
+    assert!(
+        promoter.contains("for graph in native wasm")
+            && promoter.contains("nook-rust-${graph}-deps-input-v3")
+            && !promoter.contains("nook-rust-${graph}-deps-input-v2"),
+        "native and WASM dependency promotion must target only the rotated repository generation"
+    );
+    Ok(())
+}
+
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     let app_bake = read(root, "nook-app/docker-bake.hcl");
     let rust_toolchain_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
@@ -25,22 +158,22 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "GHA_CACHE_WRITE_ENABLED",
         "NOOK_REGISTRY_CACHE_HOST",
         "default = \"registry.dev.nokey.sh\"",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v3",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v3",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-kani-v1",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-base-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-dylint-v4",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-fuzz-v4",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-kani-v2",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-preflight-v1",
-        "nook-rust-ecosystem-policy-tools-v4",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v1",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v3",
+        "nook-rust-ecosystem-policy-tools-v5",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-ecosystem-deterministic-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-deps-v4",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v3",
-        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v2",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-native-source-v4",
+        "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-source-v3",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-deps-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-v1",
         "${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-web-e2e-v1",
         "type=registry,ref=",
-        "mode=max,timeout=10m",
+        "mode=max,compression=zstd,force-compression=true,timeout=10m",
     ] {
         assert!(
             bake.contains(required),
@@ -309,7 +442,7 @@ fn assert_pr_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 fn assert_rust_cache_export_hardening(bake: &str) {
     assert!(
         !bake.contains(
-            "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
+            "nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,ignore-error=true"
         ) && !bake.contains("${GHA_RUST_WASM_DEPS_SCOPE}:buildcache,mode=max,ignore-error=true",),
         "Rust dependency cache exporters must not ignore upload failures"
     );
@@ -323,7 +456,9 @@ fn assert_rust_cache_export_hardening(bake: &str) {
 fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
     let rust = section(&main, "  rust:\n", "\n  wasm:\n");
-    let wasm = section(&main, "  wasm:\n", "\n  web:\n");
+    let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
+    let wasm_cache_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
+    let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
     let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
     let rust_verify = rust
@@ -338,9 +473,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let wasm_node = wasm
         .find("task ci:main:wasm-node-test")
         .context("Main WASM job must run Node tests")?;
+    let wasm_publish_id = wasm
+        .find("id: publish_wasm_cache")
+        .context("Main WASM producer must expose its cache publication outcome")?;
     let wasm_publish = wasm
         .find("task ci:main:publish-wasm-cache")
-        .context("Main WASM job must publish its cache")?;
+        .context("Main WASM producer must publish its verified graph")?;
     let web_verify = web
         .find("task ci:main:web:artifacts")
         .context("Main web job must build verified artifacts")?;
@@ -359,9 +497,28 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm.contains("needs: [rust]")
             && wasm_verify < wasm_node
-            && wasm_node < wasm_publish
+            && wasm_node < wasm_publish_id
+            && wasm_publish_id < wasm_publish
             && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm.contains("cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}")
+            && wasm[wasm_publish_id..wasm_publish].contains("continue-on-error: true")
             && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_cache_publish.contains("needs: [wasm]")
+            && wasm_cache_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
+            )
+            && wasm_cache_publish.contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
+            && !wasm_cache_publish.contains("task ci:main:publish-wasm-cache")
+            && !wasm_cache_publish.contains("nook-docker-setup")
+            && !wasm_cache_publish.contains("actions/checkout")
+            && !wasm_cache_publish.contains("actions/download-artifact")
+            && !wasm_cache_publish.contains("actions/upload-artifact")
+            && main.matches("task ci:main:publish-wasm-cache").count() == 1
+            && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
+            && web.contains("needs: [wasm]")
+            && !web.contains("wasm-cache-publish")
+            && web.contains("uses: actions/download-artifact@v8")
+            && web.contains("name: main-wasm-${{ github.run_id }}")
             && web_verify < web_publish
             && web_verify < web_browser_image
             && web[web_verify..web_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
@@ -375,7 +532,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
-        "Main producers must verify read-only, publish from warm builders, and hand the exact browser image to container ARC consumers"
+        "Main must export the producer-owned graph once while product consumers and the visible cache gate remain independent"
     );
     let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     assert!(
@@ -534,6 +691,10 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
     let web_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
+    let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
+    let wasm_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
+    let wasm_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
+    let web = section(&main, "  web:\n", "\n  web-e2e:\n");
     let deploy = main
         .split("\n  deploy:\n")
         .nth(1)
@@ -551,10 +712,20 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("task _web:test:ui-demo")
             && main.matches("runs-on: nook-k0s-container").count() == 3
             && main.contains("nook-main-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && main.contains("\n  wasm-cache-publish:\n")
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
+            && web.contains("needs: [wasm]")
+            && wasm.contains("task ci:main:publish-wasm-cache")
+            && wasm.contains("continue-on-error: true")
+            && wasm_publish.contains("needs: [wasm]")
+            && wasm_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
+            )
+            && !wasm_publish.contains("task ci:main:publish-wasm-cache")
+            && wasm_proof.contains("needs: [wasm-cache-publish]")
             && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
-        "Main must split native Rust, WASM, fresh registry cache proof, web verify, and browser suites without a duplicate cache publisher"
+        "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"
     );
     assert!(
         web_tasks.contains("if [ \"${NOOK_ARC_RUNNER:-}\" = \"1\" ]; then")

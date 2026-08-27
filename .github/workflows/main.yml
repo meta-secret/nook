@@ -1,7 +1,7 @@
 # Main branch: keep one active run plus only the newest pending revision. Run the shared
-# Rust ecosystem gates beside the product pipeline. Serialize the native, WASM, and web
-# cache-writing lanes so each verifies read-only and exports its already-solved local graph
-# without competing uploads. After the verified
+# Rust ecosystem gates beside the product pipeline. Product verification produces immutable
+# handoffs before cache publication, so a cache exporter failure cannot suppress web or browser
+# evidence. After the verified
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on ARC
 # runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
@@ -173,9 +173,9 @@ jobs:
 
   wasm:
     name: WASM verification and artifact
-    # Serialize cache uploads after native verification while retaining the producer's
-    # job-scoped builder for a no-rebuild export.
     needs: [rust]
+    outputs:
+      cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -230,23 +230,38 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Publish verified WASM BuildKit cache
-        if: success()
+        id: publish_wasm_cache
+        continue-on-error: true
         run: task ci:main:publish-wasm-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes source state from its persistent shard. The portable
-          # dependency ref is owned by the separate ARC writer/proof job.
+          # ARC publishes source state from the verified job-scoped graph. The
+          # portable dependency ref is owned by the later writer/proof job.
           WASM_BUILD_MODE: dev
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  wasm-cache-publish:
+    name: WASM cache publication
+    needs: [wasm]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    steps:
+      - name: Require successful WASM cache publication
+        env:
+          CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}
+        run: |
+          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
+            echo "WASM cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
+            exit 1
+          fi
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof
-    needs: [wasm]
+    needs: [wasm-cache-publish]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read

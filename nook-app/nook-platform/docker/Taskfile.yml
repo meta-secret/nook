@@ -246,7 +246,7 @@ tasks:
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
-      # rust-base-publish writes nook-rust-base-v1 under write_cache_repository
+      # rust-base-publish writes nook-rust-base-v2 under write_cache_repository
       # (Main: nook/buildcache; isolated: nook/remote-buildcache…-git-<sha>).
       - >-
         bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"

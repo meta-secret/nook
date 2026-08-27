@@ -70,7 +70,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
             )
             && setup.contains("NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint")
             && setup
-                .contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint")
+                .contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint")
     );
     assert!(setup.contains("GHA_CACHE_WRITE_ENABLED=$cache_write_enabled"));
     assert!(setup.contains("[ -z \"$read_only\" ]"));
@@ -124,7 +124,7 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     assert!(rust_bake.contains("nook/buildcache/${GHA_RUST_WASM_DEPS_SCOPE}:buildcache"));
     assert!(rust_bake.contains("rust_wasm_deps_write_scope"));
     assert!(rust_bake.contains(
-        "${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},timeout=10m"
+        "${write_cache_repository}/${rust_wasm_deps_write_scope}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m"
     ));
     let wasm_source_cache = rust_bake
         .split_once("rust_wasm_source_cache_from =")
@@ -141,8 +141,8 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "every WASM source cache path must directly import the fingerprinted dependency lineage"
     );
     assert!(
-        !wasm_source_cache.contains("nook-rust-base-v1")
-            && !wasm_source_cache.contains("nook-rust-deps-v3"),
+        !wasm_source_cache.contains("nook-rust-base-v2")
+            && !wasm_source_cache.contains("nook-rust-deps-v4"),
         "WASM source cache-from must not import shorter rust-base or native rust-deps parents"
     );
     let docker_tasks = read("nook-app/nook-platform/docker/Taskfile.yml");
@@ -212,10 +212,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
     );
     assert!(!bake.contains("type=gha"));
     for fallback in [
-        "nook/buildcache/nook-rust-base-v1:buildcache",
-        "nook/buildcache/nook-rust-deps-v3:buildcache",
-        "nook/buildcache/nook-rust-native-source-v3:buildcache",
-        "nook/buildcache/nook-rust-wasm-source-v2:buildcache",
+        "nook/buildcache/nook-rust-base-v2:buildcache",
+        "nook/buildcache/nook-rust-deps-v4:buildcache",
+        "nook/buildcache/nook-rust-native-source-v4:buildcache",
+        "nook/buildcache/nook-rust-wasm-source-v3:buildcache",
         "nook/buildcache/nook-web-v1:buildcache",
     ] {
         assert!(
@@ -224,10 +224,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     for scope in [
-        "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
-        "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}",
+        "nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
         "nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}",
     ] {
         assert!(
@@ -236,10 +236,10 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     for write_scope in [
-        "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+        "${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
         "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
@@ -250,11 +250,11 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         );
     }
     for cold_isolated_import in [
-        "${write_cache_repository}/nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-        "${write_cache_repository}/nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+        "${write_cache_repository}/nook-rust-ecosystem-kani-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-deps-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
         "${write_cache_repository}/nook-web-e2e-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
@@ -277,9 +277,9 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         "WASM dependency restores must import registry.dev.nokey.sh cache refs"
     );
     assert!(
-        !wasm_deps_from.contains("nook-rust-base-v1")
-            && !wasm_deps_from.contains("nook-rust-deps-v3")
-            && wasm_deps_from.contains("nook-rust-wasm-source-v2"),
+        !wasm_deps_from.contains("nook-rust-base-v2")
+            && !wasm_deps_from.contains("nook-rust-deps-v4")
+            && wasm_deps_from.contains("nook-rust-wasm-source-v3"),
         "WASM deps cache-from must not import shorter rust-base or native rust-deps parents; longer source-v2 is the empty-fingerprint bootstrap"
     );
     let deps_from = rust_bake
@@ -297,16 +297,16 @@ fn assert_delivery_cache_scope_contract() -> anyhow::Result<()> {
         .context("platform bake must delimit the native source cache inputs")?
         .0;
     assert!(
-        !deps_from.contains("nook-rust-base-v1")
-            && !native_source_from.contains("nook-rust-base-v1")
-            && deps_from.contains("nook-rust-deps-v3")
-            && native_source_from.contains("nook-rust-native-source-v3")
-            && native_source_from.contains("nook-rust-deps-v3"),
+        !deps_from.contains("nook-rust-base-v2")
+            && !native_source_from.contains("nook-rust-base-v2")
+            && deps_from.contains("nook-rust-deps-v4")
+            && native_source_from.contains("nook-rust-native-source-v4")
+            && native_source_from.contains("nook-rust-deps-v4"),
         "native deps must be own-scope v3; native source cold fallback may import deps but never rust-base"
     );
     assert!(
         rust_bake.contains(
-            "rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook-rust-wasm-deps-v5${GHA_CACHE_SCOPE_SUFFIX}\""
+            "rust_wasm_deps_write_scope = GHA_CACHE_SCOPE_SUFFIX != \"\" ? \"nook-rust-wasm-deps-v6${GHA_CACHE_SCOPE_SUFFIX}\""
         ) && wasm_deps_from.contains("GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE")
             && wasm_deps_from.contains("${rust_wasm_deps_write_scope}:buildcache")
             && wasm_deps_from
