@@ -29,7 +29,10 @@ or a resulting fix.
    - State the requested outcome in public-safe language.
    - Identify completion evidence and explicit exclusions.
    - Fetch the required baseline.
+   - A team subagent may mutate only:
+     - the current task's owned feature and focused issue set.
    - Treat every other active task as read-only.
+   - Require an explicit handoff first when ownership must change.
    - Do not copy the raw prompt or chat transcript.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
