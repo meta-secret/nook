@@ -163,16 +163,32 @@ test('admits session Markdown only through the global HTML syntax gate', async (
   }
 });
 
-test('does not cascade from an indexed skill rejected by syntax admission', async () => {
+test('admits Gizmo skill rows without cascading from rejected syntax', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-cascade-'));
   try {
     const cortexRoot = path.join(repoRoot, '.cortex');
     const teamsRoot = path.join(cortexRoot, 'teams');
     const aiRoot = path.join(teamsRoot, 'ai');
     const gizmoRoot = path.join(cortexRoot, 'gizmo');
+    const gizmoSkillsRoot = path.join(gizmoRoot, 'dynamic-skills');
     const skillsRoot = path.join(aiRoot, 'dynamic-skills');
+    const gizmoSkillSlugs = [
+      'team-oriented-development',
+      'agent-feature-ownership',
+      'code-review-comments',
+      'efficient-pr-delivery',
+      'feature-issue-planning',
+      'issue-scope-management',
+    ] as const;
+    const gizmoGraphRows = gizmoSkillSlugs
+      .map((slug) => `- [${slug}](dynamic-skills/${slug}.md)`)
+      .join('\n');
+    const gizmoIndexRows = gizmoSkillSlugs
+      .map((slug) => `- [${slug}](../../../gizmo/dynamic-skills/${slug}.md)`)
+      .join('\n');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
+    mkdirSync(gizmoSkillsRoot, directoryOptions);
     mkdirSync(path.join(teamsRoot, 'dev-core'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'security'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'sre'), directoryOptions);
@@ -202,8 +218,14 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
 - [Rejected skill](dynamic-skills/bad.md)
 `,
     );
-    for (const graphPath of [
+    writeFileSync(
       path.join(gizmoRoot, 'knowledge-graph.md'),
+      `# Gizmo Knowledge Graph
+
+${gizmoGraphRows}
+`,
+    );
+    for (const graphPath of [
       path.join(teamsRoot, 'dev-core', 'knowledge-graph.md'),
       path.join(teamsRoot, 'security', 'knowledge-graph.md'),
       path.join(teamsRoot, 'sre', 'knowledge-graph.md'),
@@ -218,12 +240,16 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
 
 - [Rejected skill](bad.md)
 - [Rejected executable](../../../../.agents/skills/bad/SKILL.md)
+${gizmoIndexRows}
 `,
     );
     writeFileSync(
       path.join(skillsRoot, 'bad.md'),
       '# Rejected skill\n\n<div>forbidden</div>\n',
     );
+    for (const slug of gizmoSkillSlugs) {
+      writeFileSync(path.join(gizmoSkillsRoot, `${slug}.md`), `# ${slug}\n`);
+    }
 
     const request = { includeDensityLint: false };
     const auditArgs = { request, startDirectory: repoRoot };
