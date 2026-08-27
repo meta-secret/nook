@@ -77,10 +77,28 @@ request before implementation.
 - The Mission Lead routes that dependency to the responsible team.
 - Shared files and lifecycle state remain parent-owned.
 
-Security review does not erase functional implementation ownership. Security
-owns the invariant and acceptance criteria. Development core, web development,
-SRE, or AI owns implementation in its normal layer unless the Mission Lead
-freezes a bounded expertise contract.
+Security review does not transfer implementation ownership.
+
+- **Security agent**
+  - Defines the security invariant.
+  - Defines security acceptance evidence.
+  - Reviews whether the implementation preserves the invariant.
+- **Development-core agent**
+  - Implements portable Rust behavior.
+  - Implements cryptography, authorization, storage, and typed WASM contracts.
+- **Web-development agent**
+  - Implements TypeScript, Svelte, browser behavior, and extension interaction.
+- **SRE agent**
+  - Implements CI/CD, clusters, deployments, runners, containers, and
+    operations.
+- **AI agent**
+  - Implements Cortex, Loom, agent skills, routing, and agent automation.
+- **Mission Lead**
+  - Keeps implementation with the normal functional owner.
+  - Creates a bounded expertise contract when another team should implement an
+    exact slice.
+  - Names the provider team, allowed files, forbidden files, tests, and
+    acceptance evidence.
 
 The Mission Lead may serialize delegated units when parallel execution is not
 safe. Serialization does not authorize the Mission Lead to implement a unit.
