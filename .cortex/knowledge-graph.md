@@ -17,7 +17,7 @@ coordination, Workbench, pull requests, readiness, and merge state.
 
 ## Team routes
 
-Choose the team that owns the requested functionality.
+Gizmo chooses the team agent that owns the requested functionality.
 
 - [AI](teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills, agent
   workflows, expert routing, and AI automation.
@@ -42,8 +42,10 @@ authority.
 
 ## Routing rules
 
-1. Select Gizmo or one primary team before opening another graph.
-2. Load that context's `AGENTS.md` and knowledge graph.
+1. Gizmo keeps delivery-control work in its own context. For functional work,
+   Gizmo chooses one primary team agent.
+2. The assigned worker loads only its own context's `AGENTS.md` and knowledge
+   graph.
 3. Open only documents needed for the assigned functionality.
 4. Load a shared document only for a named cross-team dependency.
 5. Do not open another team's graph for background context.
