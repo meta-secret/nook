@@ -131,9 +131,11 @@ AI owns the agent knowledge system and deterministic agent tooling.
   - AI workflow tests.
 - **Primary Cortex:** `.cortex/teams/ai/`.
 
-AI owns Cortex governance, authoring rules, consistency, navigation, agent
-ownership, delegation, review, and delivery workflows. It must not implement
-portable product behavior, browser presentation, or infrastructure operations.
+AI owns Cortex governance, authoring rules, consistency, navigation, and
+deterministic agent tooling. Gizmo owns mission planning, team routing,
+subagent coordination, review coordination, PR delivery, readiness, and merge.
+AI must not implement portable product behavior, browser presentation, or
+infrastructure operations.
 
 ## Shared and serialized ownership
 
