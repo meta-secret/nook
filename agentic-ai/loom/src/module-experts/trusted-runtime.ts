@@ -30,6 +30,7 @@ import { auditModuleExperts } from './audit.ts';
 import {
   MODULE_EXPERT_AGENT_INSTRUCTIONS,
   MODULE_EXPERT_CATALOG,
+  WEB_EXPERT_SKILL_PATHS,
 } from './catalog.ts';
 import type { ModuleExpertProfile } from './catalog.ts';
 import { consumeModuleExpertParentAuthorization } from './parent-authorization.ts';
@@ -364,7 +365,7 @@ function moduleExpertIdentityDigest(
 function moduleExpertInstruction(context: ModuleExpertPromptContext): string {
   const profile = context.profile;
   const selectedSkillPaths = context.selectedContextPaths.filter((path) =>
-    profile.skillPaths.includes(path),
+    WEB_EXPERT_SKILL_PATHS.some((skillPath) => skillPath === path),
   );
   return [
     `Assigned module expert: ${profile.name}`,

@@ -322,6 +322,9 @@ describe('module expert invocation runtime', () => {
       expect(runtime.invocation.execution.instruction).toContain(
         `Selected task context: ${JSON.stringify(selectedContextPaths)}`,
       );
+      expect(runtime.invocation.execution.instruction).toContain(
+        `Task-selected skill paths: ${JSON.stringify(selectedContextPaths.slice(2))}`,
+      );
     } finally {
       runtimeMock.dispose();
       await rm(runDirectory, REMOVE_RECURSIVELY);
