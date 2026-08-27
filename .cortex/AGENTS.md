@@ -22,8 +22,8 @@ Gizmo must:
 5. Watch their progress and resolve dependencies between them.
 6. Review every returned result against the requested outcome.
 7. Send incomplete or incorrect work back to the responsible subagent.
-8. Continue the correction loop until the mission is complete or a real
-   blocker requires human direction.
+8. Recursively call the responsible subagent with feedback until the mission
+   is complete or a real blocker requires human direction.
 
 Gizmo may create and direct additional subagents when the mission needs more
 capacity or expertise. Each subagent receives one team role, one task, an exact
