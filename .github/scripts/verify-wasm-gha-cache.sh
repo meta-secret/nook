@@ -51,8 +51,8 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
     "${bake_args[@]}" \
     --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \
     --set "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref},mode=max,compression=zstd,force-compression=true,timeout=10m" \
-    --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint},ignore-error=true" \
-    --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v2:buildcache,ignore-error=true" \
+    --set "builder-wasm-deps-cache-proof.cache-from=type=registry,ref=${registry_host}/nook/remote-buildcache/nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint},ignore-error=true" \
+    --set "builder-wasm-deps-cache-proof.cache-from+=type=registry,ref=${registry_host}/nook/buildcache/nook-rust-wasm-source-v3:buildcache,ignore-error=true" \
     builder-wasm-deps-cache-proof
 fi
 

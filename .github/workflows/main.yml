@@ -1,7 +1,7 @@
 # Main branch: keep one active run plus only the newest pending revision. Run the shared
-# Rust ecosystem gates beside the product pipeline. Serialize the native, WASM, and web
-# cache-writing lanes so each verifies read-only and exports its already-solved local graph
-# without competing uploads. After the verified
+# Rust ecosystem gates beside the product pipeline. Product verification produces immutable
+# handoffs before cache publication, so a cache exporter failure cannot suppress web or browser
+# evidence. After the verified
 # WASM handoff, local-provider web e2e, extension e2e, and headless UI demos overlap on ARC
 # runtime-capable runners. Each browser solve is read-only. The successful UI-demo lane then exports its
 # warm graph to the shared browser cache. Deploy the fast, unoptimized development channel to Cloudflare
@@ -173,8 +173,6 @@ jobs:
 
   wasm:
     name: WASM verification and artifact
-    # Serialize cache uploads after native verification while retaining the producer's
-    # job-scoped builder for a no-rebuild export.
     needs: [rust]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
@@ -234,8 +232,31 @@ jobs:
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
+  wasm-cache-publish:
+    name: WASM cache publication
+    # This job reconstructs cache-only state from the same immutable push SHA.
+    # It cannot replace the verified WASM handoff uploaded by the producer.
+    needs: [wasm]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+
       - name: Publish verified WASM BuildKit cache
-        if: success()
         run: task ci:main:publish-wasm-cache
         env:
           CI: true
@@ -246,7 +267,7 @@ jobs:
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof
-    needs: [wasm]
+    needs: [wasm-cache-publish]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read

@@ -382,8 +382,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         .and_then(|tail| tail.split("rust_ecosystem_fuzz_cache_to =").next())
         .unwrap_or("");
     let pr_isolated_rust_base =
-        "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
-    let trusted_rust_base = "nook/buildcache/nook-rust-base-v1:buildcache";
+        "nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true";
+    let trusted_rust_base = "nook/buildcache/nook-rust-base-v2:buildcache";
     let native_source_from = rust_bake
         .split("rust_native_source_cache_from =")
         .nth(1)
@@ -396,27 +396,27 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && !preflight_from.contains(pr_isolated_rust_base)
             && !deps_from.contains(trusted_rust_base)
             && !deps_from.contains(pr_isolated_rust_base)
-            && !deps_from.contains("nook-rust-base-v1")
-            && !native_source_from.contains("nook-rust-base-v1"),
+            && !deps_from.contains("nook-rust-base-v2")
+            && !native_source_from.contains("nook-rust-base-v2"),
         "ecosystem/preflight/native deps+source must not import rust-base short parents"
     );
     assert!(
-        deps_from.contains("nook-rust-deps-v3")
-            && native_source_from.contains("nook-rust-native-source-v3")
-            && native_source_from.contains("nook-rust-deps-v3"),
+        deps_from.contains("nook-rust-deps-v4")
+            && native_source_from.contains("nook-rust-native-source-v4")
+            && native_source_from.contains("nook-rust-deps-v4"),
         "native deps/source must restore the v3 own scopes; source cold fallback may import deps after leaving rust-base"
     );
     assert!(
-        policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools-v4"),
+        policy_tools_from.contains("nook/buildcache/nook-rust-ecosystem-policy-tools-v5"),
         "policy-tools FALLBACK must restore the fat Main index so PR verify is not cold"
     );
     assert!(
-        dylint_from.contains("nook-rust-ecosystem-dylint-v3")
-            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v3")
+        dylint_from.contains("nook-rust-ecosystem-dylint-v4")
+            && fuzz_from.contains("nook-rust-ecosystem-fuzz-v4")
             && !dylint_from.contains("nook-rust-ecosystem-nightly")
             && !fuzz_from.contains("nook-rust-ecosystem-nightly")
-            && !dylint_from.contains("nook-rust-base-v1")
-            && !fuzz_from.contains("nook-rust-base-v1"),
+            && !dylint_from.contains("nook-rust-base-v2")
+            && !fuzz_from.contains("nook-rust-base-v2"),
         "dylint/fuzz leaf cache-from must be own-scope only (no nightly/rust-base short parents)"
     );
     assert!(
@@ -440,9 +440,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "external ecosystem Dockerfiles link read-only rust-base, product stages stay internal, and scoped publishers own writes"
     );
     assert!(
-        rust_bake.contains("nook-rust-ecosystem-policy-tools-v4")
-            && rust_bake.contains("nook-rust-ecosystem-dylint-v3")
-            && rust_bake.contains("nook-rust-ecosystem-fuzz-v3"),
+        rust_bake.contains("nook-rust-ecosystem-policy-tools-v5")
+            && rust_bake.contains("nook-rust-ecosystem-dylint-v4")
+            && rust_bake.contains("nook-rust-ecosystem-fuzz-v4"),
         "policy-tools and nightly leaves must keep dedicated hosted cache scopes"
     );
     assert!(
@@ -451,7 +451,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "ecosystem deterministic must seed its own hosted cache above rust-deps"
     );
     assert!(
-        rust_bake.contains("nook-rust-ecosystem-kani-v1")
+        rust_bake.contains("nook-rust-ecosystem-kani-v2")
             && rust_bake.contains("cache-from = rust_ecosystem_kani_cache_from")
             && rust_bake.contains("cache-to   = rust_ecosystem_kani_cache_to"),
         "Kani proof compilation must own a complete hosted BuildKit cache scope"

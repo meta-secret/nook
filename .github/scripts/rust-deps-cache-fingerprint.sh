@@ -26,7 +26,7 @@ paths="$({
 } | LC_ALL=C sort -u)"
 
 {
-  printf '%s\n' 'nook-rust-deps-input-v2'
+  printf '%s\n' 'nook-rust-deps-input-v3'
   while IFS= read -r path; do
     if [ -L "$path" ] || [ ! -f "$path" ]; then
       echo "rust-deps-cache-fingerprint: expected regular file: $path" >&2

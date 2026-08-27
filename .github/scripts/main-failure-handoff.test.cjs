@@ -293,6 +293,7 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     path.join(root, 'nook-app/nook-platform/docker/Taskfile.yml'),
     'utf8',
   )
+  const wasmJob = main.split('\n  wasm:\n')[1].split('\n  wasm-cache-publish:\n')[0]
   assert.match(
     main,
     /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
@@ -305,15 +306,17 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
   assert.match(
     main,
-    /Publish verified WASM BuildKit cache[\s\S]*task ci:main:publish-wasm-cache/,
+    /wasm-cache-publish:\n\s+name: WASM cache publication[\s\S]*?\n\s+needs: \[wasm\][\s\S]*Publish verified WASM BuildKit cache[\s\S]*task ci:main:publish-wasm-cache/,
   )
+  assert.match(main, /web:\n\s+name: Verify web build\n\s+needs: \[wasm\]/)
+  assert.doesNotMatch(wasmJob, /task ci:main:publish-wasm-cache/)
   assert.doesNotMatch(
     main,
     /Publish verified WASM BuildKit cache[\s\S]*NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"/,
   )
   assert.match(
     main,
-    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm\]\n\s+runs-on: \$\{\{ vars\.NOOK_RUNS_ON \|\| 'nook-k0s' \}\}[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
+    /wasm-cache-proof:\n\s+name: Portable WASM cache publication proof\n\s+needs: \[wasm-cache-publish\]\n\s+runs-on: \$\{\{ vars\.NOOK_RUNS_ON \|\| 'nook-k0s' \}\}[\s\S]*verify-wasm-gha-cache\.sh[\s\S]*NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"/,
   )
   assert.match(
     main,

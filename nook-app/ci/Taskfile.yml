@@ -109,7 +109,12 @@ tasks:
       VITE_VAULT_SYNC_INTERVAL_MS: '{{.VITE_VAULT_SYNC_INTERVAL_MS}}'
       WASM_BUILD_MODE: '{{.WASM_BUILD_MODE}}'
     cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/with-healthy-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
+      - |
+        if test "${NOOK_BUILDKIT_REMOTE:-}" = "1"; then
+          bash "{{.REPO_ROOT}}/.github/scripts/with-remote-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
+        else
+          bash "{{.REPO_ROOT}}/.github/scripts/with-healthy-buildkit.sh" task --dir "{{.REPO_ROOT}}" {{.BUILD_TASK}}
+        fi
 
   ci:pr:e2e:
     desc: Full stub web Playwright e2e plus extension e2e on job-scoped or daemon BuildKit.

@@ -385,8 +385,12 @@ tasks.requireAll([
 mainWorkflow.forbid("NOOK_CACHE_RUNS_ON");
 mainWorkflow.forbid("    runs-on: ubuntu-latest");
 mainWorkflow.requireAll([
+  "wasm-cache-publish:",
+  "name: WASM cache publication",
+  "needs: [wasm]",
   "wasm-cache-proof:",
   "name: Portable WASM cache publication proof",
+  "needs: [wasm-cache-publish]",
   "Install Bun for registry cache audit",
   "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
   "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
@@ -400,6 +404,8 @@ mainWorkflow.requireAll([
   "runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}",
   "runs-on: nook-k0s-container",
   "Publish exact-source browser job image",
+  "name: Verify web build",
+  "needs: [web, web-e2e, wasm-cache-proof]",
   "task _ci:main:web:e2e-only",
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
@@ -464,8 +470,8 @@ webDockerTasks.requireAll([
 wasmCacheProof.requireAll([
   "Publish from the already-selected node-local rootless BuildKit shard",
   "repair solve never imports the ref it is replacing",
-  'nook-rust-wasm-deps-input-v2:fingerprint-${deps_fingerprint}',
-  "nook-rust-wasm-source-v2:buildcache,ignore-error=true",
+  'nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}',
+  "nook-rust-wasm-source-v3:buildcache,ignore-error=true",
   "compression=zstd,force-compression=true",
   'builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}',
   "verify-registry-cache-blobs.ts",
