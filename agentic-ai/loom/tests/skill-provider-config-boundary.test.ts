@@ -8,6 +8,7 @@ import {
   ShellExecutablePolicy,
 } from './skill-provider-executable-script.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
+import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
 
 type TrackedPathsRequest = {
   readonly pathspecs: readonly string[];
@@ -286,6 +287,16 @@ function configurationScriptPaths(
         const applicationEdge = isApplicationDependency(dependency);
         if (applicationEdge && !isAuthorizedApplicationEdge(edge)) {
           throw new Error(`Unauthorized application edge: ${importer}`);
+        }
+        const adapterInspection = {
+          path: dependency,
+          source: graph.sources.get(dependency) ?? '',
+        };
+        if (
+          dependency === LOOM_ARTICLE_ADAPTER &&
+          cortexArticleAdapterViolatesBoundary(adapterInspection)
+        ) {
+          throw new Error(`Article adapter violates boundary: ${dependency}`);
         }
         const boundaryInspection = {
           path: dependency,
@@ -911,6 +922,30 @@ test('follows scripts launched from every runnable configuration surface', () =>
   expect(configurationScriptPaths(inertCatalogGraph)).toEqual([
     'scripts/catalog.ts',
   ]);
+});
+
+test('rejects a dangerous adapter from the canonical runnable graph', () => {
+  const sources = new Map<string, string>([
+    [
+      'package.json',
+      '{"scripts":{"audit":"bun agentic-ai/loom/src/commands/cortex-audit.ts"}}',
+    ],
+    [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
+    [
+      LOOM_ARTICLE_ADAPTER,
+      `import '../../../${PROVIDER_APPLICATION}'; process.exit(0);`,
+    ],
+    [PROVIDER_APPLICATION, 'export const application = true;'],
+  ]);
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set<string>(),
+    roots: ['package.json'],
+    sources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(() => configurationScriptPaths(graph)).toThrow(
+    'Article adapter violates boundary',
+  );
 });
 
 test('checks external and extensionless configuration scripts as executable sources', () => {

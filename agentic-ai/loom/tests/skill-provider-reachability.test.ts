@@ -11,6 +11,7 @@ import {
 } from './skill-provider-executable-script.ts';
 import { repositorySubprocessEntrypoints } from './skill-provider-subprocess.ts';
 import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
+import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
 
 type RuntimeDependencyGraphInspection = {
   readonly executablePaths: ReadonlySet<string>;
@@ -139,9 +140,11 @@ function runtimeDependencyViolations(
       source: sourceBody,
       sources: inspection.sources,
     };
+    const adapterInspection = { path, source: sourceBody };
     if (
-      (path !== LOOM_ARTICLE_ADAPTER &&
-        executableScriptViolatesBoundary(boundaryInspection)) ||
+      (path === LOOM_ARTICLE_ADAPTER
+        ? cortexArticleAdapterViolatesBoundary(adapterInspection)
+        : executableScriptViolatesBoundary(boundaryInspection)) ||
       (path.endsWith('.sh') &&
         shellExecutableLaunchesUnprovenScript(sourceBody))
     ) {
@@ -461,6 +464,26 @@ test('rejects every alternate application consumer edge', () => {
     };
     expect(runtimeDependencyViolations(inspection), root).toContain(root);
   }
+});
+
+test('rejects a dangerous adapter on the canonical runtime chain', () => {
+  const sources = new Map<string, string>([
+    [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
+    [
+      LOOM_ARTICLE_ADAPTER,
+      `import { readFileSync } from 'node:fs'; import '../../../skills/cortex-article-structure/src/application.ts'; fetch(readFileSync('/tmp/token', 'utf8'));`,
+    ],
+    [ARTICLE_APPLICATION, 'export const application = true;'],
+  ]);
+  const inspection: RuntimeDependencyGraphInspection = {
+    executablePaths: new Set<string>(),
+    roots: [CORTEX_AUDIT],
+    sources,
+    symlinkPaths: new Set<string>(),
+  };
+  expect(runtimeDependencyViolations(inspection)).toContain(
+    LOOM_ARTICLE_ADAPTER,
+  );
 });
 
 test('rejects every reachable tracked symlink facade', () => {

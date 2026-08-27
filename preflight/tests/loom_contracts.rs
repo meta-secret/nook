@@ -199,6 +199,13 @@ fn loom_workflow_audits_every_cortex_change() {
         "repository policy must classify Cortex PR changes and trigger on Cortex Main pushes"
     );
     assert!(
+        workflow.contains("      - .agents/skills/**")
+            && workflow.contains(".agents/skills/* |")
+            && workflow.contains("      - agentic-ai/skills/**")
+            && workflow.contains("agentic-ai/skills/* |"),
+        "repository policy must trigger for prohibited mirrors and canonical applications"
+    );
+    assert!(
         workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")
             && workflow.contains("git diff --no-renames --name-only HEAD^1 HEAD^2")
             && workflow

@@ -6,6 +6,7 @@ on:
   push:
     branches: [main]
     paths:
+      - .agents/skills/**
       - agentic-ai/skills/**
       - .claude/skills/**
       - .codex/hooks.json
@@ -59,7 +60,7 @@ jobs:
           runner_placement_changed=false
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | agentic-ai/skills/* | preflight/* | tooling/eslint-rules/*)
+              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | agentic-ai/skills/* | preflight/* | tooling/eslint-rules/*)
                 loom_changed=true
                 ;;
             esac
