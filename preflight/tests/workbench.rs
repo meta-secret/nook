@@ -458,7 +458,6 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
     let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
     let self_improvement = read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
-    let skill_wrapper = read(".agents/skills/self-improvement/SKILL.md");
     let agent_tasks = read(".task/agentic-ai.yml");
     let readiness_guard = read("agentic-ai/loom/src/commands/cortex-session-clean.ts");
 
@@ -496,10 +495,9 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         );
     }
     assert!(
-        skill_wrapper.contains(".cortex/teams/ai/dynamic-skills/self-improvement.md")
-            && skill_wrapper.contains("invocation mirror")
-            && !skill_wrapper.contains("Create `.cortex/.session"),
-        "the executable skill must route agents through the canonical lifecycle"
+        self_improvement.contains("## Task lifecycle")
+            && self_improvement.contains("Create one temporary file for every substantial task"),
+        "the canonical skill must own the complete self-improvement lifecycle"
     );
     assert!(
         agent_tasks

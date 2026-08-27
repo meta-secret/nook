@@ -292,8 +292,7 @@ describe('module expert invocation runtime', () => {
     const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
       '.cortex/teams/web-dev/product-specs/browser-extension.md',
       '.github/workflows/release.yml',
-      '.agents/skills/design-taste-frontend/SKILL.md',
-      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const request: ModuleExpertInvocationRequest = {
@@ -322,6 +321,9 @@ describe('module expert invocation runtime', () => {
       expect(runtime.invocation.agentProfile.name).toBe('web_expert');
       expect(runtime.invocation.execution.instruction).toContain(
         `Selected task context: ${JSON.stringify(selectedContextPaths)}`,
+      );
+      expect(runtime.invocation.execution.instruction).toContain(
+        `Task-selected skill paths: ${JSON.stringify(selectedContextPaths.slice(2))}`,
       );
     } finally {
       runtimeMock.dispose();

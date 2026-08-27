@@ -12,20 +12,25 @@ test('uses the current adapter-bearing attempt journal schema', () => {
   );
 });
 
-test('declares executable skill mirrors in the skill audit scope', () => {
+test('audits canonical skills without granting harness mirror scope', () => {
   const task =
     CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
       CortexAuditTask.AuditDynamicSkillsAndEntryPoints
     ];
-  expect(task.resources.read).toContain('.agents/**');
-  expect(task.resources.read).toContain('.cursor/**');
-  expect(task.resources.read).toContain('.claude/**');
+  expect(task.resources.read).toEqual([
+    '.cortex/**',
+    '.codex/hooks.json',
+    '.cursor/rules.md',
+    '.github/prompts/**',
+    'AGENTS.md',
+    'CODEX.md',
+    'README.md',
+  ]);
   if (task.execution.kind !== WorkflowExecutorKind.Agent) {
     throw new Error('Skill audit must use an agent executor.');
   }
-  expect(task.execution.instruction).toContain('.agents/skills');
-  expect(task.execution.instruction).toContain('.cursor executable mirrors');
-  expect(task.execution.instruction).toContain('.claude executable mirrors');
+  expect(task.execution.instruction).toContain('prohibited harness mirrors');
+  expect(task.execution.instruction).toContain('duplicate semantic authority');
 });
 
 test('compares design and product claims with owning implementation', () => {

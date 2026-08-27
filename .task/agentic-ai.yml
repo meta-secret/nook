@@ -6,24 +6,6 @@ vars:
   CI_AGENT_DIR: agentic-ai/ci-agent
 
 tasks:
-  skills:install:
-    desc: Install executable skill TypeScript dependencies with a frozen lockfile.
-    dir: .agents/skills
-    cmds:
-      - bun install --frozen-lockfile
-
-  skills:format:
-    desc: Format executable skill files through the shared pinned host formatter.
-    cmds:
-      - bash "{{.REPO_ROOT}}/.github/scripts/format-host-apply.sh"
-
-  skills:verify:
-    desc: Format-check, lint, typecheck, and test executable skill capability packages.
-    dir: .agents/skills
-    deps: [skills:install]
-    cmds:
-      - bun run verify
-
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom
@@ -69,7 +51,6 @@ tasks:
     desc: Format-check, lint, typecheck, and unit-test Loom.
     deps: [loom:install]
     cmds:
-      - task: skills:verify
       - task: loom:format:check
       - task: loom:lint
       - task: loom:check

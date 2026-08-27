@@ -35,19 +35,16 @@ describe('skill scaffold', () => {
   test('inserts the current bullet catalog shape before authoring guidance', () => {
     const insertArgs = {
       cardHref: 'self-improvement.md',
-      createExecutableWrappers: true,
       indexContent:
         '# Project Skill Registry\n\n## Skill catalog\n\n' +
         '- **[existing.md](existing.md)**\n' +
         '  - Purpose: Existing rule\n\n' +
         '## How to add one\n',
-      slug: 'self-improvement',
     };
 
     expect(insertSkillCatalogEntry(insertArgs)).toContain(
       '- **[self-improvement.md](self-improvement.md)**\n' +
-        '  - Purpose: TODO: purpose\n' +
-        '  - Executable skill: [`.agents/skills/self-improvement/SKILL.md`](../../../../.agents/skills/self-improvement/SKILL.md)\n\n' +
+        '  - Purpose: TODO: purpose\n\n' +
         '## How to add one',
     );
   });
@@ -55,12 +52,10 @@ describe('skill scaffold', () => {
   test('accepts the legacy title casing without duplicating an existing card', () => {
     const insertArgs = {
       cardHref: 'self-improvement.md',
-      createExecutableWrappers: false,
       indexContent:
         '# Registry\n\n## Skill catalog\n\n' +
         '- **[self-improvement.md](self-improvement.md)**\n\n' +
         '## How To Add One\n',
-      slug: 'self-improvement',
     };
 
     expect(insertSkillCatalogEntry(insertArgs)).toBe(insertArgs.indexContent);
@@ -69,9 +64,7 @@ describe('skill scaffold', () => {
   test('inserts a team-owned skill by its path from the AI registry', () => {
     const insertArgs = {
       cardHref: '../../sre/dynamic-skills/cluster-recovery.md',
-      createExecutableWrappers: false,
       indexContent: '# Registry\n\n## Skill catalog\n\n## How to add one\n',
-      slug: 'cluster-recovery',
     };
 
     expect(insertSkillCatalogEntry(insertArgs)).toContain(
@@ -93,7 +86,6 @@ describe('skill scaffold', () => {
     const requestNode: UntrustedYamlNode = {
       skillSlug: 'workflow-routing',
       skillOwner: 'gizmo',
-      createExecutableWrappers: false,
     };
     const outcome = decodeSkillScaffoldRequest(requestNode);
     const expectedOutcome: DecodeOutcome<SkillScaffoldRequest> = {
@@ -101,7 +93,6 @@ describe('skill scaffold', () => {
       value: {
         skillSlug: 'workflow-routing',
         skillOwner: SkillOwner.Gizmo,
-        createExecutableWrappers: false,
       },
     };
     expect(outcome).toEqual(expectedOutcome);

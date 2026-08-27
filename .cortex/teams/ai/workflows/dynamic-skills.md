@@ -23,11 +23,12 @@ It does not mean optional or temporary guidance.
 Dynamic skills turn concrete feedback into reusable guidance:
 
 1. A **skill card** in the responsible team's `dynamic-skills/` directory is
-   the source of truth. Only ownerless repository-wide policy stays in the
-   common directory.
-2. Executable skills live in [`.agents/skills/`](../../../../.agents/skills) (the canonical open agent skill directory for Antigravity, Cursor, Claude, and Codex), with symlinks in [`.cursor/skills/`](../../../../.cursor/skills) and [`.claude/skills/`](../../../../.claude/skills). Skill wrappers are mirrors, not the canonical copy.
+   the sole semantic authority. Only ownerless repository-wide policy stays in
+   the shared directory.
+2. Harness profiles may discover or present these cards outside the tracked
+   repository. They must not mirror or redefine repository semantics.
 3. The registry at [`.cortex/teams/ai/dynamic-skills/index.md`](../dynamic-skills/index.md)
-   lists every available skill card and whether it has an executable skill.
+   lists every available skill card.
 
 ## Prompt Protocol
 
@@ -62,7 +63,8 @@ scope, and apply the pattern with normal coding workflow and validation.
    Otherwise select the responsible team before creating the card.
 5. Update [`.cortex/teams/ai/dynamic-skills/index.md`](../dynamic-skills/index.md) in the
    same change.
-6. Create or update `.agents/skills/<skill-name>/SKILL.md` (and ensure `.cursor/skills/` and `.claude/skills/` symlinks exist) when the pattern is intended to be invoked directly by future agents.
+6. Keep harness-specific discovery configuration outside the tracked
+   repository. Do not create `.agents`, `.cursor`, or `.claude` skill mirrors.
 
 For a new card scaffold, prefer Loom:
 
@@ -70,7 +72,6 @@ For a new card scaffold, prefer Loom:
 skillScaffold:
   skillSlug: example-skill
   skillOwner: gizmo # or ai, shared, dev-core, security, sre, or web-dev
-  createExecutableWrappers: false
 ```
 
 ```bash

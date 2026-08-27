@@ -1,29 +1,3 @@
 {
-  "hooks": {
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write|apply_patch",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || task impeccable:hook",
-            "timeout": 15,
-            "statusMessage": "Checking UI changes"
-          }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "[ ! -f \".agents/skills/impeccable/scripts/hook.mjs\" ] || task impeccable:hook",
-            "timeout": 45,
-            "statusMessage": "Design deep pass"
-          }
-        ]
-      }
-    ]
-  }
+  "hooks": {}
 }

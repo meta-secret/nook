@@ -33,7 +33,7 @@ export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
   readonly missingFromIndex: string[];
   readonly orphanIndexRows: string[];
-  readonly missingExecutableSkills: string[];
+  readonly prohibitedHarnessSkillPaths: string[];
   readonly densityFindings: DensityFinding[];
   readonly structureFindings: CortexStructureFinding[];
   readonly articleStructureFindings: CortexArticleFinding[];
@@ -189,7 +189,6 @@ export async function runCortexAuditFromDirectory(
   const indexed = new Set(
     [...indexContent.matchAll(/\(([^)]+\.md)\)/g)]
       .map((match) => match[1] ?? '')
-      .filter((target) => !target.includes('.agents/'))
       .map((target) => path.resolve(path.dirname(indexPath), target))
       .map((target) => path.relative(repoRoot, target))
       .filter((target) => target.includes('/dynamic-skills/')),
@@ -212,59 +211,51 @@ export async function runCortexAuditFromDirectory(
         .map((filePath) => path.basename(filePath))
     : [];
 
-  const missingExecutableSkills: string[] = [];
-  for (const match of indexContent.matchAll(
-    /\((?:\.\.\/)+\.agents\/skills\/([^/]+)\/SKILL\.md\)/g,
-  )) {
-    const slug = match[1];
-    if (typeof slug !== 'string') {
-      continue;
-    }
-    if (syntaxInvalidSkillNames.has(`${slug}.md`)) {
-      continue;
-    }
-    const skillPath = path.join(
-      repoRoot,
-      '.agents',
-      'skills',
-      slug,
-      'SKILL.md',
-    );
-    if (!existsSync(skillPath)) {
-      missingExecutableSkills.push(slug);
-    }
-  }
-  const admittedBrokenLinks = brokenLinks.filter((finding) => {
-    if (finding.file !== '.cortex/teams/ai/dynamic-skills/index.md') {
-      return true;
-    }
-    const mirrorMatch =
-      /^(?:\.\.\/)+\.agents\/skills\/([^/]+)\/SKILL\.md(?:#.*)?$/.exec(
-        finding.target,
-      );
-    const slug = mirrorMatch?.[1];
-    return (
-      typeof slug !== 'string' || !syntaxInvalidSkillNames.has(`${slug}.md`)
-    );
-  });
+  const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
 
   return {
-    brokenLinks: admittedBrokenLinks,
+    brokenLinks,
     missingFromIndex,
     orphanIndexRows,
-    missingExecutableSkills,
+    prohibitedHarnessSkillPaths,
     densityFindings,
     structureFindings,
     articleStructureFindings,
     auditOk:
-      admittedBrokenLinks.length === 0 &&
+      brokenLinks.length === 0 &&
       missingFromIndex.length === 0 &&
       orphanIndexRows.length === 0 &&
-      missingExecutableSkills.length === 0 &&
+      prohibitedHarnessSkillPaths.length === 0 &&
       densityFindings.length === 0 &&
       structureFindings.length === 0 &&
       articleStructureFindings.length === 0,
   };
+}
+
+const HARNESS_SKILL_ROOTS = [
+  '.agents/skills',
+  '.cursor/skills',
+  '.claude/skills',
+] as const;
+
+function trackedHarnessSkillPaths(repoRoot: string): string[] {
+  if (!existsSync(path.join(repoRoot, '.git'))) {
+    return [];
+  }
+  const commandArgs = ['ls-files', '--', ...HARNESS_SKILL_ROOTS];
+  const options: ExecFileSyncOptionsWithStringEncoding = {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  };
+  try {
+    return execFileSync('git', commandArgs, options)
+      .split(/\r?\n/u)
+      .filter((entry) => entry.length > 0)
+      .sort();
+  } catch {
+    return [...HARNESS_SKILL_ROOTS];
+  }
 }
 
 const DOCUMENT_MAP_MIGRATION_LEDGER_PATH = '.cortex/document-map-migration.txt';

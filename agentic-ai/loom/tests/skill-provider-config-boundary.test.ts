@@ -80,14 +80,14 @@ type RepositoryPackageDocument = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const PROVIDER_ROOT = '.agents/skills/cortex-article-structure';
-const PROVIDER_RUNNER = `${PROVIDER_ROOT}/src/runner.ts`;
+const PROVIDER_ROOT = 'agentic-ai/loom/src/cortex-article-provider';
+const PROVIDER_RUNNER = `${PROVIDER_ROOT}/runner.ts`;
 const PROVIDER_SOURCE_GLOB = '**/*';
 const PROVIDER_SOURCE_PATHS = [
-  `${PROVIDER_ROOT}/src/audit.ts`,
-  `${PROVIDER_ROOT}/src/codec.ts`,
-  `${PROVIDER_ROOT}/src/domain.ts`,
-  `${PROVIDER_ROOT}/src/verification.ts`,
+  `${PROVIDER_ROOT}/audit.ts`,
+  `${PROVIDER_ROOT}/codec.ts`,
+  `${PROVIDER_ROOT}/domain.ts`,
+  `${PROVIDER_ROOT}/verification.ts`,
 ] as const;
 const RUNNABLE_CONFIG_PATHS = [
   ':(glob)**/package.json',
@@ -536,13 +536,13 @@ test('dormant provider exposes no runnable adapter or side-effect entrypoint', a
   expect(providerSourceGlob.match('runtime/runner.sh')).toBe(true);
   expect(providerSourceGlob.match('runtime/runner')).toBe(true);
   const scanOptions: SourceScanOptions = {
-    cwd: join(REPOSITORY_ROOT, PROVIDER_ROOT, 'src'),
+    cwd: join(REPOSITORY_ROOT, PROVIDER_ROOT),
     onlyFiles: true,
   };
   const providerSources = (
     await Array.fromAsync(providerSourceGlob.scan(scanOptions))
   )
-    .map((path) => `${PROVIDER_ROOT}/src/${path}`)
+    .map((path) => `${PROVIDER_ROOT}/${path}`)
     .sort();
   expect(providerSources).toEqual([...PROVIDER_SOURCE_PATHS].sort());
 
@@ -557,15 +557,9 @@ test('dormant provider exposes no runnable adapter or side-effect entrypoint', a
       /\bexport\s+(?:async\s+)?(?:function|const|let|var)\s+run\b/u,
     );
   }
-
-  const manifest = await Bun.file(
-    join(REPOSITORY_ROOT, PROVIDER_ROOT, 'executable-skill.json'),
-  ).text();
-  expect(manifest).not.toContain('"entrypoint"');
-  expect(manifest).not.toContain('"command"');
 });
 
-test('production Loom and runnable configuration do not consume the provider', async () => {
+test('production Loom owns the provider without runnable configuration entrypoints', async () => {
   const productionRequest: TrackedPathsRequest = {
     pathspecs: PRODUCTION_LOOM_PATHS,
   };
@@ -612,9 +606,11 @@ test('production Loom and runnable configuration do not consume the provider', a
     symlinkPaths,
   };
   const reachableScriptPaths = configurationScriptPaths(scriptGraph);
+  expect(await pathsContainingProviderRoot(productionPaths)).toEqual(
+    PROVIDER_SOURCE_PATHS,
+  );
   expect(
     await pathsContainingProviderRoot([
-      ...productionPaths,
       ...configPaths,
       ...reachableActionPaths,
       ...reachableScriptPaths,

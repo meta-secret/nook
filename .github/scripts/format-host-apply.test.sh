@@ -79,14 +79,18 @@ for required in \
     || { echo "format-host-apply test: missing shared TypeScript formatter contract: $required" >&2; exit 1; }
 done
 for required in \
-  '.agents/skills/*' \
-  'executable_skill_files+=' \
-  '"$repo_root/.agents/skills"' \
   'tooling/eslint-rules/no-raw-object-arguments.js' \
   'shared_tooling_files+=' \
   'done <"$changed_files"'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
-    || { echo "format-host-apply test: missing executable-skill formatter contract: $required" >&2; exit 1; }
+    || { echo "format-host-apply test: missing shared-tooling formatter contract: $required" >&2; exit 1; }
+done
+for obsolete in \
+  '.agents/skills/*' \
+  'executable_skill_files+=' \
+  '"$repo_root/.agents/skills"'; do
+  printf '%s\n' "$formatter" | grep -Fq "$obsolete" \
+    && { echo "format-host-apply test: obsolete project skill formatter remains: $obsolete" >&2; exit 1; }
 done
 
 for required in \
@@ -95,13 +99,13 @@ for required in \
   'FORMAT_CHANGED_FILES="$FORMAT_CHANGED_FILES"' \
   'bash "$formatter_root/format.sh"'; do
   printf '%s\n' "$guest_changed_formatter" | grep -Fq -- "$required" \
-    || { echo "format-host-apply test: sealed guest misses skill formatter contract: $required" >&2; exit 1; }
+    || { echo "format-host-apply test: sealed guest misses shared formatter contract: $required" >&2; exit 1; }
 done
 printf '%s\n' "$guest_formatter" | grep -Fq 'bash .github/scripts/format-host-apply.sh' \
   || { echo 'format-host-apply test: sealed guest must delegate changed-file selection' >&2; exit 1; }
 for package in "$web_package" "$loom_package"; do
   printf '%s\n' "$package" | grep -Fq '"prettier": "3.9.6"' \
-    || { echo 'format-host-apply test: skill formatter Prettier version is not pinned consistently' >&2; exit 1; }
+    || { echo 'format-host-apply test: shared formatter Prettier version is not pinned consistently' >&2; exit 1; }
 done
 for loom_format_contract in \
   '"format": "prettier --config .prettierrc' \
@@ -109,15 +113,14 @@ for loom_format_contract in \
   printf '%s\n' "$loom_package" | grep -Fq "$loom_format_contract" \
     || { echo 'format-host-apply test: Loom tooling formatter does not use its pinned config' >&2; exit 1; }
 done
-for forbidden in 'task skills:format' 'task skills:install' 'bun install' '.agents/skills/*/src/**/*.ts'; do
+for forbidden in 'bun install'; do
   printf '%s\n%s\n' "$guest_formatter" "$guest_changed_formatter" | grep -Fq -- "$forbidden" \
-    && { echo "format-host-apply test: sealed guest skill formatting recurses or installs: $forbidden" >&2; exit 1; }
+    && { echo "format-host-apply test: sealed guest formatting installs dependencies: $forbidden" >&2; exit 1; }
 done
 
 fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
 mkdir -p \
-  "$fixture_root/.agents/skills/demo/src" \
   "$fixture_root/agentic-ai/loom/src" \
   "$fixture_root/agentic-ai/minds/hive-console/src" \
   "$fixture_root/agentic-ai/minds/hive/src" \
@@ -171,9 +174,6 @@ chmod +x \
   "$fixture_root/bin/rustfmt" \
   "$fixture_root/bin/task" \
   "$fixture_root/.github/formatting/node_modules/.bin/prettier"
-printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/changed.ts"
-printf 'baseline\n' >"$fixture_root/.agents/skills/demo/src/untouched.ts"
-printf '{}\n' >"$fixture_root/.agents/skills/.prettierrc"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-web.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-default.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-shared-typescript.json"
@@ -204,10 +204,6 @@ printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments
   git add -A
   git commit -qm baseline
   git update-ref refs/remotes/origin/main HEAD
-  printf 'dirty\n' >.agents/skills/demo/src/changed.ts
-  printf 'staged\n' >.agents/skills/demo/src/staged.ts
-  git add .agents/skills/demo/src/staged.ts
-  printf 'export default {};\n' >.agents/skills/eslint.config.js
   printf 'unrelated\n' >README.md
   printf 'const changed = true;\n' >tooling/eslint-rules/no-raw-object-arguments.js
   printf 'const loom = true;\n' >agentic-ai/loom/src/loom.ts
@@ -235,9 +231,6 @@ printf '%s\n' \
   '../nook-vault-sentinel/src/sentinel.svelte' \
   '../nook-vault-simple/src/simple.svelte' \
   '../nook-web-shared/src/vault-app/shared.ts' \
-  'demo/src/changed.ts' \
-  'demo/src/staged.ts' \
-  'eslint.config.js' \
   'src/extension.ts' \
   'src/hive-console.ts' \
   'src/loom.ts' \
@@ -256,10 +249,6 @@ printf '%s\n' \
 sort "$fixture_root/rust.log" >"$fixture_root/actual-rust.log"
 cmp -s "$fixture_root/expected-rust.log" "$fixture_root/actual-rust.log" \
   || { echo 'format-host-apply test: sealed guest Rust changed-path selection drifted' >&2; exit 1; }
-if grep -Fq 'untouched.ts' "$fixture_root/format.log"; then
-  echo 'format-host-apply test: sealed guest formatted an untouched skill file' >&2
-  exit 1
-fi
 (
   cd "$fixture_root"
   rm -f format.log expected.log actual.log rust.log expected-rust.log actual-rust.log

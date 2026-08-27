@@ -29,7 +29,7 @@ will implement named files.
 - Product-specification lifecycle and evidence-backed Cortex promotion.
 - Loom commands, typed workflows, runtime implementation, and deterministic
   Cortex audits under `agentic-ai/loom/`.
-- Agent skills and their executable mirrors.
+- Canonical Cortex skill cards and their deterministic tooling.
 - Module experts and structural-refactoring experts.
 - Structural-refactoring evidence and synthesis.
 - Dynamic-skill authoring and workflow implementation.

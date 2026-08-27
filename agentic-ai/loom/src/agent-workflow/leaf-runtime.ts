@@ -221,17 +221,13 @@ export function mechanicalCortexAuditOutput(
     };
     findings.push(finding);
   }
-  for (const skill of report.missingExecutableSkills) {
-    const executablePath = `.agents/skills/${skill}/SKILL.md`;
+  for (const mirrorPath of report.prohibitedHarnessSkillPaths) {
     const finding: WorkflowFinding = {
       severity: WorkflowFindingSeverity.Error,
-      title: 'Missing executable dynamic-skill wrapper',
-      summary: `${skill} has no executable skill wrapper.`,
-      evidence: [`Expected executable wrapper at ${executablePath}.`],
-      affectedPaths: [
-        '.cortex/teams/ai/dynamic-skills/index.md',
-        executablePath,
-      ],
+      title: 'Tracked harness skill mirror',
+      summary: `${mirrorPath} duplicates or redefines canonical Cortex authority.`,
+      evidence: [`git ls-files reports ${mirrorPath}.`],
+      affectedPaths: [mirrorPath],
     };
     findings.push(finding);
   }

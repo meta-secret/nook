@@ -217,8 +217,8 @@ It identifies:
 - **Entry points:** Each production package's `package.json`.
 - **Allowed skill catalog:** The task selects the smallest applicable set.
   - `module-expert` is always required for module analysis.
-  - `design-taste-frontend` is required for user-visible Svelte or interaction
-    work.
+  - `.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md` is required for
+    user-visible Svelte or interaction work.
   - `browser-extension-release-security` is required when hosted extension
     origins, identity, archives, redirects, injection exclusions, isolated
     browser profiles, or release artifacts are in scope.
@@ -227,20 +227,19 @@ It identifies:
 - **Selection field:** `selectedContextPaths` carries optional product
   authorities, release authorities, and task-applicable skill paths.
   - An empty selection represents ordinary module analysis.
-  - Selecting a product authority requires `design-taste-frontend`.
+  - Selecting a product authority requires `ui-design-skills`.
   - Selecting a release authority requires
     `browser-extension-release-security` and its canonical security authority.
   - The role rejects duplicate, reordered, unknown, or incomplete selections.
-- **Skill authority:** `design-taste-frontend` is complete in its executable
-  skill card. `browser-extension-release-security` routes to its canonical
-  security authority. The task-selected snapshot includes that authority when
-  the security skill is required.
+- **Skill authority:** `ui-design-skills` and
+  `browser-extension-release-security` remain complete in their owning Cortex
+  cards. The task-selected snapshot includes the security authority when the
+  security skill is required.
 - **Base context:** Every invocation receives these authorities.
   - `.cortex/teams/web-dev/AGENTS.md`
   - `.cortex/teams/web-dev/knowledge-graph.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
   - `.cortex/gizmo/workflows/module-oriented-development.md`
-  - `.agents/skills/module-expert/SKILL.md`
 - **Allowed product authority catalog:** The task selects only the authorities
   that own its assigned functionality.
   - `.cortex/teams/dev-core/product-specs/authenticator-items.md`

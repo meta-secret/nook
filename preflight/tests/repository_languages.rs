@@ -126,12 +126,9 @@ fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()
     let canonical = fs::read_to_string(
         root.join(".cortex/shared/dynamic-skills/typescript-rust-automation-only.md"),
     )?;
-    let executable =
-        fs::read_to_string(root.join(".agents/skills/typescript-rust-automation-only/SKILL.md"))?;
     for (name, source) in [
         ("agent operating contract", agents.as_str()),
         ("canonical language skill", canonical.as_str()),
-        ("executable language skill", executable.as_str()),
     ] {
         assert!(
             source.contains(&language),

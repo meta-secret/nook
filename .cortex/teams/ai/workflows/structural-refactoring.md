@@ -65,7 +65,7 @@ The Cortex expert begins with the root routing graph and the selected team's
 knowledge graph.
 
 1. Find the most specific authority for the topic.
-2. Read its one-hop authorities and executable skill mirrors.
+2. Read its one-hop authorities and canonical skill cards.
 3. Compare active claims with code, Task, CI, and product evidence.
 4. Identify complexity, conflicts, duplication, legacy, and ownership drift.
 5. Classify instruction ownership.
@@ -109,7 +109,7 @@ Gizmo reviews every finding before assigning edits.
    tests for code invariants.
 6. Assign dependent consumer changes after their provider contract is
    accepted.
-7. Update Cortex and executable mirrors when durable guidance changes.
+7. Update canonical Cortex cards when durable guidance changes.
 8. Update the owning knowledge graph when document headings or paths change.
 9. Run the validation owned by each edit group.
 
@@ -142,7 +142,7 @@ A structural refactor is complete when:
 - Cortex has one clear owner for each durable claim;
 - legacy material is removed or labeled historical;
 - deterministic mechanics have typed enforcement or remain explicit proposals;
-- executable skill mirrors agree with canonical cards;
+- tracked harness skill mirrors remain absent;
 - the knowledge graph matches the final headings;
 - the updated exact head passes its required gates.
 

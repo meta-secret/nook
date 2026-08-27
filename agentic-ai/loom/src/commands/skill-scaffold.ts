@@ -1,10 +1,4 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  writeFileSync,
-  symlinkSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   SkillOwner,
@@ -21,7 +15,6 @@ import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 export type SkillScaffoldReport = {
   readonly cardPath: string;
   readonly indexUpdated: boolean;
-  readonly wrappersCreated: string[];
   readonly created: boolean;
 };
 
@@ -44,9 +37,7 @@ export function renderSkillCard(args: RenderSkillCardArgs): string {
 
 type InsertSkillCatalogEntryArgs = {
   readonly cardHref: string;
-  readonly createExecutableWrappers: boolean;
   readonly indexContent: string;
-  readonly slug: string;
 };
 
 type FindExistingSkillCardArgs = {
@@ -118,10 +109,8 @@ export function insertSkillCatalogEntry(
     loomFailureDetail(failureArgs);
   }
 
-  const executableSkill = args.createExecutableWrappers
-    ? `\n  - Executable skill: [\`.agents/skills/${args.slug}/SKILL.md\`](../../../../.agents/skills/${args.slug}/SKILL.md)`
-    : '';
-  const entry = `- **[${args.slug}.md](${args.cardHref})**\n  - Purpose: TODO: purpose${executableSkill}`;
+  const slug = path.basename(args.cardHref, '.md');
+  const entry = `- **[${slug}.md](${args.cardHref})**\n  - Purpose: TODO: purpose`;
   const markerIndex = markerMatch.index;
   const before = args.indexContent.slice(0, markerIndex).trimEnd();
   const after = args.indexContent.slice(markerIndex);
@@ -175,9 +164,7 @@ export async function runSkillScaffold(
   const currentIndexContent = readFileSync(indexPath, 'utf8');
   const insertArgs: InsertSkillCatalogEntryArgs = {
     cardHref: markdownPath(path.relative(aiSkillsDir, cardPath)),
-    createExecutableWrappers: request.createExecutableWrappers,
     indexContent: currentIndexContent,
-    slug,
   };
   const indexContent = insertSkillCatalogEntry(insertArgs);
   const indexUpdated = indexContent !== currentIndexContent;
@@ -187,54 +174,9 @@ export async function runSkillScaffold(
   writeFileSync(cardPath, card, 'utf8');
   if (indexUpdated) writeFileSync(indexPath, indexContent, 'utf8');
 
-  const wrappersCreated: string[] = [];
-  if (request.createExecutableWrappers) {
-    const agentsDir = path.join(repoRoot, '.agents', 'skills', slug);
-    mkdirSync(agentsDir, directoryOptions);
-    const skillMd = path.join(agentsDir, 'SKILL.md');
-    if (!existsSync(skillMd)) {
-      const cortexLink = markdownPath(path.relative(repoRoot, cardPath));
-      writeFileSync(
-        skillMd,
-        [
-          '---',
-          `name: ${slug}`,
-          'description: >-',
-          `  Project skill wrapper for ${cortexLink}`,
-          '---',
-          '',
-          `# ${title}`,
-          '',
-          'Read and follow the canonical project skill at',
-          `[${cortexLink}](../../../${cortexLink}).`,
-          '',
-        ].join('\n'),
-        'utf8',
-      );
-      wrappersCreated.push(path.relative(repoRoot, skillMd));
-    }
-
-    for (const host of ['.cursor/skills', '.claude/skills'] as const) {
-      const hostDir = path.join(repoRoot, host);
-      mkdirSync(hostDir, directoryOptions);
-      const linkPath = path.join(hostDir, slug);
-      if (!existsSync(linkPath)) {
-        symlinkSync(
-          path.relative(
-            hostDir,
-            path.join(repoRoot, '.agents', 'skills', slug),
-          ),
-          linkPath,
-        );
-        wrappersCreated.push(path.relative(repoRoot, linkPath));
-      }
-    }
-  }
-
   return {
     cardPath: path.relative(repoRoot, cardPath),
     indexUpdated,
-    wrappersCreated,
     created: true,
   };
 }

@@ -103,5 +103,5 @@ Does not apply to read-only sessions with no commits.
 A first Verify attempt should not fail solely on Prettier, rustfmt, or the UI
 demo contract.
 
-If Workbench stats still flag those as waste, tighten this card and coding-bro
-in the same task.
+If Workbench stats still flag those as waste, tighten this card and
+[Gizmo mission delivery](../../../gizmo/workflows/mission-delivery.md) in the same task.

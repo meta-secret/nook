@@ -52,34 +52,21 @@ const thresholds = {
 };
 
 describe('scanRepositoryNpmPackages', () => {
-  test('unions Loom and executable-skill dependencies', () => {
+  test('reads production Loom dependencies', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nook-dependency-scan-'));
     temporaryRoots.push(root);
     const loomManifest: PackageManifestFixture = {
       dependencies: { alpha: '1.0.0', shared: '1.0.0' },
       devDependencies: { '@types/ignored': '1.0.0' },
     };
-    const skillManifest: PackageManifestFixture = {
-      dependencies: { beta: '1.0.0', shared: '1.0.0' },
-    };
     const loomWrite: WriteManifestArgs = {
       root,
       relativePath: 'agentic-ai/loom/package.json',
       manifest: loomManifest,
     };
-    const skillWrite: WriteManifestArgs = {
-      root,
-      relativePath: '.agents/skills/package.json',
-      manifest: skillManifest,
-    };
     writeManifest(loomWrite);
-    writeManifest(skillWrite);
 
-    expect(scanRepositoryNpmPackages(root)).toEqual([
-      'alpha',
-      'beta',
-      'shared',
-    ]);
+    expect(scanRepositoryNpmPackages(root)).toEqual(['alpha', 'shared']);
   });
 });
 

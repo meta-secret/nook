@@ -72,9 +72,6 @@ includes:
   ci-workflows:
     taskfile: .task/ci-workflows.yml
     flatten: true
-  impeccable:
-    taskfile: .task/impeccable.yml
-    flatten: true
   infra:
     taskfile: infra/Taskfile.yml
     dir: .

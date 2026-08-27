@@ -125,8 +125,8 @@ module under `src`. Its failure message directs the agent to architectural
 decomposition and explicitly rejects test-file and arbitrary splits.
 
 Static line counting cannot prove cohesion or dependency direction. Contract
-tests keep this critical guidance wired into `.cortex`, the executable skill,
-and scanner diagnostics; code review must verify the actual architectural seam.
+tests keep this critical guidance wired into Cortex and scanner diagnostics.
+Code review must verify the actual architectural seam.
 
 ## Validation
 

@@ -73,8 +73,7 @@ describe('module expert invocation request codec', () => {
     const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
       '.cortex/teams/web-dev/product-specs/browser-extension.md',
       '.github/workflows/release.yml',
-      '.agents/skills/design-taste-frontend/SKILL.md',
-      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const request: ModuleExpertInvocationRequest = {
@@ -96,8 +95,7 @@ describe('module expert invocation request codec', () => {
     const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
       '.cortex/teams/web-dev/product-specs/browser-extension.md',
       '.github/workflows/release.yml',
-      '.agents/skills/design-taste-frontend/SKILL.md',
-      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const webRequest: ModuleExpertInvocationRequest = {
