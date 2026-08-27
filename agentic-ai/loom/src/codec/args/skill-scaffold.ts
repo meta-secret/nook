@@ -36,6 +36,7 @@ export enum SkillScaffoldField {
 
 export enum SkillOwner {
   Shared = 'shared',
+  Gizmo = 'gizmo',
   Ai = 'ai',
   DevCore = 'dev-core',
   Security = 'security',
@@ -51,7 +52,7 @@ export type SkillScaffoldRequest = {
 
 const ROOT = RequestFamily.SkillScaffold;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const SKILL_OWNER_RE = /^(?:shared|ai|dev-core|security|sre|web-dev)$/;
+const SKILL_OWNER_RE = /^(?:shared|gizmo|ai|dev-core|security|sre|web-dev)$/;
 
 export function decodeSkillScaffoldRequest(
   value: UntrustedYamlNode,
@@ -107,7 +108,7 @@ export function decodeSkillScaffoldRequest(
     const fieldErrorArgs: FieldErrorArgs = {
       path: `${ROOT}.${SkillScaffoldField.SkillOwner}`,
       issue: FieldIssue.ExpectedOneOf,
-      detail: fieldDetailText('shared|ai|dev-core|security|sre|web-dev'),
+      detail: fieldDetailText('shared|gizmo|ai|dev-core|security|sre|web-dev'),
     };
     errors.push(fieldError(fieldErrorArgs));
   }
@@ -127,7 +128,7 @@ const skillSlugPatternArgs: PatternStringJsonSchemaArgs = {
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
 };
 const skillOwnerPatternArgs: PatternStringJsonSchemaArgs = {
-  pattern: '^(?:shared|ai|dev-core|security|sre|web-dev)$',
+  pattern: '^(?:shared|gizmo|ai|dev-core|security|sre|web-dev)$',
 };
 const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [

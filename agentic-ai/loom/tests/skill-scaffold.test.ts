@@ -7,7 +7,16 @@ import {
   insertSkillCatalogEntry,
   markdownPath,
   renderSkillCard,
+  skillOwnerDynamicSkillsDirectory,
+  type SkillOwnerDynamicSkillsDirectoryArgs,
 } from '../src/commands/skill-scaffold.ts';
+import {
+  decodeSkillScaffoldRequest,
+  SkillOwner,
+  type SkillScaffoldRequest,
+} from '../src/codec/args/skill-scaffold.ts';
+import { DecodeStatus, type DecodeOutcome } from '../src/codec/field-error.ts';
+import type { UntrustedYamlNode } from '../src/lib/guards.ts';
 
 describe('skill scaffold', () => {
   test('normalizes Markdown links across platforms', () => {
@@ -70,6 +79,44 @@ describe('skill scaffold', () => {
     );
   });
 
+  test('routes Gizmo-owned skills outside the teams directory', () => {
+    const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
+      cortexRoot: '/repo/.cortex',
+      skillOwner: SkillOwner.Gizmo,
+    };
+    expect(skillOwnerDynamicSkillsDirectory(directoryArgs)).toBe(
+      '/repo/.cortex/gizmo/dynamic-skills',
+    );
+  });
+
+  test('decodes Gizmo as a supported skill owner', () => {
+    const requestNode: UntrustedYamlNode = {
+      skillSlug: 'workflow-routing',
+      skillOwner: 'gizmo',
+      createExecutableWrappers: false,
+    };
+    const outcome = decodeSkillScaffoldRequest(requestNode);
+    const expectedOutcome: DecodeOutcome<SkillScaffoldRequest> = {
+      status: DecodeStatus.Ok,
+      value: {
+        skillSlug: 'workflow-routing',
+        skillOwner: SkillOwner.Gizmo,
+        createExecutableWrappers: false,
+      },
+    };
+    expect(outcome).toEqual(expectedOutcome);
+  });
+
+  test('preserves Security skill ownership under the teams directory', () => {
+    const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
+      cortexRoot: '/repo/.cortex',
+      skillOwner: SkillOwner.Security,
+    };
+    expect(skillOwnerDynamicSkillsDirectory(directoryArgs)).toBe(
+      '/repo/.cortex/teams/security/dynamic-skills',
+    );
+  });
+
   test('rejects a duplicate skill slug owned by another team', async () => {
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-skill-scaffold-'));
     const cortexRoot = join(fixtureRoot, '.cortex');
@@ -120,6 +167,32 @@ describe('skill scaffold', () => {
 
       const findArgs = { cortexRoot, slug: 'threat-review' };
       expect(findExistingSkillCard(findArgs)).toBe(securityCard);
+    } finally {
+      const removeOptions = { recursive: true, force: true } as const;
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('finds an existing Gizmo-owned skill card', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-gizmo-skill-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    const gizmoCard = join(
+      cortexRoot,
+      'gizmo',
+      'dynamic-skills',
+      'workflow-routing.md',
+    );
+
+    try {
+      const directoryOptions = { recursive: true } as const;
+      await mkdir(
+        join(cortexRoot, 'gizmo', 'dynamic-skills'),
+        directoryOptions,
+      );
+      await writeFile(gizmoCard, '# Workflow Routing\n', 'utf8');
+
+      const findArgs = { cortexRoot, slug: 'workflow-routing' };
+      expect(findExistingSkillCard(findArgs)).toBe(gizmoCard);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);

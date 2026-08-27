@@ -99,7 +99,10 @@ function parseBudgetFieldValue(budgetSection, label) {
   return { kind: 'valid', value: match[1].trim() }
 }
 
-const ownershipTeamPattern = 'AI|Development core|Security|SRE|Web development'
+const functionalOwnerPattern =
+  'Gizmo|AI|Development core|Security|SRE|Web development'
+const expertiseProviderPattern =
+  'AI|Development core|Security|SRE|Web development'
 
 function isExactRepositoryPathList(value) {
   if (value === 'None') return false
@@ -128,7 +131,7 @@ function validateOwnershipUnits(ownershipBody) {
   if (lines.length === 0) return 'plan requires at least one ownership unit'
 
   const unitPattern = new RegExp(
-    `^(\\d+)\\. Capability: (.+?); Functional owner: (${ownershipTeamPattern}); Expertise provider: (None|${ownershipTeamPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
+    `^(\\d+)\\. Capability: (.+?); Functional owner: (${functionalOwnerPattern}); Expertise provider: (None|${expertiseProviderPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
   )
 
   for (let index = 0; index < lines.length; index += 1) {

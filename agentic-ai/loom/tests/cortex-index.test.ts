@@ -44,6 +44,10 @@ Model text.
   const renderArgs = { index };
   const markdown = renderCortexIndexMarkdown(renderArgs);
   expect(markdown).toContain('# Cortex Context Router');
+  expect(markdown).toContain('## Gizmo route');
+  expect(markdown).toContain('[Gizmo](gizmo/knowledge-graph.md)');
+  expect(markdown).not.toContain('[Gizmo](teams/gizmo/knowledge-graph.md)');
+  expect(markdown).toContain('## Team routes');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
   expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');

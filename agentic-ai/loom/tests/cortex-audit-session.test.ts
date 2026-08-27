@@ -169,6 +169,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     const cortexRoot = path.join(repoRoot, '.cortex');
     const teamsRoot = path.join(cortexRoot, 'teams');
     const aiRoot = path.join(teamsRoot, 'ai');
+    const gizmoRoot = path.join(cortexRoot, 'gizmo');
     const skillsRoot = path.join(aiRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
@@ -176,6 +177,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     mkdirSync(path.join(teamsRoot, 'security'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'sre'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'web-dev'), directoryOptions);
+    mkdirSync(gizmoRoot, directoryOptions);
     mkdirSync(path.join(cortexRoot, 'shared'), directoryOptions);
     writeFileSync(path.join(cortexRoot, 'AGENTS.md'), '# Agent Map\n');
     writeFileSync(
@@ -183,6 +185,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
       `# Knowledge Graph
 
 - [Agent Map](AGENTS.md)
+- [Gizmo](gizmo/knowledge-graph.md)
 - [AI](teams/ai/knowledge-graph.md)
 - [Development core](teams/dev-core/knowledge-graph.md)
 - [Security](teams/security/knowledge-graph.md)
@@ -200,6 +203,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
 `,
     );
     for (const graphPath of [
+      path.join(gizmoRoot, 'knowledge-graph.md'),
       path.join(teamsRoot, 'dev-core', 'knowledge-graph.md'),
       path.join(teamsRoot, 'security', 'knowledge-graph.md'),
       path.join(teamsRoot, 'sre', 'knowledge-graph.md'),
