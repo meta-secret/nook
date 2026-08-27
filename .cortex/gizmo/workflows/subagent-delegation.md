@@ -24,9 +24,9 @@ A capable agent environment MUST delegate when all of these conditions hold:
 - Preserve Gizmo's exact model for every native subagent.
   - Do not set a different model in the spawn request.
   - Do not set `model` in a custom agent file.
+  - Do not set `model_reasoning_effort` in a custom agent file.
   - Do not use an `[agents]` default that changes the model.
-  - Pass Gizmo's exact model when the harness does not inherit it
-    automatically.
+  - Report a blocker when the harness does not inherit Gizmo's exact model.
 - If the host cannot start the required subagents:
   - report an implementation blocker;
   - do not let Gizmo implement the assigned task; and
@@ -89,7 +89,7 @@ This rule preserves
 Every subagent task must declare:
 
 - a stable task ID;
-- Gizmo's model;
+- model inheritance without an override;
 - its exact baseline;
 - its purpose;
 - its allowed files or evidence surface;
@@ -153,10 +153,11 @@ They do not authorize descendants or lifecycle mutations.
 Implementation delegation also follows
 [Team-oriented development](team-oriented-development.md).
 
-- Assign each task to `ai`, `dev-core`, `security`, `sre`, or `web-dev` before
-  starting subagents.
-- Give every team agent one team identity and explicit code and Cortex paths.
-- Give every team agent Gizmo's exact model.
+- Assign each task to `ai_team_agent`, `development_core_team_agent`,
+  `security_team_agent`, `sre_team_agent`, or
+  `web_development_team_agent` before starting subagents.
+- Give every team agent one exact type and explicit code and Cortex paths.
+- Preserve Gizmo's exact model without a spawn or profile override.
 - Keep write-capable team agents in isolated workspaces with disjoint scopes.
 - Require each team agent to own its implementation, tests, Cortex updates,
   review fixes, and validation fixes.
@@ -167,6 +168,8 @@ Implementation delegation also follows
   state with Gizmo.
 - Give each worker only its team entry contract and exact task-relevant Cortex
   authorities. Do not attach every graph or the shared corpus.
+- Treat the selected profile as a routing default. It never replaces the
+  parent task contract or grants lifecycle authority.
 
 Team ownership does not add hierarchy depth or scheduling authority.
 
@@ -378,6 +381,8 @@ The architecture boundary is defined in
 Before integration, verify:
 
 - every worker used its declared exact baseline;
+- every team worker used its declared exact canonical type;
+- no team profile or spawn request overrode the model;
 - every reached task has a harness-visible terminal result;
 - every child records the correct parent lineage;
 - every task stayed inside its declared hierarchy depth bound;

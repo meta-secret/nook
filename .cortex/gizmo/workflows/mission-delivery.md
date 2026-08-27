@@ -42,10 +42,14 @@ or a resulting fix.
 3. **Assign team tasks.**
    - Name one functional owner for each capability.
    - Name an expertise provider only for declared foreign-team files.
+   - Select `ai_team_agent`, `development_core_team_agent`,
+     `security_team_agent`, `sre_team_agent`, or
+     `web_development_team_agent` for each team task.
    - Give each subagent an exact baseline, allowed writes, forbidden writes,
      dependencies, and acceptance evidence.
    - Give each subagent only its team contract and knowledge graph.
-   - Run every native subagent with Gizmo's exact model.
+   - Preserve Gizmo's exact model without a profile or spawn override.
+   - Treat each profile as a routing default, not task or lifecycle authority.
 4. **Accept implementation handoffs.**
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.

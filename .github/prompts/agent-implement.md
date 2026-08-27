@@ -22,6 +22,18 @@ owner follows
 `.cortex/gizmo/workflows/mission-delivery.md` without passing unrelated Gizmo context
 to a team worker.
 
+The parent dispatches the selected owner through exactly one canonical type:
+
+- AI: `ai_team_agent`;
+- development core: `development_core_team_agent`;
+- security: `security_team_agent`;
+- SRE: `sre_team_agent`; or
+- web development: `web_development_team_agent`.
+
+The profile is a routing default only. The validated parent contract supplies
+the baseline, scope, dependencies, proof, and handoff. Do not request a model
+or reasoning-effort override.
+
 When a selected team authority links a foreign-team skill as required
 engineering policy, load that skill read-only. The functional owner may apply
 it directly; this alone does not require an expertise provider.
@@ -85,6 +97,8 @@ hand-written `docker run` commands.
   without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
+- Stay in the harness-provided isolated workspace. Return the work to the
+  parent through the harness commit handoff.
 - Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.

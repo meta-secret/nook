@@ -51,17 +51,40 @@ Gizmo owns the final integrated PR verdict for the exact head.
 - Gizmo cannot waive, downgrade, or override either block.
 - Gizmo may block delivery when integration or mission evidence is incomplete.
 
+### Canonical team-agent types
+
+Gizmo dispatches team work through one exact project profile type:
+
+| Functional owner | Agent type |
+| --- | --- |
+| AI | `ai_team_agent` |
+| Development core | `development_core_team_agent` |
+| Security | `security_team_agent` |
+| SRE | `sre_team_agent` |
+| Web development | `web_development_team_agent` |
+
+The profiles are routing defaults only.
+
+- The parent task contract supplies the exact baseline, scope, dependencies,
+  acceptance evidence, hierarchy bound, and parent-owned join.
+- The selected profile loads only its own team `AGENTS.md`, knowledge graph,
+  and minimal task-relevant authorities.
+- A write-capable team agent uses an isolated workspace and returns a verified
+  commit handoff.
+- The agent escalates every foreign-team dependency to Gizmo.
+- The agent does not mutate parent-owned lifecycle state.
+
 ### Subagent model
 
 Every native team subagent must run with Gizmo's exact model.
 
 - Gizmo must not request a different model for a subagent.
 - A task prompt must not request a different model.
-- A custom agent file must not set `model`.
+- A team-agent profile or other custom agent file must not set `model`.
+- A team-agent profile must not set `model_reasoning_effort`.
 - An `[agents]` default must not override Gizmo's model.
-- If the harness does not inherit the model automatically, Gizmo must pass its
-  exact model when starting the subagent.
-- If the harness cannot preserve the model, Gizmo must report a blocker.
+- If the harness does not inherit the model automatically, Gizmo must report a
+  blocker.
 
 ## Mandatory context selection
 
@@ -78,15 +101,15 @@ Agents must keep Cortex retrieval proportional to their assigned work.
 The team assignment selects the context entry point:
 
 - Gizmo loads `gizmo/AGENTS.md` and `gizmo/knowledge-graph.md`.
-- An AI subagent loads `teams/ai/AGENTS.md` and
+- An `ai_team_agent` loads `teams/ai/AGENTS.md` and
   `teams/ai/knowledge-graph.md`.
-- A development-core subagent loads `teams/dev-core/AGENTS.md` and
+- A `development_core_team_agent` loads `teams/dev-core/AGENTS.md` and
   `teams/dev-core/knowledge-graph.md`.
-- A security subagent loads `teams/security/AGENTS.md` and
+- A `security_team_agent` loads `teams/security/AGENTS.md` and
   `teams/security/knowledge-graph.md`.
-- An SRE subagent loads `teams/sre/AGENTS.md` and
+- An `sre_team_agent` loads `teams/sre/AGENTS.md` and
   `teams/sre/knowledge-graph.md`.
-- A web-development subagent loads `teams/web-dev/AGENTS.md` and
+- A `web_development_team_agent` loads `teams/web-dev/AGENTS.md` and
   `teams/web-dev/knowledge-graph.md`.
 
 The following behavior is prohibited:

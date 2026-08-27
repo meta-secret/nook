@@ -21,8 +21,8 @@ Before dispatch:
 3. Let the active Codex, Cursor, or other capable harness own subagent creation,
    communication, scheduling, retries, cancellation, barriers, nested
    delegation, and synthesis.
-4. Run every native subagent with Gizmo's exact model. Do not configure a
-   subagent model override.
+4. Preserve Gizmo's exact model for every native subagent. Do not configure a
+   model or reasoning-effort override.
 5. Use Loom or another deterministic tool for mechanical work.
 6. Declare a task-specific hierarchy depth bound before dispatch.
 7. Give every write-capable worker a separate disposable worktree or workspace.
@@ -55,4 +55,6 @@ and the named
 
 For implementation work, also load
 [`team-oriented-development.md`](../../../.cortex/gizmo/workflows/team-oriented-development.md)
-and keep each child inside one engineering-team boundary.
+and keep each child inside one engineering-team boundary. Select the exact
+`ai_team_agent`, `development_core_team_agent`, `security_team_agent`,
+`sre_team_agent`, or `web_development_team_agent` type before dispatch.

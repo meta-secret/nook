@@ -24,7 +24,8 @@ Gizmo context to an implementation worker.
 2. Inspect the failed run with `gh run view ${GITHUB_RUN_ID} --log-failed`.
 3. Classify each root cause by functional owner through the root router.
 4. Separate independent findings into path-bounded tasks.
-5. Dispatch each implementation or fix to a team-specific subagent.
+5. Dispatch each implementation or fix through its exact canonical team-agent
+   type.
 6. Integrate only handoffs that include the required proof.
 7. Run the smallest applicable integrated validation.
 8. Return the branch to the normal Gizmo PR-delivery workflow.
@@ -38,6 +39,9 @@ team boundaries.
 Every writer task must name:
 
 - one exact functional owner;
+- one exact `ai_team_agent`, `development_core_team_agent`,
+  `security_team_agent`, `sre_team_agent`, or
+  `web_development_team_agent` type;
 - exactly that team's `AGENTS.md` and knowledge graph;
 - the exact 40-character baseline commit;
 - explicit allowed paths;
@@ -49,6 +53,10 @@ The worker loads only its named team context and task-relevant authorities. It
 must not load Gizmo context or another team's graph. The worker verifies the
 finding, implements the minimal correct fix, runs focused checks, and returns a
 commit handoff with proof.
+
+The profile is a routing default only. Do not set a model or reasoning-effort
+override. Keep every writer in an isolated workspace. The worker escalates
+foreign-team dependencies and never mutates parent-owned lifecycle state.
 
 If a finding needs expertise from another team, keep one functional owner. Give
 the expertise provider a read-only or path-bounded contract and named consumer

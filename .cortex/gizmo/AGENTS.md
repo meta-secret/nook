@@ -21,7 +21,8 @@ Gizmo never gives its own graph to a team subagent.
 - Interpret the mission and publish its public-safe plan.
 - Classify each task by functional owner and optional expertise provider.
 - Freeze baselines, write scopes, dependencies, and acceptance evidence.
-- Dispatch team subagents with Gizmo's exact model.
+- Dispatch each team task through its exact canonical profile type.
+- Preserve Gizmo's exact model without a profile or spawn override.
 - Resolve dependencies and integrate verified commit handoffs.
 - Mutate Workbench, integrated Git state, pull requests, review threads,
   validation requests, readiness, and merge state.
@@ -40,14 +41,26 @@ Gizmo never gives its own graph to a team subagent.
 
 1. Define the requested outcome and completion evidence.
 2. Split the work into bounded team tasks.
-3. Dispatch every task through the responsible team context.
-4. Verify each returned commit against its baseline and scope.
-5. Integrate accepted commits in dependency order.
-6. Route every implementation finding back to its responsible team.
-7. Validate the integrated exact head.
-8. Record the final integrated verdict.
-9. Complete readiness, merge, and Workbench publication when the verdict is
+3. Select the exact canonical team-agent type for every team task.
+4. Dispatch every task through the responsible team context.
+5. Verify each returned commit against its baseline and scope.
+6. Integrate accepted commits in dependency order.
+7. Route every implementation finding back to its responsible team.
+8. Validate the integrated exact head.
+9. Record the final integrated verdict.
+10. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
+
+The exact team-agent types are:
+
+- `ai_team_agent`;
+- `development_core_team_agent`;
+- `security_team_agent`;
+- `sre_team_agent`; and
+- `web_development_team_agent`.
+
+Each profile is a routing default. The task contract remains authoritative for
+scope, isolation, evidence, and the parent-owned join.
 
 ## Verdict rules
 

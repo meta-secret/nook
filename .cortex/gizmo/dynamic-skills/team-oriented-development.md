@@ -2,8 +2,13 @@
 
 ## Purpose
 
-Route Nook work through the `ai`, `dev-core`, `security`, `sre`, and `web-dev`
-ownership boundaries.
+Route Nook work through the five canonical team-agent types:
+
+- `ai_team_agent`;
+- `development_core_team_agent`;
+- `security_team_agent`;
+- `sre_team_agent`; and
+- `web_development_team_agent`.
 
 Use this skill whenever a request touches code, scripts, infrastructure, tests, or Cortex owned by one or more engineering teams.
 
@@ -13,14 +18,19 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 2. Turn the request into concrete tasks and assign each task to one team.
 3. Identify whether another team should provide implementation expertise.
 4. Freeze every capability or expertise contract before assigning files.
-5. Start one team subagent for each task with clear files and acceptance proof.
-6. Run every team subagent with Gizmo's exact model.
-7. Keep every team agent inside its declared task scope.
-8. Route cross-team dependencies through Gizmo.
-9. Require each team to implement its own tests, Cortex updates, and review
+5. Select the exact canonical team-agent type for each task.
+6. Start one team subagent for each task with clear files and acceptance proof.
+7. Preserve Gizmo's exact model without a profile or spawn override.
+8. Keep every team agent inside its declared task scope.
+9. Route cross-team dependencies through Gizmo.
+10. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-10. Keep shared files and lifecycle mutations in the parent-owned join.
-11. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
+11. Keep shared files and lifecycle mutations in the parent-owned join.
+12. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
+
+The profile supplies only the team routing default. The parent task contract
+supplies the exact baseline, bounded paths, dependencies, acceptance evidence,
+hierarchy bound, and join.
 
 When a unit changes a security boundary, name security acceptance separately
 from implementation ownership. Security review does not transfer the

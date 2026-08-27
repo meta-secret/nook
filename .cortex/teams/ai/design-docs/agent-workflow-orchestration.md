@@ -163,8 +163,25 @@ Nook does not start another Codex or Cursor process to coordinate those native
 subagents.
 
 Project role TOMLs remain thin routing instructions.
-They must not set `model`.
-They do not grant filesystem capability or delivery ownership.
+
+The canonical write-capable team types are:
+
+- `ai_team_agent`;
+- `development_core_team_agent`;
+- `security_team_agent`;
+- `sre_team_agent`; and
+- `web_development_team_agent`.
+
+Their profiles enforce these boundaries:
+
+- The parent task contract supplies identity, baseline, scope, dependencies,
+  evidence, hierarchy depth, and the join.
+- The agent loads its own team `AGENTS.md`, knowledge graph, and minimal
+  task-relevant authorities.
+- Foreign-team requirements return to the parent.
+- Write-capable agents use isolated workspaces and return commit handoffs.
+- Profiles do not grant lifecycle authority.
+- Profiles do not set `model` or `model_reasoning_effort`.
 
 The existing Loom Codex SDK adapter remains available for reviewed static
 read-only workflows.

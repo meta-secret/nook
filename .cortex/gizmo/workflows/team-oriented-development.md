@@ -12,7 +12,7 @@ boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 Gizmo writes the team assignments before implementation starts.
 
 1. Turn the request into concrete team tasks.
-2. Assign each task to `ai`, `dev-core`, `security`, `sre`, or `web-dev`.
+2. Assign each task to one exact canonical team-agent type.
 3. Name a second team when that team's expertise is required to change files.
 4. Keep shared integration and delivery actions as Gizmo tasks.
 5. Give each subagent an exact starting commit.
@@ -28,13 +28,16 @@ A dependent subagent waits for the provider subagent to finish.
 
 Use a team subagent when the task has clear ownership, files, and proof.
 
-- A `dev-core` agent loads `.cortex/teams/dev-core/AGENTS.md` and its team knowledge graph.
-- An `sre` agent loads `.cortex/teams/sre/AGENTS.md` and its team knowledge graph.
-- A `web-dev` agent loads `.cortex/teams/web-dev/AGENTS.md` and its team knowledge graph.
-- A `security` agent loads `.cortex/teams/security/AGENTS.md` and its team
-  knowledge graph.
-- An `ai` agent loads `.cortex/teams/ai/AGENTS.md` and its team knowledge
-  graph.
+| Functional owner | Exact type | Team context |
+| --- | --- | --- |
+| AI | `ai_team_agent` | `.cortex/teams/ai/` |
+| Development core | `development_core_team_agent` | `.cortex/teams/dev-core/` |
+| Security | `security_team_agent` | `.cortex/teams/security/` |
+| SRE | `sre_team_agent` | `.cortex/teams/sre/` |
+| Web development | `web_development_team_agent` | `.cortex/teams/web-dev/` |
+
+Each exact type resolves to its project profile under
+`.codex/agents/team-agents/`.
 
 These are entry points, not bulk context manifests.
 
@@ -49,8 +52,8 @@ These are entry points, not bulk context manifests.
 
 Each team agent receives:
 
-- one team identity;
-- Gizmo's exact model;
+- one exact canonical team-agent type;
+- model inheritance without an override;
 - one functional-owner or expertise-provider role;
 - one exact commit;
 - allowed code and Cortex paths;
@@ -59,6 +62,14 @@ Each team agent receives:
 - required outputs and tests;
 - review and validation findings in that team's scope; and
 - the parent-owned handoff contract.
+
+The profile is not the task contract.
+
+- The parent contract grants the bounded write scope.
+- A write-capable worker uses an isolated workspace.
+- The worker returns a verified commit handoff.
+- The worker escalates foreign-team requirements to Gizmo.
+- The worker does not mutate delivery lifecycle state.
 
 When implementation changes a security boundary, the contract also names the
 security invariant and security acceptance evidence. Security review is not a
@@ -141,7 +152,8 @@ blocking team verdict or a required blocking security verdict.
 
 ## Validation
 
-Completion requires one owner team per capability and at most one expertise
-provider for each set of delegated files. It also requires explicit
-cross-team contracts, team-owned tests and review fixes, one shared-state
-writer, root aggregation, and green exact-head delivery gates.
+Completion requires one exact canonical team-agent type per team task.
+Each capability has one owner team and at most one expertise provider for each
+set of delegated files. Completion also requires explicit cross-team
+contracts, team-owned tests and review fixes, one shared-state writer, root
+aggregation, and green exact-head delivery gates.

@@ -16,11 +16,21 @@ Read and follow:
 - the selected team's `AGENTS.md` and knowledge graph.
 
 Turn the request into concrete team tasks before assigning files.
+Dispatch each task through exactly one canonical type:
+
+- `ai_team_agent`;
+- `development_core_team_agent`;
+- `security_team_agent`;
+- `sre_team_agent`; or
+- `web_development_team_agent`.
+
 Name an expertise provider when another team should change specific files.
 Allow a functional owner to consume a specifically linked foreign-team skill
 as read-only policy without delegating implementation.
-Keep each team agent inside one declared task scope.
-Run each team agent with Gizmo's exact model.
+Keep each team agent inside one parent-declared task scope and isolated
+workspace.
+Treat the profile as a routing default only.
+Preserve Gizmo's exact model without a profile or spawn override.
 Route cross-team dependencies through Gizmo. Gizmo delegates every
 implementation and validation fix to the responsible team.
 Require each team to own implementation, tests, Cortex updates, review fixes,
@@ -29,3 +39,4 @@ Keep consumer capability semantics and Cortex with the functional owner.
 Keep shared files and lifecycle state in the parent-owned join. Gizmo owns the
 final integrated verdict but cannot override a required blocking team or
 security verdict.
+Require every successful writer to return a verified commit handoff.
