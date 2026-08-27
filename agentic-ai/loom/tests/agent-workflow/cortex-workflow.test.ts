@@ -20,7 +20,9 @@ test('audits canonical skills without granting harness mirror scope', () => {
   expect(task.resources.read).toEqual([
     '.cortex/**',
     '.codex/hooks.json',
+    '.cursor/rules.md',
     'AGENTS.md',
+    'CODEX.md',
     'README.md',
   ]);
   if (task.execution.kind !== WorkflowExecutorKind.Agent) {
