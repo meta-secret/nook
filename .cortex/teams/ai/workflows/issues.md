@@ -252,6 +252,7 @@ The plan must contain:
 - a `Change budget and PR sequence` section;
 - an `Estimated authored changed lines` value;
 - an `Owning modules, packages, or layers` value;
+- consecutively numbered `Ownership units`, one per capability;
 - a `Public or cross-module interfaces` value;
 - a `Delivery shape` value;
 - a `Current PR estimated authored changed lines` value;
@@ -260,6 +261,15 @@ The plan must contain:
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.
+
+Each ownership unit uses the exact field order from
+`.github/prompts/agent-plan.md`. It names one functional owner and capability
+acceptance contract. When an expertise provider will write a bounded unit, it
+also enumerates exact repository-relative code, test, and forbidden paths,
+consumer interfaces, and provider-owned evidence. Otherwise every expertise
+field is `None`.
+
+### Publish the plan
 
 Plans are immutable start snapshots.
 

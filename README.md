@@ -422,12 +422,16 @@ Engineering work is divided among four Cortex team domains:
 - [SRE](.cortex/teams/sre/knowledge-graph.md) owns CI/CD, runners, containers, k0s,
   Kubernetes, deployments, and provider operations.
 - [Web development](.cortex/teams/web-dev/knowledge-graph.md) owns browser apps,
-  extension presentation, Svelte/TypeScript interaction behavior, and browser
-  evidence.
+  extension presentation, Svelte/TypeScript interaction behavior, browser
+  evidence, and repository-wide TypeScript/Svelte engineering practices.
 
 The [root Cortex graph](.cortex/knowledge-graph.md) routes each request to one
-team graph. [Shared knowledge](.cortex/shared/knowledge-graph.md) is loaded only
-for a named cross-team dependency; it is not a fifth implementation team.
+functional owner. That owner may request a bounded implementation unit from an
+expertise provider, such as web development implementing TypeScript for an
+AI-owned capability. Each worker loads only its own team graph and the explicit
+expertise contract. [Shared knowledge](.cortex/shared/knowledge-graph.md) is
+loaded only for a named cross-team dependency; it is not a fifth implementation
+team.
 
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them

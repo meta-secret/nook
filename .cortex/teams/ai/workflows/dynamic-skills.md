@@ -8,7 +8,8 @@ or refactor pattern that should become durable agent knowledge.
 Nook's canonical repository-local skill cards live in `dynamic-skills/`
 directories under common Cortex or one engineering team.
 
-- Shared cross-team cards live under `.cortex/shared/dynamic-skills/`.
+- Shared ownerless repository-wide cards live under
+  `.cortex/shared/dynamic-skills/`.
 - Development-core cards live under `.cortex/teams/dev-core/dynamic-skills/`.
 - SRE cards live under `.cortex/teams/sre/dynamic-skills/`.
 - Web-development cards live under `.cortex/teams/web-dev/dynamic-skills/`.
@@ -19,7 +20,8 @@ It does not mean optional or temporary guidance.
 Dynamic skills turn concrete feedback into reusable guidance:
 
 1. A **skill card** in the responsible team's `dynamic-skills/` directory is
-   the source of truth. Genuinely cross-team cards stay in the common directory.
+   the source of truth. Only ownerless repository-wide policy stays in the
+   common directory.
 2. Executable skills live in [`.agents/skills/`](../../../../.agents/skills) (the canonical open agent skill directory for Antigravity, Cursor, Claude, and Codex), with symlinks in [`.cursor/skills/`](../../../../.cursor/skills) and [`.claude/skills/`](../../../../.claude/skills). Skill wrappers are mirrors, not the canonical copy.
 3. The registry at [`.cortex/teams/ai/dynamic-skills/index.md`](../dynamic-skills/index.md)
    lists every available skill card and whether it has an executable skill.

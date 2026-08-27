@@ -95,7 +95,7 @@ task loom:run CONFIG=<request.yaml>
 
 ## TypeScript domain structure
 
-Loom follows [typescript-domain-structure.md](../../../shared/dynamic-skills/typescript-domain-structure.md):
+Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md):
 
 - nested same-prefix families (`agentStats`, `prLand`) plus operation enums
 - field-name enums passed into deny-unknown checks (never string sets)
@@ -105,8 +105,10 @@ Loom follows [typescript-domain-structure.md](../../../shared/dynamic-skills/typ
   `new Set(['field', ...])` allow-lists
 
 Loom also follows
-[typescript-single-parameter.md](../../../shared/dynamic-skills/typescript-single-parameter.md)
-and [typescript-no-unknown.md](../../../shared/dynamic-skills/typescript-no-unknown.md):
+[typescript-explicit-state.md](../../web-dev/dynamic-skills/typescript-explicit-state.md),
+[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)
+[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md),
+and [typescript-named-args.md](../../web-dev/dynamic-skills/typescript-named-args.md):
 
 - every authored function/method takes at most one parameter
 - multi-value inputs use a typed object argument

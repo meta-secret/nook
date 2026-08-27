@@ -3,13 +3,28 @@
 Before working on any task:
 
 1. Read `.cortex/AGENTS.md` and `.cortex/knowledge-graph.md`.
-2. Select exactly one owning team.
+2. Select exactly one functional owner.
 3. Read only that team's `AGENTS.md` and knowledge graph.
 4. Open the smallest set of task-relevant documents and headings.
 5. Load one named shared authority only when the task depends on it.
 
+When the functional owner requests another team's expertise:
+
+1. Name the expertise provider and exact code and test paths.
+2. Give that provider a bounded implementation contract.
+3. Require the provider to load only its own team graph, the contract, and the
+   named consumer interfaces.
+4. Keep capability semantics, consumer-team Cortex, integration, and delivery
+   lifecycle with the functional owner.
+
 Do not preload the AI skill registry, shared catalogs, or foreign-team graphs.
-The routed Cortex documents are the source of truth for the selected work.
+An expertise provider does not load the functional owner's graph wholesale.
+The routed Cortex documents and explicit contract are the source of truth for
+the selected work.
+
+A selected team authority may link a foreign-team skill as required read-only
+engineering policy. The functional owner may apply that skill directly. Use an
+expertise contract only when the foreign team will write the bounded unit.
 
 ---
 

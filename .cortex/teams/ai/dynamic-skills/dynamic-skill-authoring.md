@@ -20,8 +20,9 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 2. Select the responsible team through
    [Engineering team ownership](../architecture/team-ownership.md).
 3. Convert the explanation into a concise card in that team's
-   `dynamic-skills/` directory. Use the shared directory only for cross-team
-   guidance. This card is the source of truth.
+   `dynamic-skills/` directory. Use the shared directory only for ownerless
+   repository-wide policy. Multi-team consumption does not erase a clear
+   expertise owner. This card is the source of truth.
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Create `.agents/skills/<skill>/SKILL.md` when the pattern should be invokable
    directly by future agents.
@@ -59,7 +60,7 @@ Does not apply to:
   - scaffold with
     `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>`;
   - set `skillOwner` to the responsible team, to `ai` for AI-system knowledge,
-    or to `shared` for genuinely cross-team knowledge;
+    or to `shared` for ownerless repository-wide policy;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
   - set `createExecutableWrappers: true` only when direct invocation is useful;
     and

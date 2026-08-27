@@ -23,13 +23,26 @@ The following behavior is prohibited:
 - using broad Cortex dumps when targeted search or one document is enough; and
 - retaining unrelated team material in a worker's task contract.
 
+A task-relevant team authority may name the smallest explicitly linked set of
+foreign-team skills as required read-only engineering policy. The functional
+owner may apply those skills to its own code without delegating implementation.
+An expertise contract is required only when the foreign team will write the
+bounded unit.
+
 ## Multi-team requests
 
 One delivery owner decomposes a multi-team request before implementation.
 
-- Each functional unit receives one team owner.
+- Each functional unit receives one functional owner.
+- The functional owner controls capability semantics, Cortex authority, and
+  acceptance.
+- A second team may own a bounded implementation unit when the task needs its
+  engineering expertise.
+- The expertise contract names the provider team, allowed files, forbidden
+  files, accepted inputs, tests, and evidence.
 - Each team agent receives only its team contract and task-relevant authority.
-- A team agent stops at a foreign-team boundary.
+- A team agent stops at a foreign-team write boundary unless the delivery owner
+  assigns an explicit expertise contract.
 - The agent reports the required capability and consumer contract.
 - The delivery owner routes that dependency to the responsible team.
 - Shared files and lifecycle state remain parent-owned.
@@ -39,7 +52,10 @@ serially. The same context and write boundaries still apply.
 
 ## Universal repository boundaries
 
-- Team agents write only inside their declared team code and Cortex scope.
+- Team agents write only inside their declared task scope.
+- An expertise provider may edit named consumer-team code and tests. It must not
+  edit the consumer team's Cortex, redefine capability semantics, or expand its
+  own scope.
 - Team agents own implementation, tests, team Cortex, review fixes, and
   validation fixes for their bounded unit.
 - **Feature ownership boundary:** agents mutate only their owned feature.

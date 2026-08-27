@@ -17,6 +17,9 @@ Load a shared architecture document only when the assigned contract crosses a
 named package boundary. Report every foreign-team dependency to the delivery
 owner.
 
+For a Rust expertise request, load the named consumer contract as read-only.
+Do not load the consumer team's complete graph.
+
 ## Owned responsibilities
 
 - Portable Rust domain crates and their behavior-focused tests.
@@ -26,17 +29,22 @@ owner.
 - Portable validation and business rules.
 - Development-core product specifications, design docs, references, and
   skills.
+- Bounded Rust implementation units delegated by AI, SRE, or web development.
 
 ## Forbidden responsibilities
 
 - Browser presentation, interaction design, accessibility, and visual behavior.
 - CI/CD pipelines, runners, clusters, deployments, and provider operations.
-- AI tooling, Loom, or another team's Cortex documents.
+- Foreign capability semantics or another team's Cortex documents.
+- Consumer-team files outside an explicit expertise contract.
 - Shared Git, PR, Workbench, validation, readiness, and merge state.
 
 TypeScript or Svelte must not become an alternate owner for portable business
 or security logic. Return the required typed contract to the delivery owner
 when a web consumer needs new core functionality.
+
+Rust expertise does not transfer functional ownership. The consumer team keeps
+its capability semantics and acceptance contract.
 
 ## Complete team scope
 

@@ -204,6 +204,151 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 }
 
 #[test]
+fn team_work_separates_functional_ownership_from_implementation_expertise() -> anyhow::Result<()> {
+    let agent_map = read(".cortex/AGENTS.md");
+    let ownership = read(".cortex/teams/ai/architecture/team-ownership.md");
+    let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map.md");
+    let workflow = read(".cortex/teams/ai/workflows/team-oriented-development.md");
+    let web_contract = read(".cortex/teams/web-dev/AGENTS.md");
+    let sre_contract = read(".cortex/teams/sre/AGENTS.md");
+    let web_graph = read(".cortex/teams/web-dev/knowledge-graph.md");
+    let shared_graph = read(".cortex/shared/knowledge-graph.md");
+    let agent_plan = read(".github/prompts/agent-plan.md");
+    let issues_workflow = read(".cortex/teams/ai/workflows/issues.md");
+    let loom_tools = read(".cortex/teams/ai/references/loom-tools.md");
+    let workbench_validator = read(".github/scripts/workbench-records.cjs");
+
+    for required in [
+        "functional owner",
+        "expertise provider",
+        "explicit expertise contract",
+        "named consumer-team code and tests",
+        "smallest explicitly linked set of",
+        "foreign-team skills as required read-only engineering policy",
+        "read-only engineering policy",
+        "only when the foreign team will write",
+    ] {
+        assert!(
+            agent_map.contains(required),
+            "root agent routing is missing matrix ownership contract: {required}"
+        );
+    }
+
+    assert!(
+        document_map.contains("foreign-team implementation requirement")
+            && document_map.contains("Skill consumption")
+            && document_map.contains("does not require delegation")
+            && document_map.contains("without opening the foreign team's graph"),
+        "document navigation must distinguish read-only skill use from foreign-team implementation"
+    );
+
+    for required in [
+        "## Ownership dimensions",
+        "## Cross-team expertise protocol",
+        "does not permanently transfer a file",
+        "consumer-team Cortex",
+        "capability semantics",
+        "Skill ownership is separate from implementation delegation",
+        "implementing its own capability",
+    ] {
+        assert!(
+            ownership.contains(required),
+            "team ownership is missing expertise boundary: {required}"
+        );
+    }
+
+    for required in [
+        "## Request another team's expertise",
+        "exact code and test paths",
+        "Return the result to the functional owner",
+        "Skill consumption alone does not create an expertise provider",
+    ] {
+        assert!(
+            workflow.contains(required),
+            "team workflow is missing expertise delegation step: {required}"
+        );
+    }
+
+    assert!(
+        web_contract.contains("TypeScript and Svelte engineering expertise")
+            && web_contract.contains("Bounded TypeScript implementation units")
+            && web_contract.contains("does not authorize changes to consumer-team Cortex"),
+        "web development must own TypeScript expertise without taking consumer capability authority"
+    );
+    assert!(
+        web_graph.contains("direct functional-owner implementation")
+            && web_graph.contains("read-only engineering policy"),
+        "web TypeScript routing must include direct read-only consumption by functional owners"
+    );
+    for required in [
+        "- Ownership units:",
+        "Functional owner:",
+        "Expertise provider:",
+        "Expertise allowed code paths:",
+        "Expertise allowed test paths:",
+        "Expertise forbidden paths:",
+        "Expertise consumer interfaces:",
+        "Expertise acceptance evidence:",
+        "Capability acceptance evidence:",
+    ] {
+        assert!(
+            agent_plan.contains(required)
+                && issues_workflow.contains("Ownership units")
+                && workbench_validator.contains(required.trim()),
+            "automated planning must require expertise contract field: {required}"
+        );
+    }
+
+    for skill in [
+        "typescript-domain-structure.md",
+        "typescript-explicit-state.md",
+    ] {
+        assert!(
+            sre_contract.contains(skill),
+            "SRE JavaScript and TypeScript work must route read-only policy: {skill}"
+        );
+    }
+    for skill in [
+        "typescript-domain-structure.md",
+        "typescript-explicit-state.md",
+        "typescript-named-args.md",
+        "typescript-no-unknown.md",
+        "typescript-single-parameter.md",
+    ] {
+        assert!(
+            loom_tools.contains(skill),
+            "AI Loom work must route read-only TypeScript policy: {skill}"
+        );
+    }
+
+    for skill in [
+        "typescript-domain-structure.md",
+        "typescript-explicit-state.md",
+        "typescript-named-args.md",
+        "typescript-no-unknown.md",
+        "typescript-single-parameter.md",
+    ] {
+        let web_path = repository_root()
+            .join(".cortex/teams/web-dev/dynamic-skills")
+            .join(skill);
+        let shared_path = repository_root()
+            .join(".cortex/shared/dynamic-skills")
+            .join(skill);
+        assert!(web_path.is_file(), "web development must own {skill}");
+        assert!(
+            !shared_path.exists(),
+            "shared Cortex must not retain web-owned skill {skill}"
+        );
+        assert!(
+            web_graph.contains(skill) && !shared_graph.contains(skill),
+            "{skill} must be indexed only by the web-development graph"
+        );
+    }
+
+    Ok(())
+}
+
+#[test]
 fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");

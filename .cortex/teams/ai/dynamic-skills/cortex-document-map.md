@@ -42,7 +42,13 @@ document is selected.
 7. Stop when the task contract has enough authoritative context.
 
 Agents must not preload all graphs, all team documents, or the shared corpus.
-A foreign-team requirement returns to the delivery owner.
+A foreign-team implementation requirement returns to the delivery owner.
+
+A selected team authority may link the smallest task-relevant set of
+foreign-team skills as read-only engineering policy. The worker opens those
+skills directly without opening the foreign team's graph. Skill consumption
+does not require delegation. A foreign-team writer still requires an explicit
+expertise contract.
 
 ## Individual document structure
 

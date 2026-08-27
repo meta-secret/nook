@@ -17,6 +17,18 @@ infrastructure.
 Load shared architecture only for a named cross-team execution contract. Report
 product, web, or AI dependencies to the delivery owner.
 
+For an infrastructure expertise request, load the named consumer contract as
+read-only. Do not load the consumer team's complete graph.
+
+For authored JavaScript or TypeScript under `.github/` or SRE-owned scripts,
+load these web-owned skills directly as read-only engineering policy:
+
+- [TypeScript domain structure](../web-dev/dynamic-skills/typescript-domain-structure.md)
+- [TypeScript explicit state](../web-dev/dynamic-skills/typescript-explicit-state.md)
+
+Do not open the web-development graph. Applying these linked skills does not
+create a web-development expertise provider.
+
 ## Owned responsibilities
 
 - GitHub Actions workflows and CI helpers.
@@ -26,12 +38,15 @@ product, web, or AI dependencies to the delivery owner.
 - SRE-focused preflight and operational tests.
 - SRE architecture, workflows, references, toolchain specifications, and
   skills.
+- Bounded infrastructure, CI, deployment, or operational implementation units
+  delegated by another team.
 
 ## Forbidden responsibilities
 
 - Portable product, cryptographic, authorization, or vault-storage logic.
 - Browser presentation, interaction design, and frontend state.
-- AI tooling, Loom semantics, or another team's Cortex documents.
+- Foreign capability semantics or another team's Cortex documents.
+- Consumer-team files outside an explicit expertise contract.
 - Shared Git, PR, Workbench, readiness, and merge state.
 
 SRE may define how team tests execute. It must not redefine the product

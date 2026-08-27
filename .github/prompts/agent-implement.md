@@ -12,11 +12,19 @@ ${AGENT_TASK}
 - The planning phase has already published the task-start record and left its
   validated body in `.nook-workbench-plan.md`.
 
-Read `.cortex/AGENTS.md` and `.cortex/knowledge-graph.md`. Select one owning
-team, then load only that team's `AGENTS.md`, knowledge graph, and exact
-task-relevant documents. The delivery owner follows
+Read `.cortex/AGENTS.md` and `.cortex/knowledge-graph.md`. Select one functional
+owner, then load only that team's `AGENTS.md`, knowledge graph, and exact
+task-relevant documents. If the validated plan names an expertise provider,
+give that worker only the explicit expertise contract, its own team graph, and
+the named consumer interfaces. Do not preload the functional owner's graph or
+transfer capability semantics and consumer-team Cortex ownership. The delivery
+owner follows
 `.cortex/teams/ai/workflows/coding-bro.md` without passing unrelated AI context
 to a team worker.
+
+When a selected team authority links a foreign-team skill as required
+engineering policy, load that skill read-only. The functional owner may apply
+it directly; this alone does not require an expertise provider.
 
 ## CI toolchain (Docker)
 

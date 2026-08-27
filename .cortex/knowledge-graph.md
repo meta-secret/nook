@@ -17,8 +17,9 @@ Choose the team that owns the requested functionality.
   security domains, vault behavior, and typed WASM contracts.
 - [SRE](teams/sre/knowledge-graph.md) owns CI/CD, clusters, deployments,
   runners, containers, and operations.
-- [Web development](teams/web-dev/knowledge-graph.md) owns browser
-  presentation, frontend behavior, and extension interaction.
+- [Web development](teams/web-dev/knowledge-graph.md) owns TypeScript and Svelte
+  engineering expertise, browser presentation, frontend behavior, and
+  extension interaction.
 
 ## Shared route
 
@@ -36,6 +37,10 @@ authority.
 4. Load a shared document only for a named cross-team dependency.
 5. Do not open another team's graph for background context.
 6. Return foreign-team requirements to the delivery owner.
+7. Load a foreign-team skill read-only when the selected team's task-relevant
+   authority names it as required engineering policy.
+8. Require an expertise contract only when the foreign team will implement a
+   bounded unit.
 
 For a multi-team request, the delivery owner performs this procedure once per
 bounded team unit. Each team agent receives only its own context.

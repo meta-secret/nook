@@ -29,6 +29,10 @@ const planBudgetFields = [
     pattern: /^- Owning modules, packages, or layers:\s*\S.+$/im,
   },
   {
+    label: 'Ownership units',
+    pattern: /^- Ownership units:\s*$/m,
+  },
+  {
     label: 'Public or cross-module interfaces',
     pattern: /^- Public or cross-module interfaces:\s*\S.+$/m,
   },
@@ -95,6 +99,108 @@ function parseBudgetFieldValue(budgetSection, label) {
   return { kind: 'valid', value: match[1].trim() }
 }
 
+const ownershipTeamPattern = 'AI|Development core|SRE|Web development'
+
+function isExactRepositoryPathList(value) {
+  if (value === 'None') return false
+  return value.split(',').every((entry) => {
+    const path = entry.trim()
+    return (
+      path.length > 0 &&
+      (path.includes('/') || path.includes('.')) &&
+      /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/.test(path) &&
+      !path.split('/').some((segment) => segment === '.' || segment === '..')
+    )
+  })
+}
+
+function repositoryPathsOverlap(left, right) {
+  return (
+    left === right || left.startsWith(`${right}/`) || right.startsWith(`${left}/`)
+  )
+}
+
+function validateOwnershipUnits(ownershipBody) {
+  const lines = ownershipBody
+    .trim()
+    .split('\n')
+    .filter((line) => line.trim())
+  if (lines.length === 0) return 'plan requires at least one ownership unit'
+
+  const unitPattern = new RegExp(
+    `^(\\d+)\\. Capability: (.+?); Functional owner: (${ownershipTeamPattern}); Expertise provider: (None|${ownershipTeamPattern}); Expertise allowed code paths: (.+?); Expertise allowed test paths: (.+?); Expertise forbidden paths: (.+?); Expertise consumer interfaces: (.+?); Expertise acceptance evidence: (.+?); Capability acceptance evidence: (.+?)$`,
+  )
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const match = unitPattern.exec(lines[index].trim())
+    if (!match || Number(match[1]) !== index + 1) {
+      return 'ownership units must be consecutive and match the required contract shape'
+    }
+
+    const [
+      ,
+      ,
+      capability,
+      functionalOwner,
+      expertiseProvider,
+      allowedCodePaths,
+      allowedTestPaths,
+      forbiddenPaths,
+      consumerInterfaces,
+      expertiseEvidence,
+      capabilityEvidence,
+    ] = match
+    if (isPlaceholder(capability) || isPlaceholder(capabilityEvidence)) {
+      return 'ownership unit capability and acceptance evidence must be concrete'
+    }
+
+    const expertiseFields = [
+      allowedCodePaths,
+      allowedTestPaths,
+      forbiddenPaths,
+      consumerInterfaces,
+      expertiseEvidence,
+    ]
+    if (expertiseProvider === 'None') {
+      if (expertiseFields.some((value) => value !== 'None')) {
+        return 'ownership unit expertise fields require a provider'
+      }
+      continue
+    }
+    if (expertiseProvider === functionalOwner) {
+      return 'expertise provider must differ from the functional owner'
+    }
+    if (
+      !isExactRepositoryPathList(allowedCodePaths) ||
+      !isExactRepositoryPathList(allowedTestPaths) ||
+      !isExactRepositoryPathList(forbiddenPaths)
+    ) {
+      return 'expertise paths must be exact comma-separated repository-relative paths'
+    }
+    const allowedPaths = new Set(
+      `${allowedCodePaths},${allowedTestPaths}`
+        .split(',')
+        .map((path) => path.trim()),
+    )
+    const forbiddenPathEntries = forbiddenPaths
+      .split(',')
+      .map((path) => path.trim())
+    if (
+      forbiddenPathEntries.some((forbiddenPath) =>
+        [...allowedPaths].some((allowedPath) =>
+          repositoryPathsOverlap(allowedPath, forbiddenPath),
+        ),
+      )
+    ) {
+      return 'expertise allowed and forbidden paths must not overlap'
+    }
+    if (isPlaceholder(consumerInterfaces) || isPlaceholder(expertiseEvidence)) {
+      return 'expertise interfaces and acceptance evidence must be concrete'
+    }
+  }
+  return ''
+}
+
 function parseBudgetFields(budgetSection) {
   const owningBoundary = parseBudgetFieldValue(
     budgetSection,
@@ -119,6 +225,9 @@ function parseBudgetFields(budgetSection) {
   )
   const sequenceMarker = '- PR slices and acceptance evidence:'
   const sequenceStart = budgetSection.indexOf(sequenceMarker)
+  const ownershipMarker = '- Ownership units:'
+  const ownershipStart = budgetSection.indexOf(ownershipMarker)
+  const ownershipEnd = budgetSection.indexOf('- Public or cross-module interfaces:')
   if (
     owningBoundary.kind === 'invalid' ||
     estimate.kind === 'invalid' ||
@@ -126,13 +235,19 @@ function parseBudgetFields(budgetSection) {
     deliveryShape.kind === 'invalid' ||
     publicInterfaces.kind === 'invalid' ||
     currentSlice.kind === 'invalid' ||
-    sequenceStart < 0
+    sequenceStart < 0 ||
+    ownershipStart < 0 ||
+    ownershipEnd <= ownershipStart
   ) {
     return { kind: 'invalid' }
   }
   return {
     kind: 'valid',
     owningBoundary: owningBoundary.value,
+    ownershipBody: budgetSection.slice(
+      ownershipStart + ownershipMarker.length,
+      ownershipEnd,
+    ),
     estimate: Number(estimate.value.replaceAll(',', '')),
     currentPrEstimate: Number(currentPrEstimate.value.replaceAll(',', '')),
     deliveryShape: deliveryShape.value,
@@ -300,6 +415,11 @@ function validateAgentRecord(candidate, kind, secrets = [], sourceTask = '') {
     if (isUnresolvedPlaceholder(budgetFields.publicInterfaces)) {
       return 'missing or empty plan field: Public or cross-module interfaces'
     }
+
+    const ownershipRejection = validateOwnershipUnits(
+      budgetFields.ownershipBody,
+    )
+    if (ownershipRejection) return ownershipRejection
 
     const estimate = budgetFields.estimate
     const currentPrEstimate = budgetFields.currentPrEstimate

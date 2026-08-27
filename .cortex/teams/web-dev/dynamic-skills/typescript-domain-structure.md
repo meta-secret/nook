@@ -70,7 +70,7 @@ Applies to:
 
 Does not apply to:
 
-- Rust `Result` / `Option` (see [rust-coding.md](../../teams/dev-core/dynamic-skills/rust-coding.md))
+- Rust `Result` / `Option` (see [rust-coding.md](../../dev-core/dynamic-skills/rust-coding.md))
 - Generated WASM / dependency typings
 
 ## Examples

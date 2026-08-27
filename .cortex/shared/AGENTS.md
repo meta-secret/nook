@@ -3,6 +3,9 @@
 Shared Cortex is a cross-team reference surface. It is not an implementation
 team.
 
+Shared placement requires ownerless repository-wide policy. A rule does not
+become shared merely because several teams consume one team's expertise.
+
 ## Load boundary
 
 Load [the shared knowledge graph](knowledge-graph.md) only when the assigned

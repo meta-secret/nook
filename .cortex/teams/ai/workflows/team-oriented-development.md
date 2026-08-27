@@ -11,12 +11,15 @@ boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 
 The delivery owner creates one immutable work graph before team execution.
 
-1. Classify each functional unit as `ai`, `dev-core`, `sre`, or `web-dev`.
-2. Declare shared integration and lifecycle work separately.
-3. Freeze provider-consumer contracts between teams.
-4. Give every team unit an exact baseline and bounded read/write scope.
-5. Give every unit its own tests and acceptance evidence.
-6. Declare the all-terminal barrier and parent-owned integration join.
+1. Classify each capability unit under one functional owner: `ai`, `dev-core`,
+   `sre`, or `web-dev`.
+2. Name an expertise provider when another team should implement a bounded
+   slice.
+3. Declare shared integration and lifecycle work separately.
+4. Freeze provider-consumer and expertise contracts between teams.
+5. Give every team unit an exact baseline and bounded read/write scope.
+6. Give every unit explicit forbidden paths, tests, and acceptance evidence.
+7. Declare the all-terminal barrier and parent-owned integration join.
 
 Team work units may run in parallel only when their write scopes are isolated and disjoint.
 Provider work completes before a dependent consumer starts.
@@ -38,10 +41,14 @@ These are entry points, not bulk context manifests.
 - It does not preload the rest of its team corpus.
 - It does not load shared or foreign-team documents unless the task contract
   names that dependency.
+- It may load a foreign-team skill read-only when a selected team authority
+  names that skill as required engineering policy.
+- Skill consumption alone does not create an expertise provider.
 
 Each team agent receives:
 
 - one team identity;
+- one functional-owner or expertise-provider role;
 - one exact commit;
 - allowed code and Cortex paths;
 - forbidden paths;
@@ -60,7 +67,8 @@ Each team agent owns its entire declared technical slice.
 
 1. Read the team entry point and select the smallest relevant graph category.
 2. Open only the task-relevant authorities and headings.
-3. Confirm the scope does not include another team's responsibility.
+3. Confirm the scope contains only the assigned functional responsibility or
+   explicitly delegated expertise unit.
 4. Implement the accepted contract only in allowed paths.
 5. Update the team's Cortex authority when durable knowledge changes.
 6. Add or update the team's behavior and regression tests.
@@ -82,11 +90,32 @@ When a team needs a provider owned elsewhere:
 
 Cross-team requests do not authorize direct edits in the provider team's paths.
 
+## Request another team's expertise
+
+Use expertise delegation when the requesting team already owns the capability
+contract but needs another team's implementation discipline.
+
+Do not create an expertise unit merely to consume another team's skill. The
+functional owner may apply specifically linked read-only policy to its own
+implementation.
+
+1. Keep the requesting team as functional owner.
+2. Name the provider team and the required engineering expertise.
+3. Freeze exact code and test paths for the provider.
+4. Prohibit consumer Cortex, capability semantics, shared files, and lifecycle
+   state.
+5. Require provider-owned implementation, tests, review fixes, and validation
+   fixes inside the bounded scope.
+6. Return the result to the functional owner for semantic acceptance.
+
+An expertise contract is an explicit task-scoped handoff. It is not general
+permission to edit another team's code.
+
 ## Integrate and deliver
 
 The delivery owner waits for the declared barrier.
 
-1. Verify each team's baseline, scope, result, tests, and semantic view.
+1. Verify each team's role, baseline, scope, result, tests, and semantic view.
 2. Reconcile cross-team contract disagreements.
 3. Integrate accepted provider work before consumers.
 4. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
@@ -97,6 +126,7 @@ The delivery owner waits for the declared barrier.
 
 ## Validation
 
-Completion requires one owner per unit, explicit cross-team contracts,
-team-owned tests and review fixes, one shared-state writer, root aggregation,
-and green exact-head delivery gates without cross-team writes.
+Completion requires one functional owner per capability and at most one
+expertise provider per implementation unit. It also requires explicit
+cross-team contracts, team-owned tests and review fixes, one shared-state
+writer, root aggregation, and green exact-head delivery gates.

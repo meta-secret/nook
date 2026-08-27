@@ -119,7 +119,7 @@ Examples include:
 - knowledge-loading guidance;
 - self-review and Cortex maintenance rules.
 
-Update the owning card in `.cortex/shared/dynamic-skills/` or the owning workflow.
+Update the owning team card, shared ownerless policy, or owning workflow.
 
 ### Project workflows
 
