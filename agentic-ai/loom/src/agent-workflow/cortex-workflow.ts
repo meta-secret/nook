@@ -46,7 +46,7 @@ const READ_ONLY_CORTEX: TaskResourceClaims = {
 
 const READ_ONLY_SKILLS: TaskResourceClaims = {
   // prettier-ignore
-  read: ['.cortex/**', '.codex/hooks.json', '.cursor/rules.md', 'AGENTS.md', 'CODEX.md', 'README.md'],
+  read: ['.cortex/**', '.codex/hooks.json', '.cursor/rules.md', '.github/prompts/**', 'AGENTS.md', 'CODEX.md', 'README.md'],
   write: [],
 };
 

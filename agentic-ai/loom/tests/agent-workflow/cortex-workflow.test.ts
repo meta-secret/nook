@@ -21,6 +21,7 @@ test('audits canonical skills without granting harness mirror scope', () => {
     '.cortex/**',
     '.codex/hooks.json',
     '.cursor/rules.md',
+    '.github/prompts/**',
     'AGENTS.md',
     'CODEX.md',
     'README.md',
