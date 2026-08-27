@@ -11,7 +11,7 @@ const expertiseOwnershipUnit =
 const securityOwnershipUnit =
   '1. Capability: Cryptographic architecture review; Functional owner: Security; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Security architecture evidence is current'
 const gizmoOwnershipUnit =
-  '1. Capability: Deterministic agent workflow routing; Functional owner: Gizmo; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Runtime graph enforcement passes'
+  '1. Capability: Integrated pull request delivery; Functional owner: Gizmo; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Integrated readiness evidence is complete'
 
 const validPlan = `# Task plan
 
