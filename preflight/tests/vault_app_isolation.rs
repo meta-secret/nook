@@ -81,6 +81,8 @@ mod hosted_buildkit_cache_contracts;
 mod hosted_delivery_contracts;
 #[path = "vault_app_isolation/playwright_coverage_contracts.rs"]
 mod playwright_coverage_contracts;
+#[path = "vault_app_isolation/prepared_pod_build_contracts.rs"]
+mod prepared_pod_build_contracts;
 #[path = "vault_app_isolation/runtime_boundary_contracts.rs"]
 mod runtime_boundary_contracts;
 #[path = "vault_app_isolation/svelte_build_contracts.rs"]
