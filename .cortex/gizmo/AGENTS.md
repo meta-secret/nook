@@ -19,13 +19,15 @@ Gizmo never gives its own graph to a team subagent.
 ## Owned responsibilities
 
 - Interpret the mission and publish its public-safe plan.
-- Recursively discover every necessary bounded task and provider dependency.
+- Recursively discover every necessary bounded task and provider dependency as
+  task records.
 - Classify each task by functional owner and optional expertise provider.
-- Freeze each task's starting frontier, resource claims, dependencies, and
-  acceptance evidence.
+- Freeze the initial known graph, resource claims, dependencies, and acceptance
+  evidence before dispatch.
 - Choose exactly one team identity for each task.
-- Create one worker for every reached task.
-- Dispatch every dependency-ready, non-conflicting task in the same wave.
+- Select a deterministic maximal safe wave in stable task order.
+- Snapshot immutable starting frontiers for the selected tasks.
+- Create one worker attempt per selected task and dispatch the wave.
 - Supply the team identity and bounded task contract to the active harness.
 - Resolve dependencies and integrate verified commit handoffs.
 - Recompute edge-local readiness after every integration.
@@ -45,21 +47,24 @@ Gizmo never gives its own graph to a team subagent.
 ## Delivery procedure
 
 1. Define the requested outcome and completion evidence.
-2. Recursively discover the complete bounded task graph.
+2. Recursively discover initial bounded task records and provider edges.
 3. Select exactly one team identity for every team task.
-4. Create one worker for every reached task.
-5. Dispatch every dependency-ready, non-conflicting task in the same wave.
-6. Verify each returned result against its task identity, starting frontier,
+4. Freeze the initial known graph before dispatch.
+5. Select a deterministic maximal safe wave from ready tasks.
+6. Snapshot each selected task's immutable starting frontier.
+7. Create one worker attempt for each selected task and dispatch the wave.
+8. Verify each returned result against its task identity, starting frontier,
    resource scope, and acceptance evidence.
-7. Integrate accepted commits in deterministic dependency order.
-8. Recompute readiness across affected outgoing edges after each integration.
-9. Bind each newly ready successor to the exact integrated frontier containing
-   its complete predecessor closure.
-10. Route every implementation finding back to its responsible team.
-11. Use the all-task barrier only for the final parent-owned join.
-12. Validate the integrated exact head.
-13. Record the final integrated verdict.
-14. Complete readiness, merge, and Workbench publication when the verdict is
+9. Integrate accepted commits in deterministic dependency order.
+10. Recompute readiness across affected outgoing edges after each integration.
+11. Bind each newly ready successor to the exact integrated frontier containing
+   its complete write-predecessor closure.
+12. Route every implementation finding back to its responsible team.
+13. Replan a task when its attempt reports an unknown provider.
+14. Use the all-task barrier only for the final parent-owned join.
+15. Validate the integrated exact head.
+16. Record the final integrated verdict.
+17. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
 
 Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
@@ -71,9 +76,19 @@ Gizmo adds delivery-specific decisions. It selects the functional owner,
 freezes the team task, integrates accepted handoffs, and controls shared
 lifecycle state.
 
-Direct providers form edge-local readiness barriers. A successor is ready only
-after every direct provider is terminal-successful, semantically accepted,
-commit-verified, and integrated. Readiness does not wait for unrelated tasks.
+Direct providers form edge-local readiness barriers.
+
+- A write provider must be terminal-successful, accepted, commit-verified, and
+  integrated into the consumer's Git frontier.
+- A read-only provider must be terminal-successful, accepted, exact-source
+  verified, and accepted into parent task state.
+- Read-only evidence does not enter Git ancestry.
+- Readiness does not wait for unrelated tasks.
+
+If an attempt discovers an unknown provider, the harness invalidates and stops
+or cancels that attempt. Gizmo adds the provider task and edge, then replans the
+affected graph. The consumer retries only as a fresh attempt from a fresh
+frontier after the write or read-only provider barrier is satisfied.
 
 ## Verdict rules
 

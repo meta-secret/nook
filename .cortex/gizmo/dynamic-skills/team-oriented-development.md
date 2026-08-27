@@ -15,19 +15,23 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 ## Preferred pattern
 
 1. Read [Engineering team ownership](../architecture/team-ownership.md).
-2. Recursively discover every necessary bounded task and provider dependency.
+2. Recursively discover every necessary bounded task record and provider edge.
 3. Assign exactly one team identity to each task.
 4. Identify whether another team should provide implementation expertise.
-5. Freeze every capability or expertise contract before assigning files.
-6. Create one worker for every reached task.
-7. Dispatch every dependency-ready, non-conflicting task in the same wave.
-8. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-9. Follow [subagent delegation](../workflows/subagent-delegation.md) for
+5. Freeze the initial known graph and every capability or expertise contract.
+6. Select a deterministic maximal safe wave in stable task order.
+7. Snapshot an exact starting frontier for each selected task.
+8. Create one worker attempt per selected task and dispatch the wave.
+9. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+10. Follow [subagent delegation](../workflows/subagent-delegation.md) for
    dispatch and integration.
-10. Route cross-team dependencies through Gizmo.
-11. Require each team to implement its own tests, Cortex updates, and review
+11. Route cross-team dependencies through Gizmo.
+12. Invalidate and stop or cancel an attempt that discovers an unknown provider.
+13. Add the provider task and edge, then replan the affected graph.
+14. Retry the consumer as a fresh attempt after the provider barrier.
+15. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-12. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+16. Follow [Team-oriented development](../workflows/team-oriented-development.md)
    for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
@@ -58,7 +62,8 @@ This skill does not replace module ownership, internal API review, or subagent e
 ## Validation
 
 Confirm that every capability has one functional owner. Confirm that every
-task has one team identity. Confirm that every reached task received a worker.
-Confirm that every expertise provider stayed inside its explicit code and test
-scope. Confirm that successor baselines contain their complete accepted and
-integrated predecessor closure.
+task has one team identity. Confirm that every ready selected task received one
+worker attempt after its exact frontier existed. Confirm that every expertise
+provider stayed inside its explicit code and test scope. Confirm that Git
+frontiers contain write predecessors while accepted read-only evidence remains
+in parent task state.

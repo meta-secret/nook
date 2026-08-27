@@ -27,7 +27,7 @@ Each node declares:
 - the consumer outcome;
 - provider dependencies;
 - read and write resource claims;
-- one exact starting frontier;
+- the starting-frontier rule;
 - the isolated workspace policy for write-capable work;
 - the expected commit handoff;
 - acceptance evidence;
@@ -42,10 +42,14 @@ Each edge declares:
 - compatibility expectations;
 - owning contract tests.
 
-The delivery owner recursively discovers and freezes these relationships before
-each reached node begins. Every reached node receives one team identity and one
-worker. The harness schedules every dependency-ready, non-conflicting node in
-the same wave.
+The delivery owner recursively discovers task records and freezes the initial
+known graph before dispatch. Every reached node receives one team identity. A
+ready selected node receives one worker attempt only after its exact starting
+frontier exists.
+
+The harness visits ready nodes in stable task order. It greedily selects a
+maximal set whose resource claims do not conflict. It snapshots all selected
+frontiers before creating the wave's worker attempts.
 A child may delegate only within its assigned node and declared depth bound.
 Nested delegation cannot add graph nodes, change edges, or widen write scope.
 
@@ -90,29 +94,52 @@ Implementation follows dependency readiness.
 2. Validate the provider against the frozen edge contract.
 3. Verify the provider commit against its starting frontier and write scope.
 4. Integrate accepted provider commits in deterministic task order.
-5. Recompute readiness across the provider's outgoing edges.
-6. Bind each ready consumer to the exact integrated frontier containing its
-   complete predecessor closure.
-7. Dispatch every newly ready, non-conflicting consumer in the same wave.
-8. Write each immediate consumer against the accepted external API.
-9. Add consumer tests for integration behavior.
-10. Repeat toward the feature root without waiting for unrelated nodes.
-11. Use the all-task barrier only for the final parent-owned join.
-12. Run repository delivery gates.
+5. Accept read-only provider evidence into parent task state.
+6. Recompute readiness after each Git integration or evidence acceptance.
+7. Bind each ready consumer to the exact integrated frontier containing its
+   complete write-predecessor closure.
+8. Select the next deterministic maximal safe wave.
+9. Snapshot selected frontiers and create one attempt per selected node.
+10. Write each immediate consumer against the accepted external API.
+11. Add consumer tests for integration behavior.
+12. Repeat toward the feature root without waiting for unrelated nodes.
+13. Use the all-task barrier only for the final parent-owned join.
+14. Run repository delivery gates.
 
 Independent ready providers may be analyzed in parallel.
 Independent write-capable providers may run in parallel only when their
 isolated workspace and resource claims are disjoint.
 Shared files and unresolved contracts remain serialized.
 
-A node is ready only when every direct provider is terminal-successful,
-semantically accepted, commit-verified, and integrated. Provider edges are local
-barriers. They do not create a global wait between waves.
+### Provider barriers
+
+A write provider must be terminal-successful, accepted, commit-verified, and
+integrated into the consumer's Git frontier. A read-only provider must be
+terminal-successful, accepted, exact-source verified, and accepted as evidence
+in parent task state. Read-only evidence is not required in Git ancestry.
+
+Provider edges are local barriers. They do not create a global wait between
+waves. Ready nodes excluded by conflicts remain pending for the next readiness
+recomputation.
 
 For example, `nook-core` must be accepted and integrated before `nook-wasm`
 starts. The web consumer then starts from the integrated frontier containing
 both `nook-core` and `nook-wasm`. Independent ready module tasks continue while
 that chain advances.
+
+## Late provider discovery
+
+The initial known module graph is frozen for dispatch.
+
+1. A worker reports an unknown provider instead of adding the edge itself.
+2. The harness invalidates and stops or cancels the affected attempt.
+3. Gizmo adds the provider record and edge.
+4. Gizmo recursively discovers and replans the affected module graph.
+5. Unaffected tasks continue.
+6. The provider satisfies its write or read-only acceptance barrier.
+7. The consumer retries as a fresh attempt from a fresh exact frontier.
+
+The invalidated attempt cannot supply accepted evidence or a commit handoff.
 
 ## Flat hierarchy
 
@@ -152,15 +179,19 @@ Before implementation, verify:
 - every changed boundary has a reviewed external API;
 - provider tests own domain behavior;
 - dependency order is acyclic;
-- every task has an exact starting frontier and declared resource scope;
+- every task has a starting-frontier rule and declared resource scope;
+- every selected ready attempt has an exact starting frontier;
 - every write-capable task has an isolated workspace policy;
 - every task stays inside the declared hierarchy depth bound;
 - no descendant widens a task or feature-DAG edge;
 - every accepted writer returns a verified commit handoff;
 - retries use fresh isolated attempt state;
 - downstream tasks bind to the exact integrated frontier containing their full
-  predecessor closure;
-- readiness is recomputed after every accepted integration;
+  write-predecessor closure;
+- read-only evidence is accepted in parent task state without Git ancestry;
+- each wave is greedily maximal under stable task order and resource claims;
+- late providers invalidate affected attempts before replanning;
+- readiness is recomputed after every Git integration or evidence acceptance;
 - only the final parent-owned join uses an all-task barrier;
 - the delivery owner owns the join.
 

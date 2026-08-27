@@ -14,7 +14,8 @@ The main task-owning agent is **Gizmo**.
 Gizmo must:
 
 1. Understand the requested outcome.
-2. Recursively discover every necessary bounded task and provider dependency.
+2. Recursively discover every necessary bounded task and provider dependency
+   as task records.
 3. For each task, name:
    - the responsible team;
    - the expected result;
@@ -22,20 +23,23 @@ Gizmo must:
    - the files the subagent must not change; and
    - the tests or evidence that prove completion.
 4. Assign exactly one team identity to each task.
-5. Create one worker for every reached task.
-6. Dispatch every dependency-ready, non-conflicting task in the same wave.
-7. Integrate accepted handoffs and recompute readiness after each integration.
-8. Bind each successor to the exact integrated frontier that contains its
-   complete predecessor closure.
-9. Review every returned result against the requested outcome.
-10. Send incomplete or incorrect work back to the responsible subagent.
-11. Recursively call the responsible subagent with feedback until the mission
+5. Freeze the initial known task graph before dispatch.
+6. Select a deterministic maximal safe wave from ready task records.
+7. Snapshot each selected task's exact starting frontier.
+8. Create one worker attempt for each selected task and dispatch the wave.
+9. Integrate accepted handoffs and recompute readiness after each integration.
+10. Bind each successor to the exact integrated frontier that contains its
+   complete write-predecessor closure.
+11. Review every returned result against the requested outcome.
+12. Send incomplete or incorrect work back to the responsible subagent.
+13. Recursively call the responsible subagent with feedback until the mission
    is complete or a real blocker requires human direction.
 
-Every reached task receives one worker. Each worker receives one team identity,
-one task, an exact starting frontier, allowed files, forbidden files, and
-required proof. Team identity belongs to the task. It is not a singular identity
-for the mission.
+Every reached unit receives a task record. A ready task receives one worker
+attempt only after its exact starting frontier exists. Each worker receives one
+team identity, one task, that frontier, allowed files, forbidden files, and
+required proof. Team identity belongs to the task. It is not a singular
+identity for the mission.
 
 Gizmo may inspect the repository and subagent evidence. Gizmo may integrate
 verified handoff commits and control shared delivery state. Gizmo must not
@@ -79,22 +83,37 @@ Gizmo supplies a bounded task contract for that identity.
 - It returns foreign-team dependencies to Gizmo.
 - It does not grant parent-owned lifecycle authority.
 
-A task is dependency-ready only when every direct provider is:
+A write provider satisfies its consumer edge only when it is:
 
 - terminal-successful;
 - semantically accepted by its responsible owner;
-- verified against its declared commit and resource scope; and
-- integrated into the frontier for the successor.
+- commit-verified against its declared starting frontier and resource scope;
+  and
+- integrated into the consumer's Git frontier.
+
+A read-only provider satisfies its consumer edge only when it is:
+
+- terminal-successful;
+- semantically accepted by its responsible owner;
+- verified against its exact source commit; and
+- accepted as evidence in the parent task state.
 
 - The successor starts from the exact integrated frontier that contains its
-  complete predecessor closure.
+  complete write-predecessor closure.
+- Read-only evidence is not required in Git ancestry.
 - The harness recomputes readiness after each integration.
 - Provider edges are local barriers.
 - An all-task barrier is reserved for the final parent-owned join.
+- The initial known graph is frozen before dispatch.
+- An unknown provider invalidates and stops or cancels the affected attempt.
+- Gizmo adds the provider task and edge, then replans the affected graph.
+- The consumer retries as a fresh attempt from a fresh frontier after the new
+  provider barrier is satisfied.
 
 The active harness owns worker creation and native worker labels or names.
-It also owns model inheritance or selection, scheduling, communication,
-retries, cancellation, and terminal barriers.
+It also owns same-model inheritance. Any explicit model selection remains
+harness-owned. The harness owns scheduling, communication, retries,
+cancellation, and terminal barriers.
 
 Repository profile files are not semantic, capability, context, model, or
 lifecycle authority.
@@ -186,10 +205,10 @@ Security review does not transfer implementation ownership.
     acceptance evidence.
 
 Gizmo may run team subagents one after another when their changes cannot safely
-overlap. It dispatches all dependency-ready tasks together when their resource
-claims do not conflict. Read-only audits may overlap. Concurrent writers require
-isolated workspaces and disjoint resource claims. Gizmo still must not implement
-their tasks.
+overlap. It greedily selects a maximal safe wave in stable task order. Read-only
+audits may overlap. Any overlapping claims conflict when either task writes.
+Concurrent writers require isolated workspaces and disjoint resource claims.
+Gizmo still must not implement their tasks.
 
 ## Universal repository boundaries
 

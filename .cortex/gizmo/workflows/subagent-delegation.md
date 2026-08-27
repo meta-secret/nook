@@ -11,7 +11,7 @@
 A capable agent environment MUST delegate when all of these conditions hold:
 
 1. The request contains at least two separate team tasks.
-2. Each task has an exact starting frontier.
+2. Each selected ready task can receive an exact starting frontier.
 3. Concurrent write tasks have isolated workspaces and disjoint resource claims.
 4. Each subagent has explicit inputs and expected outputs.
 5. Each subagent has its own acceptance evidence.
@@ -22,7 +22,7 @@ A capable agent environment MUST delegate when all of these conditions hold:
   - Do not use a movable branch name as a worker baseline.
 - Do not require one common baseline for the whole mission.
 - Record the delegation decision in the task plan.
-- Let the active harness own model inheritance or selection.
+- Let the active harness own same-model inheritance and any explicit selection.
 - Do not encode model selection in the repository task contract.
 - If the host cannot start the required subagents:
   - report an implementation blocker;
@@ -98,7 +98,8 @@ Every subagent task must declare:
 - forbidden mutations;
 - its parent-owned join.
 
-Create one disposable worker for each reached task ID.
+Create one disposable worker attempt only when the task is ready and its exact
+starting frontier exists.
 
 Do not create a second worker for the same task and attempt.
 
@@ -126,34 +127,72 @@ dispatched.
 1. Start from the requested outcomes.
 2. Identify every direct provider needed for each outcome.
 3. Repeat for each provider until all leaves are independently executable.
-4. Assign exactly one team identity to every reached task.
-5. Create one worker for every reached task.
-6. Freeze dependencies, resource claims, acceptance evidence, and the
+4. Create one task record for every reached task.
+5. Assign exactly one team identity to every task record.
+6. Freeze the initial known graph before dispatch.
+7. Freeze resource claims, acceptance evidence, stable task order, and the
    parent-owned join.
 
 ### Ready wave dispatch
 
-A task is dependency-ready only when all direct providers are:
+A write provider satisfies its consumer edge only when it is:
 
 - terminal-successful;
 - semantically accepted by the responsible owner;
-- commit-verified against their declared frontier and resource scope; and
-- integrated into the successor's starting frontier.
+- commit-verified against its declared frontier and resource scope; and
+- integrated into the consumer's Git frontier.
+
+A read-only provider satisfies its consumer edge only when it is:
+
+- terminal-successful;
+- semantically accepted by the responsible owner;
+- verified against its exact source commit; and
+- accepted as evidence in parent task state.
 
 Dispatch follows these rules:
 
-- A read-only provider verifies its exact source commit.
-  Integration accepts its evidence into the parent task state.
-- The harness dispatches every dependency-ready task whose resource claims do
-  not conflict in the same wave.
+- A task becomes ready when every direct provider satisfies its edge barrier.
+- A task is not selectable until its exact starting Git frontier exists.
+- Read-only evidence is not required in Git ancestry.
+- The harness visits ready pending tasks in stable task order.
+- It greedily selects a task when its claims do not conflict with already
+  selected tasks.
+- Claims conflict when they overlap and either task writes.
+- The resulting set is the deterministic maximal safe wave.
+- The harness snapshots every selected starting frontier before creating any
+  attempt in that wave.
+- It creates one worker attempt for each selected task.
+- Ready tasks excluded by conflicts remain pending for the next recomputation.
 - Read-only audits may overlap, including audits of the same evidence.
 - Concurrent writers require isolated workspaces and disjoint resource claims.
-- After each accepted integration, Gizmo recomputes readiness on affected
-  outgoing edges.
+- After each Git integration or read-only evidence acceptance, Gizmo recomputes
+  readiness on affected outgoing edges.
 - Each newly ready successor binds to the exact integrated frontier that
-  contains its complete predecessor closure.
+  contains its complete write-predecessor closure.
 - Unrelated work continues. No global wait separates waves.
 - The all-task terminal barrier exists only for the final parent-owned join.
+
+### Late provider discovery
+
+The frozen initial graph controls dispatch. A worker cannot add its own task or
+dependency edge.
+
+When a running task discovers an unknown provider:
+
+1. The worker reports the provider and affected consumer contract.
+2. The harness invalidates the current attempt.
+3. The harness stops or cancels that attempt.
+4. Gizmo adds the bounded provider task and dependency edge.
+5. Gizmo recursively discovers any dependencies of the new provider.
+6. Gizmo replans and freezes the affected graph in stable task order.
+7. Unaffected tasks continue from their existing records and frontiers.
+8. A write provider passes through commit verification and Git integration.
+9. A read-only provider passes through exact-source verification and evidence
+   acceptance in parent task state.
+10. The consumer retries only as a fresh attempt from a fresh frontier after
+    every new provider barrier is satisfied.
+
+Output from the invalidated attempt cannot satisfy acceptance or integration.
 
 ## Module-oriented feature development
 
@@ -220,7 +259,8 @@ Its native control path includes:
 - nested delegation within declared bounds;
 - parent and root synthesis.
 
-It also owns native worker labels or names and model inheritance or selection.
+It also owns native worker labels or names, same-model inheritance, and any
+explicit model selection.
 
 Repository event streams and semantic views are optional human evidence.
 They are not lifecycle authority for native harness delegation.
@@ -271,10 +311,12 @@ Before integration, the parent:
 4. verifies acceptance evidence;
 5. reconciles failures and disagreements;
 6. integrates accepted commits in deterministic dependency order;
-7. recomputes readiness across affected outgoing edges;
-8. binds downstream work to the exact integrated frontier containing its
-   complete predecessor closure; and
-9. dispatches all newly ready, non-conflicting tasks.
+7. accepts read-only evidence into parent task state or integrates a write
+   commit into the Git frontier;
+8. recomputes readiness across affected outgoing edges;
+9. binds downstream work to the exact integrated frontier containing its
+   complete write-predecessor closure; and
+10. selects the next deterministic maximal safe wave.
 
 The parent may author a Markdown summary for humans.
 That summary is optional.
@@ -429,7 +471,8 @@ Before integration, verify:
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
 - the repository task contract did not prescribe a native label or model;
-- every reached task has a harness-visible terminal result;
+- every reached task has a task record;
+- every selected ready task has one harness-visible worker attempt;
 - every child records the correct parent lineage;
 - every task stayed inside its declared hierarchy depth bound;
 - no descendant widened its assigned task or write scope;
@@ -440,9 +483,18 @@ Before integration, verify:
 - every accepted commit descends from its exact baseline;
 - every accepted commit changes only allowed paths;
 - every downstream task binds to the exact integrated provider commit;
-- every downstream task's frontier contains its complete predecessor closure;
+- every downstream task's frontier contains its complete write-predecessor
+  closure;
+- read-only evidence was accepted in parent task state without a Git-ancestry
+  requirement;
 - integration follows deterministic dependency order;
-- readiness was recomputed after every accepted integration;
+- every wave was greedily maximal under stable task order and resource claims;
+- every selected frontier was snapshotted before wave attempts were created;
+- conflict-excluded ready tasks remained pending for recomputation;
+- every late provider invalidated and stopped or cancelled the affected attempt;
+- every late-provider consumer retry used fresh attempt state and a fresh
+  frontier;
+- readiness was recomputed after every Git integration or evidence acceptance;
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - the parent reviewed all evidence;

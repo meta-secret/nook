@@ -43,20 +43,24 @@ authority.
 ## Routing rules
 
 1. Gizmo keeps delivery-control work in its own context.
-2. Gizmo recursively discovers bounded functional tasks.
+2. Gizmo recursively discovers bounded functional task records.
 3. Gizmo assigns exactly one team identity to each task.
-4. The assigned worker loads only its own context's `AGENTS.md` and knowledge
+4. Gizmo creates a worker attempt only after the task is ready and its exact
+   starting frontier exists.
+5. An unknown provider invalidates the affected attempt and returns to Gizmo
+   for graph replanning.
+6. The assigned worker loads only its own context's `AGENTS.md` and knowledge
    graph.
-5. Open only documents needed for the assigned functionality.
-6. Load a shared document only for a named cross-team dependency.
-7. Do not open another team's graph for background context.
-8. Return foreign-team requirements to Gizmo.
-9. Load a foreign-team skill read-only when the selected team's task-relevant
+7. Open only documents needed for the assigned functionality.
+8. Load a shared document only for a named cross-team dependency.
+9. Do not open another team's graph for background context.
+10. Return foreign-team requirements to Gizmo.
+11. Load a foreign-team skill read-only when the selected team's task-relevant
    authority names it as required engineering policy.
-10. Require an expertise contract only when the foreign team will change files.
-11. Route security architecture and acceptance questions to security without
+12. Require an expertise contract only when the foreign team will change files.
+13. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
-For a multi-team request, Gizmo loads only its own graph. Gizmo creates one
-worker for every reached task. Each worker receives only the context for the
-task's team identity.
+For a multi-team request, Gizmo loads only its own graph. Every reached task has
+a task record. Every ready selected task receives one worker attempt with only
+the context for that task's team identity.

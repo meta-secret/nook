@@ -39,7 +39,10 @@ Team identity is task-scoped.
 
 - Gizmo assigns exactly one team identity to each bounded task.
 - A mission may reach many tasks with the same or different team identities.
-- Worker count follows reached task count. It does not follow team count.
+- Discovery creates task records. It does not create worker attempts.
+- Each ready selected task receives one worker attempt.
+- Worker attempt count follows ready selected tasks. It does not follow team
+  count.
 - Team ownership does not collapse several tasks into one mission-wide worker.
 
 Skill ownership is separate from implementation delegation.
@@ -167,17 +170,19 @@ Gizmo decides the integration order and assigns the final writer.
 Gizmo assigns the human request before implementation starts.
 
 1. Describe the observable functionality without assigning files yet.
-2. Recursively discover concrete tasks and their provider dependencies.
+2. Recursively discover concrete task records and their provider dependencies.
 3. Assign coordination, integration, and lifecycle capabilities to Gizmo.
 4. Assign each implementation task to AI, development core, security, SRE, or
    web development.
 5. Identify implementation expertise required from another team.
 6. Identify every cross-team provider and consumer contract.
-7. Freeze each contract, starting frontier, resource claims, forbidden scope,
+7. Freeze the initial known graph, contracts, resource claims, forbidden scope,
    tests, and acceptance evidence.
 8. Assign exactly one team identity to every reached task.
-9. Create one worker for every reached task.
-10. Keep shared files and lifecycle state in the parent-owned join.
+9. Select a deterministic maximal safe wave from ready tasks.
+10. Snapshot exact starting frontiers for selected tasks.
+11. Create one worker attempt for each selected task.
+12. Keep shared files and lifecycle state in the parent-owned join.
 
 File location does not override semantic ownership.
 
@@ -206,9 +211,17 @@ It reports a dependency containing:
 - the blocked or deferred consumer work.
 
 The team agent must not implement the provider inside its own layer.
-Gizmo routes the dependency to the provider team and updates the recorded team
-assignments. The new provider is a bounded task with its own team identity.
-Gizmo recursively discovers any additional dependencies of that provider.
+
+When the provider was absent from the frozen graph:
+
+1. The agent reports the unknown provider.
+2. The harness invalidates and stops or cancels the affected attempt.
+3. Gizmo adds the provider task and edge.
+4. Gizmo replans the affected graph and recursively discovers provider needs.
+5. Gizmo accepts a write provider through Git integration.
+6. Gizmo accepts a read-only provider through parent task evidence state.
+7. Gizmo retries the consumer from a fresh frontier after the provider barrier
+   is satisfied.
 
 ## Cross-team expertise protocol
 
@@ -263,7 +276,9 @@ The final integration must prove:
 - cross-team contracts were frozen before consumer integration;
 - each team supplied its own tests and review fixes;
 - shared files were serialized; and
-- every reached task had one team identity and one worker per attempt;
+- every reached task had one team identity;
+- every ready selected task had one worker attempt and an exact frontier;
+- every late provider invalidated the affected attempt before replanning;
 - every successor started from a frontier containing its full predecessor
   closure; and
 - Gizmo validated the integrated exact head.
