@@ -305,7 +305,11 @@ test('bounds paths, source lines, codes, and finding messages', () => {
 });
 
 test('rejects control characters in request and result paths', () => {
-  const controls = ['\n', '\t', '\u001b', '\u0001', '\u007f'];
+  const controls: string[] = [];
+  for (let codePoint = 0; codePoint <= 0x1f; codePoint += 1) {
+    controls.push(String.fromCodePoint(codePoint));
+  }
+  controls.push(String.fromCodePoint(0x7f));
   for (const control of controls) {
     const relativePath = `.cortex/exam${control}ple.md`;
     const document = { ...validRequest.documents[0], relativePath };

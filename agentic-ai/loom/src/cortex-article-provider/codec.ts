@@ -98,8 +98,11 @@ const LEDGER_KEYS = ['relativePath', 'content'] as const;
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
-const PATH_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 const UTF8_ENCODER = new TextEncoder();
+enum PathControlCodePoint {
+  C0Maximum = 0x1f,
+  Delete = 0x7f,
+}
 enum SerializedCortexArticleContract {
   Request = 'request',
   Result = 'result',
@@ -528,13 +531,27 @@ function isNonblankString(value: string | false): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+function hasPathControlCharacter(value: string): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (
+      codePoint !== undefined &&
+      (codePoint <= PathControlCodePoint.C0Maximum ||
+        codePoint === PathControlCodePoint.Delete)
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function isSafeRelativePath(value: string | false): value is string {
   return (
     isNonblankString(value) &&
     value.length <= CORTEX_ARTICLE_PATH_LIMIT &&
     !value.startsWith('/') &&
     !value.includes('\\') &&
-    !PATH_CONTROL_CHARACTER.test(value) &&
+    !hasPathControlCharacter(value) &&
     value
       .split('/')
       .every((part) => part !== '..' && part !== '.' && part !== '')
