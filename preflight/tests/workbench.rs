@@ -204,7 +204,7 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 }
 
 #[test]
-fn team_work_separates_functional_ownership_from_implementation_expertise() -> anyhow::Result<()> {
+fn team_work_distinguishes_owner_vocabulary_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
     let ownership = read(".cortex/gizmo/architecture/team-ownership.md");
     let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map.md");
@@ -355,6 +355,7 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
             "automated planning must require expertise contract field: {required}"
         );
     }
+    // The planning prompt carries the review policy for Gizmo's delivery semantics.
     assert!(
         normalized_agent_plan.contains(
             "`Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
@@ -362,19 +363,19 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
             "Use `Gizmo` only for coordination, integration, or lifecycle capabilities"
         ) && normalized_agent_plan.contains(
                 "An `Expertise provider` must be exactly `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
-            ),
-        "automated planning must allow Gizmo only as a functional delivery owner"
+            ) && normalized_agent_plan.contains("Gizmo is never an expertise provider"),
+        "planning review policy must reserve Gizmo for coordination, integration, or lifecycle and exclude it from expertise provision"
     );
+    // The JavaScript validator enforces only role vocabularies, not capability semantics.
     assert!(
-        normalized_agent_plan.contains("Gizmo is never an expertise provider")
-            && workbench_validator.contains("const functionalOwnerPattern =")
+        workbench_validator.contains("const functionalOwnerPattern =")
             && workbench_validator
                 .contains("'Gizmo|AI|Development core|Security|SRE|Web development'")
             && workbench_validator.contains("const expertiseProviderPattern =")
             && workbench_validator.contains("'AI|Development core|Security|SRE|Web development'")
             && workbench_validator.contains("(${functionalOwnerPattern})")
             && workbench_validator.contains("(None|${expertiseProviderPattern})"),
-        "Workbench validation must accept Gizmo as a functional owner and reject it as an expertise provider"
+        "Workbench validation must include Gizmo in the functional-owner vocabulary and exclude it from the expertise-provider vocabulary"
     );
 
     for skill in [
