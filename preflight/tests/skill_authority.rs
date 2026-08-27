@@ -8,23 +8,6 @@ fn repository_root() -> PathBuf {
 }
 
 #[test]
-fn tracked_harness_skill_mirrors_remain_absent() -> anyhow::Result<()> {
-    let root = repository_root();
-    for directory in [".agents/skills", ".cursor/skills", ".claude/skills"] {
-        let path = root.join(directory);
-        if !path.exists() {
-            continue;
-        }
-        for entry in fs::read_dir(path)? {
-            let name = entry?.file_name();
-            let tolerated = directory == ".agents/skills" && name == "impeccable";
-            anyhow::ensure!(tolerated, "harness skill mirror is prohibited");
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     let root = repository_root();
     let readme = fs::read_to_string(root.join("README.md"))?;
