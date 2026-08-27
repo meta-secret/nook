@@ -55,7 +55,7 @@ const REPLICATION_ROOT = 'nook-app/nook-platform/nook-replication';
 
 const MODULE_EXPERT_SHARED_CONTEXT_PATHS = [
   '.cortex/teams/ai/dynamic-skills/module-expert.md',
-  '.cortex/teams/ai/workflows/module-oriented-development.md',
+  '.cortex/gizmo/workflows/module-oriented-development.md',
 ] as const;
 
 export const MODULE_EXPERT_CANONICAL_CONTEXT_PATHS = [
