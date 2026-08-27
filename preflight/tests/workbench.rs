@@ -347,6 +347,25 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
             "automated planning must require expertise contract field: {required}"
         );
     }
+    assert!(
+        agent_plan.contains(
+            "`Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`, `SRE`, or `Web development`"
+        ) && agent_plan.contains("Gizmo is a delivery owner, not an expertise provider")
+            && agent_plan.contains(
+                "`Expertise provider` to exactly `AI`, `Development core`, `Security`, `SRE`, `Web development`, or `None`"
+            ),
+        "automated planning must allow Gizmo only as a functional delivery owner"
+    );
+    assert!(
+        workbench_validator.contains("const functionalOwnerTeamPattern =")
+            && workbench_validator
+                .contains("'Gizmo|AI|Development core|Security|SRE|Web development'")
+            && workbench_validator.contains("const expertiseProviderTeamPattern =")
+            && workbench_validator.contains("'AI|Development core|Security|SRE|Web development'")
+            && workbench_validator.contains("(${functionalOwnerTeamPattern})")
+            && workbench_validator.contains("(None|${expertiseProviderTeamPattern})"),
+        "Workbench validation must accept Gizmo as a functional owner and reject it as an expertise provider"
+    );
 
     for skill in [
         "typescript-domain-structure.md",
