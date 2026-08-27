@@ -27,6 +27,13 @@ export type ModuleExpertInvocationRequest = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly instruction: string;
+  readonly selectedContextPaths?: readonly ModuleExpertTaskContextPath[];
+};
+
+export type ValidatedModuleExpertInvocationRequest = Omit<
+  ModuleExpertInvocationRequest,
+  'selectedContextPaths'
+> & {
   readonly selectedContextPaths: readonly ModuleExpertTaskContextPath[];
 };
 
@@ -45,7 +52,7 @@ type ParentLineageValidation = {
 
 export function decodeModuleExpertInvocationRequest(
   serialized: string,
-): ModuleExpertInvocationRequest {
+): ValidatedModuleExpertInvocationRequest {
   if (Buffer.byteLength(serialized, 'utf8') > MAX_REQUEST_BYTES) {
     invalidRequest();
   }
@@ -56,19 +63,22 @@ export function decodeModuleExpertInvocationRequest(
     invalidRequest();
   }
   if (!isRecord(node)) invalidRequest();
-  const expectedKeys = [
+  const requiredKeys = [
     'attempt',
     'depth',
     'expert',
     'instruction',
     'parent',
     'runId',
-    'selectedContextPaths',
     'sourceCommit',
     'task',
   ];
   const actualKeys = Object.keys(node).sort();
-  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+  const allowedKeys = [...requiredKeys, 'selectedContextPaths'];
+  if (
+    requiredKeys.some((key) => !actualKeys.includes(key)) ||
+    actualKeys.some((key) => !allowedKeys.includes(key))
+  ) {
     invalidRequest();
   }
   const runIdProperty: ModuleExpertRequestProperty = {
@@ -115,12 +125,12 @@ export function decodeModuleExpertInvocationRequest(
   const attempt = requiredNumber(attemptProperty);
   const depth = requiredNumber(depthProperty);
   const parent = requiredParent(parentProperty);
-  const selectedContextPathValues = requiredStringList(
+  const selectedContextPathValues = optionalStringList(
     selectedContextPathsProperty,
   );
   const contextSelection: ModuleExpertContextSelection = {
     expertName: expert,
-    selectedContextPaths: selectedContextPathValues,
+    selectedContextPaths: selectedContextPathValues ?? [],
   };
   let selectedContextPaths: readonly ModuleExpertTaskContextPath[];
   try {
@@ -162,7 +172,7 @@ export function decodeModuleExpertInvocationRequest(
 
 export function validatedModuleExpertInvocationRequest(
   request: ModuleExpertInvocationRequest,
-): ModuleExpertInvocationRequest {
+): ValidatedModuleExpertInvocationRequest {
   let serialized: string;
   try {
     const encoded = JSON.stringify(request);
@@ -204,21 +214,22 @@ function requiredNumber(property: ModuleExpertRequestProperty): number {
   return value.value;
 }
 
-function requiredStringList(
+function optionalStringList(
   property: ModuleExpertRequestProperty,
-): readonly string[] {
+): readonly string[] | undefined {
   const propertyArgs: UntrustedYamlPropertyArgs = {
     record: property.record,
     key: property.key,
   };
   const value = untrustedYamlProperty(propertyArgs);
   if (
-    value.presence === UntrustedYamlPropertyPresence.Absent ||
-    !Array.isArray(value.value) ||
-    value.value.some((entry) => typeof entry !== 'string')
+    value.presence !== UntrustedYamlPropertyPresence.Absent &&
+    (!Array.isArray(value.value) ||
+      value.value.some((entry) => typeof entry !== 'string'))
   ) {
     invalidRequest();
   }
+  if (value.presence === UntrustedYamlPropertyPresence.Absent) return undefined;
   return value.value as readonly string[];
 }
 

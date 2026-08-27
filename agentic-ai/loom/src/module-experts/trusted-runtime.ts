@@ -363,12 +363,16 @@ function moduleExpertIdentityDigest(
 
 function moduleExpertInstruction(context: ModuleExpertPromptContext): string {
   const profile = context.profile;
+  const selectedSkillPaths = context.selectedContextPaths.filter((path) =>
+    path.startsWith('.agents/skills/'),
+  );
   return [
     `Assigned module expert: ${profile.name}`,
     `Description: ${profile.description}`,
     `Module roots: ${JSON.stringify(profile.moduleRoots)}`,
     `Additional scope: ${JSON.stringify(profile.scopePaths)}`,
     `Selected task context: ${JSON.stringify(context.selectedContextPaths)}`,
+    `Task-selected skill paths: ${JSON.stringify(selectedSkillPaths)}`,
     `Generated scope: ${JSON.stringify(profile.generatedScopePaths.map((scope) => scope.path))}`,
     `Excluded paths: ${JSON.stringify(profile.excludedPaths)}`,
     `Public entry points: ${JSON.stringify(profile.publicEntryPoints)}`,

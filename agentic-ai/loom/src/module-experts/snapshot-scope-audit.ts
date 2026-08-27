@@ -103,14 +103,14 @@ export function auditModuleExpertSnapshotScopes(
       }
       const skillComparison: OrderedSnapshotPaths = {
         actual: profile.skillPaths,
-        expected: WEB_EXPERT_SKILL_PATHS,
+        expected: [WEB_EXPERT_SKILL_PATHS[0]],
       };
       if (!sameOrderedPaths(skillComparison)) {
         const finding: ModuleExpertSnapshotScopeFinding = {
           code: 'invalid-web-expert-skills',
           path: MODULE_EXPERT_CATALOG_PATH,
           message:
-            'web_expert requires the exact cataloged module, frontend, and browser-extension skill bundle.',
+            'web_expert requires only the fixed module-expert skill; task-applicable web skills must remain selectable.',
         };
         findings.push(finding);
       }

@@ -327,6 +327,7 @@ describe('module expert runtime isolation', () => {
         expertName: 'web_expert',
         selectedContextPaths: [
           '.cortex/teams/web-dev/product-specs/browser-extension.md',
+          '.agents/skills/design-taste-frontend/SKILL.md',
         ],
       };
       const isolation =

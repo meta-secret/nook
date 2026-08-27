@@ -394,7 +394,6 @@ describe('module expert audit', () => {
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/web-dev/knowledge-graph.md',
-      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/gizmo/workflows/module-oriented-development.md',
     ]);
@@ -406,7 +405,6 @@ describe('module expert audit', () => {
     expect(WEB_EXPERT_SKILL_AUTHORITY_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/ai/architecture/module-experts.md',
-      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/gizmo/workflows/module-oriented-development.md',
     ]);
@@ -439,6 +437,9 @@ describe('module expert audit', () => {
     expect(WEB_EXPERT_ALLOWED_CONTEXT_PATHS).toEqual([
       ...WEB_EXPERT_PRODUCT_SPEC_PATHS,
       ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
+      '.agents/skills/design-taste-frontend/SKILL.md',
+      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ]);
     expect(INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS).toEqual([
       'nook-app/nook-platform/nook-app-common',
@@ -531,10 +532,6 @@ describe('module expert audit', () => {
           '.agents/skills/coding-bro/SKILL.md',
         ],
       },
-      {
-        ...webProfile,
-        skillPaths: [...webProfile.skillPaths].reverse(),
-      },
     ];
     const expectedCodes = [
       'invalid-canonical-expert-context',
@@ -549,7 +546,6 @@ describe('module expert audit', () => {
       'invalid-web-expert-scope',
       'missing-web-expert-skill-authority',
       'invalid-web-expert-authorities',
-      'invalid-web-expert-skills',
       'invalid-web-expert-skills',
       'invalid-web-expert-skills',
     ];

@@ -187,6 +187,25 @@ the ordinary Loom delegation journal before invoking the child.
 }
 ```
 
+Existing non-web requests may omit `selectedContextPaths`. Loom normalizes the
+omitted field to `[]`.
+
+`web_expert` accepts an empty selection for ordinary module analysis. Product
+authorities require the design skill. Release authorities require the
+extension-release skill and its canonical security authority. For example:
+
+```json
+{
+  "selectedContextPaths": [
+    ".cortex/teams/web-dev/product-specs/browser-extension.md",
+    ".github/workflows/release.yml",
+    ".agents/skills/design-taste-frontend/SKILL.md",
+    ".agents/skills/browser-extension-release-security/SKILL.md",
+    ".cortex/teams/security/dynamic-skills/browser-extension-release-security.md"
+  ]
+}
+```
+
 ```bash
 task loom:module-experts:invoke REQUEST=/absolute/path/to/request.json
 ```
@@ -225,7 +244,8 @@ view under
 `workflow/processing/delegated-agent-work/<runId>/agents/<task>/attempt-<n>/`.
 The JSON response contains the typed terminal and content-addressed processing
 references. Before returning them, Loom rereads all three projections, verifies
-their digests and exact identity, and replays the terminal stream. Runtime
+their digests and exact identity, and replays the terminal stream. The replayed
+invocation evidence binds the normalized `selectedContextPaths`. Runtime
 errors and invalid resolved completions produce a sanitized failed terminal and
 a Loom-authored failure view. The delivery owner remains responsible for
 aggregation, continuation, and lifecycle state.

@@ -19,6 +19,7 @@ import {
 } from '../agent-workflow/domain.ts';
 import type {
   AgentAttemptEvent,
+  AgentRuntimeActivityEvent,
   AgentAttemptTerminalRecordedEvent,
 } from '../agent-workflow/agent-events.ts';
 import type {
@@ -51,12 +52,16 @@ import {
   decodeModuleExpertInvocationRequest,
   validatedModuleExpertInvocationRequest,
 } from './request-codec.ts';
-import type { ModuleExpertInvocationRequest } from './request-codec.ts';
+import type {
+  ModuleExpertInvocationRequest,
+  ValidatedModuleExpertInvocationRequest,
+} from './request-codec.ts';
 
 export { decodeModuleExpertInvocationRequest } from './request-codec.ts';
 export type { ModuleExpertInvocationRequest } from './request-codec.ts';
 
 const MAX_ACTIVITY_COUNT = 256;
+const SELECTED_CONTEXT_EVIDENCE_PREFIX = 'Module expert selected context: ';
 
 export type ModuleExpertInvocationResult = {
   readonly runDirectory: string;
@@ -85,7 +90,7 @@ export type VerifyModuleExpertInvocationResultArgs = {
 type ModuleExpertResultContext = {
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
-  readonly request: ModuleExpertInvocationRequest;
+  readonly request: ValidatedModuleExpertInvocationRequest;
   readonly terminal: TaskTerminal<string>;
   readonly processing: AgentAttemptProcessingReference;
 };
@@ -111,7 +116,7 @@ type FinalizeFailedAttemptContext = {
   readonly activityCount: number;
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
-  readonly request: ModuleExpertInvocationRequest;
+  readonly request: ValidatedModuleExpertInvocationRequest;
 };
 
 export async function invokeModuleExpert(
@@ -183,7 +188,13 @@ export async function invokeModuleExpert(
   };
   const journal = createModuleExpertAttemptJournal<string>(journalArgs);
   await journal.initialize();
-  let activityCount = 0;
+  const selectedContextObservation: RuntimeActivityObservation = {
+    activity: WorkflowRuntimeActivityKind.SourceReadCompleted,
+    detail: `${SELECTED_CONTEXT_EVIDENCE_PREFIX}${JSON.stringify(request.selectedContextPaths)}`,
+  };
+  const selectedContextEvent = runtimeActivityEvent(selectedContextObservation);
+  await journal.append(selectedContextEvent);
+  let activityCount = 1;
   const observe = async (
     observation: RuntimeActivityObservation,
   ): Promise<void> => {
@@ -417,12 +428,14 @@ export async function verifyModuleExpertInvocationResult(
     processingVerificationFailed();
   }
   const firstEvent = events[0];
+  const selectedContextEvent = events[1] as AgentRuntimeActivityEvent;
   const terminalEvents = events.filter(
     (event) => event.kind === AgentAttemptEventKind.AttemptTerminalRecorded,
   ) as readonly AgentAttemptTerminalRecordedEvent[];
   const terminalEvent = terminalEvents[0];
   if (
     !firstEvent ||
+    !selectedContextEvent ||
     terminalEvents.length !== 1 ||
     !terminalEvent ||
     firstEvent.adapter !== AgentAttemptAdapterKind.ModuleExpertInvocation ||
@@ -435,6 +448,11 @@ export async function verifyModuleExpertInvocationResult(
     firstEvent.attempt !== result.attempt ||
     firstEvent.depth !== result.depth ||
     JSON.stringify(firstEvent.parent) !== JSON.stringify(result.parent) ||
+    selectedContextEvent.kind !== AgentAttemptEventKind.RuntimeActivity ||
+    selectedContextEvent.activity !==
+      WorkflowRuntimeActivityKind.SourceReadCompleted ||
+    selectedContextEvent.detail !==
+      `${SELECTED_CONTEXT_EVIDENCE_PREFIX}${JSON.stringify(result.selectedContextPaths)}` ||
     projectedTerminal.task !== result.task ||
     projectedTerminal.attempt !== result.attempt ||
     projectedTerminal.kind !== result.terminal.kind ||

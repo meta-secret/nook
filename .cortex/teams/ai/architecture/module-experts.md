@@ -224,6 +224,13 @@ It identifies:
     browser profiles, or release artifacts are in scope.
 - **Skill routing:** The role rejects skills outside the allowed catalog.
   It also rejects a task that omits an applicable required skill.
+- **Selection field:** `selectedContextPaths` carries optional product
+  authorities, release authorities, and task-applicable skill paths.
+  - An empty selection represents ordinary module analysis.
+  - Selecting a product authority requires `design-taste-frontend`.
+  - Selecting a release authority requires
+    `browser-extension-release-security` and its canonical security authority.
+  - The role rejects duplicate, reordered, unknown, or incomplete selections.
 - **Skill authority:** `design-taste-frontend` is complete in its executable
   skill card. `browser-extension-release-security` routes to its canonical
   security authority. The task-selected snapshot includes that authority when
@@ -233,6 +240,7 @@ It identifies:
   - `.cortex/teams/web-dev/knowledge-graph.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
   - `.cortex/gizmo/workflows/module-oriented-development.md`
+  - `.agents/skills/module-expert/SKILL.md`
 - **Allowed product authority catalog:** The task selects only the authorities
   that own its assigned functionality.
   - `.cortex/teams/dev-core/product-specs/authenticator-items.md`

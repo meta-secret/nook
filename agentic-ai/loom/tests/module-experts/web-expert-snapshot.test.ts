@@ -28,9 +28,17 @@ const UNRELATED_PRODUCT_SPEC =
   '.cortex/teams/sre/product-specs/monorepo-setup.md';
 const UNRELATED_CI_AUTHORITY = '.github/workflows/unrelated.yml';
 const VENDOR_CORE_PROFILE = '.codex/agents/module-experts/core_expert.toml';
+const DESIGN_SKILL_PATH = '.agents/skills/design-taste-frontend/SKILL.md';
+const EXTENSION_RELEASE_SKILL_PATH =
+  '.agents/skills/browser-extension-release-security/SKILL.md';
+const EXTENSION_RELEASE_AUTHORITY_PATH =
+  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md';
 const SELECTED_CONTEXT_PATHS: readonly WebExpertAllowedContextPath[] = [
   '.cortex/teams/web-dev/product-specs/browser-extension.md',
   '.github/workflows/release.yml',
+  DESIGN_SKILL_PATH,
+  EXTENSION_RELEASE_SKILL_PATH,
+  EXTENSION_RELEASE_AUTHORITY_PATH,
 ];
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
@@ -86,6 +94,52 @@ test('materializes exact committed web product and release authorities', async (
       await expect(
         access(join(isolation.repositorySnapshot, VENDOR_CORE_PROFILE)),
       ).rejects.toThrow();
+    } finally {
+      await isolation.dispose();
+    }
+  } finally {
+    await rm(fixtureRoot, REMOVE_RECURSIVELY);
+  }
+});
+
+test('keeps ordinary web analysis free of design and extension release context', async () => {
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-web-base-snapshot-'));
+  try {
+    const fixture = await createWebSnapshotFixture(fixtureRoot);
+    const temporaryRoot = join(fixtureRoot, 'isolated');
+    await mkdir(temporaryRoot);
+    const isolationRequest: ModuleExpertRuntimeIsolationRequest = {
+      expertName: 'web_expert',
+      parentEnvironment: {
+        CODEX_API_KEY: 'web-base-snapshot-test-key',
+        PATH: process.env.PATH ?? '',
+      },
+      sourceCommit: fixture.sourceCommit,
+      selectedContextPaths: [],
+      temporaryRoot,
+      workingDirectory: fixture.root,
+    };
+    const isolation =
+      await createModuleExpertRuntimeIsolation(isolationRequest);
+    try {
+      expect(isolation.selectedContextPaths).toEqual([]);
+      for (const excludedTaskContext of [
+        DESIGN_SKILL_PATH,
+        EXTENSION_RELEASE_SKILL_PATH,
+        EXTENSION_RELEASE_AUTHORITY_PATH,
+      ]) {
+        await expect(
+          access(join(isolation.repositorySnapshot, excludedTaskContext)),
+        ).rejects.toThrow();
+      }
+      await expect(
+        access(
+          join(
+            isolation.repositorySnapshot,
+            '.agents/skills/module-expert/SKILL.md',
+          ),
+        ),
+      ).resolves.toBeFalsy();
     } finally {
       await isolation.dispose();
     }

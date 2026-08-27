@@ -74,7 +74,6 @@ export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
 export const WEB_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/teams/web-dev/AGENTS.md',
   '.cortex/teams/web-dev/knowledge-graph.md',
-  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
@@ -87,9 +86,11 @@ export const WEB_EXPERT_SKILL_PATHS = [
 export const WEB_EXPERT_SKILL_AUTHORITY_PATHS = [
   '.cortex/teams/web-dev/AGENTS.md',
   EXPERT_AUTHORITY_PATH,
-  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
+
+export const WEB_EXPERT_EXTENSION_RELEASE_SECURITY_AUTHORITY_PATH =
+  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md';
 
 export const WEB_EXPERT_AUTHORITY_PATHS = [
   PACKAGE_AUTHORITY_PATH,
@@ -123,6 +124,9 @@ export const WEB_EXPERT_RELEASE_AUTHORITY_PATHS = [
 export const WEB_EXPERT_ALLOWED_CONTEXT_PATHS = [
   ...WEB_EXPERT_PRODUCT_SPEC_PATHS,
   ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
+  DESIGN_TASTE_FRONTEND_SKILL_PATH,
+  EXTENSION_RELEASE_SECURITY_SKILL_PATH,
+  WEB_EXPERT_EXTENSION_RELEASE_SECURITY_AUTHORITY_PATH,
 ] as const;
 
 export type WebExpertAllowedContextPath =
@@ -554,7 +558,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
       'nook-app/nook-web/nook-web-shared/package.json',
     ],
     authorityPaths: WEB_EXPERT_AUTHORITY_PATHS,
-    skillPaths: WEB_EXPERT_SKILL_PATHS,
+    skillPaths: [MODULE_EXPERT_SKILL_PATH],
     validationSelectors: ['web:check', 'web:test', 'extension:check'],
   },
 ];

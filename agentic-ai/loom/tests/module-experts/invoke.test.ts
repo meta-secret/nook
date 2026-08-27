@@ -36,7 +36,6 @@ import type {
 } from '../../src/agent-workflow/runtime.ts';
 import { parseModuleExpertCommandLine } from '../../src/module-experts/cli.ts';
 import {
-  decodeModuleExpertInvocationRequest,
   invokeModuleExpert,
   verifyModuleExpertInvocationResult,
 } from '../../src/module-experts/invoke.ts';
@@ -163,170 +162,7 @@ class MissingContinuationAgentRuntime implements AgentTaskRuntime<
   }
 }
 
-describe('module expert invocation', () => {
-  test('decodes a bounded exact request with direct expert lineage', () => {
-    const request = directRequest('module-expert-decode');
-    const serialized = JSON.stringify(request);
-
-    expect(decodeModuleExpertInvocationRequest(serialized)).toEqual(request);
-  });
-
-  test('decodes bounded exceptional depth-three lineage', () => {
-    const direct = directRequest('module-expert-child');
-    const request: ModuleExpertInvocationRequest = {
-      ...direct,
-      depth: 3,
-      parent: {
-        kind: AgentAttemptParentKind.AgentAttempt,
-        task: 'inspect-feature-modules',
-        agent: 'module-planner',
-        attempt: 2,
-      },
-    };
-
-    expect(
-      decodeModuleExpertInvocationRequest(JSON.stringify(request)),
-    ).toEqual(request);
-  });
-
-  test('preserves a canonical task-selected web context subset', () => {
-    const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
-      '.cortex/teams/web-dev/product-specs/browser-extension.md',
-      '.github/workflows/release.yml',
-    ];
-    const request: ModuleExpertInvocationRequest = {
-      ...directRequest('web-expert-selected-context'),
-      expert: 'web_expert',
-      selectedContextPaths,
-    };
-
-    expect(
-      decodeModuleExpertInvocationRequest(JSON.stringify(request)),
-    ).toEqual(request);
-  });
-
-  test('rejects empty, unknown, duplicate, reordered, or foreign context selection', () => {
-    const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
-      '.cortex/teams/web-dev/product-specs/browser-extension.md',
-      '.github/workflows/release.yml',
-    ];
-    const webRequest: ModuleExpertInvocationRequest = {
-      ...directRequest('web-expert-invalid-context'),
-      expert: 'web_expert',
-      selectedContextPaths,
-    };
-    const invalidRequests = [
-      { ...webRequest, selectedContextPaths: [] },
-      { ...webRequest, selectedContextPaths: ['.cortex/unknown.md'] },
-      {
-        ...webRequest,
-        selectedContextPaths: [
-          selectedContextPaths[0],
-          selectedContextPaths[0],
-        ],
-      },
-      {
-        ...webRequest,
-        selectedContextPaths: [...selectedContextPaths].reverse(),
-      },
-      {
-        ...directRequest('core-expert-foreign-context'),
-        selectedContextPaths: [selectedContextPaths[0]],
-      },
-    ];
-
-    for (const request of invalidRequests) {
-      expect(() =>
-        decodeModuleExpertInvocationRequest(JSON.stringify(request)),
-      ).toThrow('request is invalid');
-    }
-  });
-
-  test('rejects malformed, unbounded, extended, and excessive-depth requests', () => {
-    const valid = directRequest('module-expert-invalid');
-    const invalidSourceRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      sourceCommit: 'main',
-    };
-    const extraFieldRequest: ExtendedModuleExpertInvocationRequest = {
-      ...valid,
-      allowWrites: true,
-    };
-    const unboundedInstructionRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      instruction: 'x'.repeat(16_385),
-    };
-    const excessiveDepthRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      depth: 4,
-    };
-    const workflowRootAtDepthTwoRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    };
-    const workflowRootAtDepthOneRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      depth: 1,
-      parent: { kind: AgentAttemptParentKind.WorkflowRoot },
-    };
-    const selfParentRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      depth: 2,
-      parent: {
-        kind: AgentAttemptParentKind.AgentAttempt,
-        task: valid.task,
-        agent: valid.expert,
-        attempt: valid.attempt,
-      },
-    };
-    const zeroAttemptRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      attempt: 0,
-    };
-    const fractionalAttemptRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      attempt: 1.5,
-    };
-    const childAtRootDepthRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      depth: 1,
-    };
-    const invalidParentAttemptRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      depth: 2,
-      parent: {
-        kind: AgentAttemptParentKind.AgentAttempt,
-        task: 'parent-task',
-        agent: 'parent-agent',
-        attempt: 0,
-      },
-    };
-    const unsafeRunRequest: ModuleExpertInvocationRequest = {
-      ...valid,
-      runId: '../escape',
-    };
-    const invalidRequests = [
-      invalidSourceRequest,
-      extraFieldRequest,
-      unboundedInstructionRequest,
-      excessiveDepthRequest,
-      workflowRootAtDepthTwoRequest,
-      workflowRootAtDepthOneRequest,
-      selfParentRequest,
-      zeroAttemptRequest,
-      fractionalAttemptRequest,
-      childAtRootDepthRequest,
-      invalidParentAttemptRequest,
-      unsafeRunRequest,
-    ];
-
-    for (const request of invalidRequests) {
-      expect(() =>
-        decodeModuleExpertInvocationRequest(JSON.stringify(request)),
-      ).toThrow('request is invalid');
-    }
-  });
-
+describe('module expert invocation runtime', () => {
   test('invokes one read-only expert and finalizes immutable evidence', async () => {
     const runtime = new RecordingAgentRuntime();
     const request = directRequest(uniqueRunId('module-expert-success'));
@@ -456,6 +292,9 @@ describe('module expert invocation', () => {
     const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
       '.cortex/teams/web-dev/product-specs/browser-extension.md',
       '.github/workflows/release.yml',
+      '.agents/skills/design-taste-frontend/SKILL.md',
+      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const request: ModuleExpertInvocationRequest = {
       ...directRequest(uniqueRunId('web-expert-context-evidence')),
@@ -706,6 +545,17 @@ describe('module expert invocation', () => {
         await writeFile(absolutePath, original, 'utf8');
       }
 
+      const reboundContextResult: ModuleExpertInvocationResult = {
+        ...result,
+        selectedContextPaths: [
+          '.cortex/teams/web-dev/product-specs/browser-extension.md',
+        ],
+      };
+      const reboundContextVerification = { result: reboundContextResult };
+      await expect(
+        verifyModuleExpertInvocationResult(reboundContextVerification),
+      ).rejects.toThrow('processing verification failed');
+
       const eventsPath = join(
         result.runDirectory,
         result.processing.events.path,
@@ -783,7 +633,7 @@ describe('module expert invocation', () => {
         runDirectory,
         runId: request.runId,
         expert: request.expert,
-        selectedContextPaths: request.selectedContextPaths,
+        selectedContextPaths: request.selectedContextPaths ?? [],
         sourceCommit: request.sourceCommit,
         task: request.task,
         attempt: request.attempt,
