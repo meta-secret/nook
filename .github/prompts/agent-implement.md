@@ -35,12 +35,12 @@ The job runs `task setup` before you start (sealed **nook-web:local**). You run 
 **Product validation runs on configured GitHub Actions workers after the harness
 opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
 hosted.** Your required local action is host-applied formatting only. Do not run
-`task check` / `task ci:pr` before finishing. The harness assigns the PR to the
-continuing task owner and posts a direct mention. That owner runs advisory local
-review after handoff. The owner may use `task remote` for focused execution,
-then runs `task pr:validate`. It stabilizes exact-head Codex review before
-dispatching GitHub Actions. A bounded timeout keeps review unavailability from
-blocking those checks. It never activates another review provider. Use
+`task check` / `task ci:pr` before finishing. The harness returns the PR to Gizmo
+and posts a direct mention. Gizmo runs advisory local review after handoff. It
+may use `task remote` for focused execution, then runs `task pr:validate`. Gizmo
+stabilizes exact-head Codex review before dispatching GitHub Actions. A bounded
+timeout keeps review unavailability from blocking those checks. Gizmo never
+activates another review provider. Use
 repository Task targets; do not replace them with
 hand-written `docker run` commands.
 
@@ -58,12 +58,12 @@ hand-written `docker run` commands.
    commits a formatted tree. When UI-facing paths change, pass the UI demo
    contract against the base ref when practical.
 4. Do not run `task check`, `task ci:pr`, full suites, builds, or e2e in this
-   bounded worker. The assigned continuing owner runs focused and complete
-   hosted execution after the harness publishes the branch and PR.
+   bounded worker. Gizmo runs focused and complete hosted execution after the
+   harness publishes the branch and PR.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
    `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
-   Before removing work, stop; the continuing owner must preserve it in a
+   Before removing work, stop; Gizmo must preserve it in a
    linked successor and record its inventory in Workbench.
 6. Before finishing, write a concise Markdown work summary to
    `.nook-workbench-worklog.md`. Include `# Work summary` and the sections
@@ -77,11 +77,12 @@ hand-written `docker run` commands.
 
 - Do **not** run any `git` commands — the harness commits and pushes `${AGENT_BRANCH}` after you finish.
 - Do **not** create, monitor, or merge a PR from this bounded worker. The harness
-  opens the PR after you finish. It assigns and directly mentions the continuing
-  task owner. That owner runs advisory local review on the committed head, then
-  stabilizes one exact-head Codex review before dispatching complete validation.
-  The owner fixes failures/comments/conflicts, runs the exact-head readiness
-  audit, and squash-merges without separate merge authorization.
+  opens the PR after you finish and returns it to Gizmo. Gizmo runs advisory
+  local review on the committed head, then stabilizes one exact-head Codex
+  review before complete validation. For failures, comments, or conflicts,
+  Gizmo dispatches scoped fixes to the responsible team agents and integrates
+  their verified handoffs. Gizmo runs exact-head readiness and squash-merges
+  without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
 - Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).

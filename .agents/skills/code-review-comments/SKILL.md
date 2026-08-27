@@ -3,10 +3,10 @@ name: code-review-comments
 description: >-
   Use when addressing human, Codex, or automated PR review comments in Nook.
   Inspect submitted reviews, inline review threads, and PR comments; build a
-  checklist from actionable items; verify each finding; fix or explain it;
-  validate, push, reply on GitHub, and resolve conversations only after the
-  agent's targeted reply is visible. This skill does not initiate reviews;
-  the exact-head Codex request belongs to PR delivery.
+  checklist from actionable items; route verification and fixes to the
+  responsible team; then integrate, validate, push, reply, and resolve through
+  Gizmo. This skill does not initiate reviews. The exact-head Codex request
+  belongs to PR delivery.
 ---
 
 # Code Review Comments
@@ -14,22 +14,20 @@ description: >-
 System of record:
 [`.cortex/gizmo/dynamic-skills/code-review-comments.md`](../../../.cortex/gizmo/dynamic-skills/code-review-comments.md).
 
-Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) before starting. Inspect
-submitted reviews, inline review threads, and PR comments from humans, Codex,
-and other automated reviewers. For every active, non-outdated actionable item,
-verify the finding, use reviewer-provided agent prompts as context, make the
-minimal correct fix or document why no code change is needed, run `task format`,
-push any change, and leave a concise targeted GitHub reply on the original
-review thread or comment when GitHub supports one. Resolve a conversation only
-after the reply is visible and resolution is the correct next action. Track
-actionable submitted-review items without threaded reply targets in the local
-checklist and final handoff rather than creating broad or duplicative PR
-comments. Re-query reviews and unresolved threads before handoff. Do not require
-local `task check` / `task ci:pr` — GitHub Actions is the product gate.
+Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) before starting. Gizmo
+inspects submitted reviews, inline review threads, and PR comments. It filters
+findings against the exact current head and dispatches each active actionable
+item to the responsible team agent.
 
-Inspect the feedback and address every actionable item already present. Proceed
-when the unresolved-thread count is zero and Nook's applicable repository-owned
-PR test checks are green.
+The team agent verifies the finding, implements the minimal correct fix when
+required, and returns focused proof. Gizmo coordinates no-change findings,
+integrates team handoffs, runs `task format`, completes validation, pushes
+changes, and leaves a targeted reply on the original review target. Gizmo
+resolves a conversation only after the reply is visible. It tracks unthreaded
+review-body findings in the delivery checklist and final handoff.
+
+Proceed only when complete repository-owned validation is green and zero
+unresolved actionable threads remain.
 These are normally `PR / Verify and preview`, plus `Web research / Build and
 deploy research catalog` when web-research paths change. Do not wait for a
 review result after checks finish or request another external review service.

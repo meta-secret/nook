@@ -234,7 +234,7 @@ task loom:agent-stats CONFIG=path/to/assemble-request.yaml
 Validate and publish use `agentStats.validate` / `agentStats.publish` with
 `statsFile`. Agent-statistics paths accept `{agentTempDir}` for stable isolation
 by Git commit and worktree. See
-[AI Agent PR Statistics](../workflows/agent-statistics.md#mechanical-entrypoint--loom).
+[Agent PR Statistics](../../../gizmo/workflows/agent-statistics.md#mechanical-entrypoint--loom).
 
 ### prLand (status / validate / ready / mergeCheck)
 

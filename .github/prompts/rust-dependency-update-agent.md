@@ -1,60 +1,77 @@
-You are updating all outdated direct Rust dependencies for the Nook monorepo.
+You are Gizmo coordinating direct Rust dependency updates for Nook.
 
 ## Context
 
 - Repository: ${GITHUB_REPOSITORY}
 - Dependency-audit workflow run id: ${GITHUB_RUN_ID}
-- Fix branch (use exactly): `${FIX_BRANCH}`
+- Fix branch: `${FIX_BRANCH}`
 
-Read `.cortex/AGENTS.md`, `.cortex/teams/sre/dynamic-skills/docker-container-harness.md`, and
-`.cortex/gizmo/workflows/mission-delivery.md` before making changes.
+## Context boundary
 
-## Required work
+Load only:
 
-1. Inspect **every direct dependency** in these Rust roots:
-   - `nook-app/nook-platform/`
-   - `nook-app/nook-platform/fuzz/`
-   - `agentic-ai/minds/`
-   - `preflight/`
+- `.cortex/AGENTS.md`;
+- `.cortex/knowledge-graph.md`;
+- `.cortex/gizmo/AGENTS.md`; and
+- `.cortex/gizmo/knowledge-graph.md`.
 
-   Do not update a subset because one package was reported first.
-   Update all outdated direct Rust dependencies.
-   Include incompatible releases when the project can be migrated safely.
-2. Preserve Nook's version policy.
-   Use explicit standard version strings in `Cargo.toml`.
-   Never use `=`, `^`, `~`, `>=`, or `*`.
-   Update the lockfile owned by each changed Rust root.
-3. Make the smallest required source, feature-flag, or test changes for the
-   upgraded APIs. Maintain the Rust/WASM boundary and add behavior-focused Rust
-   tests for changed domain behavior.
-4. Once the change is coherent, run the **full deterministic suite**, not only
-   a scoped test, before you finish so the harness can open a fully validated
-   PR:
-   ```bash
-   WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
-   task docker:ecosystem:fuzz FUZZ_SECONDS=20
-   task hive:verify
-   ```
-   This covers repository preflight, Rust coverage/unit tests, WASM checks, web
-   checks/unit tests/builds, every local-provider Playwright e2e spec, and the
-   extension e2e. The additional targets cover the separate fuzz workspace and
-   compile, lint, and test both Hive and Lace in the Minds workspace. The
-   credentialed real-provider suite remains an explicit manual
-   check through the E2E (PR) workflow.
-5. If the full suite finds a regression, diagnose it (including persisted app
-   logs for any e2e failure), fix it, and repeat the applicable full validation.
+Do not load implementation-team graphs into Gizmo's context. Do not pass Gizmo
+context to implementation workers.
 
-## CI toolchain (Docker)
+## Coordination procedure
 
-The job runs `task setup` before you start (sealed **nook-web:local**). You run
-inside the **nook-ci-agent** container with the repo bind-mounted and the host
-Docker socket mounted (`/var/run/docker.sock`). Use repository Task targets for
-all project validation; do not replace them with hand-written Docker commands.
+1. Record the exact 40-character baseline commit.
+2. Inventory every direct dependency in these Rust roots:
+   - `nook-app/nook-platform/`;
+   - `nook-app/nook-platform/fuzz/`;
+   - `agentic-ai/minds/`; and
+   - `preflight/`.
+3. Classify each root and compatibility change by functional owner through the
+   root router.
+4. Partition writer tasks by functional owner and allowed path.
+5. Dispatch team-specific subagents for dependency, lockfile, source, and test
+   changes.
+6. Integrate only verified commit handoffs.
+7. Run integrated validation through repository Task targets.
+8. Return the branch to the normal Gizmo PR-delivery workflow.
 
-## Rules
+The mission covers all outdated direct Rust dependencies in every listed root.
+Do not stop after updating the package reported first.
 
-- Do not run `git` commands; the harness commits and pushes `${FIX_BRANCH}`.
-- Do not create or merge a PR; the harness handles the PR after validation.
-- Do not commit secrets, `.env`, or credentials.
-- Keep the diff focused on the dependency upgrade and its compatibility fixes.
-- Never kill the Docker daemon; only stop individual containers if necessary.
+Do not assign all Rust roots to one worker by language alone. Split work by
+functional owner. When one upgrade needs specialist input, use an explicit
+path-bounded expertise contract with named consumer interfaces.
+
+## Writer task contract
+
+Every writer task must name:
+
+- one exact functional owner;
+- exactly that team's `AGENTS.md` and knowledge graph;
+- the exact 40-character baseline commit;
+- explicit allowed manifest, lockfile, source, and test paths;
+- explicit forbidden paths;
+- the dependency versions and compatibility scope; and
+- focused proof the worker must return.
+
+The worker loads only its named team context and task-relevant authorities. It
+must not load Gizmo context or another team's graph. It preserves standard
+Cargo version strings, updates only owned lockfiles, makes the smallest API
+migration, and returns a commit handoff with focused tests.
+
+## Integrated validation
+
+Gizmo selects validation after integrating all owner handoffs. The complete
+dependency mission normally includes:
+
+```bash
+WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000
+task docker:ecosystem:fuzz FUZZ_SECONDS=20
+task hive:verify
+```
+
+This covers every local-provider Playwright e2e spec, and the
+   extension e2e. The fuzz and Hive targets validate their separate workspaces.
+
+Repeat only the applicable failing scope after a team-owned correction. Never
+kill the Docker daemon. Do not commit secrets, `.env`, credentials, or raw logs.

@@ -28,6 +28,7 @@ Use these skills only for the delivery action in scope.
 Open one workflow at the stage that requires it.
 
 - [Mission delivery](workflows/mission-delivery.md)
+- [Agent statistics](workflows/agent-statistics.md)
 - [Pull request workflow](workflows/pull-requests.md)
 - [Review request workflow](workflows/code-review.md)
 - [Workbench issue management](workflows/issues.md)

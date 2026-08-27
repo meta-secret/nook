@@ -43,7 +43,7 @@ Delivery rules:
 - `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes
   readiness.
 - Loom never squash-merges.
-  - The task-owning agent merges after readiness succeeds.
+  - Gizmo merges after readiness succeeds.
 - Loom stabilizes one exact-head Codex review before complete validation.
   - Current findings stop dispatch so they can be repaired as one batch.
   - A failed request or missing result is bounded and non-blocking when no
@@ -92,7 +92,7 @@ Does not apply to:
 - [ ] Inspect and address all feedback already present.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
 - [ ] Squash-merge immediately when readiness succeeds, then report duration.
-- [ ] Publish Workbench issue, worklog, and Loom AI-agent statistics.
+- [ ] Publish Workbench issue, worklog, and agent statistics.
 
 ## Validation
 
@@ -103,4 +103,4 @@ Does not apply to:
   - missing exact-head deployment; and
   - feedback requiring handling.
 - The audit stays read-only.
-- The task-owning agent performs the squash merge after readiness succeeds.
+- Gizmo performs the squash merge after readiness succeeds.

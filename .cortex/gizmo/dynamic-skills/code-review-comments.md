@@ -2,13 +2,14 @@
 
 ## Purpose
 
-Make PR review-comment handling auditable: every active actionable item from a
-human reviewer, Codex, or another automated reviewer must be verified, fixed or
-explicitly invalidated, and replied to on GitHub. Agents must leave their own
-targeted reply before resolving any PR comment or review conversation. This
-skill does not initiate reviews. The PR delivery workflow stabilizes one
+Make PR review-comment handling auditable. The responsible team agent verifies
+each active actionable finding and implements any required fix. Gizmo integrates
+the handoff, pushes the result, leaves the targeted GitHub reply, and resolves
+the conversation. Gizmo also coordinates findings that require no change.
+
+This skill does not initiate reviews. The PR delivery workflow stabilizes one
 exact-head Codex review before it dispatches complete validation. Codex is the
-sole automatic provider; Cursor Bugbot remains inactive.
+sole automatic provider. Cursor Bugbot remains inactive.
 
 ## Problem Pattern
 
@@ -20,17 +21,26 @@ review reasoning from the PR timeline and makes later agents rediscover it.
 
 ## Preferred Pattern
 
-Treat all actionable PR feedback surfaces as a checklist: inline review threads,
-submitted review bodies, and human PR comments. For each active, non-outdated
-actionable item, verify the finding against current code, use any
-reviewer-provided agent prompt as context rather than a blind patch, make the
-minimal correct fix or document why no change is needed, validate locally, and
-push the result. Leave a concise reply on the original review thread or comment
-when GitHub exposes a reply target. Resolve a conversation only after the
-targeted reply is visible and the finding is fixed or explicitly invalidated.
-If an actionable item appears only in a submitted review body without a threaded
-reply target, include it in the local checklist and final handoff instead of
-posting a broad or duplicative PR comment.
+Gizmo builds one checklist from inline review threads, submitted review bodies,
+and human PR comments. It filters findings against the exact current head and
+routes each active, non-outdated actionable item to its functional owner.
+
+For each routed item, the responsible team agent:
+
+1. Verifies the finding against current code.
+2. Uses reviewer-provided agent prompts as context, not as blind patches.
+3. Implements the minimal correct fix when a change is required.
+4. Returns focused validation and a concise explanation to Gizmo.
+
+Gizmo then integrates the verified handoff, completes applicable validation,
+pushes the result, and replies on the original review target. When no change is
+required, Gizmo coordinates the team verification and records the rationale.
+Gizmo resolves a conversation only after its targeted reply is visible and the
+finding is fixed or explicitly invalidated.
+
+If an actionable item appears only in a submitted review body without a
+threaded reply target, Gizmo keeps it in the delivery checklist and final
+handoff. It does not post a broad or duplicative PR comment.
 
 Inspect the currently available feedback before merge or handoff. Proceed when
 all actionable items are handled, Nook's applicable repository-owned checks are
@@ -59,38 +69,41 @@ Does not apply to:
 
 ## Examples
 
-- Before: fix code, push, call `resolveReviewThread`, no agent reply.
-- After: fix code, push, reply to the specific thread: "Fixed by moving the
-  parser check into Rust and validated with `cd nook-app/nook-platform && cargo test -p nook-core parser_conflict`."
-  Resolve only after that reply is visible.
-- Before: resolve an outdated formatting comment because it looks obsolete.
-- After: reply "This was addressed by commit `<sha>`; current file is
-  formatter-clean.", then resolve.
-- Before: inspect only unresolved inline threads and miss a P1 finding in the
-  submitted Codex review body.
-- After: inspect submitted reviews as well, add the finding to the checklist,
-  fix or explain it, and report it in the handoff if no threaded target exists.
-- Before: leave one generic "review audit" PR comment for several findings.
-- After: reply only to the specific review threads/comments that support
-  targeted replies and track unthreaded review-body items in the handoff.
+- Before: Gizmo implements a fix and resolves the thread without a reply.
+- After: the responsible team implements and validates the fix. Gizmo
+  integrates it, pushes, posts the targeted reply, and then resolves.
+- Before: Gizmo resolves an outdated formatting comment because it looks
+  obsolete.
+- After: the responsible team verifies the current file. Gizmo replies with the
+  addressing commit and proof before resolving.
+- Before: Gizmo inspects only unresolved inline threads and misses a P1 finding
+  in the submitted Codex review body.
+- After: Gizmo checks submitted reviews, routes the finding, and tracks any
+  unthreaded result in the handoff.
+- Before: Gizmo leaves one generic review-audit comment for several findings.
+- After: Gizmo replies only on targets that support a specific reply. It tracks
+  unthreaded review-body items in the handoff.
 
 ## Application Checklist
 
-- [ ] Fetch submitted reviews, active review threads, and PR comments with `gh`.
-- [ ] Build a checklist item for each active, non-outdated actionable finding.
-- [ ] Verify each finding against current code before editing.
-- [ ] Use reviewer-provided agent prompts as context, not as blind patches.
-- [ ] Make the minimal correct fix, or prepare a concise no-change rationale.
-- [ ] Run `task loom:pre-push` when files changed; use focused `task remote` jobs as
-      useful, then explicitly trigger complete PR validation.
-- [ ] Push the fix or rationale commit when code/docs changed.
-- [ ] Leave a GitHub reply explaining the fix, validation, or no-change
-      rationale on the original review thread/comment when GitHub supports one.
-- [ ] Resolve a GitHub conversation only after the targeted reply is visible and
-      resolution is the correct next action.
-- [ ] Track actionable submitted-review items without threaded reply targets in
-      the local checklist and final handoff rather than creating comment spam.
-- [ ] Re-query submitted reviews and unresolved review threads before handoff.
+- [ ] Gizmo fetches submitted reviews, active review threads, and PR comments.
+- [ ] Gizmo filters review bodies by the exact current head.
+- [ ] Gizmo builds a checklist for every active actionable finding.
+- [ ] Gizmo routes each finding to the responsible team agent.
+- [ ] The team agent verifies the finding before editing.
+- [ ] The team agent implements the minimal correct fix when required.
+- [ ] The team agent returns focused proof and any no-change rationale.
+- [ ] Gizmo integrates verified handoffs and runs `task loom:pre-push` when files
+      changed.
+- [ ] Gizmo uses focused `task remote` jobs when useful, then explicitly triggers
+      complete PR validation.
+- [ ] Gizmo pushes changed code or documentation.
+- [ ] Gizmo leaves a targeted reply with the fix, validation, or no-change
+      rationale when GitHub supports one.
+- [ ] Gizmo resolves a conversation only after the targeted reply is visible.
+- [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
+      final handoff.
+- [ ] Gizmo re-queries submitted reviews and unresolved threads before handoff.
 
 ## GitHub Queries
 
@@ -148,9 +161,14 @@ commit or why it no longer applies before resolution.
 
 ## Validation
 
-Use GraphQL or `gh pr view`/`gh api` to confirm there are no unresolved review
-threads, and inspect submitted reviews and PR comments for remaining actionable
-items currently present. Report Nook's applicable repository-owned PR test-check state,
-the unresolved-thread query result, and whether any unthreaded actionable
-review-body item remains in the handoff. This comment-handling workflow does not
-request reviewers or wait for checks to change state.
+Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm zero unresolved actionable
+review threads. It also inspects submitted reviews and PR comments for remaining
+actionable items on the exact current head.
+
+Gizmo reports:
+
+- complete repository-owned validation state;
+- the unresolved-thread query result; and
+- any unthreaded actionable review-body item in the handoff.
+
+This workflow does not request reviewers or wait for checks to change state.

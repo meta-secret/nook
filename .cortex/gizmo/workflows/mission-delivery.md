@@ -86,7 +86,7 @@ or a resulting fix.
     - Ask the AI team to complete the
       [self-improvement lifecycle](../../teams/ai/dynamic-skills/self-improvement.md).
     - Publish the Workbench issue update, linked worklog, and
-      [agent statistics](../../teams/ai/workflows/agent-statistics.md).
+      [agent statistics](agent-statistics.md).
     - Report duration and any authorized remaining work.
 
 ## Fix ownership

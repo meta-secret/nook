@@ -47,9 +47,8 @@ Use these authorities for product knowledge and evidence-backed promotion.
 
 ## AI workflows
 
-Use these workflows for AI-owned evidence, skills, and cross-package changes.
+Use these workflows for AI-owned skills and cross-package changes.
 
-- [AI agent statistics](workflows/agent-statistics.md)
 - [Dynamic skills workflow](workflows/dynamic-skills.md)
 - [Structural refactoring](workflows/structural-refactoring.md)
 - [Cross-package changes](workflows/monorepo.md)

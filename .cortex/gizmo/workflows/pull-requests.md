@@ -471,7 +471,7 @@ task pr:preflight PR=<number>
 - Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or
   `task pr:ready` for read-only exact-head readiness.
   - The command never merges by itself.
-  - Success tells the task owner to squash-merge immediately.
+  - Success tells Gizmo to squash-merge immediately.
 - Codex review is not a readiness requirement.
   - Its bounded pre-validation lane must not deadlock delivery.
   - Do not request Claude, CodeRabbit, or other optional external reviews.
@@ -613,7 +613,7 @@ After merge, `main.yml` independently runs full local-provider and extension **e
 
 Every normal Gizmo-owned PR continues through a Workbench publication after
 merge. Follow [issues](issues.md) and
-[agent statistics](../../teams/ai/workflows/agent-statistics.md):
+[agent statistics](agent-statistics.md):
 
 - Update the associated issue.
 - Add the agent worklog.
