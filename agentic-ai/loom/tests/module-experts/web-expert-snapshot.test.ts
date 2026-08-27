@@ -32,14 +32,11 @@ const DESIGN_SKILL_PATH =
   '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
 const EXTENSION_RELEASE_SKILL_PATH =
   '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md';
-const EXTENSION_RELEASE_AUTHORITY_PATH =
-  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md';
 const SELECTED_CONTEXT_PATHS: readonly WebExpertAllowedContextPath[] = [
   '.cortex/teams/web-dev/product-specs/browser-extension.md',
   '.github/workflows/release.yml',
   DESIGN_SKILL_PATH,
   EXTENSION_RELEASE_SKILL_PATH,
-  EXTENSION_RELEASE_AUTHORITY_PATH,
 ];
 const REMOVE_RECURSIVELY: RmOptions = { recursive: true, force: true };
 
@@ -127,7 +124,6 @@ test('keeps ordinary web analysis free of design and extension release context',
       for (const excludedTaskContext of [
         DESIGN_SKILL_PATH,
         EXTENSION_RELEASE_SKILL_PATH,
-        EXTENSION_RELEASE_AUTHORITY_PATH,
       ]) {
         await expect(
           access(join(isolation.repositorySnapshot, excludedTaskContext)),

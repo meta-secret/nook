@@ -294,7 +294,6 @@ describe('module expert invocation runtime', () => {
       '.github/workflows/release.yml',
       '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
-      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ];
     const request: ModuleExpertInvocationRequest = {
       ...directRequest(uniqueRunId('web-expert-context-evidence')),
