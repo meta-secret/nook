@@ -153,10 +153,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/teams/ai/workflows/coding-bro.md");
-    let issue_workflow = read(".cortex/teams/ai/workflows/issues.md");
-    let pull_request_workflow = read(".cortex/teams/ai/workflows/pull-requests.md");
-    let ownership_skill = read(".cortex/teams/ai/dynamic-skills/agent-feature-ownership.md");
+    let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
+    let issue_workflow = read(".cortex/gizmo/workflows/issues.md");
+    let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
+    let ownership_skill = read(".cortex/gizmo/dynamic-skills/agent-feature-ownership.md");
 
     for required in [
         "agents mutate only their owned feature",
@@ -206,9 +206,9 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 #[test]
 fn team_work_separates_functional_ownership_from_implementation_expertise() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
-    let ownership = read(".cortex/teams/ai/architecture/team-ownership.md");
-    let document_map = read(".cortex/teams/ai/dynamic-skills/cortex-document-map.md");
-    let workflow = read(".cortex/teams/ai/workflows/team-oriented-development.md");
+    let ownership = read(".cortex/gizmo/architecture/team-ownership.md");
+    let document_map = read(".cortex/gizmo/dynamic-skills/cortex-document-map.md");
+    let workflow = read(".cortex/gizmo/workflows/team-oriented-development.md");
     let web_contract = read(".cortex/teams/web-dev/AGENTS.md");
     let sre_contract = read(".cortex/teams/sre/AGENTS.md");
     let security_contract = read(".cortex/teams/security/AGENTS.md");
@@ -219,8 +219,8 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
     let web_graph = read(".cortex/teams/web-dev/knowledge-graph.md");
     let shared_graph = read(".cortex/shared/knowledge-graph.md");
     let agent_plan = read(".github/prompts/agent-plan.md");
-    let issues_workflow = read(".cortex/teams/ai/workflows/issues.md");
-    let loom_tools = read(".cortex/teams/ai/references/loom-tools.md");
+    let issues_workflow = read(".cortex/gizmo/workflows/issues.md");
+    let loom_tools = read(".cortex/gizmo/references/loom-tools.md");
     let workbench_validator = read(".github/scripts/workbench-records.cjs");
 
     for required in [
@@ -422,9 +422,9 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
 fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/teams/ai/workflows/coding-bro.md");
-    let pull_request_workflow = read(".cortex/teams/ai/workflows/pull-requests.md");
-    let self_improvement = read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
+    let coding_workflow = read(".cortex/gizmo/workflows/mission-delivery.md");
+    let pull_request_workflow = read(".cortex/gizmo/workflows/pull-requests.md");
+    let self_improvement = read(".cortex/gizmo/dynamic-skills/self-improvement.md");
     let skill_wrapper = read(".agents/skills/self-improvement/SKILL.md");
     let agent_tasks = read(".task/agentic-ai.yml");
     let readiness_guard = read("agentic-ai/loom/src/commands/cortex-session-clean.ts");
@@ -463,7 +463,7 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         );
     }
     assert!(
-        skill_wrapper.contains(".cortex/teams/ai/dynamic-skills/self-improvement.md")
+        skill_wrapper.contains(".cortex/gizmo/dynamic-skills/self-improvement.md")
             && skill_wrapper.contains("invocation mirror")
             && !skill_wrapper.contains("Create `.cortex/.session"),
         "the executable skill must route agents through the canonical lifecycle"

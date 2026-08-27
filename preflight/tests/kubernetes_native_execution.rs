@@ -190,8 +190,8 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
 
     for path in [
         "README.md",
-        ".cortex/teams/ai/workflows/coding-bro.md",
-        ".cortex/teams/ai/workflows/pull-requests.md",
+        ".cortex/gizmo/workflows/mission-delivery.md",
+        ".cortex/gizmo/workflows/pull-requests.md",
     ] {
         let documentation = read(path);
         assert!(documentation.contains("task remote TASK_NAME=web:build"));
