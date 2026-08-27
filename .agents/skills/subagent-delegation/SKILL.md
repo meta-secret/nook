@@ -40,7 +40,7 @@ Before continuation or completion:
 3. Verify the declared acceptance evidence.
 4. Integrate accepted commits in deterministic dependency order.
 5. Bind downstream work to the exact integrated commit.
-6. Let the delivery owner validate the final join and author the report.
+6. Let Gizmo validate the integrated result and author the report.
 
 JSONL streams, result files, and Markdown summaries may be retained for human
 inspection or audit evidence. They are never prerequisites for harness

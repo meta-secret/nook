@@ -21,7 +21,7 @@ correction order when applied without a shared join.
 4. Correlate code and Cortex ownership drift.
 5. Order provider corrections before consumer corrections.
 6. Identify independent edit groups and parent-owned joins.
-7. Return unresolved decisions to the delivery owner.
+7. Return unresolved decisions to Gizmo.
 
 ## Scope
 

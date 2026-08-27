@@ -14,9 +14,9 @@ Additional routing rules apply:
   execution model, or other major architectural direction.
 - Every implementation request follows
   [`team-oriented-development.md`](team-oriented-development.md). Assign one
-  functional owner to each capability. Name an expertise provider when another
-  team should implement a bounded unit. Keep shared integration and lifecycle
-  state with the delivery owner.
+  owner team for each requested behavior. Name an expertise provider when
+  another team should change specific files. Keep shared integration and
+  lifecycle state with Gizmo.
 - Delegated work follows
   [`subagent-delegation.md`](subagent-delegation.md). The active Codex, Cursor,
   or other capable harness owns child creation, communication, terminal
@@ -101,8 +101,8 @@ Default PR-first loop:
    feature branch for the first cohesive slice and decide whether its PR will
    be draft or normal.
 3. **Implement functionality:**
-   - Assign each independently bounded unit to its functional owner or declared
-     expertise provider when delegation is available.
+   - Turn the request into concrete team tasks. Assign each task to its owner
+     team or declared expertise provider.
    - Require each team agent to own implementation, tests, Cortex updates,
      review fixes, and validation fixes inside its scope.
    - Route a required foreign-team capability back through the delivery owner.
@@ -587,7 +587,7 @@ Create the YAML from current Nook `main`:
 
 - **Respect team ownership.** Every capability has one functional owner. An
   explicitly contracted expertise provider may change only the named consumer
-  code and tests in its bounded unit. It must not change consumer Cortex,
+  code and tests in its assigned task. It must not change consumer Cortex,
   capability semantics, shared files, or lifecycle state. See
   [team-oriented-development.md](team-oriented-development.md).
 - **Never push directly to `main`.** Branch → PR → squash merge.

@@ -261,7 +261,8 @@ The parallel wave contains these tasks:
     same join before synthesis.
 - **Mutation boundary:** The workflow edits no repository file and mutates no
   GitHub or Workbench state.
-  - The delivery owner reviews the report and authors any later correction.
+  - Gizmo reviews the report and assigns any later correction to the
+    responsible team subagent.
 
 ## Reviewed catalog growth
 

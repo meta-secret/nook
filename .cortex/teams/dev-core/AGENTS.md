@@ -30,7 +30,8 @@ Do not load the consumer team's complete graph.
 - Portable validation and business rules.
 - Development-core product specifications, design docs, references, and
   skills.
-- Bounded Rust implementation units delegated by AI, SRE, or web development.
+- Rust files assigned by AI, SRE, or web development through an expertise
+  contract.
 
 ## Forbidden responsibilities
 

@@ -10,14 +10,14 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 ## Preferred pattern
 
 1. Read [Engineering team ownership](../architecture/team-ownership.md).
-2. Assign one functional owner to every capability unit.
+2. Turn the request into concrete tasks and assign each task to one team.
 3. Identify whether another team should provide implementation expertise.
 4. Freeze every capability or expertise contract before assigning files.
-5. Delegate each independently bounded unit to its team agent when available.
+5. Start one team subagent for each task with clear files and acceptance proof.
 6. Keep every team agent inside its declared task scope.
-7. Route cross-team dependencies through the delivery owner.
+7. Route cross-team dependencies through Gizmo.
 8. Require each team to implement its own tests, Cortex updates, and review
-   fixes for its owned unit.
+   fixes for its assigned task.
 9. Keep shared files and lifecycle mutations in the parent-owned join.
 10. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
 

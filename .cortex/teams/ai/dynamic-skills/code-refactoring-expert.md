@@ -22,7 +22,7 @@ The resulting refactor has no clear behavior boundary or owning evidence.
    product-changing, or deterministic.
 5. Return exact evidence and the smallest proposed edit groups.
 6. Require boundary-expert evidence before accepting a contract change.
-7. Let the delivery owner apply and validate accepted corrections.
+7. Let Gizmo assign and validate accepted corrections.
 
 ## Scope
 

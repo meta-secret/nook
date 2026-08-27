@@ -7,21 +7,21 @@ Nook divides responsibility across five engineering teams.
 The split controls code, Cortex, agent routing, contracts, tests, and review-fix
 responsibility.
 
-One delivery owner retains the shared integration and lifecycle join.
+Gizmo retains shared integration and delivery actions.
 
 ## Ownership dimensions
 
-Every work unit has one functional owner.
+Every task has one team that owns the requested behavior.
 
 - The functional owner defines capability semantics, consumer contracts,
   security boundaries, Cortex authority, and acceptance evidence.
 - File location is evidence of normal ownership. It does not prevent explicit
   expertise delegation.
 
-A work unit may also have one expertise provider.
+A task may also have one expertise provider.
 
-- The expertise provider owns a bounded implementation slice after the
-  delivery owner freezes its contract.
+- The expertise provider changes the named files after Gizmo records the
+  contract.
 - Its task scope names allowed code and test files.
 - It owns implementation quality, focused tests, review fixes, and validation
   fixes inside that scope.
@@ -36,8 +36,8 @@ Skill ownership is separate from implementation delegation.
 - A functional owner may load a specifically linked foreign-team skill as
   read-only engineering policy.
 - It may apply that policy while implementing its own capability.
-- An expertise contract is required only when a worker from the skill-owning
-  team will write the bounded unit.
+- An expertise contract is required only when a subagent from the skill-owning
+  team will change files.
 
 ## Team boundaries
 
@@ -131,22 +131,21 @@ Shared Cortex contains knowledge that genuinely serves multiple teams.
 - TypeScript implementation practices belong to web development even when AI
   or SRE code consumes them.
 - Agent protocols, expert registries, and Cortex rules belong to AI.
-- Shared integration files remain serialized under the delivery owner.
+- Shared integration files remain serialized under Gizmo.
 
 Shared integration includes root manifests, lockfiles, generated bindings,
 cross-team registries, the root graph, and delivery lifecycle state.
 
 A team agent may propose a required shared-file change.
-The delivery owner decides its integration order and final writer.
+Gizmo decides the integration order and assigns the final writer.
 
 ## Scope classification procedure
 
-The delivery owner classifies the human request before implementation starts.
+Gizmo assigns the human request before implementation starts.
 
 1. Describe the observable functionality without assigning files yet.
-2. Split the functionality by durable responsibility.
-3. Map each unit to an AI, development-core, security, SRE, or web-development
-   functional owner.
+2. Turn the functionality into concrete team tasks.
+3. Assign each task to AI, development core, security, SRE, or web development.
 4. Identify implementation expertise required from another team.
 5. Identify every cross-team provider and consumer contract.
 6. Freeze the contract, baseline, write scope, forbidden scope, tests, and
@@ -162,8 +161,8 @@ File location does not override semantic ownership.
 - A CI change required by a web test routes to SRE after web development reports the dependency.
 - A Cortex audit or Loom change routes to AI after another team reports the
   documentation or automation dependency.
-- A Loom TypeScript refactor remains an AI capability. AI may request a bounded
-  web-development implementation unit for TypeScript engineering expertise.
+- A Loom TypeScript refactor remains an AI capability. AI may ask a
+  web-development subagent to change named TypeScript files.
 - A cryptographic format or trust-boundary change requires security acceptance.
   Its Rust, web, infrastructure, or agent implementation remains with the
   corresponding functional team.
@@ -182,7 +181,8 @@ It reports a dependency containing:
 - the blocked or deferred consumer work.
 
 The team agent must not implement the provider inside its own layer.
-The delivery owner routes the dependency to the provider team and updates the frozen work graph.
+Gizmo routes the dependency to the provider team and updates the recorded team
+assignments.
 
 ## Cross-team expertise protocol
 
@@ -190,7 +190,7 @@ Expertise delegation applies when the functional contract is already owned but
 another team has the implementation discipline needed to realize it safely.
 
 1. Keep one functional owner for the capability.
-2. Name one expertise provider for the bounded implementation unit.
+2. Name one expertise provider for the files that require its expertise.
 3. Freeze the accepted input contract and observable output.
 4. Declare exact code and test paths the provider may change.
 5. Declare consumer Cortex, capability semantics, shared files, and lifecycle
@@ -218,10 +218,11 @@ That responsibility includes:
 - fixes for validation failures caused by the team's change; and
 - a bounded semantic handoff with evidence.
 
-The delivery owner retains external lifecycle mutations.
+Gizmo retains external lifecycle mutations.
 
 - Team agents may diagnose review comments and implement their scoped fixes.
-- Only the delivery owner replies, resolves conversations, pushes the integrated branch, triggers shared checks, declares readiness, or merges.
+- Only Gizmo replies, resolves conversations, pushes the integrated branch,
+  triggers shared checks, declares readiness, or merges.
 
 ## Validation
 
@@ -229,11 +230,11 @@ The final integration must prove:
 
 - every changed path has one responsible team;
 - every capability has one functional owner;
-- every delegated implementation unit has one expertise provider;
+- every task delegated for cross-team expertise has one provider team;
 - every changed security boundary has named security acceptance evidence;
 - no expertise provider changed consumer Cortex, capability semantics, shared
   files, or undeclared code;
 - cross-team contracts were frozen before consumer integration;
 - each team supplied its own tests and review fixes;
 - shared files were serialized; and
-- the root delivery owner validated the integrated exact head.
+- Gizmo validated the integrated exact head.

@@ -39,8 +39,8 @@ create a web-development expertise provider.
 - SRE-focused preflight and operational tests.
 - SRE architecture, workflows, references, toolchain specifications, and
   skills.
-- Bounded infrastructure, CI, deployment, or operational implementation units
-  delegated by another team.
+- Infrastructure, CI, deployment, or operational files assigned by another
+  team through an expertise contract.
 
 ## Forbidden responsibilities
 

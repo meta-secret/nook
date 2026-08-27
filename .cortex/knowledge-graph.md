@@ -39,13 +39,12 @@ authority.
 3. Open only documents needed for the assigned functionality.
 4. Load a shared document only for a named cross-team dependency.
 5. Do not open another team's graph for background context.
-6. Return foreign-team requirements to the delivery owner.
+6. Return foreign-team requirements to Gizmo.
 7. Load a foreign-team skill read-only when the selected team's task-relevant
    authority names it as required engineering policy.
-8. Require an expertise contract only when the foreign team will implement a
-   bounded unit.
+8. Require an expertise contract only when the foreign team will change files.
 9. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
-For a multi-team request, the delivery owner performs this procedure once per
-bounded team unit. Each team agent receives only its own context.
+For a multi-team request, Gizmo creates one task for each required team
+subagent. Each team subagent receives only its own context.

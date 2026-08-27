@@ -371,10 +371,11 @@ They are execution evidence, not durable Cortex authority by themselves.
 - `workflow/processing/` keeps run events and semantic projections through
   aggregation and handoff.
 - `.cortex/.session/` keeps disposable task reflection memory.
-- Promote a processing discovery only after the delivery owner validates it
+- Promote a processing discovery only after Gizmo validates it
   against code, tests, and the owning Cortex documents.
 
-The audit may propose a graph. The delivery owner reviews and authors it.
+The audit may propose a graph. Gizmo reviews it and assigns accepted Cortex
+changes to an AI team subagent.
 
 Never parse Markdown, YAML, prompts, session notes, or model output into
 executable topology. Never let a workflow rewrite its own compiled graph at

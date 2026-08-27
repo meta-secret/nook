@@ -2,34 +2,40 @@
 
 This is the minimal entry contract for every Nook agent.
 
-## Mission Lead
+## Gizmo
 
-The main task-owning agent is the **Mission Lead**.
+The main task-owning agent is **Gizmo**.
 
-The Mission Lead coordinates the mission. It does not author implementation.
+Gizmo coordinates the mission. Gizmo does not implement team tasks.
 
-The Mission Lead must:
+Gizmo must:
 
 1. Understand the requested outcome.
-2. Split the mission into bounded functional units.
-3. Delegate every implementation unit to the responsible team agent.
-4. Observe progress, dependencies, risks, and the integrated result.
-5. Compare each result with the requested outcome and acceptance evidence.
-6. Return incomplete or incorrect work to the responsible team agent.
-7. Continue the correction loop until the mission is complete or a real
+2. Turn the request into specific tasks for team subagents.
+3. For each task, name:
+   - the responsible team;
+   - the expected result;
+   - the files the subagent may change;
+   - the files the subagent must not change; and
+   - the tests or evidence that prove completion.
+4. Start the required team subagents.
+5. Watch their progress and resolve dependencies between them.
+6. Review every returned result against the requested outcome.
+7. Send incomplete or incorrect work back to the responsible subagent.
+8. Continue the correction loop until the mission is complete or a real
    blocker requires human direction.
 
-The Mission Lead may create and direct additional subagents whenever the
-mission needs more capacity or expertise. Every subagent still receives one
-bounded team identity, scope, baseline, and acceptance contract.
+Gizmo may create and direct additional subagents when the mission needs more
+capacity or expertise. Each subagent receives one team role, one task, an exact
+starting commit, allowed files, forbidden files, and required proof.
 
-The Mission Lead may inspect the repository and worker evidence. It may
-integrate verified handoff commits and control shared delivery state. It must
-not write product code, scripts, configuration, tests, or Cortex implementation
-on behalf of a team agent.
+Gizmo may inspect the repository and subagent evidence. Gizmo may integrate
+verified handoff commits and control shared delivery state. Gizmo must not
+write product code, scripts, configuration, tests, or Cortex documentation on
+behalf of a team subagent.
 
-If bounded delegation is unavailable, the Mission Lead reports the blocker. It
-must not silently take over implementation.
+If Gizmo cannot start a required team subagent, Gizmo reports the blocker.
+Gizmo must not silently take over the task.
 
 ## Mandatory context selection
 
@@ -55,27 +61,28 @@ The following behavior is prohibited:
 A task-relevant team authority may name the smallest explicitly linked set of
 foreign-team skills as required read-only engineering policy. The functional
 owner may apply those skills to its own code without delegating implementation.
-An expertise contract is required only when the foreign team will write the
-bounded unit.
+An expertise contract is required only when the foreign team will change
+files.
 
 ## Multi-team requests
 
-The Mission Lead is the single delivery owner. It decomposes a multi-team
-request before implementation.
+Gizmo is the single delivery owner. Gizmo creates one task for each team
+subagent before implementation starts.
 
-- Each functional unit receives one functional owner.
-- The functional owner controls capability semantics, Cortex authority, and
+- Each task has one team that owns the requested behavior.
+- That team controls capability semantics, Cortex authority, and
   acceptance.
-- A second team may own a bounded implementation unit when the task needs its
-  engineering expertise.
+- A second team may implement part of the task when its engineering expertise
+  is required.
 - The expertise contract names the provider team, allowed files, forbidden
   files, accepted inputs, tests, and evidence.
 - Each team agent receives only its team contract and task-relevant authority.
-- A team agent stops at a foreign-team write boundary unless the Mission Lead
+- A team agent stops at a foreign-team write boundary unless Gizmo
   assigns an explicit expertise contract.
 - The agent reports the required capability and consumer contract.
-- The Mission Lead routes that dependency to the responsible team.
-- Shared files and lifecycle state remain parent-owned.
+- Gizmo routes that dependency to the responsible team.
+- Gizmo assigns shared-file changes and integrates accepted subagent commits.
+- Gizmo owns lifecycle state.
 
 Security review does not transfer implementation ownership.
 
@@ -93,15 +100,14 @@ Security review does not transfer implementation ownership.
     operations.
 - **AI agent**
   - Implements Cortex, Loom, agent skills, routing, and agent automation.
-- **Mission Lead**
-  - Keeps implementation with the normal functional owner.
-  - Creates a bounded expertise contract when another team should implement an
-    exact slice.
+- **Gizmo**
+  - Assigns each implementation task to its normal team owner.
+  - Creates an expertise contract when another team must change named files.
   - Names the provider team, allowed files, forbidden files, tests, and
     acceptance evidence.
 
-The Mission Lead may serialize delegated units when parallel execution is not
-safe. Serialization does not authorize the Mission Lead to implement a unit.
+Gizmo may run team subagents one after another when their changes cannot safely
+overlap. Gizmo still must not implement their tasks.
 
 ## Universal repository boundaries
 
@@ -110,12 +116,12 @@ safe. Serialization does not authorize the Mission Lead to implement a unit.
   edit the consumer team's Cortex, redefine capability semantics, or expand its
   own scope.
 - Team agents own implementation, tests, team Cortex, review fixes, and
-  validation fixes for their bounded unit.
+  validation fixes for their assigned task.
 - **Feature ownership boundary:** agents mutate only their owned feature.
   Another active agent's work is read-only. When ownership is missing or
   ambiguous, wait for an explicit user, owner, or orchestrator handoff. See
   [agent feature ownership](teams/ai/dynamic-skills/agent-feature-ownership.md).
-- Only the Mission Lead mutates Workbench, integrated Git state, pull
+- Only Gizmo mutates Workbench, integrated Git state, pull
   requests, review threads, validation requests, readiness, and merge state.
 - Portable security behavior stays in Rust/WASM when development core owns the
   implementation. Security owns cross-team security architecture and review.
