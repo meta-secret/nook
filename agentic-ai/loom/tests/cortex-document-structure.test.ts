@@ -95,15 +95,14 @@ test('accepts clean documents and valid centralized knowledge-graph.md', () => {
 });
 
 type DistributedDocumentsArgs = {
-  readonly rootExtra?: string;
-  readonly devTarget?: string;
+  readonly rootExtra: string;
+  readonly devTarget: string;
+  readonly gizmoTarget: string;
 };
 
 function distributedDocuments(
   args: DistributedDocumentsArgs,
 ): CortexDocumentSource[] {
-  const rootExtra = args.rootExtra ?? '';
-  const devTarget = args.devTarget ?? 'policy.md';
   const rootDocumentArgs: MakeDocumentArgs = {
     path: '.cortex/knowledge-graph.md',
     content: `# Cortex Knowledge Graph
@@ -114,7 +113,8 @@ function distributedDocuments(
 - [SRE](teams/sre/knowledge-graph.md)
 - [Web development](teams/web-dev/knowledge-graph.md)
 - [Shared](shared/knowledge-graph.md)
-${rootExtra}`,
+- [Gizmo](gizmo/knowledge-graph.md)
+${args.rootExtra}`,
   };
   const aiGraphArgs: MakeDocumentArgs = {
     path: '.cortex/teams/ai/knowledge-graph.md',
@@ -122,7 +122,7 @@ ${rootExtra}`,
   };
   const devGraphArgs: MakeDocumentArgs = {
     path: '.cortex/teams/dev-core/knowledge-graph.md',
-    content: `# Development Core Knowledge Graph\n\n- [Core policy](${devTarget})\n`,
+    content: `# Development Core Knowledge Graph\n\n- [Core policy](${args.devTarget})\n`,
   };
   const sreGraphArgs: MakeDocumentArgs = {
     path: '.cortex/teams/sre/knowledge-graph.md',
@@ -140,9 +140,17 @@ ${rootExtra}`,
     path: '.cortex/shared/knowledge-graph.md',
     content: '# Shared Knowledge Graph\n',
   };
+  const gizmoGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/gizmo/knowledge-graph.md',
+    content: `# Gizmo Knowledge Graph\n\n- [Gizmo policy](${args.gizmoTarget})\n`,
+  };
   const corePolicyArgs: MakeDocumentArgs = {
     path: '.cortex/teams/dev-core/policy.md',
     content: '# Core Policy\n\n## Boundary\n\nPolicy text.\n',
+  };
+  const gizmoPolicyArgs: MakeDocumentArgs = {
+    path: '.cortex/gizmo/policy.md',
+    content: '# Gizmo Policy\n\n## Boundary\n\nPolicy text.\n',
   };
   return [
     makeDocument(rootDocumentArgs),
@@ -152,18 +160,68 @@ ${rootExtra}`,
     makeDocument(sreGraphArgs),
     makeDocument(webGraphArgs),
     makeDocument(sharedGraphArgs),
+    makeDocument(gizmoGraphArgs),
     makeDocument(corePolicyArgs),
+    makeDocument(gizmoPolicyArgs),
   ];
 }
 
 test('accepts document-level team and shared graphs', () => {
-  const distributedArgs: DistributedDocumentsArgs = {};
+  const distributedArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
+    devTarget: 'policy.md',
+    gizmoTarget: 'policy.md',
+  };
   expect(audit(distributedDocuments(distributedArgs))).toEqual([]);
+});
+
+test('requires the root knowledge graph to link the Gizmo graph', () => {
+  const distributedArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
+    devTarget: 'policy.md',
+    gizmoTarget: 'policy.md',
+  };
+  const documents = distributedDocuments(distributedArgs);
+  const rootDocument = documents[0];
+  if (!rootDocument) throw new Error('Expected distributed root document');
+  documents[0] = {
+    ...rootDocument,
+    content: rootDocument.content.replace(
+      '- [Gizmo](gizmo/knowledge-graph.md)\n',
+      '',
+    ),
+  };
+  const findings = audit(documents);
+  const expectedFinding = {
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: '.cortex/knowledge-graph.md',
+    message:
+      'Root knowledge graph must link the owner graph: .cortex/gizmo/knowledge-graph.md',
+  };
+  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+});
+
+test('maps Gizmo-owned documents to the Gizmo knowledge graph', () => {
+  const distributedArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
+    devTarget: 'policy.md',
+    gizmoTarget: 'missing-policy.md',
+  };
+  const findings = audit(distributedDocuments(distributedArgs));
+  const expectedFinding = {
+    code: CortexStructureFindingCode.MissingFromIndex,
+    file: '.cortex/gizmo/knowledge-graph.md',
+    message:
+      'Document is not indexed in its owning knowledge graph .cortex/gizmo/knowledge-graph.md: .cortex/gizmo/policy.md',
+  };
+  expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
 });
 
 test('rejects section links and duplicate document entries in knowledge graphs', () => {
   const distributedArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
     devTarget: 'policy.md#boundary',
+    gizmoTarget: 'policy.md',
   };
   const findings = audit(distributedDocuments(distributedArgs));
   const expectedFinding = {
@@ -176,6 +234,8 @@ test('rejects section links and duplicate document entries in knowledge graphs',
 test('rejects root navigation that bypasses an owning graph', () => {
   const distributedArgs: DistributedDocumentsArgs = {
     rootExtra: '- [Core policy](teams/dev-core/policy.md)\n',
+    devTarget: 'policy.md',
+    gizmoTarget: 'policy.md',
   };
   const findings = audit(distributedDocuments(distributedArgs));
   expect(findings.map((finding) => finding.code)).toContain(
@@ -185,7 +245,9 @@ test('rejects root navigation that bypasses an owning graph', () => {
 
 test('rejects a team graph that indexes another team document', () => {
   const distributedArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
     devTarget: '../sre/policy.md',
+    gizmoTarget: 'policy.md',
   };
   const documents = distributedDocuments(distributedArgs);
   const srePolicyArgs: MakeDocumentArgs = {
@@ -199,6 +261,32 @@ test('rejects a team graph that indexes another team document', () => {
     file: '.cortex/teams/dev-core/knowledge-graph.md',
   };
   expect(findings).toContainEqual(expect.objectContaining(expectedFinding));
+});
+
+test('rejects cross-owner indexing between Gizmo and team graphs', () => {
+  const gizmoIndexesTeamArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
+    devTarget: 'policy.md',
+    gizmoTarget: '../teams/dev-core/policy.md',
+  };
+  const gizmoFindings = audit(distributedDocuments(gizmoIndexesTeamArgs));
+  const gizmoFinding = {
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/gizmo/knowledge-graph.md',
+  };
+  expect(gizmoFindings).toContainEqual(expect.objectContaining(gizmoFinding));
+
+  const teamIndexesGizmoArgs: DistributedDocumentsArgs = {
+    rootExtra: '',
+    devTarget: '../../gizmo/policy.md',
+    gizmoTarget: 'policy.md',
+  };
+  const teamFindings = audit(distributedDocuments(teamIndexesGizmoArgs));
+  const teamFinding = {
+    code: CortexStructureFindingCode.InvalidIndexEntry,
+    file: '.cortex/teams/dev-core/knowledge-graph.md',
+  };
+  expect(teamFindings).toContainEqual(expect.objectContaining(teamFinding));
 });
 
 test('accepts k-graph.md as an alias for the centralized knowledge graph', () => {

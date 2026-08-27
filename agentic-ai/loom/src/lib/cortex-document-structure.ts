@@ -21,6 +21,7 @@ export enum CortexStructureFindingCode {
 enum CortexGraphOwner {
   Ai = 'ai',
   DevCore = 'dev-core',
+  Gizmo = 'gizmo',
   Security = 'security',
   Sre = 'sre',
   WebDev = 'web-dev',
@@ -126,7 +127,8 @@ export function auditCortexDocumentStructure(
     };
     addFinding(findingArgs);
   } else {
-    const distributedGraphPaths = [
+    const ownerGraphPaths = [
+      '.cortex/gizmo/knowledge-graph.md',
       '.cortex/teams/ai/knowledge-graph.md',
       '.cortex/teams/dev-core/knowledge-graph.md',
       '.cortex/teams/security/knowledge-graph.md',
@@ -134,7 +136,7 @@ export function auditCortexDocumentStructure(
       '.cortex/teams/web-dev/knowledge-graph.md',
       '.cortex/shared/knowledge-graph.md',
     ] as const;
-    const distributedTopology = distributedGraphPaths.some((graphPath) =>
+    const distributedTopology = ownerGraphPaths.some((graphPath) =>
       catalog.has(graphPath),
     );
     const graphDocuments = new Map<string, ParsedDocument>();
@@ -143,7 +145,7 @@ export function auditCortexDocumentStructure(
     );
     graphDocuments.set(rootGraphPath, rootIndexDoc);
     if (distributedTopology) {
-      for (const graphPath of distributedGraphPaths) {
+      for (const graphPath of ownerGraphPaths) {
         const graphDocument = catalog.get(graphPath);
         if (!graphDocument) {
           const findingArgs: AddFindingArgs = {
@@ -151,7 +153,7 @@ export function auditCortexDocumentStructure(
             code: CortexStructureFindingCode.MissingIndex,
             file: graphPath,
             line: 1,
-            message: `Required team knowledge graph is missing: ${graphPath}`,
+            message: `Required owner knowledge graph is missing: ${graphPath}`,
           };
           addFinding(findingArgs);
           continue;
@@ -196,28 +198,29 @@ export function auditCortexDocumentStructure(
 
     if (distributedTopology) {
       const rootIndexedFiles = indexedByGraph.get(rootGraphPath) ?? new Set();
-      for (const teamGraphPath of distributedGraphPaths) {
-        if (!rootIndexedFiles.has(teamGraphPath)) {
+      for (const ownerGraphPath of ownerGraphPaths) {
+        if (!rootIndexedFiles.has(ownerGraphPath)) {
           const findingArgs: AddFindingArgs = {
             findings,
             code: CortexStructureFindingCode.MissingFromIndex,
             file: rootGraphPath,
             line: 1,
-            message: `Root knowledge graph must link the team graph: ${teamGraphPath}`,
+            message: `Root knowledge graph must link the owner graph: ${ownerGraphPath}`,
           };
           addFinding(findingArgs);
         }
       }
-      for (const teamGraphPath of distributedGraphPaths) {
-        const graphOwner = cortexGraphOwner(teamGraphPath);
-        const teamIndexedFiles = indexedByGraph.get(teamGraphPath) ?? new Set();
-        for (const indexedPath of teamIndexedFiles) {
+      for (const ownerGraphPath of ownerGraphPaths) {
+        const graphOwner = cortexGraphOwner(ownerGraphPath);
+        const ownerIndexedFiles =
+          indexedByGraph.get(ownerGraphPath) ?? new Set();
+        for (const indexedPath of ownerIndexedFiles) {
           const indexedOwner = cortexGraphOwner(indexedPath);
           if (indexedOwner === false || indexedOwner === graphOwner) continue;
           const findingArgs: AddFindingArgs = {
             findings,
             code: CortexStructureFindingCode.InvalidIndexEntry,
-            file: teamGraphPath,
+            file: ownerGraphPath,
             line: 1,
             message: `Owning knowledge graph cannot index another context's document: ${indexedPath}`,
           };
@@ -226,10 +229,11 @@ export function auditCortexDocumentStructure(
       }
       for (const indexedPath of rootIndexedFiles) {
         if (
-          distributedGraphPaths.some(
-            (teamGraphPath) =>
-              indexedPath.startsWith(`${path.posix.dirname(teamGraphPath)}/`) &&
-              indexedPath !== teamGraphPath,
+          ownerGraphPaths.some(
+            (ownerGraphPath) =>
+              indexedPath.startsWith(
+                `${path.posix.dirname(ownerGraphPath)}/`,
+              ) && indexedPath !== ownerGraphPath,
           )
         ) {
           const findingArgs: AddFindingArgs = {
@@ -237,7 +241,7 @@ export function auditCortexDocumentStructure(
             code: CortexStructureFindingCode.InvalidIndexEntry,
             file: rootGraphPath,
             line: 1,
-            message: `Root knowledge graph must route through team graphs instead of indexing team documents directly: ${indexedPath}`,
+            message: `Root knowledge graph must route through owner graphs instead of indexing owned documents directly: ${indexedPath}`,
           };
           addFinding(findingArgs);
         }
@@ -475,13 +479,16 @@ function isKnowledgeGraphPath(filePath: string): boolean {
     filePath === 'k-graph.md' ||
     filePath === '.cortex/INDEX.md' ||
     filePath === 'INDEX.md' ||
-    /^\.cortex\/(?:teams\/(?:ai|dev-core|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
+    /^\.cortex\/(?:gizmo|teams\/(?:ai|dev-core|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
       filePath,
     )
   );
 }
 
 function owningKnowledgeGraphPath(filePath: string): string {
+  if (filePath.startsWith('.cortex/gizmo/')) {
+    return '.cortex/gizmo/knowledge-graph.md';
+  }
   for (const team of [
     CortexGraphOwner.Ai,
     CortexGraphOwner.DevCore,
@@ -500,6 +507,7 @@ function owningKnowledgeGraphPath(filePath: string): string {
 }
 
 function cortexGraphOwner(filePath: string): CortexGraphOwner | false {
+  if (filePath.startsWith('.cortex/gizmo/')) return CortexGraphOwner.Gizmo;
   if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
   const match = /^\.cortex\/teams\/(ai|dev-core|security|sre|web-dev)\//.exec(
     filePath,
