@@ -62,10 +62,11 @@ export function findExistingSkillCard(
   args: FindExistingSkillCardArgs,
 ): string | false {
   const ownerRoots = [
-    path.join(args.cortexRoot, 'dynamic-skills'),
-    path.join(args.cortexRoot, SkillOwner.DevCore, 'dynamic-skills'),
-    path.join(args.cortexRoot, SkillOwner.Sre, 'dynamic-skills'),
-    path.join(args.cortexRoot, SkillOwner.WebDev, 'dynamic-skills'),
+    path.join(args.cortexRoot, 'shared', 'dynamic-skills'),
+    path.join(args.cortexRoot, 'teams', SkillOwner.Ai, 'dynamic-skills'),
+    path.join(args.cortexRoot, 'teams', SkillOwner.DevCore, 'dynamic-skills'),
+    path.join(args.cortexRoot, 'teams', SkillOwner.Sre, 'dynamic-skills'),
+    path.join(args.cortexRoot, 'teams', SkillOwner.WebDev, 'dynamic-skills'),
   ];
   return (
     ownerRoots
@@ -92,7 +93,7 @@ export function insertSkillCatalogEntry(
   }
 
   const executableSkill = args.createExecutableWrappers
-    ? `\n  - Executable skill: [\`.agents/skills/${args.slug}/SKILL.md\`](../../.agents/skills/${args.slug}/SKILL.md)`
+    ? `\n  - Executable skill: [\`.agents/skills/${args.slug}/SKILL.md\`](../../../../.agents/skills/${args.slug}/SKILL.md)`
     : '';
   const entry = `- **[${args.slug}.md](${args.cardHref})**\n  - Purpose: TODO: purpose${executableSkill}`;
   const markerIndex = markerMatch.index;
@@ -108,19 +109,19 @@ export async function runSkillScaffold(
   const slug = request.skillSlug;
 
   const cortexRoot = path.join(repoRoot, '.cortex');
-  const commonSkillsDir = path.join(cortexRoot, 'dynamic-skills');
+  const aiSkillsDir = path.join(cortexRoot, 'teams', 'ai', 'dynamic-skills');
   const skillsDir =
-    request.skillOwner === SkillOwner.Common
-      ? commonSkillsDir
-      : path.join(repoRoot, '.cortex', request.skillOwner, 'dynamic-skills');
-  const templatePath = path.join(commonSkillsDir, '_template.md');
+    request.skillOwner === SkillOwner.Shared
+      ? path.join(cortexRoot, 'shared', 'dynamic-skills')
+      : path.join(cortexRoot, 'teams', request.skillOwner, 'dynamic-skills');
+  const templatePath = path.join(aiSkillsDir, '_template.md');
   const cardPath = path.join(skillsDir, `${slug}.md`);
-  const indexPath = path.join(commonSkillsDir, 'index.md');
+  const indexPath = path.join(aiSkillsDir, 'index.md');
 
   if (!existsSync(templatePath)) {
     const loomFailureDetailArgs3: LoomFailureDetailArgs = {
       code: LoomFailureCode.SkillScaffoldFailed,
-      text: 'Missing .cortex/dynamic-skills/_template.md',
+      text: 'Missing .cortex/teams/ai/dynamic-skills/_template.md',
     };
     loomFailureDetail(loomFailureDetailArgs3);
   }
@@ -146,7 +147,7 @@ export async function runSkillScaffold(
   const card = renderSkillCard(renderArgs);
   const currentIndexContent = readFileSync(indexPath, 'utf8');
   const insertArgs: InsertSkillCatalogEntryArgs = {
-    cardHref: markdownPath(path.relative(commonSkillsDir, cardPath)),
+    cardHref: markdownPath(path.relative(aiSkillsDir, cardPath)),
     createExecutableWrappers: request.createExecutableWrappers,
     indexContent: currentIndexContent,
     slug,

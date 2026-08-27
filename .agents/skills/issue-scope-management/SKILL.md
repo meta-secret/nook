@@ -9,7 +9,7 @@ description: >-
 
 # Issue Scope Management
 
-System of record: [`.cortex/dynamic-skills/issue-scope-management.md`](../../../.cortex/dynamic-skills/issue-scope-management.md) and [`.cortex/workflows/issues.md`](../../../.cortex/workflows/issues.md).
+System of record: [`.cortex/teams/ai/dynamic-skills/issue-scope-management.md`](../../../.cortex/teams/ai/dynamic-skills/issue-scope-management.md) and [`.cortex/teams/ai/workflows/issues.md`](../../../.cortex/teams/ai/workflows/issues.md).
 
 Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) before starting. Before
 saying work is too big, risky, blocked, out of scope, or follow-up, search

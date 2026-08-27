@@ -24,7 +24,7 @@ There is no centrally hosted Nook account and no master password. The shipped
 applications keep multiple local identities in an independently protected
 browser keyring. Replicated identity control remains target architecture;
 identity records are not owned by a Nook account service. See the
-[identity and vault architecture](.cortex/dev-core/design-docs/identity-vault-architecture.md)
+[identity and vault architecture](.cortex/teams/dev-core/design-docs/identity-vault-architecture.md)
 for the implemented/target boundary.
 
 > [!WARNING]
@@ -277,13 +277,13 @@ and `auth/icloud`; portable provider policy remains in Rust.
 
 Deeper documentation lives in [`.cortex/`](.cortex/):
 
-- [Architecture](.cortex/ARCHITECTURE.md)
-- [Vault event log](.cortex/dev-core/design-docs/vault-event-log.md)
-- [Unified vault / local-first](.cortex/dev-core/design-docs/unified-vault.md)
-- [Vault session and lock](.cortex/dev-core/design-docs/vault-session-and-lock.md)
-- [Password manager](.cortex/dev-core/product-specs/password-manager.md)
-- [Decentralized multi-device auth](.cortex/dev-core/product-specs/decentralized-auth.md)
-- [Engineering principles](.cortex/design-docs/core-beliefs.md)
+- [Architecture](.cortex/shared/architecture/system.md)
+- [Vault event log](.cortex/teams/dev-core/design-docs/vault-event-log.md)
+- [Unified vault / local-first](.cortex/teams/dev-core/design-docs/unified-vault.md)
+- [Vault session and lock](.cortex/teams/dev-core/design-docs/vault-session-and-lock.md)
+- [Password manager](.cortex/teams/dev-core/product-specs/password-manager.md)
+- [Decentralized multi-device auth](.cortex/teams/dev-core/product-specs/decentralized-auth.md)
+- [Engineering principles](.cortex/teams/ai/design-docs/core-beliefs.md)
 - [Agent map](.cortex/AGENTS.md)
 
 Development issues, agent worklogs, and delivery statistics live in the
@@ -412,18 +412,22 @@ encrypted event log under `nook-log/v1/events/` in a private repository.
 
 ## Development
 
-Engineering work is divided among three Cortex ownership domains:
+Engineering work is divided among four Cortex team domains:
 
-- [Development core](.cortex/dev-core/knowledge-graph.md) owns portable Rust,
+- [AI](.cortex/teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills,
+  agent workflows, expert routing, and deterministic AI automation.
+
+- [Development core](.cortex/teams/dev-core/knowledge-graph.md) owns portable Rust,
   Rust/WASM domain contracts, security logic, and core product specifications.
-- [SRE](.cortex/sre/knowledge-graph.md) owns CI/CD, runners, containers, k0s,
+- [SRE](.cortex/teams/sre/knowledge-graph.md) owns CI/CD, runners, containers, k0s,
   Kubernetes, deployments, and provider operations.
-- [Web development](.cortex/web-dev/knowledge-graph.md) owns browser apps,
+- [Web development](.cortex/teams/web-dev/knowledge-graph.md) owns browser apps,
   extension presentation, Svelte/TypeScript interaction behavior, and browser
   evidence.
 
-The [root Cortex graph](.cortex/knowledge-graph.md) routes requests to those
-team graphs and retains common cross-team delivery authorities.
+The [root Cortex graph](.cortex/knowledge-graph.md) routes each request to one
+team graph. [Shared knowledge](.cortex/shared/knowledge-graph.md) is loaded only
+for a named cross-team dependency; it is not a fifth implementation team.
 
 Agent workflow: run **`task loom:pre-push`**, commit, and push the exact branch head;
 run focused builds/tests with **`task remote TASK_NAME=<name>`** or batch them
@@ -487,8 +491,8 @@ and synthesis profiles. Invoke one preauthorized role with
 exact-commit evidence. `system_coherence_synthesizer` receives only
 replay-verified child results and views. The parent plan freezes the read scope
 or synthesis barrier; every role remains nondelegating and read-only. See the
-[structural refactoring registry](.cortex/architecture/refactoring-experts.md)
-and [workflow](.cortex/workflows/structural-refactoring.md).
+[structural refactoring registry](.cortex/teams/ai/architecture/refactoring-experts.md)
+and [workflow](.cortex/teams/ai/workflows/structural-refactoring.md).
 
 ```sh
 task loom:pre-push         # required local agent action (host-applied)
@@ -592,7 +596,7 @@ compiler-coupled Dylint checks have bounded hosted jobs. Main also covers
 minds-only and mixed pushes while skipping product jobs for minds-only changes.
 Schedule, manual, and labeled minds-only PR entry points stay in thin
 `rust-ecosystem.yml`. The selection and configuration policy lives in
-[`.cortex/sre/workflows/quality.md`](.cortex/sre/workflows/quality.md).
+[`.cortex/teams/sre/workflows/quality.md`](.cortex/teams/sre/workflows/quality.md).
 
 See [`infra/k0s/README.md`](infra/k0s/README.md) for the failed Main-repair
 inspection and recovery workflow.
@@ -701,7 +705,7 @@ worker image and BuildKit cache manifests. ARC jobs connect to the persistent
 rootless BuildKit shard on the same k0s node, so warm solves avoid an external
 data path while retaining the public TLS registry identity for portable cache
 fallback. Details:
-[`.cortex/ARCHITECTURE.md`](.cortex/ARCHITECTURE.md) §7.
+[`.cortex/shared/architecture/system.md`](.cortex/shared/architecture/system.md) §7.
 
 After changing Rust dependencies, commit the updated lockfile:
 

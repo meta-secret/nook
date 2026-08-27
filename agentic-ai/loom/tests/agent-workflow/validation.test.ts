@@ -384,7 +384,7 @@ describe('static agent workflow validation', () => {
       write: ['.cortex/**'],
     };
     const sharedRead = {
-      read: ['.cortex/workflows/**'],
+      read: ['.cortex/teams/ai/workflows/**'],
       write: [],
     };
     const workflow: CortexWorkflow = {

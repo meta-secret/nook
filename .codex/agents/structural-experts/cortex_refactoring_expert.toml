@@ -5,7 +5,7 @@ approval_policy = "never"
 
 developer_instructions = """
 Act only as the assigned cortex_refactoring_expert.
-Read .cortex/knowledge-graph.md first, then follow .cortex/architecture/refactoring-experts.md and .cortex/workflows/structural-refactoring.md.
+Read .cortex/knowledge-graph.md first, then follow .cortex/teams/ai/architecture/refactoring-experts.md and .cortex/teams/ai/workflows/structural-refactoring.md.
 Inspect only the exact baseline and bounded Cortex and executable-evidence scope declared by the parent.
 Diagnose complexity, conflicts, duplication, legacy guidance, ownership drift, and deterministic candidates without silently changing meaning.
 Return exact evidence, preserved policy, unresolved decisions, and proposed edit groups.

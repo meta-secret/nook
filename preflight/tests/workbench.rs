@@ -153,10 +153,10 @@ fn agent_implementation_claims_only_explicit_workbench_records() -> anyhow::Resu
 #[test]
 fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> {
     let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/workflows/coding-bro.md");
-    let issue_workflow = read(".cortex/workflows/issues.md");
-    let pull_request_workflow = read(".cortex/workflows/pull-requests.md");
-    let ownership_skill = read(".cortex/dynamic-skills/agent-feature-ownership.md");
+    let coding_workflow = read(".cortex/teams/ai/workflows/coding-bro.md");
+    let issue_workflow = read(".cortex/teams/ai/workflows/issues.md");
+    let pull_request_workflow = read(".cortex/teams/ai/workflows/pull-requests.md");
+    let ownership_skill = read(".cortex/teams/ai/dynamic-skills/agent-feature-ownership.md");
 
     for required in [
         "agents mutate only their owned feature",
@@ -207,9 +207,9 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
 fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
     let gitignore = read(".gitignore");
     let agent_map = read(".cortex/AGENTS.md");
-    let coding_workflow = read(".cortex/workflows/coding-bro.md");
-    let pull_request_workflow = read(".cortex/workflows/pull-requests.md");
-    let self_improvement = read(".cortex/dynamic-skills/self-improvement.md");
+    let coding_workflow = read(".cortex/teams/ai/workflows/coding-bro.md");
+    let pull_request_workflow = read(".cortex/teams/ai/workflows/pull-requests.md");
+    let self_improvement = read(".cortex/teams/ai/dynamic-skills/self-improvement.md");
     let skill_wrapper = read(".agents/skills/self-improvement/SKILL.md");
     let agent_tasks = read(".task/agentic-ai.yml");
     let readiness_guard = read("agentic-ai/loom/src/commands/cortex-session-clean.ts");
@@ -248,7 +248,7 @@ fn substantial_agent_tasks_use_curated_session_memory() -> anyhow::Result<()> {
         );
     }
     assert!(
-        skill_wrapper.contains(".cortex/dynamic-skills/self-improvement.md")
+        skill_wrapper.contains(".cortex/teams/ai/dynamic-skills/self-improvement.md")
             && skill_wrapper.contains("invocation mirror")
             && !skill_wrapper.contains("Create `.cortex/.session"),
         "the executable skill must route agents through the canonical lifecycle"

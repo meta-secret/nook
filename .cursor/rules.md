@@ -1,15 +1,15 @@
 # Cursor Rules
 
-Before working on any task, load and follow the instructions in these files:
+Before working on any task:
 
-1. `.cortex/knowledge-graph.md` — central knowledge graph and topic index
-2. `.cortex/AGENTS.md` — entry point and table of contents
-3. `.cortex/ARCHITECTURE.md` — project shape, packages, commands
-4. `.cortex/dynamic-skills/index.md` — canonical dynamic skill cards
-5. `.cortex/design-docs/index.md` — design docs and operating beliefs
-6. `.cortex/product-specs/index.md` — product requirements and specifications
+1. Read `.cortex/AGENTS.md` and `.cortex/knowledge-graph.md`.
+2. Select exactly one owning team.
+3. Read only that team's `AGENTS.md` and knowledge graph.
+4. Open the smallest set of task-relevant documents and headings.
+5. Load one named shared authority only when the task depends on it.
 
-These files are the source of truth for how this project works.
+Do not preload the AI skill registry, shared catalogs, or foreign-team graphs.
+The routed Cortex documents are the source of truth for the selected work.
 
 ---
 
@@ -24,9 +24,9 @@ These files are the source of truth for how this project works.
 ### Get started paths
 - **Three mutually exclusive first-run intents:** Create Simple vault, Create Sentinel vault, Join Sentinel setup. Do not collapse create/join into one vault-type dropdown with footer links.
 - **Sync-provider import is secondary** (“already have a vault”), not a create/join path.
-- **Sentinel create** chooses `N`/`T`, waits for all participant public keys, then atomically creates an empty vault. See `.cortex/dev-core/design-docs/sentinel-genesis.md`.
+- **Sentinel create** chooses `N`/`T`, waits for all participant public keys, then atomically creates an empty vault. See `.cortex/teams/dev-core/design-docs/sentinel-genesis.md`.
 - **Sentinel join** primarily shares standalone public keys with the vault owner; initiator request is optional (session-bound response or share delivery only). Post-genesis share delivery and later Onboard+sync QR are separate steps.
-- Source of truth: `.cortex/dev-core/design-docs/vault-architecture-modes.md` and issue #303.
+- Source of truth: `.cortex/teams/dev-core/design-docs/vault-architecture-modes.md` and issue #303.
 
 ### Package boundaries
 - Dependency flow is strictly `nook-core` → `nook-wasm` → `nook-web`. Never reverse this.
@@ -40,12 +40,12 @@ These files are the source of truth for how this project works.
 ### Product specifications
 - **Read specifications before implementation.** Select the responsible team through `.cortex/knowledge-graph.md`, then read its team graph and owning product specification before planning or editing user-facing features, item types, or UX workflows.
 - **Update specifications on new knowledge.** Capture user requirements from chat, task execution, and PR review iterations in the owning team's `product-specs/` document in the same PR.
-- **Treat stale/missing specs as P1 defects.** Follow `.cortex/dynamic-skills/product-spec-lifecycle.md`.
+- **Treat stale/missing specs as P1 defects.** Follow `.cortex/teams/ai/dynamic-skills/product-spec-lifecycle.md`.
 
 ### Tooling
 - Use `task` commands (via Docker) for build, check, format, and test. Do not run raw compiler commands unless debugging.
 - Keep changes minimal and scoped. Match existing naming, patterns, and file structure.
 
 ### Git
-- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/workflows/pull-requests.md`.
-- **Squash merge only.** Every PR merged into `main` MUST use squash merge (`gh pr merge --squash` or GitHub **Squash and merge**). Never merge commit or rebase merge. See `.cortex/workflows/pull-requests.md`.
+- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/teams/ai/workflows/pull-requests.md`.
+- **Squash merge only.** Every PR merged into `main` MUST use squash merge (`gh pr merge --squash` or GitHub **Squash and merge**). Never merge commit or rebase merge. See `.cortex/teams/ai/workflows/pull-requests.md`.

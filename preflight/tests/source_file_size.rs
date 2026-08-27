@@ -38,7 +38,8 @@ fn critical_architecture_rule_stays_wired_to_agent_guidance() -> anyhow::Result<
     assert_eq!(AUTHORED_SOURCE_LINE_LIMIT, 1_000);
     let root = repository_root();
     let agents = fs::read_to_string(root.join(".cortex/AGENTS.md"))?;
-    let canonical = fs::read_to_string(root.join(".cortex/dynamic-skills/source-file-size.md"))?;
+    let canonical =
+        fs::read_to_string(root.join(".cortex/shared/dynamic-skills/source-file-size.md"))?;
     let executable = fs::read_to_string(root.join(".agents/skills/source-file-size/SKILL.md"))?;
 
     for (name, source) in [

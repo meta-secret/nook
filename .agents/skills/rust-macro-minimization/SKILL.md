@@ -10,7 +10,7 @@ description: >-
 # Rust Macro Minimization
 
 Read and follow the canonical project rule at
-[`rust-macro-minimization.md`](../../../.cortex/dev-core/dynamic-skills/rust-macro-minimization.md).
+[`rust-macro-minimization.md`](../../../.cortex/teams/dev-core/dynamic-skills/rust-macro-minimization.md).
 
 Inventory every definition and caller, distinguish external integration macros
 from repository-defined abstraction, then replace authored macros with explicit

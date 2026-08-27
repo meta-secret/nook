@@ -10,9 +10,9 @@ description: >-
 
 Read and follow:
 
-- [the canonical skill](../../../.cortex/dynamic-skills/module-expert.md);
-- [the module expert registry](../../../.cortex/architecture/module-experts.md);
-- [the module-oriented workflow](../../../.cortex/workflows/module-oriented-development.md).
+- [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/module-expert.md);
+- [the module expert registry](../../../.cortex/teams/ai/architecture/module-experts.md);
+- [the module-oriented workflow](../../../.cortex/teams/ai/workflows/module-oriented-development.md).
 
 Resolve one named profile before exploring its source.
 Load only that profile's authorities and task-relevant skills.

@@ -14,9 +14,9 @@ Use this skill when the user says `/dynamic-skill`, asks to create a reusable
 codebase skill, or asks to refactor code using a previously captured dynamic
 skill.
 
-System of record: [`.cortex/workflows/dynamic-skills.md`](../../../.cortex/workflows/dynamic-skills.md).
-Registry: [`.cortex/dynamic-skills/index.md`](../../../.cortex/dynamic-skills/index.md).
-Authoring rule: [`.cortex/dynamic-skills/dynamic-skill-authoring.md`](../../../.cortex/dynamic-skills/dynamic-skill-authoring.md).
+System of record: [`.cortex/teams/ai/workflows/dynamic-skills.md`](../../../.cortex/teams/ai/workflows/dynamic-skills.md).
+Registry: [`.cortex/teams/ai/dynamic-skills/index.md`](../../../.cortex/teams/ai/dynamic-skills/index.md).
+Authoring rule: [`.cortex/teams/ai/dynamic-skills/dynamic-skill-authoring.md`](../../../.cortex/teams/ai/dynamic-skills/dynamic-skill-authoring.md).
 The owning `.cortex/**/dynamic-skills/` card is canonical. This `.agents`
 entry is the executable wrapper. Cursor and Claude entries are symlink mirrors.
 
@@ -32,9 +32,10 @@ entry is the executable wrapper. Cursor and Claude entries are symlink mirrors.
    - Examples or code references.
    - Validation checks.
 4. Update an existing skill card when possible. Otherwise create the card in
-   the responsible team's `dynamic-skills/` directory. Use the common registry
-   only for genuinely cross-team skills.
-5. Update `.cortex/dynamic-skills/index.md`.
+   the responsible team's `dynamic-skills/` directory. Use the shared directory
+   only for genuinely cross-team skills, and register every card in the
+   AI-owned catalog.
+5. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 6. Create `.agents/skills/<skill-name>/SKILL.md` when direct invocation is
    required. Add matching `.cursor/skills/` and `.claude/skills/` symlinks.
 

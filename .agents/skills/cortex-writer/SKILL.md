@@ -12,7 +12,7 @@ description: >-
 # Cortex Writer
 
 Read and follow the canonical project rule at
-[`.cortex/dynamic-skills/cortex-writer.md`](../../../.cortex/dynamic-skills/cortex-writer.md).
+[`.cortex/teams/ai/dynamic-skills/cortex-writer.md`](../../../.cortex/teams/ai/dynamic-skills/cortex-writer.md).
 
 Every `.cortex` Markdown edit must keep cognitive complexity low, prefer
 enclosed structured lists, reserve tables for compact exact mappings, avoid

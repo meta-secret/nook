@@ -13,7 +13,7 @@ description: >-
 Use this skill when editing Loom, executable-skill, or Nook web production
 TypeScript/Svelte.
 
-Read `.cortex/dynamic-skills/typescript-named-args.md` and apply it:
+Read `.cortex/shared/dynamic-skills/typescript-named-args.md` and apply it:
 
 1. Do not declare `fn(args: { ... })` with an inline object type.
 2. Declare and reuse a named semantic `type`, `interface`, or Rust-generated type.

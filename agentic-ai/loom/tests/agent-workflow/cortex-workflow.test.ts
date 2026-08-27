@@ -37,9 +37,7 @@ test('compares design and product claims with owning implementation', () => {
   if (task.execution.kind !== WorkflowExecutorKind.Agent) {
     throw new Error('Architecture audit must use an agent executor.');
   }
-  expect(task.execution.instruction).toContain(
-    'owning nook-app implementation',
-  );
+  expect(task.execution.instruction).toContain('owning implementation');
 });
 
 test('classifies workflow extraction candidates before synthesis', () => {

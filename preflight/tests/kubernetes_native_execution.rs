@@ -190,8 +190,8 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
 
     for path in [
         "README.md",
-        ".cortex/workflows/coding-bro.md",
-        ".cortex/workflows/pull-requests.md",
+        ".cortex/teams/ai/workflows/coding-bro.md",
+        ".cortex/teams/ai/workflows/pull-requests.md",
     ] {
         let documentation = read(path);
         assert!(documentation.contains("task remote TASK_NAME=web:build"));
@@ -199,7 +199,8 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
         assert!(!documentation.contains("task remote TASK_NAMES=web:build,web:e2e"));
     }
 
-    let cortex_rule = read(".cortex/sre/dynamic-skills/kubernetes-native-cluster-execution.md");
+    let cortex_rule =
+        read(".cortex/teams/sre/dynamic-skills/kubernetes-native-cluster-execution.md");
     assert!(cortex_rule.contains("P1 hard rule"));
     assert!(cortex_rule.contains("BuildKit shard is a build service only"));
     assert!(cortex_rule.contains("Playwright directly inside an ordinary Pod"));

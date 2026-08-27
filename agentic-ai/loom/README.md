@@ -360,7 +360,7 @@ in. Use the resolved path when creating the scratch JSON before `assemble`.
 
 ## TypeScript domain structure
 
-Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/dynamic-skills/typescript-domain-structure.md):
+Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/shared/dynamic-skills/typescript-domain-structure.md):
 
 - nested request families (`agentStats.assemble`, `prLand.validate`)
 - field-name enums for deny-unknown-key checks
@@ -368,18 +368,18 @@ Loom authored TypeScript follows [typescript-domain-structure.md](../../.cortex/
 - runtime failures throw `LoomFailure` with `LoomFailureCode`
 - no generic TypeScript `Result<T>` or `Maybe<T>` utilities
 - prefer popular libraries over hand-rolled commodity helpers
-  ([prefer-popular-libraries.md](../../.cortex/dynamic-skills/prefer-popular-libraries.md))
+  ([prefer-popular-libraries.md](../../.cortex/shared/dynamic-skills/prefer-popular-libraries.md))
 - at most one function/method parameter; multi-value inputs use a typed object
-  ([typescript-single-parameter.md](../../.cortex/dynamic-skills/typescript-single-parameter.md))
+  ([typescript-single-parameter.md](../../.cortex/shared/dynamic-skills/typescript-single-parameter.md))
 - no authored `unknown`, `object`, or generic domain values; the only narrow
   exception is `UntrustedYamlNode` / `UntrustedYamlMap` inside YAML, JSON, or
   host-response adapters, where it must be decoded immediately into a domain
   value
-  ([typescript-no-unknown.md](../../.cortex/dynamic-skills/typescript-no-unknown.md))
+  ([typescript-no-unknown.md](../../.cortex/shared/dynamic-skills/typescript-no-unknown.md))
 - discovery `inputSchema` constants are typed `ObjectJsonSchema`, built with
   `objectJsonSchema` / field enums (not raw `{ type: 'object', ... } as const`)
 - call sites pass named typed args values, never inline `{ ... }` object
-  literals ([typescript-named-args.md](../../.cortex/dynamic-skills/typescript-named-args.md))
+  literals ([typescript-named-args.md](../../.cortex/shared/dynamic-skills/typescript-named-args.md))
 
 Enforced by `task preflight:typescript-state`, Loom ESLint (`max-params`,
 `no-restricted-types`), and `task loom:verify`.

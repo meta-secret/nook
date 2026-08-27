@@ -1,18 +1,18 @@
 ---
 name: team-oriented-development
 description: >-
-  Route Nook implementation through dev-core, SRE, and web-development team
+  Route Nook work through AI, dev-core, SRE, and web-development team
   boundaries. Use when a request touches code, scripts, infrastructure, tests,
-  or Cortex owned by one or more engineering teams.
+  Cortex, Loom, or agent workflows owned by one or more teams.
 ---
 
 # Team-Oriented Development
 
 Read and follow:
 
-- [the canonical skill](../../../.cortex/dynamic-skills/team-oriented-development.md);
-- [engineering team ownership](../../../.cortex/architecture/team-ownership.md);
-- [the team development workflow](../../../.cortex/workflows/team-oriented-development.md); and
+- [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/team-oriented-development.md);
+- [engineering team ownership](../../../.cortex/teams/ai/architecture/team-ownership.md);
+- [the team development workflow](../../../.cortex/teams/ai/workflows/team-oriented-development.md); and
 - the selected team's `AGENTS.md` and knowledge graph.
 
 Classify functionality before assigning files.

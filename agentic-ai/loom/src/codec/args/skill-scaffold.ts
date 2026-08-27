@@ -35,7 +35,8 @@ export enum SkillScaffoldField {
 }
 
 export enum SkillOwner {
-  Common = 'common',
+  Shared = 'shared',
+  Ai = 'ai',
   DevCore = 'dev-core',
   Sre = 'sre',
   WebDev = 'web-dev',
@@ -49,7 +50,7 @@ export type SkillScaffoldRequest = {
 
 const ROOT = RequestFamily.SkillScaffold;
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-const SKILL_OWNER_RE = /^(?:common|dev-core|sre|web-dev)$/;
+const SKILL_OWNER_RE = /^(?:shared|ai|dev-core|sre|web-dev)$/;
 
 export function decodeSkillScaffoldRequest(
   value: UntrustedYamlNode,
@@ -105,7 +106,7 @@ export function decodeSkillScaffoldRequest(
     const fieldErrorArgs: FieldErrorArgs = {
       path: `${ROOT}.${SkillScaffoldField.SkillOwner}`,
       issue: FieldIssue.ExpectedOneOf,
-      detail: fieldDetailText('common|dev-core|sre|web-dev'),
+      detail: fieldDetailText('shared|ai|dev-core|sre|web-dev'),
     };
     errors.push(fieldError(fieldErrorArgs));
   }
@@ -125,7 +126,7 @@ const skillSlugPatternArgs: PatternStringJsonSchemaArgs = {
   pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$',
 };
 const skillOwnerPatternArgs: PatternStringJsonSchemaArgs = {
-  pattern: '^(?:common|dev-core|sre|web-dev)$',
+  pattern: '^(?:shared|ai|dev-core|sre|web-dev)$',
 };
 const skillScaffoldInputSchemaArgs: ObjectJsonSchemaArgs = {
   required: [

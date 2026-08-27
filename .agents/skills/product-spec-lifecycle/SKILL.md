@@ -10,7 +10,7 @@ description: >-
 # Product Specification Lifecycle
 
 Read and follow the canonical project rule at
-[`.cortex/dynamic-skills/product-spec-lifecycle.md`](../../../.cortex/dynamic-skills/product-spec-lifecycle.md).
+[`.cortex/teams/ai/dynamic-skills/product-spec-lifecycle.md`](../../../.cortex/teams/ai/dynamic-skills/product-spec-lifecycle.md).
 
 Team-owned product specifications are the living system of record for
 user-facing requirements.
@@ -21,7 +21,7 @@ user-facing requirements.
    knowledge graph before modifying product behavior.
 2. Incorporate specification requirements into the task plan.
 3. Update existing specs or author new ones when chat or execution reveals product rules or flows.
-4. Keep `.cortex/product-specs/index.md` and the owning team knowledge graph synchronized.
+4. Keep `.cortex/shared/product-specs/index.md` and the owning team knowledge graph synchronized.
 5. Fix obsolete or conflicting specification claims in the same PR.
 6. Keep new prose under [cortex-writer](../cortex-writer/SKILL.md).
 7. Promote durable behavior discovered in strong Rust, WASM, or Playwright

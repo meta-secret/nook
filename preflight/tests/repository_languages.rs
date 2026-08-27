@@ -123,8 +123,9 @@ fn repository_language_rule_stays_wired_to_agent_guidance() -> anyhow::Result<()
     let root = repository_root();
     let language = ["Py", "thon"].concat();
     let agents = fs::read_to_string(root.join(".cortex/AGENTS.md"))?;
-    let canonical =
-        fs::read_to_string(root.join(".cortex/dynamic-skills/typescript-rust-automation-only.md"))?;
+    let canonical = fs::read_to_string(
+        root.join(".cortex/shared/dynamic-skills/typescript-rust-automation-only.md"),
+    )?;
     let executable =
         fs::read_to_string(root.join(".agents/skills/typescript-rust-automation-only/SKILL.md"))?;
     for (name, source) in [

@@ -6,4 +6,4 @@ description: Format locally, run focused builds and tests through task remote on
 # GitHub Actions Execution and Validation
 
 Read and follow the canonical project skill at
-[`.cortex/sre/dynamic-skills/github-actions-only-validation.md`](../../../.cortex/sre/dynamic-skills/github-actions-only-validation.md).
+[`.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`](../../../.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md).

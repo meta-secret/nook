@@ -9,7 +9,7 @@
  * read this when diagnosing a test).
  *
  * For mid-flow or explicit export, use `fetchAppLogs(page)` (`/app-logs`) or
- * `dumpNookLogs(page)` from `./helpers`. See `.cortex/references/logging.md`.
+ * `dumpNookLogs(page)` from `./helpers`. See `.cortex/shared/references/logging.md`.
  *
  * To capture more detail for a post-mortem, lower the persistence level and
  * re-run (e.g. `VITE_LOG_LEVEL=debug` for the dev server, or set

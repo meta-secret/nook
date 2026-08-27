@@ -199,10 +199,12 @@ export function mechanicalCortexAuditOutput(
       severity: WorkflowFindingSeverity.Error,
       title: 'Dynamic skill missing from index',
       summary: `${skill} is not registered in the dynamic-skill index.`,
-      evidence: [`.cortex/dynamic-skills/index.md does not list ${skill}.`],
+      evidence: [
+        `.cortex/teams/ai/dynamic-skills/index.md does not list ${skill}.`,
+      ],
       affectedPaths: [
-        '.cortex/dynamic-skills/index.md',
-        `.cortex/dynamic-skills/${skill}`,
+        '.cortex/teams/ai/dynamic-skills/index.md',
+        `.cortex/shared/dynamic-skills/${skill}`,
       ],
     };
     findings.push(finding);
@@ -212,8 +214,10 @@ export function mechanicalCortexAuditOutput(
       severity: WorkflowFindingSeverity.Error,
       title: 'Orphan dynamic-skill index row',
       summary: `${skill} is indexed but its durable skill card is absent.`,
-      evidence: [`.cortex/dynamic-skills/index.md references ${skill}.`],
-      affectedPaths: ['.cortex/dynamic-skills/index.md'],
+      evidence: [
+        `.cortex/teams/ai/dynamic-skills/index.md references ${skill}.`,
+      ],
+      affectedPaths: ['.cortex/teams/ai/dynamic-skills/index.md'],
     };
     findings.push(finding);
   }
@@ -224,7 +228,10 @@ export function mechanicalCortexAuditOutput(
       title: 'Missing executable dynamic-skill wrapper',
       summary: `${skill} has no executable skill wrapper.`,
       evidence: [`Expected executable wrapper at ${executablePath}.`],
-      affectedPaths: ['.cortex/dynamic-skills/index.md', executablePath],
+      affectedPaths: [
+        '.cortex/teams/ai/dynamic-skills/index.md',
+        executablePath,
+      ],
     };
     findings.push(finding);
   }

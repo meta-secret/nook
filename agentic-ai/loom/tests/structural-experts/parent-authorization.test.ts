@@ -94,7 +94,7 @@ test('binds and consumes an exact mixed all-terminal synthesis barrier', async (
     runId,
     task: 'inspect-cortex',
     expert: 'cortex_refactoring_expert',
-    evidencePaths: ['.cortex/architecture/refactoring-experts.md'],
+    evidencePaths: ['.cortex/teams/ai/architecture/refactoring-experts.md'],
   };
   const cortexRequest = evidenceRequest(cortexInput);
   try {
@@ -187,7 +187,7 @@ test('rejects omitted, extra, reordered, or unrelated synthesis lanes', async ()
     runId,
     task: 'inspect-cortex',
     expert: 'cortex_refactoring_expert',
-    evidencePaths: ['.cortex/architecture/refactoring-experts.md'],
+    evidencePaths: ['.cortex/teams/ai/architecture/refactoring-experts.md'],
   };
   const cortexRequest = evidenceRequest(cortexInput);
   const projections = expectedProjections();

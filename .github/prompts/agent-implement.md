@@ -12,7 +12,11 @@ ${AGENT_TASK}
 - The planning phase has already published the task-start record and left its
   validated body in `.nook-workbench-plan.md`.
 
-Read `.cortex/AGENTS.md` and `.cortex/workflows/coding-bro.md` before making changes.
+Read `.cortex/AGENTS.md` and `.cortex/knowledge-graph.md`. Select one owning
+team, then load only that team's `AGENTS.md`, knowledge graph, and exact
+task-relevant documents. The delivery owner follows
+`.cortex/teams/ai/workflows/coding-bro.md` without passing unrelated AI context
+to a team worker.
 
 ## CI toolchain (Docker)
 
@@ -38,7 +42,10 @@ hand-written `docker run` commands.
    and acceptance evidence` scope. Treat the remaining PR sequence as feature
    context, not as authorization to implement later slices. Prefer the
    Workbench issue scope. Do not expand into unrelated refactors.
-2. Implement the change end-to-end in the working tree. Match existing conventions and package boundaries in `.cortex/ARCHITECTURE.md` and `.cortex/dynamic-skills/`.
+2. Implement the change end-to-end in the working tree. Match the selected
+   team's authorities. Load `.cortex/shared/architecture/system.md` or one
+   shared skill only when the task names that cross-team dependency; never scan
+   the shared tree by default.
 3. **Always run `task format`** (host-applied) before finishing so the harness
    commits a formatted tree. When UI-facing paths change, pass the UI demo
    contract against the base ref when practical.
@@ -46,7 +53,7 @@ hand-written `docker run` commands.
    bounded worker. The assigned continuing owner runs focused and complete
    hosted execution after the harness publishes the branch and PR.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
-   `.cortex/workflows/issues.md` (update/create Workbench Markdown records)
+   `.cortex/teams/ai/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
    Before removing work, stop; the continuing owner must preserve it in a
    linked successor and record its inventory in Workbench.
@@ -69,6 +76,6 @@ hand-written `docker run` commands.
   audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
-- Follow `.cortex/workflows/pull-requests.md` (squash merge only) and `.cortex/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
-- Follow `.cortex/sre/dynamic-skills/github-actions-only-validation.md`: format
+- Follow `.cortex/teams/ai/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.

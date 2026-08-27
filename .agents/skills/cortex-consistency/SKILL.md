@@ -10,7 +10,7 @@ description: >-
 # Cortex Consistency
 
 Read and follow the canonical project rule at
-[`.cortex/dynamic-skills/cortex-consistency.md`](../../../.cortex/dynamic-skills/cortex-consistency.md).
+[`.cortex/teams/ai/dynamic-skills/cortex-consistency.md`](../../../.cortex/teams/ai/dynamic-skills/cortex-consistency.md).
 
 Every durable `.cortex` claim must stay consistent with sibling docs and code.
 

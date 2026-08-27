@@ -12,7 +12,7 @@ description: >-
 Use this skill when editing Loom, executable-skill, or migrated Nook web
 TypeScript.
 
-Read `.cortex/dynamic-skills/typescript-single-parameter.md` and apply it:
+Read `.cortex/shared/dynamic-skills/typescript-single-parameter.md` and apply it:
 
 1. Do not author functions/methods with two or more positional parameters.
 2. Wrap multi-value inputs in a named semantic object contract.

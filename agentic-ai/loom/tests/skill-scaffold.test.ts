@@ -38,7 +38,7 @@ describe('skill scaffold', () => {
     expect(insertSkillCatalogEntry(insertArgs)).toContain(
       '- **[self-improvement.md](self-improvement.md)**\n' +
         '  - Purpose: TODO: purpose\n' +
-        '  - Executable skill: [`.agents/skills/self-improvement/SKILL.md`](../../.agents/skills/self-improvement/SKILL.md)\n\n' +
+        '  - Executable skill: [`.agents/skills/self-improvement/SKILL.md`](../../../../.agents/skills/self-improvement/SKILL.md)\n\n' +
         '## How to add one',
     );
   });
@@ -57,16 +57,16 @@ describe('skill scaffold', () => {
     expect(insertSkillCatalogEntry(insertArgs)).toBe(insertArgs.indexContent);
   });
 
-  test('inserts a team-owned skill by its path from the common registry', () => {
+  test('inserts a team-owned skill by its path from the AI registry', () => {
     const insertArgs = {
-      cardHref: '../sre/dynamic-skills/cluster-recovery.md',
+      cardHref: '../../sre/dynamic-skills/cluster-recovery.md',
       createExecutableWrappers: false,
       indexContent: '# Registry\n\n## Skill catalog\n\n## How to add one\n',
       slug: 'cluster-recovery',
     };
 
     expect(insertSkillCatalogEntry(insertArgs)).toContain(
-      '- **[cluster-recovery.md](../sre/dynamic-skills/cluster-recovery.md)**',
+      '- **[cluster-recovery.md](../../sre/dynamic-skills/cluster-recovery.md)**',
     );
   });
 
@@ -75,6 +75,7 @@ describe('skill scaffold', () => {
     const cortexRoot = join(fixtureRoot, '.cortex');
     const existingCard = join(
       cortexRoot,
+      'teams',
       'sre',
       'dynamic-skills',
       'cluster-recovery.md',
@@ -84,7 +85,10 @@ describe('skill scaffold', () => {
       const directoryOptions = {
         recursive: true,
       } as const;
-      await mkdir(join(cortexRoot, 'sre', 'dynamic-skills'), directoryOptions);
+      await mkdir(
+        join(cortexRoot, 'teams', 'sre', 'dynamic-skills'),
+        directoryOptions,
+      );
       await writeFile(existingCard, '# Cluster Recovery\n', 'utf8');
 
       const findArgs = { cortexRoot, slug: 'cluster-recovery' };

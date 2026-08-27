@@ -11,7 +11,7 @@ description: >-
 # TypeScript and Rust Automation Only
 
 Read and follow the canonical project rule at
-[`.cortex/dynamic-skills/typescript-rust-automation-only.md`](../../../.cortex/dynamic-skills/typescript-rust-automation-only.md).
+[`.cortex/shared/dynamic-skills/typescript-rust-automation-only.md`](../../../.cortex/shared/dynamic-skills/typescript-rust-automation-only.md).
 
 This is a P1 hard rule with no baseline or grandfathered exceptions. Remove
 Python source files, inline programs, runtime invocations, image packages, and
