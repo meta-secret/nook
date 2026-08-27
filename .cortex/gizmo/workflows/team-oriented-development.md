@@ -12,14 +12,12 @@ boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 Gizmo writes the team assignments before implementation starts.
 
 1. Turn the request into concrete team tasks.
-2. Assign each task to one exact canonical team-agent type.
+2. Assign each task to exactly one semantic team identity.
 3. Name a second team when that team's expertise is required to change files.
 4. Keep shared integration and delivery actions as Gizmo tasks.
-5. Give each subagent an exact starting commit.
-6. Name the files each subagent may and must not change.
-7. Name the expected output, tests, and acceptance evidence.
-8. State which subagent results another subagent must wait for.
-9. Integrate results only after every required subagent has finished.
+5. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+6. Apply [subagent delegation](subagent-delegation.md) for operational worker
+   rules and integration.
 
 Team subagents may run in parallel only when they change different files.
 A dependent subagent waits for the provider subagent to finish.
@@ -28,16 +26,8 @@ A dependent subagent waits for the provider subagent to finish.
 
 Use a team subagent when the task has clear ownership, files, and proof.
 
-| Functional owner | Exact type | Team context |
-| --- | --- | --- |
-| AI | `ai_team_agent` | `.cortex/teams/ai/` |
-| Development core | `development_core_team_agent` | `.cortex/teams/dev-core/` |
-| Security | `security_team_agent` | `.cortex/teams/security/` |
-| SRE | `sre_team_agent` | `.cortex/teams/sre/` |
-| Web development | `web_development_team_agent` | `.cortex/teams/web-dev/` |
-
-Each exact type resolves to its project profile under
-`.codex/agents/team-agents/`.
+The root [context selection contract](../../AGENTS.md#mandatory-context-selection)
+maps each team identity to its entry points.
 
 These are entry points, not bulk context manifests.
 
@@ -50,38 +40,20 @@ These are entry points, not bulk context manifests.
   names that skill as required engineering policy.
 - Skill consumption alone does not create an expertise provider.
 
-Each team agent receives:
+This workflow adds team-specific context to the universal worker contract:
 
-- one exact canonical team-agent type;
-- model inheritance without an override;
-- one functional-owner or expertise-provider role;
-- one exact commit;
-- allowed code and Cortex paths;
-- forbidden paths;
-- accepted input contracts;
-- required outputs and tests;
-- review and validation findings in that team's scope; and
-- the parent-owned handoff contract.
-
-The profile is not the task contract.
-
-- The parent contract grants the bounded write scope.
-- A write-capable worker uses an isolated workspace.
-- The worker returns a verified commit handoff.
-- The worker escalates foreign-team requirements to Gizmo.
-- The worker does not mutate delivery lifecycle state.
+- one functional-owner team identity;
+- an optional expertise-provider identity;
+- that team's entry points and task-relevant authorities;
+- team-owned review and validation findings; and
+- the consumer contract when expertise crosses a team boundary.
 
 When implementation changes a security boundary, the contract also names the
 security invariant and security acceptance evidence. Security review is not a
 foreign-team write grant.
 
-If Gizmo cannot start a required team subagent, Gizmo reports an implementation
-blocker.
-
-- Gizmo must not implement the assigned task.
-- Gizmo must not invent an undocumented subagent runtime.
-- Gizmo resumes after subagents become available or a human changes the
-  mission.
+If the required team cannot act, follow the blocker rule in
+[subagent delegation](subagent-delegation.md).
 
 ## Execute within one team
 
@@ -152,7 +124,7 @@ blocking team verdict or a required blocking security verdict.
 
 ## Validation
 
-Completion requires one exact canonical team-agent type per team task.
+Completion requires one exact team identity per team task.
 Each capability has one owner team and at most one expertise provider for each
 set of delegated files. Completion also requires explicit cross-team
 contracts, team-owned tests and review fixes, one shared-state writer, root

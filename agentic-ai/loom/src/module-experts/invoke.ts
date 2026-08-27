@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
@@ -58,14 +57,12 @@ export { decodeModuleExpertInvocationRequest } from './request-codec.ts';
 export type { ModuleExpertInvocationRequest } from './request-codec.ts';
 
 const MAX_ACTIVITY_COUNT = 256;
-const MAX_AGENT_DEFINITION_BYTES = 65_536;
 
 export type ModuleExpertInvocationResult = {
   readonly runDirectory: string;
   readonly runId: string;
   readonly expert: string;
-  readonly agentDefinitionPath: string;
-  readonly agentDefinitionSha256: string;
+  readonly selectedContextPaths: readonly string[];
   readonly sourceCommit: string;
   readonly task: string;
   readonly attempt: number;
@@ -88,7 +85,6 @@ export type VerifyModuleExpertInvocationResultArgs = {
 type ModuleExpertResultContext = {
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
-  readonly definitionSha256: string;
   readonly request: ModuleExpertInvocationRequest;
   readonly terminal: TaskTerminal<string>;
   readonly processing: AgentAttemptProcessingReference;
@@ -115,7 +111,6 @@ type FinalizeFailedAttemptContext = {
   readonly activityCount: number;
   readonly runDirectory: string;
   readonly profile: ModuleExpertProfile;
-  readonly definitionSha256: string;
   readonly request: ModuleExpertInvocationRequest;
 };
 
@@ -134,11 +129,6 @@ export async function invokeModuleExpert(
   const audit = auditModuleExperts(auditArgs);
   if (!audit.auditOk) {
     throw new Error('Module expert catalog validation failed.');
-  }
-  const definitionPath = join(repoRoot, profile.agentDefinitionPath);
-  const definition = readFileSync(definitionPath, 'utf8');
-  if (Buffer.byteLength(definition, 'utf8') > MAX_AGENT_DEFINITION_BYTES) {
-    throw new Error('Module expert agent definition exceeds its size bound.');
   }
   const runDirectory = join(
     repoRoot,
@@ -218,7 +208,6 @@ export async function invokeModuleExpert(
       activityCount,
       runDirectory,
       profile,
-      definitionSha256: sha256(definition),
       request,
     };
     return finalizeFailedAttempt(failureContext);
@@ -236,7 +225,6 @@ export async function invokeModuleExpert(
       activityCount,
       runDirectory,
       profile,
-      definitionSha256: sha256(definition),
       request,
     };
     return finalizeFailedAttempt(failureContext);
@@ -260,7 +248,6 @@ export async function invokeModuleExpert(
         activityCount,
         runDirectory,
         profile,
-        definitionSha256: sha256(definition),
         request,
       };
       return finalizeFailedAttempt(failureContext);
@@ -270,7 +257,6 @@ export async function invokeModuleExpert(
   const resultContext: ModuleExpertResultContext = {
     runDirectory,
     profile,
-    definitionSha256: sha256(definition),
     request,
     terminal,
     processing,
@@ -288,8 +274,7 @@ function invocationResult(
     runDirectory: context.runDirectory,
     runId: context.request.runId,
     expert: context.profile.name,
-    agentDefinitionPath: context.profile.agentDefinitionPath,
-    agentDefinitionSha256: context.definitionSha256,
+    selectedContextPaths: context.request.selectedContextPaths,
     sourceCommit: context.request.sourceCommit,
     task: context.request.task,
     attempt: context.request.attempt,
@@ -321,7 +306,6 @@ async function finalizeFailedAttempt(
   const resultContext: ModuleExpertResultContext = {
     runDirectory: context.runDirectory,
     profile: context.profile,
-    definitionSha256: context.definitionSha256,
     request: context.request,
     terminal,
     processing,

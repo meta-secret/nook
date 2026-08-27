@@ -15,6 +15,10 @@ Gizmo owns delivery control and lifecycle state.
 4. Follow direct links one hop only when the task requires them.
 5. Do not load the Gizmo graph or another team's graph.
 
+The root [team worker contract](../../AGENTS.md#team-worker-contract) supplies
+universal requirements. This entry point adds only AI ownership and context
+selection.
+
 An exact AI authority may require a foreign-team engineering skill. Load that
 skill read-only. An expertise provider is required only when the foreign team
 will implement named files.

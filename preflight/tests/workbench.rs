@@ -1,5 +1,8 @@
 #![allow(clippy::unnecessary_wraps)]
 
+#[path = "workbench/harness_neutral.rs"]
+mod harness_neutral;
+
 use anyhow::Context as _;
 use std::{
     fs,
@@ -16,11 +19,6 @@ fn repository_root() -> PathBuf {
 fn read(path: &str) -> String {
     fs::read_to_string(repository_root().join(path))
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
-}
-
-fn read_fallible(path: &str) -> anyhow::Result<String> {
-    fs::read_to_string(repository_root().join(path))
-        .with_context(|| format!("failed to read {path}"))
 }
 
 fn directory_has_files(path: &Path) -> bool {
@@ -205,96 +203,6 @@ fn agents_mutate_only_their_owned_feature_and_issue_set() -> anyhow::Result<()> 
             && ownership_skill.contains("prompt-backed run requires the `continuing_owner`"),
         "agent feature ownership skill must cover PR and review mutations"
     );
-    Ok(())
-}
-
-#[test]
-fn team_agent_profiles_inherit_the_parent_model_and_load_their_team_context() -> anyhow::Result<()>
-{
-    for (agent_type, team_path) in [
-        ("ai_team_agent", "ai"),
-        ("development_core_team_agent", "dev-core"),
-        ("security_team_agent", "security"),
-        ("sre_team_agent", "sre"),
-        ("web_development_team_agent", "web-dev"),
-    ] {
-        let profile_path = format!(".codex/agents/team-agents/{agent_type}.toml");
-        let profile = read_fallible(&profile_path)?;
-
-        assert!(
-            profile.contains(&format!("name = \"{agent_type}\"")),
-            "team-agent profile must declare its exact canonical type: {agent_type}"
-        );
-        assert!(
-            profile.contains(&format!(".cortex/teams/{team_path}/AGENTS.md"))
-                && profile.contains(&format!(".cortex/teams/{team_path}/knowledge-graph.md")),
-            "{agent_type} must load its owning team entry context"
-        );
-        assert!(
-            !profile.lines().any(|line| {
-                line.split_once('=').is_some_and(|(key, _value)| {
-                    matches!(key.trim(), "model" | "model_reasoning_effort")
-                })
-            }),
-            "{agent_type} must inherit Gizmo's model and reasoning effort"
-        );
-    }
-
-    Ok(())
-}
-
-#[test]
-fn team_agent_dispatch_surfaces_use_every_canonical_agent_type() -> anyhow::Result<()> {
-    let workflow_path = ".cortex/gizmo/workflows/team-oriented-development.md";
-    let workflow = read_fallible(workflow_path)?;
-    let dispatch_surfaces = [
-        (
-            "agent implementation prompt",
-            read_fallible(".github/prompts/agent-implement.md")?,
-        ),
-        (
-            "CI fix prompt",
-            read_fallible(".github/prompts/ci-fix-agent.md")?,
-        ),
-        (
-            "Rust dependency update prompt",
-            read_fallible(".github/prompts/rust-dependency-update-agent.md")?,
-        ),
-    ];
-
-    for (surface_name, surface) in &dispatch_surfaces {
-        assert!(
-            surface.contains(workflow_path),
-            "{surface_name} must reference the canonical team-agent mapping"
-        );
-    }
-
-    for (functional_owner, agent_type, team_context) in [
-        ("AI", "ai_team_agent", "ai"),
-        (
-            "Development core",
-            "development_core_team_agent",
-            "dev-core",
-        ),
-        ("Security", "security_team_agent", "security"),
-        ("SRE", "sre_team_agent", "sre"),
-        ("Web development", "web_development_team_agent", "web-dev"),
-    ] {
-        assert!(
-            workflow.contains(&format!(
-                "| {functional_owner} | `{agent_type}` | `.cortex/teams/{team_context}/` |"
-            )),
-            "team-oriented development must map {functional_owner} to {agent_type} and its team context"
-        );
-
-        for (surface_name, surface) in &dispatch_surfaces {
-            assert!(
-                surface.contains(agent_type),
-                "{surface_name} must dispatch the canonical {agent_type} type"
-            );
-        }
-    }
-
     Ok(())
 }
 

@@ -7,6 +7,11 @@ import {
   SYSTEM_COHERENCE_BEHAVIOR_CONTRACT,
 } from './catalog.ts';
 import type { StructuralExpertProfile } from './catalog.ts';
+import { auditMarkdownContractSections } from '../lib/markdown-contract.ts';
+import type {
+  MarkdownContractAuditRequest,
+  MarkdownContractSection,
+} from '../lib/markdown-contract.ts';
 
 export type StructuralExpertAuditFinding = {
   readonly code: string;
@@ -29,13 +34,17 @@ export type AuditStructuralExpertProfilesRequest =
     readonly profiles: readonly StructuralExpertProfile[];
   };
 
+export type AuditStructuralExpertCortexAuthorityRequest = {
+  readonly source: string;
+};
+
 const EXPECTED_PROFILES = [
   {
     name: 'code_refactoring_expert',
+    description:
+      'Read-only evidence expert for architecture, design, code quality, stronger types, and tests in explicitly authorized code scopes.',
     resultKind: WorkflowResultKind.CodeRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
-    agentDefinitionPath:
-      '.codex/agents/structural-experts/code_refactoring_expert.toml',
     skillPath: '.agents/skills/code-refactoring-expert/SKILL.md',
     requiredContextPaths: [
       '.cortex/AGENTS.md',
@@ -81,10 +90,10 @@ const EXPECTED_PROFILES = [
   },
   {
     name: 'cortex_refactoring_expert',
+    description:
+      'Read-only evidence expert for Cortex authority, conflicts, legacy content, complexity, and deterministic Loom extraction candidates.',
     resultKind: WorkflowResultKind.CortexRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
-    agentDefinitionPath:
-      '.codex/agents/structural-experts/cortex_refactoring_expert.toml',
     skillPath: '.agents/skills/cortex-refactoring-expert/SKILL.md',
     requiredContextPaths: [
       '.cortex/AGENTS.md',
@@ -120,10 +129,10 @@ const EXPECTED_PROFILES = [
   },
   {
     name: 'system_coherence_synthesizer',
+    description:
+      'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     kind: StructuralExpertKind.VerifiedViewSynthesis,
-    agentDefinitionPath:
-      '.codex/agents/structural-experts/system_coherence_synthesizer.toml',
     skillPath: '.agents/skills/system-coherence-synthesizer/SKILL.md',
     requiredContextPaths: [],
     allowedEvidenceFiles: [],
@@ -133,6 +142,41 @@ const EXPECTED_PROFILES = [
     validationSelectors: ['loom:verify'],
   },
 ] as const;
+
+const STRUCTURAL_EXPERT_CATALOG_PATH =
+  'agentic-ai/loom/src/structural-experts/catalog.ts';
+const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
+  '.cortex/teams/ai/architecture/refactoring-experts.md';
+const STRUCTURAL_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
+  [
+    {
+      heading: '## Registry contract',
+      requiredMarkers: [
+        'one stable structural role and attempt identity;',
+        'one bounded read scope;',
+        'Every role is read-only and nondelegating.',
+        'This Cortex registry defines each stable semantic role, capability, context, and evidence contract.',
+        'Children cannot add tasks, descendants, resource claims, or workflow tiers.',
+      ],
+    },
+    {
+      heading: '## Shared boundaries',
+      requiredMarkers: [
+        'Structural experts diagnose and propose. They do not apply repository changes.',
+        'Exactly one delivery owner controls:',
+        'mutate source, documentation, lifecycle, or external state.',
+        'Typed workflow state remains authoritative for continuation.',
+      ],
+    },
+    {
+      heading: '## `system_coherence_synthesizer`',
+      requiredMarkers: [
+        'It receives only typed results, verified artifact references, and bounded semantic views.',
+        'It has no repository read scope.',
+        'It cannot schedule successors or authorize writes.',
+      ],
+    },
+  ];
 
 export function auditStructuralExperts(
   request: AuditStructuralExpertsRequest,
@@ -148,6 +192,17 @@ export function auditStructuralExpertProfiles(
   request: AuditStructuralExpertProfilesRequest,
 ): StructuralExpertAuditReport {
   const findings: StructuralExpertAuditFinding[] = [];
+  const authorityPath = join(
+    request.repoRoot,
+    STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
+  );
+  const authoritySource = existsSync(authorityPath)
+    ? readFileSync(authorityPath, 'utf8')
+    : '';
+  const authorityRequest: AuditStructuralExpertCortexAuthorityRequest = {
+    source: authoritySource,
+  };
+  findings.push(...auditStructuralExpertCortexAuthority(authorityRequest));
   if (request.profiles.length !== EXPECTED_PROFILES.length) {
     const finding: StructuralExpertAuditFinding = {
       code: 'invalid-structural-profile-count',
@@ -177,7 +232,7 @@ export function auditStructuralExpertProfiles(
     if (!profileMatchesExpectation(expectationRequest)) {
       const finding: StructuralExpertAuditFinding = {
         code: 'structural-profile-contract-drift',
-        path: profile.agentDefinitionPath,
+        path: STRUCTURAL_EXPERT_CATALOG_PATH,
         message: `Structural expert profile ${expected.name} differs from its exact reviewed contract.`,
       };
       findings.push(finding);
@@ -229,9 +284,9 @@ function profileMatchesExpectation(
     right: expected.validationSelectors,
   };
   return (
+    profile.description === expected.description &&
     profile.resultKind === expected.resultKind &&
     profile.kind === expected.kind &&
-    profile.agentDefinitionPath === expected.agentDefinitionPath &&
     profile.skillPath === expected.skillPath &&
     profile.runtimeBehaviorContract === expected.runtimeBehaviorContract &&
     equalStrings(contextPaths) &&
@@ -259,7 +314,6 @@ type ValidateStructuralProfileRequest = {
 
 function validateProfile(request: ValidateStructuralProfileRequest): void {
   const { findings, profile, repoRoot } = request;
-  const expectedDefinition = `.codex/agents/structural-experts/${profile.name}.toml`;
   const expectedSkills = new Map([
     [
       'code_refactoring_expert',
@@ -275,21 +329,15 @@ function validateProfile(request: ValidateStructuralProfileRequest): void {
     ],
   ]);
   const expectedSkill = expectedSkills.get(profile.name);
-  if (
-    profile.agentDefinitionPath !== expectedDefinition ||
-    !expectedSkill ||
-    profile.skillPath !== expectedSkill
-  ) {
+  if (!expectedSkill || profile.skillPath !== expectedSkill) {
     const finding: StructuralExpertAuditFinding = {
       code: 'noncanonical-structural-profile-path',
-      path: profile.agentDefinitionPath,
-      message:
-        'Structural expert definitions and skills require canonical paths.',
+      path: profile.skillPath,
+      message: 'Structural expert skills require canonical paths.',
     };
     findings.push(finding);
   }
   const paths = [
-    profile.agentDefinitionPath,
     profile.skillPath,
     ...profile.requiredContextPaths,
     ...profile.allowedEvidenceFiles,
@@ -308,7 +356,6 @@ function validateProfile(request: ValidateStructuralProfileRequest): void {
     }
   }
   for (const path of [
-    profile.agentDefinitionPath,
     profile.skillPath,
     ...profile.requiredContextPaths,
     ...profile.allowedEvidenceFiles,
@@ -326,13 +373,41 @@ function validateProfile(request: ValidateStructuralProfileRequest): void {
   if (profile.validationSelectors.length === 0) {
     const finding: StructuralExpertAuditFinding = {
       code: 'missing-structural-validation',
-      path: profile.agentDefinitionPath,
+      path: STRUCTURAL_EXPERT_CATALOG_PATH,
       message: 'Every structural expert requires focused validation selectors.',
     };
     findings.push(finding);
   }
   validateRoleIsolation(request);
-  validateAgentDefinition(request);
+}
+
+export function auditStructuralExpertCortexAuthority(
+  request: AuditStructuralExpertCortexAuthorityRequest,
+): readonly StructuralExpertAuditFinding[] {
+  const findings: StructuralExpertAuditFinding[] = [];
+  const contractAuditRequest: MarkdownContractAuditRequest = {
+    sections: STRUCTURAL_EXPERT_CONTRACT_SECTIONS,
+    source: request.source,
+  };
+  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
+    const finding: StructuralExpertAuditFinding = {
+      code: 'cortex-structural-expert-contract-semantic-drift',
+      path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
+      message: `Canonical Cortex structural expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
+    };
+    findings.push(finding);
+  }
+  for (const profile of STRUCTURAL_EXPERT_CATALOG) {
+    const marker = `## \`${profile.name}\``;
+    if (request.source.includes(marker)) continue;
+    const finding: StructuralExpertAuditFinding = {
+      code: 'missing-cortex-structural-expert-role',
+      path: STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH,
+      message: `Canonical Cortex structural expert role is missing: ${profile.name}`,
+    };
+    findings.push(finding);
+  }
+  return findings;
 }
 
 function validateRoleIsolation(
@@ -355,53 +430,12 @@ function validateRoleIsolation(
   ) {
     const finding: StructuralExpertAuditFinding = {
       code: 'invalid-structural-role-isolation',
-      path: profile.agentDefinitionPath,
+      path: STRUCTURAL_EXPERT_CATALOG_PATH,
       message:
         'Evidence experts require bounded repository roots; synthesis must receive verified child views only.',
     };
     request.findings.push(finding);
   }
-}
-
-function validateAgentDefinition(
-  request: ValidateStructuralProfileRequest,
-): void {
-  const path = join(request.repoRoot, request.profile.agentDefinitionPath);
-  if (!existsSync(path)) return;
-  const source = readFileSync(path, 'utf8');
-  const required = [
-    `name = "${request.profile.name}"`,
-    'sandbox_mode = "read-only"',
-    'approval_policy = "never"',
-  ];
-  if (required.some((marker) => !source.includes(marker))) {
-    const finding: StructuralExpertAuditFinding = {
-      code: 'unsafe-structural-agent-definition',
-      path: request.profile.agentDefinitionPath,
-      message: 'Structural expert TOML must retain exact read-only identity.',
-    };
-    request.findings.push(finding);
-  }
-  if (
-    request.profile.kind === StructuralExpertKind.VerifiedViewSynthesis &&
-    extractedDeveloperInstructions(source) !==
-      request.profile.runtimeBehaviorContract
-  ) {
-    const finding: StructuralExpertAuditFinding = {
-      code: 'structural-runtime-behavior-contract-drift',
-      path: request.profile.agentDefinitionPath,
-      message:
-        'The synthesizer runtime behavior contract must exactly match its reviewed TOML definition.',
-    };
-    request.findings.push(finding);
-  }
-}
-
-function extractedDeveloperInstructions(source: string): string | false {
-  const match = source.match(/developer_instructions = """\n([\s\S]*?)\n"""/u);
-  if (!match) return false;
-  const instructions = match[1];
-  return typeof instructions === 'string' ? instructions : false;
 }
 
 export function safeRepositoryPath(path: string): boolean {

@@ -127,10 +127,13 @@ Hive is outside this workflow architecture.
 
 ## Module expert catalog
 
-Named read-only project agents live under `.codex/agents/module-experts/`.
+Named read-only semantic roles are defined in
+`.cortex/teams/ai/architecture/module-experts.md`.
 
-The typed catalog owns production module routes, boundary scope, canonical
+The typed catalog mirrors production module routes, boundary scope, canonical
 context, authorities, skills, entry points, and focused validation selectors.
+Universal worker behavior remains defined by `.cortex/AGENTS.md` and the
+subagent-delegation workflow.
 
 Validate the catalog from the repository root:
 
@@ -195,12 +198,13 @@ from the Codex process environment, provider configuration, arguments, and
 disposable repository snapshot. The helper source is embedded in the running
 Loom module instead of loaded from the analyzed commit or live worktree.
 
-The command validates the complete catalog and selected TOML definition before
-starting one isolated Codex thread. The request accepts no runtime permissions,
-tools, model, successors, or graph. It must declare the run, attempt, depth, and
-parent agent-attempt lineage. Direct named experts run only at depth two or
-three; workflow-root, depth-one, self-parent, and invalid parent-attempt
-lineage are rejected before runtime. Loom replay-verifies the completed parent,
+The command validates the complete typed catalog and selected semantic role
+before starting one isolated Codex thread. The request accepts no runtime
+permissions, tools, model, successors, or graph. It must declare the run,
+attempt, depth, and parent agent-attempt lineage. Direct named experts run only
+at depth two or three. Workflow-root, depth-one, self-parent, and invalid
+parent-attempt lineage are rejected before runtime. Loom replay-verifies the
+completed parent,
 its source commit and projections, and the exact typed child authorization
 before creating the child journal. A depth-three child must also have a
 completed immediate parent named by the depth-one plan. Expert evidence and

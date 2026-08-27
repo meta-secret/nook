@@ -21,8 +21,8 @@ Gizmo never gives its own graph to a team subagent.
 - Interpret the mission and publish its public-safe plan.
 - Classify each task by functional owner and optional expertise provider.
 - Freeze baselines, write scopes, dependencies, and acceptance evidence.
-- Dispatch each team task through its exact canonical profile type.
-- Preserve Gizmo's exact model without a profile or spawn override.
+- Choose exactly one team identity for each task.
+- Supply the team identity and bounded task contract to the active harness.
 - Resolve dependencies and integrate verified commit handoffs.
 - Mutate Workbench, integrated Git state, pull requests, review threads,
   validation requests, readiness, and merge state.
@@ -41,7 +41,7 @@ Gizmo never gives its own graph to a team subagent.
 
 1. Define the requested outcome and completion evidence.
 2. Split the work into bounded team tasks.
-3. Select the exact canonical team-agent type for every team task.
+3. Select exactly one team identity for every team task.
 4. Dispatch every task through the responsible team context.
 5. Verify each returned commit against its baseline and scope.
 6. Integrate accepted commits in dependency order.
@@ -51,16 +51,14 @@ Gizmo never gives its own graph to a team subagent.
 10. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
 
-The exact team-agent types are:
+Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
+universal requirements. Use
+[subagent delegation](workflows/subagent-delegation.md) for operational worker
+rules.
 
-- `ai_team_agent`;
-- `development_core_team_agent`;
-- `security_team_agent`;
-- `sre_team_agent`; and
-- `web_development_team_agent`.
-
-Each profile is a routing default. The task contract remains authoritative for
-scope, isolation, evidence, and the parent-owned join.
+Gizmo adds delivery-specific decisions. It selects the functional owner,
+freezes the team task, integrates accepted handoffs, and controls shared
+lifecycle state.
 
 ## Verdict rules
 

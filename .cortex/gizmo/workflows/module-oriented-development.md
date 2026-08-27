@@ -6,8 +6,9 @@ Design feature behavior top-down and implement accepted module contracts
 bottom-up.
 
 One delivery owner freezes the plan and owns the PR lifecycle.
-The active harness dispatches experts and implementation workers.
-Write-capable workers use isolated workspaces and return commit handoffs.
+Worker dispatch follows the root
+[team worker contract](../../AGENTS.md#team-worker-contract) and
+[subagent delegation](subagent-delegation.md).
 
 Named experts come from the
 [module expert registry](../../teams/ai/architecture/module-experts.md).
@@ -63,21 +64,13 @@ Do not begin consumer code while its provider contract remains unresolved.
 
 ## Expert dispatch
 
-The active Codex, Cursor, or other capable harness dispatches named experts
-with:
+The module task adds these expert-specific inputs to the universal worker
+contract:
 
-- one exact Git commit;
-- a stable task identity;
-- declared parent lineage and depth bound;
+- one stable semantic expert role;
 - a read-only evidence surface;
-- relevant catalog entry and authority anchors;
-- expected semantic result fields;
-- a terminal barrier and parent-owned join.
-
-The harness owns expert creation, communication, scheduling, retries,
-cancellation, barriers, nested delegation, and synthesis.
-The repository does not start a second Codex or Cursor process to coordinate
-native subagents.
+- task-selected authority anchors and skills; and
+- expected module evidence fields.
 
 Experts return evidence and recommendations.
 Read-only experts do not edit files or mutate lifecycle state.

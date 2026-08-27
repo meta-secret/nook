@@ -1,15 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  normalize,
-  relative,
-} from 'node:path';
+import { dirname, isAbsolute, join, normalize, relative } from 'node:path';
 import type { CodexOptions, ThreadOptions } from '@openai/codex-sdk';
 import {
-  MODULE_EXPERT_AGENT_INSTRUCTIONS,
   MODULE_EXPERT_CATALOG,
   MODULE_EXPERT_RESEARCH_ROOT,
 } from './catalog.ts';
@@ -48,10 +40,13 @@ import {
 import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audit.ts';
 import { validModuleExpertRuntimeEnvironment } from './runtime-environment-audit.ts';
 import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
-import { STRUCTURAL_EXPERT_CATALOG } from '../structural-experts/catalog.ts';
 import { auditTeamAgents } from '../team-agents/audit.ts';
 import type { AuditTeamAgentsRequest } from '../team-agents/audit.ts';
-import { TEAM_AGENT_CATALOG } from '../team-agents/catalog.ts';
+import { auditMarkdownContractSections } from '../lib/markdown-contract.ts';
+import type {
+  MarkdownContractAuditRequest,
+  MarkdownContractSection,
+} from '../lib/markdown-contract.ts';
 export { auditModuleExpertRuntimeRouting };
 export type { AuditModuleExpertRuntimeRoutingArgs };
 
@@ -81,16 +76,14 @@ export type AuditModuleExpertRuntimePolicyArgs = {
   readonly threadOptions: ThreadOptions;
 };
 
-type ParsedAgentDefinition = {
-  readonly name: string;
-  readonly description: string;
-  readonly sandboxMode: string;
-  readonly approvalPolicy: string;
-  readonly developerInstructions: string;
+export type AuditModuleExpertCortexAuthorityArgs = {
+  readonly source: string;
 };
 
-const CODEX_AGENT_DIRECTORY = '.codex/agents';
-const AGENT_DIRECTORY = `${CODEX_AGENT_DIRECTORY}/module-experts`;
+const MODULE_EXPERT_CATALOG_PATH =
+  'agentic-ai/loom/src/module-experts/catalog.ts';
+const MODULE_EXPERT_CORTEX_AUTHORITY_PATH =
+  '.cortex/teams/ai/architecture/module-experts.md';
 const PLATFORM_MANIFEST = 'nook-app/nook-platform/Cargo.toml';
 const WEB_ROOT = 'nook-app/nook-web';
 const EXPECTED_AUTH_ENVIRONMENT_KEYS = ['CODEX_API_KEY'] as const;
@@ -124,6 +117,36 @@ const EXPECTED_DISABLED_FEATURES = {
   unified_exec: false,
   view_image: false,
 } as const;
+const MODULE_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
+  {
+    heading: '## Engineering team routing',
+    requiredMarkers: [
+      'Every module expert runs inside one engineering-team ownership domain.',
+      'The internal API expert may inspect an accepted provider-consumer boundary across teams. It remains read-only and cannot transfer ownership.',
+      "The expert must not expand into another team's implementation scope.",
+    ],
+  },
+  {
+    heading: '## Registry contract',
+    requiredMarkers: [
+      'This Cortex registry is the semantic authority for role capability and context.',
+      'The typed catalog is a deterministic implementation mirror.',
+      'Every invocation follows the universal worker contract.',
+      'Native semantic evidence, optional `ModuleExpertEvidence`, and `parentActions` remain recommendations. They do not authorize descendants, writes, integration, or lifecycle changes.',
+      'Every role is read-only.',
+      'Every role loads only the context named by this registry and its bounded task contract.',
+      'The stable role name identifies semantic expertise. It is not a native worker label or harness configuration key.',
+    ],
+  },
+  {
+    heading: '## Production web expert',
+    requiredMarkers: [
+      '**Allowed product authority catalog:** The task selects only the authorities that own its assigned functionality.',
+      '**Extension release authority:** When extension release security is required, the task selects only the relevant release paths from this catalog.',
+      '**Security routing:** A task cannot omit `browser-extension-release-security` or its canonical security authority when an extension release boundary is in scope.',
+    ],
+  },
+];
 
 export function auditModuleExperts(
   args: AuditModuleExpertsArgs,
@@ -134,13 +157,13 @@ export function auditModuleExperts(
     repoRoot: args.repoRoot,
   };
   validateProfiles(context);
+  validateCortexRoleAuthority(context);
   const liveRoots = liveProductionModuleRoots(context);
   const coverageArgs: ValidateProductionCoverageArgs = {
     context,
     liveRoots,
   };
   validateProductionCoverage(coverageArgs);
-  validateAgentDefinitions(context);
   mergeTeamAgentAudit(context);
   validateRuntimePolicy(context);
   validateRuntimeRouting(context);
@@ -360,23 +383,15 @@ function validateProfiles(context: ModuleExpertValidationContext): void {
     if (!safeIdentifier(profile.name) || names.has(profile.name)) {
       context.findings[context.findings.length] = {
         code: 'invalid-profile-name',
-        path: profile.agentDefinitionPath,
+        path: MODULE_EXPERT_CATALOG_PATH,
         message: `Module expert name is unsafe or duplicated: ${profile.name}`,
       };
     }
     names.add(profile.name);
-    const expectedDefinitionPath = `${AGENT_DIRECTORY}/${profile.name}.toml`;
-    if (profile.agentDefinitionPath !== expectedDefinitionPath) {
-      context.findings[context.findings.length] = {
-        code: 'noncanonical-agent-path',
-        path: profile.agentDefinitionPath,
-        message: `Expected agent definition path ${expectedDefinitionPath}.`,
-      };
-    }
     if (profile.validationSelectors.length === 0) {
       context.findings[context.findings.length] = {
         code: 'missing-validation-selector',
-        path: profile.agentDefinitionPath,
+        path: MODULE_EXPERT_CATALOG_PATH,
         message:
           'Every module expert needs at least one focused validation selector.',
       };
@@ -395,6 +410,61 @@ function validateProfiles(context: ModuleExpertValidationContext): void {
   validateInternalApiProfile(context);
 }
 
+function validateCortexRoleAuthority(
+  context: ModuleExpertValidationContext,
+): void {
+  const authorityPath = join(
+    context.repoRoot,
+    MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
+  );
+  const source = existsSync(authorityPath)
+    ? readFileSync(authorityPath, 'utf8')
+    : '';
+  const authorityAuditArgs: AuditModuleExpertCortexAuthorityArgs = { source };
+  context.findings.push(
+    ...auditModuleExpertCortexAuthority(authorityAuditArgs),
+  );
+}
+
+export function auditModuleExpertCortexAuthority(
+  args: AuditModuleExpertCortexAuthorityArgs,
+): readonly ModuleExpertAuditFinding[] {
+  const findings: ModuleExpertAuditFinding[] = [];
+  const contractAuditRequest: MarkdownContractAuditRequest = {
+    sections: MODULE_EXPERT_CONTRACT_SECTIONS,
+    source: args.source,
+  };
+  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
+    const finding: ModuleExpertAuditFinding = {
+      code: 'cortex-module-expert-contract-semantic-drift',
+      path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
+      message: `Canonical Cortex module expert contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
+    };
+    findings.push(finding);
+  }
+  for (const profile of MODULE_EXPERT_CATALOG) {
+    const marker = moduleExpertCortexMarker(profile);
+    if (args.source.includes(marker)) continue;
+    const finding: ModuleExpertAuditFinding = {
+      code: 'missing-cortex-module-expert-role',
+      path: MODULE_EXPERT_CORTEX_AUTHORITY_PATH,
+      message: `Canonical Cortex module expert role is missing: ${profile.name}`,
+    };
+    findings.push(finding);
+  }
+  return findings;
+}
+
+function moduleExpertCortexMarker(profile: ModuleExpertProfile): string {
+  if (profile.name === 'internal_api_expert') {
+    return '`internal_api_expert` owns inter-module contract analysis.';
+  }
+  if (profile.name === 'web_expert') {
+    return '`web_expert` covers the initial production presentation group.';
+  }
+  return `### \`${profile.name}\``;
+}
+
 type ValidateProfilePathsArgs = {
   readonly context: ModuleExpertValidationContext;
   readonly moduleOwners: Map<string, string>;
@@ -403,9 +473,9 @@ type ValidateProfilePathsArgs = {
 
 function validateProfilePaths(args: ValidateProfilePathsArgs): void {
   const paths = [
-    args.profile.agentDefinitionPath,
     ...args.profile.boundaryScopePaths,
     ...args.profile.canonicalContextPaths,
+    ...args.profile.allowedContextPaths,
     ...args.profile.moduleRoots,
     ...args.profile.scopePaths,
     ...args.profile.generatedScopePaths.flatMap((scope) => [
@@ -438,9 +508,9 @@ function validateProfilePaths(args: ValidateProfilePathsArgs): void {
     args.moduleOwners.set(moduleRoot, args.profile.name);
   }
   const requiredPaths = [
-    args.profile.agentDefinitionPath,
     ...args.profile.boundaryScopePaths,
     ...args.profile.canonicalContextPaths,
+    ...args.profile.allowedContextPaths,
     ...args.profile.moduleRoots,
     ...args.profile.scopePaths,
     ...args.profile.publicEntryPoints,
@@ -563,7 +633,7 @@ function validateInternalApiProfile(
   if (!profile) {
     context.findings[context.findings.length] = {
       code: 'missing-internal-api-expert',
-      path: AGENT_DIRECTORY,
+      path: MODULE_EXPERT_CATALOG_PATH,
       message: 'The internal_api_expert profile is required.',
     };
     return;
@@ -590,7 +660,7 @@ function validateInternalApiProfile(
     if (!ownedScopes.has(requiredScope)) {
       context.findings[context.findings.length] = {
         code: 'incomplete-internal-api-scope',
-        path: profile.agentDefinitionPath,
+        path: MODULE_EXPERT_CATALOG_PATH,
         message: `internal_api_expert must cover ${requiredScope}.`,
       };
     }
@@ -706,99 +776,6 @@ function liveProductionModuleRoots(
   return [...rustRoots, ...webRoots].sort();
 }
 
-function validateAgentDefinitions(
-  context: ModuleExpertValidationContext,
-): void {
-  const agentDirectory = join(context.repoRoot, CODEX_AGENT_DIRECTORY);
-  if (!existsSync(agentDirectory)) {
-    context.findings[context.findings.length] = {
-      code: 'missing-agent-directory',
-      path: CODEX_AGENT_DIRECTORY,
-      message: 'Module expert agent definition directory is missing.',
-    };
-    return;
-  }
-  const expectedPaths = new Set<string>();
-  for (const profile of MODULE_EXPERT_CATALOG) {
-    expectedPaths.add(profile.agentDefinitionPath);
-  }
-  for (const profile of STRUCTURAL_EXPERT_CATALOG) {
-    expectedPaths.add(profile.agentDefinitionPath);
-  }
-  for (const profile of TEAM_AGENT_CATALOG) {
-    expectedPaths.add(profile.agentDefinitionPath);
-  }
-  const collectArgs: CollectAgentDefinitionPathsArgs = {
-    directory: agentDirectory,
-    repoRoot: context.repoRoot,
-  };
-  const discovery = collectAgentDefinitionPaths(collectArgs);
-  for (const unsafePath of discovery.unsafePaths) {
-    context.findings[context.findings.length] = {
-      code: 'unsafe-agent-definition-entry',
-      path: unsafePath,
-      message: `Custom-agent discovery does not permit symbolic links: ${unsafePath}`,
-    };
-  }
-  const actualPaths = discovery.paths;
-  for (const actualPath of actualPaths) {
-    if (!expectedPaths.has(actualPath)) {
-      const roleName = basename(actualPath, '.toml');
-      const forbiddenBoundaryRole = /(?:wasm|bridge)/iu.test(roleName);
-      context.findings[context.findings.length] = {
-        code: forbiddenBoundaryRole
-          ? 'forbidden-wasm-boundary-role'
-          : 'uncataloged-agent-definition',
-        path: actualPath,
-        message: forbiddenBoundaryRole
-          ? 'A separate WASM or bridge expert is forbidden; use internal_api_expert.'
-          : `Agent definition is not present in the module expert catalog: ${roleName}`,
-      };
-    }
-  }
-  for (const profile of MODULE_EXPERT_CATALOG) {
-    const validateAgentDefinitionArgs: ValidateAgentDefinitionArgs = {
-      context,
-      profile,
-    };
-    validateAgentDefinition(validateAgentDefinitionArgs);
-  }
-}
-
-type CollectAgentDefinitionPathsArgs = {
-  readonly directory: string;
-  readonly repoRoot: string;
-};
-
-type AgentDefinitionDiscovery = {
-  readonly paths: readonly string[];
-  readonly unsafePaths: readonly string[];
-};
-
-function collectAgentDefinitionPaths(
-  args: CollectAgentDefinitionPathsArgs,
-): AgentDefinitionDiscovery {
-  const paths: string[] = [];
-  const unsafePaths: string[] = [];
-  const directories = [args.directory];
-  const directoryOptions = { withFileTypes: true } as const;
-  while (directories.length > 0) {
-    const directory = directories.pop();
-    if (!directory) continue;
-    for (const entry of readdirSync(directory, directoryOptions)) {
-      const absolutePath = join(directory, entry.name);
-      if (entry.isSymbolicLink()) {
-        unsafePaths[unsafePaths.length] = relative(args.repoRoot, absolutePath);
-      } else if (entry.isDirectory()) {
-        directories[directories.length] = absolutePath;
-      } else if (entry.isFile() && entry.name.endsWith('.toml')) {
-        paths[paths.length] = relative(args.repoRoot, absolutePath);
-      }
-    }
-  }
-  return { paths: paths.sort(), unsafePaths: unsafePaths.sort() };
-}
-
 function validateRuntimePolicy(context: ModuleExpertValidationContext): void {
   const threadOptionsArgs = { workingDirectory: context.repoRoot };
   const threadOptions = moduleExpertIsolatedThreadOptions(threadOptionsArgs);
@@ -850,85 +827,6 @@ function validateRuntimeRouting(context: ModuleExpertValidationContext): void {
   for (const finding of auditModuleExpertRuntimeRouting(auditArgs)) {
     context.findings[context.findings.length] = finding;
   }
-}
-
-type ValidateAgentDefinitionArgs = {
-  readonly context: ModuleExpertValidationContext;
-  readonly profile: ModuleExpertProfile;
-};
-
-function validateAgentDefinition(args: ValidateAgentDefinitionArgs): void {
-  const absolutePath = join(
-    args.context.repoRoot,
-    args.profile.agentDefinitionPath,
-  );
-  if (!existsSync(absolutePath)) return;
-  const source = readFileSync(absolutePath, 'utf8');
-  const definition = parseAgentDefinition(source);
-  if (!definition) {
-    args.context.findings[args.context.findings.length] = {
-      code: 'malformed-agent-definition',
-      path: args.profile.agentDefinitionPath,
-      message:
-        'Agent definition must contain the required bounded TOML fields.',
-    };
-    return;
-  }
-  const valid =
-    definition.name === args.profile.name &&
-    definition.description === args.profile.description &&
-    definition.sandboxMode === 'read-only' &&
-    definition.approvalPolicy === 'never' &&
-    definition.developerInstructions === MODULE_EXPERT_AGENT_INSTRUCTIONS &&
-    source.trim() === renderAgentDefinition(args.profile).trim();
-  if (!valid) {
-    args.context.findings[args.context.findings.length] = {
-      code: 'agent-definition-contract-drift',
-      path: args.profile.agentDefinitionPath,
-      message:
-        'Agent definition must match its catalog identity and the shared read-only instruction contract.',
-    };
-  }
-}
-
-function renderAgentDefinition(profile: ModuleExpertProfile): string {
-  return `name = "${profile.name}"
-description = "${profile.description}"
-sandbox_mode = "read-only"
-approval_policy = "never"
-
-developer_instructions = """
-${MODULE_EXPERT_AGENT_INSTRUCTIONS}
-"""
-`;
-}
-
-function parseAgentDefinition(source: string): ParsedAgentDefinition | false {
-  const name = source.match(/^name\s*=\s*"([^"]+)"\s*$/mu)?.[1];
-  const description = source.match(/^description\s*=\s*"([^"]+)"\s*$/mu)?.[1];
-  const sandboxMode = source.match(/^sandbox_mode\s*=\s*"([^"]+)"\s*$/mu)?.[1];
-  const approvalPolicy = source.match(
-    /^approval_policy\s*=\s*"([^"]+)"\s*$/mu,
-  )?.[1];
-  const developerInstructions = source.match(
-    /developer_instructions\s*=\s*"""\n([\s\S]*?)\n"""/u,
-  )?.[1];
-  if (
-    !name ||
-    !description ||
-    !sandboxMode ||
-    !approvalPolicy ||
-    !developerInstructions
-  ) {
-    return false;
-  }
-  return {
-    name,
-    description,
-    sandboxMode,
-    approvalPolicy,
-    developerInstructions,
-  };
 }
 
 function safeIdentifier(value: string): boolean {

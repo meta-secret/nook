@@ -11,6 +11,9 @@ import type {
   UntrustedYamlNode,
   UntrustedYamlPropertyArgs,
 } from '../lib/guards.ts';
+import { validatedModuleExpertContextPaths } from './context-selection.ts';
+import type { ModuleExpertContextSelection } from './context-selection.ts';
+import type { ModuleExpertTaskContextPath } from './catalog.ts';
 
 const MAX_REQUEST_BYTES = 65_536;
 const MAX_INSTRUCTION_LENGTH = 16_384;
@@ -24,6 +27,7 @@ export type ModuleExpertInvocationRequest = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly instruction: string;
+  readonly selectedContextPaths: readonly ModuleExpertTaskContextPath[];
 };
 
 type ModuleExpertRequestProperty = {
@@ -59,6 +63,7 @@ export function decodeModuleExpertInvocationRequest(
     'instruction',
     'parent',
     'runId',
+    'selectedContextPaths',
     'sourceCommit',
     'task',
   ];
@@ -98,6 +103,10 @@ export function decodeModuleExpertInvocationRequest(
     record: node,
     key: 'parent',
   };
+  const selectedContextPathsProperty: ModuleExpertRequestProperty = {
+    record: node,
+    key: 'selectedContextPaths',
+  };
   const runId = requiredString(runIdProperty);
   const expert = requiredString(expertProperty);
   const sourceCommit = requiredString(sourceCommitProperty);
@@ -106,6 +115,19 @@ export function decodeModuleExpertInvocationRequest(
   const attempt = requiredNumber(attemptProperty);
   const depth = requiredNumber(depthProperty);
   const parent = requiredParent(parentProperty);
+  const selectedContextPathValues = requiredStringList(
+    selectedContextPathsProperty,
+  );
+  const contextSelection: ModuleExpertContextSelection = {
+    expertName: expert,
+    selectedContextPaths: selectedContextPathValues,
+  };
+  let selectedContextPaths: readonly ModuleExpertTaskContextPath[];
+  try {
+    selectedContextPaths = validatedModuleExpertContextPaths(contextSelection);
+  } catch {
+    invalidRequest();
+  }
   const lineageValidation: ParentLineageValidation = {
     task,
     expert,
@@ -134,6 +156,7 @@ export function decodeModuleExpertInvocationRequest(
     depth,
     parent,
     instruction,
+    selectedContextPaths,
   };
 }
 
@@ -179,6 +202,24 @@ function requiredNumber(property: ModuleExpertRequestProperty): number {
     invalidRequest();
   }
   return value.value;
+}
+
+function requiredStringList(
+  property: ModuleExpertRequestProperty,
+): readonly string[] {
+  const propertyArgs: UntrustedYamlPropertyArgs = {
+    record: property.record,
+    key: property.key,
+  };
+  const value = untrustedYamlProperty(propertyArgs);
+  if (
+    value.presence === UntrustedYamlPropertyPresence.Absent ||
+    !Array.isArray(value.value) ||
+    value.value.some((entry) => typeof entry !== 'string')
+  ) {
+    invalidRequest();
+  }
+  return value.value as readonly string[];
 }
 
 function requiredParent(

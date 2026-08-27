@@ -26,26 +26,22 @@ Structural experts find improvements across existing structures.
 
 ## Registry contract
 
-Every structural expert attempt declares:
+Every structural expert attempt follows the root
+[team worker contract](../../../AGENTS.md#team-worker-contract) and
+[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
-- one exact Git commit;
-- one stable task and attempt identity;
-- explicit parent lineage;
+This registry adds:
+
+- one stable structural role and attempt identity;
 - one bounded read scope;
-- the relevant canonical authorities;
-- the required evidence shape;
-- acceptance evidence;
-- a terminal barrier;
-- a parent-owned join.
+- the relevant canonical lenses; and
+- the role-specific evidence shape.
 
-Every role is read-only and nondelegating.
-
-The role definitions live under `.codex/agents/structural-experts/`.
-They provide identity and behavioral defaults.
-They do not grant capabilities or scheduling authority.
-
-The delivery owner freezes the task graph before dispatch.
-Children cannot add tasks, descendants, resource claims, or workflow tiers.
+- Every role is read-only and nondelegating.
+- This Cortex registry defines each stable semantic role, capability, context,
+  and evidence contract.
+- The delivery owner freezes the task graph before dispatch.
+- Children cannot add tasks, descendants, resource claims, or workflow tiers.
 
 ## Shared boundaries
 
@@ -201,7 +197,7 @@ It examines:
 - type safety and stronger domain types;
 - compatibility and security invariants.
 
-The delivery owner resolves the owning module profile before dispatch.
+The delivery owner resolves the owning module role before dispatch.
 The expert receives the relevant package authorities and module-expert evidence.
 It does not replace `internal_api_expert` when a proposed change crosses a
 module boundary.
@@ -349,6 +345,5 @@ Validate direct skill routing by checking:
 - every canonical skill card is indexed;
 - every executable wrapper points to its canonical card;
 - Cursor and Claude entries are symlinks to `.agents/skills/`;
-- every role file is a regular tracked file;
-- the registry contains exactly the two repository-reading roles and one
+- the Cortex registry contains exactly the two repository-reading roles and one
   synthesis-only role.

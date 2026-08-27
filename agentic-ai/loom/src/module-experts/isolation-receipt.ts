@@ -23,6 +23,7 @@ export type ExecuteIsolatedModuleExpertAgentArgs<
   TAgent extends string,
 > = {
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly selectedContextPaths: readonly string[];
 };
 
 export type ConsumeIsolatedModuleExpertExecutionArgs<
@@ -31,6 +32,7 @@ export type ConsumeIsolatedModuleExpertExecutionArgs<
 > = {
   readonly execution: IsolatedModuleExpertExecution;
   readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly selectedContextPaths: readonly string[];
 };
 
 type ModuleExpertIsolationReceiptRecord = {
@@ -49,7 +51,10 @@ export async function executeIsolatedModuleExpertAgent<
 >(
   args: ExecuteIsolatedModuleExpertAgentArgs<TTask, TAgent>,
 ): Promise<IsolatedModuleExpertExecution> {
-  const codexArgs = { invocation: args.invocation };
+  const codexArgs = {
+    invocation: args.invocation,
+    selectedContextPaths: args.selectedContextPaths,
+  };
   const completion = await runIsolatedModuleExpertCodex(codexArgs);
   const receiptValue = {
     kind: ModuleExpertIsolationReceiptKind.Isolated,
@@ -57,7 +62,7 @@ export async function executeIsolatedModuleExpertAgent<
   const receipt: ModuleExpertIsolationReceipt = Object.freeze(receiptValue);
   const record: ModuleExpertIsolationReceiptRecord = {
     completionDigest: isolatedCompletionDigest(completion),
-    invocationDigest: isolatedInvocationDigest(args.invocation),
+    invocationDigest: isolatedInvocationDigest(args),
   };
   MODULE_EXPERT_ISOLATION_RECEIPTS.set(receipt, record);
   const execution = { completion, receipt };
@@ -73,7 +78,7 @@ export function consumeIsolatedModuleExpertExecution<
     !record ||
     record.completionDigest !==
       isolatedCompletionDigest(args.execution.completion) ||
-    record.invocationDigest !== isolatedInvocationDigest(args.invocation)
+    record.invocationDigest !== isolatedInvocationDigest(args)
   ) {
     throw new Error('Module expert isolation receipt is invalid.');
   }
@@ -86,9 +91,18 @@ function isolatedCompletionDigest(
   return createHash('sha256').update(JSON.stringify(completion)).digest('hex');
 }
 
+type ModuleExpertIsolationInvocationEvidence<
+  TTask extends string,
+  TAgent extends string,
+> = {
+  readonly invocation: AgentExecutionInvocation<TTask, TAgent>;
+  readonly selectedContextPaths: readonly string[];
+};
+
 function isolatedInvocationDigest<TTask extends string, TAgent extends string>(
-  invocation: AgentExecutionInvocation<TTask, TAgent>,
+  evidence: ModuleExpertIsolationInvocationEvidence<TTask, TAgent>,
 ): string {
+  const invocation = evidence.invocation;
   const identity = {
     task: invocation.task,
     attempt: invocation.attempt,
@@ -98,6 +112,7 @@ function isolatedInvocationDigest<TTask extends string, TAgent extends string>(
     upstreamOutputs: invocation.upstreamOutputs,
     execution: invocation.execution,
     agentProfile: invocation.agentProfile,
+    selectedContextPaths: evidence.selectedContextPaths,
   };
   return createHash('sha256').update(JSON.stringify(identity)).digest('hex');
 }

@@ -1,8 +1,10 @@
 import { expect, test } from 'bun:test';
+import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { AgentAttemptAdapterKind } from '../../src/agent-workflow/domain.ts';
 import {
   auditStructuralExpertProfiles,
+  auditStructuralExpertCortexAuthority,
   auditStructuralExperts,
 } from '../../src/structural-experts/audit.ts';
 import {
@@ -31,11 +33,30 @@ test('registers exactly two bounded readers and one view-only synthesizer', () =
   );
 });
 
-test('passes deterministic catalog and definition audit', () => {
+test('passes deterministic catalog and Cortex authority audit', () => {
   const auditRequest = { repoRoot: REPO_ROOT };
   const report = auditStructuralExperts(auditRequest);
   const expected = { auditOk: true, profileCount: 3, findings: [] };
   expect(report).toEqual(expected);
+});
+
+test('rejects semantic drift in structural read-only lifecycle boundaries', async () => {
+  const authorityPath = resolve(
+    REPO_ROOT,
+    '.cortex/teams/ai/architecture/refactoring-experts.md',
+  );
+  const source = await readFile(authorityPath, 'utf8');
+  const driftedSource = source.replace(
+    'Every role is read-only and nondelegating.',
+    'Every role may write and delegate.',
+  );
+  const authorityRequest = { source: driftedSource };
+
+  expect(
+    auditStructuralExpertCortexAuthority(authorityRequest).map(
+      (finding) => finding.code,
+    ),
+  ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
 test('grants shared formatter and skill lint tooling through exact files', () => {
@@ -102,7 +123,7 @@ test('rejects broadening or reordering an exact structural scope', () => {
   }
 });
 
-test('rejects synthesizer runtime behavior contract drift', () => {
+test('rejects canonical synthesizer behavior contract drift', () => {
   const synthesizer = STRUCTURAL_EXPERT_CATALOG[2];
   if (!synthesizer) throw new Error('Synthesizer profile is missing.');
   const drifted = {
@@ -117,8 +138,5 @@ test('rejects synthesizer runtime behavior contract drift', () => {
   expect(report.auditOk).toBe(false);
   expect(report.findings.map((finding) => finding.code)).toContain(
     'structural-profile-contract-drift',
-  );
-  expect(report.findings.map((finding) => finding.code)).toContain(
-    'structural-runtime-behavior-contract-drift',
   );
 });

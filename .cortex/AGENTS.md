@@ -51,40 +51,38 @@ Gizmo owns the final integrated PR verdict for the exact head.
 - Gizmo cannot waive, downgrade, or override either block.
 - Gizmo may block delivery when integration or mission evidence is incomplete.
 
-### Canonical team-agent types
+### Team worker contract
 
-Gizmo dispatches team work through one exact project profile type:
+Gizmo assigns each implementation task to exactly one team identity:
 
-| Functional owner | Agent type |
-| --- | --- |
-| AI | `ai_team_agent` |
-| Development core | `development_core_team_agent` |
-| Security | `security_team_agent` |
-| SRE | `sre_team_agent` |
-| Web development | `web_development_team_agent` |
+- AI;
+- development core;
+- security;
+- SRE; or
+- web development.
 
-The profiles are routing defaults only.
+Gizmo supplies a bounded task contract for that identity.
 
-- The parent task contract supplies the exact baseline, scope, dependencies,
-  acceptance evidence, hierarchy bound, and parent-owned join.
-- The selected profile loads only its own team `AGENTS.md`, knowledge graph,
-  and minimal task-relevant authorities.
-- A write-capable team agent uses an isolated workspace and returns a verified
-  commit handoff.
-- The agent escalates every foreign-team dependency to Gizmo.
-- The agent does not mutate parent-owned lifecycle state.
+- The contract names the exact baseline and expected result.
+- It names allowed and forbidden paths.
+- It names dependencies, acceptance evidence, the hierarchy bound, and the
+  parent-owned join.
+- It gives the worker only its own team entry points and task-relevant
+  authorities.
+- It requires an isolated workspace and verified handoff for write-capable
+  work.
+- It returns foreign-team dependencies to Gizmo.
+- It does not grant parent-owned lifecycle authority.
 
-### Subagent model
+The active harness owns worker creation and native worker labels or names.
+It also owns model inheritance or selection, scheduling, communication,
+retries, cancellation, and terminal barriers.
 
-Every native team subagent must run with Gizmo's exact model.
+Repository profile files are not semantic, capability, context, model, or
+lifecycle authority.
 
-- Gizmo must not request a different model for a subagent.
-- A task prompt must not request a different model.
-- A team-agent profile or other custom agent file must not set `model`.
-- A team-agent profile must not set `model_reasoning_effort`.
-- An `[agents]` default must not override Gizmo's model.
-- If the harness does not inherit the model automatically, Gizmo must report a
-  blocker.
+Operational dispatch, isolation, retry, evidence, and join rules live in
+[subagent delegation](gizmo/workflows/subagent-delegation.md).
 
 ## Mandatory context selection
 
@@ -101,15 +99,15 @@ Agents must keep Cortex retrieval proportional to their assigned work.
 The team assignment selects the context entry point:
 
 - Gizmo loads `gizmo/AGENTS.md` and `gizmo/knowledge-graph.md`.
-- An `ai_team_agent` loads `teams/ai/AGENTS.md` and
+- An AI worker loads `teams/ai/AGENTS.md` and
   `teams/ai/knowledge-graph.md`.
-- A `development_core_team_agent` loads `teams/dev-core/AGENTS.md` and
+- A development-core worker loads `teams/dev-core/AGENTS.md` and
   `teams/dev-core/knowledge-graph.md`.
-- A `security_team_agent` loads `teams/security/AGENTS.md` and
+- A security worker loads `teams/security/AGENTS.md` and
   `teams/security/knowledge-graph.md`.
-- An `sre_team_agent` loads `teams/sre/AGENTS.md` and
+- An SRE worker loads `teams/sre/AGENTS.md` and
   `teams/sre/knowledge-graph.md`.
-- A `web_development_team_agent` loads `teams/web-dev/AGENTS.md` and
+- A web-development worker loads `teams/web-dev/AGENTS.md` and
   `teams/web-dev/knowledge-graph.md`.
 
 The following behavior is prohibited:

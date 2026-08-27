@@ -2,13 +2,13 @@
 
 ## Purpose
 
-Route Nook work through the five canonical team-agent types:
+Route Nook work through the five semantic team identities:
 
-- `ai_team_agent`;
-- `development_core_team_agent`;
-- `security_team_agent`;
-- `sre_team_agent`; and
-- `web_development_team_agent`.
+- AI;
+- development core;
+- security;
+- SRE; and
+- web development.
 
 Use this skill whenever a request touches code, scripts, infrastructure, tests, or Cortex owned by one or more engineering teams.
 
@@ -18,19 +18,14 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 2. Turn the request into concrete tasks and assign each task to one team.
 3. Identify whether another team should provide implementation expertise.
 4. Freeze every capability or expertise contract before assigning files.
-5. Select the exact canonical team-agent type for each task.
-6. Start one team subagent for each task with clear files and acceptance proof.
-7. Preserve Gizmo's exact model without a profile or spawn override.
-8. Keep every team agent inside its declared task scope.
-9. Route cross-team dependencies through Gizmo.
-10. Require each team to implement its own tests, Cortex updates, and review
+5. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+6. Follow [subagent delegation](../workflows/subagent-delegation.md) for
+   dispatch and integration.
+7. Route cross-team dependencies through Gizmo.
+8. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-11. Keep shared files and lifecycle mutations in the parent-owned join.
-12. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
-
-The profile supplies only the team routing default. The parent task contract
-supplies the exact baseline, bounded paths, dependencies, acceptance evidence,
-hierarchy bound, and join.
+9. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+   for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
 from implementation ownership. Security review does not transfer the
@@ -55,7 +50,7 @@ This skill does not replace module ownership, internal API review, or subagent e
 
 - Use module experts inside the selected team when a production module boundary changes.
 - Use the internal API expert when a contract crosses modules or teams.
-- Follow the universal subagent workflow for baselines, isolation, views, and joins.
+- Follow the universal subagent workflow for operational worker rules.
 
 ## Validation
 

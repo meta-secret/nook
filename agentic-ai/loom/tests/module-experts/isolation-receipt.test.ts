@@ -46,6 +46,7 @@ test('binds an isolation receipt to one exact completion and invocation', async 
   try {
     const executeArgs: ExecuteIsolatedModuleExpertAgentArgs<string, string> = {
       invocation,
+      selectedContextPaths: [],
     };
     const execution = await executeIsolatedModuleExpertAgent(executeArgs);
     const mutatedCompletion: IsolatedModuleExpertExecution = {
@@ -61,6 +62,7 @@ test('binds an isolation receipt to one exact completion and invocation', async 
     > = {
       execution: mutatedCompletion,
       invocation,
+      selectedContextPaths: [],
     };
     expect(() =>
       consumeIsolatedModuleExpertExecution(mutatedCompletionArgs),
@@ -76,9 +78,24 @@ test('binds an isolation receipt to one exact completion and invocation', async 
     > = {
       execution,
       invocation: mutatedInvocation,
+      selectedContextPaths: [],
     };
     expect(() =>
       consumeIsolatedModuleExpertExecution(mutatedInvocationArgs),
+    ).toThrow('isolation receipt is invalid');
+
+    const mutatedContextArgs: ConsumeIsolatedModuleExpertExecutionArgs<
+      string,
+      string
+    > = {
+      execution,
+      invocation,
+      selectedContextPaths: [
+        '.cortex/teams/web-dev/product-specs/browser-extension.md',
+      ],
+    };
+    expect(() =>
+      consumeIsolatedModuleExpertExecution(mutatedContextArgs),
     ).toThrow('isolation receipt is invalid');
 
     const consumeArgs: ConsumeIsolatedModuleExpertExecutionArgs<
@@ -87,6 +104,7 @@ test('binds an isolation receipt to one exact completion and invocation', async 
     > = {
       execution,
       invocation,
+      selectedContextPaths: [],
     };
     consumeIsolatedModuleExpertExecution(consumeArgs);
     expect(() => consumeIsolatedModuleExpertExecution(consumeArgs)).toThrow(
@@ -113,6 +131,7 @@ test('rejects a structurally forged isolation receipt', () => {
     {
       execution,
       invocation,
+      selectedContextPaths: [],
     };
 
   expect(() => consumeIsolatedModuleExpertExecution(consumeArgs)).toThrow(

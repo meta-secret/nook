@@ -126,7 +126,7 @@ AI owns the agent knowledge system and deterministic agent tooling.
   - Loom commands, audits, typed workflows, and orchestration under
     `agentic-ai/loom/`;
   - agent skills and executable mirrors;
-  - module and structural expert profiles;
+  - module and structural expert semantic contracts;
   - agent-focused prompts and preflight contracts; and
   - AI workflow tests.
 - **Primary Cortex:** `.cortex/teams/ai/`.

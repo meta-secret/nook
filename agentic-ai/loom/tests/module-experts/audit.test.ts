@@ -1,9 +1,7 @@
 import {
-  copyFile,
   mkdir,
   mkdtemp,
   readFile,
-  readdir,
   rm,
   symlink,
   writeFile,
@@ -15,6 +13,7 @@ import type { CodexOptions } from '@openai/codex-sdk';
 import { describe, expect, test } from 'bun:test';
 import {
   auditGeneratedScopeProducerContract,
+  auditModuleExpertCortexAuthority,
   auditModuleExpertRuntimePolicy,
   auditModuleExpertRuntimeRouting,
   auditModuleExperts,
@@ -39,7 +38,7 @@ import {
   WEB_EXPERT_CANONICAL_CONTEXT_PATHS,
   WEB_EXPERT_PRODUCT_SPEC_PATHS,
   WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
-  WEB_EXPERT_SCOPE_PATHS,
+  WEB_EXPERT_ALLOWED_CONTEXT_PATHS,
   WEB_EXPERT_SKILL_AUTHORITY_PATHS,
   WEB_EXPERT_SKILL_PATHS,
 } from '../../src/module-experts/catalog.ts';
@@ -437,7 +436,7 @@ describe('module expert audit', () => {
       'Taskfile.yml',
       'nook-app/ci/Taskfile.yml',
     ]);
-    expect(WEB_EXPERT_SCOPE_PATHS).toEqual([
+    expect(WEB_EXPERT_ALLOWED_CONTEXT_PATHS).toEqual([
       ...WEB_EXPERT_PRODUCT_SPEC_PATHS,
       ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
     ]);
@@ -496,15 +495,22 @@ describe('module expert audit', () => {
       },
       {
         ...webProfile,
-        scopePaths: webProfile.scopePaths.slice(1),
+        allowedContextPaths: webProfile.allowedContextPaths.slice(1),
       },
       {
         ...webProfile,
-        scopePaths: [...webProfile.scopePaths, '.github'],
+        allowedContextPaths: [
+          ...webProfile.allowedContextPaths,
+          WEB_EXPERT_ALLOWED_CONTEXT_PATHS[0],
+        ],
       },
       {
         ...webProfile,
-        scopePaths: [...webProfile.scopePaths].reverse(),
+        allowedContextPaths: [...webProfile.allowedContextPaths].reverse(),
+      },
+      {
+        ...webProfile,
+        scopePaths: ['.github'],
       },
       {
         ...webProfile,
@@ -537,8 +543,9 @@ describe('module expert audit', () => {
       'invalid-internal-api-rust-boundary-scope',
       'unexpected-boundary-scope',
       'invalid-canonical-expert-context',
-      'invalid-web-expert-scope',
-      'invalid-web-expert-scope',
+      'invalid-web-expert-allowed-context',
+      'invalid-web-expert-allowed-context',
+      'invalid-web-expert-allowed-context',
       'invalid-web-expert-scope',
       'missing-web-expert-skill-authority',
       'invalid-web-expert-authorities',
@@ -656,101 +663,49 @@ describe('module expert audit', () => {
     }
   });
 
-  test('rejects writable roles, team profile drift, and a separate WASM expert', async () => {
+  test('ignores vendor profile TOMLs when auditing canonical expert roles', async () => {
     const fixtureRoot = await moduleExpertFixture();
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
-      const coreDefinitionPath = join(
+      const vendorProfileDirectory = join(
         fixtureRoot,
-        '.codex/agents/module-experts/core_expert.toml',
+        '.codex/agents/module-experts',
       );
-      const coreDefinition = await readFile(coreDefinitionPath, 'utf8');
-      await writeFile(
-        coreDefinitionPath,
-        coreDefinition.replace(
-          'sandbox_mode = "read-only"',
-          'sandbox_mode = "workspace-write"',
-        ),
-        'utf8',
-      );
-      const aiTeamDefinitionPath = join(
-        fixtureRoot,
-        '.codex/agents/team-agents/ai_team_agent.toml',
-      );
-      const aiTeamDefinition = await readFile(aiTeamDefinitionPath, 'utf8');
-      await writeFile(
-        aiTeamDefinitionPath,
-        `${aiTeamDefinition}model = "gpt-5"\n`,
-        'utf8',
-      );
-      const hiddenDirectory = join(fixtureRoot, '.codex/agents/hidden/deep');
       const directoryOptions: MakeDirectoryOptions = { recursive: true };
-      await mkdir(hiddenDirectory, directoryOptions);
+      await mkdir(vendorProfileDirectory, directoryOptions);
       await writeFile(
-        join(hiddenDirectory, 'wasm_expert.toml'),
-        'name = "wasm_expert"\n',
+        join(vendorProfileDirectory, 'core_expert.toml'),
+        'name = "core_expert"\nsandbox_mode = "workspace-write"\napproval_policy = "on-request"\n',
         'utf8',
       );
       const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
-      const report = auditModuleExperts(auditArgs);
-      const codes = report.findings.map((finding) => finding.code);
+      const reportWithVendorProfile = auditModuleExperts(auditArgs);
+      await rm(join(fixtureRoot, '.codex'), removeOptions);
+      const reportWithoutVendorProfiles = auditModuleExperts(auditArgs);
 
-      expect(codes).toContain('agent-definition-contract-drift');
-      expect(codes).toContain('team-agent-definition-contract-drift');
-      expect(codes).toContain('forbidden-wasm-boundary-role');
-      expect(report.auditOk).toBe(false);
+      expect(reportWithVendorProfile).toEqual(reportWithoutVendorProfiles);
     } finally {
       await rm(fixtureRoot, removeOptions);
     }
   });
 
-  test('rejects recursively discovered uncataloged roles', async () => {
-    const fixtureRoot = await moduleExpertFixture();
-    const removeOptions: RmOptions = { recursive: true, force: true };
-    try {
-      const nestedDirectory = join(
-        fixtureRoot,
-        '.codex/agents/module-experts/nested',
-      );
-      const directoryOptions: MakeDirectoryOptions = { recursive: true };
-      await mkdir(nestedDirectory, directoryOptions);
-      await writeFile(
-        join(nestedDirectory, 'shadow_expert.toml'),
-        'name = "shadow_expert"\n',
-        'utf8',
-      );
-      const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
-      const report = auditModuleExperts(auditArgs);
+  test('rejects semantic drift in the Cortex module expert contract', async () => {
+    const authorityPath = join(
+      REPO_ROOT,
+      '.cortex/teams/ai/architecture/module-experts.md',
+    );
+    const source = await readFile(authorityPath, 'utf8');
+    const driftedSource = source.replace(
+      'Every role is read-only.',
+      'Every role may write when useful.',
+    );
+    const authorityArgs = { source: driftedSource };
 
-      expect(
-        report.findings
-          .filter((finding) => finding.code === 'uncataloged-agent-definition')
-          .map((finding) => finding.path),
-      ).toEqual(['.codex/agents/module-experts/nested/shadow_expert.toml']);
-      expect(report.auditOk).toBe(false);
-    } finally {
-      await rm(fixtureRoot, removeOptions);
-    }
-  });
-
-  test('rejects symlinked custom-agent entries', async () => {
-    const fixtureRoot = await moduleExpertFixture();
-    const removeOptions: RmOptions = { recursive: true, force: true };
-    try {
-      await symlink(
-        join(fixtureRoot, '.codex/agents/module-experts/core_expert.toml'),
-        join(fixtureRoot, '.codex/agents/shadow.toml'),
-      );
-      const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
-      const report = auditModuleExperts(auditArgs);
-
-      expect(report.findings.map((finding) => finding.code)).toContain(
-        'unsafe-agent-definition-entry',
-      );
-      expect(report.auditOk).toBe(false);
-    } finally {
-      await rm(fixtureRoot, removeOptions);
-    }
+    expect(
+      auditModuleExpertCortexAuthority(authorityArgs).map(
+        (finding) => finding.code,
+      ),
+    ).toContain('cortex-module-expert-contract-semantic-drift');
   });
 
   test('uses Cargo workspace identities instead of manifest text matches', () => {
@@ -979,21 +934,9 @@ describe('module expert audit', () => {
 
 async function moduleExpertFixture(): Promise<string> {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-module-experts-'));
-  const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
   await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
   await symlink(join(REPO_ROOT, '.agents'), join(fixtureRoot, '.agents'));
   await symlink(join(REPO_ROOT, 'agentic-ai'), join(fixtureRoot, 'agentic-ai'));
   await symlink(join(REPO_ROOT, 'nook-app'), join(fixtureRoot, 'nook-app'));
-  for (const directoryName of ['module-experts', 'team-agents']) {
-    const sourceDirectory = join(REPO_ROOT, '.codex/agents', directoryName);
-    const fixtureDirectory = join(fixtureRoot, '.codex/agents', directoryName);
-    await mkdir(fixtureDirectory, recursiveDirectoryOptions);
-    for (const definitionName of await readdir(sourceDirectory)) {
-      await copyFile(
-        join(sourceDirectory, definitionName),
-        join(fixtureDirectory, definitionName),
-      );
-    }
-  }
   return fixtureRoot;
 }

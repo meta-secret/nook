@@ -49,6 +49,7 @@ import { MODULE_EXPERT_WORKFLOW_VERSION } from '../../src/module-experts/trusted
 import { createAuthorizedDirectParent } from './invoke-parent-fixture.ts';
 import { registerModuleExpertRuntimeMock } from './module-expert-runtime-mock.ts';
 import type { RegisterModuleExpertRuntimeMockArgs } from './module-expert-runtime-mock.ts';
+import type { WebExpertAllowedContextPath } from '../../src/module-experts/catalog.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
@@ -188,6 +189,59 @@ describe('module expert invocation', () => {
     ).toEqual(request);
   });
 
+  test('preserves a canonical task-selected web context subset', () => {
+    const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
+      '.cortex/teams/web-dev/product-specs/browser-extension.md',
+      '.github/workflows/release.yml',
+    ];
+    const request: ModuleExpertInvocationRequest = {
+      ...directRequest('web-expert-selected-context'),
+      expert: 'web_expert',
+      selectedContextPaths,
+    };
+
+    expect(
+      decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+    ).toEqual(request);
+  });
+
+  test('rejects empty, unknown, duplicate, reordered, or foreign context selection', () => {
+    const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
+      '.cortex/teams/web-dev/product-specs/browser-extension.md',
+      '.github/workflows/release.yml',
+    ];
+    const webRequest: ModuleExpertInvocationRequest = {
+      ...directRequest('web-expert-invalid-context'),
+      expert: 'web_expert',
+      selectedContextPaths,
+    };
+    const invalidRequests = [
+      { ...webRequest, selectedContextPaths: [] },
+      { ...webRequest, selectedContextPaths: ['.cortex/unknown.md'] },
+      {
+        ...webRequest,
+        selectedContextPaths: [
+          selectedContextPaths[0],
+          selectedContextPaths[0],
+        ],
+      },
+      {
+        ...webRequest,
+        selectedContextPaths: [...selectedContextPaths].reverse(),
+      },
+      {
+        ...directRequest('core-expert-foreign-context'),
+        selectedContextPaths: [selectedContextPaths[0]],
+      },
+    ];
+
+    for (const request of invalidRequests) {
+      expect(() =>
+        decodeModuleExpertInvocationRequest(JSON.stringify(request)),
+      ).toThrow('request is invalid');
+    }
+  });
+
   test('rejects malformed, unbounded, extended, and excessive-depth requests', () => {
     const valid = directRequest('module-expert-invalid');
     const invalidSourceRequest: ModuleExpertInvocationRequest = {
@@ -293,10 +347,7 @@ describe('module expert invocation', () => {
       const result = await invokeModuleExpert(invokeArgs);
 
       expect(result.expert).toBe('core_expert');
-      expect(result.agentDefinitionPath).toBe(
-        '.codex/agents/module-experts/core_expert.toml',
-      );
-      expect(result.agentDefinitionSha256).toMatch(/^[0-9a-f]{64}$/u);
+      expect(result.selectedContextPaths).toEqual([]);
       expect(result.runId).toBe(request.runId);
       expect(result.attempt).toBe(request.attempt);
       expect(result.depth).toBe(request.depth);
@@ -393,6 +444,45 @@ describe('module expert invocation', () => {
       }
       expect(projectedTerminal.output.continuation).toEqual(
         moduleExpertContinuation(),
+      );
+    } finally {
+      runtimeMock.dispose();
+      await rm(runDirectory, REMOVE_RECURSIVELY);
+    }
+  });
+
+  test('binds exact web context selection into invocation and runtime evidence', async () => {
+    const runtime = new RecordingAgentRuntime();
+    const selectedContextPaths: readonly WebExpertAllowedContextPath[] = [
+      '.cortex/teams/web-dev/product-specs/browser-extension.md',
+      '.github/workflows/release.yml',
+    ];
+    const request: ModuleExpertInvocationRequest = {
+      ...directRequest(uniqueRunId('web-expert-context-evidence')),
+      expert: 'web_expert',
+      selectedContextPaths,
+    };
+    const runDirectory = processingRunDirectory(request.runId);
+    const controller = new AbortController();
+    const runtimeMockArgs: RegisterModuleExpertRuntimeMockArgs = {
+      runId: request.runId,
+      runtime,
+    };
+    const runtimeMock = registerModuleExpertRuntimeMock(runtimeMockArgs);
+    const invokeArgs: InvokeModuleExpertArgs = {
+      repoRoot: REPO_ROOT,
+      request,
+      signal: controller.signal,
+    };
+    try {
+      await createAuthorizedDirectParent(request);
+      const result = await invokeModuleExpert(invokeArgs);
+
+      expect(result.selectedContextPaths).toEqual(selectedContextPaths);
+      if (!runtime.invocation) throw new Error('Expected captured invocation.');
+      expect(runtime.invocation.agentProfile.name).toBe('web_expert');
+      expect(runtime.invocation.execution.instruction).toContain(
+        `Selected task context: ${JSON.stringify(selectedContextPaths)}`,
       );
     } finally {
       runtimeMock.dispose();
@@ -693,8 +783,7 @@ describe('module expert invocation', () => {
         runDirectory,
         runId: request.runId,
         expert: request.expert,
-        agentDefinitionPath: '.codex/agents/module-experts/core_expert.toml',
-        agentDefinitionSha256: '0'.repeat(64),
+        selectedContextPaths: request.selectedContextPaths,
         sourceCommit: request.sourceCommit,
         task: request.task,
         attempt: request.attempt,
@@ -911,6 +1000,7 @@ function directRequest(runId: string): ModuleExpertInvocationRequest {
   return {
     runId,
     expert: 'core_expert',
+    selectedContextPaths: [],
     sourceCommit: SOURCE_COMMIT,
     task: 'inspect-core-contract',
     attempt: 1,

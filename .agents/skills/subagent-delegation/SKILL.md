@@ -10,51 +10,17 @@ description: >-
 
 # Subagent Delegation
 
-Read and follow the canonical workflow at
-[`.cortex/gizmo/workflows/subagent-delegation.md`](../../../.cortex/gizmo/workflows/subagent-delegation.md).
+Read and follow:
 
-Before dispatch:
+- [the universal worker contract](../../../.cortex/AGENTS.md#team-worker-contract);
+- [the canonical delegation workflow](../../../.cortex/gizmo/workflows/subagent-delegation.md);
+- [team-oriented development](../../../.cortex/gizmo/workflows/team-oriented-development.md) for implementation work; and
+- [module-oriented development](../../../.cortex/gizmo/workflows/module-oriented-development.md) for registered module work.
 
-1. Declare the exact baseline, task identity, parent lineage, dependencies,
-   resource scope, acceptance evidence, and parent-owned join.
-2. Keep one delivery owner for shared files and lifecycle state.
-3. Let the active Codex, Cursor, or other capable harness own subagent creation,
-   communication, scheduling, retries, cancellation, barriers, nested
-   delegation, and synthesis.
-4. Preserve Gizmo's exact model for every native subagent. Do not configure a
-   model or reasoning-effort override.
-5. Use Loom or another deterministic tool for mechanical work.
-6. Declare a task-specific hierarchy depth bound before dispatch.
-7. Give every write-capable worker a separate disposable worktree or workspace.
-8. Require a verified commit handoff from each successful writer.
+This wrapper is an invocation mirror. It does not duplicate the task contract,
+dispatch procedure, evidence protocol, or integration checklist.
 
-During execution:
-
-1. Enforce dependency readiness and non-overlapping resource claims.
-2. Keep retries isolated from failed or cancelled workspace state.
-3. Prevent children from widening their write scope.
-4. Preserve the exact baseline used for every attempt.
-
-Before continuation or completion:
-
-1. Let the harness wait for the declared dependency or terminal barrier.
-2. Verify the commit against its baseline and allowed write scope.
-3. Verify the declared acceptance evidence.
-4. Integrate accepted commits in deterministic dependency order.
-5. Bind downstream work to the exact integrated commit.
-6. Let Gizmo validate the integrated result and author the report.
-
-JSONL streams, result files, and Markdown summaries may be retained for human
-inspection or audit evidence. They are never prerequisites for harness
-dispatch, continuation, retry, join, or completion.
-
-For module-oriented work, also load
-[`module-oriented-development.md`](../../../.cortex/gizmo/workflows/module-oriented-development.md)
-and the named
-[`module expert registry`](../../../.cortex/teams/ai/architecture/module-experts.md).
-
-For implementation work, also load
-[`team-oriented-development.md`](../../../.cortex/gizmo/workflows/team-oriented-development.md)
-and keep each child inside one engineering-team boundary. Select the exact
-`ai_team_agent`, `development_core_team_agent`, `security_team_agent`,
-`sre_team_agent`, or `web_development_team_agent` type before dispatch.
+The active harness owns native worker creation, labels or names, model
+inheritance or selection, scheduling, communication, retries, cancellation,
+barriers, and bounded nested delegation. Cortex owns semantic roles and task
+constraints. Gizmo owns integration and delivery lifecycle state.

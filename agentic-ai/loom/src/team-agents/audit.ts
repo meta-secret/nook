@@ -1,174 +1,246 @@
-import { existsSync, lstatSync, readFileSync, readdirSync } from 'node:fs';
-import { basename, join, relative } from 'node:path';
-import { TEAM_AGENT_CATALOG } from './catalog.ts';
-import type { TeamAgentProfile } from './catalog.ts';
+import { existsSync, readFileSync } from 'node:fs';
+import { join, normalize } from 'node:path';
+import { auditMarkdownContractSections } from '../lib/markdown-contract.ts';
+import type {
+  MarkdownContractAuditRequest,
+  MarkdownContractSection,
+} from '../lib/markdown-contract.ts';
+import { TEAM_AUTHORITY_CATALOG, TeamKey } from './catalog.ts';
+import type { TeamAuthority } from './catalog.ts';
 
-export type TeamAgentAuditFinding = {
+export type TeamAuthorityAuditFinding = {
   readonly code: string;
   readonly path: string;
   readonly message: string;
 };
 
-export type TeamAgentAuditReport = {
-  readonly findings: readonly TeamAgentAuditFinding[];
-  readonly profileCount: number;
+export type TeamAuthorityAuditReport = {
+  readonly findings: readonly TeamAuthorityAuditFinding[];
+  readonly authorityCount: number;
   readonly auditOk: boolean;
+};
+
+export type AuditTeamAuthoritiesRequest = {
+  readonly repoRoot: string;
+  readonly authorities: readonly TeamAuthority[];
 };
 
 export type AuditTeamAgentsRequest = {
   readonly repoRoot: string;
 };
 
-type TeamAgentDefinitionDiscoveryRequest = {
-  readonly directory: string;
-  readonly repoRoot: string;
+export type AuditTeamCortexAuthorityRequest = {
+  readonly source: string;
 };
 
-type TeamAgentDefinitionDiscovery = {
-  readonly paths: readonly string[];
-  readonly unsafePaths: readonly string[];
+type ExpectedTeamAuthority = {
+  readonly identity: string;
+  readonly contextDirectory: string;
+  readonly description: string;
+  readonly capabilityBoundary: string;
 };
 
-type ValidateTeamAgentDefinitionRequest = {
-  readonly findings: TeamAgentAuditFinding[];
-  readonly profile: TeamAgentProfile;
-  readonly repoRoot: string;
-};
+const TEAM_CATALOG_PATH = 'agentic-ai/loom/src/team-agents/catalog.ts';
+const TEAM_AUTHORITY_PATH = '.cortex/AGENTS.md';
+const PARENT_OWNED_LIFECYCLE_BOUNDARY =
+  'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
+const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
+  [
+    TeamKey.Ai,
+    {
+      identity: 'AI',
+      contextDirectory: 'ai',
+      description:
+        'Owns Cortex, Loom, agent skills, expert routing, and agent automation.',
+      capabilityBoundary: `AI defines agent capability semantics and acceptance. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    },
+  ],
+  [
+    TeamKey.DevelopmentCore,
+    {
+      identity: 'Development core',
+      contextDirectory: 'dev-core',
+      description:
+        'Owns portable Rust behavior, vault behavior, security-control implementation, and typed WASM contracts.',
+      capabilityBoundary: `Development core does not own browser presentation, infrastructure operations, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    },
+  ],
+  [
+    TeamKey.Security,
+    {
+      identity: 'Security',
+      contextDirectory: 'security',
+      description:
+        'Owns security architecture, cryptographic policy, trust boundaries, and security acceptance.',
+      capabilityBoundary: `Security owns invariants and acceptance without taking implementation ownership from another team. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    },
+  ],
+  [
+    TeamKey.Sre,
+    {
+      identity: 'SRE',
+      contextDirectory: 'sre',
+      description:
+        'Owns CI/CD, clusters, deployments, runners, containers, and operations.',
+      capabilityBoundary: `SRE does not own product rules, browser presentation, or another team's Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    },
+  ],
+  [
+    TeamKey.WebDevelopment,
+    {
+      identity: 'Web development',
+      contextDirectory: 'web-dev',
+      description:
+        'Owns TypeScript and Svelte engineering expertise, browser presentation, frontend behavior, and extension interaction.',
+      capabilityBoundary: `Web development may implement bounded TypeScript expertise without taking consumer capability semantics or Cortex authority. ${PARENT_OWNED_LIFECYCLE_BOUNDARY}`,
+    },
+  ],
+]);
 
-const TEAM_AGENT_DIRECTORY = '.codex/agents/team-agents';
+const TEAM_AUTHORITY_CONTRACT_SECTIONS: readonly MarkdownContractSection[] = [
+  {
+    heading: '### Team worker contract',
+    requiredMarkers: [
+      'Gizmo assigns each implementation task to exactly one team identity:',
+      'Gizmo supplies a bounded task contract for that identity.',
+      'It requires an isolated workspace and verified handoff for write-capable work.',
+      'It does not grant parent-owned lifecycle authority.',
+      'The active harness owns worker creation and native worker labels or names.',
+      'Repository profile files are not semantic, capability, context, model, or lifecycle authority.',
+    ],
+  },
+  {
+    heading: '## Mandatory context selection',
+    requiredMarkers: [
+      'Load exactly one Gizmo or team `AGENTS.md` and its knowledge graph.',
+      'Select the smallest set of documents that owns the task.',
+      'An AI worker loads `teams/ai/AGENTS.md` and `teams/ai/knowledge-graph.md`.',
+      'A web-development worker loads `teams/web-dev/AGENTS.md` and `teams/web-dev/knowledge-graph.md`.',
+    ],
+  },
+];
 
 export function auditTeamAgents(
   request: AuditTeamAgentsRequest,
-): TeamAgentAuditReport {
-  const findings: TeamAgentAuditFinding[] = [];
-  const directory = join(request.repoRoot, TEAM_AGENT_DIRECTORY);
-  if (!existsSync(directory)) {
-    const finding: TeamAgentAuditFinding = {
-      code: 'missing-team-agent-directory',
-      path: TEAM_AGENT_DIRECTORY,
-      message: 'The team-agent definition directory is missing.',
-    };
-    findings.push(finding);
-    return teamAgentAuditReport(findings);
-  }
-  if (!lstatSync(directory).isDirectory()) {
-    const finding: TeamAgentAuditFinding = {
-      code: 'unsafe-team-agent-directory',
-      path: TEAM_AGENT_DIRECTORY,
-      message: 'The team-agent definition root must be a real directory.',
-    };
-    findings.push(finding);
-    return teamAgentAuditReport(findings);
-  }
-
-  const discoveryRequest: TeamAgentDefinitionDiscoveryRequest = {
-    directory,
+): TeamAuthorityAuditReport {
+  const authorityRequest: AuditTeamAuthoritiesRequest = {
     repoRoot: request.repoRoot,
+    authorities: TEAM_AUTHORITY_CATALOG,
   };
-  const discovery = discoverTeamAgentDefinitions(discoveryRequest);
-  for (const unsafePath of discovery.unsafePaths) {
-    const finding: TeamAgentAuditFinding = {
-      code: 'unsafe-team-agent-definition-entry',
-      path: unsafePath,
-      message: `Team-agent discovery does not permit symbolic links: ${unsafePath}`,
-    };
-    findings.push(finding);
-  }
+  return auditTeamAuthorities(authorityRequest);
+}
 
-  const expectedPaths = new Set(
-    TEAM_AGENT_CATALOG.map((profile) => profile.agentDefinitionPath),
-  );
-  const actualPaths = new Set(discovery.paths);
-  for (const actualPath of actualPaths) {
-    if (expectedPaths.has(actualPath)) continue;
-    const roleName = basename(actualPath, '.toml');
-    const finding: TeamAgentAuditFinding = {
-      code: 'uncataloged-team-agent-definition',
-      path: actualPath,
-      message: `Team-agent definition is not cataloged: ${roleName}`,
+export function auditTeamAuthorities(
+  request: AuditTeamAuthoritiesRequest,
+): TeamAuthorityAuditReport {
+  const findings: TeamAuthorityAuditFinding[] = [];
+  const seenKeys = new Set<TeamKey>();
+  const seenIdentities = new Set<string>();
+  const authoritySource = existsSync(
+    join(request.repoRoot, TEAM_AUTHORITY_PATH),
+  )
+    ? readFileSync(join(request.repoRoot, TEAM_AUTHORITY_PATH), 'utf8')
+    : '';
+  const cortexAuthorityRequest: AuditTeamCortexAuthorityRequest = {
+    source: authoritySource,
+  };
+  findings.push(...auditTeamCortexAuthority(cortexAuthorityRequest));
+  if (request.authorities.length !== EXPECTED_TEAM_AUTHORITIES.size) {
+    const finding: TeamAuthorityAuditFinding = {
+      code: 'invalid-team-authority-count',
+      path: TEAM_CATALOG_PATH,
+      message: 'The canonical Cortex team catalog must contain five teams.',
     };
     findings.push(finding);
   }
-  for (const profile of TEAM_AGENT_CATALOG) {
-    if (!actualPaths.has(profile.agentDefinitionPath)) {
-      const finding: TeamAgentAuditFinding = {
-        code: 'missing-team-agent-definition',
-        path: profile.agentDefinitionPath,
-        message: `Required team-agent definition is missing: ${profile.name}`,
+  for (const authority of request.authorities) {
+    const expected = EXPECTED_TEAM_AUTHORITIES.get(authority.key);
+    const expectedContextPaths = expected
+      ? [
+          `.cortex/teams/${expected.contextDirectory}/AGENTS.md`,
+          `.cortex/teams/${expected.contextDirectory}/knowledge-graph.md`,
+        ]
+      : [];
+    if (
+      !expected ||
+      authority.identity !== expected.identity ||
+      seenKeys.has(authority.key) ||
+      seenIdentities.has(authority.identity)
+    ) {
+      const finding: TeamAuthorityAuditFinding = {
+        code: 'invalid-team-authority-identity',
+        path: TEAM_CATALOG_PATH,
+        message: `Team authority identity is missing, duplicated, or drifted: ${authority.key}`,
       };
       findings.push(finding);
-      continue;
     }
-    const validationRequest: ValidateTeamAgentDefinitionRequest = {
-      findings,
-      profile,
-      repoRoot: request.repoRoot,
-    };
-    validateTeamAgentDefinition(validationRequest);
-  }
-  return teamAgentAuditReport(findings);
-}
-
-export function renderTeamAgentDefinition(profile: TeamAgentProfile): string {
-  return `name = "${profile.name}"
-description = "${profile.description}"
-sandbox_mode = "${profile.sandboxMode}"
-
-developer_instructions = """
-${profile.developerInstructions}
-"""
-`;
-}
-
-function teamAgentAuditReport(
-  findings: readonly TeamAgentAuditFinding[],
-): TeamAgentAuditReport {
-  return {
-    findings,
-    profileCount: TEAM_AGENT_CATALOG.length,
-    auditOk: findings.length === 0,
-  };
-}
-
-function validateTeamAgentDefinition(
-  request: ValidateTeamAgentDefinitionRequest,
-): void {
-  const path = join(request.repoRoot, request.profile.agentDefinitionPath);
-  const source = readFileSync(path, 'utf8');
-  if (source === renderTeamAgentDefinition(request.profile)) return;
-  const finding: TeamAgentAuditFinding = {
-    code: 'team-agent-definition-contract-drift',
-    path: request.profile.agentDefinitionPath,
-    message:
-      'Team-agent TOML must exactly match its cataloged name, description, sandbox mode, and developer instructions; model settings and extra fields are forbidden.',
-  };
-  request.findings.push(finding);
-}
-
-function discoverTeamAgentDefinitions(
-  request: TeamAgentDefinitionDiscoveryRequest,
-): TeamAgentDefinitionDiscovery {
-  const paths: string[] = [];
-  const unsafePaths: string[] = [];
-  const directories = [request.directory];
-  const directoryOptions = { withFileTypes: true } as const;
-  while (directories.length > 0) {
-    const directory = directories.pop();
-    if (!directory) continue;
-    for (const entry of readdirSync(directory, directoryOptions)) {
-      const absolutePath = join(directory, entry.name);
-      const repoPath = relative(request.repoRoot, absolutePath);
-      if (entry.isSymbolicLink()) {
-        unsafePaths.push(repoPath);
-      } else if (entry.isDirectory()) {
-        directories.push(absolutePath);
-      } else if (entry.isFile() && entry.name.endsWith('.toml')) {
-        paths.push(repoPath);
+    seenKeys.add(authority.key);
+    seenIdentities.add(authority.identity);
+    if (
+      JSON.stringify(authority.contextPaths) !==
+        JSON.stringify(expectedContextPaths) ||
+      authority.description !== expected?.description ||
+      authority.capabilityBoundary !== expected?.capabilityBoundary
+    ) {
+      const finding: TeamAuthorityAuditFinding = {
+        code: 'invalid-team-authority-contract',
+        path: TEAM_CATALOG_PATH,
+        message: `Team authority contract is incomplete or drifted: ${authority.key}`,
+      };
+      findings.push(finding);
+    }
+    for (const contextPath of authority.contextPaths) {
+      if (!safeRepositoryPath(contextPath)) {
+        const finding: TeamAuthorityAuditFinding = {
+          code: 'unsafe-team-context-path',
+          path: contextPath,
+          message:
+            'Team context paths must be normalized and repository-relative.',
+        };
+        findings.push(finding);
+      } else if (!existsSync(join(request.repoRoot, contextPath))) {
+        const finding: TeamAuthorityAuditFinding = {
+          code: 'missing-team-context-path',
+          path: contextPath,
+          message: `Canonical Cortex team context is missing: ${contextPath}`,
+        };
+        findings.push(finding);
       }
     }
   }
   return {
-    paths: paths.sort(),
-    unsafePaths: unsafePaths.sort(),
+    findings,
+    authorityCount: request.authorities.length,
+    auditOk: findings.length === 0,
   };
+}
+
+export function auditTeamCortexAuthority(
+  request: AuditTeamCortexAuthorityRequest,
+): readonly TeamAuthorityAuditFinding[] {
+  const findings: TeamAuthorityAuditFinding[] = [];
+  const contractAuditRequest: MarkdownContractAuditRequest = {
+    sections: TEAM_AUTHORITY_CONTRACT_SECTIONS,
+    source: request.source,
+  };
+  for (const drift of auditMarkdownContractSections(contractAuditRequest)) {
+    const finding: TeamAuthorityAuditFinding = {
+      code: 'cortex-team-contract-semantic-drift',
+      path: TEAM_AUTHORITY_PATH,
+      message: `Canonical Cortex team contract drifted in ${drift.heading}: ${drift.missingMarkers.join(', ')}`,
+    };
+    findings.push(finding);
+  }
+  return findings;
+}
+
+function safeRepositoryPath(path: string): boolean {
+  return (
+    path !== '' &&
+    !path.startsWith('/') &&
+    !path.includes('\\') &&
+    !path.includes('\u0000') &&
+    !path.split('/').includes('..') &&
+    normalize(path) === path
+  );
 }

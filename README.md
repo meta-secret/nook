@@ -459,9 +459,10 @@ bounded Markdown materialized views there. Loom verifies those projections
 before a parent aggregates them into the next-level view and, finally, the root
 workflow view.
 
-Project-scoped module experts are named Codex roles backed by one typed registry
-and an isolated read-only Loom runtime. Direct native child spawning is not the
-capability boundary because it inherits the delivery session's permissions.
+Project-scoped module experts use stable semantic role names defined by the
+[Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
+worker behavior follows the [root Cortex contract](.cortex/AGENTS.md). The
+typed Loom catalog mirrors the roles for isolated read-only execution.
 Run **`task loom:module-experts:validate`** to verify complete production-module
 routing, runtime isolation, generated WASM binding contracts, the
 `internal_api_expert` boundary, and research exclusions. Loom journal creation
@@ -495,7 +496,7 @@ authority.
 Structural refactoring uses a separate read-only expert registry so overlapping
 maintenance scopes do not pretend to own production modules. Run
 **`task loom:structural-experts:validate`** to verify the exact code, Cortex,
-and synthesis profiles. Invoke one preauthorized role with
+and synthesis role contracts. Invoke one preauthorized role with
 **`task loom:structural-experts:invoke REQUEST=/absolute/path/to/request.json`**.
 `code_refactoring_expert` and `cortex_refactoring_expert` inspect only bounded
 exact-commit evidence. `system_coherence_synthesizer` receives only

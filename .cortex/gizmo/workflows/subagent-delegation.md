@@ -21,12 +21,8 @@ A capable agent environment MUST delegate when all of these conditions hold:
 - Use an exact Git commit as the normal immutable baseline.
   - Do not use a movable branch name as a worker baseline.
 - Record the delegation decision in the task plan.
-- Preserve Gizmo's exact model for every native subagent.
-  - Do not set a different model in the spawn request.
-  - Do not set `model` in a custom agent file.
-  - Do not set `model_reasoning_effort` in a custom agent file.
-  - Do not use an `[agents]` default that changes the model.
-  - Report a blocker when the harness does not inherit Gizmo's exact model.
+- Let the active harness own model inheritance or selection.
+- Do not encode model selection in the repository task contract.
 - If the host cannot start the required subagents:
   - report an implementation blocker;
   - do not let Gizmo implement the assigned task; and
@@ -89,7 +85,7 @@ This rule preserves
 Every subagent task must declare:
 
 - a stable task ID;
-- model inheritance without an override;
+- one semantic role or team identity;
 - its exact baseline;
 - its purpose;
 - its allowed files or evidence surface;
@@ -127,7 +123,7 @@ Module-oriented work follows
 [module-oriented-development.md](module-oriented-development.md).
 
 - Keep the feature dependency DAG separate from agent parent lineage.
-- Use the named read-only profiles in the
+- Use the named read-only semantic roles in the
   [module expert registry](../../teams/ai/architecture/module-experts.md).
 - Use the active harness to create and coordinate module experts and
   implementation workers.
@@ -153,11 +149,10 @@ They do not authorize descendants or lifecycle mutations.
 Implementation delegation also follows
 [Team-oriented development](team-oriented-development.md).
 
-- Assign each task to `ai_team_agent`, `development_core_team_agent`,
-  `security_team_agent`, `sre_team_agent`, or
-  `web_development_team_agent` before starting subagents.
-- Give every team agent one exact type and explicit code and Cortex paths.
-- Preserve Gizmo's exact model without a spawn or profile override.
+- Assign each task to AI, development core, security, SRE, or web development
+  before starting workers.
+- Give every team worker one exact team identity and explicit code and Cortex
+  paths.
 - Keep write-capable team agents in isolated workspaces with disjoint scopes.
 - Require each team agent to own its implementation, tests, Cortex updates,
   review fixes, and validation fixes.
@@ -168,8 +163,9 @@ Implementation delegation also follows
   state with Gizmo.
 - Give each worker only its team entry contract and exact task-relevant Cortex
   authorities. Do not attach every graph or the shared corpus.
-- Treat the selected profile as a routing default. It never replaces the
-  parent task contract or grants lifecycle authority.
+- Treat the parent task contract as the portable routing and capability
+  authority.
+- Treat repository profile files as non-authoritative.
 
 Team ownership does not add hierarchy depth or scheduling authority.
 
@@ -185,6 +181,8 @@ Its native control path includes:
 - terminal barriers;
 - nested delegation within declared bounds;
 - parent and root synthesis.
+
+It also owns native worker labels or names and model inheritance or selection.
 
 Repository event streams and semantic views are optional human evidence.
 They are not lifecycle authority for native harness delegation.
@@ -381,8 +379,8 @@ The architecture boundary is defined in
 Before integration, verify:
 
 - every worker used its declared exact baseline;
-- every team worker used its declared exact canonical type;
-- no team profile or spawn request overrode the model;
+- every team worker used its declared team identity;
+- the repository task contract did not prescribe a native label or model;
 - every reached task has a harness-visible terminal result;
 - every child records the correct parent lineage;
 - every task stayed inside its declared hierarchy depth bound;

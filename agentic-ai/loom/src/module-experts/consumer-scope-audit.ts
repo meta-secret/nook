@@ -57,7 +57,7 @@ export function auditInternalApiExpertConsumerScope(
   return [
     {
       code: 'invalid-internal-api-consumer-scope',
-      path: args.profile.agentDefinitionPath,
+      path: 'agentic-ai/loom/src/module-experts/catalog.ts',
       message:
         'internal_api_expert must declare every authored production TypeScript, Svelte, or JSON configuration file that directly imports, configures, or resolves a generated WASM binding, and no broader scope.',
     },

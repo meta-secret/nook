@@ -53,14 +53,9 @@ Runtime inputs have bounded authority:
 
 ### Hierarchy semantics
 
-The active harness owns native subagent hierarchy.
-
-- Every delegated task declares parent lineage.
-- Every task declares a hierarchy depth bound.
-- A child may delegate only inside its assigned task and ownership scope.
-- Descendants inherit the exact baseline and delivery owner.
-- The harness owns communication, scheduling, retries, cancellation, barriers,
-  nested delegation, and synthesis.
+Native hierarchy follows the root
+[team worker contract](../../../AGENTS.md#team-worker-contract) and
+[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
 A compiled Loom graph still declares its own fixed hierarchy.
 That hierarchy is an optional separate workflow.
@@ -75,7 +70,7 @@ Feature planning uses the
 - The feature dependency DAG controls readiness.
 - The agent hierarchy records semantic parentage.
 - Dependency chains do not increase hierarchy depth.
-- Named profiles come from the
+- Named semantic roles come from the
   [module expert registry](../architecture/module-experts.md).
 - `internal_api_expert` owns changed inter-module and WASM consumer contracts.
 - Expert catalog paths route knowledge and do not grant write authority.
@@ -149,39 +144,9 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 The active Codex, Cursor, or other capable harness is the primary worker
 adapter.
 
-It owns:
-
-- native subagent creation and communication;
-- Gizmo-model inheritance for every native subagent;
-- dependency-ready scheduling and barriers;
-- retry and cancellation behavior;
-- nested delegation within declared depth and ownership bounds;
-- child-result synthesis;
-- context transfer to downstream tasks.
-
-Nook does not start another Codex or Cursor process to coordinate those native
-subagents.
-
-Project role TOMLs remain thin routing instructions.
-
-The canonical write-capable team types are:
-
-- `ai_team_agent`;
-- `development_core_team_agent`;
-- `security_team_agent`;
-- `sre_team_agent`; and
-- `web_development_team_agent`.
-
-Their profiles enforce these boundaries:
-
-- The parent task contract supplies identity, baseline, scope, dependencies,
-  evidence, hierarchy depth, and the join.
-- The agent loads its own team `AGENTS.md`, knowledge graph, and minimal
-  task-relevant authorities.
-- Foreign-team requirements return to the parent.
-- Write-capable agents use isolated workspaces and return commit handoffs.
-- Profiles do not grant lifecycle authority.
-- Profiles do not set `model` or `model_reasoning_effort`.
+Its universal responsibilities are defined by the root worker contract and
+subagent delegation workflow. This architecture adds one boundary: Nook does
+not start another Codex or Cursor process to coordinate native subagents.
 
 The existing Loom Codex SDK adapter remains available for reviewed static
 read-only workflows.

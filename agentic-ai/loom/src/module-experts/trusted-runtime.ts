@@ -18,6 +18,10 @@ import {
   executeIsolatedModuleExpertAgent,
 } from './isolation-receipt.ts';
 import type {
+  ConsumeIsolatedModuleExpertExecutionArgs,
+  ExecuteIsolatedModuleExpertAgentArgs,
+} from './isolation-receipt.ts';
+import type {
   AgentExecutionCompletion,
   AgentExecutionInvocation,
   RuntimeActivityObserver,
@@ -57,6 +61,7 @@ export type ModuleExpertRuntimeIdentity = {
   readonly depth: number;
   readonly parent: AgentAttemptParent;
   readonly instruction: string;
+  readonly selectedContextPaths: readonly string[];
 };
 
 export type ModuleExpertRuntimeSession = {
@@ -114,6 +119,7 @@ type ModuleExpertSessionRecord = {
   readonly identityDigest: string;
   readonly agentProfile: AgentProfile<string>;
   readonly execution: AgentTaskExecution<string>;
+  readonly selectedContextPaths: readonly string[];
 };
 
 type ModuleExpertJournalAuthorityRecord = {
@@ -129,6 +135,7 @@ type ModuleExpertCompletionAuthorityRecord =
 type ModuleExpertPromptContext = {
   readonly profile: ModuleExpertProfile;
   readonly instruction: string;
+  readonly selectedContextPaths: readonly string[];
 };
 
 const MODULE_EXPERT_SESSIONS = new WeakMap<
@@ -191,6 +198,7 @@ export function createModuleExpertRuntimeSession(
   const promptContext: ModuleExpertPromptContext = {
     profile,
     instruction: request.instruction,
+    selectedContextPaths: request.selectedContextPaths,
   };
   const instruction = moduleExpertInstruction(promptContext);
   const parentCopy: AgentAttemptParent = { ...request.parent };
@@ -208,6 +216,7 @@ export function createModuleExpertRuntimeSession(
     depth: request.depth,
     parent,
     instruction,
+    selectedContextPaths: Object.freeze([...request.selectedContextPaths]),
   };
   const identity = Object.freeze(identityValue);
   const sessionValue = {
@@ -237,6 +246,7 @@ export function createModuleExpertRuntimeSession(
     identityDigest,
     agentProfile,
     execution,
+    selectedContextPaths: identity.selectedContextPaths,
   };
   MODULE_EXPERT_SESSIONS.set(session, record);
   const authorityRecord: ModuleExpertJournalAuthorityRecord = {
@@ -268,13 +278,18 @@ export async function executeModuleExpertAgent(
     execution: record.execution,
     agentProfile: record.agentProfile,
   };
-  const executionArgs = { invocation };
+  const executionArgs: ExecuteIsolatedModuleExpertAgentArgs<string, string> = {
+    invocation,
+    selectedContextPaths: record.selectedContextPaths,
+  };
   const isolatedExecution =
     await executeIsolatedModuleExpertAgent(executionArgs);
-  const consumeArgs = {
-    execution: isolatedExecution,
-    invocation,
-  };
+  const consumeArgs: ConsumeIsolatedModuleExpertExecutionArgs<string, string> =
+    {
+      execution: isolatedExecution,
+      invocation,
+      selectedContextPaths: record.selectedContextPaths,
+    };
   consumeIsolatedModuleExpertExecution(consumeArgs);
   const completion = isolatedExecution.completion;
   const authorityValue = {
@@ -353,6 +368,7 @@ function moduleExpertInstruction(context: ModuleExpertPromptContext): string {
     `Description: ${profile.description}`,
     `Module roots: ${JSON.stringify(profile.moduleRoots)}`,
     `Additional scope: ${JSON.stringify(profile.scopePaths)}`,
+    `Selected task context: ${JSON.stringify(context.selectedContextPaths)}`,
     `Generated scope: ${JSON.stringify(profile.generatedScopePaths.map((scope) => scope.path))}`,
     `Excluded paths: ${JSON.stringify(profile.excludedPaths)}`,
     `Public entry points: ${JSON.stringify(profile.publicEntryPoints)}`,

@@ -92,7 +92,6 @@ function materializedEvidenceManifest(
   input: ValidateStructuralOutputScopeRequest,
 ): ReadonlySet<string> {
   const selectedPaths = [
-    input.profile.agentDefinitionPath,
     input.profile.skillPath,
     ...input.profile.requiredContextPaths,
     ...input.request.evidencePaths,

@@ -22,30 +22,20 @@ owner follows
 `.cortex/gizmo/workflows/mission-delivery.md` without passing unrelated Gizmo context
 to a team worker.
 
-The parent dispatches the selected owner through exactly one canonical type:
-
-- AI: `ai_team_agent`;
-- development core: `development_core_team_agent`;
-- security: `security_team_agent`;
-- SRE: `sre_team_agent`; or
-- web development: `web_development_team_agent`.
-
-Gizmo selects the type through the canonical mapping authority at
-`.cortex/gizmo/workflows/team-oriented-development.md`.
-
-The profile is a routing default only. The validated parent contract supplies
-the baseline, scope, dependencies, proof, and handoff. Do not request a model
-or reasoning-effort override.
+The validated plan selects one semantic team identity. Apply the root
+`.cortex/AGENTS.md` team worker contract and
+`.cortex/gizmo/workflows/subagent-delegation.md`. Use
+`.cortex/gizmo/workflows/team-oriented-development.md` for team-specific
+routing.
 
 When a selected team authority links a foreign-team skill as required
 engineering policy, load that skill read-only. The functional owner may apply
 it directly; this alone does not require an expertise provider.
 
-## CI toolchain (Docker)
+## Execution environment
 
-The job runs `task setup` before you start (sealed **nook-web:local**). You run inside the
-**nook-ci-agent** container with the repo bind-mounted and the host Docker socket mounted
-(`/var/run/docker.sock` — sibling containers, not Docker-in-Docker).
+The job runs `task setup` before you start. Use repository Task targets for all
+allowed actions.
 
 **Product validation runs on configured GitHub Actions workers after the harness
 opens the PR. Trusted Rust gates may use ARC; runtime-dependent gates stay
