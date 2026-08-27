@@ -6,9 +6,10 @@ How Nook persists **replication-provider** credentials, the **login gate**, and
 how provider transports relate independently to identities and vaults.
 
 > **Canonical model:**
-> [identity-vault-architecture.md](identity-vault-architecture.md),
+> [identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md),
 > [unified-vault.md](unified-vault.md), and
-> [vault-session-and-lock.md](vault-session-and-lock.md). Providers are neutral
+> [vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md).
+> Providers are neutral
 > **replication targets** mounted independently by identity control logs and
 > vault event logs; they are not identities, vaults, or unlock factors.
 > Provider **event-log sync** mechanics live in
@@ -17,7 +18,7 @@ how provider transports relate independently to identities and vaults.
 
 **Related:** [ARCHITECTURE.md](../../../shared/architecture/system.md) §4,
 [password-manager.md](../product-specs/password-manager.md) §2A,
-[secret-store-identity.md](secret-store-identity.md).
+[secret-store-identity.md](../../security/architecture/secret-store-identity.md).
 
 ---
 
@@ -86,7 +87,7 @@ A domain-type refactor alone never authorizes a wire format change.
 | `githubPat?`, `githubRepo?`                                                          | GitHub only — PAT sealed at rest                                                                  |
 | `oauthFile?`                                                                         | Drive/iCloud block — see below                                                                    |
 | `localFolder?`                                                                       | File System Access directory handle metadata (`directoryName?`, `handleId?`)                      |
-| `storeId?`                                                                           | Logical secret store (`store_{token}`) — see [secret-store-identity.md](secret-store-identity.md) |
+| `storeId?`                                                                           | Logical secret store (`store_{token}`) — see [secret-store-identity.md](../../security/architecture/secret-store-identity.md) |
 | `lastSyncedVersion?`, `lastSyncedAt?`, `lastSyncRevision?`, `lastCommonContentHash?` | Sync bookkeeping                                                                                  |
 
 ### Wire fields (`oauthFile`)
@@ -291,7 +292,7 @@ Shared components live under
 
 ### Lock
 
-See [vault-session-and-lock.md](vault-session-and-lock.md). **Lock** is **not**
+See [vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md). **Lock** is **not**
 “delete vault” — it clears the WASM typed session database, the in-memory device
 identity, and sensitive Svelte state. The normal vault login gate remains
 visible; choosing device keys starts passkey authorization directly, while PIN
@@ -343,7 +344,7 @@ projection cache and fans events out to sync providers listed in `nook_auth`
 | Multiple sync providers per vault  | Done — fan-out after local save                                                                                                                             |
 | Single `store_id` across replicas  | Enforced — `StoreIdMismatch` in `sync/vault_sync.rs`                                                                                                        |
 | Event-log causal sync              | Done — [vault-event-log.md](vault-event-log.md)                                                                                                             |
-| Multi-vault on one browser profile | Partial — e2e coverage in `nook-web-app/e2e/multi-vault.spec.ts`; full picker UX still evolving ([vault-session-and-lock.md](vault-session-and-lock.md) §3) |
+| Multi-vault on one browser profile | Partial — e2e coverage in `nook-web-app/e2e/multi-vault.spec.ts`; full picker UX still evolving ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md) §3) |
 
 **Do not confuse:** adding a sync provider **replicates** the active vault;
 opening a **different** vault requires Lock and connect/import flow (or the

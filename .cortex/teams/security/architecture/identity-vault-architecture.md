@@ -364,8 +364,8 @@ It acts through a selected identity after the matching app key is enrolled.
 
 ## Related records
 
-- [devices-and-access.md](../product-specs/devices-and-access.md)
-- [auth-providers.md](auth-providers.md)
-- [vault-event-log.md](vault-event-log.md)
+- [devices-and-access.md](../../dev-core/product-specs/devices-and-access.md)
+- [auth-providers.md](../../dev-core/design-docs/auth-providers.md)
+- [vault-event-log.md](../../dev-core/design-docs/vault-event-log.md)
 - [vault-session-and-lock.md](vault-session-and-lock.md)
 - [browser-extension.md](../../web-dev/product-specs/browser-extension.md)

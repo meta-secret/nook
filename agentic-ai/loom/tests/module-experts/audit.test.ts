@@ -399,7 +399,7 @@ describe('module expert audit', () => {
     expect(WEB_EXPERT_CANONICAL_CONTEXT_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/web-dev/knowledge-graph.md',
-      '.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md',
+      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/teams/ai/workflows/module-oriented-development.md',
     ]);
@@ -411,7 +411,7 @@ describe('module expert audit', () => {
     expect(WEB_EXPERT_SKILL_AUTHORITY_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
       '.cortex/teams/ai/architecture/module-experts.md',
-      '.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md',
+      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
       '.cortex/teams/ai/dynamic-skills/module-expert.md',
       '.cortex/teams/ai/workflows/module-oriented-development.md',
     ]);

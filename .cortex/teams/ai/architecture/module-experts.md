@@ -240,7 +240,7 @@ It identifies:
   cards and that linked authority.
 - **Canonical skill context:** The fixed profile adds these exact authorities.
   - `.cortex/AGENTS.md`
-  - `.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md`
+  - `.cortex/teams/security/dynamic-skills/browser-extension-release-security.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
   - `.cortex/teams/ai/workflows/module-oriented-development.md`
 - **Product specification scope:** The profile receives every exact

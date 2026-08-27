@@ -7,8 +7,8 @@ This is the minimal entry contract for every Nook agent.
 Agents must keep Cortex retrieval proportional to their assigned work.
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the requested functionality as AI, development core, SRE, web
-   development, or shared integration.
+2. Classify the requested functionality as AI, development core, security,
+   SRE, web development, or shared integration.
 3. Load exactly one team `AGENTS.md` and its knowledge graph.
 4. Select the smallest set of documents that owns the task.
 5. Read only the relevant headings inside those documents.
@@ -47,6 +47,11 @@ One delivery owner decomposes a multi-team request before implementation.
 - The delivery owner routes that dependency to the responsible team.
 - Shared files and lifecycle state remain parent-owned.
 
+Security review does not erase functional implementation ownership. Security
+owns the invariant and acceptance criteria. Development core, web development,
+SRE, or AI owns implementation in its normal layer unless the delivery owner
+freezes a bounded expertise contract.
+
 When bounded delegation is unavailable, the delivery owner executes units
 serially. The same context and write boundaries still apply.
 
@@ -64,8 +69,9 @@ serially. The same context and write boundaries still apply.
   [agent feature ownership](teams/ai/dynamic-skills/agent-feature-ownership.md).
 - Only the delivery owner mutates Workbench, integrated Git state, pull
   requests, review threads, validation requests, readiness, and merge state.
-- Product and security rules stay in portable Rust/WASM when that layer owns
-  them. Web code receives public typed projections only.
+- Portable security behavior stays in Rust/WASM when development core owns the
+  implementation. Security owns cross-team security architecture and review.
+  Web code receives public typed projections only.
 - **1,000-line hard limit:** Every authored source file stays at or below 1,000
   lines. Oversized Rust signals excessive domain responsibility and requires
   cohesive domain or architectural decomposition. Extracting unit tests alone

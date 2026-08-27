@@ -145,8 +145,8 @@ They do not authorize descendants or lifecycle mutations.
 Implementation delegation also follows
 [Team-oriented development](team-oriented-development.md).
 
-- Classify each functional unit as `ai`, `dev-core`, `sre`, or `web-dev` before
-  dispatch.
+- Classify each functional unit as `ai`, `dev-core`, `security`, `sre`, or
+  `web-dev` before dispatch.
 - Give every team agent one team identity and explicit code and Cortex paths.
 - Keep write-capable team agents in isolated workspaces with disjoint scopes.
 - Require each team agent to own its implementation, tests, Cortex updates,

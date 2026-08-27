@@ -66,7 +66,7 @@ For a new card scaffold, prefer Loom:
 ```yaml
 skillScaffold:
   skillSlug: example-skill
-  skillOwner: ai # or shared, dev-core, sre, or web-dev
+  skillOwner: ai # or shared, dev-core, security, sre, or web-dev
   createExecutableWrappers: false
 ```
 

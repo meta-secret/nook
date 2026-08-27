@@ -8,6 +8,8 @@ const baseOwnershipUnit =
 
 const expertiseOwnershipUnit =
   '1. Capability: Workbench agent record validation; Functional owner: AI; Expertise provider: Web development; Expertise allowed code paths: .github/scripts/workbench-records.cjs; Expertise allowed test paths: .github/scripts/workbench-records.test.cjs; Expertise forbidden paths: .cortex/teams/ai,.cortex/shared; Expertise consumer interfaces: Plan input and validation result; Expertise acceptance evidence: Focused validator tests pass; Capability acceptance evidence: Published plans reject incomplete contracts'
+const securityOwnershipUnit =
+  '1. Capability: Cryptographic architecture review; Functional owner: Security; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Security architecture evidence is current'
 
 const validPlan = `# Task plan
 
@@ -229,6 +231,14 @@ test('accepts a complete cross-team expertise contract', () => {
     expertiseOwnershipUnit,
   )
   assert.equal(validateAgentRecord(expertisePlan, 'plan'), '')
+})
+
+test('accepts security as a functional owner', () => {
+  const securityPlan = validPlan.replace(
+    baseOwnershipUnit,
+    securityOwnershipUnit,
+  )
+  assert.equal(validateAgentRecord(securityPlan, 'plan'), '')
 })
 
 test('rejects an expertise provider without a complete contract', () => {

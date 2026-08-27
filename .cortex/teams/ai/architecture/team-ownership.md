@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Nook divides implementation responsibility across four engineering teams.
+Nook divides responsibility across five engineering teams.
 
 The split controls code, Cortex, agent routing, contracts, tests, and review-fix
 responsibility.
@@ -68,6 +68,22 @@ SRE owns build, validation, deployment, and runtime infrastructure.
 It must not own product rules, browser presentation, or another team's Cortex
 authorities.
 
+### Security
+
+Security owns cross-team security architecture and assurance.
+
+- **Primary responsibilities:**
+  - cryptographic policy and mechanism inventory;
+  - key ownership and lifecycle architecture;
+  - trust boundaries and protected-material rules;
+  - security-specific review and release skills; and
+  - security acceptance criteria for cross-team changes.
+- **Primary Cortex:** `.cortex/teams/security/`.
+
+Security does not automatically own implementation files. Development core,
+web development, SRE, and AI retain implementation ownership in their normal
+layers. Security owns the invariant and acceptance evidence.
+
 ### Web development
 
 Web development owns TypeScript and Svelte engineering expertise. It also owns
@@ -129,8 +145,8 @@ The delivery owner classifies the human request before implementation starts.
 
 1. Describe the observable functionality without assigning files yet.
 2. Split the functionality by durable responsibility.
-3. Map each unit to an AI, development-core, SRE, or web-development functional
-   owner.
+3. Map each unit to an AI, development-core, security, SRE, or web-development
+   functional owner.
 4. Identify implementation expertise required from another team.
 5. Identify every cross-team provider and consumer contract.
 6. Freeze the contract, baseline, write scope, forbidden scope, tests, and
@@ -148,6 +164,9 @@ File location does not override semantic ownership.
   documentation or automation dependency.
 - A Loom TypeScript refactor remains an AI capability. AI may request a bounded
   web-development implementation unit for TypeScript engineering expertise.
+- A cryptographic format or trust-boundary change requires security acceptance.
+  Its Rust, web, infrastructure, or agent implementation remains with the
+  corresponding functional team.
 
 ## Cross-team dependency protocol
 
@@ -211,6 +230,7 @@ The final integration must prove:
 - every changed path has one responsible team;
 - every capability has one functional owner;
 - every delegated implementation unit has one expertise provider;
+- every changed security boundary has named security acceptance evidence;
 - no expertise provider changed consumer Cortex, capability semantics, shared
   files, or undeclared code;
 - cross-team contracts were frozen before consumer integration;

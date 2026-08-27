@@ -24,7 +24,7 @@ There is no centrally hosted Nook account and no master password. The shipped
 applications keep multiple local identities in an independently protected
 browser keyring. Replicated identity control remains target architecture;
 identity records are not owned by a Nook account service. See the
-[identity and vault architecture](.cortex/teams/dev-core/design-docs/identity-vault-architecture.md)
+[identity and vault architecture](.cortex/teams/security/architecture/identity-vault-architecture.md)
 for the implemented/target boundary.
 
 > [!WARNING]
@@ -280,7 +280,7 @@ Deeper documentation lives in [`.cortex/`](.cortex/):
 - [Architecture](.cortex/shared/architecture/system.md)
 - [Vault event log](.cortex/teams/dev-core/design-docs/vault-event-log.md)
 - [Unified vault / local-first](.cortex/teams/dev-core/design-docs/unified-vault.md)
-- [Vault session and lock](.cortex/teams/dev-core/design-docs/vault-session-and-lock.md)
+- [Vault session and lock](.cortex/teams/security/architecture/vault-session-and-lock.md)
 - [Password manager](.cortex/teams/dev-core/product-specs/password-manager.md)
 - [Decentralized multi-device auth](.cortex/teams/dev-core/product-specs/decentralized-auth.md)
 - [Engineering principles](.cortex/teams/ai/design-docs/core-beliefs.md)

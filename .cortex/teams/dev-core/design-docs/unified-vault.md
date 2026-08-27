@@ -11,9 +11,12 @@
     replica model.
 - **Current ownership:** Identity, independent vault DEK, authorization grant,
   onboarding, and provider-mount ownership is defined in
-  [identity-vault-architecture.md](identity-vault-architecture.md).
+  [identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md).
 
-**Related:** [auth-providers.md](auth-providers.md), [vault-session-and-lock.md](vault-session-and-lock.md), [secret-store-identity.md](secret-store-identity.md), [ARCHITECTURE.md](../../../shared/architecture/system.md) §4.
+**Related:** [auth-providers.md](auth-providers.md),
+[vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md),
+[secret-store-identity.md](../../security/architecture/secret-store-identity.md),
+and [system architecture](../../../shared/architecture/system.md).
 
 ---
 
@@ -46,7 +49,7 @@ flowchart TB
 
 | Concept               | Old                          | New                                                                                                                                          |
 | --------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Vault**             | Implicit per provider        | Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](vault-session-and-lock.md))           |
+| **Vault**             | Implicit per provider        | Explicit logical DB (`store_id`); user may have **many vaults** over time ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md))           |
 | **Primary copy**      | Immutable provider event log | Local IndexedDB (`vault:{store_id}`) projection cache for the active vault                                                                   |
 | **Unlock**            | Provider-first wizard        | Login gate: unlock local cache or connect provider to fetch a vault                                                                          |
 | **Sync providers**    | Vault selectors              | **Mounted replica targets** supplied to vault sync — many providers, one `store_id`; identity control logs may mount providers independently |
@@ -182,7 +185,8 @@ stateDiagram-v2
    import an existing vault of the app's fixed type. See
    [sentinel-genesis.md](sentinel-genesis.md).
 3. **Lock** (`VaultState.lockVault`) clears in-memory secrets and the device
-   identity; user returns through the passkey gate ([vault-session-and-lock.md](vault-session-and-lock.md)).
+   identity; user returns through the passkey gate
+   ([vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md)).
 4. **After unlock**, sync providers in Settings replicate the **current** vault (`store_id`).
 
 Device-key multi-device flows (`auth:`, `joins:`, `members:`) continue alongside optional backup passwords.

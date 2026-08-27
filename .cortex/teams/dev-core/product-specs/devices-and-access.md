@@ -28,7 +28,7 @@
   - Extension setup enrolls its internal app key into a selected identity.
 
 See
-[identity-vault-architecture.md](../design-docs/identity-vault-architecture.md).
+[identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md).
 
 ## Identity and access model
 
@@ -377,6 +377,6 @@ Current dashboard requirements:
 
 ## Related records
 
-- [identity-vault-architecture.md](../design-docs/identity-vault-architecture.md)
+- [identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md)
 - [vault-event-log.md](../design-docs/vault-event-log.md)
 - [browser-extension.md](../../web-dev/product-specs/browser-extension.md)

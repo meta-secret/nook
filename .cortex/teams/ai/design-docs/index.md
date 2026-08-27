@@ -18,13 +18,13 @@ This index catalogs the durable design authorities and their current status.
 - **[arc-kata-runner-platform.md](../../../teams/sre/design-docs/arc-kata-runner-platform.md)**
   - Description: Disposable regular ARC runners, one persistent rootless BuildKit shard per node, cache distribution, and credential ownership
   - Status: Implemented
-- **[identity-vault-architecture.md](../../../teams/dev-core/design-docs/identity-vault-architecture.md)**
+- **[identity-vault-architecture.md](../../../teams/security/architecture/identity-vault-architecture.md)**
   - Description: Identity and vault ownership boundaries
   - Status: Local directory implemented
 - **[unified-vault.md](../../../teams/dev-core/design-docs/unified-vault.md)**
   - Description: Local-first vault model; scalar `vault_version` sync retained as historical context
   - Status: Partially historical — provider sync superseded by [vault-event-log.md](../../../teams/dev-core/design-docs/vault-event-log.md)
-- **[vault-session-and-lock.md](../../../teams/dev-core/design-docs/vault-session-and-lock.md)**
+- **[vault-session-and-lock.md](../../../teams/security/architecture/vault-session-and-lock.md)**
   - Description: Lock session, vault vs sync providers, multi-vault model
   - Status: Active; compatibility storage examples are explicitly non-authoritative
 - **[auth-providers.md](../../../teams/dev-core/design-docs/auth-providers.md)**
@@ -33,7 +33,7 @@ This index catalogs the durable design authorities and their current status.
 - **[passkey-manager.md](../../../teams/web-dev/design-docs/passkey-manager.md)**
   - Description: Chromium website passkey provider, ceremony boundary, sync, and threat model
   - Status: Implemented
-- **[secret-store-identity.md](../../../teams/dev-core/design-docs/secret-store-identity.md)**
+- **[secret-store-identity.md](../../../teams/security/architecture/secret-store-identity.md)**
   - Description: `store_id` logical vault identity, replication, `pk_id` rationale
   - Status: Verified
 - **[vault-event-log.md](../../../teams/dev-core/design-docs/vault-event-log.md)**

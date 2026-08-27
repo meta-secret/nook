@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Route Nook implementation through the `ai`, `dev-core`, `sre`, and `web-dev`
+Route Nook work through the `ai`, `dev-core`, `security`, `sre`, and `web-dev`
 ownership boundaries.
 
 Use this skill whenever a request touches code, scripts, infrastructure, tests, or Cortex owned by one or more engineering teams.
@@ -20,6 +20,10 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
    fixes for its owned unit.
 9. Keep shared files and lifecycle mutations in the parent-owned join.
 10. Follow [Team-oriented development](../workflows/team-oriented-development.md) for execution and validation.
+
+When a unit changes a security boundary, name security acceptance separately
+from implementation ownership. Security review does not transfer the
+implementation to the security team.
 
 ## Context boundary
 

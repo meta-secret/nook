@@ -110,6 +110,7 @@ function distributedDocuments(
 
 - [AI](teams/ai/knowledge-graph.md)
 - [Development core](teams/dev-core/knowledge-graph.md)
+- [Security](teams/security/knowledge-graph.md)
 - [SRE](teams/sre/knowledge-graph.md)
 - [Web development](teams/web-dev/knowledge-graph.md)
 - [Shared](shared/knowledge-graph.md)
@@ -127,6 +128,10 @@ ${rootExtra}`,
     path: '.cortex/teams/sre/knowledge-graph.md',
     content: '# SRE Knowledge Graph\n',
   };
+  const securityGraphArgs: MakeDocumentArgs = {
+    path: '.cortex/teams/security/knowledge-graph.md',
+    content: '# Security Knowledge Graph\n',
+  };
   const webGraphArgs: MakeDocumentArgs = {
     path: '.cortex/teams/web-dev/knowledge-graph.md',
     content: '# Web Development Knowledge Graph\n',
@@ -143,6 +148,7 @@ ${rootExtra}`,
     makeDocument(rootDocumentArgs),
     makeDocument(aiGraphArgs),
     makeDocument(devGraphArgs),
+    makeDocument(securityGraphArgs),
     makeDocument(sreGraphArgs),
     makeDocument(webGraphArgs),
     makeDocument(sharedGraphArgs),

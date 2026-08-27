@@ -26,15 +26,12 @@ vault behavior.
 Open the narrow design authority for the affected Rust or WASM contract.
 
 - [Authentication providers and sync](design-docs/auth-providers.md)
-- [Identity, app keys, passkeys, and vault keys](design-docs/identity-vault-architecture.md)
-- [Secret store identity](design-docs/secret-store-identity.md)
 - [Sentinel genesis](design-docs/sentinel-genesis.md)
 - [Typed newtypes](design-docs/typed-newtypes.md)
 - [Unified vault](design-docs/unified-vault.md)
 - [Vault architecture modes](design-docs/vault-architecture-modes.md)
 - [Vault event log](design-docs/vault-event-log.md)
 - [Vault schema versioning](design-docs/vault-schema-versioning.md)
-- [Vault session and lock](design-docs/vault-session-and-lock.md)
 
 ## Development skills
 

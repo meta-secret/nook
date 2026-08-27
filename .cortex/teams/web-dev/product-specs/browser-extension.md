@@ -34,7 +34,7 @@ website-passkey integration backed by an authorized Simple Vault. The first
 belongs to identity management. The second operates on vault-owned content.
 Pairing or trusting a site does not create a vault, and a provider credential
 does not authorize decryption. See
-[identity-vault-architecture.md](../../dev-core/design-docs/identity-vault-architecture.md).
+[identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md).
 
 The extension is a Simple Vault capability. It must never pair with, receive a
 grant from, inject a content script into, or open Sentinel Vault. Rust/WASM

@@ -110,7 +110,7 @@ enum VersionedVaultEventBody {
 
 ## Related
 
-- [secret-store-identity.md](secret-store-identity.md) — `store_id` / `pk_id` rationale
+- [secret-store-identity.md](../../security/architecture/secret-store-identity.md) — `store_id` / `pk_id` rationale
 - [vault-event-log.md](vault-event-log.md) — event envelope fields
 - [references/rust-wasm.md](../references/rust-wasm.md) — WASM boundary conventions
 - [dynamic-skills/testing-pyramid-and-regression.md](../../../shared/dynamic-skills/testing-pyramid-and-regression.md) — domain testing standards

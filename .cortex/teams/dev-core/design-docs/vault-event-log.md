@@ -25,7 +25,7 @@ Member and app-key roster changes update identity DEK envelopes.
 They do not rewrite vault membership as the authority model.
 
 Legacy `join-approved` and `auth:` envelopes remain a compatibility boundary.
-See [identity-vault-architecture.md](identity-vault-architecture.md).
+See [identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md).
 
 ## Architecture
 

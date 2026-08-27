@@ -18,7 +18,7 @@ independently with zero or more registered keys and receives explicit grants
 to independently encrypted vaults. Local identity selection and identity-owned
 DEK records are implemented. Replicated identity-control storage,
 cross-installation enrollment, and revocation remain target architecture. See
-[identity-vault-architecture.md](identity-vault-architecture.md).
+[identity-vault-architecture.md](../../security/architecture/identity-vault-architecture.md).
 
 ## Architecture Groups
 

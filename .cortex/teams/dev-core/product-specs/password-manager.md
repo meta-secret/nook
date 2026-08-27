@@ -230,7 +230,7 @@ secrets:
       -----END AGE ENCRYPTED FILE-----
 ```
 
-- **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../design-docs/secret-store-identity.md).
+- **`store_id`:** Logical secret-store identity (`store_{token}`). Same value on every provider replica. See [secret-store-identity.md](../../security/architecture/secret-store-identity.md).
 - **`vault_version`:** Local projection revision. Provider sync uses immutable event heads — see [vault-event-log.md](../design-docs/vault-event-log.md).
 - **`id`:** Secret item id — generated items use `secret_{token}`; legacy human labels still load.
 - **`data`:** Armored age ciphertext of the secret value only (YAML `|` block scalar for multiline armor).

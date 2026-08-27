@@ -2,7 +2,8 @@
 
 ## Mission
 
-Development core owns Nook's portable application and security domain.
+Development core owns Nook's portable application behavior, including the Rust
+implementation of security controls.
 
 ## Context loading
 
@@ -11,7 +12,7 @@ Development core owns Nook's portable application and security domain.
    portable behavior.
 3. Load only the relevant headings and directly required Rust skill.
 4. Do not preload every product specification or design document.
-5. Do not open the SRE, web, or AI graph for background context.
+5. Do not open the security, SRE, web, or AI graph for background context.
 
 Load a shared architecture document only when the assigned contract crosses a
 named package boundary. Report every foreign-team dependency to the delivery
@@ -23,8 +24,8 @@ Do not load the consumer team's complete graph.
 ## Owned responsibilities
 
 - Portable Rust domain crates and their behavior-focused tests.
-- Identity, authorization, cryptography, replication, signed events, vaults,
-  and storage schemas.
+- Rust implementations for identity, authorization, cryptography, replication,
+  signed events, vaults, and storage schemas.
 - Typed WASM bridges and generated contracts when they expose core behavior.
 - Portable validation and business rules.
 - Development-core product specifications, design docs, references, and
@@ -38,10 +39,23 @@ Do not load the consumer team's complete graph.
 - Foreign capability semantics or another team's Cortex documents.
 - Consumer-team files outside an explicit expertise contract.
 - Shared Git, PR, Workbench, validation, readiness, and merge state.
+- Security-team architecture, cryptographic policy, or review criteria.
 
 TypeScript or Svelte must not become an alternate owner for portable business
 or security logic. Return the required typed contract to the delivery owner
 when a web consumer needs new core functionality.
+
+Load a named security architecture section as read-only policy when changing a
+security-sensitive Rust contract. Return new or changed cross-team security
+invariants to the delivery owner for security-team acceptance.
+
+Task contracts may name these read-only authorities:
+
+- [Nook security architecture](../security/architecture/security-architecture.md)
+- [Identity, app keys, passkeys, and vault keys](../security/architecture/identity-vault-architecture.md)
+- [Secret store identity](../security/architecture/secret-store-identity.md)
+- [Vault session and lock](../security/architecture/vault-session-and-lock.md)
+- [Cryptography and protected material](../security/references/cryptography.md)
 
 Rust expertise does not transfer functional ownership. The consumer team keeps
 its capability semantics and acceptance contract.

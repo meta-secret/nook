@@ -1,7 +1,7 @@
 ---
 name: team-oriented-development
 description: >-
-  Route Nook work through AI, dev-core, SRE, and web-development team
+  Route Nook work through AI, dev-core, security, SRE, and web-development team
   boundaries. Use when a request touches code, scripts, infrastructure, tests,
   Cortex, Loom, or agent workflows owned by one or more teams.
 ---
