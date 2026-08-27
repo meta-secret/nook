@@ -2,6 +2,8 @@ use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
+const LEGACY_IMPECCABLE_INSTALL: &str = ".agents/skills/impeccable";
+
 pub(super) fn collect_authored_source_files(
     directory: &Path,
     files: &mut Vec<PathBuf>,
@@ -43,6 +45,9 @@ pub(super) fn collect_authored_source_files(
 }
 
 fn is_excluded_directory(path: &Path) -> bool {
+    if path.ends_with(Path::new(LEGACY_IMPECCABLE_INSTALL)) {
+        return true;
+    }
     path.file_name()
         .and_then(std::ffi::OsStr::to_str)
         .is_some_and(|name| {
@@ -59,4 +64,20 @@ fn is_excluded_directory(path: &Path) -> bool {
                     | "test-results"
             )
         })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_excluded_directory;
+    use std::path::Path;
+
+    #[test]
+    fn excludes_only_the_legacy_impeccable_install() {
+        assert!(is_excluded_directory(Path::new(
+            "/repo/.agents/skills/impeccable"
+        )));
+        assert!(!is_excluded_directory(Path::new(
+            "/repo/.agents/skills/example"
+        )));
+    }
 }

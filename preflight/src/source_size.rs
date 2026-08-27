@@ -21,6 +21,7 @@ const ALWAYS_EXCLUDED_DIRECTORY_NAMES: &[&str] =
 const OUTPUT_DIRECTORY_NAMES: &[&str] = &["coverage", "dist", "target"];
 
 const EXCLUDED_REPOSITORY_PREFIXES: &[&str] = &[
+    ".agents/skills/impeccable",
     "workflow/processing",
     "nook-app/nook-web/nook-web-shared/src/wasm",
     "nook-app/nook-web/nook-web-shared/src/generated",
@@ -419,6 +420,11 @@ mod tests {
                 lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
             )?;
         }
+        fs::create_dir_all(root.join(".agents/skills/impeccable/generated"))?;
+        fs::write(
+            root.join(".agents/skills/impeccable/generated/oversized.ts"),
+            lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
+        )?;
         fs::write(
             root.join("large-fixture.json"),
             lines(AUTHORED_SOURCE_LINE_LIMIT + 1),
