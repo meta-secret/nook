@@ -6,7 +6,10 @@ on:
   push:
     branches: [main]
     paths:
+      - .agents/skills/**
+      - .claude/skills/**
       - .cortex/**
+      - .cursor/skills/**
       - .github/formatting/**
       - .github/scripts/format-host-apply.sh
       - .github/scripts/format-host-apply.test.sh
@@ -50,7 +53,7 @@ jobs:
           runner_placement_changed=false
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .cortex/* | .github/formatting/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | agentic-ai/loom/* | preflight/* | tooling/eslint-rules/*)
+              .agents/skills/* | .claude/skills/* | .cortex/* | .cursor/skills/* | .github/formatting/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | agentic-ai/loom/* | preflight/* | tooling/eslint-rules/*)
                 loom_changed=true
                 ;;
             esac
