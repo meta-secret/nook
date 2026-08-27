@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, lstatSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
@@ -31,6 +31,7 @@ import {
 } from '../lib/cortex-article-structure.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
+  readonly invalidExecutableSkillPackages: string[];
   readonly missingFromIndex: string[];
   readonly orphanIndexRows: string[];
   readonly prohibitedHarnessSkillPaths: string[];
@@ -75,7 +76,7 @@ export async function runCortexAuditFromDirectory(
     const documentSource: CortexDocumentSource = {
       absolutePath: filePath,
       relativePath: path.relative(repoRoot, filePath),
-      content: readFileSync(filePath, 'utf8'),
+      content: readCortexMarkdown(filePath),
     };
     return documentSource;
   });
@@ -90,10 +91,10 @@ export async function runCortexAuditFromDirectory(
       )
       .map((finding) => finding.file),
   );
-  const syntaxInvalidSkillNames = new Set(
-    [...syntaxInvalidPaths]
-      .filter((filePath) => filePath.includes('/dynamic-skills/'))
-      .map((filePath) => path.basename(filePath)),
+  const syntaxInvalidSkillPaths = new Set(
+    [...syntaxInvalidPaths].filter((filePath) =>
+      filePath.includes('/dynamic-skills/'),
+    ),
   );
   const documents = allDocuments.filter((document) => {
     const persistenceArgs: IsPersistentCortexMarkdownFileArgs = {
@@ -170,13 +171,29 @@ export async function runCortexAuditFromDirectory(
     path.join(cortexRoot, 'teams', 'sre', 'dynamic-skills'),
     path.join(cortexRoot, 'teams', 'web-dev', 'dynamic-skills'),
   ];
+  const executableSkillPackageFindings = skillDirectories.flatMap(
+    (skillsDir) => {
+      const packageAuditArgs: AuditExecutableSkillPackagesArgs = {
+        repoRoot,
+        skillsDir,
+      };
+      return auditExecutableSkillPackages(packageAuditArgs);
+    },
+  );
   const skillFiles = skillDirectories
     .flatMap((skillsDir) =>
       existsSync(skillsDir)
         ? readdirSync(skillsDir)
-            .filter((name) => name.endsWith('.md'))
-            .filter((name) => name !== 'index.md' && name !== '_template.md')
-            .map((name) => path.join(skillsDir, name))
+            .flatMap((name) => {
+              const candidate = path.join(skillsDir, name);
+              if (name.endsWith('.md')) return [candidate];
+              const skill = path.join(candidate, 'SKILL.md');
+              return existsSync(skill) ? [skill] : [];
+            })
+            .filter(
+              (file) =>
+                !file.endsWith('/index.md') && !file.endsWith('/_template.md'),
+            )
         : [],
     )
     .map((filePath) => path.relative(repoRoot, filePath))
@@ -197,7 +214,7 @@ export async function runCortexAuditFromDirectory(
   const missingFromIndex = indexIsAdmitted
     ? skillFiles
         .filter((filePath) => !indexed.has(filePath))
-        .map((filePath) => path.basename(filePath))
+        .map(skillDiagnosticName)
     : [];
   const orphanIndexRows = indexIsAdmitted
     ? [...indexed]
@@ -205,16 +222,17 @@ export async function runCortexAuditFromDirectory(
           (filePath) =>
             path.basename(filePath) !== 'index.md' &&
             path.basename(filePath) !== '_template.md' &&
-            !syntaxInvalidSkillNames.has(path.basename(filePath)) &&
+            !syntaxInvalidSkillPaths.has(filePath) &&
             !skillFiles.includes(filePath),
         )
-        .map((filePath) => path.basename(filePath))
+        .map(skillDiagnosticName)
     : [];
 
   const prohibitedHarnessSkillPaths = trackedHarnessSkillPaths(repoRoot);
 
   return {
     brokenLinks,
+    invalidExecutableSkillPackages: executableSkillPackageFindings,
     missingFromIndex,
     orphanIndexRows,
     prohibitedHarnessSkillPaths,
@@ -223,6 +241,7 @@ export async function runCortexAuditFromDirectory(
     articleStructureFindings,
     auditOk:
       brokenLinks.length === 0 &&
+      executableSkillPackageFindings.length === 0 &&
       missingFromIndex.length === 0 &&
       orphanIndexRows.length === 0 &&
       prohibitedHarnessSkillPaths.length === 0 &&
@@ -263,7 +282,7 @@ const DOCUMENT_MAP_SKILL_PATH =
   '.cortex/teams/ai/dynamic-skills/cortex-document-map.md';
 const ARTICLE_MIGRATION_LEDGER_PATH = '.cortex/article-structure-migration.txt';
 const ARTICLE_STRUCTURE_SKILL_PATH =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure.md';
+  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md';
 
 type ReadGitTextArgs = {
   readonly relativePath: string;
@@ -406,6 +425,11 @@ export function listCortexMarkdownFiles(root: string): string[] {
     for (const entry of readdirSync(current, directoryReadOptions)) {
       const full = path.join(current, entry.name);
       if (entry.isDirectory()) {
+        const scriptsDirectoryArgs: IsExecutableSkillScriptsDirectoryArgs = {
+          cortexRoot: root,
+          candidate: full,
+        };
+        if (isExecutableSkillScriptsDirectory(scriptsDirectoryArgs)) continue;
         stack.push(full);
         continue;
       }
@@ -415,4 +439,207 @@ export function listCortexMarkdownFiles(root: string): string[] {
     }
   }
   return out.sort();
+}
+
+const EXECUTABLE_SKILL_PROJECT_FILES = [
+  '.gitignore',
+  '.prettierrc',
+  'bun.lock',
+  'eslint.config.js',
+  'executable-skill.json',
+  'package.json',
+  'tsconfig.json',
+] as const;
+
+export type AuditExecutableSkillPackagesArgs = {
+  readonly repoRoot: string;
+  readonly skillsDir: string;
+};
+
+export function auditExecutableSkillPackages(
+  args: AuditExecutableSkillPackagesArgs,
+): string[] {
+  if (!existsSync(args.skillsDir)) return [];
+  const findings: string[] = [];
+  const directoryOptions: { readonly withFileTypes: true } = {
+    withFileTypes: true,
+  };
+  for (const entry of readdirSync(args.skillsDir, directoryOptions)) {
+    if (entry.isSymbolicLink()) {
+      findings.push(
+        `${path.relative(args.repoRoot, path.join(args.skillsDir, entry.name))}: dynamic skill entries cannot be symlinks`,
+      );
+      continue;
+    }
+    if (!entry.isDirectory()) continue;
+    const packageRoot = path.join(args.skillsDir, entry.name);
+    const skillPath = path.join(packageRoot, 'SKILL.md');
+    if (!isRegularFile(skillPath)) {
+      findings.push(
+        `${path.relative(args.repoRoot, packageRoot)}: executable skill directory is missing SKILL.md`,
+      );
+      continue;
+    }
+    const frontmatterArgs: AuditExecutableSkillFrontmatterArgs = {
+      repoRoot: args.repoRoot,
+      skillPath,
+      slug: entry.name,
+    };
+    findings.push(...auditExecutableSkillFrontmatter(frontmatterArgs));
+    const scriptsRoot = path.join(packageRoot, 'scripts');
+    if (!isRegularDirectory(scriptsRoot)) {
+      findings.push(
+        `${path.relative(args.repoRoot, scriptsRoot)}: executable skill package is missing scripts`,
+      );
+      continue;
+    }
+    for (const required of EXECUTABLE_SKILL_PROJECT_FILES) {
+      const requiredPath = path.join(scriptsRoot, required);
+      if (!isRegularFile(requiredPath)) {
+        findings.push(
+          `${path.relative(args.repoRoot, requiredPath)}: executable skill package file is missing`,
+        );
+      }
+    }
+    for (const required of ['src', 'tests'] as const) {
+      const requiredPath = path.join(scriptsRoot, required);
+      if (!isRegularDirectory(requiredPath)) {
+        findings.push(
+          `${path.relative(args.repoRoot, requiredPath)}: executable skill package directory is missing`,
+        );
+      }
+    }
+    for (const nestedSkillPath of nestedSkillCards(scriptsRoot)) {
+      findings.push(
+        `${path.relative(args.repoRoot, nestedSkillPath)}: scripts cannot contain a skill-card mirror`,
+      );
+    }
+  }
+  return findings.sort();
+}
+
+function nestedSkillCards(scriptsRoot: string): readonly string[] {
+  const skillCards: string[] = [];
+  const pending = [scriptsRoot];
+  const directoryOptions: { readonly withFileTypes: true } = {
+    withFileTypes: true,
+  };
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    if (typeof directory !== 'string') break;
+    for (const entry of readdirSync(directory, directoryOptions)) {
+      if (entry.name === 'node_modules') continue;
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) pending.push(entryPath);
+      if (entry.isFile() && entry.name === 'SKILL.md')
+        skillCards.push(entryPath);
+    }
+  }
+  return skillCards.sort();
+}
+
+type AuditExecutableSkillFrontmatterArgs = {
+  readonly repoRoot: string;
+  readonly skillPath: string;
+  readonly slug: string;
+};
+
+function auditExecutableSkillFrontmatter(
+  args: AuditExecutableSkillFrontmatterArgs,
+): string[] {
+  const relativeSkillPath = path.relative(args.repoRoot, args.skillPath);
+  const content = readFileSync(args.skillPath, 'utf8');
+  const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/u
+    .exec(content)
+    ?.at(1);
+  if (typeof frontmatter !== 'string') {
+    return [`${relativeSkillPath}: SKILL.md is missing YAML frontmatter`];
+  }
+  const values = new Map<string, string>();
+  for (const line of frontmatter.split(/\r?\n/u)) {
+    const field = /^(name|description):\s*(\S(?:.*\S)?)\s*$/u.exec(line);
+    const name = field?.at(1);
+    const value = field?.at(2);
+    if (typeof name === 'string' && typeof value === 'string') {
+      if (values.has(name)) {
+        return [
+          `${relativeSkillPath}: SKILL.md frontmatter duplicates ${name}`,
+        ];
+      }
+      values.set(name, value);
+    }
+  }
+  const findings: string[] = [];
+  if (values.get('name') !== args.slug) {
+    findings.push(
+      `${relativeSkillPath}: SKILL.md name must equal directory slug ${args.slug}`,
+    );
+  }
+  const description = values.get('description');
+  if (
+    typeof description !== 'string' ||
+    description === '""' ||
+    description === "''"
+  ) {
+    findings.push(
+      `${relativeSkillPath}: SKILL.md description must be nonempty`,
+    );
+  }
+  return findings;
+}
+
+type IsExecutableSkillScriptsDirectoryArgs = {
+  readonly cortexRoot: string;
+  readonly candidate: string;
+};
+
+function isExecutableSkillScriptsDirectory(
+  args: IsExecutableSkillScriptsDirectoryArgs,
+): boolean {
+  if (path.basename(args.candidate) !== 'scripts') return false;
+  const skillRoot = path.dirname(args.candidate);
+  if (!isRegularFile(path.join(skillRoot, 'SKILL.md'))) return false;
+  const ownerRoot = path.dirname(skillRoot);
+  if (path.basename(ownerRoot) !== 'dynamic-skills') return false;
+  const relativeOwner = path.relative(args.cortexRoot, ownerRoot);
+  return (
+    relativeOwner === path.join('gizmo', 'dynamic-skills') ||
+    relativeOwner === path.join('shared', 'dynamic-skills') ||
+    ['ai', 'dev-core', 'security', 'sre', 'web-dev'].some(
+      (team) => relativeOwner === path.join('teams', team, 'dynamic-skills'),
+    )
+  );
+}
+
+function readCortexMarkdown(filePath: string): string {
+  const content = readFileSync(filePath, 'utf8');
+  return filePath.endsWith(`${path.sep}SKILL.md`)
+    ? content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u, (frontmatter) =>
+        frontmatter.replace(/[^\r\n]/gu, ' '),
+      )
+    : content;
+}
+
+function skillDiagnosticName(filePath: string): string {
+  return path.basename(filePath) === 'SKILL.md'
+    ? path.dirname(filePath)
+    : path.basename(filePath);
+}
+
+function isRegularFile(filePath: string): boolean {
+  try {
+    const metadata = lstatSync(filePath);
+    return metadata.isFile() && !metadata.isSymbolicLink();
+  } catch {
+    return false;
+  }
+}
+
+function isRegularDirectory(directoryPath: string): boolean {
+  try {
+    const metadata = lstatSync(directoryPath);
+    return metadata.isDirectory() && !metadata.isSymbolicLink();
+  } catch {
+    return false;
+  }
 }

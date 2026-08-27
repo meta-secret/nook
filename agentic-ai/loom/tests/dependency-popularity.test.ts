@@ -67,10 +67,18 @@ describe('scanRepositoryNpmPackages', () => {
     writeManifest(loomWrite);
     const skillsWrite: WriteManifestArgs = {
       root,
-      relativePath: 'agentic-ai/skills/package.json',
+      relativePath:
+        '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json',
       manifest: { dependencies: { beta: '2.0.0', shared: '1.0.0' } },
     };
     writeManifest(skillsWrite);
+    writeFileSync(
+      path.join(
+        root,
+        '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
+      ),
+      '# Cortex Article Structure\n',
+    );
 
     expect(scanRepositoryNpmPackages(root)).toEqual([
       'alpha',

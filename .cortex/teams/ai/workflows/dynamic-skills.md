@@ -66,11 +66,14 @@ scope, and apply the pattern with normal coding workflow and validation.
 6. Keep harness-specific discovery configuration outside the tracked
    repository. Do not create `.agents`, `.cursor`, or `.claude` skill mirrors.
 
-Executable applications are distinct from semantic skill cards. Put their
-ordinary Bun and TypeScript project code under `agentic-ai/skills`, keep policy
-in the owning Cortex card, and apply the repository TypeScript rules, focused
-tests, and 1,000-line source limit. The current Cortex article application is
-in-process only; strict YAML discovery and invocation remain follow-up work.
+Executable applications remain owned by their semantic skill card. Use the
+folder form `<dynamic-skills>/<slug>/SKILL.md` and put the ordinary Bun and
+TypeScript project under its co-located `scripts/` directory. The project must
+have a frozen lockfile, package manifest, TypeScript and ESLint configuration,
+focused `src/` and `tests/`, and the repository 1,000-line source limit. It must
+not contain another `SKILL.md` or become a harness mirror. The Cortex article
+application is in-process only; strict YAML discovery and invocation remain
+follow-up work.
 
 For a new card scaffold, prefer Loom:
 
@@ -84,7 +87,10 @@ skillScaffold:
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
-Then fill the card content and verify with `task loom:cortex-audit`.
+The scaffold creates the prose-only `<slug>.md` form. When the skill needs a
+deterministic application, convert it in the same change to
+`<slug>/SKILL.md`, add the independent `scripts/` project, and update its index
+link. Then fill the card content and verify with `task loom:cortex-audit`.
 
 See [loom-tools.md](../references/loom-tools.md).
 

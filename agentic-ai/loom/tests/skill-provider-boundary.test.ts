@@ -669,16 +669,12 @@ export function referencesSkillProvider(specifier: string): boolean {
       return true;
     }
   }
+  const framed = `/${normalized.replace(/^\/+|\/+$/gu, '')}/`;
   return (
-    normalized === '.agents/skills' ||
-    normalized.endsWith('/.agents/skills') ||
-    normalized.startsWith('.agents/skills/') ||
-    normalized.includes('/.agents/skills/') ||
-    normalized === 'agentic-ai/skills' ||
-    normalized.endsWith('/agentic-ai/skills') ||
-    normalized.startsWith('agentic-ai/skills/') ||
-    normalized.includes('/agentic-ai/skills/') ||
-    normalized.includes('/skills/cortex-article-structure/')
+    framed.includes('/.agents/skills/') ||
+    framed.includes(
+      '/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/',
+    )
   );
 }
 

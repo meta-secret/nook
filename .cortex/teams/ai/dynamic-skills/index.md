@@ -21,7 +21,7 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one 1,000-line ceiling; oversized Rust signals excessive domain responsibility and requires cohesive decomposition
 - **[cortex-writer.md](cortex-writer.md)**
   - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; reserve tables for compact repeated fields or exact mappings
-- **[cortex-article-structure.md](cortex-article-structure.md)**
+- **[cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md)**
   - Purpose: **P1 / critical `.cortex` article rule:** expose semantic Markdown hierarchy; authored HTML nodes are prohibited, while literal HTML belongs in inline or block code
 - **[cortex-consistency.md](cortex-consistency.md)**
   - Purpose: **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code
@@ -103,6 +103,9 @@ Harness profile directories must not mirror or redefine these cards.
    `web-dev`.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
+   Keep prose-only cards as `<slug>.md`. For an executable skill, convert the
+   card to `<slug>/SKILL.md` and co-locate its independent Bun and TypeScript
+   project under `<slug>/scripts/`.
 3. Confirm the new card is in the catalog above and its owning Gizmo or team
    graph. Use the shared graph only for ownerless cross-team knowledge.
 4. Keep harness-specific profiles outside the tracked repository. Do not create

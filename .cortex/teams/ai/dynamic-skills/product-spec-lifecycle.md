@@ -65,7 +65,8 @@ Capture durable product knowledge in the owning specification in the same PR:
 If no specification exists for a new feature or item type:
 
 1. Create the specification in the responsible team's `product-specs/` directory.
-2. Follow [cortex-writer.md](cortex-writer.md) and [cortex-article-structure.md](cortex-article-structure.md).
+2. Follow [cortex-writer.md](cortex-writer.md) and
+   [cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md).
 3. Register the new specification in [`.cortex/shared/product-specs/index.md`](../../../shared/product-specs/index.md).
 4. Update navigation entries in the owning team knowledge graph.
 

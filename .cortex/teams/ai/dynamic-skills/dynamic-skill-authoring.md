@@ -27,6 +27,9 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
    - Preserve security ownership for security policy and acceptance.
    Multi-team consumption does not erase a clear owner. This card is the
    source of truth.
+   - Keep prose-only skills as `<slug>.md`.
+   - Use `<slug>/SKILL.md` when the skill owns executable TypeScript under a
+     co-located `scripts/` project.
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Keep harness-specific profile directories outside the tracked repository.
    Do not duplicate semantic guidance under `.agents`, `.cursor`, or `.claude`.
@@ -65,6 +68,10 @@ Does not apply to:
     `shared` for ownerless repository-wide policy;
   - use `security` for security policy, trust boundaries, and acceptance;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
+  - when deterministic code is required, convert the scaffolded card to
+    `<slug>/SKILL.md`, add `name` and `description` frontmatter, and create an
+    independently installable `scripts/` project with `src/`, `tests/`, a
+    frozen `bun.lock`, and the repository TypeScript configuration;
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
     Loom did not.
 - Run `task loom:cortex-audit` after the card and registry agree.

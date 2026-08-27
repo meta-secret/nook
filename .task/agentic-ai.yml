@@ -7,21 +7,22 @@ vars:
 
 tasks:
   skills:install:
-    desc: Install executable application dependencies with a frozen lockfile.
-    dir: agentic-ai/skills
+    desc: Install the Cortex article executable package with a frozen lockfile.
+    dir: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts
+    silent: true
     cmds:
-      - bun install --frozen-lockfile
+      - bun install --frozen-lockfile 1>&2
 
   skills:format:
     desc: Format executable application TypeScript and manifests.
-    dir: agentic-ai/skills
+    dir: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts
     deps: [skills:install]
     cmds:
       - bun run format
 
   skills:verify:
-    desc: Format-check, lint, typecheck, and test executable applications.
-    dir: agentic-ai/skills
+    desc: Format-check, lint, typecheck, and test the executable application.
+    dir: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts
     deps: [skills:install]
     cmds:
       - bun run verify

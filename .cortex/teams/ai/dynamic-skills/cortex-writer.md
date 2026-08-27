@@ -71,9 +71,9 @@ Split the idea before writing the final prose.
    - Use Mermaid (` ```mermaid `) for flowcharts, sequence diagrams, and architecture maps.
    - Use structured ordered or unordered lists for execution procedures.
 
-Use [Cortex structured articles](cortex-article-structure.md) to choose the body
-shape. This rule governs sentence complexity and content conciseness. The structured-article rule
-governs semantic hierarchy.
+Use [Cortex structured articles](cortex-article-structure/SKILL.md) to choose the
+body shape. This rule governs sentence complexity and content conciseness. The
+structured-article rule governs semantic hierarchy.
 
 Checklist for every new or edited `.cortex` sentence:
 

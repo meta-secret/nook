@@ -194,6 +194,16 @@ export function mechanicalCortexAuditOutput(
     };
     findings.push(finding);
   }
+  for (const packageFinding of report.invalidExecutableSkillPackages) {
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Invalid executable-skill package',
+      summary: packageFinding,
+      evidence: [packageFinding],
+      affectedPaths: [packageFinding.split(':').at(0) ?? '.cortex'],
+    };
+    findings.push(finding);
+  }
   for (const skill of report.missingFromIndex) {
     const finding: WorkflowFinding = {
       severity: WorkflowFindingSeverity.Error,

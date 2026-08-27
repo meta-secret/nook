@@ -294,16 +294,12 @@ function utf8ByteLength(value: string): number {
 }
 
 function assertCanonicalExecutableSkillSourcePath(relativePath: string): void {
-  const segments = relativePath.split('/');
   if (
     !relativePath.endsWith(ExecutableSkillSourceModuleSuffix.TypeScript) ||
     posix.isAbsolute(relativePath) ||
     posix.normalize(relativePath) !== relativePath ||
     relativePath.includes('\\') ||
-    segments.length < 4 ||
-    segments[0] !== 'agentic-ai' ||
-    segments[1] !== 'skills' ||
-    !segments[2]
+    executableSkillRoot(relativePath) === false
   ) {
     throw new Error(
       'Executable skill requires a canonical TypeScript source path inside its skill root.',
@@ -319,8 +315,12 @@ type AssertContainedModuleSpecifierRequest = {
 function assertContainedModuleSpecifier(
   request: AssertContainedModuleSpecifierRequest,
 ): void {
-  const sourceSegments = request.sourcePath.split('/');
-  const skillRoot = sourceSegments.slice(0, 3).join('/');
+  const skillRoot = executableSkillRoot(request.sourcePath);
+  if (skillRoot === false) {
+    throw new Error(
+      'Executable skill requires a canonical TypeScript source path inside its skill root.',
+    );
+  }
   const resolvedPath = posix.normalize(
     posix.join(posix.dirname(request.sourcePath), request.moduleSpecifier),
   );
@@ -329,6 +329,14 @@ function assertContainedModuleSpecifier(
       'Executable skill runtime imports must remain inside their owning skill root.',
     );
   }
+}
+
+function executableSkillRoot(relativePath: string): string | false {
+  const match =
+    /^(\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\/(?:src|tests)\/.+\.ts$/u.exec(
+      relativePath,
+    );
+  return match?.at(1) ?? false;
 }
 
 type AssertNoForbiddenCapabilityRequest = {

@@ -81,9 +81,11 @@ type RepositoryPackageDocument = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const PROVIDER_ROOT = 'agentic-ai/skills/cortex-article-structure';
+const PROVIDER_ROOT =
+  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts';
 const PROVIDER_APPLICATION = `${PROVIDER_ROOT}/src/application.ts`;
 const PROVIDER_DOMAIN = `${PROVIDER_ROOT}/src/domain.ts`;
+const PROVIDER_PACKAGE = `${PROVIDER_ROOT}/package.json`;
 const CORTEX_AUDIT = 'agentic-ai/loom/src/commands/cortex-audit.ts';
 const LOOM_ARTICLE_ADAPTER =
   'agentic-ai/loom/src/lib/cortex-article-structure.ts';
@@ -605,7 +607,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   const reachableActionPaths = actionRuntimePaths(actionGraph);
   const scriptGraph: ConfigurationScriptGraph = {
     executablePaths: trackedExecutablePaths(),
-    roots: configPaths,
+    roots: configPaths.filter((path) => path !== PROVIDER_PACKAGE),
     sources: actionSources,
     symlinkPaths,
   };
@@ -619,7 +621,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
       ...reachableActionPaths,
       ...reachableScriptPaths,
     ]),
-  ).toEqual([LOOM_ARTICLE_ADAPTER]);
+  ).toEqual([PROVIDER_PACKAGE, LOOM_ARTICLE_ADAPTER].sort());
 
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
@@ -667,7 +669,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     ['.github/actions/nested/pre.js', 'prepare();'],
     ['.github/actions/nested/post.js', 'cleanup();'],
     [
-      'agentic-ai/skills/cortex-article-structure/src/audit.ts',
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts',
       'export const audit = true;',
     ],
   ]);
@@ -689,7 +691,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   const providerSources = new Map(sources);
   providerSources.set(
     '.github/actions/nested/neutral.js',
-    "export { audit } from '../../../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
+    "export { audit } from '../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
   );
   const providerGraph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
@@ -879,7 +881,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
       ['scripts/facade.ts', "import './nested.ts';"],
       [
         'scripts/nested.ts',
-        "import '../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
+        "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
       ],
       [`${PROVIDER_ROOT}/src/audit.ts`, 'export const audit = true;'],
       [LOOM_ARTICLE_ADAPTER, `import '../../../${PROVIDER_APPLICATION}';`],
@@ -952,7 +954,7 @@ test('checks external and extensionless configuration scripts as executable sour
   for (const externalSource of [
     'eval(source);',
     'await import(modulePath);',
-    "import '../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
+    "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
   ]) {
     const sources = new Map<string, string>([
       ['package.json', '{"scripts":{"audit":"bun scripts/external.ts"}}'],

@@ -236,7 +236,7 @@ The expert applies these canonical lenses:
 
 - [Cortex consistency](../dynamic-skills/cortex-consistency.md);
 - [Cortex writer](../dynamic-skills/cortex-writer.md);
-- [Cortex article structure](../dynamic-skills/cortex-article-structure.md);
+- [Cortex article structure](../dynamic-skills/cortex-article-structure/SKILL.md);
 - [Cortex document navigation](../dynamic-skills/cortex-document-map.md);
 - [self-improvement instruction classification](../dynamic-skills/self-improvement.md#instruction-classification).
 

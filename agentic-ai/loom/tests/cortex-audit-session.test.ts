@@ -3,10 +3,13 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import {
+  auditExecutableSkillPackages,
+  listCortexMarkdownFiles,
   listPersistentCortexMarkdownFiles,
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
+import type { AuditExecutableSkillPackagesArgs } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../src/lib/cortex-document-structure.ts';
 
 test('excludes temporary session memory from persistent Cortex documents', () => {
@@ -32,6 +35,122 @@ test('excludes temporary session memory from persistent Cortex documents', () =>
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(cortexRoot, removeOptions);
+  }
+});
+
+test('excludes only canonical executable package scripts from Cortex Markdown', () => {
+  const cortexRoot = mkdtempSync(path.join(tmpdir(), 'cortex-scripts-scope-'));
+  try {
+    const skillRoot = path.join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'article-audit',
+    );
+    const unrelatedScripts = path.join(cortexRoot, 'teams', 'ai', 'scripts');
+    const unknownSkillRoot = path.join(
+      cortexRoot,
+      'teams',
+      'unknown',
+      'dynamic-skills',
+      'hidden',
+    );
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(path.join(skillRoot, 'scripts'), directoryOptions);
+    mkdirSync(unrelatedScripts, directoryOptions);
+    mkdirSync(path.join(unknownSkillRoot, 'scripts'), directoryOptions);
+    writeFileSync(path.join(skillRoot, 'SKILL.md'), '# Article Audit\n');
+    writeFileSync(path.join(skillRoot, 'scripts', 'README.md'), '# Code\n');
+    writeFileSync(path.join(unrelatedScripts, 'policy.md'), '# Policy\n');
+    writeFileSync(path.join(unknownSkillRoot, 'SKILL.md'), '# Hidden\n');
+    writeFileSync(
+      path.join(unknownSkillRoot, 'scripts', 'README.md'),
+      '# Must remain audited\n',
+    );
+
+    const relativeFiles = listCortexMarkdownFiles(cortexRoot).map((filePath) =>
+      path.relative(cortexRoot, filePath),
+    );
+    expect(relativeFiles).toContain(
+      path.join('teams', 'ai', 'scripts', 'policy.md'),
+    );
+    expect(relativeFiles).toContain(
+      path.join('teams', 'ai', 'dynamic-skills', 'article-audit', 'SKILL.md'),
+    );
+    expect(relativeFiles).not.toContain(
+      path.join(
+        'teams',
+        'ai',
+        'dynamic-skills',
+        'article-audit',
+        'scripts',
+        'README.md',
+      ),
+    );
+    expect(relativeFiles).toContain(
+      path.join(
+        'teams',
+        'unknown',
+        'dynamic-skills',
+        'hidden',
+        'scripts',
+        'README.md',
+      ),
+    );
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(cortexRoot, removeOptions);
+  }
+});
+
+test('reports orphan and malformed executable skill packages by exact path', () => {
+  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-skill-package-'));
+  try {
+    const skillsDir = path.join(
+      repoRoot,
+      '.cortex',
+      'teams',
+      'ai',
+      'dynamic-skills',
+    );
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(path.join(skillsDir, 'orphan', 'scripts'), directoryOptions);
+    mkdirSync(path.join(skillsDir, 'wrong-name'), directoryOptions);
+    mkdirSync(path.join(skillsDir, 'mirrored', 'scripts'), directoryOptions);
+    writeFileSync(
+      path.join(skillsDir, 'wrong-name', 'SKILL.md'),
+      '---\nname: another-name\ndescription: Test package.\n---\n\n# Test\n',
+    );
+    writeFileSync(
+      path.join(skillsDir, 'mirrored', 'SKILL.md'),
+      '---\nname: mirrored\ndescription: Test package.\n---\n\n# Test\n',
+    );
+    writeFileSync(
+      path.join(skillsDir, 'mirrored', 'scripts', 'SKILL.md'),
+      '# Mirror\n',
+    );
+
+    const packageAuditArgs: AuditExecutableSkillPackagesArgs = {
+      repoRoot,
+      skillsDir,
+    };
+    const findings = auditExecutableSkillPackages(packageAuditArgs);
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/orphan: executable skill directory is missing SKILL.md',
+    );
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/wrong-name/SKILL.md: SKILL.md name must equal directory slug wrong-name',
+    );
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/wrong-name/scripts: executable skill package is missing scripts',
+    );
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/mirrored/scripts/SKILL.md: scripts cannot contain a skill-card mirror',
+    );
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(repoRoot, removeOptions);
   }
 });
 
@@ -255,6 +374,7 @@ ${gizmoIndexRows}
     const report = await runCortexAuditFromDirectory(auditArgs);
     const expectedReport: CortexAuditReport = {
       brokenLinks: [],
+      invalidExecutableSkillPackages: [],
       missingFromIndex: [],
       orphanIndexRows: [],
       prohibitedHarnessSkillPaths: [],

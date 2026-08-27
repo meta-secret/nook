@@ -10,10 +10,14 @@ type TrackedSourceOptions = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
+const ARTICLE_ROOT =
+  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
+const EXECUTABLE_SKILL_SOURCE =
+  /^\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts\/src\/.*\.ts$/u;
 
 test('all tracked executable application sources pass the AST capability gate', async () => {
   const options: TrackedSourceOptions = {
-    cmd: ['git', 'ls-files', '--', 'agentic-ai/skills'],
+    cmd: ['git', 'ls-files', '--', '.cortex'],
     cwd: REPOSITORY_ROOT,
     stderr: 'pipe',
     stdout: 'pipe',
@@ -23,7 +27,7 @@ test('all tracked executable application sources pass the AST capability gate', 
   const sources = result.stdout
     .toString()
     .split('\n')
-    .filter((path) => /^agentic-ai\/skills\/[^/]+\/src\/.*\.ts$/u.test(path));
+    .filter((path) => EXECUTABLE_SKILL_SOURCE.test(path));
   expect(sources.length).toBeGreaterThan(0);
   for (const path of sources) {
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
@@ -40,11 +44,13 @@ test('all tracked executable application sources pass the AST capability gate', 
       /\bexport\s+(?:async\s+)?(?:function|const|let|var)\s+run\b/u,
     );
   }
-  const manifest = await Bun.file(
-    join(
-      REPOSITORY_ROOT,
-      'agentic-ai/skills/cortex-article-structure/executable-skill.json',
-    ),
-  ).text();
-  expect(manifest).not.toMatch(/"(?:command|entrypoint)"/u);
+  const manifests = result.stdout
+    .toString()
+    .split('\n')
+    .filter((path) => path.endsWith('/scripts/executable-skill.json'));
+  expect(manifests).toContain(`${ARTICLE_ROOT}executable-skill.json`);
+  for (const path of manifests) {
+    const manifest = await Bun.file(join(REPOSITORY_ROOT, path)).text();
+    expect(manifest).not.toMatch(/"(?:command|entrypoint)"/u);
+  }
 });

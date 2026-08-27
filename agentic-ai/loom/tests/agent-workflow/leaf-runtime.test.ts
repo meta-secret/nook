@@ -38,6 +38,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
         target: '../missing.md',
       },
     ],
+    invalidExecutableSkillPackages: [],
     missingFromIndex: ['unindexed.md'],
     orphanIndexRows: [],
     prohibitedHarnessSkillPaths: ['.agents/skills/forbidden/SKILL.md'],
@@ -59,6 +60,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
 test('allows a clean mechanical report with zero findings', () => {
   const report: CortexAuditReport = {
     brokenLinks: [],
+    invalidExecutableSkillPackages: [],
     missingFromIndex: [],
     orphanIndexRows: [],
     prohibitedHarnessSkillPaths: [],
@@ -77,6 +79,7 @@ test('bounds Loom-authored mechanical materialized views', () => {
   const arrayLength = { length: 2_000 };
   const report: CortexAuditReport = {
     brokenLinks: [],
+    invalidExecutableSkillPackages: [],
     missingFromIndex: Array.from(
       arrayLength,
       () => `documents/${'x'.repeat(100)}.md`,

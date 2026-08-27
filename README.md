@@ -331,12 +331,12 @@ verify canonical links, catalog coverage, and the absence of tracked harness
 skill mirrors.
 
 Deterministic implementations of those semantics are ordinary Bun and
-TypeScript applications under `agentic-ai/skills`; they are code, not skill-card
-mirrors. Use `task skills:install` and `task skills:verify` for their pinned
-project gate. `task loom:verify` additionally applies the repository AST
-capability and exact-consumer boundary. The Cortex article application is
-currently consumed in-process by Loom. Strict YAML discovery and invocation are
-a follow-up slice.
+TypeScript projects co-located under the owning skill's `scripts/` directory.
+They are code, not skill-card mirrors. Use `task skills:install` and
+`task skills:verify` for the pinned Cortex article project gate.
+`task loom:verify` additionally applies the repository AST capability and
+exact-consumer boundary. The Cortex article application is currently consumed
+in-process by Loom. Strict YAML discovery and invocation are a follow-up slice.
 
 ```sh
 task web:dev
