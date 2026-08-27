@@ -15,8 +15,10 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let verifier = read(&root, ".github/scripts/verify-wasm-gha-cache.sh");
     let fingerprint = read(&root, ".github/scripts/rust-deps-cache-fingerprint.sh");
+    let promoter = read(&root, ".github/scripts/rust-deps-cache-promote.sh");
     let root_tasks = read(&root, "Taskfile.yml");
-    let contract = format!("{rust_bake}\n{setup}\n{verifier}\n{fingerprint}\n{root_tasks}");
+    let contract =
+        format!("{rust_bake}\n{setup}\n{verifier}\n{fingerprint}\n{promoter}\n{root_tasks}");
 
     let registry_writers = rust_bake
         .lines()
@@ -81,6 +83,12 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
             && verifier.contains("nook-rust-wasm-deps-input-v3")
             && verifier.contains("nook-rust-wasm-source-v3"),
         "fingerprint and portable WASM proof must share the rotated forced-zstd generation"
+    );
+    assert!(
+        promoter.contains("for graph in native wasm")
+            && promoter.contains("nook-rust-${graph}-deps-input-v3")
+            && !promoter.contains("nook-rust-${graph}-deps-input-v2"),
+        "native and WASM dependency promotion must target only the rotated repository generation"
     );
 }
 
