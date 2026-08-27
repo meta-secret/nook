@@ -240,7 +240,6 @@ It identifies:
   - `.cortex/teams/web-dev/knowledge-graph.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
   - `.cortex/gizmo/workflows/module-oriented-development.md`
-  - `.cortex/teams/ai/dynamic-skills/module-expert.md`
 - **Allowed product authority catalog:** The task selects only the authorities
   that own its assigned functionality.
   - `.cortex/teams/dev-core/product-specs/authenticator-items.md`

@@ -17,7 +17,12 @@ test('audits canonical skills without granting harness mirror scope', () => {
     CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW.tasks[
       CortexAuditTask.AuditDynamicSkillsAndEntryPoints
     ];
-  expect(task.resources.read).toEqual(['.cortex/**', 'AGENTS.md']);
+  expect(task.resources.read).toEqual([
+    '.cortex/**',
+    '.codex/hooks.json',
+    'AGENTS.md',
+    'README.md',
+  ]);
   if (task.execution.kind !== WorkflowExecutorKind.Agent) {
     throw new Error('Skill audit must use an agent executor.');
   }

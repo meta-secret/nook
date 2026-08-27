@@ -45,7 +45,7 @@ const READ_ONLY_CORTEX: TaskResourceClaims = {
 };
 
 const READ_ONLY_SKILLS: TaskResourceClaims = {
-  read: ['.cortex/**', 'AGENTS.md'],
+  read: ['.cortex/**', '.codex/hooks.json', 'AGENTS.md', 'README.md'],
   write: [],
 };
 

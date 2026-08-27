@@ -109,7 +109,7 @@ Gizmo reviews every finding before assigning edits.
    tests for code invariants.
 6. Assign dependent consumer changes after their provider contract is
    accepted.
-7. Update Cortex and executable mirrors when durable guidance changes.
+7. Update canonical Cortex cards when durable guidance changes.
 8. Update the owning knowledge graph when document headings or paths change.
 9. Run the validation owned by each edit group.
 
