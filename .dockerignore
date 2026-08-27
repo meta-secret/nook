@@ -1,8 +1,6 @@
 .git
 .nook
 workflow/processing
-# Host-installed by `task impeccable:install`; must not enter build or preflight COPY.
-.agents/skills/impeccable
 **/target
 preflight/target
 **/node_modules

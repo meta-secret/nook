@@ -14,7 +14,6 @@ extension_files=()
 research_files=()
 hive_console_files=()
 loom_files=()
-executable_skill_files=()
 shared_tooling_files=()
 while IFS= read -r -d '' path; do
   if [[ ! -f "$repo_root/$path" || -L "$repo_root/$path" ]]; then
@@ -44,9 +43,6 @@ while IFS= read -r -d '' path; do
       ;;
     agentic-ai/loom/*)
       loom_files+=("${path#agentic-ai/loom/}")
-      ;;
-    .agents/skills/*)
-      executable_skill_files+=("${path#.agents/skills/}")
       ;;
     tooling/eslint-rules/no-raw-object-arguments.js)
       shared_tooling_files+=("$path")
@@ -101,9 +97,6 @@ if [[ "${#hive_console_files[@]}" -gt 0 ]]; then
 fi
 if [[ "${#loom_files[@]}" -gt 0 ]]; then
   format_changed_files "$default_config" "$repo_root/agentic-ai/loom" "${loom_files[@]}"
-fi
-if [[ "${#executable_skill_files[@]}" -gt 0 ]]; then
-  format_changed_files "$default_config" "$repo_root/.agents/skills" "${executable_skill_files[@]}"
 fi
 if [[ "${#shared_tooling_files[@]}" -gt 0 ]]; then
   format_changed_files "$default_config" "$repo_root" "${shared_tooling_files[@]}"
