@@ -967,6 +967,17 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
             "Main browser image must preserve build configuration: {required}"
         );
     }
+    let main_web_e2e = section(&main_workflow, "  web-e2e:\n", "\n  extension-e2e:\n");
+    for required in [
+        "VITE_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}",
+        "VITE_SIMPLE_APP_URL: ${{ env.CI_MAIN_SIMPLE_URL }}",
+        "VITE_SENTINEL_APP_URL: ${{ env.CI_MAIN_SENTINEL_URL }}",
+    ] {
+        assert!(
+            main_web_e2e.contains(required),
+            "Main web e2e must expect the development origins sealed into its browser image: {required}"
+        );
+    }
 
     let pr_browser_image = section(
         &pr_workflow,
