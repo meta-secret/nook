@@ -1,5 +1,5 @@
 import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
-/** User-facing product help — keep in sync with .cortex/teams/dev-core/design-docs/unified-vault.md */
+/** User-facing product help — keep in sync with .cortex/dev-core/design-docs/unified-vault.md */
 
 export type HelpSection = {
   id: string;

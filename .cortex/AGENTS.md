@@ -46,8 +46,8 @@ serially. The same context and write boundaries still apply.
   requests, review threads, validation requests, readiness, and merge state.
 - Product and security rules stay in portable Rust/WASM when that layer owns
   them. Web code receives public typed projections only.
-- Repository-authored automation uses TypeScript/Bun, Rust, and Taskfiles. It
-  does not use Python.
+- **P1 hard rule:** Repository-authored automation uses TypeScript/Bun, Rust,
+  and Taskfiles. It does not use Python.
 - Run `task loom:pre-push` before every push.
 - Run heavy product validation through the configured GitHub Actions path.
 - Keep `.cortex/.session/` temporary and physically clean before readiness.
