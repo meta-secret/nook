@@ -222,7 +222,7 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
     let main_node = section(
         &main,
         "      - name: WASM Node tests\n",
-        "      - name: Preserve cache telemetry\n",
+        "      - name: Publish verified WASM BuildKit cache\n",
     );
     let pr_node = section(&pr, "  wasm-node-test:\n", "  verify:\n");
     let ci_tasks = read(&root, "nook-app/ci/Taskfile.yml");

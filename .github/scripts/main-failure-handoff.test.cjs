@@ -294,6 +294,9 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     'utf8',
   )
   const wasmJob = main.split('\n  wasm:\n')[1].split('\n  wasm-cache-publish:\n')[0]
+  const wasmCacheGate = main
+    .split('\n  wasm-cache-publish:\n')[1]
+    .split('\n  wasm-cache-proof:\n')[0]
   assert.match(
     main,
     /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
@@ -306,10 +309,15 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
   )
   assert.match(
     main,
-    /wasm-cache-publish:\n\s+name: WASM cache publication[\s\S]*?\n\s+needs: \[wasm\][\s\S]*Publish verified WASM BuildKit cache[\s\S]*task ci:main:publish-wasm-cache/,
+    /wasm-cache-publish:\n\s+name: WASM cache publication[\s\S]*?\n\s+needs: \[wasm\][\s\S]*CACHE_PUBLICATION_OUTCOME: \$\{\{ needs\.wasm\.outputs\.cache_publication_outcome \}\}[\s\S]*WASM cache publication failed in the verified producer/,
   )
   assert.match(main, /web:\n\s+name: Verify web build\n\s+needs: \[wasm\]/)
-  assert.doesNotMatch(wasmJob, /task ci:main:publish-wasm-cache/)
+  assert.match(
+    wasmJob,
+    /outputs:\n\s+cache_publication_outcome: \$\{\{ steps\.publish_wasm_cache\.outcome \}\}[\s\S]*WASM Node tests[\s\S]*Publish verified WASM BuildKit cache[\s\S]*id: publish_wasm_cache\n\s+continue-on-error: true[\s\S]*task ci:main:publish-wasm-cache/,
+  )
+  assert.equal((main.match(/task ci:main:publish-wasm-cache/g) || []).length, 1)
+  assert.doesNotMatch(wasmCacheGate, /actions\/checkout|nook-docker-setup|task ci:/)
   assert.doesNotMatch(
     main,
     /Publish verified WASM BuildKit cache[\s\S]*NOOK_DEFER_FRESH_WASM_CACHE_PROOF: "1"/,

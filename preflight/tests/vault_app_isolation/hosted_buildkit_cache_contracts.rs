@@ -424,9 +424,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let wasm_node = wasm
         .find("task ci:main:wasm-node-test")
         .context("Main WASM job must run Node tests")?;
-    let wasm_publish = wasm_cache_publish
+    let wasm_publish_id = wasm
+        .find("id: publish_wasm_cache")
+        .context("Main WASM producer must expose its cache publication outcome")?;
+    let wasm_publish = wasm
         .find("task ci:main:publish-wasm-cache")
-        .context("Main WASM cache job must publish its cache")?;
+        .context("Main WASM producer must publish its verified graph")?;
     let web_verify = web
         .find("task ci:main:web:artifacts")
         .context("Main web job must build verified artifacts")?;
@@ -445,13 +448,23 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm.contains("needs: [rust]")
             && wasm_verify < wasm_node
-            && wasm[wasm_verify..].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && !wasm.contains("task ci:main:publish-wasm-cache")
+            && wasm_node < wasm_publish_id
+            && wasm_publish_id < wasm_publish
+            && wasm[wasm_verify..wasm_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && wasm.contains("cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}")
+            && wasm[wasm_publish_id..wasm_publish].contains("continue-on-error: true")
+            && wasm[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && wasm_cache_publish.contains("needs: [wasm]")
-            && wasm_cache_publish.contains("uses: actions/checkout@v7")
-            && wasm_cache_publish[wasm_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && wasm_cache_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
+            )
+            && wasm_cache_publish.contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
+            && !wasm_cache_publish.contains("task ci:main:publish-wasm-cache")
+            && !wasm_cache_publish.contains("nook-docker-setup")
+            && !wasm_cache_publish.contains("actions/checkout")
             && !wasm_cache_publish.contains("actions/download-artifact")
             && !wasm_cache_publish.contains("actions/upload-artifact")
+            && main.matches("task ci:main:publish-wasm-cache").count() == 1
             && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
             && web.contains("needs: [wasm]")
             && !web.contains("wasm-cache-publish")
@@ -470,7 +483,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !main.contains("\n  publish-cache:\n")
             && !main.contains("task ci:main:warm-gha-cache")
             && !main.contains("task ci:main:publish-gha-cache"),
-        "Main must keep product consumers on verified WASM while cache publication and proof remain visible fail-closed gates"
+        "Main must export the producer-owned graph once while product consumers and the visible cache gate remain independent"
     );
     let ci_tasks = read(root, "nook-app/ci/Taskfile.yml");
     assert!(
@@ -629,6 +642,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
 fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
     let web_tasks = read(root, "nook-app/nook-web/docker/Taskfile.yml");
+    let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
     let wasm_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
     let wasm_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
@@ -653,7 +667,13 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
             && main.contains("\n  wasm-cache-proof:\n")
             && main.contains("NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"")
             && web.contains("needs: [wasm]")
+            && wasm.contains("task ci:main:publish-wasm-cache")
+            && wasm.contains("continue-on-error: true")
             && wasm_publish.contains("needs: [wasm]")
+            && wasm_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}"
+            )
+            && !wasm_publish.contains("task ci:main:publish-wasm-cache")
             && wasm_proof.contains("needs: [wasm-cache-publish]")
             && main.contains("needs: [web, web-e2e, wasm-cache-proof]"),
         "Main must let verified WASM feed product jobs independently while cache publication and deployment remain fail-closed"

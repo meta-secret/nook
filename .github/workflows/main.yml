@@ -174,6 +174,8 @@ jobs:
   wasm:
     name: WASM verification and artifact
     needs: [rust]
+    outputs:
+      cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -228,42 +230,34 @@ jobs:
           NOOK_EXTENSION_SITE_URL: ${{ env.CI_MAIN_DEV_URL }}/
           WASM_BUILD_MODE: dev
 
+      - name: Publish verified WASM BuildKit cache
+        id: publish_wasm_cache
+        continue-on-error: true
+        run: task ci:main:publish-wasm-cache
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+          # ARC publishes source state from the verified job-scoped graph. The
+          # portable dependency ref is owned by the later writer/proof job.
+          WASM_BUILD_MODE: dev
+
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
   wasm-cache-publish:
     name: WASM cache publication
-    # This job reconstructs cache-only state from the same immutable push SHA.
-    # It cannot replace the verified WASM handoff uploaded by the producer.
     needs: [wasm]
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    permissions:
-      contents: read
-      pull-requests: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-
-      - name: Publish verified WASM BuildKit cache
-        run: task ci:main:publish-wasm-cache
+      - name: Require successful WASM cache publication
         env:
-          CI: true
-          GHA_CACHE_WRITE_ENABLED: "1"
-          # ARC publishes source state from its persistent shard. The portable
-          # dependency ref is owned by the separate ARC writer/proof job.
-          WASM_BUILD_MODE: dev
+          CACHE_PUBLICATION_OUTCOME: ${{ needs.wasm.outputs.cache_publication_outcome }}
+        run: |
+          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
+            echo "WASM cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
+            exit 1
+          fi
 
   wasm-cache-proof:
     name: Portable WASM cache publication proof

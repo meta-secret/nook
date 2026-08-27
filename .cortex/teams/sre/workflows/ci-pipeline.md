@@ -844,13 +844,15 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
 - Browser runtime jobs use a two-stage Kubernetes path. `nook-k0s` builds and
   pushes the exact-source image. ARC lifecycle hooks then create an ordinary
   job Pod from that immutable run tag on `nook-k0s-container`.
-- Main publishes the verified WASM artifact before cache publication. Web and
-  prepared-Pod browser consumers depend on that verified artifact, not on the
-  cache publisher, so cache-health failures remain visible without suppressing
-  product evidence. The separate publisher checks out the same immutable push
-  SHA and reconstructs cache-only state. It neither downloads nor replaces the
-  verified artifact. That job gates the portable proof and development
-  deployment.
+- Main publishes the verified WASM artifact, completes Node verification, and
+  exports the cache from that producer's job-scoped graph. The export step may
+  report its failure without failing the producer so verified artifact
+  consumers can continue. A separate lightweight job converts that recorded
+  outcome into a visible failing cache-publication gate. It performs no
+  checkout, BuildKit setup, or second source solve. Web and prepared-Pod
+  browser consumers depend on the verified artifact rather than this gate.
+  The portable proof and development deployment remain gated by successful
+  cache publication.
 - Main's portable WASM cache writer uses an ARC solve. Static
   contracts require the release, clippy, and test dependency vertices in its
   exact Dockerfile lineage. Zot then proves child manifest digest/size plus
