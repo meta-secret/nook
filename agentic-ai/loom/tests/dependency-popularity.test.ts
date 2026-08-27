@@ -74,8 +74,8 @@ describe('scanRepositoryNpmPackages', () => {
 
     expect(scanRepositoryNpmPackages(root)).toEqual([
       'alpha',
-      'shared',
       'beta',
+      'shared',
     ]);
   });
 });

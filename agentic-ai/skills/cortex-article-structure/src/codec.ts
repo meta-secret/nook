@@ -594,9 +594,9 @@ function findingContributorPath(request: FindingContributorRequest): string {
     (document) => document.relativePath === finding.file,
   );
   if (documentIndex < 0) return 'documents';
-  const blockIndex = request.request.documents[documentIndex]?.blocks.findIndex(
-    (block) => block.line === finding.line,
-  );
+  const blockIndex = request.request.documents
+    .at(documentIndex)
+    ?.blocks.findIndex((block) => block.line === finding.line);
   return typeof blockIndex === 'number' && blockIndex >= 0
     ? `documents[${documentIndex}].blocks[${blockIndex}]`
     : `documents[${documentIndex}]`;

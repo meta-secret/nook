@@ -173,6 +173,16 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         skills_typescript
             .contains("\"include\": [\"*.ts\", \"*/src/**/*.ts\", \"*/tests/**/*.ts\"]")
     );
+    let source_gate = read(
+        &root,
+        "agentic-ai/loom/tests/skill-application-source-boundary.test.ts",
+    );
+    assert!(
+        source_gate.contains("analyzeExecutableSkillSource")
+            && source_gate.contains("agentic-ai/skills")
+            && source_gate.contains("git', 'ls-files'"),
+        "loom:verify must AST-audit every tracked executable application source"
+    );
 }
 
 #[test]

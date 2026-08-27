@@ -25,6 +25,16 @@ type RuntimeDependencyResolution = {
   readonly specifier: string;
 };
 
+type RuntimeDependencyEdge = {
+  readonly dependency: string;
+  readonly importer: string;
+};
+
+type RuntimeDependencyListRequest = {
+  readonly importer: string;
+  readonly sources: ReadonlyMap<string, string>;
+};
+
 type TrackedSourcesSpawnOptions = {
   readonly cmd: string[];
   readonly cwd: string;
@@ -51,8 +61,11 @@ type RepositoryPackageDocument = {
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
+const CORTEX_AUDIT = `${LOOM_PRODUCTION_PREFIX}commands/cortex-audit.ts`;
 const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
 const ARTICLE_PROVIDER_PREFIX = 'agentic-ai/skills/cortex-article-structure/';
+const ARTICLE_APPLICATION = `${ARTICLE_PROVIDER_PREFIX}src/application.ts`;
+const ARTICLE_DOMAIN = `${ARTICLE_PROVIDER_PREFIX}src/domain.ts`;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
 const SUBPROCESS_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
 const RUNTIME_SOURCE_SUFFIXES = [
@@ -145,30 +158,31 @@ function runtimeDependencyViolations(
         sources: inspection.sources,
         specifier: imported.path,
       };
+      const dependency = resolveRuntimeDependency(resolution);
       const providerReference =
         specifierReferencesSkillProvider(imported.path) ||
         referencesSkillProvider(resolution);
+      const edge: RuntimeDependencyEdge | false =
+        dependency === false ? false : { dependency, importer: path };
       if (
-        providerReference &&
-        path !== LOOM_ARTICLE_ADAPTER &&
-        !path.startsWith(ARTICLE_PROVIDER_PREFIX)
+        (providerReference && dependency === false) ||
+        (edge !== false &&
+          isSkillApplicationDependency(edge.dependency) &&
+          !isAuthorizedSkillApplicationEdge(edge))
       ) {
         violations.push(path);
-      } else {
-        const dependency = resolveRuntimeDependency(resolution);
-        if (
-          dependency &&
-          (EXECUTABLE_SOURCE_EXTENSION.test(dependency) ||
-            posix.extname(dependency) === '')
-        ) {
-          pending.push(dependency);
-        } else if (
-          !dependency &&
-          (imported.path.startsWith('.') ||
-            isRepositoryBackedSpecifier(resolution))
-        ) {
-          violations.push(path);
-        }
+      } else if (
+        dependency !== false &&
+        (EXECUTABLE_SOURCE_EXTENSION.test(dependency) ||
+          posix.extname(dependency) === '')
+      ) {
+        pending.push(dependency);
+      } else if (
+        dependency === false &&
+        (imported.path.startsWith('.') ||
+          isRepositoryBackedSpecifier(resolution))
+      ) {
+        violations.push(path);
       }
     }
     const entrypointInspection = {
@@ -178,10 +192,63 @@ function runtimeDependencyViolations(
       sources: inspection.sources,
     };
     const entrypoints = repositorySubprocessEntrypoints(entrypointInspection);
-    pending.push(...entrypoints.paths);
+    for (const dependency of entrypoints.paths) {
+      const edge: RuntimeDependencyEdge = { dependency, importer: path };
+      if (
+        isSkillApplicationDependency(dependency) &&
+        !isAuthorizedSkillApplicationEdge(edge)
+      ) {
+        violations.push(path);
+      } else {
+        pending.push(dependency);
+      }
+    }
     if (entrypoints.unresolved) violations.push(path);
   }
   return [...new Set(violations)].sort();
+}
+
+function isSkillApplicationDependency(path: string): boolean {
+  return (
+    path === LOOM_ARTICLE_ADAPTER || path.startsWith(ARTICLE_PROVIDER_PREFIX)
+  );
+}
+
+function isAuthorizedSkillApplicationEdge(
+  edge: RuntimeDependencyEdge,
+): boolean {
+  if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
+    return edge.importer === CORTEX_AUDIT;
+  }
+  if (edge.importer === LOOM_ARTICLE_ADAPTER) {
+    return (
+      edge.dependency === ARTICLE_APPLICATION ||
+      edge.dependency === ARTICLE_DOMAIN
+    );
+  }
+  return (
+    edge.importer.startsWith(ARTICLE_PROVIDER_PREFIX) &&
+    edge.dependency.startsWith(ARTICLE_PROVIDER_PREFIX)
+  );
+}
+
+function skillApplicationDependencies(
+  request: RuntimeDependencyListRequest,
+): readonly string[] {
+  const source = request.sources.get(request.importer) ?? '';
+  const dependencies = new Set<string>();
+  for (const imported of RUNTIME_IMPORT_SCANNER.scanImports(source)) {
+    const resolution: RuntimeDependencyResolution = {
+      importer: request.importer,
+      sources: request.sources,
+      specifier: imported.path,
+    };
+    const dependency = resolveRuntimeDependency(resolution);
+    if (dependency !== false && isSkillApplicationDependency(dependency)) {
+      dependencies.add(dependency);
+    }
+  }
+  return [...dependencies].sort();
 }
 
 function resolveRuntimeDependency(
@@ -343,7 +410,57 @@ test('production Loom reaches providers only through its semantic adapter', asyn
     sources,
     symlinkPaths: inventory.symlinkPaths,
   };
+  const auditDependenciesRequest: RuntimeDependencyListRequest = {
+    importer: CORTEX_AUDIT,
+    sources,
+  };
+  expect(skillApplicationDependencies(auditDependenciesRequest)).toEqual([
+    LOOM_ARTICLE_ADAPTER,
+  ]);
+  const adapterDependenciesRequest: RuntimeDependencyListRequest = {
+    importer: LOOM_ARTICLE_ADAPTER,
+    sources,
+  };
+  expect(skillApplicationDependencies(adapterDependenciesRequest)).toEqual([
+    ARTICLE_APPLICATION,
+    ARTICLE_DOMAIN,
+  ]);
   expect(runtimeDependencyViolations(inspection)).toEqual([]);
+});
+
+test('rejects every alternate application consumer edge', () => {
+  const canonical = new Map<string, string>([
+    [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
+    [
+      LOOM_ARTICLE_ADAPTER,
+      "import '../../../skills/cortex-article-structure/src/application.ts'; import '../../../skills/cortex-article-structure/src/domain.ts';",
+    ],
+    [ARTICLE_APPLICATION, "import './audit.ts';"],
+    [`${ARTICLE_PROVIDER_PREFIX}src/audit.ts`, 'export const audit = true;'],
+    [ARTICLE_DOMAIN, 'export const domain = true;'],
+  ]);
+  for (const [root, source] of [
+    [
+      'agentic-ai/loom/src/alternate.ts',
+      "import './lib/cortex-article-structure.ts';",
+    ],
+    ['scripts/alternate.ts', `import '../${ARTICLE_APPLICATION}';`],
+    [
+      '.github/actions/audit/index.js',
+      `import '../../../${LOOM_ARTICLE_ADAPTER}';`,
+    ],
+    ['scripts/alternate.sh', `#!/bin/sh\nbun ../${LOOM_ARTICLE_ADAPTER}`],
+  ] as const) {
+    const sources = new Map(canonical);
+    sources.set(root, source);
+    const inspection: RuntimeDependencyGraphInspection = {
+      executablePaths: new Set<string>(),
+      roots: [root],
+      sources,
+      symlinkPaths: new Set<string>(),
+    };
+    expect(runtimeDependencyViolations(inspection), root).toContain(root);
+  }
 });
 
 test('rejects every reachable tracked symlink facade', () => {
