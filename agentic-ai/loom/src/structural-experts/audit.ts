@@ -45,7 +45,7 @@ const EXPECTED_PROFILES = [
       'Read-only evidence expert for architecture, design, code quality, stronger types, and tests in explicitly authorized code scopes.',
     resultKind: WorkflowResultKind.CodeRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
-    skillPath: '.agents/skills/code-refactoring-expert/SKILL.md',
+    skillPath: '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
     requiredContextPaths: [
       '.cortex/AGENTS.md',
       '.cortex/knowledge-graph.md',
@@ -59,13 +59,6 @@ const EXPECTED_PROFILES = [
       'tooling/eslint-rules/no-raw-object-arguments.js',
       'agentic-ai/loom/eslint.config.js',
       'agentic-ai/loom/package.json',
-      '.agents/skills/eslint.config.js',
-      '.agents/skills/package.json',
-      '.agents/skills/tsconfig.json',
-      '.agents/skills/bun.lock',
-      '.agents/skills/.prettierrc',
-      '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
-      '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
     ],
     allowedEvidenceDescendantRoots: [
       '.github/scripts',
@@ -94,7 +87,7 @@ const EXPECTED_PROFILES = [
       'Read-only evidence expert for Cortex authority, conflicts, legacy content, complexity, and deterministic Loom extraction candidates.',
     resultKind: WorkflowResultKind.CortexRefactoringEvidence,
     kind: StructuralExpertKind.RepositoryEvidence,
-    skillPath: '.agents/skills/cortex-refactoring-expert/SKILL.md',
+    skillPath: '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
     requiredContextPaths: [
       '.cortex/AGENTS.md',
       '.cortex/knowledge-graph.md',
@@ -117,12 +110,7 @@ const EXPECTED_PROFILES = [
       'agentic-ai/loom/tests/cortex-document-structure.test.ts',
       'agentic-ai/loom/tests/cortex-index.test.ts',
     ],
-    allowedEvidenceDescendantRoots: [
-      '.agents/skills',
-      '.cortex',
-      '.github/workflows',
-      '.task',
-    ],
+    allowedEvidenceDescendantRoots: ['.cortex', '.github/workflows', '.task'],
     excludedPaths: ['.cortex/.session'],
     runtimeBehaviorContract: '',
     validationSelectors: ['loom:cortex-audit', 'loom:verify'],
@@ -133,7 +121,8 @@ const EXPECTED_PROFILES = [
       'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     kind: StructuralExpertKind.VerifiedViewSynthesis,
-    skillPath: '.agents/skills/system-coherence-synthesizer/SKILL.md',
+    skillPath:
+      '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
     requiredContextPaths: [],
     allowedEvidenceFiles: [],
     allowedEvidenceDescendantRoots: [],
@@ -317,15 +306,15 @@ function validateProfile(request: ValidateStructuralProfileRequest): void {
   const expectedSkills = new Map([
     [
       'code_refactoring_expert',
-      '.agents/skills/code-refactoring-expert/SKILL.md',
+      '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
     ],
     [
       'cortex_refactoring_expert',
-      '.agents/skills/cortex-refactoring-expert/SKILL.md',
+      '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
     ],
     [
       'system_coherence_synthesizer',
-      '.agents/skills/system-coherence-synthesizer/SKILL.md',
+      '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
     ],
   ]);
   const expectedSkill = expectedSkills.get(profile.name);

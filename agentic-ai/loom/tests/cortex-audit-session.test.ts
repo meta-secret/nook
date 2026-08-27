@@ -239,7 +239,6 @@ ${gizmoGraphRows}
       `# Skills
 
 - [Rejected skill](bad.md)
-- [Rejected executable](../../../../.agents/skills/bad/SKILL.md)
 ${gizmoIndexRows}
 `,
     );
@@ -258,7 +257,7 @@ ${gizmoIndexRows}
       brokenLinks: [],
       missingFromIndex: [],
       orphanIndexRows: [],
-      missingExecutableSkills: [],
+      prohibitedHarnessSkillPaths: [],
       densityFindings: [],
       structureFindings: [
         {

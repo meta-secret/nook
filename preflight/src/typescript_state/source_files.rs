@@ -43,18 +43,6 @@ pub(super) fn collect_authored_source_files(
 }
 
 fn is_excluded_directory(path: &Path) -> bool {
-    // Host-installed by `task impeccable:install`; same exclusion as source_size.
-    if path.components().any(|component| {
-        component
-            .as_os_str()
-            .to_str()
-            .is_some_and(|name| name == "impeccable")
-    }) && path
-        .components()
-        .any(|component| component.as_os_str() == ".agents")
-    {
-        return true;
-    }
     path.file_name()
         .and_then(std::ffi::OsStr::to_str)
         .is_some_and(|name| {

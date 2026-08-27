@@ -113,35 +113,23 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
-    let skills_format = task_body(&taskfile, "skills:format", "skills:verify");
-    assert!(
-        skills_format.contains(".github/scripts/format-host-apply.sh")
-            && !skills_format.contains("skills:install")
-            && !skills_format.contains("bun install"),
-        "skills:format must use the shared pinned formatter without a package install"
-    );
-    let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
-    assert!(
-        skills_verify.contains("deps: [skills:install]"),
-        "skills:verify must retain the executable-skill dependency install"
-    );
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");
     assert!(
         loom_install.contains("bun install --frozen-lockfile")
             && !loom_install.contains("skills:install"),
-        "loom:install must install only Loom dependencies so pre-push stays detached from the skills workspace"
+        "loom:install must install only Loom dependencies"
     );
     let loom_verify = task_body(&taskfile, "loom:verify", "loom:run");
     assert!(
-        loom_verify.contains("task: skills:verify"),
-        "loom:verify must continue to opt into the complete executable-skill verification"
+        !loom_verify.contains("skills:") && loom_verify.contains("task: loom:test"),
+        "loom:verify must keep deterministic capability tests in Loom"
     );
     let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
         pre_push.contains("deps: [loom:install]")
             && pre_push.contains("task loom:default FAMILY=prePush")
-            && !pre_push.contains("skills:format"),
-        "loom:pre-push must retain Loom setup while its shared formatter avoids a separate skills install"
+            && !pre_push.contains("skills:"),
+        "loom:pre-push must retain Loom setup without a harness skill workspace"
     );
 
     let preflight = read(&root, "preflight/Taskfile.yml");
@@ -155,30 +143,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "the formatter contract must be a detached, install-free preflight task"
     );
 
-    let skills_manifest = read(&root, ".agents/skills/package.json");
-    assert_eq!(
-        skills_manifest.matches("eslint.config.js").count(),
-        2,
-        "executable-skill format and format:check must both own eslint.config.js"
-    );
-    assert_eq!(
-        skills_manifest.matches("*/SKILL.md").count(),
-        2,
-        "executable-skill format and format:check must both own nested skill cards"
-    );
-
-    let skills_eslint = read(&root, ".agents/skills/eslint.config.js");
-    for required in [
-        "ExternalValue:",
-        "ExternalObject:",
-        "JsonValue:",
-        "GenericValue:",
-    ] {
-        assert!(
-            skills_eslint.contains(required),
-            "executable-skill ESLint config must retain `{required}`"
-        );
-    }
+    assert!(!taskfile.contains("skills:install:"));
+    assert!(!taskfile.contains("skills:verify:"));
 }
 
 #[test]

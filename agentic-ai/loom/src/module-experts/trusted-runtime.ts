@@ -364,7 +364,7 @@ function moduleExpertIdentityDigest(
 function moduleExpertInstruction(context: ModuleExpertPromptContext): string {
   const profile = context.profile;
   const selectedSkillPaths = context.selectedContextPaths.filter((path) =>
-    path.startsWith('.agents/skills/'),
+    profile.skillPaths.includes(path),
   );
   return [
     `Assigned module expert: ${profile.name}`,

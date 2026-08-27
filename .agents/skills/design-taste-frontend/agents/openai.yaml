@@ -1,4 +1,0 @@
-interface:
-  display_name: "Nook Svelte UI Taste"
-  short_description: "Craft trustworthy Nook interfaces in Svelte"
-  default_prompt: "Use $design-taste-frontend to design or polish this Nook Svelte interface within the existing Rust/WASM and visual boundaries."

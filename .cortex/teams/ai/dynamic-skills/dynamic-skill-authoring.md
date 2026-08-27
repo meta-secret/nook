@@ -28,11 +28,8 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
    Multi-team consumption does not erase a clear owner. This card is the
    source of truth.
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
-5. Create `.agents/skills/<skill>/SKILL.md` when the pattern should be invokable
-   directly by future agents.
-   - Keep the wrapper concise and point it back to the `.cortex` card.
-   - Keep `.cursor/skills/` and `.claude/skills/` as symlink mirrors of the
-     canonical `.agents` wrapper.
+5. Keep harness-specific profile directories outside the tracked repository.
+   Do not duplicate semantic guidance under `.agents`, `.cursor`, or `.claude`.
 6. Apply the skill to code when the user asks for capture plus refactor.
 
 ## Scope
@@ -68,8 +65,6 @@ Does not apply to:
     `shared` for ownerless repository-wide policy;
   - use `security` for security policy, trust boundaries, and acceptance;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
-  - set `createExecutableWrappers: true` only when direct invocation is useful;
-    and
   - update `.cortex/teams/ai/dynamic-skills/index.md` and the owning knowledge graph if
     Loom did not.
 - Run `task loom:cortex-audit` after the card and registry agree.

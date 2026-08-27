@@ -37,12 +37,14 @@ export type ModuleExpertGeneratedMarker = {
 
 const PACKAGE_AUTHORITY_PATH = '.cortex/shared/architecture/packages.md';
 const EXPERT_AUTHORITY_PATH = '.cortex/teams/ai/architecture/module-experts.md';
-const MODULE_EXPERT_SKILL_PATH = '.agents/skills/module-expert/SKILL.md';
-const INTERNAL_API_SKILL_PATH = '.agents/skills/internal-api-expert/SKILL.md';
+const MODULE_EXPERT_SKILL_PATH =
+  '.cortex/teams/ai/dynamic-skills/module-expert.md';
+const INTERNAL_API_SKILL_PATH =
+  '.cortex/teams/ai/dynamic-skills/internal-api-expert.md';
 const DESIGN_TASTE_FRONTEND_SKILL_PATH =
-  '.agents/skills/design-taste-frontend/SKILL.md';
+  '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md';
 const EXTENSION_RELEASE_SECURITY_SKILL_PATH =
-  '.agents/skills/browser-extension-release-security/SKILL.md';
+  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md';
 const RESEARCH_ROOT = 'nook-app/nook-web/nook-web-research';
 const APP_COMMON_ROOT = 'nook-app/nook-platform/nook-app-common';
 const AUTH2_ROOT = 'nook-app/nook-platform/nook-auth2';
@@ -126,7 +128,6 @@ export const WEB_EXPERT_ALLOWED_CONTEXT_PATHS = [
   ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
   DESIGN_TASTE_FRONTEND_SKILL_PATH,
   EXTENSION_RELEASE_SECURITY_SKILL_PATH,
-  WEB_EXPERT_EXTENSION_RELEASE_SECURITY_AUTHORITY_PATH,
 ] as const;
 
 export type WebExpertAllowedContextPath =

@@ -44,13 +44,6 @@ const CODE_REFACTORING_FILES = [
   'tooling/eslint-rules/no-raw-object-arguments.js',
   'agentic-ai/loom/eslint.config.js',
   'agentic-ai/loom/package.json',
-  '.agents/skills/eslint.config.js',
-  '.agents/skills/package.json',
-  '.agents/skills/tsconfig.json',
-  '.agents/skills/bun.lock',
-  '.agents/skills/.prettierrc',
-  '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
-  '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
 ] as const;
 
 const CODE_REFACTORING_DESCENDANT_ROOTS = [
@@ -80,7 +73,6 @@ const CORTEX_REFACTORING_FILES = [
 ] as const;
 
 const CORTEX_REFACTORING_DESCENDANT_ROOTS = [
-  '.agents/skills',
   '.cortex',
   '.github/workflows',
   '.task',
@@ -93,7 +85,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
       'Read-only evidence expert for architecture, design, code quality, stronger types, and tests in explicitly authorized code scopes.',
     kind: StructuralExpertKind.RepositoryEvidence,
     resultKind: WorkflowResultKind.CodeRefactoringEvidence,
-    skillPath: '.agents/skills/code-refactoring-expert/SKILL.md',
+    skillPath: '.cortex/teams/ai/dynamic-skills/code-refactoring-expert.md',
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CODE_REFACTORING_FILES,
     allowedEvidenceDescendantRoots: CODE_REFACTORING_DESCENDANT_ROOTS,
@@ -115,7 +107,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
       'Read-only evidence expert for Cortex authority, conflicts, legacy content, complexity, and deterministic Loom extraction candidates.',
     kind: StructuralExpertKind.RepositoryEvidence,
     resultKind: WorkflowResultKind.CortexRefactoringEvidence,
-    skillPath: '.agents/skills/cortex-refactoring-expert/SKILL.md',
+    skillPath: '.cortex/teams/ai/dynamic-skills/cortex-refactoring-expert.md',
     requiredContextPaths: COMMON_CONTEXT,
     allowedEvidenceFiles: CORTEX_REFACTORING_FILES,
     allowedEvidenceDescendantRoots: CORTEX_REFACTORING_DESCENDANT_ROOTS,
@@ -129,7 +121,8 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
       'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
-    skillPath: '.agents/skills/system-coherence-synthesizer/SKILL.md',
+    skillPath:
+      '.cortex/teams/ai/dynamic-skills/system-coherence-synthesizer.md',
     requiredContextPaths: [],
     allowedEvidenceFiles: [],
     allowedEvidenceDescendantRoots: [],

@@ -166,7 +166,6 @@ export const SKILL_SCAFFOLD_EXAMPLE_DOCUMENT: SkillScaffoldExampleDocument = {
   skillScaffold: {
     skillSlug: 'example-skill',
     skillOwner: SkillOwner.Ai,
-    createExecutableWrappers: false,
   },
 };
 

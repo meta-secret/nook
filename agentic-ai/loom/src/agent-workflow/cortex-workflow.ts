@@ -40,12 +40,12 @@ export enum CortexAuditJoin {
 }
 
 const READ_ONLY_CORTEX: TaskResourceClaims = {
-  read: ['.cortex/**', '.agents/skills/**'],
+  read: ['.cortex/**'],
   write: [],
 };
 
 const READ_ONLY_SKILLS: TaskResourceClaims = {
-  read: ['.cortex/**', '.agents/**', '.cursor/**', '.claude/**', 'AGENTS.md'],
+  read: ['.cortex/**', 'AGENTS.md'],
   write: [],
 };
 
@@ -204,7 +204,7 @@ export const CORTEX_FULL_GARBAGE_COLLECTION_WORKFLOW: StaticAgentWorkflowDefinit
         kind: WorkflowExecutorKind.Agent,
         agent: CortexAuditAgent.SkillAuditor,
         instruction:
-          'Use the AI knowledge graph to inspect its dynamic-skill catalog and only the exact team or shared skill cards named by that catalog. Compare those cards with .agents/skills, .cursor executable mirrors, .claude executable mirrors, .cortex/AGENTS.md, and AGENTS.md. Do not preload all team graphs or all Cortex documents. Find stale skills, missing or divergent wrappers and mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
+          'Use the AI knowledge graph to inspect its dynamic-skill catalog and only the exact team or shared skill cards named by that catalog. Compare those cards with .cortex/AGENTS.md, AGENTS.md, and active entry points. Do not preload all team graphs or all Cortex documents. Find stale skills, duplicate semantic authority, prohibited harness mirrors, and entry-point guidance that disagrees with durable skill cards. Return precise file and line evidence. Do not edit files.',
         resultKind: WorkflowResultKind.CortexEvidence,
       },
       completed: {

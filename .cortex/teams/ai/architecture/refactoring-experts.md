@@ -290,7 +290,7 @@ Examples include:
 
 - path and link existence;
 - heading and knowledge-graph coverage;
-- executable-skill mirror integrity;
+- canonical skill-card registration and harness-mirror absence;
 - exact duplicate blocks;
 - migration-ledger monotonicity;
 - source-size and closed-vocabulary checks;
@@ -343,7 +343,6 @@ task preflight:loom-contracts
 Validate direct skill routing by checking:
 
 - every canonical skill card is indexed;
-- every executable wrapper points to its canonical card;
-- Cursor and Claude entries are symlinks to `.agents/skills/`;
+- no tracked `.agents`, `.cursor`, or `.claude` skill mirror exists;
 - the Cortex registry contains exactly the two repository-reading roles and one
   synthesis-only role.

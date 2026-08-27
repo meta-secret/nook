@@ -196,7 +196,8 @@ The final state has no exemptions.
 
 ## Validation
 
-Run the focused checks:
+Run the focused checks. The provider contract and independent verifier live in
+Loom with the production audit implementation:
 
 ```bash
 task loom:cortex-audit

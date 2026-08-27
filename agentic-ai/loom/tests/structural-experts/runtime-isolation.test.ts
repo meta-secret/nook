@@ -103,13 +103,6 @@ test('materializes only exact shared formatter and lint tooling', async () => {
     '.github/formatting/format.sh',
     'tooling/eslint-rules/no-raw-object-arguments.js',
     'agentic-ai/loom/eslint.config.js',
-    '.agents/skills/eslint.config.js',
-    '.agents/skills/package.json',
-    '.agents/skills/tsconfig.json',
-    '.agents/skills/bun.lock',
-    '.agents/skills/.prettierrc',
-    '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
-    '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
   ];
   for (const relativePath of exactRefactoringFiles) {
     expect(profile.allowedEvidenceFiles).toContain(relativePath);
@@ -156,28 +149,8 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       expect(
         await readdir(join(isolation.repositorySnapshot, 'agentic-ai/loom')),
       ).toEqual(['eslint.config.js']);
-      expect(
-        (
-          await readdir(join(isolation.repositorySnapshot, '.agents/skills'))
-        ).sort(),
-      ).toEqual(
-        [
-          '.prettierrc',
-          'bun.lock',
-          'eslint.config.js',
-          'package.json',
-          'tsconfig.json',
-          'typescript-named-args',
-          'typescript-no-unknown',
-        ].sort(),
-      );
       await expect(
-        access(
-          join(
-            isolation.repositorySnapshot,
-            '.agents/skills/cortex-article-structure/SKILL.md',
-          ),
-        ),
+        access(join(isolation.repositorySnapshot, '.agents')),
       ).rejects.toThrow();
       await expect(
         access(
@@ -187,14 +160,6 @@ test('materializes only exact shared formatter and lint tooling', async () => {
       await expect(
         access(
           join(isolation.repositorySnapshot, 'agentic-ai/loom/tsconfig.json'),
-        ),
-      ).rejects.toThrow();
-      await expect(
-        access(
-          join(
-            isolation.repositorySnapshot,
-            '.agents/skills/coding-bro/SKILL.md',
-          ),
         ),
       ).rejects.toThrow();
     } finally {

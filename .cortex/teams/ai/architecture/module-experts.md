@@ -231,16 +231,16 @@ It identifies:
   - Selecting a release authority requires
     `browser-extension-release-security` and its canonical security authority.
   - The role rejects duplicate, reordered, unknown, or incomplete selections.
-- **Skill authority:** `design-taste-frontend` is complete in its executable
-  skill card. `browser-extension-release-security` routes to its canonical
-  security authority. The task-selected snapshot includes that authority when
-  the security skill is required.
+- **Skill authority:** `design-taste-frontend` and
+  `browser-extension-release-security` remain complete in their owning Cortex
+  cards. The task-selected snapshot includes the security authority when the
+  security skill is required.
 - **Base context:** Every invocation receives these authorities.
   - `.cortex/teams/web-dev/AGENTS.md`
   - `.cortex/teams/web-dev/knowledge-graph.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
   - `.cortex/gizmo/workflows/module-oriented-development.md`
-  - `.agents/skills/module-expert/SKILL.md`
+  - `.cortex/teams/ai/dynamic-skills/module-expert.md`
 - **Allowed product authority catalog:** The task selects only the authorities
   that own its assigned functionality.
   - `.cortex/teams/dev-core/product-specs/authenticator-items.md`

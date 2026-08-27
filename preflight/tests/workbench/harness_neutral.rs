@@ -100,69 +100,6 @@ fn files_under(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
     Ok(files)
 }
 
-fn skill_wrapper_files(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let metadata = match fs::symlink_metadata(path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => {
-            return Err(error).with_context(|| format!("failed to inspect {}", path.display()));
-        }
-    };
-    anyhow::ensure!(
-        !metadata.file_type().is_symlink(),
-        "refusing to scan symlink {}",
-        path.display()
-    );
-    anyhow::ensure!(
-        metadata.is_dir(),
-        "skill wrapper root is not a directory: {}",
-        path.display()
-    );
-
-    let mut wrappers = Vec::new();
-    for entry in fs::read_dir(path)
-        .with_context(|| format!("failed to read skill wrappers under {}", path.display()))?
-    {
-        let entry = entry?;
-        if entry.file_name() == "node_modules" {
-            continue;
-        }
-        let file_type = entry.file_type()?;
-        anyhow::ensure!(
-            !file_type.is_symlink(),
-            "refusing to scan symlink {}",
-            entry.path().display()
-        );
-        if !file_type.is_dir() {
-            continue;
-        }
-
-        let wrapper = entry.path().join("SKILL.md");
-        match fs::symlink_metadata(&wrapper) {
-            Ok(metadata) => {
-                anyhow::ensure!(
-                    !metadata.file_type().is_symlink(),
-                    "refusing to scan symlink {}",
-                    wrapper.display()
-                );
-                anyhow::ensure!(
-                    metadata.is_file(),
-                    "skill wrapper is not a file: {}",
-                    wrapper.display()
-                );
-                wrappers.push(wrapper);
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => {
-                return Err(error)
-                    .with_context(|| format!("failed to inspect {}", wrapper.display()));
-            }
-        }
-    }
-    wrappers.sort();
-    Ok(wrappers)
-}
-
 fn line_prescribes_native_model_override(line: &str) -> bool {
     let normalized = line
         .trim_start_matches(|character: char| {
@@ -288,8 +225,6 @@ fn repository_agent_authority_is_harness_neutral() -> anyhow::Result<()> {
     for authority_root in [".cortex", ".github/prompts"] {
         authority_files.extend(files_under(&root.join(authority_root))?);
     }
-    authority_files.extend(skill_wrapper_files(&root.join(".agents/skills"))?);
-
     let mut findings = Vec::new();
     for path in authority_files {
         let authority = fs::read_to_string(&path)

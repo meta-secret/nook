@@ -398,9 +398,9 @@ describe('module expert audit', () => {
       '.cortex/gizmo/workflows/module-oriented-development.md',
     ]);
     expect(WEB_EXPERT_SKILL_PATHS).toEqual([
-      '.agents/skills/module-expert/SKILL.md',
-      '.agents/skills/design-taste-frontend/SKILL.md',
-      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/ai/dynamic-skills/module-expert.md',
+      '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
+      '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ]);
     expect(WEB_EXPERT_SKILL_AUTHORITY_PATHS).toEqual([
       '.cortex/teams/web-dev/AGENTS.md',
@@ -437,8 +437,7 @@ describe('module expert audit', () => {
     expect(WEB_EXPERT_ALLOWED_CONTEXT_PATHS).toEqual([
       ...WEB_EXPERT_PRODUCT_SPEC_PATHS,
       ...WEB_EXPERT_RELEASE_AUTHORITY_PATHS,
-      '.agents/skills/design-taste-frontend/SKILL.md',
-      '.agents/skills/browser-extension-release-security/SKILL.md',
+      '.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md',
       '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
     ]);
     expect(INTERNAL_API_EXPERT_RUST_BOUNDARY_SCOPE_PATHS).toEqual([

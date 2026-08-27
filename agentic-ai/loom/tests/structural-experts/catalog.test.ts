@@ -59,22 +59,12 @@ test('rejects semantic drift in structural read-only lifecycle boundaries', asyn
   ).toContain('cortex-structural-expert-contract-semantic-drift');
 });
 
-test('grants shared formatter and skill lint tooling through exact files', () => {
+test('grants shared formatter and Loom lint tooling through exact files', () => {
   const profile = STRUCTURAL_EXPERT_CATALOG[0];
   if (!profile) throw new Error('Code refactoring profile is missing.');
   expect(
-    profile.allowedEvidenceFiles.filter((path) =>
-      path.startsWith('.agents/skills/'),
-    ),
-  ).toEqual([
-    '.agents/skills/eslint.config.js',
-    '.agents/skills/package.json',
-    '.agents/skills/tsconfig.json',
-    '.agents/skills/bun.lock',
-    '.agents/skills/.prettierrc',
-    '.agents/skills/typescript-named-args/tests/eslint-contract.test.ts',
-    '.agents/skills/typescript-no-unknown/tests/eslint-contract.test.ts',
-  ]);
+    profile.allowedEvidenceFiles.some((path) => path.startsWith('.agents/')),
+  ).toBe(false);
   expect(profile.allowedEvidenceFiles).toContain(
     'tooling/eslint-rules/no-raw-object-arguments.js',
   );
@@ -84,9 +74,7 @@ test('grants shared formatter and skill lint tooling through exact files', () =>
   expect(profile.allowedEvidenceFiles).toContain(
     '.github/formatting/format.sh',
   );
-  expect(profile.allowedEvidenceDescendantRoots).not.toContain(
-    '.agents/skills',
-  );
+  expect(profile.allowedEvidenceDescendantRoots).not.toContain('.agents');
   expect(profile.allowedEvidenceDescendantRoots).not.toContain('tooling');
   expect(profile.allowedEvidenceDescendantRoots).not.toContain(
     'tooling/eslint-rules',
