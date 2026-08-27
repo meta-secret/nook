@@ -532,12 +532,11 @@ function isNonblankString(value: string | false): value is string {
 }
 
 function hasPathControlCharacter(value: string): boolean {
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.charCodeAt(index);
     if (
-      codePoint !== undefined &&
-      (codePoint <= PathControlCodePoint.C0Maximum ||
-        codePoint === PathControlCodePoint.Delete)
+      codePoint <= PathControlCodePoint.C0Maximum ||
+      codePoint === PathControlCodePoint.Delete
     ) {
       return true;
     }
