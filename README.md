@@ -309,7 +309,7 @@ Prerequisites:
 
 - Docker with Buildx
 - [Task](https://taskfile.dev/)
-- [Bun 1.3.14](https://bun.sh/) for the host-run `skills:*` commands
+- [Bun 1.3.14](https://bun.sh/) for host-run Loom commands
 
 The root `Taskfile.yml` is the repository entrypoint. Compile, test, and
 package installs run inside the project container. Infrastructure commands use
@@ -324,11 +324,11 @@ scripts and controllers, Rust for compiled behavior, and Taskfiles for
 orchestration. `task preflight:source-architecture` enforces the complete
 tracked tree.
 
-Agent-invocable skills live under `.agents/skills`. That workspace owns the
-shared TypeScript, ESLint, formatting, and test contracts for skill-local code.
-Use `task skills:install`, `task skills:format`, and `task skills:verify` to
-install its pinned dependencies, apply formatting, and run its complete quality
-gate.
+Project skill semantics live only in team-owned Markdown under `.cortex` and
+are indexed through the AI dynamic-skill catalog. Harness-specific profiles
+must remain outside the tracked repository. Use `task loom:cortex-audit` to
+verify canonical links, catalog coverage, and the absence of tracked harness
+skill mirrors.
 
 ```sh
 task web:dev

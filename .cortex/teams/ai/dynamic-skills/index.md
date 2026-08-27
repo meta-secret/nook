@@ -82,7 +82,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[prefer-popular-libraries.md](../../../shared/dynamic-skills/prefer-popular-libraries.md)**
   - Purpose: Before writing boilerplate, prefer mature high-adoption libraries; reject obscure low-star/low-download deps; validate with Loom `dependencyPopularity`
 - **[ui-design-skills.md](../../web-dev/dynamic-skills/ui-design-skills.md)**
-  - Purpose: Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it
+  - Purpose: Apply the Web-owned UI design guidance for user-visible interface work
 - **[user-facing-security-abstractions.md](../../security/dynamic-skills/user-facing-security-abstractions.md)**
   - Purpose: Present product-level security objects and keep implementation keys subordinate or advanced
 - **[web-unused-code.md](../../web-dev/dynamic-skills/web-unused-code.md)**
