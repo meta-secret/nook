@@ -52,7 +52,7 @@ const thresholds = {
 };
 
 describe('scanRepositoryNpmPackages', () => {
-  test('reads production Loom dependencies', () => {
+  test('reads Loom and executable-application dependencies', () => {
     const root = mkdtempSync(path.join(tmpdir(), 'nook-dependency-scan-'));
     temporaryRoots.push(root);
     const loomManifest: PackageManifestFixture = {
@@ -65,8 +65,18 @@ describe('scanRepositoryNpmPackages', () => {
       manifest: loomManifest,
     };
     writeManifest(loomWrite);
+    const skillsWrite: WriteManifestArgs = {
+      root,
+      relativePath: 'agentic-ai/skills/package.json',
+      manifest: { dependencies: { beta: '2.0.0', shared: '1.0.0' } },
+    };
+    writeManifest(skillsWrite);
 
-    expect(scanRepositoryNpmPackages(root)).toEqual(['alpha', 'shared']);
+    expect(scanRepositoryNpmPackages(root)).toEqual([
+      'alpha',
+      'shared',
+      'beta',
+    ]);
   });
 });
 

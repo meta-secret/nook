@@ -80,15 +80,18 @@ type RepositoryPackageDocument = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const PROVIDER_ROOT = 'agentic-ai/loom/src/cortex-article-provider';
-const PROVIDER_RUNNER = `${PROVIDER_ROOT}/runner.ts`;
+const PROVIDER_ROOT = 'agentic-ai/skills/cortex-article-structure';
+const PROVIDER_RUNNER = `${PROVIDER_ROOT}/src/runner.ts`;
 const PROVIDER_SOURCE_GLOB = '**/*';
 const PROVIDER_SOURCE_PATHS = [
-  `${PROVIDER_ROOT}/audit.ts`,
-  `${PROVIDER_ROOT}/codec.ts`,
-  `${PROVIDER_ROOT}/domain.ts`,
-  `${PROVIDER_ROOT}/verification.ts`,
+  `${PROVIDER_ROOT}/src/application.ts`,
+  `${PROVIDER_ROOT}/src/audit.ts`,
+  `${PROVIDER_ROOT}/src/codec.ts`,
+  `${PROVIDER_ROOT}/src/domain.ts`,
+  `${PROVIDER_ROOT}/src/verification.ts`,
 ] as const;
+const LOOM_ARTICLE_ADAPTER =
+  'agentic-ai/loom/src/lib/cortex-article-structure.ts';
 const RUNNABLE_CONFIG_PATHS = [
   ':(glob)**/package.json',
   ':(glob)**/Taskfile.yml',
@@ -248,7 +251,7 @@ function configurationScriptPaths(
     for (const specifier of configurationScriptReferences(
       referenceInspection,
     )) {
-      const candidates = [
+      const candidates: readonly string[] = [
         posix.normalize(specifier.replace(/^\.\//u, '')),
         posix.normalize(posix.join(posix.dirname(importer), specifier)),
         posix.normalize(
@@ -261,8 +264,9 @@ function configurationScriptPaths(
           ),
         ),
       ];
-      const dependency = candidates.find((path) => graph.sources.has(path));
-      if (!dependency) {
+      const dependency =
+        candidates.find((path) => graph.sources.has(path)) ?? false;
+      if (dependency === false) {
         const launchInspection: RequiredLaunchInspection = {
           source,
           specifier,
@@ -291,10 +295,22 @@ function configurationScriptPaths(
           source: graph.sources.get(dependency) ?? '',
           sources: graph.sources,
         };
-        if (executableScriptViolatesBoundary(boundaryInspection)) {
+        if (
+          dependency !== LOOM_ARTICLE_ADAPTER &&
+          !(
+            importer === LOOM_ARTICLE_ADAPTER &&
+            dependency.startsWith(PROVIDER_ROOT)
+          ) &&
+          executableScriptViolatesBoundary(boundaryInspection)
+        ) {
           throw new Error(
             `Runnable script violates runtime boundary: ${dependency}`,
           );
+        }
+        if (dependency.startsWith(PROVIDER_ROOT)) {
+          if (importer !== LOOM_ARTICLE_ADAPTER)
+            throw new Error('Unauthorized provider edge');
+          continue;
         }
         scripts.add(dependency);
       }
@@ -525,7 +541,7 @@ function resolveActionDependency(
   return false;
 }
 
-test('dormant provider exposes no runnable adapter or side-effect entrypoint', async () => {
+test('provider exposes only pure in-process modules', async () => {
   expect(await Bun.file(join(REPOSITORY_ROOT, PROVIDER_RUNNER)).exists()).toBe(
     false,
   );
@@ -536,18 +552,21 @@ test('dormant provider exposes no runnable adapter or side-effect entrypoint', a
   expect(providerSourceGlob.match('runtime/runner.sh')).toBe(true);
   expect(providerSourceGlob.match('runtime/runner')).toBe(true);
   const scanOptions: SourceScanOptions = {
-    cwd: join(REPOSITORY_ROOT, PROVIDER_ROOT),
+    cwd: join(REPOSITORY_ROOT, PROVIDER_ROOT, 'src'),
     onlyFiles: true,
   };
   const providerSources = (
     await Array.fromAsync(providerSourceGlob.scan(scanOptions))
   )
-    .map((path) => `${PROVIDER_ROOT}/${path}`)
+    .map((path) => `${PROVIDER_ROOT}/src/${path}`)
     .sort();
   expect(providerSources).toEqual([...PROVIDER_SOURCE_PATHS].sort());
 
   for (const path of providerSources) {
     const source = await Bun.file(join(REPOSITORY_ROOT, path)).text();
+    expect(source, path).not.toMatch(
+      /\b(?:eval|fetch|WebSocket)\s*\(|\bnew\s+(?:Function|Worker)\b|Bun\.(?:file|spawn|write)|node:(?:child_process|fs|https?|net)|process\./u,
+    );
     expect(source, path).not.toContain('import.meta.main');
     expect(source, path).not.toContain('Bun.stdin');
     expect(source, path).not.toContain('Bun.stdout');
@@ -557,9 +576,15 @@ test('dormant provider exposes no runnable adapter or side-effect entrypoint', a
       /\bexport\s+(?:async\s+)?(?:function|const|let|var)\s+run\b/u,
     );
   }
+
+  const manifest = await Bun.file(
+    join(REPOSITORY_ROOT, PROVIDER_ROOT, 'executable-skill.json'),
+  ).text();
+  expect(manifest).not.toContain('"entrypoint"');
+  expect(manifest).not.toContain('"command"');
 });
 
-test('production Loom owns the provider without runnable configuration entrypoints', async () => {
+test('only the Loom semantic adapter reaches the provider', async () => {
   const productionRequest: TrackedPathsRequest = {
     pathspecs: PRODUCTION_LOOM_PATHS,
   };
@@ -606,22 +631,22 @@ test('production Loom owns the provider without runnable configuration entrypoin
     symlinkPaths,
   };
   const reachableScriptPaths = configurationScriptPaths(scriptGraph);
-  expect(await pathsContainingProviderRoot(productionPaths)).toEqual(
-    PROVIDER_SOURCE_PATHS,
-  );
+  expect(await pathsContainingProviderRoot(productionPaths)).toEqual([
+    LOOM_ARTICLE_ADAPTER,
+  ]);
   expect(
     await pathsContainingProviderRoot([
       ...configPaths,
       ...reachableActionPaths,
       ...reachableScriptPaths,
     ]),
-  ).toEqual([]);
+  ).toEqual([LOOM_ARTICLE_ADAPTER]);
 
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
   ).text();
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
-  expect(activeAudit).not.toContain(PROVIDER_ROOT);
+  expect(activeAudit).not.toContain('src/cortex-article-provider');
 });
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
@@ -663,7 +688,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     ['.github/actions/nested/pre.js', 'prepare();'],
     ['.github/actions/nested/post.js', 'cleanup();'],
     [
-      '.agents/skills/cortex-article-structure/src/audit.ts',
+      'agentic-ai/skills/cortex-article-structure/src/audit.ts',
       'export const audit = true;',
     ],
   ]);
@@ -685,7 +710,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   const providerSources = new Map(sources);
   providerSources.set(
     '.github/actions/nested/neutral.js',
-    "export { audit } from '../../../.agents/skills/cortex-article-structure/src/audit.ts';",
+    "export { audit } from '../../../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
   );
   const providerGraph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
@@ -847,7 +872,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
       ['scripts/facade.ts', "import './nested.ts';"],
       [
         'scripts/nested.ts',
-        "import '../.agents/skills/cortex-article-structure/src/audit.ts';",
+        "import '../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
       ],
       [`${PROVIDER_ROOT}/src/audit.ts`, 'export const audit = true;'],
     ]);
@@ -894,7 +919,7 @@ test('checks external and extensionless configuration scripts as executable sour
   for (const externalSource of [
     'eval(source);',
     'await import(modulePath);',
-    "import '../.agents/skills/cortex-article-structure/src/audit.ts';",
+    "import '../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
   ]) {
     const sources = new Map<string, string>([
       ['package.json', '{"scripts":{"audit":"bun scripts/external.ts"}}'],

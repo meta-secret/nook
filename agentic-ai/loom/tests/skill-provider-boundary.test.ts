@@ -673,7 +673,12 @@ export function referencesSkillProvider(specifier: string): boolean {
     normalized === '.agents/skills' ||
     normalized.endsWith('/.agents/skills') ||
     normalized.startsWith('.agents/skills/') ||
-    normalized.includes('/.agents/skills/')
+    normalized.includes('/.agents/skills/') ||
+    normalized === 'agentic-ai/skills' ||
+    normalized.endsWith('/agentic-ai/skills') ||
+    normalized.startsWith('agentic-ai/skills/') ||
+    normalized.includes('/agentic-ai/skills/') ||
+    normalized.includes('/skills/cortex-article-structure/')
   );
 }
 
@@ -969,7 +974,7 @@ test('resolves globalThis bindings in their exact lexical scopes', () => {
   }
 });
 
-test('production Loom does not runtime-import dormant skill providers', async () => {
+test('production Loom limits provider imports to the semantic adapter', async () => {
   const sourceGlob = new Bun.Glob('src/**/*');
   const scanOptions: LoomSourceScanOptions = {
     cwd: LOOM_ROOT,
@@ -989,5 +994,5 @@ test('production Loom does not runtime-import dormant skill providers', async ()
     }
   }
 
-  expect(violations).toEqual([]);
+  expect(violations).toEqual(['src/lib/cortex-article-structure.ts']);
 });

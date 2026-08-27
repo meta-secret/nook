@@ -51,6 +51,8 @@ type RepositoryPackageDocument = {
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
+const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
+const ARTICLE_PROVIDER_PREFIX = 'agentic-ai/skills/cortex-article-structure/';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
 const SUBPROCESS_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
 const RUNTIME_SOURCE_SUFFIXES = [
@@ -125,7 +127,8 @@ function runtimeDependencyViolations(
       sources: inspection.sources,
     };
     if (
-      executableScriptViolatesBoundary(boundaryInspection) ||
+      (path !== LOOM_ARTICLE_ADAPTER &&
+        executableScriptViolatesBoundary(boundaryInspection)) ||
       (path.endsWith('.sh') &&
         shellExecutableLaunchesUnprovenScript(sourceBody))
     ) {
@@ -142,9 +145,13 @@ function runtimeDependencyViolations(
         sources: inspection.sources,
         specifier: imported.path,
       };
-      if (
+      const providerReference =
         specifierReferencesSkillProvider(imported.path) ||
-        referencesSkillProvider(resolution)
+        referencesSkillProvider(resolution);
+      if (
+        providerReference &&
+        path !== LOOM_ARTICLE_ADAPTER &&
+        !path.startsWith(ARTICLE_PROVIDER_PREFIX)
       ) {
         violations.push(path);
       } else {
@@ -231,7 +238,12 @@ function referencesSkillProvider(
   resolution: RuntimeDependencyResolution,
 ): boolean {
   const path = normalizedDependencyPath(resolution);
-  return path === '.agents/skills' || path.startsWith('.agents/skills/');
+  return (
+    path === '.agents/skills' ||
+    path.startsWith('.agents/skills/') ||
+    path === 'agentic-ai/skills' ||
+    path.startsWith('agentic-ai/skills/')
+  );
 }
 
 function normalizedDependencyPath(
@@ -304,7 +316,7 @@ test('fails closed for repository-backed module aliases', () => {
   }
 });
 
-test('production Loom runtime closure cannot reach dormant providers', async () => {
+test('production Loom reaches providers only through its semantic adapter', async () => {
   const inventory = trackedRepositoryInventory();
   const trackedPaths = inventory.paths;
   const roots = trackedPaths

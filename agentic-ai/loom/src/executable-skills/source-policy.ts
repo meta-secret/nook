@@ -301,7 +301,7 @@ function assertCanonicalExecutableSkillSourcePath(relativePath: string): void {
     posix.normalize(relativePath) !== relativePath ||
     relativePath.includes('\\') ||
     segments.length < 4 ||
-    segments[0] !== '.agents' ||
+    segments[0] !== 'agentic-ai' ||
     segments[1] !== 'skills' ||
     !segments[2]
   ) {

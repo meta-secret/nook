@@ -1,24 +1,24 @@
 import { readFileSync } from 'node:fs';
-import path from 'node:path';
-import type { Heading, Nodes, Root, RootContent } from 'mdast';
+import type { Nodes, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
+import { executeCortexArticleStructureApplication } from '../../../skills/cortex-article-structure/src/application.ts';
+import {
+  CortexArticleContractKind,
+  CortexArticleSemanticKind,
+  CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
+  type AuditCortexArticleStructureRequest,
+  type CortexArticleDocument,
+  type CortexArticleFinding,
+  type CortexArticleSemanticBlock,
+} from '../../../skills/cortex-article-structure/src/domain.ts';
 import type { CortexDocumentSource } from './cortex-document-structure.ts';
 
-export enum CortexArticleFindingCode {
-  InvalidMigrationLedger = 'invalid-article-migration-ledger',
-  EmptyArticle = 'empty-article',
-  DenseArticle = 'dense-article',
-  UnorderedProcedure = 'unordered-procedure',
-}
-
-export type CortexArticleFinding = {
-  readonly code: CortexArticleFindingCode;
-  readonly file: string;
-  readonly line: number;
-  readonly message: string;
-};
+export {
+  CortexArticleFindingCode,
+  type CortexArticleFinding,
+} from '../../../skills/cortex-article-structure/src/domain.ts';
 
 export type AuditCortexArticleStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
@@ -27,34 +27,12 @@ export type AuditCortexArticleStructureArgs = {
   readonly repoRoot: string;
 };
 
-type ParsedArticleDocument = CortexDocumentSource & {
-  readonly root: Root;
+type SemanticDocumentRequest = {
+  readonly document: CortexDocumentSource;
 };
 
-type AddFindingArgs = {
-  readonly findings: CortexArticleFinding[];
-  readonly code: CortexArticleFindingCode;
-  readonly file: string;
-  readonly line: number;
-  readonly message: string;
-};
-
-type ReadMigrationExemptionsArgs = {
-  readonly catalog: ReadonlySet<string>;
-  readonly findings: CortexArticleFinding[];
-  readonly migrationBaselineEntries: readonly string[] | false;
-  readonly migrationLedgerPath: string;
-  readonly repoRoot: string;
-};
-
-type AuditDocumentArgs = {
-  readonly document: ParsedArticleDocument;
-  readonly findings: CortexArticleFinding[];
-};
-
-type AuditArticleArgs = AuditDocumentArgs & {
-  readonly heading: Heading;
-  readonly sectionNodes: readonly RootContent[];
+type SemanticBlockRequest = {
+  readonly node: RootContent;
 };
 
 type MarkdownContentInspection = {
@@ -62,186 +40,91 @@ type MarkdownContentInspection = {
   readonly excludeProcedureExamples: boolean;
 };
 
-const MAX_CONSECUTIVE_PARAGRAPHS = 3;
-const PROCEDURE_HEADING =
-  /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
 const INVISIBLE_TEXT = /[\s\p{Default_Ignorable_Code_Point}]/gu;
 
 export function auditCortexArticleStructure(
   args: AuditCortexArticleStructureArgs,
 ): CortexArticleFinding[] {
-  const findings: CortexArticleFinding[] = [];
-  const documents = args.documents.map(parseDocument);
-  const catalog = new Set(documents.map((document) => document.relativePath));
-  const exemptionArgs: ReadMigrationExemptionsArgs = {
-    catalog,
-    findings,
+  const documents = args.documents.map((document) => {
+    const request: SemanticDocumentRequest = { document };
+    return semanticDocument(request);
+  });
+  const request: AuditCortexArticleStructureRequest = {
+    kind: CortexArticleContractKind.Request,
+    documents,
     migrationBaselineEntries: args.migrationBaselineEntries,
-    migrationLedgerPath: args.migrationLedgerPath,
-    repoRoot: args.repoRoot,
+    migrationLedger: {
+      relativePath: CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
+      content: readMigrationLedger(args.migrationLedgerPath),
+    },
   };
-  const exemptions = readMigrationExemptions(exemptionArgs);
-
-  for (const document of documents) {
-    if (exemptions.has(document.relativePath)) {
-      continue;
-    }
-    const documentArgs: AuditDocumentArgs = { document, findings };
-    auditDocument(documentArgs);
-  }
-
-  return findings;
+  return [...executeCortexArticleStructureApplication(request).findings];
 }
 
-function parseDocument(document: CortexDocumentSource): ParsedArticleDocument {
+function semanticDocument(
+  request: SemanticDocumentRequest,
+): CortexArticleDocument {
   const root = unified()
     .use(remarkParse)
     .use(remarkGfm)
-    .parse(document.content);
-  return { ...document, root };
+    .parse(request.document.content);
+  const blocks = root.children.map((node) => {
+    const blockRequest: SemanticBlockRequest = { node };
+    return semanticBlock(blockRequest);
+  });
+  return { relativePath: request.document.relativePath, blocks };
 }
 
-function readMigrationExemptions(
-  args: ReadMigrationExemptionsArgs,
-): ReadonlySet<string> {
-  let content: string;
+function semanticBlock(
+  request: SemanticBlockRequest,
+): CortexArticleSemanticBlock {
+  const line = nodeLine(request.node);
+  if (request.node.type === 'heading') {
+    return {
+      kind: CortexArticleSemanticKind.Heading,
+      depth: request.node.depth,
+      line,
+      text: nodeText(request.node),
+    };
+  }
+  if (isTransparentArticleNode(request.node)) {
+    return { kind: CortexArticleSemanticKind.Transparent, line };
+  }
+  if (request.node.type === 'thematicBreak') {
+    return { kind: CortexArticleSemanticKind.DensitySeparator, line };
+  }
+  if (request.node.type === 'paragraph') {
+    if (!isVisibleArticleNode(request.node)) {
+      return { kind: CortexArticleSemanticKind.Transparent, line };
+    }
+    return {
+      kind: hasVisibleProseContent(request.node)
+        ? CortexArticleSemanticKind.Paragraph
+        : CortexArticleSemanticKind.Structure,
+      line,
+    };
+  }
+  if (!isVisibleArticleNode(request.node)) {
+    return { kind: CortexArticleSemanticKind.Transparent, line };
+  }
+  return {
+    kind: hasVisibleOrderedProcedureList(request.node)
+      ? CortexArticleSemanticKind.VisibleOrderedList
+      : CortexArticleSemanticKind.Structure,
+    line,
+  };
+}
+
+function readMigrationLedger(ledgerPath: string): string | false {
   try {
-    content = readFileSync(args.migrationLedgerPath, 'utf8');
+    return readFileSync(ledgerPath, 'utf8');
   } catch {
-    return new Set<string>();
+    return false;
   }
-
-  const exemptions = new Set<string>();
-  const baseline =
-    args.migrationBaselineEntries === false
-      ? false
-      : new Set(args.migrationBaselineEntries);
-  const ledgerFile = path.relative(args.repoRoot, args.migrationLedgerPath);
-  const lines = content.split(/\r?\n/);
-
-  for (let index = 0; index < lines.length; index += 1) {
-    const entry = (lines[index] ?? '').trim();
-    if (entry.length === 0 || entry.startsWith('#')) {
-      continue;
-    }
-    const invalidMessageArgs: InvalidLedgerMessageArgs = {
-      baseline,
-      catalog: args.catalog,
-      entry,
-      exemptions,
-    };
-    const message = invalidLedgerMessage(invalidMessageArgs);
-    if (message !== false) {
-      const findingArgs: AddFindingArgs = {
-        findings: args.findings,
-        code: CortexArticleFindingCode.InvalidMigrationLedger,
-        file: ledgerFile,
-        line: index + 1,
-        message,
-      };
-      addFinding(findingArgs);
-      continue;
-    }
-    exemptions.add(entry);
-  }
-
-  return exemptions;
-}
-
-type InvalidLedgerMessageArgs = {
-  readonly baseline: ReadonlySet<string> | false;
-  readonly catalog: ReadonlySet<string>;
-  readonly entry: string;
-  readonly exemptions: ReadonlySet<string>;
-};
-
-function invalidLedgerMessage(args: InvalidLedgerMessageArgs): string | false {
-  if (args.exemptions.has(args.entry)) {
-    return `Duplicate article-structure migration exemption: ${args.entry}`;
-  }
-  if (!args.catalog.has(args.entry)) {
-    return `Article-structure exemption is not a Cortex Markdown file: ${args.entry}`;
-  }
-  if (args.baseline !== false && !args.baseline.has(args.entry)) {
-    return `Article-structure exemption was added after the baseline: ${args.entry}`;
-  }
-  return false;
-}
-
-function auditDocument(args: AuditDocumentArgs): void {
-  const children = args.document.root.children;
-  for (let index = 0; index < children.length; index += 1) {
-    const node = children[index] ?? false;
-    if (
-      node === false ||
-      node.type !== 'heading' ||
-      (node.depth !== 2 && node.depth !== 3)
-    ) {
-      continue;
-    }
-    const sectionNodeArgs: OwnedSectionNodesArgs = {
-      children,
-      headingIndex: index,
-    };
-    const sectionNodes = ownedSectionNodes(sectionNodeArgs);
-    const articleArgs: AuditArticleArgs = {
-      document: args.document,
-      findings: args.findings,
-      heading: node,
-      sectionNodes,
-    };
-    auditArticle(articleArgs);
-  }
-}
-
-type OwnedSectionNodesArgs = {
-  readonly children: readonly RootContent[];
-  readonly headingIndex: number;
-};
-
-function ownedSectionNodes(
-  args: OwnedSectionNodesArgs,
-): readonly RootContent[] {
-  const heading = args.children[args.headingIndex] ?? false;
-  if (heading === false || heading.type !== 'heading') {
-    return [];
-  }
-  let end = args.children.length;
-  for (
-    let index = args.headingIndex + 1;
-    index < args.children.length;
-    index += 1
-  ) {
-    const node = args.children[index];
-    if (node?.type === 'heading' && node.depth <= heading.depth) {
-      end = index;
-      break;
-    }
-  }
-  return args.children.slice(args.headingIndex + 1, end);
-}
-
-function auditArticle(args: AuditArticleArgs): void {
-  if (!args.sectionNodes.some(isVisibleArticleNode)) {
-    const findingArgs: AddFindingArgs = {
-      findings: args.findings,
-      code: CortexArticleFindingCode.EmptyArticle,
-      file: args.document.relativePath,
-      line: nodeLine(args.heading),
-      message: `Article #${nodeText(args.heading)} has no body content.`,
-    };
-    addFinding(findingArgs);
-    return;
-  }
-
-  auditConsecutiveParagraphs(args);
-  auditProcedure(args);
 }
 
 function isVisibleArticleNode(node: RootContent): boolean {
-  if (node.type === 'heading' || isTransparentArticleNode(node)) {
-    return false;
-  }
+  if (node.type === 'heading' || isTransparentArticleNode(node)) return false;
   const inspection: MarkdownContentInspection = {
     excludeProcedureExamples: false,
     node,
@@ -249,71 +132,8 @@ function isVisibleArticleNode(node: RootContent): boolean {
   return hasVisibleMarkdownContent(inspection);
 }
 
-function auditConsecutiveParagraphs(args: AuditArticleArgs): void {
-  let consecutive = 0;
-  for (const node of args.sectionNodes) {
-    if (node.type === 'heading') {
-      if (node.depth <= 3) {
-        break;
-      }
-      consecutive = 0;
-      continue;
-    }
-    if (isTransparentArticleNode(node)) {
-      continue;
-    }
-    if (node.type === 'thematicBreak') {
-      consecutive = 0;
-      continue;
-    }
-    if (node.type !== 'paragraph') {
-      if (!isVisibleArticleNode(node)) {
-        continue;
-      }
-      consecutive = 0;
-      continue;
-    }
-    if (!isVisibleArticleNode(node)) {
-      continue;
-    }
-    if (!hasVisibleProseContent(node)) {
-      consecutive = 0;
-      continue;
-    }
-    consecutive += 1;
-    if (consecutive === MAX_CONSECUTIVE_PARAGRAPHS + 1) {
-      const findingArgs: AddFindingArgs = {
-        findings: args.findings,
-        code: CortexArticleFindingCode.DenseArticle,
-        file: args.document.relativePath,
-        line: nodeLine(node),
-        message: `Article #${nodeText(args.heading)} has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
-      };
-      addFinding(findingArgs);
-    }
-  }
-}
-
 function isTransparentArticleNode(node: RootContent): boolean {
   return node.type === 'definition' || node.type === 'footnoteDefinition';
-}
-
-function auditProcedure(args: AuditArticleArgs): void {
-  if (!PROCEDURE_HEADING.test(nodeText(args.heading))) {
-    return;
-  }
-  const hasOrderedList = args.sectionNodes.some(hasVisibleOrderedProcedureList);
-  if (hasOrderedList) {
-    return;
-  }
-  const findingArgs: AddFindingArgs = {
-    findings: args.findings,
-    code: CortexArticleFindingCode.UnorderedProcedure,
-    file: args.document.relativePath,
-    line: nodeLine(args.heading),
-    message: `Procedure-like article #${nodeText(args.heading)} must expose its action sequence as an ordered list.`,
-  };
-  addFinding(findingArgs);
 }
 
 function hasVisibleOrderedProcedureList(node: Nodes): boolean {
@@ -330,20 +150,18 @@ function hasVisibleOrderedProcedureList(node: Nodes): boolean {
       excludeProcedureExamples: true,
       node,
     };
-    if (hasVisibleMarkdownContent(inspection)) {
-      return true;
-    }
+    if (hasVisibleMarkdownContent(inspection)) return true;
   }
-  if (!('children' in node)) {
-    return false;
-  }
+  if (!('children' in node)) return false;
   return node.children.some(hasVisibleOrderedProcedureList);
 }
 
-function hasVisibleMarkdownContent(args: MarkdownContentInspection): boolean {
-  const node = args.node;
+function hasVisibleMarkdownContent(
+  request: MarkdownContentInspection,
+): boolean {
+  const node = request.node;
   if (
-    args.excludeProcedureExamples &&
+    request.excludeProcedureExamples &&
     (node.type === 'blockquote' || node.type === 'code')
   ) {
     return false;
@@ -358,14 +176,15 @@ function hasVisibleMarkdownContent(args: MarkdownContentInspection): boolean {
   ) {
     return false;
   }
-  if (node.type === 'image' || node.type === 'imageReference') {
-    return true;
-  }
-  if (node.type === 'footnoteReference') {
+  if (
+    node.type === 'image' ||
+    node.type === 'imageReference' ||
+    node.type === 'footnoteReference'
+  ) {
     return true;
   }
   if (
-    !args.excludeProcedureExamples &&
+    !request.excludeProcedureExamples &&
     node.type === 'listItem' &&
     typeof node.checked === 'boolean'
   ) {
@@ -374,15 +193,13 @@ function hasVisibleMarkdownContent(args: MarkdownContentInspection): boolean {
   if ('value' in node && typeof node.value === 'string') {
     return visibleText(node.value);
   }
-  if (!('children' in node)) {
-    return false;
-  }
+  if (!('children' in node)) return false;
   return node.children.some((child) => {
-    const childArgs: MarkdownContentInspection = {
-      excludeProcedureExamples: args.excludeProcedureExamples,
+    const childRequest: MarkdownContentInspection = {
+      excludeProcedureExamples: request.excludeProcedureExamples,
       node: child,
     };
-    return hasVisibleMarkdownContent(childArgs);
+    return hasVisibleMarkdownContent(childRequest);
   });
 }
 
@@ -403,9 +220,7 @@ function hasVisibleProseContent(node: Nodes): boolean {
   if ('value' in node && typeof node.value === 'string') {
     return visibleText(node.value);
   }
-  if (!('children' in node)) {
-    return false;
-  }
+  if (!('children' in node)) return false;
   return node.children.some(hasVisibleProseContent);
 }
 
@@ -414,25 +229,11 @@ function visibleText(value: string): boolean {
 }
 
 function nodeText(node: RootContent): string {
-  if ('value' in node && typeof node.value === 'string') {
-    return node.value;
-  }
-  if (!('children' in node)) {
-    return '';
-  }
-  return node.children.map((child) => nodeText(child as RootContent)).join('');
+  if ('value' in node && typeof node.value === 'string') return node.value;
+  if (!('children' in node)) return '';
+  return node.children.map(nodeText).join('');
 }
 
 function nodeLine(node: RootContent): number {
   return node.position?.start.line ?? 1;
-}
-
-function addFinding(args: AddFindingArgs): void {
-  const finding: CortexArticleFinding = {
-    code: args.code,
-    file: args.file,
-    line: args.line,
-    message: args.message,
-  };
-  args.findings.push(finding);
 }

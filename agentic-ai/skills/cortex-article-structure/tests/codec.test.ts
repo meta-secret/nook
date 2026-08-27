@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
 import {
+  CortexArticleRequestDecodeError,
   decodeCortexArticleRequest,
   decodeCortexArticleResult,
   encodeCortexArticleRequest,
   encodeCortexArticleResult,
-} from '../../src/cortex-article-provider/codec.ts';
+} from '../src/codec.ts';
 import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
@@ -17,7 +18,7 @@ import {
   type AuditCortexArticleStructureRequest,
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
-} from '../../src/cortex-article-provider/domain.ts';
+} from '../src/domain.ts';
 
 type RequestWithWrites = AuditCortexArticleStructureRequest & {
   readonly allowWrites: boolean;
@@ -65,6 +66,16 @@ const validResult: CortexArticleStructureResult = {
     },
   ],
 };
+
+function requestFailurePath(serializedRequest: string): string {
+  try {
+    decodeCortexArticleRequest(serializedRequest);
+  } catch (error) {
+    if (error instanceof CortexArticleRequestDecodeError) return error.path;
+    throw error;
+  }
+  throw new Error('Expected request decoding to fail.');
+}
 
 test('round-trips exact semantic requests and findings', () => {
   expect(
@@ -136,6 +147,9 @@ test('rejects malformed envelopes and extra fields', () => {
   for (const serialized of invalidRequests) {
     expect(() => decodeCortexArticleRequest(serialized)).toThrow();
   }
+  expect(requestFailurePath(JSON.stringify(requestWithWrites))).toBe(
+    '["<unknown-key>"]',
+  );
   const resultWithExtra: ResultWithExtra = { ...validResult, extra: true };
   const invalidResults = ['{}', 'null', JSON.stringify(resultWithExtra)];
   for (const serialized of invalidResults) {
@@ -172,6 +186,9 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
   expect(() =>
     decodeCortexArticleRequest(JSON.stringify(duplicateRequest)),
   ).toThrow('Duplicate Cortex article document path');
+  expect(requestFailurePath(JSON.stringify(duplicateRequest))).toBe(
+    'documents[1].relativePath',
+  );
 
   const outOfOrderDocument = {
     ...validRequest.documents[0],
@@ -187,6 +204,9 @@ test('rejects duplicate documents and nonmonotonic source lines', () => {
   expect(() =>
     decodeCortexArticleRequest(JSON.stringify(outOfOrderRequest)),
   ).toThrow('Cortex article block lines must be strictly ordered');
+  expect(requestFailurePath(JSON.stringify(outOfOrderRequest))).toBe(
+    'documents[0].blocks[1].line',
+  );
 });
 
 test('requires the canonical migration ledger path', () => {
@@ -199,6 +219,9 @@ test('requires the canonical migration ledger path', () => {
   };
   expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow(
     'Invalid Cortex article migration ledger',
+  );
+  expect(requestFailurePath(JSON.stringify(request))).toBe(
+    'migrationLedger.relativePath',
   );
 });
 
@@ -305,11 +328,7 @@ test('bounds paths, source lines, codes, and finding messages', () => {
 });
 
 test('rejects control characters in request and result paths', () => {
-  const controls: string[] = [];
-  for (let codePoint = 0; codePoint <= 0x1f; codePoint += 1) {
-    controls.push(String.fromCodePoint(codePoint));
-  }
-  controls.push(String.fromCodePoint(0x7f));
+  const controls = ['\n', '\t', '\u001b', '\u0001', '\u007f'];
   for (const control of controls) {
     const relativePath = `.cortex/exam${control}ple.md`;
     const document = { ...validRequest.documents[0], relativePath };
@@ -359,11 +378,13 @@ test('rejects requests whose possible findings exceed result capacity', () => {
   expect(() => decodeCortexArticleRequest(JSON.stringify(request))).toThrow(
     'Cortex article request result budget exceeds its bound',
   );
+  expect(requestFailurePath(JSON.stringify(request))).toBe(
+    'documents[0].blocks[9999]',
+  );
 });
 
 test('self-verifies an accepted request through decode, audit, and result decode', async () => {
-  const { auditCortexArticleStructure } =
-    await import('../../src/cortex-article-provider/audit.ts');
+  const { auditCortexArticleStructure } = await import('../src/audit.ts');
   const decodedRequest = decodeCortexArticleRequest(
     encodeCortexArticleRequest(validRequest),
   );

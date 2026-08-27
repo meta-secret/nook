@@ -32,7 +32,7 @@ const TYPESCRIPT_JAVASCRIPT_SOURCE = /\.(?:[cm]?[jt]sx?)$/u;
 const TYPESCRIPT_SOURCE = /\.(?:cts|mts|ts|tsx)$/u;
 const SHELL_SOURCE = /\.sh$/u;
 const SHELL_PROVIDER_EXECUTION =
-  /(?:\b(?:bun|node|bash|sh|source)\s+|(?:^|[\n;&|])\s*\.\s+)["']?(?:\.\/|\.\.\/|\/)?[^\s"']*\.agents\/skills\//gmu;
+  /(?:\b(?:bun|node|bash|sh|source)\s+|(?:^|[\n;&|])\s*\.\s+)["']?(?:\.\/|\.\.\/|\/)?[^\s"']*agentic-ai\/skills\//gmu;
 const SHELL_REPOSITORY_SCRIPT_EXECUTION =
   /(?:^|[\n;&|])\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)(?:(?:exec|command)\s+)?(?:bun|node|bash|sh|source|\.)\s+(?!-)[^\n;&|]+/gmu;
 type BoundaryTranspilerOptions = { readonly loader: 'tsx' };
