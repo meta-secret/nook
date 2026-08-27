@@ -29,6 +29,7 @@ or a resulting fix.
    - State the requested outcome in public-safe language.
    - Identify completion evidence and explicit exclusions.
    - Fetch the required baseline.
+   - Treat every other active task as read-only.
    - Do not copy the raw prompt or chat transcript.
 2. **Plan delivery.**
    - Publish the Workbench task plan before implementation edits.
@@ -55,6 +56,9 @@ or a resulting fix.
    - Run `task loom:pre-push` before each push.
    - Commit and push the coherent integrated change.
    - Run the required advisory review before the first owner-authored push.
+   - Use `task remote TASK_NAME=web:build` for focused web build evidence.
+   - Use `task remote TASK_NAME=web:e2e` for focused browser evidence.
+   - Dispatch each focused command separately.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
