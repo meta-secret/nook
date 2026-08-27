@@ -90,6 +90,8 @@ Every subagent task must declare:
 - its exact baseline;
 - its purpose;
 - its allowed files or evidence surface;
+- its read and write resource claims;
+- the exact resource claims that form any read-only evidence surface;
 - whether it is read-only;
 - its dependencies;
 - its hierarchy depth bound;
@@ -130,7 +132,10 @@ dispatched.
 4. Create one task record for every reached task.
 5. Assign exactly one team identity to every task record.
 6. Freeze the initial known graph before dispatch.
-7. Freeze resource claims, acceptance evidence, stable task order, and the
+7. Run deterministic topology and cycle validation.
+   - A cycle fails closed.
+   - Report the blocked dependency to Gizmo instead of waiting.
+8. Freeze resource claims, acceptance evidence, stable task order, and the
    parent-owned join.
 
 ### Ready wave dispatch
@@ -154,9 +159,12 @@ Dispatch follows these rules:
 - A task becomes ready when every direct provider satisfies its edge barrier.
 - A task is not selectable until its exact starting Git frontier exists.
 - Read-only evidence is not required in Git ancestry.
+- Every active attempt leases its resource claims.
+- A lease remains held until terminal completion or confirmed cancellation.
 - The harness visits ready pending tasks in stable task order.
-- It greedily selects a task when its claims do not conflict with already
-  selected tasks.
+- It first excludes tasks that conflict with any active lease from prior waves.
+- It then greedily selects a task when its claims do not conflict with claims
+  already selected for the new wave.
 - Claims conflict when they overlap and either task writes.
 - The resulting set is the deterministic maximal safe wave.
 - The harness snapshots every selected starting frontier before creating any
@@ -172,6 +180,28 @@ Dispatch follows these rules:
 - Unrelated work continues. No global wait separates waves.
 - The all-task terminal barrier exists only for the final parent-owned join.
 
+### Read-only evidence stability
+
+The task record names every resource claim used to produce read-only evidence.
+Those claims are its evidence surface.
+
+Before consumer dispatch:
+
+1. Compare the evidence surface at the provider's exact source commit with the
+   consumer's exact frontier.
+2. Treat the evidence as head-stable only when every claimed resource has the
+   same content identity.
+3. Trigger this check whenever a write integration overlaps the evidence
+   surface.
+4. If the surface changed, invalidate the accepted evidence.
+5. Rerun the read-only provider against the exact consumer frontier.
+6. Verify the exact source commit and accept the replacement evidence in parent
+   task state.
+7. Recompute readiness after acceptance or reacceptance.
+
+Only consumers of the changed evidence surface are delayed. Independent claims
+remain eligible for parallel work.
+
 ### Late provider discovery
 
 The frozen initial graph controls dispatch. A worker cannot add its own task or
@@ -184,12 +214,16 @@ When a running task discovers an unknown provider:
 3. The harness stops or cancels that attempt.
 4. Gizmo adds the bounded provider task and dependency edge.
 5. Gizmo recursively discovers any dependencies of the new provider.
-6. Gizmo replans and freezes the affected graph in stable task order.
-7. Unaffected tasks continue from their existing records and frontiers.
-8. A write provider passes through commit verification and Git integration.
-9. A read-only provider passes through exact-source verification and evidence
+6. Gizmo replans the affected graph in stable task order.
+7. Gizmo reruns deterministic topology and cycle validation.
+   - A cycle fails closed.
+   - Gizmo receives the blocked dependency instead of waiting.
+8. Gizmo freezes the validated affected graph.
+9. Unaffected tasks continue from their existing records and frontiers.
+10. A write provider passes through commit verification and Git integration.
+11. A read-only provider passes through exact-source verification and evidence
    acceptance in parent task state.
-10. The consumer retries only as a fresh attempt from a fresh frontier after
+12. The consumer retries only as a fresh attempt from a fresh frontier after
     every new provider barrier is satisfied.
 
 Output from the invalidated attempt cannot satisfy acceptance or integration.
@@ -313,10 +347,12 @@ Before integration, the parent:
 6. integrates accepted commits in deterministic dependency order;
 7. accepts read-only evidence into parent task state or integrates a write
    commit into the Git frontier;
-8. recomputes readiness across affected outgoing edges;
-9. binds downstream work to the exact integrated frontier containing its
+8. checks affected read-only evidence surfaces after a write integration;
+9. invalidates and reruns stale read-only evidence at the consumer frontier;
+10. recomputes readiness after integration, acceptance, or reacceptance;
+11. binds downstream work to the exact integrated frontier containing its
    complete write-predecessor closure; and
-10. selects the next deterministic maximal safe wave.
+12. selects the next deterministic maximal safe wave against active leases.
 
 The parent may author a Markdown summary for humans.
 That summary is optional.
@@ -473,6 +509,8 @@ Before integration, verify:
 - the repository task contract did not prescribe a native label or model;
 - every reached task has a task record;
 - every selected ready task has one harness-visible worker attempt;
+- every task record declares read and write resource claims;
+- every read-only task record declares its evidence surface;
 - every child records the correct parent lineage;
 - every task stayed inside its declared hierarchy depth bound;
 - no descendant widened its assigned task or write scope;
@@ -489,12 +527,21 @@ Before integration, verify:
   requirement;
 - integration follows deterministic dependency order;
 - every wave was greedily maximal under stable task order and resource claims;
+- every wave excluded conflicts with all claim leases held by active attempts;
+- every claim lease remained held until terminal completion or confirmed
+  cancellation;
 - every selected frontier was snapshotted before wave attempts were created;
 - conflict-excluded ready tasks remained pending for recomputation;
 - every late provider invalidated and stopped or cancelled the affected attempt;
+- every graph mutation reran deterministic topology and cycle validation;
+- every cycle failed closed and reported its blocked dependency to Gizmo;
 - every late-provider consumer retry used fresh attempt state and a fresh
   frontier;
 - readiness was recomputed after every Git integration or evidence acceptance;
+- overlapping write integrations triggered evidence-surface stability checks;
+- stale read-only evidence was rerun and reaccepted at the exact consumer
+  frontier;
+- readiness was recomputed after read-only evidence reacceptance;
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - the parent reviewed all evidence;

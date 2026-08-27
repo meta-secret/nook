@@ -41,6 +41,13 @@ Team identity is task-scoped.
 - A mission may reach many tasks with the same or different team identities.
 - Discovery creates task records. It does not create worker attempts.
 - Each ready selected task receives one worker attempt.
+- Every active attempt leases its resource claims until terminal completion or
+  confirmed cancellation.
+- A read-only task record names the exact resource claims used as its evidence
+  surface.
+- Accepted read-only evidence must remain unchanged at the consumer frontier.
+- An overlapping write triggers the check.
+- Changed evidence is rerun and accepted again at the consumer frontier.
 - Worker attempt count follows ready selected tasks. It does not follow team
   count.
 - Team ownership does not collapse several tasks into one mission-wide worker.
@@ -177,12 +184,13 @@ Gizmo assigns the human request before implementation starts.
 5. Identify implementation expertise required from another team.
 6. Identify every cross-team provider and consumer contract.
 7. Freeze the initial known graph, contracts, resource claims, forbidden scope,
-   tests, and acceptance evidence.
+   tests, evidence surfaces, and acceptance evidence.
 8. Assign exactly one team identity to every reached task.
-9. Select a deterministic maximal safe wave from ready tasks.
-10. Snapshot exact starting frontiers for selected tasks.
-11. Create one worker attempt for each selected task.
-12. Keep shared files and lifecycle state in the parent-owned join.
+9. Validate deterministic topology and fail closed on cycles.
+10. Select a stable-order maximal safe wave against active claim leases.
+11. Snapshot exact starting frontiers for selected tasks.
+12. Create one worker attempt for each selected task.
+13. Keep shared files and lifecycle state in the parent-owned join.
 
 File location does not override semantic ownership.
 
@@ -218,9 +226,12 @@ When the provider was absent from the frozen graph:
 2. The harness invalidates and stops or cancels the affected attempt.
 3. Gizmo adds the provider task and edge.
 4. Gizmo replans the affected graph and recursively discovers provider needs.
-5. Gizmo accepts a write provider through Git integration.
-6. Gizmo accepts a read-only provider through parent task evidence state.
-7. Gizmo retries the consumer from a fresh frontier after the provider barrier
+5. Gizmo reruns deterministic topology and cycle validation.
+   - A cycle fails closed.
+   - Gizmo receives the blocked dependency.
+6. Gizmo accepts a write provider through Git integration.
+7. Gizmo accepts a read-only provider through parent task evidence state.
+8. Gizmo retries the consumer from a fresh frontier after the provider barrier
    is satisfied.
 
 ## Cross-team expertise protocol
@@ -275,10 +286,15 @@ The final integration must prove:
   files, or undeclared code;
 - cross-team contracts were frozen before consumer integration;
 - each team supplied its own tests and review fixes;
-- shared files were serialized; and
+- shared files were serialized;
 - every reached task had one team identity;
 - every ready selected task had one worker attempt and an exact frontier;
+- every active claim lease participated in wave conflict checks;
+- every graph mutation passed deterministic topology and cycle validation;
 - every late provider invalidated the affected attempt before replanning;
-- every successor started from a frontier containing its full predecessor
-  closure; and
+- every read-only task declared an evidence surface;
+- every accepted read-only result was head-stable for its consumer frontier;
+- every successor Git frontier contained its full write-predecessor closure;
+- every successor had accepted and current read-only predecessor evidence in
+  parent task state; and
 - Gizmo validated the integrated exact head.

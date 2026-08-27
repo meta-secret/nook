@@ -27,6 +27,7 @@ Each node declares:
 - the consumer outcome;
 - provider dependencies;
 - read and write resource claims;
+- read-only evidence-surface claims;
 - the starting-frontier rule;
 - the isolated workspace policy for write-capable work;
 - the expected commit handoff;
@@ -47,9 +48,14 @@ known graph before dispatch. Every reached node receives one team identity. A
 ready selected node receives one worker attempt only after its exact starting
 frontier exists.
 
-The harness visits ready nodes in stable task order. It greedily selects a
-maximal set whose resource claims do not conflict. It snapshots all selected
-frontiers before creating the wave's worker attempts.
+Every graph mutation runs deterministic topology and cycle validation before
+dispatch. A cycle fails closed and reports the blocked dependency to Gizmo.
+
+Active attempts lease their resource claims until terminal completion or
+confirmed cancellation. The harness visits ready nodes in stable task order. It
+excludes conflicts with active leases, then greedily selects a maximal set whose
+claims do not conflict. It snapshots all selected frontiers before creating the
+wave's worker attempts.
 A child may delegate only within its assigned node and declared depth bound.
 Nested delegation cannot add graph nodes, change edges, or widen write scope.
 
@@ -95,16 +101,19 @@ Implementation follows dependency readiness.
 3. Verify the provider commit against its starting frontier and write scope.
 4. Integrate accepted provider commits in deterministic task order.
 5. Accept read-only provider evidence into parent task state.
-6. Recompute readiness after each Git integration or evidence acceptance.
-7. Bind each ready consumer to the exact integrated frontier containing its
+6. Check affected read-only evidence surfaces after each write integration.
+7. Rerun and reaccept stale evidence against the consumer frontier.
+8. Recompute readiness after Git integration, evidence acceptance, or
+   reacceptance.
+9. Bind each ready consumer to the exact integrated frontier containing its
    complete write-predecessor closure.
-8. Select the next deterministic maximal safe wave.
-9. Snapshot selected frontiers and create one attempt per selected node.
-10. Write each immediate consumer against the accepted external API.
-11. Add consumer tests for integration behavior.
-12. Repeat toward the feature root without waiting for unrelated nodes.
-13. Use the all-task barrier only for the final parent-owned join.
-14. Run repository delivery gates.
+10. Select the next deterministic maximal safe wave against active leases.
+11. Snapshot selected frontiers and create one attempt per selected node.
+12. Write each immediate consumer against the accepted external API.
+13. Add consumer tests for integration behavior.
+14. Repeat toward the feature root without waiting for unrelated nodes.
+15. Use the all-task barrier only for the final parent-owned join.
+16. Run repository delivery gates.
 
 Independent ready providers may be analyzed in parallel.
 Independent write-capable providers may run in parallel only when their
@@ -122,6 +131,14 @@ Provider edges are local barriers. They do not create a global wait between
 waves. Ready nodes excluded by conflicts remain pending for the next readiness
 recomputation.
 
+### Evidence stability
+
+The task record names the exact resource claims used by read-only evidence.
+Before consumer dispatch, each claimed resource must have the same content
+identity at the provider source commit and consumer frontier. An overlapping
+write integration triggers this check. Changed evidence is invalidated, rerun
+against the consumer frontier, and accepted again in parent task state.
+
 For example, `nook-core` must be accepted and integrated before `nook-wasm`
 starts. The web consumer then starts from the integrated frontier containing
 both `nook-core` and `nook-wasm`. Independent ready module tasks continue while
@@ -135,9 +152,11 @@ The initial known module graph is frozen for dispatch.
 2. The harness invalidates and stops or cancels the affected attempt.
 3. Gizmo adds the provider record and edge.
 4. Gizmo recursively discovers and replans the affected module graph.
-5. Unaffected tasks continue.
-6. The provider satisfies its write or read-only acceptance barrier.
-7. The consumer retries as a fresh attempt from a fresh exact frontier.
+5. Gizmo reruns deterministic topology and cycle validation.
+   - A cycle fails closed and reports the blocked dependency to Gizmo.
+6. Unaffected tasks continue.
+7. The provider satisfies its write or read-only acceptance barrier.
+8. The consumer retries as a fresh attempt from a fresh exact frontier.
 
 The invalidated attempt cannot supply accepted evidence or a commit handoff.
 
@@ -180,6 +199,7 @@ Before implementation, verify:
 - provider tests own domain behavior;
 - dependency order is acyclic;
 - every task has a starting-frontier rule and declared resource scope;
+- every read-only task declares its evidence-surface claims;
 - every selected ready attempt has an exact starting frontier;
 - every write-capable task has an isolated workspace policy;
 - every task stays inside the declared hierarchy depth bound;
@@ -190,8 +210,14 @@ Before implementation, verify:
   write-predecessor closure;
 - read-only evidence is accepted in parent task state without Git ancestry;
 - each wave is greedily maximal under stable task order and resource claims;
+- each wave excludes claims leased by every active attempt;
+- leases persist until terminal completion or confirmed cancellation;
+- every graph mutation passes deterministic topology and cycle validation;
 - late providers invalidate affected attempts before replanning;
-- readiness is recomputed after every Git integration or evidence acceptance;
+- read-only evidence is head-stable for each consumer frontier;
+- overlapping write integrations trigger evidence-surface checks;
+- stale evidence is rerun and reaccepted against the exact consumer frontier;
+- readiness is recomputed after integration, acceptance, or reacceptance;
 - only the final parent-owned join uses an all-task barrier;
 - the delivery owner owns the join.
 

@@ -49,16 +49,20 @@ authority.
    starting frontier exists.
 5. An unknown provider invalidates the affected attempt and returns to Gizmo
    for graph replanning.
-6. The assigned worker loads only its own context's `AGENTS.md` and knowledge
+6. Every graph mutation reruns deterministic topology and cycle validation.
+7. Cycles fail closed and return the blocked dependency to Gizmo.
+8. Wave selection includes claims leased by every active attempt.
+9. Read-only evidence must remain head-stable for the consumer frontier.
+10. The assigned worker loads only its own context's `AGENTS.md` and knowledge
    graph.
-7. Open only documents needed for the assigned functionality.
-8. Load a shared document only for a named cross-team dependency.
-9. Do not open another team's graph for background context.
-10. Return foreign-team requirements to Gizmo.
-11. Load a foreign-team skill read-only when the selected team's task-relevant
+11. Open only documents needed for the assigned functionality.
+12. Load a shared document only for a named cross-team dependency.
+13. Do not open another team's graph for background context.
+14. Return foreign-team requirements to Gizmo.
+15. Load a foreign-team skill read-only when the selected team's task-relevant
    authority names it as required engineering policy.
-12. Require an expertise contract only when the foreign team will change files.
-13. Route security architecture and acceptance questions to security without
+16. Require an expertise contract only when the foreign team will change files.
+17. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
 For a multi-team request, Gizmo loads only its own graph. Every reached task has

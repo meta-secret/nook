@@ -24,15 +24,19 @@ Gizmo must:
    - the tests or evidence that prove completion.
 4. Assign exactly one team identity to each task.
 5. Freeze the initial known task graph before dispatch.
-6. Select a deterministic maximal safe wave from ready task records.
-7. Snapshot each selected task's exact starting frontier.
-8. Create one worker attempt for each selected task and dispatch the wave.
-9. Integrate accepted handoffs and recompute readiness after each integration.
-10. Bind each successor to the exact integrated frontier that contains its
+6. Validate deterministic topology and reject cycles.
+7. Select a deterministic maximal safe wave against all active claim leases.
+8. Snapshot each selected task's exact starting frontier.
+9. Create one worker attempt for each selected task and dispatch the wave.
+10. Integrate accepted write handoffs or accept read-only evidence.
+11. Check affected read-only evidence surfaces at the consumer frontier.
+12. Rerun and reaccept stale evidence.
+13. Recompute readiness after integration, acceptance, or reacceptance.
+14. Bind each successor to the exact integrated frontier that contains its
    complete write-predecessor closure.
-11. Review every returned result against the requested outcome.
-12. Send incomplete or incorrect work back to the responsible subagent.
-13. Recursively call the responsible subagent with feedback until the mission
+15. Review every returned result against the requested outcome.
+16. Send incomplete or incorrect work back to the responsible subagent.
+17. Recursively call the responsible subagent with feedback until the mission
    is complete or a real blocker requires human direction.
 
 Every reached unit receives a task record. A ready task receives one worker
@@ -76,6 +80,7 @@ Gizmo supplies a bounded task contract for that identity.
 - It names allowed and forbidden paths.
 - It names dependencies, acceptance evidence, the hierarchy bound, and the
   parent-owned join.
+- It names the resource claims used by read-only evidence.
 - It gives the worker only its own team entry points and task-relevant
   authorities.
 - It requires an isolated workspace and verified handoff for write-capable
@@ -101,12 +106,20 @@ A read-only provider satisfies its consumer edge only when it is:
 - The successor starts from the exact integrated frontier that contains its
   complete write-predecessor closure.
 - Read-only evidence is not required in Git ancestry.
-- The harness recomputes readiness after each integration.
+- Before consumer dispatch, read-only evidence must be head-stable for the
+  consumer frontier.
+- An overlapping write integration triggers that stability check.
+- Stale evidence is invalidated, rerun against the consumer frontier, and
+  accepted again.
+- The harness recomputes readiness after write integration or read-only
+  evidence acceptance or reacceptance.
 - Provider edges are local barriers.
 - An all-task barrier is reserved for the final parent-owned join.
 - The initial known graph is frozen before dispatch.
 - An unknown provider invalidates and stops or cancels the affected attempt.
 - Gizmo adds the provider task and edge, then replans the affected graph.
+- Every graph change reruns deterministic topology and cycle validation.
+- A cycle fails closed and returns the blocked dependency to Gizmo.
 - The consumer retries as a fresh attempt from a fresh frontier after the new
   provider barrier is satisfied.
 
@@ -205,10 +218,12 @@ Security review does not transfer implementation ownership.
     acceptance evidence.
 
 Gizmo may run team subagents one after another when their changes cannot safely
-overlap. It greedily selects a maximal safe wave in stable task order. Read-only
-audits may overlap. Any overlapping claims conflict when either task writes.
-Concurrent writers require isolated workspaces and disjoint resource claims.
-Gizmo still must not implement their tasks.
+overlap. Claims remain leased while an attempt is active. Gizmo greedily selects
+a maximal safe wave in stable task order against active leases and claims
+selected for the new wave. Read-only audits may overlap. Any overlapping claims
+conflict when either task writes. Concurrent writers require isolated
+workspaces and disjoint resource claims. Gizmo still must not implement their
+tasks.
 
 ## Universal repository boundaries
 

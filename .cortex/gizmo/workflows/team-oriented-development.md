@@ -16,14 +16,19 @@ Gizmo writes the team assignments before implementation starts.
 3. Name a second team when that team's expertise is required to change files.
 4. Keep shared integration and delivery actions as Gizmo tasks.
 5. Freeze the initial known graph before dispatch.
-6. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-7. Apply [subagent delegation](subagent-delegation.md) for operational worker
+6. Record the exact claims used by each read-only evidence surface.
+7. Validate deterministic topology and fail closed on cycles.
+8. Report the blocked dependency to Gizmo when a cycle exists.
+9. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+10. Apply [subagent delegation](subagent-delegation.md) for operational worker
    rules and integration.
 
-Select each wave in stable task order. Greedily include every ready task that
-does not conflict with a selected task. Snapshot each selected frontier, then
-create one worker attempt per selected task. Leave excluded ready tasks pending
-for the next readiness recomputation.
+Claims remain leased until an attempt reaches terminal completion or confirmed
+cancellation. Select each wave in stable task order. Greedily include every
+ready task that conflicts with neither an active lease nor a claim selected for
+the new wave. Snapshot each selected frontier, then create one worker attempt
+per selected task. Leave excluded ready tasks pending for the next readiness
+recomputation.
 
 Read-only audits may overlap. Claims conflict when they overlap and either task
 writes. Concurrent writers require isolated workspaces and disjoint resource
@@ -90,7 +95,9 @@ When a team needs a provider owned elsewhere:
 5. If the provider was unknown, invalidate and stop or cancel the current
    attempt.
 6. Let Gizmo add the provider task and edge, then replan the affected graph.
-7. Resume through a fresh attempt only after the provider barrier is satisfied.
+7. Rerun deterministic topology and cycle validation.
+   - If a cycle exists, fail closed and report the blocked dependency to Gizmo.
+8. Resume through a fresh attempt only after the provider barrier is satisfied.
 
 Cross-team requests do not authorize direct edits in the provider team's paths.
 
@@ -129,16 +136,21 @@ tasks before activating a successor.
 5. Require each read-only provider to be terminal-successful and accepted.
 6. Verify each read-only provider's exact source commit, then accept its
    evidence into parent task state.
-7. Recompute readiness after each Git integration or evidence acceptance.
-8. Bind every ready successor to the exact Git frontier containing its complete
+7. Verify that its declared evidence surface is head-stable for the consumer
+   frontier.
+   - An overlapping write integration triggers the check.
+   - If the surface changed, invalidate and rerun the read-only provider against
+     the exact consumer frontier, then accept it again.
+8. Recompute readiness after each Git integration or evidence acceptance.
+9. Bind every ready successor to the exact Git frontier containing its complete
    write-predecessor closure.
-9. Select and dispatch the next deterministic maximal safe wave.
-10. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
-11. Route review and validation failures back to the responsible team.
-12. Repeat until every team-owned correction is complete.
-13. Reserve the all-task barrier for the final parent-owned join.
-14. Run exact-head validation and readiness through Gizmo's delivery workflow.
-15. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
+10. Select the next deterministic maximal safe wave against active leases.
+11. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
+12. Route review and validation failures back to the responsible team.
+13. Repeat until every team-owned correction is complete.
+14. Reserve the all-task barrier for the final parent-owned join.
+15. Run exact-head validation and readiness through Gizmo's delivery workflow.
+16. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
    Gizmo.
 
 Gizmo owns the final integrated verdict. Gizmo cannot override a required

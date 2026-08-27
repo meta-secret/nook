@@ -24,13 +24,17 @@ Gizmo never gives its own graph to a team subagent.
 - Classify each task by functional owner and optional expertise provider.
 - Freeze the initial known graph, resource claims, dependencies, and acceptance
   evidence before dispatch.
+- Validate deterministic topology and reject cycles after every graph mutation.
 - Choose exactly one team identity for each task.
-- Select a deterministic maximal safe wave in stable task order.
+- Keep each attempt's claims leased until terminal completion or confirmed
+  cancellation.
+- Select a deterministic maximal safe wave against all active claim leases.
 - Snapshot immutable starting frontiers for the selected tasks.
 - Create one worker attempt per selected task and dispatch the wave.
 - Supply the team identity and bounded task contract to the active harness.
 - Resolve dependencies and integrate verified commit handoffs.
-- Recompute edge-local readiness after every integration.
+- Recompute edge-local readiness after write integration or read-only evidence
+  acceptance or reacceptance.
 - Mutate Workbench, integrated Git state, pull requests, review threads,
   validation requests, readiness, and merge state.
 - Issue the final integrated exact-head PR verdict.
@@ -50,21 +54,25 @@ Gizmo never gives its own graph to a team subagent.
 2. Recursively discover initial bounded task records and provider edges.
 3. Select exactly one team identity for every team task.
 4. Freeze the initial known graph before dispatch.
-5. Select a deterministic maximal safe wave from ready tasks.
-6. Snapshot each selected task's immutable starting frontier.
-7. Create one worker attempt for each selected task and dispatch the wave.
-8. Verify each returned result against its task identity, starting frontier,
+5. Validate deterministic topology and fail closed on cycles.
+6. Select a deterministic maximal safe wave against active claim leases.
+7. Snapshot each selected task's immutable starting frontier.
+8. Create one worker attempt for each selected task and dispatch the wave.
+9. Verify each returned result against its task identity, starting frontier,
    resource scope, and acceptance evidence.
-9. Integrate accepted commits in deterministic dependency order.
-10. Recompute readiness across affected outgoing edges after each integration.
-11. Bind each newly ready successor to the exact integrated frontier containing
+10. Integrate accepted commits in deterministic dependency order.
+11. Check affected read-only evidence surfaces at the consumer frontier.
+12. Rerun and reaccept stale read-only evidence.
+13. Recompute readiness after write integration or read-only evidence
+    acceptance or reacceptance.
+14. Bind each newly ready successor to the exact integrated frontier containing
    its complete write-predecessor closure.
-12. Route every implementation finding back to its responsible team.
-13. Replan a task when its attempt reports an unknown provider.
-14. Use the all-task barrier only for the final parent-owned join.
-15. Validate the integrated exact head.
-16. Record the final integrated verdict.
-17. Complete readiness, merge, and Workbench publication when the verdict is
+15. Route every implementation finding back to its responsible team.
+16. Replan a task when its attempt reports an unknown provider.
+17. Use the all-task barrier only for the final parent-owned join.
+18. Validate the integrated exact head.
+19. Record the final integrated verdict.
+20. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
 
 Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
@@ -83,12 +91,22 @@ Direct providers form edge-local readiness barriers.
 - A read-only provider must be terminal-successful, accepted, exact-source
   verified, and accepted into parent task state.
 - Read-only evidence does not enter Git ancestry.
+- Its task record names the exact evidence surface and resource claims.
+- Before consumer dispatch, the evidence surface must be unchanged at the
+  consumer frontier.
+- An overlapping write integration triggers that check.
+- Changed evidence is invalidated, rerun at the consumer frontier, and accepted
+  again.
 - Readiness does not wait for unrelated tasks.
 
 If an attempt discovers an unknown provider, the harness invalidates and stops
 or cancels that attempt. Gizmo adds the provider task and edge, then replans the
 affected graph. The consumer retries only as a fresh attempt from a fresh
 frontier after the write or read-only provider barrier is satisfied.
+
+Every graph mutation reruns deterministic topology and cycle validation before
+dispatch. A cycle fails closed. Gizmo receives the blocked dependency instead of
+waiting for readiness that cannot occur.
 
 ## Verdict rules
 
