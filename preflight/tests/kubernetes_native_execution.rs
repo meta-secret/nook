@@ -6,9 +6,11 @@ const CLUSTER_ENTRYPOINTS: &[&str] = &[
     ".github/actions/nook-docker-setup/action.yml",
     ".github/actions/nook-node-setup/action.yml",
     ".github/scripts/arc-runtime-smoke.sh",
+    ".github/scripts/with-remote-buildkit.sh",
     ".github/scripts/ci-release-deploy-vaults.sh",
     ".github/scripts/remote-task-batch.sh",
     ".github/scripts/wait-hive-neo4j.sh",
+    "nook-app/ci/Taskfile.yml",
 ];
 
 const EXPECTED_REMOTE_CATALOG: &[&str] = &[
@@ -164,6 +166,30 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
 
     for path in CLUSTER_ENTRYPOINTS {
         assert_no_nested_runtime(path, &read(path));
+    }
+
+    let ci_tasks = read("nook-app/ci/Taskfile.yml");
+    assert!(ci_tasks.contains("if test \"${NOOK_BUILDKIT_REMOTE:-}\" = \"1\"; then"));
+    assert!(ci_tasks.contains(".github/scripts/with-remote-buildkit.sh"));
+    let docker_setup = read(".github/actions/nook-docker-setup/action.yml");
+    assert!(docker_setup.contains("echo \"NOOK_BUILDKIT_REMOTE=1\" >> \"$GITHUB_ENV\""));
+    let remote_buildkit = read(".github/scripts/with-remote-buildkit.sh");
+    for allowed in ["buildx inspect", "buildx build", "buildx use"] {
+        assert!(
+            remote_buildkit.contains(allowed),
+            "ARC remote BuildKit wrapper must retain build-only client operation: {allowed}"
+        );
+    }
+    for forbidden in [
+        "buildx create",
+        "buildx rm",
+        "--driver docker-container",
+        "volume rm",
+    ] {
+        assert!(
+            !remote_buildkit.contains(forbidden),
+            "ARC remote BuildKit wrapper must not contain hosted daemon recovery: {forbidden}"
+        );
     }
 
     let expected = EXPECTED_REMOTE_CATALOG

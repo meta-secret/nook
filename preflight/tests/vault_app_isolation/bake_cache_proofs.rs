@@ -71,24 +71,24 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     assert_scope_arms(
         &rust_bake,
         "rust_deps_cache_from",
-        &["nook-rust-deps-v3"],
+        &["nook-rust-deps-v4"],
         &[],
-        &["nook-rust-base-v1"],
+        &["nook-rust-base-v2"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_native_source_cache_from",
-        &["nook-rust-native-source-v3", "nook-rust-deps-v3"],
+        &["nook-rust-native-source-v4", "nook-rust-deps-v4"],
         &[],
-        &["nook-rust-base-v1"],
+        &["nook-rust-base-v2"],
     )?;
     let native_source = assignment_body(&rust_bake, "rust_native_source_cache_from")?;
     let native_main =
         split_main_available_arm(native_source, "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE")?;
     assert!(
-        native_main.contains("nook/buildcache/nook-rust-native-source-v3")
-            && !native_main.contains("nook-rust-deps-v3")
-            && !native_main.contains("nook-rust-native-deps-input-v2"),
+        native_main.contains("nook/buildcache/nook-rust-native-source-v4")
+            && !native_main.contains("nook-rust-deps-v4")
+            && !native_main.contains("nook-rust-native-deps-input-v3"),
         "Main native-source restore must import that full graph alone"
     );
     // Main non-FALLBACK restores the fingerprinted scope; PR FALLBACK also lists
@@ -96,67 +96,67 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     assert_scope_arms(
         &rust_bake,
         "rust_wasm_deps_cache_from",
-        &["nook-rust-wasm-source-v2"],
-        &[&["nook-rust-wasm-deps-v5", "${GHA_RUST_WASM_DEPS_SCOPE}"]],
-        &["nook-rust-base-v1", "nook-rust-deps-v3"],
+        &["nook-rust-wasm-source-v3"],
+        &[&["nook-rust-wasm-deps-v6", "${GHA_RUST_WASM_DEPS_SCOPE}"]],
+        &["nook-rust-base-v2", "nook-rust-deps-v4"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_wasm_source_cache_from",
-        &["nook-rust-wasm-source-v2"],
-        &[&["nook-rust-wasm-deps-v5", "${GHA_RUST_WASM_DEPS_SCOPE}"]],
-        &["nook-rust-base-v1", "nook-rust-deps-v3"],
+        &["nook-rust-wasm-source-v3"],
+        &[&["nook-rust-wasm-deps-v6", "${GHA_RUST_WASM_DEPS_SCOPE}"]],
+        &["nook-rust-base-v2", "nook-rust-deps-v4"],
     )?;
     let wasm_source = assignment_body(&rust_bake, "rust_wasm_source_cache_from")?;
     let wasm_main =
         split_main_available_arm(wasm_source, "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE")?;
     assert!(
-        wasm_main.contains("nook/buildcache/nook-rust-wasm-source-v2")
-            && !wasm_main.contains("nook-rust-wasm-deps-v5")
-            && !wasm_main.contains("nook-rust-wasm-deps-input-v2"),
+        wasm_main.contains("nook/buildcache/nook-rust-wasm-source-v3")
+            && !wasm_main.contains("nook-rust-wasm-deps-v6")
+            && !wasm_main.contains("nook-rust-wasm-deps-input-v3"),
         "Main WASM source restore must import that full graph alone"
     );
     assert_scope_arms(
         &rust_bake,
         "rust_wasm_node_cache_from",
-        &["nook-rust-wasm-node-v1"],
+        &["nook-rust-wasm-node-v2"],
         &[],
-        &["nook-rust-wasm-source-v2", "nook-rust-wasm-deps-v5"],
+        &["nook-rust-wasm-source-v3", "nook-rust-wasm-deps-v6"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
-        &["nook-rust-ecosystem-policy-tools-v4"],
+        &["nook-rust-ecosystem-policy-tools-v5"],
         &[],
-        &["nook-rust-base-v1"],
+        &["nook-rust-base-v2"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_dylint_cache_from",
-        &["nook-rust-ecosystem-dylint-v3"],
+        &["nook-rust-ecosystem-dylint-v4"],
         &[],
-        &["nook-rust-base-v1", "nook-rust-ecosystem-nightly"],
+        &["nook-rust-base-v2", "nook-rust-ecosystem-nightly"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_fuzz_cache_from",
-        &["nook-rust-ecosystem-fuzz-v3"],
+        &["nook-rust-ecosystem-fuzz-v4"],
         &[],
-        &["nook-rust-base-v1", "nook-rust-ecosystem-nightly"],
+        &["nook-rust-base-v2", "nook-rust-ecosystem-nightly"],
     )?;
     assert_scope_arms(
         &rust_bake,
         "rust_ecosystem_kani_cache_from",
-        &["nook-rust-ecosystem-kani-v1"],
+        &["nook-rust-ecosystem-kani-v2"],
         &[],
-        &["nook-rust-base-v1", "nook-rust-deps-v3"],
+        &["nook-rust-base-v2", "nook-rust-deps-v4"],
     )?;
     assert_scope_arms(
         &preflight_bake,
         "preflight_cache_from",
         &["nook-preflight-v1"],
         &[],
-        &["nook-rust-base-v1"],
+        &["nook-rust-base-v2"],
     )?;
     Ok(())
 }
@@ -172,50 +172,50 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             rust_bake.as_str(),
             "rust_base_cache_from",
             "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
-            "nook-rust-base-v1${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-base-v1",
+            "nook-rust-base-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-base-v2",
         ),
         (
             rust_bake.as_str(),
             "rust_ecosystem_policy_tools_cache_from",
             "GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE",
-            "nook-rust-ecosystem-policy-tools-v4${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-ecosystem-policy-tools-v4",
+            "nook-rust-ecosystem-policy-tools-v5${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-policy-tools-v5",
         ),
         (
             rust_bake.as_str(),
             "rust_ecosystem_dylint_cache_from",
             "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE",
-            "nook-rust-ecosystem-dylint-v3${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-ecosystem-dylint-v3",
+            "nook-rust-ecosystem-dylint-v4${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-dylint-v4",
         ),
         (
             rust_bake.as_str(),
             "rust_ecosystem_fuzz_cache_from",
             "GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE",
-            "nook-rust-ecosystem-fuzz-v3${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-ecosystem-fuzz-v3",
+            "nook-rust-ecosystem-fuzz-v4${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-fuzz-v4",
         ),
         (
             rust_bake.as_str(),
             "rust_ecosystem_deterministic_cache_from",
             "GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE",
-            "nook-rust-ecosystem-deterministic-v1${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-ecosystem-deterministic-v1",
+            "nook-rust-ecosystem-deterministic-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-deterministic-v2",
         ),
         (
             rust_bake.as_str(),
             "rust_ecosystem_kani_cache_from",
             "GHA_CACHE_EXACT_RUST_KANI_AVAILABLE",
-            "nook-rust-ecosystem-kani-v1${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-ecosystem-kani-v1",
+            "nook-rust-ecosystem-kani-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-ecosystem-kani-v2",
         ),
         (
             rust_bake.as_str(),
             "rust_deps_cache_from",
             "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE",
-            "nook-rust-deps-v3${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-deps-v3",
+            "nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-deps-v4",
         ),
         (
             rust_bake.as_str(),
@@ -228,22 +228,22 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             rust_bake.as_str(),
             "rust_native_source_cache_from",
             "GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE",
-            "nook-rust-native-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-native-source-v3",
+            "nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-native-source-v4",
         ),
         (
             rust_bake.as_str(),
             "rust_wasm_source_cache_from",
             "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
-            "nook-rust-wasm-source-v2${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-wasm-source-v2",
+            "nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-wasm-source-v3",
         ),
         (
             rust_bake.as_str(),
             "rust_wasm_node_cache_from",
             "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
-            "nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-wasm-node-v1",
+            "nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}",
+            "nook/buildcache/nook-rust-wasm-node-v2",
         ),
         (
             preflight_bake.as_str(),

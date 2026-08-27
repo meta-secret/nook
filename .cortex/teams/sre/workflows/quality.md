@@ -134,12 +134,12 @@ Use this workflow for quality, CI, and deployment changes.
      toolchain-only `rust-ecosystem-nightly` stage with pinned
      [`cargo-fuzz`](https://rust-fuzz.github.io/book/cargo-fuzz.html).
      The leaf stage owns the platform source copy after the shared tool stage.
-     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v3`.
+     Fuzz restores nightly read-only and writes `nook-rust-ecosystem-fuzz-v4`.
    - `PR / Rust ecosystem / Kani bounded proofs` —
      [`Kani`](https://model-checking.github.io/kani/) exhaustively verifies
      bounded proof harnesses with a pinned specialized toolchain.
      `task docker:ecosystem:kani` Bakes the `rust-kani` internal stage.
-     `nook-rust-ecosystem-kani-v1` caches both installation and proof
+     `nook-rust-ecosystem-kani-v2` caches both installation and proof
      compilation because Kani's compiler cannot use ordinary rustc sccache.
    - `PR / Rust ecosystem / Dylint repository lints` —
      `task docker:ecosystem:dylint` warms `docker:rust-base`,
@@ -149,7 +149,7 @@ Use this workflow for quality, CI, and deployment changes.
      There is no linked nightly Bake context whose identity can change.
      Pinned [`cargo-dylint`](https://trailofbits.github.io/dylint/) /
      `dylint-link` release binaries (no host `cargo install`).
-     The dylint leaf scope is `nook-rust-ecosystem-dylint-v3`.
+     The dylint leaf scope is `nook-rust-ecosystem-dylint-v4`.
      Nightly stays toolchain-stable and source-free.
      Dylint and fuzz copy sources in sibling stages after it.
 7. Build wasm before Svelte checks or web builds.
@@ -204,7 +204,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Dylint/fuzz leaf scopes must not import nightly (or rust-base).
     - WASM deps/source scopes must not import rust-base or native rust-deps.
     - Their mode=max exports already embed that parent chain.
-    - WASM deps may import longer `nook-rust-wasm-source-v2` after own deps
+    - WASM deps may import longer `nook-rust-wasm-source-v3` after own deps
       scopes miss.
     - That longer source index restores cook layers when the fingerprinted deps
       scope is still empty.
@@ -212,8 +212,8 @@ Use this workflow for quality, CI, and deployment changes.
     - Native deps and ecosystem leaves restore parents the same way.
     - Leaf `cache-from` stays own-scope only (no short-parent importers).
     - `mode=max` leaf exports already embed the parent chain.
-    - Native deps/source use `nook-rust-deps-v3` and
-      `nook-rust-native-source-v3` after leaving short-chain rust-base.
+    - Native deps/source use `nook-rust-deps-v4` and
+      `nook-rust-native-source-v4` after leaving short-chain rust-base.
     - Empty `cache-from=` and `cache-to=` overrides are prohibited.
     - Clearing `cache-from` after a remote hit forces cold apt/toolchain rebuilds.
     - Clearing `cache-to` on a linked parent is banned.

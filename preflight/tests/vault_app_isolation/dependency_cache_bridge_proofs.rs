@@ -86,7 +86,7 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
         "dirty formatter publication must never export real source or validation layers"
     );
     for graph in ["native", "wasm"] {
-        let repository = format!("nook-rust-{graph}-deps-input-v2");
+        let repository = format!("nook-rust-{graph}-deps-input-v3");
         let stable = format!("{repository}:fingerprint-${{NOOK_RUST_DEPS_INPUT_FINGERPRINT}}");
         let candidate = format!(
             "{repository}:candidate-${{NOOK_RUST_DEPS_INPUT_FINGERPRINT}}-${{NOOK_RUST_DEPS_INPUT_CANDIDATE}}"
@@ -94,7 +94,9 @@ fn theorem_local_formatter_and_pr_share_input_cache() -> anyhow::Result<()> {
         assert!(
             rust_bake.contains(&stable)
                 && rust_bake.contains(&candidate)
-                && rust_bake.contains(&format!("{candidate},mode=max"))
+                && rust_bake.contains(&format!(
+                    "{candidate},mode=max,compression=zstd,force-compression=true"
+                ))
                 && rust_bake.matches(&stable).count() == 4,
             "quarantined dependency publication and verified restore are missing for {graph}"
         );
@@ -211,10 +213,10 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
     assert!(
         app_bake.contains("variable \"GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE\"")
             && setup.contains(
-                "publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE \"nook-rust-wasm-node-v1$scope_suffix\""
+                "publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE \"nook-rust-wasm-node-v2$scope_suffix\""
             )
-            && rust_bake.contains("nook/buildcache/nook-rust-wasm-node-v1")
-            && rust_bake.contains("nook-rust-wasm-node-v1${GHA_CACHE_SCOPE_SUFFIX}"),
+            && rust_bake.contains("nook/buildcache/nook-rust-wasm-node-v2")
+            && rust_bake.contains("nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}"),
         "hosted setup must select exact-only Node restore or trusted Main fallback"
     );
     let main_node = section(
@@ -293,11 +295,11 @@ fn theorem_wasm_fingerprint_closed_allowlist() -> anyhow::Result<()> {
         );
     }
     assert!(
-        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v5-$rust_deps_fingerprint"),
-        "fingerprinted scope must remain nook-rust-wasm-deps-v5-<hash>"
+        setup.contains("GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint"),
+        "fingerprinted scope must remain nook-rust-wasm-deps-v6-<hash>"
     );
     assert!(
-        script.contains("nook-rust-deps-input-v2") && !script.contains("nook-rust-deps-input-v1"),
+        script.contains("nook-rust-deps-input-v3") && !script.contains("nook-rust-deps-input-v1"),
         "dependency fingerprint domain must rotate with the verified v2 bridge"
     );
     assert!(

@@ -326,8 +326,11 @@ legacy registered `nook` runner is not used.
 - A manifest lookup proves index availability. It does not prove that a fresh
   builder has hydrated content or extracted snapshots.
 - Local writes use git-commit refs (`-git-<sha>`) under `nook/remote-buildcache/**`.
-- Delivery CI persists the toolchain in `nook-rust-base-v1` and native/WASM dependencies in `nook-rust-deps-v3`.
-- Source-sensitive coverage and WASM use `nook-rust-native-source-v3` and `nook-rust-wasm-source-v2`.
+- Delivery CI persists the toolchain in `nook-rust-base-v2`.
+- Native dependencies use `nook-rust-deps-v4`.
+- WASM dependencies use fingerprinted `nook-rust-wasm-deps-v6` scopes.
+- Source-sensitive native coverage uses `nook-rust-native-source-v4`.
+- Source-sensitive WASM uses `nook-rust-wasm-source-v3`.
 - Zot is reached only through Traefik HTTPS at `registry.dev.nokey.sh` with htpasswd auth.
 - Traefik allows 15 minutes to read an incoming registry request so one large
   BuildKit layer upload is not cut off by Traefik's 60-second default.
@@ -363,7 +366,8 @@ legacy registered `nook` runner is not used.
 | Artifact                | Cache Strategy                                     | Location                            |
 | ----------------------- | -------------------------------------------------- | ----------------------------------- |
 | Rust/web/browser layers | Local builder store; hosted BuildKit registry refs | `registry.dev.nokey.sh`             |
-| Rust crate dependencies | cargo-chef + Zot refs                              | `nook-rust-deps-v3`                 |
+| Native Rust dependencies | cargo-chef + Zot refs                             | `nook-rust-deps-v4`                 |
+| WASM Rust dependencies   | fingerprinted cargo-chef + Zot refs               | `nook-rust-wasm-deps-v6`            |
 | Rust compiler cache     | SeaweedFS S3 `sccache`                             | `sccache.dev.nokey.sh`              |
 | OCI registry            | Zot in k0s                                         | `10.96.90.10:5000` via Traefik      |
 | `nook-app/target/`      | Rust lineage only                                  | `/meta-secret/nook/nook-app/target` |
