@@ -131,7 +131,7 @@ tasks:
         typescript_
 
   preflight:loom-contracts:
-    desc: Enforce Loom ESLint max-params and verify-script wiring.
+    desc: Enforce hosted Loom and skill-authority contracts.
     dir: '{{.ROOT_DIR}}'
     cmds:
       - >-
@@ -139,3 +139,4 @@ tasks:
         --locked
         --manifest-path preflight/Cargo.toml
         --test loom_contracts
+        --test skill_authority
