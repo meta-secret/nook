@@ -217,8 +217,8 @@ It identifies:
 - **Entry points:** Each production package's `package.json`.
 - **Allowed skill catalog:** The task selects the smallest applicable set.
   - `module-expert` is always required for module analysis.
-  - `design-taste-frontend` is required for user-visible Svelte or interaction
-    work.
+  - `.cortex/teams/web-dev/dynamic-skills/ui-design-skills.md` is required for
+    user-visible Svelte or interaction work.
   - `browser-extension-release-security` is required when hosted extension
     origins, identity, archives, redirects, injection exclusions, isolated
     browser profiles, or release artifacts are in scope.
@@ -227,11 +227,11 @@ It identifies:
 - **Selection field:** `selectedContextPaths` carries optional product
   authorities, release authorities, and task-applicable skill paths.
   - An empty selection represents ordinary module analysis.
-  - Selecting a product authority requires `design-taste-frontend`.
+  - Selecting a product authority requires `ui-design-skills`.
   - Selecting a release authority requires
     `browser-extension-release-security` and its canonical security authority.
   - The role rejects duplicate, reordered, unknown, or incomplete selections.
-- **Skill authority:** `design-taste-frontend` and
+- **Skill authority:** `ui-design-skills` and
   `browser-extension-release-security` remain complete in their owning Cortex
   cards. The task-selected snapshot includes the security authority when the
   security skill is required.
