@@ -13,6 +13,7 @@ on:
       - .cursor/rules.md
       - .cursor/skills/**
       - .github/formatting/**
+      - .github/prompts/**
       - .github/scripts/format-host-apply.sh
       - .github/scripts/format-host-apply.test.sh
       - .github/scripts/arc-manifest-contract.ts
@@ -58,7 +59,7 @@ jobs:
           runner_placement_changed=false
           while IFS= read -r changed_file; do
             case "$changed_file" in
-              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | preflight/* | tooling/eslint-rules/*)
+              .agents/skills/* | .claude/skills/* | .codex/hooks.json | .cortex/* | .cursor/rules.md | .cursor/skills/* | .github/formatting/* | .github/prompts/* | .github/scripts/format-host-apply.sh | .github/scripts/format-host-apply.test.sh | .github/workflows/repository-policy.yml | .task/agentic-ai.yml | AGENTS.md | CODEX.md | README.md | agentic-ai/loom/* | preflight/* | tooling/eslint-rules/*)
                 loom_changed=true
                 ;;
             esac
