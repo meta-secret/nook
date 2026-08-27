@@ -10,19 +10,41 @@ fn repository_root() -> PathBuf {
 #[test]
 fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     let root = repository_root();
-    let readme = fs::read_to_string(root.join("README.md"))?;
-    let hooks = fs::read_to_string(root.join(".codex/hooks.json"))?;
+    let inputs = [
+        ("README.md", fs::read_to_string(root.join("README.md"))?),
+        (
+            ".codex/hooks.json",
+            fs::read_to_string(root.join(".codex/hooks.json"))?,
+        ),
+        (
+            "skills-lock.json",
+            fs::read_to_string(root.join("skills-lock.json"))?,
+        ),
+        ("CODEX.md", fs::read_to_string(root.join("CODEX.md"))?),
+        (
+            ".cursor/rules.md",
+            fs::read_to_string(root.join(".cursor/rules.md"))?,
+        ),
+    ];
+    let readme = &inputs[0].1;
 
     anyhow::ensure!(
         readme.contains("Project skill semantics live only in team-owned Markdown under `.cortex`")
             && readme.contains("task loom:cortex-audit"),
         "README must route project skill semantics and validation through Cortex and Loom"
     );
-    for obsolete in [".agents/skills", "task skills:", "task impeccable:"] {
-        anyhow::ensure!(
-            !readme.contains(obsolete) && !hooks.contains(obsolete),
-            "active root skill guidance must not reference obsolete `{obsolete}` machinery"
-        );
+    for obsolete in [
+        ".agents/skills",
+        "task skills:",
+        "task impeccable:",
+        "design-taste-frontend",
+    ] {
+        for (path, content) in &inputs {
+            anyhow::ensure!(
+                !content.contains(obsolete),
+                "active authority input {path} references obsolete `{obsolete}` machinery"
+            );
+        }
     }
     Ok(())
 }
