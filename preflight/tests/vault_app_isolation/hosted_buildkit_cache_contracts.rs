@@ -8,8 +8,31 @@ fn delivery_ci_scopes_buildkit_caches() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn read_sre_cortex(root: &Path) -> anyhow::Result<String> {
+    let mut pending = vec![root.join(".cortex/teams/sre")];
+    let mut markdown = Vec::new();
+    while let Some(path) = pending.pop() {
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+            } else if path.extension().is_some_and(|extension| extension == "md") {
+                markdown.push(path);
+            }
+        }
+    }
+    markdown.sort();
+    markdown
+        .into_iter()
+        .map(fs::read_to_string)
+        .collect::<Result<Vec<_>, _>>()
+        .map(|documents| documents.join("\n"))
+        .map_err(Into::into)
+}
+
 #[test]
-fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
+fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Result<()> {
     let root = repository_root();
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
@@ -17,8 +40,10 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
     let fingerprint = read(&root, ".github/scripts/rust-deps-cache-fingerprint.sh");
     let promoter = read(&root, ".github/scripts/rust-deps-cache-promote.sh");
     let root_tasks = read(&root, "Taskfile.yml");
-    let contract =
-        format!("{rust_bake}\n{setup}\n{verifier}\n{fingerprint}\n{promoter}\n{root_tasks}");
+    let sre_cortex = read_sre_cortex(&root)?;
+    let contract = format!(
+        "{rust_bake}\n{setup}\n{verifier}\n{fingerprint}\n{promoter}\n{root_tasks}\n{sre_cortex}"
+    );
 
     let registry_writers = rust_bake
         .lines()
@@ -37,7 +62,7 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
         "every Rust/WASM registry writer must force zstd in the same generation"
     );
 
-    for current in [
+    let active_refs = [
         "nook-rust-base-v2",
         "nook-rust-ecosystem-dylint-v4",
         "nook-rust-ecosystem-fuzz-v4",
@@ -51,9 +76,10 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
         "nook-rust-native-source-v4",
         "nook-rust-wasm-source-v3",
         "nook-rust-wasm-node-v2",
-    ] {
+    ];
+    for current in &active_refs {
         assert!(
-            contract.contains(current),
+            contract.contains(*current),
             "rotated Rust/WASM cache contract is missing {current}"
         );
     }
@@ -77,6 +103,28 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
             "rotated Rust/WASM contract must not import retired mixed-compression ref {retired}"
         );
     }
+    let documented_refs = sre_cortex
+        .split(|character: char| !(character.is_ascii_alphanumeric() || character == '-'))
+        .filter(|token| {
+            token.starts_with("nook-rust-")
+                && token.rsplit_once("-v").is_some_and(|(_, generation)| {
+                    !generation.is_empty()
+                        && generation
+                            .chars()
+                            .all(|character| character.is_ascii_digit())
+                })
+        })
+        .collect::<Vec<_>>();
+    assert!(
+        !documented_refs.is_empty(),
+        "owning SRE Cortex must retain explicit operational cache references"
+    );
+    for documented in documented_refs {
+        assert!(
+            active_refs.contains(&documented),
+            "owning SRE Cortex names a cache ref outside the active forced-zstd generation: {documented}"
+        );
+    }
     assert!(
         fingerprint.contains("nook-rust-deps-input-v3")
             && verifier.contains("compression=zstd,force-compression=true")
@@ -90,6 +138,7 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() {
             && !promoter.contains("nook-rust-${graph}-deps-input-v2"),
         "native and WASM dependency promotion must target only the rotated repository generation"
     );
+    Ok(())
 }
 
 fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
