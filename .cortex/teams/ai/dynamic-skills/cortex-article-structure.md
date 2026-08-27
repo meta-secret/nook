@@ -138,7 +138,11 @@ Do not add an empty block merely because the label exists in this standard.
 
 ## Mechanical enforcement
 
-Loom parses the Markdown syntax tree.
+Loom parses the Markdown syntax tree and adapts repository documents into the
+semantic request. The deterministic application under
+`agentic-ai/skills/cortex-article-structure` validates that request, audits it,
+independently verifies the findings, and enforces request and result bounds.
+This Cortex card remains the sole semantic authority.
 
 It rejects mechanically provable failures:
 
@@ -170,6 +174,10 @@ article-structure findings are accepted.
 
 Mechanical checks cannot decide whether a list reflects the correct semantics.
 The author still owns hierarchy, meaning, and consistency review.
+
+The application is currently an in-process Loom dependency with no command,
+network, write, scheduling, or lifecycle authority. Strict YAML discovery and
+invocation are deferred to a follow-up slice.
 
 ## Migration
 

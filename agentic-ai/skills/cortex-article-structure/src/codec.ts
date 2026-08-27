@@ -2,9 +2,12 @@ import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
+  CORTEX_ARTICLE_BLOCK_LIMIT,
   CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+  CORTEX_ARTICLE_DOCUMENT_LIMIT,
   CORTEX_ARTICLE_FINDING_LIMIT,
   CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT,
+  CORTEX_ARTICLE_HEADING_DEPTH_LIMIT,
   CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
   CORTEX_ARTICLE_PATH_LIMIT,
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
@@ -17,7 +20,6 @@ import {
   type CortexArticleStructureResult,
 } from './domain.ts';
 import { auditCortexArticleStructure } from './audit.ts';
-
 type CortexArticleDocumentTransport = {
   readonly relativePath: string | false;
   readonly blocks: readonly CortexArticleBlockTransport[] | false;
@@ -40,6 +42,35 @@ type CortexArticleRequestTransport = {
   readonly documents: readonly CortexArticleDocumentTransport[] | false;
   readonly migrationBaselineEntries: readonly string[] | false;
   readonly migrationLedger: CortexArticleMigrationLedgerTransport | false;
+};
+
+type CortexArticleRequestDecodeFailure = {
+  readonly message: string;
+  readonly path: string;
+};
+
+type CortexArticleRequestFailure = (
+  path: string,
+) => CortexArticleRequestDecodeError;
+
+type DecodeDocumentRequest = {
+  readonly path: string;
+  readonly transport: CortexArticleDocumentTransport;
+};
+
+type DecodeBlockRequest = {
+  readonly path: string;
+  readonly transport: CortexArticleBlockTransport;
+};
+
+type DecodeLedgerRequest = {
+  readonly path: string;
+  readonly transport: CortexArticleMigrationLedgerTransport;
+};
+
+type FindingContributorRequest = {
+  readonly findings: readonly CortexArticleFinding[];
+  readonly request: AuditCortexArticleStructureRequest;
 };
 
 type CortexArticleFindingTransport = {
@@ -65,6 +96,15 @@ type ExactKeyValue =
 type ExactKeysRequest = {
   readonly value: ExactKeyValue;
   readonly expected: readonly string[];
+};
+
+type ExactKeysPathRequest = ExactKeysRequest & {
+  readonly path: string;
+};
+
+type ContractPathRequest = {
+  readonly field: string;
+  readonly parent: string;
 };
 
 type AssertSerializedByteLimitRequest = {
@@ -98,15 +138,54 @@ const LEDGER_KEYS = ['relativePath', 'content'] as const;
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
+const PATH_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
 const UTF8_ENCODER = new TextEncoder();
-enum PathControlCodePoint {
-  C0Maximum = 0x1f,
-  Delete = 0x7f,
-}
 enum SerializedCortexArticleContract {
   Request = 'request',
   Result = 'result',
 }
+
+export class CortexArticleRequestDecodeError extends Error {
+  readonly path: string;
+
+  constructor(failure: CortexArticleRequestDecodeFailure) {
+    super(failure.message);
+    this.name = 'CortexArticleRequestDecodeError';
+    this.path = failure.path;
+  }
+}
+
+const failInvalidRequest = requestFailure(
+  'Invalid Cortex article-structure request.',
+);
+const failInvalidDocument = requestFailure('Invalid Cortex article document.');
+const failDuplicateDocument = requestFailure(
+  'Duplicate Cortex article document path.',
+);
+const failInvalidBlock = requestFailure(
+  'Invalid Cortex article semantic block.',
+);
+const failInvalidHeading = requestFailure(
+  'Invalid Cortex article heading block.',
+);
+const failInvalidBlockKind = requestFailure(
+  'Invalid Cortex article semantic block kind.',
+);
+const failNonmonotonicLine = requestFailure(
+  'Cortex article block lines must be strictly ordered.',
+);
+const failInvalidLedger = requestFailure(
+  'Invalid Cortex article migration ledger.',
+);
+const failFindingCapacity = requestFailure(
+  'Cortex article request finding capacity exceeds its bound.',
+);
+const failResultBudget = requestFailure(
+  'Cortex article request result budget exceeds its bound.',
+);
+const failRequestBytes = requestFailure(
+  'Cortex article request exceeds its byte bound.',
+);
 
 export function encodeCortexArticleRequest(
   request: AuditCortexArticleStructureRequest,
@@ -124,39 +203,60 @@ export function encodeCortexArticleRequest(
 export function decodeCortexArticleRequest(
   serializedRequest: string,
 ): AuditCortexArticleStructureRequest {
-  const byteRequest: AssertSerializedByteLimitRequest = {
-    label: SerializedCortexArticleContract.Request,
-    maximumBytes: CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
-    serialized: serializedRequest,
-  };
-  assertSerializedByteLimit(byteRequest);
-  const transport = JSON.parse(
-    serializedRequest,
-  ) as CortexArticleRequestTransport;
-  if (!transport) throw new Error('Invalid Cortex article-structure request.');
-  const exactKeysRequest: ExactKeysRequest = {
+  if (utf8ByteLength(serializedRequest) > CORTEX_ARTICLE_REQUEST_BYTE_LIMIT) {
+    throw failRequestBytes('');
+  }
+  let transport: CortexArticleRequestTransport;
+  try {
+    transport = JSON.parse(serializedRequest) as CortexArticleRequestTransport;
+  } catch {
+    throw failInvalidRequest('');
+  }
+  if (!transport) {
+    throw failInvalidRequest('');
+  }
+  const exactKeysRequest: ExactKeysPathRequest = {
     value: transport,
     expected: REQUEST_KEYS,
+    path: '',
   };
-  if (
-    !hasExactKeys(exactKeysRequest) ||
-    transport.kind !== CortexArticleContractKind.Request ||
-    !Array.isArray(transport.documents) ||
-    transport.documents.length > 10_000 ||
-    !isCortexMarkdownPathArrayOrFalse(transport.migrationBaselineEntries) ||
-    !transport.migrationLedger
-  ) {
-    throw new Error('Invalid Cortex article-structure request.');
+  const exactKeysPath = invalidExactKeysPath(exactKeysRequest);
+  if (exactKeysPath !== false) throw failInvalidRequest(exactKeysPath);
+  if (transport.kind !== CortexArticleContractKind.Request) {
+    throw failInvalidRequest('kind');
   }
-  const documents = transport.documents.map(decodeDocument);
+  if (
+    !Array.isArray(transport.documents) ||
+    transport.documents.length > CORTEX_ARTICLE_DOCUMENT_LIMIT
+  ) {
+    throw failInvalidRequest('documents');
+  }
+  if (!isCortexMarkdownPathArrayOrFalse(transport.migrationBaselineEntries)) {
+    throw failInvalidRequest('migrationBaselineEntries');
+  }
+  if (!transport.migrationLedger) {
+    throw failInvalidRequest('migrationLedger');
+  }
+  const documents: CortexArticleDocument[] = [];
   const documentPaths = new Set<string>();
-  for (const document of documents) {
+  for (const [index, documentTransport] of transport.documents.entries()) {
+    const documentPath = `documents[${index}]`;
+    const decodeRequest: DecodeDocumentRequest = {
+      path: documentPath,
+      transport: documentTransport,
+    };
+    const document = decodeDocument(decodeRequest);
     if (documentPaths.has(document.relativePath)) {
-      throw new Error('Duplicate Cortex article document path.');
+      throw failDuplicateDocument(`${documentPath}.relativePath`);
     }
     documentPaths.add(document.relativePath);
+    documents.push(document);
   }
-  const migrationLedger = decodeLedger(transport.migrationLedger);
+  const ledgerRequest: DecodeLedgerRequest = {
+    path: 'migrationLedger',
+    transport: transport.migrationLedger,
+  };
+  const migrationLedger = decodeLedger(ledgerRequest);
   const request: AuditCortexArticleStructureRequest = {
     kind: CortexArticleContractKind.Request,
     documents,
@@ -211,29 +311,39 @@ export function decodeCortexArticleResult(
   };
 }
 
-function decodeDocument(
-  transport: CortexArticleDocumentTransport,
-): CortexArticleDocument {
-  if (!transport) throw new Error('Invalid Cortex article document.');
-  const exactKeysRequest: ExactKeysRequest = {
+function decodeDocument(request: DecodeDocumentRequest): CortexArticleDocument {
+  const { path, transport } = request;
+  if (!transport) throw failInvalidDocument(path);
+  const exactKeysRequest: ExactKeysPathRequest = {
     value: transport,
     expected: DOCUMENT_KEYS,
+    path,
   };
-  if (
-    !hasExactKeys(exactKeysRequest) ||
-    !isCortexMarkdownPath(transport.relativePath) ||
-    !Array.isArray(transport.blocks) ||
-    transport.blocks.length > 100_000
-  ) {
-    throw new Error('Invalid Cortex article document.');
+  const exactKeysPath = invalidExactKeysPath(exactKeysRequest);
+  if (exactKeysPath !== false) throw failInvalidDocument(exactKeysPath);
+  if (!isCortexMarkdownPath(transport.relativePath)) {
+    throw failInvalidDocument(`${path}.relativePath`);
   }
-  const blocks = transport.blocks.map(decodeBlock);
+  if (
+    !Array.isArray(transport.blocks) ||
+    transport.blocks.length > CORTEX_ARTICLE_BLOCK_LIMIT
+  ) {
+    throw failInvalidDocument(`${path}.blocks`);
+  }
+  const blocks: CortexArticleSemanticBlock[] = [];
   let previousLine = 0;
-  for (const block of blocks) {
+  for (const [index, blockTransport] of transport.blocks.entries()) {
+    const blockPath = `${path}.blocks[${index}]`;
+    const decodeRequest: DecodeBlockRequest = {
+      path: blockPath,
+      transport: blockTransport,
+    };
+    const block = decodeBlock(decodeRequest);
     if (block.line <= previousLine) {
-      throw new Error('Cortex article block lines must be strictly ordered.');
+      throw failNonmonotonicLine(`${blockPath}.line`);
     }
     previousLine = block.line;
+    blocks.push(block);
   }
   return {
     relativePath: transport.relativePath,
@@ -241,27 +351,31 @@ function decodeDocument(
   };
 }
 
-function decodeBlock(
-  transport: CortexArticleBlockTransport,
-): CortexArticleSemanticBlock {
-  if (!transport || !isPositiveLine(transport.line)) {
-    throw new Error('Invalid Cortex article semantic block.');
+function decodeBlock(request: DecodeBlockRequest): CortexArticleSemanticBlock {
+  const { path, transport } = request;
+  if (!transport) throw failInvalidBlock(path);
+  if (!isPositiveLine(transport.line)) {
+    throw failInvalidBlock(`${path}.line`);
   }
   const line = transport.line;
   if (transport.kind === CortexArticleSemanticKind.Heading) {
-    const exactKeysRequest: ExactKeysRequest = {
+    const exactKeysRequest: ExactKeysPathRequest = {
       value: transport,
       expected: HEADING_BLOCK_KEYS,
+      path,
     };
+    const exactKeysPath = invalidExactKeysPath(exactKeysRequest);
+    if (exactKeysPath !== false) throw failInvalidHeading(exactKeysPath);
     if (
-      !hasExactKeys(exactKeysRequest) ||
       typeof transport.depth !== 'number' ||
       !Number.isInteger(transport.depth) ||
       transport.depth < 1 ||
-      transport.depth > 6 ||
-      !isBoundedDetail(transport.text)
+      transport.depth > CORTEX_ARTICLE_HEADING_DEPTH_LIMIT
     ) {
-      throw new Error('Invalid Cortex article heading block.');
+      throw failInvalidHeading(`${path}.depth`);
+    }
+    if (!isBoundedDetail(transport.text)) {
+      throw failInvalidHeading(`${path}.text`);
     }
     return {
       depth: transport.depth,
@@ -271,15 +385,15 @@ function decodeBlock(
     };
   }
   if (!isSimpleSemanticKind(transport.kind)) {
-    throw new Error('Invalid Cortex article semantic block kind.');
+    throw failInvalidBlockKind(`${path}.kind`);
   }
-  const exactKeysRequest: ExactKeysRequest = {
+  const exactKeysRequest: ExactKeysPathRequest = {
     value: transport,
     expected: SIMPLE_BLOCK_KEYS,
+    path,
   };
-  if (!hasExactKeys(exactKeysRequest)) {
-    throw new Error('Invalid Cortex article semantic block.');
-  }
+  const exactKeysPath = invalidExactKeysPath(exactKeysRequest);
+  if (exactKeysPath !== false) throw failInvalidBlock(exactKeysPath);
   return { kind: transport.kind, line };
 }
 
@@ -301,19 +415,22 @@ function isSimpleSemanticKind(
 }
 
 function decodeLedger(
-  transport: CortexArticleMigrationLedgerTransport,
+  request: DecodeLedgerRequest,
 ): CortexArticleMigrationLedger {
-  if (!transport) throw new Error('Invalid Cortex article migration ledger.');
-  const exactKeysRequest: ExactKeysRequest = {
+  const { path, transport } = request;
+  if (!transport) throw failInvalidLedger(path);
+  const exactKeysRequest: ExactKeysPathRequest = {
     value: transport,
     expected: LEDGER_KEYS,
+    path,
   };
-  if (
-    !hasExactKeys(exactKeysRequest) ||
-    transport.relativePath !== CORTEX_ARTICLE_MIGRATION_LEDGER_PATH ||
-    !isBoundedLedgerContent(transport.content)
-  ) {
-    throw new Error('Invalid Cortex article migration ledger.');
+  const exactKeysPath = invalidExactKeysPath(exactKeysRequest);
+  if (exactKeysPath !== false) throw failInvalidLedger(exactKeysPath);
+  if (transport.relativePath !== CORTEX_ARTICLE_MIGRATION_LEDGER_PATH) {
+    throw failInvalidLedger(`${path}.relativePath`);
+  }
+  if (!isBoundedLedgerContent(transport.content)) {
+    throw failInvalidLedger(`${path}.content`);
   }
   return {
     relativePath: transport.relativePath,
@@ -451,10 +568,10 @@ function assertRequestFindingCapacity(
   request: AuditCortexArticleStructureRequest,
 ): void {
   const findings = auditCortexArticleStructure(request);
+  const contributorRequest: FindingContributorRequest = { findings, request };
+  const contributor = findingContributorPath(contributorRequest);
   if (findings.length > CORTEX_ARTICLE_FINDING_LIMIT) {
-    throw new Error(
-      'Cortex article request finding capacity exceeds its bound.',
-    );
+    throw failFindingCapacity(contributor);
   }
   const result: CortexArticleStructureResult = {
     kind: CortexArticleContractKind.Result,
@@ -463,8 +580,33 @@ function assertRequestFindingCapacity(
   if (
     utf8ByteLength(JSON.stringify(result)) > CORTEX_ARTICLE_RESULT_BYTE_LIMIT
   ) {
-    throw new Error('Cortex article request result budget exceeds its bound.');
+    throw failResultBudget(contributor);
   }
+}
+
+function findingContributorPath(request: FindingContributorRequest): string {
+  const finding = request.findings.at(-1);
+  if (!finding) return 'documents';
+  if (finding.file === CORTEX_ARTICLE_MIGRATION_LEDGER_PATH) {
+    return 'migrationLedger.content';
+  }
+  const documentIndex = request.request.documents.findIndex(
+    (document) => document.relativePath === finding.file,
+  );
+  if (documentIndex < 0) return 'documents';
+  const blockIndex = request.request.documents
+    .at(documentIndex)
+    ?.blocks.findIndex((block) => block.line === finding.line);
+  return typeof blockIndex === 'number' && blockIndex >= 0
+    ? `documents[${documentIndex}].blocks[${blockIndex}]`
+    : `documents[${documentIndex}]`;
+}
+
+function requestFailure(message: string): CortexArticleRequestFailure {
+  return (path) => {
+    const failure: CortexArticleRequestDecodeFailure = { message, path };
+    return new CortexArticleRequestDecodeError(failure);
+  };
 }
 
 function assertSerializedByteLimit(
@@ -489,13 +631,36 @@ function hasExactKeys(request: ExactKeysRequest): boolean {
   return true;
 }
 
+function invalidExactKeysPath(request: ExactKeysPathRequest): string | false {
+  const actual = Object.keys(request.value);
+  const unexpected = actual.find((field) => !request.expected.includes(field));
+  const missing = request.expected.find((field) => !actual.includes(field));
+  if (typeof unexpected === 'string') {
+    return `${request.path}["<unknown-key>"]`;
+  }
+  const field = missing;
+  if (typeof field !== 'string') return false;
+  const pathRequest: ContractPathRequest = {
+    field,
+    parent: request.path,
+  };
+  return contractPath(pathRequest);
+}
+
+function contractPath(request: ContractPathRequest): string {
+  const simpleField = /^[A-Za-z_$][A-Za-z0-9_$]*$/u;
+  return simpleField.test(request.field)
+    ? `${request.parent}.${request.field}`
+    : `${request.parent}[${JSON.stringify(request.field)}]`;
+}
+
 function isCortexMarkdownPathArrayOrFalse(
   value: readonly string[] | false,
 ): value is readonly string[] | false {
   return (
     value === false ||
     (Array.isArray(value) &&
-      value.length <= 10_000 &&
+      value.length <= CORTEX_ARTICLE_DOCUMENT_LIMIT &&
       value.every((entry) => isCortexMarkdownPath(entry)))
   );
 }
@@ -531,26 +696,13 @@ function isNonblankString(value: string | false): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function hasPathControlCharacter(value: string): boolean {
-  for (let index = 0; index < value.length; index += 1) {
-    const codePoint = value.charCodeAt(index);
-    if (
-      codePoint <= PathControlCodePoint.C0Maximum ||
-      codePoint === PathControlCodePoint.Delete
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function isSafeRelativePath(value: string | false): value is string {
   return (
     isNonblankString(value) &&
     value.length <= CORTEX_ARTICLE_PATH_LIMIT &&
     !value.startsWith('/') &&
     !value.includes('\\') &&
-    !hasPathControlCharacter(value) &&
+    !PATH_CONTROL_CHARACTER.test(value) &&
     value
       .split('/')
       .every((part) => part !== '..' && part !== '.' && part !== '')

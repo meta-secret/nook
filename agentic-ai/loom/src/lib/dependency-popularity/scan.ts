@@ -16,7 +16,10 @@ export type ManifestDependencies = {
   readonly rustCrates: readonly string[];
 };
 
-const REPOSITORY_NPM_MANIFESTS = ['agentic-ai/loom/package.json'] as const;
+const REPOSITORY_NPM_MANIFESTS = [
+  'agentic-ai/loom/package.json',
+  'agentic-ai/skills/package.json',
+] as const;
 
 export function scanRepositoryManifests(
   repoRoot: string,

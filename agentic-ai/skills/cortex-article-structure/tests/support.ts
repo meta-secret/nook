@@ -1,4 +1,4 @@
-import { auditCortexArticleStructure } from '../../src/cortex-article-provider/audit.ts';
+import { auditCortexArticleStructure } from '../src/audit.ts';
 import {
   CortexArticleContractKind,
   CORTEX_ARTICLE_MIGRATION_LEDGER_PATH,
@@ -6,7 +6,7 @@ import {
   type CortexArticleDocument,
   type CortexArticleFinding,
   type CortexArticleSemanticBlock,
-} from '../../src/cortex-article-provider/domain.ts';
+} from '../src/domain.ts';
 
 export type MakeAuditRequest = {
   readonly documents: readonly CortexArticleDocument[];

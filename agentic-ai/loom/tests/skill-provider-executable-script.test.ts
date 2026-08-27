@@ -53,7 +53,7 @@ printf '.agents/skills/*/src/**/*.ts' > expected.txt`,
   };
   const executedInspection: ExecutableProviderReferenceInspection = {
     path: 'scripts/run.sh',
-    source: `bun .agents/skills/demo/src/run.ts`,
+    source: `bun agentic-ai/skills/demo/src/run.ts`,
   };
   expect(executableSourceReferencesProvider(inertInspection)).toBe(false);
   expect(executableSourceReferencesProvider(executedInspection)).toBe(true);

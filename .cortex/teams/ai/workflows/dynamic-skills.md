@@ -66,6 +66,12 @@ scope, and apply the pattern with normal coding workflow and validation.
 6. Keep harness-specific discovery configuration outside the tracked
    repository. Do not create `.agents`, `.cursor`, or `.claude` skill mirrors.
 
+Executable applications are distinct from semantic skill cards. Put their
+ordinary Bun and TypeScript project code under `agentic-ai/skills`, keep policy
+in the owning Cortex card, and apply the repository TypeScript rules, focused
+tests, and 1,000-line source limit. The current Cortex article application is
+in-process only; strict YAML discovery and invocation remain follow-up work.
+
 For a new card scaffold, prefer Loom:
 
 ```yaml

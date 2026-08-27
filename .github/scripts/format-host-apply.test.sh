@@ -81,6 +81,9 @@ done
 for required in \
   'tooling/eslint-rules/no-raw-object-arguments.js' \
   'shared_tooling_files+=' \
+  'agentic-ai/skills/*' \
+  'skill_application_files+=' \
+  '"$repo_root/agentic-ai/skills/.prettierrc"' \
   'done <"$changed_files"'; do
   printf '%s\n' "$formatter" | grep -Fq "$required" \
     || { echo "format-host-apply test: missing shared-tooling formatter contract: $required" >&2; exit 1; }
@@ -122,6 +125,7 @@ fixture_root="$(mktemp -d)"
 trap 'rm -rf "$fixture_root"' EXIT
 mkdir -p \
   "$fixture_root/agentic-ai/loom/src" \
+  "$fixture_root/agentic-ai/skills/demo/src" \
   "$fixture_root/agentic-ai/minds/hive-console/src" \
   "$fixture_root/agentic-ai/minds/hive/src" \
   "$fixture_root/.github/scripts" \
@@ -178,11 +182,13 @@ printf '{}\n' >"$fixture_root/.github/formatting/prettier-web.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-default.json"
 printf '{}\n' >"$fixture_root/.github/formatting/prettier-shared-typescript.json"
 printf '{}\n' >"$fixture_root/agentic-ai/loom/.prettierrc"
+printf '{}\n' >"$fixture_root/agentic-ai/skills/.prettierrc"
 printf '{}\n' >"$fixture_root/agentic-ai/minds/hive-console/.prettierrc"
 printf '{}\n' >"$fixture_root/nook-app/nook-web/nook-web-app/.prettierrc"
 printf '{}\n' >"$fixture_root/nook-app/nook-web/nook-web-extension/.prettierrc"
 printf '{}\n' >"$fixture_root/nook-app/nook-web/nook-web-research/.prettierrc"
 printf 'baseline\n' >"$fixture_root/agentic-ai/loom/src/loom.ts"
+printf 'baseline\n' >"$fixture_root/agentic-ai/skills/demo/src/application.ts"
 printf 'baseline\n' >"$fixture_root/agentic-ai/minds/hive-console/src/hive-console.ts"
 printf 'fn mind() {}\n' >"$fixture_root/agentic-ai/minds/hive/src/mind.rs"
 printf 'mod child; fn platform() {}\n' >"$fixture_root/nook-app/nook-platform/src/platform.rs"
@@ -207,6 +213,7 @@ printf 'baseline\n' >"$fixture_root/tooling/eslint-rules/no-raw-object-arguments
   printf 'unrelated\n' >README.md
   printf 'const changed = true;\n' >tooling/eslint-rules/no-raw-object-arguments.js
   printf 'const loom = true;\n' >agentic-ai/loom/src/loom.ts
+  printf 'const application = true;\n' >agentic-ai/skills/demo/src/application.ts
   printf 'const hiveConsole = true;\n' >agentic-ai/minds/hive-console/src/hive-console.ts
   printf 'fn mind( ) {}\n' >agentic-ai/minds/hive/src/mind.rs
   printf 'mod child; fn platform( ) {}\n' >nook-app/nook-platform/src/platform.rs
@@ -234,6 +241,7 @@ printf '%s\n' \
   'src/extension.ts' \
   'src/hive-console.ts' \
   'src/loom.ts' \
+  'demo/src/application.ts' \
   'src/research.ts' \
   'src/web-app.ts' \
   'tooling/eslint-rules/no-raw-object-arguments.js' \

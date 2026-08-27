@@ -8,7 +8,7 @@ type AnalyzeFixtureRequest = {
 function analyzeFixture(request: AnalyzeFixtureRequest): readonly string[] {
   const analysisRequest = {
     ...request,
-    relativePath: '.agents/skills/fixture/src/runner.ts',
+    relativePath: 'agentic-ai/skills/fixture/src/runner.ts',
   };
   return analyzeExecutableSkillSource(analysisRequest).moduleSpecifiers;
 }
@@ -206,10 +206,10 @@ describe('executable skill source policy', () => {
 
   test('rejects noncanonical source paths and invalid TypeScript syntax', () => {
     const noncanonicalPaths = [
-      '.agents/skills/fixture/src/run.tsx',
-      '.agents/skills/fixture/src/../run.ts',
-      '.agents\\skills\\fixture\\src\\run.ts',
-      '/.agents/skills/fixture/src/run.ts',
+      'agentic-ai/skills/fixture/src/run.tsx',
+      'agentic-ai/skills/fixture/src/../run.ts',
+      'agentic-ai\\skills\\fixture\\src\\run.ts',
+      '/agentic-ai/skills/fixture/src/run.ts',
       'agentic-ai/loom/src/run.ts',
     ];
     for (const relativePath of noncanonicalPaths) {
@@ -223,7 +223,7 @@ describe('executable skill source policy', () => {
     }
 
     const invalidSyntaxRequest = {
-      relativePath: '.agents/skills/fixture/src/run.ts',
+      relativePath: 'agentic-ai/skills/fixture/src/run.ts',
       source: "const view = <div>{fetch('https://example.com')}</div>;",
     };
     expect(() => analyzeExecutableSkillSource(invalidSyntaxRequest)).toThrow(
@@ -433,6 +433,12 @@ describe('executable skill source policy', () => {
       "import { Worker } from 'node:worker_threads';",
       "import { $ as shell } from 'bun';",
       "const load = require; load('node:fs');",
+      "const request = fetch; request('https://example.com');",
+      "import { readFileSync as read } from 'node:fs'; read('/tmp/x');",
+      'const runtime = process; runtime.cwd();',
+      "const load = (name: string) => import(name); load('./local.ts');",
+      "import fs from 'node:\\x66s'; fs.readFileSync('/tmp/x');",
+      "import fs from 'fs'; fs.readFileSync('/tmp/x');",
       "import.meta.require('node:fs');",
       "module.require('node:fs');",
       "const loader = process.getBuiltinModule; loader('child_process');",

@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { auditCortexArticleStructure } from '../../src/cortex-article-provider/audit.ts';
+import { auditCortexArticleStructure } from '../src/audit.ts';
 import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
@@ -7,11 +7,11 @@ import {
   type AuditCortexArticleStructureRequest,
   type CortexArticleFinding,
   type CortexArticleStructureResult,
-} from '../../src/cortex-article-provider/domain.ts';
+} from '../src/domain.ts';
 import {
   verifyCortexArticleStructureResult,
   type VerifyCortexArticleStructureResultRequest,
-} from '../../src/cortex-article-provider/verification.ts';
+} from '../src/verification.ts';
 
 const AUDIT_REQUEST: AuditCortexArticleStructureRequest = {
   kind: CortexArticleContractKind.Request,

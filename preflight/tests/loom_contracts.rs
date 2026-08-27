@@ -113,6 +113,19 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         );
     }
 
+    let skills_install = task_body(&taskfile, "skills:install", "skills:format");
+    assert!(
+        skills_install.contains("dir: agentic-ai/skills")
+            && skills_install.contains("bun install --frozen-lockfile"),
+        "executable applications must install their pinned project"
+    );
+    let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
+    assert!(
+        skills_verify.contains("deps: [skills:install]")
+            && skills_verify.contains("bun run verify"),
+        "skills:verify must run the complete application project gate"
+    );
+
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");
     assert!(
         loom_install.contains("bun install --frozen-lockfile")
@@ -121,8 +134,8 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
     );
     let loom_verify = task_body(&taskfile, "loom:verify", "loom:run");
     assert!(
-        !loom_verify.contains("skills:") && loom_verify.contains("task: loom:test"),
-        "loom:verify must keep deterministic capability tests in Loom"
+        loom_verify.contains("task: skills:verify") && loom_verify.contains("task: loom:test"),
+        "loom:verify must include executable applications and Loom"
     );
     let pre_push = task_body(&taskfile, "loom:pre-push", "loom:cortex-audit");
     assert!(
@@ -143,8 +156,33 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "the formatter contract must be a detached, install-free preflight task"
     );
 
-    assert!(!taskfile.contains("skills:install:"));
-    assert!(!taskfile.contains("skills:verify:"));
+    let skills_manifest = read(&root, "agentic-ai/skills/package.json");
+    assert!(
+        skills_manifest.contains("\"verify\":") && !skills_manifest.contains("\"dependencies\"")
+    );
+    let skills_eslint = read(&root, "agentic-ai/skills/eslint.config.js");
+    assert!(
+        skills_eslint.contains("files: ['*.ts', '*/src/**/*.ts', '*/tests/**/*.ts']")
+            && skills_eslint.contains("'max-params': ['error', { max: 1 }]")
+            && skills_eslint.contains("'nook/no-raw-object-arguments': 'error'")
+            && skills_eslint.contains("unknown:"),
+        "executable applications must retain repository TypeScript rules"
+    );
+    let skills_typescript = read(&root, "agentic-ai/skills/tsconfig.json");
+    assert!(
+        skills_typescript
+            .contains("\"include\": [\"*.ts\", \"*/src/**/*.ts\", \"*/tests/**/*.ts\"]")
+    );
+    let source_gate = read(
+        &root,
+        "agentic-ai/loom/tests/skill-application-source-boundary.test.ts",
+    );
+    assert!(
+        source_gate.contains("analyzeExecutableSkillSource")
+            && source_gate.contains("agentic-ai/skills")
+            && source_gate.contains("git', 'ls-files'"),
+        "loom:verify must AST-audit every tracked executable application source"
+    );
 }
 
 #[test]
@@ -159,6 +197,13 @@ fn loom_workflow_audits_every_cortex_change() {
     assert!(
         workflow.contains("      - .cortex/**") && workflow.contains(".cortex/* |"),
         "repository policy must classify Cortex PR changes and trigger on Cortex Main pushes"
+    );
+    assert!(
+        workflow.contains("      - .agents/skills/**")
+            && workflow.contains(".agents/skills/* |")
+            && workflow.contains("      - agentic-ai/skills/**")
+            && workflow.contains("agentic-ai/skills/* |"),
+        "repository policy must trigger for prohibited mirrors and canonical applications"
     );
     assert!(
         workflow.contains("echo \"loom=$loom_changed\" >> \"$GITHUB_OUTPUT\"")

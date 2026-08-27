@@ -93,6 +93,21 @@ loom <request.yaml>
 task loom:run CONFIG=<request.yaml>
 ```
 
+## Executable skill applications
+
+Semantic skill cards remain team-owned Markdown under `.cortex`. Deterministic
+implementations may live as ordinary Bun and TypeScript projects under
+`agentic-ai/skills`; those projects are not harness skill mirrors. Loom consumes
+the Cortex article application through a narrow in-process adapter. The
+application validates its request, audits it, independently verifies its
+result, and enforces contract bounds without command, network, write, agent, or
+lifecycle authority. Run its project gate with `task skills:verify`.
+Run `task loom:verify` for the recursive AST capability audit and exact
+Loom-consumer boundary.
+
+The discoverable strict-YAML host, tools listing, and invocation command are a
+follow-up slice and are not exposed by the current application.
+
 ## TypeScript domain structure
 
 Loom follows [typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md):

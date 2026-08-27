@@ -3,7 +3,7 @@ import {
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
   type CortexArticleDocument,
-} from '../../src/cortex-article-provider/domain.ts';
+} from '../src/domain.ts';
 import { audit, type MakeAuditRequest } from './support.ts';
 
 const documents: readonly CortexArticleDocument[] = [

@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "id": "cortex-article-structure",
+  "executionKind": "in-process-read-only",
+  "requestKind": "cortex-article-structure-audit-v1",
+  "resultKind": "cortex-article-structure-findings-v1",
+  "policyPaths": [
+    ".cortex/teams/ai/dynamic-skills/cortex-article-structure.md"
+  ],
+  "limits": {
+    "requestBytes": 4194304,
+    "resultBytes": 1048576
+  }
+}
