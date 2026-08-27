@@ -37,6 +37,18 @@ behalf of a team subagent.
 If Gizmo cannot start a required team subagent, Gizmo reports the blocker.
 Gizmo must not silently take over the task.
 
+### Subagent model
+
+Every native team subagent must run with Gizmo's exact model.
+
+- Gizmo must not request a different model for a subagent.
+- A task prompt must not request a different model.
+- A custom agent file must not set `model`.
+- An `[agents]` default must not override Gizmo's model.
+- If the harness does not inherit the model automatically, Gizmo must pass its
+  exact model when starting the subagent.
+- If the harness cannot preserve the model, Gizmo must report a blocker.
+
 ## Mandatory context selection
 
 Agents must keep Cortex retrieval proportional to their assigned work.
@@ -48,6 +60,19 @@ Agents must keep Cortex retrieval proportional to their assigned work.
 4. Select the smallest set of documents that owns the task.
 5. Read only the relevant headings inside those documents.
 6. Stop loading Cortex when the assigned contract can be executed safely.
+
+The team assignment selects the context entry point:
+
+- An AI subagent loads `teams/ai/AGENTS.md` and
+  `teams/ai/knowledge-graph.md`.
+- A development-core subagent loads `teams/dev-core/AGENTS.md` and
+  `teams/dev-core/knowledge-graph.md`.
+- A security subagent loads `teams/security/AGENTS.md` and
+  `teams/security/knowledge-graph.md`.
+- An SRE subagent loads `teams/sre/AGENTS.md` and
+  `teams/sre/knowledge-graph.md`.
+- A web-development subagent loads `teams/web-dev/AGENTS.md` and
+  `teams/web-dev/knowledge-graph.md`.
 
 The following behavior is prohibited:
 

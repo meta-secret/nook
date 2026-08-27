@@ -20,6 +20,7 @@ Name an expertise provider when another team should change specific files.
 Allow a functional owner to consume a specifically linked foreign-team skill
 as read-only policy without delegating implementation.
 Keep each team agent inside one declared task scope.
+Run each team agent with Gizmo's exact model.
 Route cross-team dependencies through Gizmo.
 Require each team to own implementation, tests, Cortex updates, review fixes,
 and validation fixes for its assigned task.

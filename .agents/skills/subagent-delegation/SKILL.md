@@ -21,10 +21,12 @@ Before dispatch:
 3. Let the active Codex, Cursor, or other capable harness own subagent creation,
    communication, scheduling, retries, cancellation, barriers, nested
    delegation, and synthesis.
-4. Use Loom or another deterministic tool for mechanical work.
-5. Declare a task-specific hierarchy depth bound before dispatch.
-6. Give every write-capable worker a separate disposable worktree or workspace.
-7. Require a verified commit handoff from each successful writer.
+4. Run every native subagent with Gizmo's exact model. Do not configure a
+   subagent model override.
+5. Use Loom or another deterministic tool for mechanical work.
+6. Declare a task-specific hierarchy depth bound before dispatch.
+7. Give every write-capable worker a separate disposable worktree or workspace.
+8. Require a verified commit handoff from each successful writer.
 
 During execution:
 

@@ -50,6 +50,7 @@ These are entry points, not bulk context manifests.
 Each team agent receives:
 
 - one team identity;
+- Gizmo's exact model;
 - one functional-owner or expertise-provider role;
 - one exact commit;
 - allowed code and Cortex paths;

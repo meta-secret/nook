@@ -152,6 +152,7 @@ adapter.
 It owns:
 
 - native subagent creation and communication;
+- Gizmo-model inheritance for every native subagent;
 - dependency-ready scheduling and barriers;
 - retry and cancellation behavior;
 - nested delegation within declared depth and ownership bounds;
@@ -162,6 +163,7 @@ Nook does not start another Codex or Cursor process to coordinate those native
 subagents.
 
 Project role TOMLs remain thin routing instructions.
+They must not set `model`.
 They do not grant filesystem capability or delivery ownership.
 
 The existing Loom Codex SDK adapter remains available for reviewed static

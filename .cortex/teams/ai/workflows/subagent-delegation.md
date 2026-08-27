@@ -21,6 +21,12 @@ A capable agent environment MUST delegate when all of these conditions hold:
 - Use an exact Git commit as the normal immutable baseline.
   - Do not use a movable branch name as a worker baseline.
 - Record the delegation decision in the task plan.
+- Preserve Gizmo's exact model for every native subagent.
+  - Do not set a different model in the spawn request.
+  - Do not set `model` in a custom agent file.
+  - Do not use an `[agents]` default that changes the model.
+  - Pass Gizmo's exact model when the harness does not inherit it
+    automatically.
 - If the host cannot start the required subagents:
   - report an implementation blocker;
   - do not let Gizmo implement the assigned task; and
@@ -83,6 +89,7 @@ This rule preserves
 Every subagent task must declare:
 
 - a stable task ID;
+- Gizmo's model;
 - its exact baseline;
 - its purpose;
 - its allowed files or evidence surface;
@@ -149,6 +156,7 @@ Implementation delegation also follows
 - Assign each task to `ai`, `dev-core`, `security`, `sre`, or `web-dev` before
   starting subagents.
 - Give every team agent one team identity and explicit code and Cortex paths.
+- Give every team agent Gizmo's exact model.
 - Keep write-capable team agents in isolated workspaces with disjoint scopes.
 - Require each team agent to own its implementation, tests, Cortex updates,
   review fixes, and validation fixes.
