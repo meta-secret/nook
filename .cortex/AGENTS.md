@@ -42,10 +42,19 @@ serially. The same context and write boundaries still apply.
 - Team agents write only inside their declared team code and Cortex scope.
 - Team agents own implementation, tests, team Cortex, review fixes, and
   validation fixes for their bounded unit.
+- **Feature ownership boundary:** agents mutate only their owned feature.
+  Another active agent's work is read-only. When ownership is missing or
+  ambiguous, wait for an explicit user, owner, or orchestrator handoff. See
+  [agent feature ownership](teams/ai/dynamic-skills/agent-feature-ownership.md).
 - Only the delivery owner mutates Workbench, integrated Git state, pull
   requests, review threads, validation requests, readiness, and merge state.
 - Product and security rules stay in portable Rust/WASM when that layer owns
   them. Web code receives public typed projections only.
+- **1,000-line hard limit:** Every authored source file stays at or below 1,000
+  lines. Oversized Rust signals excessive domain responsibility and requires
+  cohesive domain or architectural decomposition. Extracting unit tests alone
+  is prohibited; integration tests remain separate. See
+  [source file size](shared/dynamic-skills/source-file-size.md).
 - **P1 hard rule:** Repository-authored automation uses TypeScript/Bun, Rust,
   and Taskfiles. It does not use Python.
 - Run `task loom:pre-push` before every push.
@@ -54,7 +63,8 @@ serially. The same context and write boundaries still apply.
 
 Load detailed policy only when its action is reached. AI delivery workflows own
 planning, delegation, review, self-improvement, and PR completion. SRE owns the
-execution platform used by those workflows.
+execution platform used by those workflows. Substantial tasks follow the
+[self-improvement lifecycle](teams/ai/dynamic-skills/self-improvement.md).
 
 ## Navigation maintenance
 
