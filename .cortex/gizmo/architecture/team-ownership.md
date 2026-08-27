@@ -11,7 +11,11 @@ Gizmo retains shared integration and delivery actions.
 
 ## Ownership dimensions
 
-Every task has one team that owns the requested behavior.
+Every capability has one functional owner.
+
+- Gizmo may own coordination, integration, or lifecycle capabilities.
+- One engineering team owns every implementation capability.
+- Gizmo is never an implementation expertise provider.
 
 - The functional owner defines capability semantics, consumer contracts,
   security boundaries, Cortex authority, and acceptance evidence.
@@ -40,6 +44,16 @@ Skill ownership is separate from implementation delegation.
   team will change files.
 
 ## Team boundaries
+
+### Gizmo delivery control
+
+Gizmo owns coordination, integration, and lifecycle capabilities.
+
+- **Primary Cortex:** `.cortex/gizmo/`.
+- **Primary state:** Workbench, integrated Git state, pull requests, review
+  threads, validation requests, readiness, and merge state.
+
+Gizmo must not implement a team capability or fix.
 
 ### Development core
 
@@ -145,14 +159,16 @@ Gizmo assigns the human request before implementation starts.
 
 1. Describe the observable functionality without assigning files yet.
 2. Turn the functionality into concrete team tasks.
-3. Assign each task to AI, development core, security, SRE, or web development.
-4. Identify implementation expertise required from another team.
-5. Identify every cross-team provider and consumer contract.
-6. Freeze the contract, baseline, write scope, forbidden scope, tests, and
+3. Assign coordination, integration, and lifecycle capabilities to Gizmo.
+4. Assign each implementation task to AI, development core, security, SRE, or
+   web development.
+5. Identify implementation expertise required from another team.
+6. Identify every cross-team provider and consumer contract.
+7. Freeze the contract, baseline, write scope, forbidden scope, tests, and
    acceptance evidence.
-7. Assign each independent unit to its team agent when bounded delegation is
+8. Assign each independent unit to its team agent when bounded delegation is
    available.
-8. Keep shared files and lifecycle state in the parent-owned join.
+9. Keep shared files and lifecycle state in the parent-owned join.
 
 File location does not override semantic ownership.
 

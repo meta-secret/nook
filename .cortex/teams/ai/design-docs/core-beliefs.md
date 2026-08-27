@@ -71,11 +71,12 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 
 - **Measure wall-clock time** from the start of the user's assignment until the final handoff message.
 - **Always include elapsed time** when finishing implementation work (PR merged, feature delivered, or explicit done).
-- See [workflows/pull-requests.md § Task completion report](../../../teams/ai/workflows/pull-requests.md#10-task-completion-report).
+- See [pull request task completion](../../../gizmo/workflows/pull-requests.md#10-task-completion-report).
 
 ## 8. Default to the Coding Bro Pipeline
 
-- **Every implementation task** follows [workflows/coding-bro.md](../../../teams/ai/workflows/coding-bro.md).
+- **Every implementation mission** follows
+  [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 - The delivery pipeline has these ordered steps:
   1. Fetch the repository.
   2. Branch from `origin/main`.

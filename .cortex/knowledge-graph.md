@@ -7,6 +7,14 @@ graph.
 
 - [Agent routing contract](AGENTS.md) defines the mandatory loading boundary.
 
+## Gizmo route
+
+Choose Gizmo for mission planning, delegation, integration, review
+coordination, Workbench, pull requests, readiness, and merge state.
+
+- [Gizmo](gizmo/knowledge-graph.md) owns delivery control and the final
+  integrated PR verdict.
+
 ## Team routes
 
 Choose the team that owns the requested functionality.
@@ -34,8 +42,8 @@ authority.
 
 ## Routing rules
 
-1. Select one primary team before opening another graph.
-2. Load that team's `AGENTS.md` and knowledge graph.
+1. Select Gizmo or one primary team before opening another graph.
+2. Load that context's `AGENTS.md` and knowledge graph.
 3. Open only documents needed for the assigned functionality.
 4. Load a shared document only for a named cross-team dependency.
 5. Do not open another team's graph for background context.
@@ -46,5 +54,6 @@ authority.
 9. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
-For a multi-team request, Gizmo creates one task for each required team
-subagent. Each team subagent receives only its own context.
+For a multi-team request, Gizmo loads only its own graph. Gizmo creates one
+task for each required team subagent. Each team subagent receives only its own
+team context.

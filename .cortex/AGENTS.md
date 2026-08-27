@@ -6,7 +6,10 @@ This is the minimal entry contract for every Nook agent.
 
 The main task-owning agent is **Gizmo**.
 
-Gizmo coordinates the mission. Gizmo does not implement team tasks.
+- Gizmo loads [its delivery contract](gizmo/AGENTS.md) and
+  [knowledge graph](gizmo/knowledge-graph.md).
+- Gizmo coordinates the mission.
+- Gizmo does not implement team tasks.
 
 Gizmo must:
 
@@ -37,6 +40,17 @@ behalf of a team subagent.
 If Gizmo cannot start a required team subagent, Gizmo reports the blocker.
 Gizmo must not silently take over the task.
 
+### Integrated verdict
+
+Gizmo owns the final integrated PR verdict for the exact head.
+
+- Every required team verdict must be satisfied.
+- A required blocking team verdict remains binding until that team clears it.
+- A required blocking security verdict remains binding until security clears
+  it.
+- Gizmo cannot waive, downgrade, or override either block.
+- Gizmo may block delivery when integration or mission evidence is incomplete.
+
 ### Subagent model
 
 Every native team subagent must run with Gizmo's exact model.
@@ -54,15 +68,16 @@ Every native team subagent must run with Gizmo's exact model.
 Agents must keep Cortex retrieval proportional to their assigned work.
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the requested functionality as AI, development core, security,
-   SRE, web development, or shared integration.
-3. Load exactly one team `AGENTS.md` and its knowledge graph.
+2. Classify the request as Gizmo delivery control, AI, development core,
+   security, SRE, web development, or shared integration.
+3. Load exactly one Gizmo or team `AGENTS.md` and its knowledge graph.
 4. Select the smallest set of documents that owns the task.
 5. Read only the relevant headings inside those documents.
 6. Stop loading Cortex when the assigned contract can be executed safely.
 
 The team assignment selects the context entry point:
 
+- Gizmo loads `gizmo/AGENTS.md` and `gizmo/knowledge-graph.md`.
 - An AI subagent loads `teams/ai/AGENTS.md` and
   `teams/ai/knowledge-graph.md`.
 - A development-core subagent loads `teams/dev-core/AGENTS.md` and
@@ -76,7 +91,7 @@ The team assignment selects the context entry point:
 
 The following behavior is prohibited:
 
-- loading every team graph;
+- loading every Gizmo and team graph;
 - reading every document in one team directory;
 - loading the shared corpus by default;
 - opening foreign-team documents for general background;
@@ -145,7 +160,7 @@ overlap. Gizmo still must not implement their tasks.
 - **Feature ownership boundary:** agents mutate only their owned feature.
   Another active agent's work is read-only. When ownership is missing or
   ambiguous, wait for an explicit user, owner, or orchestrator handoff. See
-  [agent feature ownership](teams/ai/dynamic-skills/agent-feature-ownership.md).
+  [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
 - Only Gizmo mutates Workbench, integrated Git state, pull
   requests, review threads, validation requests, readiness, and merge state.
 - Portable security behavior stays in Rust/WASM when development core owns the
@@ -162,9 +177,9 @@ overlap. Gizmo still must not implement their tasks.
 - Run heavy product validation through the configured GitHub Actions path.
 - Keep `.cortex/.session/` temporary and physically clean before readiness.
 
-Load detailed policy only when its action is reached. AI delivery workflows own
-planning, delegation, review, self-improvement, and PR completion. SRE owns the
-execution platform used by those workflows. Substantial tasks follow the
+Load detailed policy only when its action is reached. Gizmo owns planning,
+delegation, review coordination, and PR completion. AI owns self-improvement
+and Cortex promotion. SRE owns the execution platform. Substantial tasks follow the
 [self-improvement lifecycle](teams/ai/dynamic-skills/self-improvement.md).
 
 ## Navigation maintenance

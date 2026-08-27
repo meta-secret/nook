@@ -98,12 +98,13 @@ sequence before implementation expands further. Use `None` when no public or
 cross-module interface changes.
 
 Add one consecutively numbered `Ownership units` row per capability. Set each
-`Functional owner` to exactly `AI`, `Development core`, `Security`, `SRE`, or
-`Web development`.
+`Functional owner` to exactly `Gizmo`, `AI`, `Development core`, `Security`,
+`SRE`, or `Web development`. Use `Gizmo` only for coordination, integration,
+or lifecycle capabilities.
 
 When another team will implement a bounded unit:
 
-- set `Expertise provider` to one different team;
+- set `Expertise provider` to one different implementation team;
 - enumerate comma-separated, exact repository-relative code paths;
 - enumerate comma-separated, exact repository-relative test paths;
 - enumerate comma-separated, exact repository-relative forbidden paths;
@@ -115,6 +116,10 @@ owner will implement the capability, set `Expertise provider` and every
 expertise field to `None`. Every unit still requires capability acceptance
 evidence. Read-only consumption of a linked foreign-team skill does not create
 an expertise provider.
+
+An `Expertise provider` must be exactly `AI`, `Development core`, `Security`,
+`SRE`, or `Web development`. Gizmo is never an expertise provider. Gizmo never
+implements a bounded unit or fix.
 
 If planning replaces an in-progress oversized PR, require a successor branch
 and linked draft PR from the last full-work commit before any scope reduction.

@@ -10,7 +10,7 @@ The active harness dispatches experts and implementation workers.
 Write-capable workers use isolated workspaces and return commit handoffs.
 
 Named experts come from the
-[module expert registry](../architecture/module-experts.md).
+[module expert registry](../../teams/ai/architecture/module-experts.md).
 Universal worker safety comes from
 [subagent delegation](subagent-delegation.md).
 
@@ -172,4 +172,4 @@ This foundation does not:
 - require JSONL or Markdown evidence for harness progress;
 - replace native harness subagent coordination;
 - map local development onto Hive;
-- replace Coding Bro delivery.
+- replace Gizmo mission delivery.

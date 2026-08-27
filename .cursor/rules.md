@@ -62,5 +62,5 @@ expertise contract only when the foreign team will write the bounded unit.
 - Keep changes minimal and scoped. Match existing naming, patterns, and file structure.
 
 ### Git
-- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/teams/ai/workflows/pull-requests.md`.
-- **Squash merge only.** Every PR merged into `main` MUST use squash merge (`gh pr merge --squash` or GitHub **Squash and merge**). Never merge commit or rebase merge. See `.cortex/teams/ai/workflows/pull-requests.md`.
+- Never push directly to `main`. Always work on a feature branch and open a pull request. See `.cortex/gizmo/workflows/pull-requests.md`.
+- **Squash merge only.** Every PR merged into `main` MUST use squash merge (`gh pr merge --squash` or GitHub **Squash and merge**). Never merge commit or rebase merge. See `.cortex/gizmo/workflows/pull-requests.md`.

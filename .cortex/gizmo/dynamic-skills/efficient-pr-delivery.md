@@ -35,7 +35,7 @@ task loom:pr-land CONFIG=path/to/agent-owned/pr-land-ready.yaml
 gh pr merge <number> --squash
 ```
 
-See [loom-tools.md](../references/loom-tools.md).
+See [Loom tools](../../teams/ai/references/loom-tools.md).
 
 Delivery rules:
 

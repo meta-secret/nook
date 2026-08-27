@@ -14,8 +14,8 @@ source of truth.
 
 ## Skill catalog
 
-- **[team-oriented-development.md](team-oriented-development.md)**
-  - Purpose: Route capabilities through AI, development-core, SRE, and web-development functional owners with optional bounded expertise providers and parent-owned cross-team joins
+- **[team-oriented-development.md](../../../gizmo/dynamic-skills/team-oriented-development.md)**
+  - Purpose: Route capabilities through all five implementation teams with optional bounded expertise providers and Gizmo-owned cross-team joins
   - Executable skill: [`.agents/skills/team-oriented-development/SKILL.md`](../../../../.agents/skills/team-oriented-development/SKILL.md)
 - **[typescript-rust-automation-only.md](../../../shared/dynamic-skills/typescript-rust-automation-only.md)**
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
@@ -35,16 +35,16 @@ source of truth.
 - **[product-spec-lifecycle.md](product-spec-lifecycle.md)**
   - Purpose: **P1 / critical product spec rule:** read owning product specs before implementation; update specs on new knowledge from chat, tasks, or PR iterations
   - Executable skill: [`.agents/skills/product-spec-lifecycle/SKILL.md`](../../../../.agents/skills/product-spec-lifecycle/SKILL.md)
-- **[agent-feature-ownership.md](agent-feature-ownership.md)**
+- **[agent-feature-ownership.md](../../../gizmo/dynamic-skills/agent-feature-ownership.md)**
   - Purpose: Keep every agent inside its assigned feature and focused issue set
   - Executable skill: [`.agents/skills/agent-feature-ownership/SKILL.md`](../../../../.agents/skills/agent-feature-ownership/SKILL.md)
-- **[code-review-comments.md](code-review-comments.md)**
+- **[code-review-comments.md](../../../gizmo/dynamic-skills/code-review-comments.md)**
   - Purpose: Address active actionable feedback and resolve its review conversations
   - Executable skill: [`.agents/skills/code-review-comments/SKILL.md`](../../../../.agents/skills/code-review-comments/SKILL.md)
 - **[dynamic-skill-authoring.md](dynamic-skill-authoring.md)**
   - Purpose: Capture user feedback as durable `.cortex` skill cards and optional project skills
   - Executable skill: [`.agents/skills/dynamic-skill/SKILL.md`](../../../../.agents/skills/dynamic-skill/SKILL.md)
-- **[efficient-pr-delivery.md](efficient-pr-delivery.md)**
+- **[efficient-pr-delivery.md](../../../gizmo/dynamic-skills/efficient-pr-delivery.md)**
   - Purpose: Ship PRs with focused configured-runner execution, complete exact-head validation, and readiness
   - Executable skill: [`.agents/skills/efficient-pr-delivery/SKILL.md`](../../../../.agents/skills/efficient-pr-delivery/SKILL.md)
 - **[github-actions-only-validation.md](../../sre/dynamic-skills/github-actions-only-validation.md)**
@@ -58,9 +58,9 @@ source of truth.
 - **[browser-extension-release-security.md](../../security/dynamic-skills/browser-extension-release-security.md)**
   - Purpose: Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts
   - Executable skill: [`.agents/skills/browser-extension-release-security/SKILL.md`](../../../../.agents/skills/browser-extension-release-security/SKILL.md)
-- **[feature-issue-planning.md](feature-issue-planning.md)**
+- **[feature-issue-planning.md](../../../gizmo/dynamic-skills/feature-issue-planning.md)**
   - Purpose: Organize each feature as a Workbench directory with a shared summary, focused Markdown issues, dependencies, and explicit automation state
-- **[issue-scope-management.md](issue-scope-management.md)**
+- **[issue-scope-management.md](../../../gizmo/dynamic-skills/issue-scope-management.md)**
   - Purpose: Preserve deferred, risky, or too-large work in existing Workbench feature/issue records and task worklogs without disrupting other agents
   - Executable skill: [`.agents/skills/issue-scope-management/SKILL.md`](../../../../.agents/skills/issue-scope-management/SKILL.md)
 - **[module-expert.md](module-expert.md)**
@@ -115,7 +115,7 @@ source of truth.
 - **[web-unused-code.md](../../web-dev/dynamic-skills/web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
 - **[cortex-document-map.md](cortex-document-map.md)**
-  - Purpose: Centralize Cortex navigation in the root routing graph and each owning team graph
+  - Purpose: Centralize Cortex navigation in the root router, one Gizmo graph, five team graphs, and one shared graph
   - Executable skill: [`.agents/skills/cortex-document-map/SKILL.md`](../../../../.agents/skills/cortex-document-map/SKILL.md)
 - **[testing-pyramid-and-regression.md](../../../shared/dynamic-skills/testing-pyramid-and-regression.md)**
   - Purpose: Enforce ~99% domain coverage in Rust, mandatory regression tests for bug fixes, and 90% Rust line coverage floor
@@ -128,11 +128,12 @@ source of truth.
 ## How to add one
 
 1. Scaffold with Loom using a `skillScaffold` domain request YAML. Set
-   `skillOwner` to `ai`, `shared`, `dev-core`, `security`, `sre`, or `web-dev`.
+   `skillOwner` to `gizmo`, `ai`, `shared`, `dev-core`, `security`, `sre`, or
+   `web-dev`.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
-3. Confirm the new card is in the catalog above and its owning team graph, or
-   the shared graph for cross-team knowledge.
+3. Confirm the new card is in the catalog above and its owning Gizmo or team
+   graph. Use the shared graph only for ownerless cross-team knowledge.
 4. If the user wants direct invocation, set `createExecutableWrappers: true` or
    create `.agents/skills/<skill-name>/SKILL.md` (with `.cursor` / `.claude`
    symlinks) pointing back to the `.cortex` card, then link it from the catalog.

@@ -242,7 +242,7 @@ It identifies:
   - `.cortex/AGENTS.md`
   - `.cortex/teams/security/dynamic-skills/browser-extension-release-security.md`
   - `.cortex/teams/ai/dynamic-skills/module-expert.md`
-  - `.cortex/teams/ai/workflows/module-oriented-development.md`
+  - `.cortex/gizmo/workflows/module-oriented-development.md`
 - **Product specification scope:** The profile receives every exact
   user-facing product authority that can own production web work.
   - `authenticator-items.md`

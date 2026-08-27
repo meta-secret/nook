@@ -66,7 +66,8 @@ without complete validation. It is idempotent and does not wait for a result.
 
 ## Actionable feedback priority
 
-Before merge, inspect feedback currently present. Agents must:
+Before merge, inspect feedback currently present. Gizmo must coordinate these
+actions:
 
 - address every active actionable finding;
 - reply on the targeted thread before resolving it;
@@ -80,10 +81,10 @@ The actionable feedback queue has priority over waiting for checks.
 When a new finding arrives:
 
 1. Stop watching or cancel validation for the obsolete head when safe.
-2. Make the fix.
-3. Reply to and resolve the thread.
-4. Run pre-push hygiene.
-5. Push the replacement head.
+2. Dispatch the fix to the responsible team.
+3. Integrate the verified fix commit.
+4. Reply to and resolve the thread.
+5. Run pre-push hygiene and push the replacement head.
 6. Restart complete validation for that head.
 
 Use a focused task instead only when it isolates a known failure faster.
@@ -105,9 +106,10 @@ every active actionable finding, whether it came from a human, Codex, Claude,
 Cursor, CodeRabbit, or another service:
 
 1. Verify the finding against the current branch and `.cortex` rules.
-2. Make the minimal correct fix or document why no change is needed.
-3. Run `task loom:pre-push` when files changed.
-4. Commit and push the completed fix.
+2. Dispatch the minimal correct fix to the responsible team, or document why
+   no change is needed.
+3. Integrate the verified fix commit.
+4. Run `task loom:pre-push`, commit, and push when files changed.
 5. Use focused hosted tasks as useful.
 6. If complete validation was already requested, restart it for the replacement
    head. This first stabilizes one exact-head Codex review. Otherwise start it
@@ -129,9 +131,9 @@ merge. If another actionable comment arrives while the agent is working,
 address it. When repository-owned checks finish and no review feedback is
 present, continue to readiness without waiting.
 
-An external service may be asked to implement a finding only when the user
-explicitly requests that separate service to own the fix. The active agent
-otherwise handles findings directly.
+Gizmo routes every implementation finding to the responsible team. Gizmo does
+not implement the fix. A separately requested service may own a finding only
+when its team task contract grants the required scope.
 
 ## Handoff
 
@@ -144,3 +146,15 @@ Report:
 
 Confirm that unresolved review-thread count was zero at the final readiness
 audit.
+
+## Integrated verdict
+
+Gizmo issues the final integrated PR verdict for the exact head.
+
+- Required team verdicts remain independent acceptance evidence.
+- A required blocking team verdict remains binding until that team clears it.
+- A required blocking security verdict remains binding until security clears
+  it.
+- Gizmo cannot waive, downgrade, or override either block.
+- Gizmo may block the PR when integration evidence is incomplete.
+- A replacement head invalidates verdicts whose evidence is not head-stable.

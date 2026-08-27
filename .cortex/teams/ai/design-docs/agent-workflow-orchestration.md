@@ -70,7 +70,7 @@ task contract and ownership rules.
 ### Local feature-development boundary
 
 Feature planning uses the
-[module-oriented development workflow](../workflows/module-oriented-development.md).
+[module-oriented development workflow](../../../gizmo/workflows/module-oriented-development.md).
 
 - The feature dependency DAG controls readiness.
 - The agent hierarchy records semantic parentage.
@@ -101,7 +101,7 @@ It defines:
 Markdown does not schedule workers.
 
 The canonical decision contract is
-[subagent-delegation.md](../workflows/subagent-delegation.md).
+[subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
 ### Loom static workflow module
 

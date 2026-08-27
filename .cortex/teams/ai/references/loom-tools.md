@@ -220,9 +220,10 @@ ignored `.cortex/.session/` memory.
 task loom:skill-scaffold CONFIG=path/to/request.yaml
 ```
 
-The request requires `skillOwner` with one of `ai`, `shared`, `dev-core`, `sre`,
-or `web-dev`. Loom creates the canonical card in that owner's dynamic-skill
-directory and registers it in the AI skill catalog.
+The request requires `skillOwner` with one of `gizmo`, `ai`, `shared`,
+`dev-core`, `security`, `sre`, or `web-dev`. Loom creates the canonical card in
+that owner's dynamic-skill directory. It registers the card in the AI skill
+catalog. Security remains the owner for security policy and acceptance.
 
 ### agentStats (assemble / validate / publish)
 

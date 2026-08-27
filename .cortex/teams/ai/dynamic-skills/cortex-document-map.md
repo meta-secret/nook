@@ -7,10 +7,12 @@ duplicating each document's heading hierarchy.
 
 ## Graph topology
 
-Cortex has one root router and five owning graphs.
+Cortex has one root router, one Gizmo graph, five team graphs, and one shared
+graph.
 
-- The root graph selects AI, development core, security, SRE, web development,
-  or shared context.
+- The root graph selects Gizmo, AI, development core, security, SRE, web
+  development, or shared context.
+- The Gizmo graph indexes delivery-control authorities.
 - Five team graphs index documents owned by their engineering teams.
 - The shared graph indexes genuinely cross-team documents.
 - Every document has exactly one owning graph.
@@ -34,15 +36,16 @@ document is selected.
 ## Selective context loading
 
 1. Read the root router.
-2. Select one primary team.
-3. Read that team's `AGENTS.md` and graph.
+2. Select Gizmo or one primary team.
+3. Read that context's `AGENTS.md` and graph.
 4. Select one relevant category.
 5. Open only the documents needed for the assigned functionality.
 6. Read only the relevant headings.
 7. Stop when the task contract has enough authoritative context.
 
 Agents must not preload all graphs, all team documents, or the shared corpus.
-A foreign-team implementation requirement returns to Gizmo.
+A foreign-team implementation requirement returns to Gizmo. A team subagent
+does not load the Gizmo graph.
 
 A selected team authority may link the smallest task-relevant set of
 foreign-team skills as read-only engineering policy. The worker opens those
@@ -63,8 +66,8 @@ sections. Their natural heading hierarchy is the local map.
 
 ## Application procedure
 
-1. Determine whether the document belongs to AI, development core, security,
-   SRE, web development, or shared knowledge.
+1. Determine whether the document belongs to Gizmo, AI, development core,
+   security, SRE, web development, or shared knowledge.
 2. Place it under the owning context.
 3. Add one document-level link to that context's graph.
 4. Remove obsolete links from the previous graph.
@@ -83,8 +86,8 @@ task preflight:loom-contracts
 
 Loom enforces:
 
-- all five child graphs exist;
-- the root links every child graph;
+- the Gizmo and five team graphs exist;
+- the root links Gizmo and every team graph;
 - every document is indexed by its owner;
 - graphs do not cross ownership boundaries;
 - each graph indexes a document once; and

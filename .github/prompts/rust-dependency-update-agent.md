@@ -7,7 +7,7 @@ You are updating all outdated direct Rust dependencies for the Nook monorepo.
 - Fix branch (use exactly): `${FIX_BRANCH}`
 
 Read `.cortex/AGENTS.md`, `.cortex/teams/sre/dynamic-skills/docker-container-harness.md`, and
-`.cortex/teams/ai/workflows/coding-bro.md` before making changes.
+`.cortex/gizmo/workflows/mission-delivery.md` before making changes.
 
 ## Required work
 

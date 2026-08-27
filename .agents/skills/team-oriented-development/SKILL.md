@@ -10,9 +10,9 @@ description: >-
 
 Read and follow:
 
-- [the canonical skill](../../../.cortex/teams/ai/dynamic-skills/team-oriented-development.md);
-- [engineering team ownership](../../../.cortex/teams/ai/architecture/team-ownership.md);
-- [the team development workflow](../../../.cortex/teams/ai/workflows/team-oriented-development.md); and
+- [the canonical skill](../../../.cortex/gizmo/dynamic-skills/team-oriented-development.md);
+- [engineering team ownership](../../../.cortex/gizmo/architecture/team-ownership.md);
+- [the team development workflow](../../../.cortex/gizmo/workflows/team-oriented-development.md); and
 - the selected team's `AGENTS.md` and knowledge graph.
 
 Turn the request into concrete team tasks before assigning files.
@@ -21,8 +21,11 @@ Allow a functional owner to consume a specifically linked foreign-team skill
 as read-only policy without delegating implementation.
 Keep each team agent inside one declared task scope.
 Run each team agent with Gizmo's exact model.
-Route cross-team dependencies through Gizmo.
+Route cross-team dependencies through Gizmo. Gizmo delegates every
+implementation and validation fix to the responsible team.
 Require each team to own implementation, tests, Cortex updates, review fixes,
 and validation fixes for its assigned task.
 Keep consumer capability semantics and Cortex with the functional owner.
-Keep shared files and lifecycle state in the parent-owned join.
+Keep shared files and lifecycle state in the parent-owned join. Gizmo owns the
+final integrated verdict but cannot override a required blocking team or
+security verdict.

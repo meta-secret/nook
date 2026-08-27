@@ -132,9 +132,12 @@ Gizmo waits for every required team subagent to finish.
 4. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
 5. Route review and validation failures back to the responsible team.
 6. Repeat until every team-owned correction is complete.
-7. Run exact-head validation and readiness through the AI-owned delivery workflow.
+7. Run exact-head validation and readiness through Gizmo's delivery workflow.
 8. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
    Gizmo.
+
+Gizmo owns the final integrated verdict. Gizmo cannot override a required
+blocking team verdict or a required blocking security verdict.
 
 ## Validation
 

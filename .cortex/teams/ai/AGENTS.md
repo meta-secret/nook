@@ -2,7 +2,10 @@
 
 ## Mission
 
-The AI team owns Nook's agent knowledge system and deterministic agent tooling.
+The AI team owns Nook's agent knowledge system and deterministic agent
+tooling.
+
+Gizmo owns delivery control and lifecycle state.
 
 ## Context loading
 
@@ -10,40 +13,33 @@ The AI team owns Nook's agent knowledge system and deterministic agent tooling.
 2. Select one category that owns the assigned AI functionality.
 3. Open only the exact workflow, skill, architecture, or reference required.
 4. Follow direct links one hop only when the task requires them.
-5. Do not preload all workflows, all skills, or another team's graph.
-
-Load a foreign-team document only when an explicit provider or consumer
-contract requires it. Treat that document as read-only unless the delivery
-owner assigns named files to its team.
+5. Do not load the Gizmo graph or another team's graph.
 
 An exact AI authority may require a foreign-team engineering skill. Load that
-skill read-only and apply it to AI-owned code. This does not require an
-expertise provider unless the foreign team will implement the unit.
+skill read-only. An expertise provider is required only when the foreign team
+will implement named files.
 
 ## Owned responsibilities
 
-- `.cortex` governance, structure, navigation, authoring, and consistency.
-- Loom commands, typed workflows, deterministic Cortex audits, and agent
-  automation under `agentic-ai/loom/`.
+- Cortex governance, structure, navigation, authoring, and consistency.
+- Product-specification lifecycle and evidence-backed Cortex promotion.
+- Loom commands, typed workflows, runtime implementation, and deterministic
+  Cortex audits under `agentic-ai/loom/`.
 - Agent skills and their executable mirrors.
-- Module experts, structural experts, delegation, and team routing.
-- Agent planning, Workbench, review, validation, readiness, and delivery
-  workflows.
+- Module experts and structural-refactoring experts.
+- Structural-refactoring evidence and synthesis.
+- Dynamic-skill authoring and workflow implementation.
 - AI-focused tests and preflight contracts.
-
-AI owns the meaning and acceptance of AI capabilities. It may ask a
-web-development subagent to change named TypeScript files without transferring
-AI capability ownership.
 
 ## Forbidden responsibilities
 
+- Gizmo delivery planning, Workbench state, integrated Git state, pull
+  requests, review threads, readiness, merge state, or final PR verdicts.
 - Portable product, cryptographic, authorization, or storage implementation.
 - Browser presentation and frontend interaction behavior.
 - CI/CD platforms, clusters, deployments, and provider operations.
-- Security architecture, cryptographic policy, or security acceptance owned by
-  the security team.
-- Foreign-team Cortex edits inside one AI-assigned task.
-- Implementation outside the exact files granted by an expertise contract.
+- Security architecture, cryptographic policy, or security acceptance.
+- Foreign-team Cortex edits without an explicit expertise contract.
 - Independent mutation of shared lifecycle state by a child agent.
 
 ## Complete team scope
@@ -54,15 +50,13 @@ For an assigned AI unit, own:
 - implementation in AI-owned tools;
 - focused tests and deterministic enforcement;
 - AI Cortex updates;
-- review and validation fixes caused by the change; and
-- a bounded evidence handoff.
+- review and validation fixes caused by the AI change; and
+- a bounded evidence handoff to Gizmo.
 
-Report product-core, security, SRE, web, or shared dependencies to the delivery
-owner.
-When an expertise provider implements part of the unit, AI supplies the frozen
-consumer contract and validates the resulting AI behavior.
+Report product-core, security, SRE, web, shared, or delivery dependencies to
+Gizmo.
 
 ## Validation
 
-Prove semantic policy with focused review and deterministic invariants with
+Prove semantic policy with focused review. Prove deterministic invariants with
 Loom or preflight tests. Markdown must never become executable workflow state.

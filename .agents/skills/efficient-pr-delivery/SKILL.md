@@ -6,4 +6,4 @@ description: Ship Nook PRs efficiently with advisory local Codex review, bounded
 # Efficient PR Delivery
 
 Read and follow the canonical project skill at
-[`.cortex/teams/ai/dynamic-skills/efficient-pr-delivery.md`](../../../.cortex/teams/ai/dynamic-skills/efficient-pr-delivery.md).
+[`.cortex/gizmo/dynamic-skills/efficient-pr-delivery.md`](../../../.cortex/gizmo/dynamic-skills/efficient-pr-delivery.md).

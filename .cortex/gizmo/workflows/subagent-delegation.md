@@ -128,7 +128,7 @@ Module-oriented work follows
 
 - Keep the feature dependency DAG separate from agent parent lineage.
 - Use the named read-only profiles in the
-  [module expert registry](../architecture/module-experts.md).
+  [module expert registry](../../teams/ai/architecture/module-experts.md).
 - Use the active harness to create and coordinate module experts and
   implementation workers.
 - Invoke `internal_api_expert` when a changed contract crosses a module
@@ -281,7 +281,9 @@ A topic-local one-hop consistency check does not require fan-out.
 
 ### Structural coherence
 
-Use the [structural refactoring workflow](structural-refactoring.md) when code
+Use the
+[structural refactoring workflow](../../teams/ai/workflows/structural-refactoring.md)
+when code
 or Cortex structure is the requested maintenance surface.
 
 - The registry contains two repository-reading structural experts.
@@ -357,7 +359,7 @@ Keep one owner when work is:
 ## Machine-managed workflows
 
 During reflection, apply the
-[workflow improvement review](../dynamic-skills/self-improvement.md#workflow-improvement-review)
+[workflow improvement review](../../teams/ai/dynamic-skills/self-improvement.md#workflow-improvement-review)
 to repeated and stable procedures.
 
 This delegation workflow still owns the worker boundary:
@@ -369,7 +371,7 @@ This delegation workflow still owns the worker boundary:
 - child workers do not acquire delivery authority.
 
 The architecture boundary is defined in
-[agent-workflow-orchestration.md](../design-docs/agent-workflow-orchestration.md).
+[agent-workflow-orchestration.md](../../teams/ai/design-docs/agent-workflow-orchestration.md).
 
 ## Validation
 

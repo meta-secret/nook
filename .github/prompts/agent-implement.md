@@ -19,7 +19,7 @@ give that worker only the explicit expertise contract, its own team graph, and
 the named consumer interfaces. Do not preload the functional owner's graph or
 transfer capability semantics and consumer-team Cortex ownership. The delivery
 owner follows
-`.cortex/teams/ai/workflows/coding-bro.md` without passing unrelated AI context
+`.cortex/gizmo/workflows/mission-delivery.md` without passing unrelated Gizmo context
 to a team worker.
 
 When a selected team authority links a foreign-team skill as required
@@ -61,7 +61,7 @@ hand-written `docker run` commands.
    bounded worker. The assigned continuing owner runs focused and complete
    hosted execution after the harness publishes the branch and PR.
 5. If part of the request is too large, risky, blocked, or out of scope, follow
-   `.cortex/teams/ai/workflows/issues.md` (update/create Workbench Markdown records)
+   `.cortex/gizmo/workflows/issues.md` (update/create Workbench Markdown records)
    rather than silently dropping work.
    Before removing work, stop; the continuing owner must preserve it in a
    linked successor and record its inventory in Workbench.
@@ -84,6 +84,6 @@ hand-written `docker run` commands.
   audit, and squash-merges without separate merge authorization.
 - Do **not** commit secrets, `.env`, or credentials.
 - Keep the diff focused on the requested task.
-- Follow `.cortex/teams/ai/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
+- Follow `.cortex/gizmo/workflows/pull-requests.md` (squash merge only) and `.cortex/teams/sre/dynamic-skills/docker-container-harness.md` (never kill Docker daemon).
 - Follow `.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md`: format
   locally; product gates run on GitHub Actions.

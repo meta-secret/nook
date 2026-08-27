@@ -18,11 +18,15 @@ When the user invokes `/dynamic-skill` or explains a reusable mistake:
 
 1. Inspect the referenced code.
 2. Select the responsible team through
-   [Engineering team ownership](../architecture/team-ownership.md).
-3. Convert the explanation into a concise card in that team's
-   `dynamic-skills/` directory. Use the shared directory only for ownerless
-   repository-wide policy. Multi-team consumption does not erase a clear
-   expertise owner. This card is the source of truth.
+   [Engineering team ownership](../../../gizmo/architecture/team-ownership.md).
+3. Convert the explanation into a concise card in the owner's
+   `dynamic-skills/` directory.
+   - Use Gizmo for delivery-control knowledge.
+   - Use the responsible engineering team for implementation knowledge.
+   - Use shared only for ownerless repository-wide policy.
+   - Preserve security ownership for security policy and acceptance.
+   Multi-team consumption does not erase a clear owner. This card is the
+   source of truth.
 4. Update `.cortex/teams/ai/dynamic-skills/index.md`.
 5. Create `.agents/skills/<skill>/SKILL.md` when the pattern should be invokable
    directly by future agents.
@@ -59,8 +63,10 @@ Does not apply to:
 - For a new card:
   - scaffold with
     `task loom:skill-scaffold CONFIG=<skill-scaffold-request.yaml>`;
-  - set `skillOwner` to the responsible team, to `ai` for AI-system knowledge,
-    or to `shared` for ownerless repository-wide policy;
+  - set `skillOwner` to `gizmo` for delivery control, to the responsible team
+    for implementation knowledge, to `ai` for AI-system knowledge, or to
+    `shared` for ownerless repository-wide policy;
+  - use `security` for security policy, trust boundaries, and acceptance;
   - keep problem, preferred pattern, scope, examples, and validation concrete;
   - set `createExecutableWrappers: true` only when direct invocation is useful;
     and

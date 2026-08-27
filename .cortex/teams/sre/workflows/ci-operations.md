@@ -30,8 +30,8 @@ lifecycle, sync, and WASM events that neither linters nor DOM assertions expose.
 Full reference: [logging.md § Debugging, troubleshooting, and CI verification](../../../shared/references/logging.md#debugging-troubleshooting-and-ci-verification).
 
 Local `task ci:pr` remains available as an optional warm-cache debug mirror.
-See [pull-requests.md § Validation](../../ai/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation)
-and [coding-bro.md](../../ai/workflows/coding-bro.md).
+See [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation)
+and [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 
 E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_INTERVAL_MS=1000` for fast background sync. Main saves prod dist before e2e and restores after (`web:e2e:restore-prod-dist`).
 
@@ -240,7 +240,9 @@ secrets:
 3. **Do** format, commit, push, use focused `task remote` jobs, and explicitly
    trigger complete validation with `task pr:validate`; never run heavy agent
    product work locally.
-4. **Do** update this doc and [`pull-requests.md`](../../ai/workflows/pull-requests.md) when workflow behavior changes.
+4. **Do** update this doc and
+   [pull requests](../../../gizmo/workflows/pull-requests.md) when workflow
+   behavior changes.
 5. Explicitly labeled PR CI runs Rust/WASM/JS unit tests, Svelte/type checks, lint, formatting, and builds.
    - UI-changing PRs additionally record only their changed headless demo specs.
    - Main-fix validation uses `task pr:validate PR=<number> FULL_E2E=1` and runs the Main-equivalent deterministic browser suites before merge.
@@ -249,4 +251,4 @@ secrets:
    - Credentialed **sync-live** checks are explicit manual runs.
 6. **Never** add Dockerfile `RUN --mount=type=cache`; dependency installs must use normal image layers. The repository-root Rust suite invoked by `task preflight` rejects violations before app setup.
 
-See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull-requests.md](../../ai/workflows/pull-requests.md).
+See also: [ARCHITECTURE.md §7](../../../shared/architecture/system.md#7-the-engineering-harness), [pull requests](../../../gizmo/workflows/pull-requests.md).

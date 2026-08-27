@@ -11,7 +11,8 @@ description: >-
 
 # Code Review Comments
 
-System of record: [`.cortex/teams/ai/dynamic-skills/code-review-comments.md`](../../../.cortex/teams/ai/dynamic-skills/code-review-comments.md).
+System of record:
+[`.cortex/gizmo/dynamic-skills/code-review-comments.md`](../../../.cortex/gizmo/dynamic-skills/code-review-comments.md).
 
 Read [`.cortex/AGENTS.md`](../../../.cortex/AGENTS.md) before starting. Inspect
 submitted reviews, inline review threads, and PR comments from humans, Codex,

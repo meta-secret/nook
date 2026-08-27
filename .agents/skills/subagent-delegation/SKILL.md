@@ -11,7 +11,7 @@ description: >-
 # Subagent Delegation
 
 Read and follow the canonical workflow at
-[`.cortex/teams/ai/workflows/subagent-delegation.md`](../../../.cortex/teams/ai/workflows/subagent-delegation.md).
+[`.cortex/gizmo/workflows/subagent-delegation.md`](../../../.cortex/gizmo/workflows/subagent-delegation.md).
 
 Before dispatch:
 
@@ -49,10 +49,10 @@ inspection or audit evidence. They are never prerequisites for harness
 dispatch, continuation, retry, join, or completion.
 
 For module-oriented work, also load
-[`module-oriented-development.md`](../../../.cortex/teams/ai/workflows/module-oriented-development.md)
+[`module-oriented-development.md`](../../../.cortex/gizmo/workflows/module-oriented-development.md)
 and the named
 [`module expert registry`](../../../.cortex/teams/ai/architecture/module-experts.md).
 
 For implementation work, also load
-[`team-oriented-development.md`](../../../.cortex/teams/ai/workflows/team-oriented-development.md)
+[`team-oriented-development.md`](../../../.cortex/gizmo/workflows/team-oriented-development.md)
 and keep each child inside one engineering-team boundary.

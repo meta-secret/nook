@@ -8,7 +8,7 @@ system coherence.
 The workflow routes evidence through the
 [structural refactoring expert registry](../architecture/refactoring-experts.md).
 It follows the universal
-[subagent delegation contract](subagent-delegation.md).
+[subagent delegation contract](../../../gizmo/workflows/subagent-delegation.md).
 
 Gizmo plans and delivers the correction process. Gizmo assigns every accepted
 edit to the responsible team subagent. Experts remain read-only and

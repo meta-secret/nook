@@ -155,7 +155,8 @@ Use this workflow for quality, CI, and deployment changes.
 7. Build wasm before Svelte checks or web builds.
 8. Use `VITE_BASE="/<repo>/"` for GitHub Pages builds.
 9. Update `.cortex` docs when checks, tooling, CI, or deploy behavior changes.
-10. **CI policy** — see subsections below. Agents: follow [pull-requests.md § Agent pipeline](../../ai/workflows/pull-requests.md#agent-pipeline).
+10. **CI policy** — see subsections below. Agents: follow
+    [the pull request pipeline](../../../gizmo/workflows/pull-requests.md#agent-pipeline).
 
     #### Workflows and runners
     - Trusted native Rust and Rust ecosystem PR jobs and Main build producers
@@ -483,7 +484,9 @@ Use this workflow for quality, CI, and deployment changes.
     - Complete PR checks run only after `task pr:validate PR=<number>`.
     - Do not run `task check`, `task ci:pr`, full suites, builds, or e2e on the agent machine.
     - Local mirrors remain available to humans.
-    - See [remote-execution.md](remote-execution.md), [coding-bro.md](../../ai/workflows/coding-bro.md), and [pull-requests.md § Validation](../../ai/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
+    - See [remote execution](remote-execution.md),
+      [mission delivery](../../../gizmo/workflows/mission-delivery.md), and
+      [pull request validation](../../../gizmo/workflows/pull-requests.md#5-hosted-iteration-and-explicit-validation).
 12. Prove the final pushed head with explicitly triggered green repository-owned
     checks before merge or handoff. After a complete-gate failure, fix, run Loom
     pre-push, commit, push, and validate the replacement head. Use focused remote
@@ -575,4 +578,4 @@ Threshold or ignore edits belong only in an explicit gate-maintenance change,
 with the rationale in the PR. Default agent behavior is: read the failure → fix
 the code → re-run the same gate until green. See
 [AGENTS.md — Fix every failing check finding](../../../../AGENTS.md#non-negotiable-fix-every-failing-check-finding)
-and [coding-bro.md](../../ai/workflows/coding-bro.md).
+and [mission delivery](../../../gizmo/workflows/mission-delivery.md).

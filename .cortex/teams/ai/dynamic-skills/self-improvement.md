@@ -332,7 +332,7 @@ Classify each candidate instruction before changing its owner.
 - **Ephemeral instruction:** Reject it when it is task-specific, speculative,
   or insufficiently evidenced.
 
-Follow [Subagent delegation](../workflows/subagent-delegation.md) for the full
+Follow [Subagent delegation](../../../gizmo/workflows/subagent-delegation.md) for the full
 worker contract and safe parallelism rules.
 
 ### Loom extraction procedure
