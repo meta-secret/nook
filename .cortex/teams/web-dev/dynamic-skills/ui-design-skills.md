@@ -3,6 +3,11 @@
 Ship deliberate, calm, trustworthy Nook interfaces without weakening product
 truth or security boundaries. This is the canonical Nook UI design authority.
 
+Every user-visible Nook UI task must load and apply this card when it:
+- designs, implements, redesigns, polishes, or reviews vault, website,
+  browser-extension, landing, help, settings, onboarding, or authentication; or
+- changes responsive behavior, accessibility, motion, visual state, components, or styling.
+
 ## Evidence And Direction
 
 Before editing:
