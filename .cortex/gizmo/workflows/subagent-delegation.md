@@ -11,15 +11,16 @@
 A capable agent environment MUST delegate when all of these conditions hold:
 
 1. The request contains at least two separate team tasks.
-2. Each subagent can start from the same exact Git commit.
-3. Each subagent is read-only or changes different files.
+2. Each task has an exact starting frontier.
+3. Concurrent write tasks have isolated workspaces and disjoint resource claims.
 4. Each subagent has explicit inputs and expected outputs.
 5. Each subagent has its own acceptance evidence.
 6. Gizmo can state how the returned results will be integrated before work
    starts.
 
-- Use an exact Git commit as the normal immutable baseline.
+- Use an exact Git commit as each task's immutable starting frontier.
   - Do not use a movable branch name as a worker baseline.
+- Do not require one common baseline for the whole mission.
 - Record the delegation decision in the task plan.
 - Let the active harness own model inheritance or selection.
 - Do not encode model selection in the repository task contract.
@@ -116,6 +117,43 @@ A retry is a new attempt of the same logical task.
 
 - The parent validates the result against current task state.
 - The parent does not merge worker conclusions blindly.
+
+## Task discovery and ready waves
+
+Gizmo recursively discovers every necessary bounded task before that task is
+dispatched.
+
+1. Start from the requested outcomes.
+2. Identify every direct provider needed for each outcome.
+3. Repeat for each provider until all leaves are independently executable.
+4. Assign exactly one team identity to every reached task.
+5. Create one worker for every reached task.
+6. Freeze dependencies, resource claims, acceptance evidence, and the
+   parent-owned join.
+
+### Ready wave dispatch
+
+A task is dependency-ready only when all direct providers are:
+
+- terminal-successful;
+- semantically accepted by the responsible owner;
+- commit-verified against their declared frontier and resource scope; and
+- integrated into the successor's starting frontier.
+
+Dispatch follows these rules:
+
+- A read-only provider verifies its exact source commit.
+  Integration accepts its evidence into the parent task state.
+- The harness dispatches every dependency-ready task whose resource claims do
+  not conflict in the same wave.
+- Read-only audits may overlap, including audits of the same evidence.
+- Concurrent writers require isolated workspaces and disjoint resource claims.
+- After each accepted integration, Gizmo recomputes readiness on affected
+  outgoing edges.
+- Each newly ready successor binds to the exact integrated frontier that
+  contains its complete predecessor closure.
+- Unrelated work continues. No global wait separates waves.
+- The all-task terminal barrier exists only for the final parent-owned join.
 
 ## Module-oriented feature development
 
@@ -233,7 +271,10 @@ Before integration, the parent:
 4. verifies acceptance evidence;
 5. reconciles failures and disagreements;
 6. integrates accepted commits in deterministic dependency order;
-7. binds downstream work to the exact integrated commit.
+7. recomputes readiness across affected outgoing edges;
+8. binds downstream work to the exact integrated frontier containing its
+   complete predecessor closure; and
+9. dispatches all newly ready, non-conflicting tasks.
 
 The parent may author a Markdown summary for humans.
 That summary is optional.
@@ -300,8 +341,15 @@ packages or ownership layers are in scope.
 
 The parent owns the cross-layer interface and migration order.
 
-Do not parallelize dependent core, WASM, and web interface changes before the
-lower-layer contract is stable.
+Core, WASM, and web interface changes preserve provider order.
+
+1. Complete, accept, commit-verify, and integrate the core provider.
+2. Start WASM from the exact integrated frontier containing core.
+3. Complete, accept, commit-verify, and integrate WASM.
+4. Start web from the exact integrated frontier containing core and WASM.
+
+Independent ready tasks continue while this chain advances. The chain does not
+create a mission-wide wait.
 
 ### Independent CI failures
 
@@ -392,7 +440,10 @@ Before integration, verify:
 - every accepted commit descends from its exact baseline;
 - every accepted commit changes only allowed paths;
 - every downstream task binds to the exact integrated provider commit;
+- every downstream task's frontier contains its complete predecessor closure;
 - integration follows deterministic dependency order;
+- readiness was recomputed after every accepted integration;
+- no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - the parent reviewed all evidence;
 - only Gizmo mutated shared lifecycle state.

@@ -19,11 +19,16 @@ Gizmo never gives its own graph to a team subagent.
 ## Owned responsibilities
 
 - Interpret the mission and publish its public-safe plan.
+- Recursively discover every necessary bounded task and provider dependency.
 - Classify each task by functional owner and optional expertise provider.
-- Freeze baselines, write scopes, dependencies, and acceptance evidence.
+- Freeze each task's starting frontier, resource claims, dependencies, and
+  acceptance evidence.
 - Choose exactly one team identity for each task.
+- Create one worker for every reached task.
+- Dispatch every dependency-ready, non-conflicting task in the same wave.
 - Supply the team identity and bounded task contract to the active harness.
 - Resolve dependencies and integrate verified commit handoffs.
+- Recompute edge-local readiness after every integration.
 - Mutate Workbench, integrated Git state, pull requests, review threads,
   validation requests, readiness, and merge state.
 - Issue the final integrated exact-head PR verdict.
@@ -40,15 +45,21 @@ Gizmo never gives its own graph to a team subagent.
 ## Delivery procedure
 
 1. Define the requested outcome and completion evidence.
-2. Split the work into bounded team tasks.
+2. Recursively discover the complete bounded task graph.
 3. Select exactly one team identity for every team task.
-4. Dispatch every task through the responsible team context.
-5. Verify each returned commit against its baseline and scope.
-6. Integrate accepted commits in dependency order.
-7. Route every implementation finding back to its responsible team.
-8. Validate the integrated exact head.
-9. Record the final integrated verdict.
-10. Complete readiness, merge, and Workbench publication when the verdict is
+4. Create one worker for every reached task.
+5. Dispatch every dependency-ready, non-conflicting task in the same wave.
+6. Verify each returned result against its task identity, starting frontier,
+   resource scope, and acceptance evidence.
+7. Integrate accepted commits in deterministic dependency order.
+8. Recompute readiness across affected outgoing edges after each integration.
+9. Bind each newly ready successor to the exact integrated frontier containing
+   its complete predecessor closure.
+10. Route every implementation finding back to its responsible team.
+11. Use the all-task barrier only for the final parent-owned join.
+12. Validate the integrated exact head.
+13. Record the final integrated verdict.
+14. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
 
 Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
@@ -59,6 +70,10 @@ rules.
 Gizmo adds delivery-specific decisions. It selects the functional owner,
 freezes the team task, integrates accepted handoffs, and controls shared
 lifecycle state.
+
+Direct providers form edge-local readiness barriers. A successor is ready only
+after every direct provider is terminal-successful, semantically accepted,
+commit-verified, and integrated. Readiness does not wait for unrelated tasks.
 
 ## Verdict rules
 

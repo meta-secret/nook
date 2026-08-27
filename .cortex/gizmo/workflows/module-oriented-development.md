@@ -27,7 +27,7 @@ Each node declares:
 - the consumer outcome;
 - provider dependencies;
 - read and write resource claims;
-- one exact baseline;
+- one exact starting frontier;
 - the isolated workspace policy for write-capable work;
 - the expected commit handoff;
 - acceptance evidence;
@@ -42,8 +42,10 @@ Each edge declares:
 - compatibility expectations;
 - owning contract tests.
 
-The delivery owner freezes these relationships before implementation begins.
-The harness schedules ready nodes from the frozen dependency order.
+The delivery owner recursively discovers and freezes these relationships before
+each reached node begins. Every reached node receives one team identity and one
+worker. The harness schedules every dependency-ready, non-conflicting node in
+the same wave.
 A child may delegate only within its assigned node and declared depth bound.
 Nested delegation cannot add graph nodes, change edges, or widen write scope.
 
@@ -86,18 +88,31 @@ Implementation follows dependency readiness.
 
 1. Complete the lowest provider API and its behavior-focused module tests.
 2. Validate the provider against the frozen edge contract.
-3. Verify the provider commit against its baseline and write scope.
+3. Verify the provider commit against its starting frontier and write scope.
 4. Integrate accepted provider commits in deterministic task order.
-5. Bind immediate consumers to the exact integrated commit.
-6. Write the immediate consumer against the accepted external API.
-7. Add consumer tests for integration behavior.
-8. Repeat toward the feature root.
-9. Run the parent-owned join and repository delivery gates.
+5. Recompute readiness across the provider's outgoing edges.
+6. Bind each ready consumer to the exact integrated frontier containing its
+   complete predecessor closure.
+7. Dispatch every newly ready, non-conflicting consumer in the same wave.
+8. Write each immediate consumer against the accepted external API.
+9. Add consumer tests for integration behavior.
+10. Repeat toward the feature root without waiting for unrelated nodes.
+11. Use the all-task barrier only for the final parent-owned join.
+12. Run repository delivery gates.
 
 Independent ready providers may be analyzed in parallel.
 Independent write-capable providers may run in parallel only when their
 isolated workspace and resource claims are disjoint.
 Shared files and unresolved contracts remain serialized.
+
+A node is ready only when every direct provider is terminal-successful,
+semantically accepted, commit-verified, and integrated. Provider edges are local
+barriers. They do not create a global wait between waves.
+
+For example, `nook-core` must be accepted and integrated before `nook-wasm`
+starts. The web consumer then starts from the integrated frontier containing
+both `nook-core` and `nook-wasm`. Independent ready module tasks continue while
+that chain advances.
 
 ## Flat hierarchy
 
@@ -105,7 +120,7 @@ The plan declares a task-specific hierarchy depth bound.
 
 - The harness enforces the bound for native subagent delegation.
 - A child may create a descendant only inside its assigned task contract.
-- A descendant inherits the same baseline, ownership limits, and delivery
+- A descendant inherits its task's starting frontier, ownership limits, and delivery
   owner.
 - Nested delegation cannot authorize another feature-DAG node.
 - Nested delegation cannot acquire GitHub, Workbench, shared-file, or merge
@@ -137,13 +152,16 @@ Before implementation, verify:
 - every changed boundary has a reviewed external API;
 - provider tests own domain behavior;
 - dependency order is acyclic;
-- every task has an exact baseline and declared resource scope;
+- every task has an exact starting frontier and declared resource scope;
 - every write-capable task has an isolated workspace policy;
 - every task stays inside the declared hierarchy depth bound;
 - no descendant widens a task or feature-DAG edge;
 - every accepted writer returns a verified commit handoff;
 - retries use fresh isolated attempt state;
-- downstream tasks bind to the exact integrated commit;
+- downstream tasks bind to the exact integrated frontier containing their full
+  predecessor closure;
+- readiness is recomputed after every accepted integration;
+- only the final parent-owned join uses an all-task barrier;
 - the delivery owner owns the join.
 
 Run:

@@ -42,20 +42,21 @@ authority.
 
 ## Routing rules
 
-1. Gizmo keeps delivery-control work in its own context. For functional work,
-   Gizmo chooses one primary team agent.
-2. The assigned worker loads only its own context's `AGENTS.md` and knowledge
+1. Gizmo keeps delivery-control work in its own context.
+2. Gizmo recursively discovers bounded functional tasks.
+3. Gizmo assigns exactly one team identity to each task.
+4. The assigned worker loads only its own context's `AGENTS.md` and knowledge
    graph.
-3. Open only documents needed for the assigned functionality.
-4. Load a shared document only for a named cross-team dependency.
-5. Do not open another team's graph for background context.
-6. Return foreign-team requirements to Gizmo.
-7. Load a foreign-team skill read-only when the selected team's task-relevant
+5. Open only documents needed for the assigned functionality.
+6. Load a shared document only for a named cross-team dependency.
+7. Do not open another team's graph for background context.
+8. Return foreign-team requirements to Gizmo.
+9. Load a foreign-team skill read-only when the selected team's task-relevant
    authority names it as required engineering policy.
-8. Require an expertise contract only when the foreign team will change files.
-9. Route security architecture and acceptance questions to security without
+10. Require an expertise contract only when the foreign team will change files.
+11. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
 For a multi-team request, Gizmo loads only its own graph. Gizmo creates one
-task for each required team subagent. Each team subagent receives only its own
-team context.
+worker for every reached task. Each worker receives only the context for the
+task's team identity.

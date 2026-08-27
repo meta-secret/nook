@@ -11,16 +11,18 @@ boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 
 Gizmo writes the team assignments before implementation starts.
 
-1. Turn the request into concrete team tasks.
+1. Recursively discover every necessary bounded task and provider dependency.
 2. Assign each task to exactly one semantic team identity.
 3. Name a second team when that team's expertise is required to change files.
 4. Keep shared integration and delivery actions as Gizmo tasks.
-5. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-6. Apply [subagent delegation](subagent-delegation.md) for operational worker
+5. Create one worker for every reached task.
+6. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+7. Apply [subagent delegation](subagent-delegation.md) for operational worker
    rules and integration.
 
-Team subagents may run in parallel only when they change different files.
-A dependent subagent waits for the provider subagent to finish.
+Dispatch every dependency-ready, non-conflicting task in the same parallel
+wave. Read-only audits may overlap. Concurrent writers require isolated
+workspaces and disjoint resource claims.
 
 ## Dispatch team agents
 
@@ -107,16 +109,25 @@ permission to edit another team's code.
 
 ## Integrate and deliver
 
-Gizmo waits for every required team subagent to finish.
+Gizmo uses provider edges as local barriers. It does not wait for unrelated
+tasks before activating a successor.
 
-1. Verify each team's role, baseline, scope, result, tests, and semantic view.
+1. Verify each task's team identity, frontier, scope, result, tests, and
+   semantic view.
 2. Reconcile cross-team contract disagreements.
-3. Integrate accepted provider work before consumers.
-4. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
-5. Route review and validation failures back to the responsible team.
-6. Repeat until every team-owned correction is complete.
-7. Run exact-head validation and readiness through Gizmo's delivery workflow.
-8. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
+3. Require every direct provider to be terminal-successful and semantically
+   accepted.
+4. Verify each provider commit and integrate it before activating consumers.
+5. Recompute readiness across affected outgoing edges after each integration.
+6. Bind every ready successor to the exact integrated frontier containing its
+   complete predecessor closure.
+7. Dispatch all newly ready, non-conflicting tasks without a global wait.
+8. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
+9. Route review and validation failures back to the responsible team.
+10. Repeat until every team-owned correction is complete.
+11. Reserve the all-task barrier for the final parent-owned join.
+12. Run exact-head validation and readiness through Gizmo's delivery workflow.
+13. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
    Gizmo.
 
 Gizmo owns the final integrated verdict. Gizmo cannot override a required
@@ -125,7 +136,7 @@ blocking team verdict or a required blocking security verdict.
 ## Validation
 
 Completion requires one exact team identity per team task.
-Each capability has one owner team and at most one expertise provider for each
-set of delegated files. Completion also requires explicit cross-team
-contracts, team-owned tests and review fixes, one shared-state writer, root
-aggregation, and green exact-head delivery gates.
+Each reached task has one worker per attempt. Each capability has one owner team
+and at most one expertise provider for each set of delegated files. Completion
+also requires explicit cross-team contracts, team-owned tests and review fixes,
+one shared-state writer, root aggregation, and green exact-head delivery gates.

@@ -15,16 +15,19 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 ## Preferred pattern
 
 1. Read [Engineering team ownership](../architecture/team-ownership.md).
-2. Turn the request into concrete tasks and assign each task to one team.
-3. Identify whether another team should provide implementation expertise.
-4. Freeze every capability or expertise contract before assigning files.
-5. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-6. Follow [subagent delegation](../workflows/subagent-delegation.md) for
+2. Recursively discover every necessary bounded task and provider dependency.
+3. Assign exactly one team identity to each task.
+4. Identify whether another team should provide implementation expertise.
+5. Freeze every capability or expertise contract before assigning files.
+6. Create one worker for every reached task.
+7. Dispatch every dependency-ready, non-conflicting task in the same wave.
+8. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+9. Follow [subagent delegation](../workflows/subagent-delegation.md) for
    dispatch and integration.
-7. Route cross-team dependencies through Gizmo.
-8. Require each team to implement its own tests, Cortex updates, and review
+10. Route cross-team dependencies through Gizmo.
+11. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-9. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+12. Follow [Team-oriented development](../workflows/team-oriented-development.md)
    for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
@@ -55,4 +58,7 @@ This skill does not replace module ownership, internal API review, or subagent e
 ## Validation
 
 Confirm that every capability has one functional owner. Confirm that every
-expertise provider stayed inside its explicit code and test scope.
+task has one team identity. Confirm that every reached task received a worker.
+Confirm that every expertise provider stayed inside its explicit code and test
+scope. Confirm that successor baselines contain their complete accepted and
+integrated predecessor closure.
