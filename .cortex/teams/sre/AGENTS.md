@@ -12,10 +12,11 @@ infrastructure.
    operational functionality.
 3. Load only the relevant headings.
 4. Do not preload every CI, cluster, or provider document.
-5. Do not open the development-core, web, or AI graph for background context.
+5. Do not open the development-core, security, web, or AI graph for background
+   context.
 
 Load shared architecture only for a named cross-team execution contract. Report
-product, web, or AI dependencies to the delivery owner.
+product, security, web, or AI dependencies to the delivery owner.
 
 For an infrastructure expertise request, load the named consumer contract as
 read-only. Do not load the consumer team's complete graph.

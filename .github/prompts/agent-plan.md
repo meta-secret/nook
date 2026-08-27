@@ -98,8 +98,8 @@ sequence before implementation expands further. Use `None` when no public or
 cross-module interface changes.
 
 Add one consecutively numbered `Ownership units` row per capability. Set each
-`Functional owner` to exactly `AI`, `Development core`, `SRE`, or `Web
-development`.
+`Functional owner` to exactly `AI`, `Development core`, `Security`, `SRE`, or
+`Web development`.
 
 When another team will implement a bounded unit:
 

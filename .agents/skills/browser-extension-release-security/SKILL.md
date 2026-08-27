@@ -6,4 +6,4 @@ description: Validate Nook hosted extension origins, identity, archives, redirec
 # Browser Extension Release Security
 
 Read and follow the canonical project skill at
-[`.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md`](../../../.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md).
+[`.cortex/teams/security/dynamic-skills/browser-extension-release-security.md`](../../../.cortex/teams/security/dynamic-skills/browser-extension-release-security.md).

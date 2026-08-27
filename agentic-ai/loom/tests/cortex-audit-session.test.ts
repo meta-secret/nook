@@ -173,6 +173,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
     mkdirSync(path.join(teamsRoot, 'dev-core'), directoryOptions);
+    mkdirSync(path.join(teamsRoot, 'security'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'sre'), directoryOptions);
     mkdirSync(path.join(teamsRoot, 'web-dev'), directoryOptions);
     mkdirSync(path.join(cortexRoot, 'shared'), directoryOptions);
@@ -184,6 +185,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
 - [Agent Map](AGENTS.md)
 - [AI](teams/ai/knowledge-graph.md)
 - [Development core](teams/dev-core/knowledge-graph.md)
+- [Security](teams/security/knowledge-graph.md)
 - [SRE](teams/sre/knowledge-graph.md)
 - [Web development](teams/web-dev/knowledge-graph.md)
 - [Shared](shared/knowledge-graph.md)
@@ -199,6 +201,7 @@ test('does not cascade from an indexed skill rejected by syntax admission', asyn
     );
     for (const graphPath of [
       path.join(teamsRoot, 'dev-core', 'knowledge-graph.md'),
+      path.join(teamsRoot, 'security', 'knowledge-graph.md'),
       path.join(teamsRoot, 'sre', 'knowledge-graph.md'),
       path.join(teamsRoot, 'web-dev', 'knowledge-graph.md'),
       path.join(cortexRoot, 'shared', 'knowledge-graph.md'),

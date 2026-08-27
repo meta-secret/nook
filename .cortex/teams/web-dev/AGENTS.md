@@ -12,7 +12,8 @@ also owns browser presentation and frontend interaction behavior.
    for the assigned interaction.
 3. Load only the relevant headings.
 4. Do not preload every extension, UI, or browser document.
-5. Do not open the development-core, SRE, or AI graph for background context.
+5. Do not open the development-core, security, SRE, or AI graph for background
+   context.
 
 Load a development-core specification only when an explicit typed consumer
 contract requires it. Treat that authority as read-only and return provider
@@ -37,6 +38,7 @@ load the consumer team's complete graph.
 ## Forbidden responsibilities
 
 - Portable validation, authorization, cryptography, and vault-storage rules.
+- Security architecture, cryptographic policy, and security review criteria.
 - CI/CD pipelines, runners, clusters, deployments, and provider operations.
 - AI capability semantics, Loom workflow topology, or another team's Cortex
   documents.
@@ -46,6 +48,16 @@ load the consumer team's complete graph.
 Web code receives public DTO projections only. It must not receive protected
 keys, vault keys, credentials, or plaintext vault content outside the
 established Rust/WASM boundary.
+
+Load a named security skill or architecture section as read-only policy when a
+browser task changes a security boundary. Return new security invariants to the
+delivery owner for security-team acceptance.
+
+Task contracts may name these read-only authorities:
+
+- [Browser extension release security](../security/dynamic-skills/browser-extension-release-security.md)
+- [User-facing security abstractions](../security/dynamic-skills/user-facing-security-abstractions.md)
+- [Nook security architecture](../security/architecture/security-architecture.md)
 
 ## Complete team scope
 

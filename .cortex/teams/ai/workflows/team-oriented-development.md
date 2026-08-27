@@ -12,7 +12,7 @@ boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 The delivery owner creates one immutable work graph before team execution.
 
 1. Classify each capability unit under one functional owner: `ai`, `dev-core`,
-   `sre`, or `web-dev`.
+   `security`, `sre`, or `web-dev`.
 2. Name an expertise provider when another team should implement a bounded
    slice.
 3. Declare shared integration and lifecycle work separately.
@@ -31,6 +31,8 @@ Use a team agent whenever delegation is available and the unit is independently 
 - A `dev-core` agent loads `.cortex/teams/dev-core/AGENTS.md` and its team knowledge graph.
 - An `sre` agent loads `.cortex/teams/sre/AGENTS.md` and its team knowledge graph.
 - A `web-dev` agent loads `.cortex/teams/web-dev/AGENTS.md` and its team knowledge graph.
+- A `security` agent loads `.cortex/teams/security/AGENTS.md` and its team
+  knowledge graph.
 - An `ai` agent loads `.cortex/teams/ai/AGENTS.md` and its team knowledge
   graph.
 
@@ -56,6 +58,10 @@ Each team agent receives:
 - required outputs and tests;
 - review and validation findings in that team's scope; and
 - the parent-owned handoff contract.
+
+When implementation changes a security boundary, the contract also names the
+security invariant and security acceptance evidence. Security review is not a
+foreign-team write grant.
 
 If bounded delegation is unavailable, the delivery owner executes each team unit serially.
 It must preserve the same ownership boundaries.

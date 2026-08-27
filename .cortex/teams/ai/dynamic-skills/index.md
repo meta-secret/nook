@@ -55,7 +55,7 @@ source of truth.
 - **[pre-push-hygiene.md](../../sre/dynamic-skills/pre-push-hygiene.md)**
   - Purpose: Always host-apply `task format` and pass the UI demo contract before every push so Verify does not burn cycles on Prettier/rustfmt/demo misses
   - Executable skill: [`.agents/skills/pre-push-hygiene/SKILL.md`](../../../../.agents/skills/pre-push-hygiene/SKILL.md)
-- **[browser-extension-release-security.md](../../web-dev/dynamic-skills/browser-extension-release-security.md)**
+- **[browser-extension-release-security.md](../../security/dynamic-skills/browser-extension-release-security.md)**
   - Purpose: Apply origin, identity, archive, redirect, and profile-isolation checks before shipping extension artifacts
   - Executable skill: [`.agents/skills/browser-extension-release-security/SKILL.md`](../../../../.agents/skills/browser-extension-release-security/SKILL.md)
 - **[feature-issue-planning.md](feature-issue-planning.md)**
@@ -110,7 +110,7 @@ source of truth.
   - Executable skill: [`.agents/skills/prefer-popular-libraries/SKILL.md`](../../../../.agents/skills/prefer-popular-libraries/SKILL.md)
 - **[ui-design-skills.md](../../web-dev/dynamic-skills/ui-design-skills.md)**
   - Purpose: Load `design-taste-frontend` for user-visible UI work; Impeccable is disabled by default and may be used only when the user explicitly requests it
-- **[user-facing-security-abstractions.md](../../web-dev/dynamic-skills/user-facing-security-abstractions.md)**
+- **[user-facing-security-abstractions.md](../../security/dynamic-skills/user-facing-security-abstractions.md)**
   - Purpose: Present product-level security objects and keep implementation keys subordinate or advanced
 - **[web-unused-code.md](../../web-dev/dynamic-skills/web-unused-code.md)**
   - Purpose: Enable class-member analysis in every web Knip graph and remove every valid unused-code finding
@@ -128,7 +128,7 @@ source of truth.
 ## How to add one
 
 1. Scaffold with Loom using a `skillScaffold` domain request YAML. Set
-   `skillOwner` to `ai`, `shared`, `dev-core`, `sre`, or `web-dev`.
+   `skillOwner` to `ai`, `shared`, `dev-core`, `security`, `sre`, or `web-dev`.
 2. Fill in the problem pattern, preferred pattern, scope, examples, and
    validation.
 3. Confirm the new card is in the catalog above and its owning team graph, or

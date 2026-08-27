@@ -9,9 +9,9 @@ duplicating each document's heading hierarchy.
 
 Cortex has one root router and five owning graphs.
 
-- The root graph selects AI, development core, SRE, web development, or shared
-  context.
-- Four team graphs index documents owned by their engineering teams.
+- The root graph selects AI, development core, security, SRE, web development,
+  or shared context.
+- Five team graphs index documents owned by their engineering teams.
 - The shared graph indexes genuinely cross-team documents.
 - Every document has exactly one owning graph.
 - The root graph does not index child documents directly.
@@ -63,8 +63,8 @@ sections. Their natural heading hierarchy is the local map.
 
 ## Application procedure
 
-1. Determine whether the document belongs to AI, development core, SRE, web
-   development, or shared knowledge.
+1. Determine whether the document belongs to AI, development core, security,
+   SRE, web development, or shared knowledge.
 2. Place it under the owning context.
 3. Add one document-level link to that context's graph.
 4. Remove obsolete links from the previous graph.

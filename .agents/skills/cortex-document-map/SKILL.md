@@ -2,7 +2,7 @@
 name: cortex-document-map
 description: >-
   Require Cortex navigation to use the root routing graph and exactly one AI,
-  dev-core, SRE, web-development, or shared graph. Use whenever creating,
+  dev-core, security, SRE, web-development, or shared graph. Use whenever creating,
   editing, moving, or auditing Cortex documents.
 ---
 

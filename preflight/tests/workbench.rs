@@ -211,6 +211,11 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
     let workflow = read(".cortex/teams/ai/workflows/team-oriented-development.md");
     let web_contract = read(".cortex/teams/web-dev/AGENTS.md");
     let sre_contract = read(".cortex/teams/sre/AGENTS.md");
+    let security_contract = read(".cortex/teams/security/AGENTS.md");
+    let security_graph = read(".cortex/teams/security/knowledge-graph.md");
+    let security_architecture =
+        read(".cortex/teams/security/architecture/security-architecture.md");
+    let cryptography = read(".cortex/teams/security/references/cryptography.md");
     let web_graph = read(".cortex/teams/web-dev/knowledge-graph.md");
     let shared_graph = read(".cortex/shared/knowledge-graph.md");
     let agent_plan = read(".github/prompts/agent-plan.md");
@@ -281,6 +286,50 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
         "web TypeScript routing must include direct read-only consumption by functional owners"
     );
     for required in [
+        "Security owns Nook's security architecture",
+        "does not automatically transfer implementation files",
+        "must not claim guarantees",
+    ] {
+        assert!(
+            security_contract.contains(required),
+            "security contract is missing ownership boundary: {required}"
+        );
+    }
+    for required in [
+        "Nook security architecture",
+        "Identity, app keys, passkeys, and vault keys",
+        "Cryptography and protected material",
+        "Browser extension release security",
+    ] {
+        assert!(
+            security_graph.contains(required),
+            "security graph is missing authority: {required}"
+        );
+    }
+    for required in [
+        "## Trust boundaries",
+        "## Key hierarchy and separation",
+        "## Authorization and event history",
+        "## Known limitations of this document",
+    ] {
+        assert!(
+            security_architecture.contains(required),
+            "security architecture is missing section: {required}"
+        );
+    }
+    for required in [
+        "AES-256-GCM",
+        "HKDF-SHA256",
+        "PBKDF2-SHA256",
+        "Ed25519",
+        "age X25519",
+    ] {
+        assert!(
+            cryptography.contains(required),
+            "cryptography inventory is missing mechanism: {required}"
+        );
+    }
+    for required in [
         "- Ownership units:",
         "Functional owner:",
         "Expertise provider:",
@@ -306,6 +355,27 @@ fn team_work_separates_functional_ownership_from_implementation_expertise() -> a
         assert!(
             sre_contract.contains(skill),
             "SRE JavaScript and TypeScript work must route read-only policy: {skill}"
+        );
+    }
+
+    for skill in [
+        "browser-extension-release-security.md",
+        "user-facing-security-abstractions.md",
+    ] {
+        let security_path = repository_root()
+            .join(".cortex/teams/security/dynamic-skills")
+            .join(skill);
+        let web_path = repository_root()
+            .join(".cortex/teams/web-dev/dynamic-skills")
+            .join(skill);
+        assert!(security_path.is_file(), "security must own {skill}");
+        assert!(
+            !web_path.exists(),
+            "web development must not retain security-owned skill {skill}"
+        );
+        assert!(
+            security_graph.contains(skill) && !web_graph.contains(skill),
+            "{skill} must be indexed only by the security graph"
         );
     }
     for skill in [

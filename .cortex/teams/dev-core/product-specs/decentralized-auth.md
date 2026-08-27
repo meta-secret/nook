@@ -6,7 +6,7 @@ Status: Active migration authority. Sections that describe a singleton
 device-derived identity, `device_identity_wrapped`, or legacy authorization
 rows are compatibility history. The current model uses logical identities,
 app-key membership, a local identity keyring, and per-store DEKs as defined in
-[Identity, App Keys, Passkeys, and Vault DEKs](../design-docs/identity-vault-architecture.md).
+[Identity, App Keys, Passkeys, and Vault DEKs](../../security/architecture/identity-vault-architecture.md).
 
 - **Vault keys:** Use `secrets_key` to encrypt user secrets and `members_key` to
   encrypt member catalog entries.

@@ -126,7 +126,7 @@ flowchart TD
   - Its credentials stay sealed to a local app key.
 
 The normative model is in
-[identity-vault-architecture.md](../../teams/dev-core/design-docs/identity-vault-architecture.md).
+[identity-vault-architecture.md](../../teams/security/architecture/identity-vault-architecture.md).
 
 ---
 
@@ -212,7 +212,8 @@ Search catalog detail:
 - Decryption stays in WASM memory only while unlocked.
 - Bucket assignment derives from opaque secret ids.
 
-Store identity detail: see [secret-store-identity.md](../../teams/dev-core/design-docs/secret-store-identity.md).
+Store identity detail: see
+[secret-store-identity.md](../../teams/security/architecture/secret-store-identity.md).
 
 Vault revision detail:
 
@@ -247,12 +248,12 @@ Provider connections detail:
 - Credentials are sealed to the local device.
   Related design specifications:
 
-- [vault-session-and-lock.md](../../teams/dev-core/design-docs/vault-session-and-lock.md): Lock session vs persisted data boundaries.
+- [vault-session-and-lock.md](../../teams/security/architecture/vault-session-and-lock.md): Lock session vs persisted data boundaries.
 - [decentralized-auth.md](../../teams/dev-core/product-specs/decentralized-auth.md): Join and approve flows.
 - [auth-providers.md](../../teams/dev-core/design-docs/auth-providers.md): Login UX and sync-provider credential persistence.
 - [vault-event-log.md](../../teams/dev-core/design-docs/vault-event-log.md): Provider event-log sync.
 - [unified-vault.md](../../teams/dev-core/design-docs/unified-vault.md): Local-first vault architecture (scalar sync historical).
-- [identity-vault-architecture.md](../../teams/dev-core/design-docs/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
+- [identity-vault-architecture.md](../../teams/security/architecture/identity-vault-architecture.md): Identity, onboarding, grant, and provider ownership.
 
 YAML payload sections:
 

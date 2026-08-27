@@ -45,6 +45,7 @@ Model text.
   const markdown = renderCortexIndexMarkdown(renderArgs);
   expect(markdown).toContain('# Cortex Context Router');
   expect(markdown).toContain('[AI](teams/ai/knowledge-graph.md)');
+  expect(markdown).toContain('[Security](teams/security/knowledge-graph.md)');
   expect(markdown).toContain('[Shared knowledge](shared/knowledge-graph.md)');
   expect(markdown).not.toContain('rules.md');
   expect(markdown).not.toContain('#overview');

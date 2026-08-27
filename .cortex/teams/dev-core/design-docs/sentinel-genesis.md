@@ -12,7 +12,7 @@ or an unlocked vault session exists.
 
 Related:
 [vault-architecture-modes.md](vault-architecture-modes.md),
-[vault-session-and-lock.md](vault-session-and-lock.md),
+[vault-session-and-lock.md](../../security/architecture/vault-session-and-lock.md),
 [vault-event-log.md](vault-event-log.md), and
 [slip39-recovery.md](../product-specs/slip39-recovery.md).
 

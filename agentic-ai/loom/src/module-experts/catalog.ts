@@ -74,7 +74,7 @@ export const INTERNAL_API_EXPERT_CANONICAL_CONTEXT_PATHS = [
 export const WEB_EXPERT_CANONICAL_CONTEXT_PATHS = [
   '.cortex/teams/web-dev/AGENTS.md',
   '.cortex/teams/web-dev/knowledge-graph.md',
-  '.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md',
+  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 
@@ -87,7 +87,7 @@ export const WEB_EXPERT_SKILL_PATHS = [
 export const WEB_EXPERT_SKILL_AUTHORITY_PATHS = [
   '.cortex/teams/web-dev/AGENTS.md',
   EXPERT_AUTHORITY_PATH,
-  '.cortex/teams/web-dev/dynamic-skills/browser-extension-release-security.md',
+  '.cortex/teams/security/dynamic-skills/browser-extension-release-security.md',
   ...MODULE_EXPERT_SHARED_CONTEXT_PATHS,
 ] as const;
 

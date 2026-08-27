@@ -65,6 +65,7 @@ export function findExistingSkillCard(
     path.join(args.cortexRoot, 'shared', 'dynamic-skills'),
     path.join(args.cortexRoot, 'teams', SkillOwner.Ai, 'dynamic-skills'),
     path.join(args.cortexRoot, 'teams', SkillOwner.DevCore, 'dynamic-skills'),
+    path.join(args.cortexRoot, 'teams', SkillOwner.Security, 'dynamic-skills'),
     path.join(args.cortexRoot, 'teams', SkillOwner.Sre, 'dynamic-skills'),
     path.join(args.cortexRoot, 'teams', SkillOwner.WebDev, 'dynamic-skills'),
   ];

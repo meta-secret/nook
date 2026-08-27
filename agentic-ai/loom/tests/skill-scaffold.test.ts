@@ -98,4 +98,31 @@ describe('skill scaffold', () => {
       await rm(fixtureRoot, removeOptions);
     }
   });
+
+  test('finds an existing security-owned skill card', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-security-skill-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    const securityCard = join(
+      cortexRoot,
+      'teams',
+      'security',
+      'dynamic-skills',
+      'threat-review.md',
+    );
+
+    try {
+      const directoryOptions = { recursive: true } as const;
+      await mkdir(
+        join(cortexRoot, 'teams', 'security', 'dynamic-skills'),
+        directoryOptions,
+      );
+      await writeFile(securityCard, '# Threat Review\n', 'utf8');
+
+      const findArgs = { cortexRoot, slug: 'threat-review' };
+      expect(findExistingSkillCard(findArgs)).toBe(securityCard);
+    } finally {
+      const removeOptions = { recursive: true, force: true } as const;
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
 });

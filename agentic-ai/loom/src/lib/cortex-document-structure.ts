@@ -21,6 +21,7 @@ export enum CortexStructureFindingCode {
 enum CortexGraphOwner {
   Ai = 'ai',
   DevCore = 'dev-core',
+  Security = 'security',
   Sre = 'sre',
   WebDev = 'web-dev',
   Shared = 'shared',
@@ -128,6 +129,7 @@ export function auditCortexDocumentStructure(
     const distributedGraphPaths = [
       '.cortex/teams/ai/knowledge-graph.md',
       '.cortex/teams/dev-core/knowledge-graph.md',
+      '.cortex/teams/security/knowledge-graph.md',
       '.cortex/teams/sre/knowledge-graph.md',
       '.cortex/teams/web-dev/knowledge-graph.md',
       '.cortex/shared/knowledge-graph.md',
@@ -473,7 +475,7 @@ function isKnowledgeGraphPath(filePath: string): boolean {
     filePath === 'k-graph.md' ||
     filePath === '.cortex/INDEX.md' ||
     filePath === 'INDEX.md' ||
-    /^\.cortex\/(?:teams\/(?:ai|dev-core|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
+    /^\.cortex\/(?:teams\/(?:ai|dev-core|security|sre|web-dev)|shared)\/knowledge-graph\.md$/.test(
       filePath,
     )
   );
@@ -483,6 +485,7 @@ function owningKnowledgeGraphPath(filePath: string): string {
   for (const team of [
     CortexGraphOwner.Ai,
     CortexGraphOwner.DevCore,
+    CortexGraphOwner.Security,
     CortexGraphOwner.Sre,
     CortexGraphOwner.WebDev,
   ] as const) {
@@ -498,11 +501,14 @@ function owningKnowledgeGraphPath(filePath: string): string {
 
 function cortexGraphOwner(filePath: string): CortexGraphOwner | false {
   if (filePath.startsWith('.cortex/shared/')) return CortexGraphOwner.Shared;
-  const match = /^\.cortex\/teams\/(ai|dev-core|sre|web-dev)\//.exec(filePath);
+  const match = /^\.cortex\/teams\/(ai|dev-core|security|sre|web-dev)\//.exec(
+    filePath,
+  );
   const owner = match?.[1];
   if (
     owner === CortexGraphOwner.Ai ||
     owner === CortexGraphOwner.DevCore ||
+    owner === CortexGraphOwner.Security ||
     owner === CortexGraphOwner.Sre ||
     owner === CortexGraphOwner.WebDev
   ) {

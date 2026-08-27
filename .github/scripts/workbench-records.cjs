@@ -99,7 +99,7 @@ function parseBudgetFieldValue(budgetSection, label) {
   return { kind: 'valid', value: match[1].trim() }
 }
 
-const ownershipTeamPattern = 'AI|Development core|SRE|Web development'
+const ownershipTeamPattern = 'AI|Development core|Security|SRE|Web development'
 
 function isExactRepositoryPathList(value) {
   if (value === 'None') return false

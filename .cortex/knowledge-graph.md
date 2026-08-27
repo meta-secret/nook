@@ -14,7 +14,10 @@ Choose the team that owns the requested functionality.
 - [AI](teams/ai/knowledge-graph.md) owns Cortex, Loom, agent skills, agent
   workflows, expert routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md) owns portable Rust,
-  security domains, vault behavior, and typed WASM contracts.
+  vault behavior, security-control implementation, and typed WASM contracts.
+- [Security](teams/security/knowledge-graph.md) owns security architecture,
+  cryptographic policy, trust boundaries, security review, and
+  security-specific skills.
 - [SRE](teams/sre/knowledge-graph.md) owns CI/CD, clusters, deployments,
   runners, containers, and operations.
 - [Web development](teams/web-dev/knowledge-graph.md) owns TypeScript and Svelte
@@ -41,6 +44,8 @@ authority.
    authority names it as required engineering policy.
 8. Require an expertise contract only when the foreign team will implement a
    bounded unit.
+9. Route security architecture and acceptance questions to security without
+   transferring implementation ownership from the functional team.
 
 For a multi-team request, the delivery owner performs this procedure once per
 bounded team unit. Each team agent receives only its own context.

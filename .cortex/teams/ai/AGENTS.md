@@ -40,6 +40,8 @@ transferring AI capability ownership.
 - Portable product, cryptographic, authorization, or storage implementation.
 - Browser presentation and frontend interaction behavior.
 - CI/CD platforms, clusters, deployments, and provider operations.
+- Security architecture, cryptographic policy, or security acceptance owned by
+  the security team.
 - Foreign-team Cortex edits inside one AI-owned work unit.
 - Implementation outside the exact files granted by an expertise contract.
 - Independent mutation of shared lifecycle state by a child agent.
@@ -55,7 +57,8 @@ For an assigned AI unit, own:
 - review and validation fixes caused by the change; and
 - a bounded evidence handoff.
 
-Report product-core, SRE, web, or shared dependencies to the delivery owner.
+Report product-core, security, SRE, web, or shared dependencies to the delivery
+owner.
 When an expertise provider implements part of the unit, AI supplies the frozen
 consumer contract and validates the resulting AI behavior.
 

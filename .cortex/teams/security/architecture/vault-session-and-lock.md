@@ -7,9 +7,12 @@ How Nook thinks about **vaults**, **sync providers**, **in-memory sessions**, th
 Status: Active session and lock guidance with compatibility storage examples.
 Immutable signed events are authoritative. YAML and scalar `vault_version`
 material are derived projection, interchange, or migration context. See
-[Vault Event Log](vault-event-log.md).
+[Vault Event Log](../../dev-core/design-docs/vault-event-log.md).
 
-**Related:** [unified-vault.md](unified-vault.md), [secret-store-identity.md](secret-store-identity.md), [auth-providers.md](auth-providers.md), [ARCHITECTURE.md](../../../shared/architecture/system.md) §4.
+**Related:** [unified-vault.md](../../dev-core/design-docs/unified-vault.md),
+[secret-store-identity.md](secret-store-identity.md),
+[auth-providers.md](../../dev-core/design-docs/auth-providers.md), and
+[system architecture](../../../shared/architecture/system.md).
 
 ---
 
@@ -46,7 +49,9 @@ flowchart TB
 **Rules**
 
 1. A **vault** is one `store_id` — one encrypted YAML file with its own secrets, devices, and version counter.
-2. A vault may **replicate to many sync providers** — each provider holds a copy of the same `store_id` blob; `vault_version` reconciles divergence ([unified-vault.md](unified-vault.md) §5).
+2. A vault may **replicate to many sync providers**. Each provider holds a copy
+   of the same `store_id` blob. `vault_version` reconciles divergence. See
+   [unified-vault.md](../../dev-core/design-docs/unified-vault.md).
 3. A Sentinel genesis draft is not registered as a vault and cannot be selected,
    imported, opened, or synchronized before atomic genesis completes.
 4. A user may **own many vaults** over time (work vs personal, migrated stores, etc.). Each vault is independent: different `store_id`, different unlock material, different provider set.
@@ -152,7 +157,10 @@ discovered again.
   device authorization, so Lock must not hide the password choice. Selecting a
   backup password unwraps the vault keys directly; it does not unlock the
   wrapped device identity or its sealed sync-provider credentials.
-- **No local vault yet** → create on device or connect a sync provider to pull an existing vault. Choosing Simple creates locally; choosing Sentinel starts the pre-vault reverse-onboarding ceremony in [sentinel-genesis.md](sentinel-genesis.md).
+- **No local vault yet** → create on device or connect a sync provider to pull
+  an existing vault. Choosing Simple creates locally. Choosing Sentinel starts
+  the pre-vault reverse-onboarding ceremony in
+  [sentinel-genesis.md](../../dev-core/design-docs/sentinel-genesis.md).
 
 - **Existing-vault import:** Recover an authorized device identity before
   attempting `connect`.
@@ -239,7 +247,10 @@ Vault projection caches use `vault:{store_id}`. Code: `nook-app/nook-platform/no
 | **Open a vault from elsewhere**               | Login → **Connect sync provider** or **Import as new vault**                                                                            |
 | **Local folder contains multiple vault logs** | Choose a dedicated folder for one vault; Nook shows the detected `store_id`s and refuses to sync until the provider path is unambiguous |
 
-If remote `store_id` ≠ active local `store_id`, sync reconciliation offers **import as new vault** or keep one copy — Nook refuses to merge unrelated databases ([unified-vault.md](unified-vault.md) §5).
+If remote `store_id` differs from the active local `store_id`, sync
+reconciliation offers **import as new vault** or keeping one copy. Nook refuses
+to merge unrelated databases. See
+[unified-vault.md](../../dev-core/design-docs/unified-vault.md).
 
 ---
 

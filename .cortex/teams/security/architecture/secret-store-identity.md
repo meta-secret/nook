@@ -4,7 +4,8 @@
 
 How Nook names and distinguishes **logical secret stores** (vault database files) from **storage providers** (where those files live).
 
-**Related:** [auth-providers.md](auth-providers.md) §5, [password-manager.md](../product-specs/password-manager.md) §3.
+**Related:** [auth-providers.md](../../dev-core/design-docs/auth-providers.md) §5,
+[password-manager.md](../../dev-core/product-specs/password-manager.md) §3.
 
 ---
 
@@ -68,7 +69,9 @@ auth:
 
 ## 3. Multi-provider replication (one vault)
 
-> **Architecture:** [unified-vault.md](unified-vault.md) — local cache + sync replicas; [vault-session-and-lock.md](vault-session-and-lock.md) — vault vs provider.
+> **Architecture:** [unified-vault.md](../../dev-core/design-docs/unified-vault.md)
+> owns local cache and sync replicas. [vault-session-and-lock.md](vault-session-and-lock.md)
+> owns the vault and provider boundary.
 
 ```mermaid
 flowchart LR

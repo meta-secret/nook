@@ -165,6 +165,7 @@ export async function runCortexAuditFromDirectory(
     aiSkillsDir,
     path.join(cortexRoot, 'shared', 'dynamic-skills'),
     path.join(cortexRoot, 'teams', 'dev-core', 'dynamic-skills'),
+    path.join(cortexRoot, 'teams', 'security', 'dynamic-skills'),
     path.join(cortexRoot, 'teams', 'sre', 'dynamic-skills'),
     path.join(cortexRoot, 'teams', 'web-dev', 'dynamic-skills'),
   ];
