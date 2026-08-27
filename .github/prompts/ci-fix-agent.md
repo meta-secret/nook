@@ -30,6 +30,9 @@ Gizmo context to an implementation worker.
 7. Run the smallest applicable integrated validation.
 8. Return the branch to the normal Gizmo PR-delivery workflow.
 
+Gizmo selects each type through the canonical mapping authority at
+`.cortex/gizmo/workflows/team-oriented-development.md`.
+
 CI stages do not determine ownership. Route each finding by the functional owner
 of the failing behavior. Use more than one team subagent when failures cross
 team boundaries.

@@ -30,6 +30,9 @@ The parent dispatches the selected owner through exactly one canonical type:
 - SRE: `sre_team_agent`; or
 - web development: `web_development_team_agent`.
 
+Gizmo selects the type through the canonical mapping authority at
+`.cortex/gizmo/workflows/team-oriented-development.md`.
+
 The profile is a routing default only. The validated parent contract supplies
 the baseline, scope, dependencies, proof, and handoff. Do not request a model
 or reasoning-effort override.

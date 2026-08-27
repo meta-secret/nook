@@ -35,6 +35,9 @@ context to implementation workers.
 7. Run integrated validation through repository Task targets.
 8. Return the branch to the normal Gizmo PR-delivery workflow.
 
+Gizmo selects each type through the canonical mapping authority at
+`.cortex/gizmo/workflows/team-oriented-development.md`.
+
 The mission covers all outdated direct Rust dependencies in every listed root.
 Do not stop after updating the package reported first.
 
