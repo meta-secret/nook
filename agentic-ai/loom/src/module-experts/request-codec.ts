@@ -42,6 +42,18 @@ type ModuleExpertRequestProperty = {
   readonly key: string;
 };
 
+enum OptionalStringListPresence {
+  Absent = 'absent',
+  Present = 'present',
+}
+
+type OptionalStringList =
+  | { readonly presence: OptionalStringListPresence.Absent }
+  | {
+      readonly presence: OptionalStringListPresence.Present;
+      readonly value: readonly string[];
+    };
+
 type ParentLineageValidation = {
   readonly task: string;
   readonly expert: string;
@@ -125,12 +137,16 @@ export function decodeModuleExpertInvocationRequest(
   const attempt = requiredNumber(attemptProperty);
   const depth = requiredNumber(depthProperty);
   const parent = requiredParent(parentProperty);
-  const selectedContextPathValues = optionalStringList(
+  const selectedContextPathSelection = optionalStringList(
     selectedContextPathsProperty,
   );
+  const selectedContextPathValues =
+    selectedContextPathSelection.presence === OptionalStringListPresence.Absent
+      ? []
+      : selectedContextPathSelection.value;
   const contextSelection: ModuleExpertContextSelection = {
     expertName: expert,
-    selectedContextPaths: selectedContextPathValues ?? [],
+    selectedContextPaths: selectedContextPathValues,
   };
   let selectedContextPaths: readonly ModuleExpertTaskContextPath[];
   try {
@@ -216,7 +232,7 @@ function requiredNumber(property: ModuleExpertRequestProperty): number {
 
 function optionalStringList(
   property: ModuleExpertRequestProperty,
-): readonly string[] | undefined {
+): OptionalStringList {
   const propertyArgs: UntrustedYamlPropertyArgs = {
     record: property.record,
     key: property.key,
@@ -229,8 +245,13 @@ function optionalStringList(
   ) {
     invalidRequest();
   }
-  if (value.presence === UntrustedYamlPropertyPresence.Absent) return undefined;
-  return value.value as readonly string[];
+  if (value.presence === UntrustedYamlPropertyPresence.Absent) {
+    return { presence: OptionalStringListPresence.Absent };
+  }
+  return {
+    presence: OptionalStringListPresence.Present,
+    value: value.value as readonly string[],
+  };
 }
 
 function requiredParent(
