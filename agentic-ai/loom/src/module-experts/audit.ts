@@ -49,6 +49,9 @@ import type { AuditModuleExpertRuntimeRoutingArgs } from './runtime-routing-audi
 import { validModuleExpertRuntimeEnvironment } from './runtime-environment-audit.ts';
 import type { ValidateModuleExpertRuntimeEnvironmentArgs } from './runtime-environment-audit.ts';
 import { STRUCTURAL_EXPERT_CATALOG } from '../structural-experts/catalog.ts';
+import { auditTeamAgents } from '../team-agents/audit.ts';
+import type { AuditTeamAgentsRequest } from '../team-agents/audit.ts';
+import { TEAM_AGENT_CATALOG } from '../team-agents/catalog.ts';
 export { auditModuleExpertRuntimeRouting };
 export type { AuditModuleExpertRuntimeRoutingArgs };
 
@@ -138,6 +141,7 @@ export function auditModuleExperts(
   };
   validateProductionCoverage(coverageArgs);
   validateAgentDefinitions(context);
+  mergeTeamAgentAudit(context);
   validateRuntimePolicy(context);
   validateRuntimeRouting(context);
   return {
@@ -146,6 +150,21 @@ export function auditModuleExperts(
     productionModuleCount: liveRoots.length,
     auditOk: findings.length === 0,
   };
+}
+
+function mergeTeamAgentAudit(context: ModuleExpertValidationContext): void {
+  const teamAuditRequest: AuditTeamAgentsRequest = {
+    repoRoot: context.repoRoot,
+  };
+  const teamAudit = auditTeamAgents(teamAuditRequest);
+  for (const teamFinding of teamAudit.findings) {
+    const finding: ModuleExpertAuditFinding = {
+      code: teamFinding.code,
+      path: teamFinding.path,
+      message: teamFinding.message,
+    };
+    context.findings.push(finding);
+  }
 }
 
 type ModuleExpertValidationContext = {
@@ -699,11 +718,16 @@ function validateAgentDefinitions(
     };
     return;
   }
-  const expectedPaths = new Set(
-    [...MODULE_EXPERT_CATALOG, ...STRUCTURAL_EXPERT_CATALOG].map(
-      (profile) => profile.agentDefinitionPath,
-    ),
-  );
+  const expectedPaths = new Set<string>();
+  for (const profile of MODULE_EXPERT_CATALOG) {
+    expectedPaths.add(profile.agentDefinitionPath);
+  }
+  for (const profile of STRUCTURAL_EXPERT_CATALOG) {
+    expectedPaths.add(profile.agentDefinitionPath);
+  }
+  for (const profile of TEAM_AGENT_CATALOG) {
+    expectedPaths.add(profile.agentDefinitionPath);
+  }
   const collectArgs: CollectAgentDefinitionPathsArgs = {
     directory: agentDirectory,
     repoRoot: context.repoRoot,

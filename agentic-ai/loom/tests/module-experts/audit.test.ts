@@ -18,12 +18,10 @@ import {
   auditModuleExpertRuntimePolicy,
   auditModuleExpertRuntimeRouting,
   auditModuleExperts,
-} from '../../src/module-experts/audit.ts';
-import type {
-  AuditGeneratedScopeProducerContractArgs,
-  AuditModuleExpertRuntimePolicyArgs,
-  AuditModuleExpertRuntimeRoutingArgs,
-  AuditModuleExpertsArgs,
+  type AuditGeneratedScopeProducerContractArgs,
+  type AuditModuleExpertRuntimePolicyArgs,
+  type AuditModuleExpertRuntimeRoutingArgs,
+  type AuditModuleExpertsArgs,
 } from '../../src/module-experts/audit.ts';
 import {
   auditInternalApiExpertConsumerScope,
@@ -66,10 +64,8 @@ import type { ModuleExpertCodexOptionsRequest } from '../../src/module-experts/r
 import {
   CargoWorkspaceInventoryKind,
   decodeCargoWorkspaceMetadata,
-} from '../../src/module-experts/cargo-workspace.ts';
-import type {
-  CargoWorkspaceInventory,
-  DecodeCargoWorkspaceMetadataArgs,
+  type CargoWorkspaceInventory,
+  type DecodeCargoWorkspaceMetadataArgs,
 } from '../../src/module-experts/cargo-workspace.ts';
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
@@ -660,7 +656,7 @@ describe('module expert audit', () => {
     }
   });
 
-  test('rejects writable roles and a separate WASM expert', async () => {
+  test('rejects writable roles, team profile drift, and a separate WASM expert', async () => {
     const fixtureRoot = await moduleExpertFixture();
     const removeOptions: RmOptions = { recursive: true, force: true };
     try {
@@ -677,6 +673,16 @@ describe('module expert audit', () => {
         ),
         'utf8',
       );
+      const aiTeamDefinitionPath = join(
+        fixtureRoot,
+        '.codex/agents/team-agents/ai_team_agent.toml',
+      );
+      const aiTeamDefinition = await readFile(aiTeamDefinitionPath, 'utf8');
+      await writeFile(
+        aiTeamDefinitionPath,
+        `${aiTeamDefinition}model = "gpt-5"\n`,
+        'utf8',
+      );
       const hiddenDirectory = join(fixtureRoot, '.codex/agents/hidden/deep');
       const directoryOptions: MakeDirectoryOptions = { recursive: true };
       await mkdir(hiddenDirectory, directoryOptions);
@@ -690,6 +696,7 @@ describe('module expert audit', () => {
       const codes = report.findings.map((finding) => finding.code);
 
       expect(codes).toContain('agent-definition-contract-drift');
+      expect(codes).toContain('team-agent-definition-contract-drift');
       expect(codes).toContain('forbidden-wasm-boundary-role');
       expect(report.auditOk).toBe(false);
     } finally {
@@ -715,9 +722,11 @@ describe('module expert audit', () => {
       const auditArgs: AuditModuleExpertsArgs = { repoRoot: fixtureRoot };
       const report = auditModuleExperts(auditArgs);
 
-      expect(report.findings.map((finding) => finding.code)).toContain(
-        'uncataloged-agent-definition',
-      );
+      expect(
+        report.findings
+          .filter((finding) => finding.code === 'uncataloged-agent-definition')
+          .map((finding) => finding.path),
+      ).toEqual(['.codex/agents/module-experts/nested/shadow_expert.toml']);
       expect(report.auditOk).toBe(false);
     } finally {
       await rm(fixtureRoot, removeOptions);
@@ -971,21 +980,20 @@ describe('module expert audit', () => {
 async function moduleExpertFixture(): Promise<string> {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-module-experts-'));
   const recursiveDirectoryOptions: MakeDirectoryOptions = { recursive: true };
-  await mkdir(
-    join(fixtureRoot, '.codex/agents/module-experts'),
-    recursiveDirectoryOptions,
-  );
   await symlink(join(REPO_ROOT, '.cortex'), join(fixtureRoot, '.cortex'));
   await symlink(join(REPO_ROOT, '.agents'), join(fixtureRoot, '.agents'));
   await symlink(join(REPO_ROOT, 'agentic-ai'), join(fixtureRoot, 'agentic-ai'));
   await symlink(join(REPO_ROOT, 'nook-app'), join(fixtureRoot, 'nook-app'));
-  const sourceDirectory = join(REPO_ROOT, '.codex/agents/module-experts');
-  const definitionNames = await readdir(sourceDirectory);
-  for (const definitionName of definitionNames) {
-    await copyFile(
-      join(sourceDirectory, definitionName),
-      join(fixtureRoot, '.codex/agents/module-experts', definitionName),
-    );
+  for (const directoryName of ['module-experts', 'team-agents']) {
+    const sourceDirectory = join(REPO_ROOT, '.codex/agents', directoryName);
+    const fixtureDirectory = join(fixtureRoot, '.codex/agents', directoryName);
+    await mkdir(fixtureDirectory, recursiveDirectoryOptions);
+    for (const definitionName of await readdir(sourceDirectory)) {
+      await copyFile(
+        join(sourceDirectory, definitionName),
+        join(fixtureDirectory, definitionName),
+      );
+    }
   }
   return fixtureRoot;
 }
