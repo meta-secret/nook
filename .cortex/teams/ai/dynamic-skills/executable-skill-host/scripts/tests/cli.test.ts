@@ -327,16 +327,45 @@ describe('executable skill YAML command protocol', () => {
       'Expected exactly one skill request family.',
     );
   });
-  test('reports YAML syntax failures without echoing source scalars', () => {
+  test('keeps nested-field and strict-YAML failures bounded and redacted', () => {
     const secretMarker = 'SECRET_MARKER';
-    const outcome = dispatchSkillYamlText(
-      `cortexArticleStructure: [${secretMarker}\n`,
+    const audit = articleExampleYaml();
+    const unknown = dispatchSkillYamlText(
+      audit.replace(
+        '    documents:',
+        `    apiToken: ${secretMarker}\n    documents:`,
+      ),
     );
-    const response = parseCliResponse(outcome.yaml);
-    expect(outcome.exitCode).toBe(2);
-    expect(response.errors?.at(0)?.issue).toBe(SkillCommandIssue.InvalidYaml);
-    expect(response.errors?.at(0)?.message).toBe('Invalid YAML syntax.');
-    expect(outcome.yaml).not.toContain(secretMarker);
+    expect(parseCliResponse(unknown.yaml).errors?.at(0)?.path).toBe(
+      'cortexArticleStructure.audit["<unknown-key>"]',
+    );
+    expect(unknown.yaml).not.toContain(secretMarker);
+    const aliasLines = [`level0: &level0 [${secretMarker}]`];
+    for (let level = 1; level <= 12; level += 1) {
+      const previous = `level${level - 1}`;
+      aliasLines.push(
+        `level${level}: &level${level} [*${previous}, *${previous}]`,
+      );
+    }
+    for (const request of [
+      `cortexArticleStructure: [${secretMarker}\n`,
+      audit.replace(
+        '  audit:',
+        `  audit:\n    token: ${secretMarker}\n  audit:`,
+      ),
+      `${audit}---\ntoken: ${secretMarker}\n`,
+      aliasLines.join('\n'),
+      aliasLines.join('\r'),
+    ]) {
+      const outcome = dispatchSkillYamlText(request);
+      const response = parseCliResponse(outcome.yaml);
+      expect(response.errors?.at(0)?.issue).toBe(SkillCommandIssue.InvalidYaml);
+      expect(response.errors?.at(0)?.message).toBe('Invalid YAML syntax.');
+      expect(outcome.yaml).not.toContain(secretMarker);
+      expect(
+        new TextEncoder().encode(outcome.yaml).byteLength,
+      ).toBeLessThanOrEqual(SKILL_PROVIDER_RESULT_BYTE_LIMIT);
+    }
   });
   test('bounds source input and echoed corrective YAML before parsing', () => {
     const oversizedYaml = `# ${'x'.repeat(4 * 1_024 * 1_024)}\n`;

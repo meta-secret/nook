@@ -125,7 +125,6 @@ function validateSkillYamlAst(node: ParsedNode): SkillYamlAstIssue {
 export function stringifySkillYaml(value: UntrustedSkillYamlNode): string {
   return `${stringify(value, YAML_STRINGIFY_OPTIONS).trimEnd()}\n`;
 }
-
 export function isSkillYamlMap(
   value: UntrustedSkillYamlNode,
 ): value is UntrustedSkillYamlMap {
@@ -135,16 +134,13 @@ export function isSkillYamlMap(
     !Array.isArray(value)
   );
 }
-
 export type SkillYamlPropertyRequest = {
   readonly key: string;
   readonly map: UntrustedSkillYamlMap;
 };
-
 export type SkillYamlProperty =
   | { readonly found: true; readonly value: UntrustedSkillYamlNode }
   | { readonly found: false };
-
 export function skillYamlProperty(
   request: SkillYamlPropertyRequest,
 ): SkillYamlProperty {

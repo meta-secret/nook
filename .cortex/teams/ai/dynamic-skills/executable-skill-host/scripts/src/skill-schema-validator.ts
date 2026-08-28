@@ -226,7 +226,6 @@ function validateArray(
   }
   return { ok: true };
 }
-
 function validateString(
   request: SkillStringValidationRequest,
 ): SkillSchemaValidation {
@@ -270,7 +269,6 @@ function validateString(
   }
   return { ok: true };
 }
-
 function validateInteger(
   request: SkillIntegerValidationRequest,
 ): SkillSchemaValidation {
@@ -292,14 +290,12 @@ function validateInteger(
   }
   return { ok: true };
 }
-
 function childPath(parent: string): (child: string) => string {
   return (child: string) => {
     const request: SkillCommandPathRequest = { field: child, parent };
     return skillCommandPath(request);
   };
 }
-
 function invalidAt(path: string): (message: string) => SkillSchemaValidation {
   return (message: string) => ({ ok: false, path, message });
 }

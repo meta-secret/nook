@@ -155,8 +155,9 @@ function configurationScriptPaths(
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
+    const taskExpansionRequest = { importer, source, sources: graph.sources };
     const referenceSource = /(^|\/)Taskfile\.ya?ml$/u.test(importer)
-      ? expandStaticTaskVariables(source)
+      ? expandStaticTaskVariables(taskExpansionRequest)
       : source;
     const referenceInspection: ConfigurationReferenceInspection = {
       importer,
@@ -820,6 +821,8 @@ test('follows scripts launched from every runnable configuration surface', () =>
       'vars: {dir: scripts}\ntasks:\n  audit:\n    vars: {host: "{{ .dir }}/facade.ts"}\n    cmds: ["bun {{ .host }}"]',
       'vars: {host: {sh: echo bun scripts/facade.ts}}\ntasks:\n  audit:\n    cmds: ["{{.host}}"]',
       'vars: {host: "{{.other}}", other: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["bun {{.host}}"]',
+      'tasks:\n  audit:\n    cmds: ["{{.CONFIG}} --default toolsList"]',
+      'tasks:\n  audit:\n    cmds: ["bun scripts/{{.CONFIG}}.ts"]',
     ].map((source) => ['Taskfile.yml', source] as const),
     [
       '.github/workflows/audit.yml',
@@ -874,12 +877,16 @@ test('follows scripts launched from every runnable configuration surface', () =>
 
   const inertCatalogSources = new Map<string, string>([
     ['package.json', '{"scripts":{"audit":"bun scripts/catalog.ts"}}'],
+    [
+      'Taskfile.yml',
+      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --config {{.CONFIG}}"]',
+    ],
     ['scripts/catalog.ts', "const evidencePath = 'scripts/unsafe.test.ts';"],
     ['scripts/unsafe.test.ts', 'eval(source);'],
   ]);
   const inertCatalogGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
-    roots: ['package.json'],
+    roots: ['package.json', 'Taskfile.yml'],
     sources: inertCatalogSources,
     symlinkPaths: new Set<string>(),
   };

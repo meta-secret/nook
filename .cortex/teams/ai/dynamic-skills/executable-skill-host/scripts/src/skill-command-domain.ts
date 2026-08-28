@@ -2,21 +2,17 @@ export enum SkillRequestFamily {
   ToolsList = 'skillToolsList',
   CortexArticleStructure = 'cortexArticleStructure',
 }
-
 export enum SkillToolsOperation {
   List = 'list',
 }
-
 export enum CortexArticleStructureOperation {
   Audit = 'audit',
 }
-
 export enum SkillCommandPhase {
   Decode = 'decode',
   Execute = 'execute',
   Usage = 'usage',
 }
-
 export enum SkillCommandIssue {
   InvalidRequest = 'invalid-request',
   InvalidYaml = 'invalid-yaml',
@@ -25,7 +21,6 @@ export enum SkillCommandIssue {
   ResponseTooLarge = 'response-too-large',
   UsageError = 'usage-error',
 }
-
 export enum SkillSchemaType {
   Array = 'array',
   Boolean = 'boolean',
@@ -33,10 +28,8 @@ export enum SkillSchemaType {
   Object = 'object',
   String = 'string',
 }
-
 export const SKILL_HOST_RESPONSE_BYTE_LIMIT = 8 * 1_024 * 1_024 + 64 * 1_024;
 export const SKILL_HOST_REQUEST_BYTE_LIMIT = 4 * 1_024 * 1_024;
-
 export type SkillStringSchema = {
   readonly type: `${SkillSchemaType.String}`;
   readonly enum?: readonly string[];
@@ -45,27 +38,22 @@ export type SkillStringSchema = {
   readonly maxTrimmedLineLength?: number;
   readonly pattern?: string;
 };
-
 export type SkillIntegerSchema = {
   readonly type: `${SkillSchemaType.Integer}`;
   readonly minimum: number;
   readonly maximum?: number;
 };
-
 export type SkillBooleanSchema = {
   readonly type: `${SkillSchemaType.Boolean}`;
 };
-
 export type SkillFalseSchema = {
   readonly const: false;
 };
-
 export type SkillArraySchema = {
   readonly type: `${SkillSchemaType.Array}`;
   readonly items: SkillInputSchema;
   readonly maxItems?: number;
 };
-
 export type SkillObjectSchema = {
   readonly type: `${SkillSchemaType.Object}`;
   readonly additionalProperties: false;
@@ -81,11 +69,9 @@ export type SkillObjectSchema = {
     readonly [field: string]: SkillInputSchema;
   };
 };
-
 export type SkillUnionSchema = {
   readonly oneOf: readonly SkillInputSchema[];
 };
-
 export type SkillInputSchema =
   | SkillArraySchema
   | SkillBooleanSchema
@@ -94,7 +80,6 @@ export type SkillInputSchema =
   | SkillObjectSchema
   | SkillStringSchema
   | SkillUnionSchema;
-
 export type DiscoverableSkillAction = {
   readonly skillId: string;
   readonly family: SkillRequestFamily;
@@ -105,17 +90,14 @@ export type DiscoverableSkillAction = {
   readonly resolvedExampleYaml: string;
   readonly inputSchema: SkillObjectSchema;
 };
-
 export type SkillToolsListResult = {
   readonly actions: readonly DiscoverableSkillAction[];
 };
-
 export type SkillCommandFieldError = {
   readonly path: string;
   readonly issue: SkillCommandIssue;
   readonly message: string;
 };
-
 export type SkillCommandErrorResponse = {
   readonly ok: false;
   readonly isError: true;
