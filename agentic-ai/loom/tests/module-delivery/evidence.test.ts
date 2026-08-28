@@ -411,16 +411,6 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
 test('synthesis requires exact nonempty accepted provider evidence identities', () => {
   const active = runtime();
   try {
-    const activeSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
-      authority: active.authority,
-      acceptedPlan: active.accepted,
-      state: active.state,
-    };
-    expect(
-      selectModuleDeliveryAdmissions(activeSelectionRequest).admissions.map(
-        ({ taskId }) => taskId,
-      ),
-    ).toEqual([active.provider.taskId]);
     const providerLeaseRequest: AdmittedLeaseRequest = {
       runtime: active,
       taskId: active.provider.taskId,

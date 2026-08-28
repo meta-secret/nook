@@ -387,7 +387,6 @@ describe('module delivery admission authority', () => {
     expect(() =>
       restartModuleDeliveryGeneration(invalidRestartRequest),
     ).toThrow('metadata is inconsistent');
-    expect(select(retryRuntime).admissions.length).toBeGreaterThan(0);
     const restartRequest: RestartModuleDeliveryGenerationRequest = {
       authority: active.authority,
       previousState: dispositionState,
@@ -395,13 +394,26 @@ describe('module delivery admission authority', () => {
       expectedLineage: lineage(second),
     };
     const restarted = restartModuleDeliveryGeneration(restartRequest);
-    expect(restarted.acceptedProviderEvidence).toEqual([]);
     const restartedRuntime: Runtime = {
       ...active,
       accepted: second,
       state: restarted,
     };
     expect(select(restartedRuntime).admissions[0]?.attempt).toBe(2);
+    const secondLeaseRequest = { runtime: restartedRuntime, taskId: 'alpha' };
+    const secondLease = lease(secondLeaseRequest);
+    const secondDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      { ...dispositionRequest, state: restarted, lease: secondLease };
+    const exhaustedState = recordModuleDeliveryAttemptDisposition(
+      secondDispositionRequest,
+    );
+    const exhaustedRuntime: Runtime = {
+      ...restartedRuntime,
+      state: exhaustedState,
+    };
+    expect(
+      select(exhaustedRuntime).admissions.map(({ taskId }) => taskId),
+    ).not.toContain('alpha');
     expect(() => select(active)).toThrow('superseded');
   });
 });

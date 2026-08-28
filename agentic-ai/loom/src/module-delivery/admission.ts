@@ -810,9 +810,7 @@ function taskPending(request: AuthorityTaskRequest): boolean {
         entry.taskId === request.taskId &&
         entry.kind === ModuleDeliveryAttemptDispositionKind.Accepted,
     ) &&
-    request.authority.dispositions.filter(
-      (entry) => entry.taskId === request.taskId,
-    ).length < request.authority.acceptedPlan.plan.maxAttempts
+    nextAttempt(request) <= request.authority.acceptedPlan.plan.maxAttempts
   );
 }
 
