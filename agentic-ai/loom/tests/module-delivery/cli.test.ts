@@ -5,19 +5,22 @@ import { join, resolve } from 'node:path';
 import { expect, test } from 'bun:test';
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
+  AgentAttemptParentKind,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryJoinKind,
   ModuleDeliveryTaskKind,
+  TeamKey,
 } from '../../src/module-delivery/index.ts';
-import type { ModuleDeliveryPlan } from '../../src/module-delivery/index.ts';
+import type { ModuleDeliveryPlanV2 } from '../../src/module-delivery/index.ts';
 
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
-function cliPlan(): ModuleDeliveryPlan {
+function cliPlan(): ModuleDeliveryPlanV2 {
   return {
-    version: 1,
+    version: 2,
+    generation: 1,
     sourceCommit: SOURCE_COMMIT,
     maxConcurrency: 1,
     maxAgentDepth: 2,
@@ -32,6 +35,10 @@ function cliPlan(): ModuleDeliveryPlan {
       {
         kind: ModuleDeliveryTaskKind.ReadOnly,
         taskId: 'core-audit',
+        team: TeamKey.DevelopmentCore,
+        functionalOwner: TeamKey.Ai,
+        acceptanceOwner: TeamKey.Ai,
+        parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
         expert: 'core_expert',
         moduleRoot: CORE_ROOT,
         consumerOutcome: 'The delivery owner receives reviewed core evidence.',
@@ -41,7 +48,11 @@ function cliPlan(): ModuleDeliveryPlan {
         },
         agentDepthLimit: 2,
         dependencies: [],
-        resources: { read: [`${CORE_ROOT}/**`], write: [] },
+        resources: {
+          read: [`${CORE_ROOT}/**`],
+          write: [],
+          evidenceSurface: [`${CORE_ROOT}/**`],
+        },
         parentOwnedExclusions: [...REQUIRED_PARENT_OWNED_RESOURCES],
         acceptance: {
           commands: ['task loom:module-experts:validate'],

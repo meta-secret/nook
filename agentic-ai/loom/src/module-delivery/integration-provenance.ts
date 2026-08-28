@@ -5,12 +5,49 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
 
+import type { TeamKey } from '../team-agents/catalog.ts';
+import type {
+  ModuleDeliveryEvidenceClaimIdentity,
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+} from './evidence.ts';
 import type { GitCommandRequest } from './git-command.ts';
 import type {
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
 } from './integration.ts';
 import type { ModuleWorktreeHandle } from './workspace.ts';
+
+export const MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 1;
+export enum ModuleDeliveryProviderSubmissionKind {
+  Write = 'write',
+  ReadOnlyEvidence = 'read-only-evidence',
+}
+export enum ModuleDeliveryEvidenceVerdict {
+  TerminalSuccess = 'terminal-success',
+}
+export type ModuleDeliveryReadOnlyEvidenceSubmission = {
+  readonly kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence;
+  readonly schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+  readonly taskId: string;
+  readonly attempt: number;
+  readonly generation: number;
+  readonly planDigest: string;
+  readonly sourceCommit: string;
+  readonly producerTeam: TeamKey;
+  readonly functionalOwner: TeamKey;
+  readonly acceptanceOwner: TeamKey;
+  readonly acceptanceRequirements: readonly string[];
+  readonly claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+  readonly acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  readonly artifactIdentity: string;
+  readonly artifactDigest: string;
+  readonly verdict: ModuleDeliveryEvidenceVerdict;
+  readonly evidence: readonly string[];
+};
+export type ModuleDeliveryProviderSubmission =
+  ModuleDeliveryReadOnlyEvidenceSubmission;
+export type AcceptedModuleDeliveryEvidence =
+  ModuleDeliveryReadOnlyEvidenceSubmission;
 
 export type SourceRepositorySnapshot = {
   readonly headCommit: string;
