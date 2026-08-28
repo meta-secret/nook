@@ -1,43 +1,16 @@
 import { isDeepStrictEqual } from 'node:util';
+import {
+  isSkillYamlMap,
+  parseSkillYamlText,
+  type UntrustedSkillYamlMap as YamlMap,
+  type UntrustedSkillYamlNode as YamlValue,
+} from '../../../.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/skill-yaml-codec.ts';
 
-type YamlValue =
-  boolean | number | string | readonly YamlValue[] | YamlRecord | undefined;
-
-interface YamlRecord {
-  readonly [key: string]: YamlValue;
-}
-
-type TaskDocument = {
-  readonly includes?: Readonly<Record<string, YamlValue>>;
-};
-
-type TaskSource = {
-  readonly path: string;
-  readonly source: string;
-};
-
-type TaskBoundarySource = string | ReadonlyMap<string, string>;
-
-type IncludeExpectation = {
-  readonly name: string;
-  readonly source: string;
-  readonly taskfile: string;
-};
-
-type TaskIncludeResolution = {
-  readonly importer: string;
-  readonly target: string;
-};
-
-type ProtectedReferenceOptions = {
-  readonly allowCanonicalInclude: boolean;
-};
-
-type ProtectedReferenceInspection = {
-  readonly options: ProtectedReferenceOptions;
-  readonly path: readonly string[];
-  readonly value: YamlValue | false;
-};
+type TaskSource = { readonly path: string; readonly source: string };
+type BoundarySource = string | ReadonlyMap<string, string>;
+type IncludeRequest = readonly [string, string, string];
+type PropertyRequest = readonly [YamlMap, string];
+type ProtectedSourceRequest = readonly [string, boolean];
 
 export const HOST_ROOT =
   '.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/';
@@ -53,6 +26,10 @@ export const AGENTIC_AI_TASKFILE = '.task/agentic-ai.yml';
 export const CANONICAL_TASKFILE = '.task/executable-skill-host.yml';
 export const HOST_CLI_TEMPLATE = `{{.REPO_ROOT}}/${HOST_CLI}`;
 export const TOOLS_LIST_COMMAND = `bun "${HOST_CLI_TEMPLATE}" --default toolsList`;
+export const TASK_YAML_BYTE_LIMIT = 2_097_152;
+const [DEPTH_LIMIT, NODE_LIMIT, SCALAR_LIMIT] = [64, 65_536, 16_384];
+const AGENTIC_INCLUDE_SOURCE =
+  '  executable-skill-host:\n    taskfile: executable-skill-host.yml\n    flatten: true\n';
 
 export const CANONICAL_TASK_SOURCE = `version: '3'
 
@@ -75,205 +52,148 @@ tasks:
     cmds:
       - ${TOOLS_LIST_COMMAND}
 `;
-
-const EXPECTED_CANONICAL_TASK = parseTask(CANONICAL_TASK_SOURCE);
-const PROTECTED_REFERENCES = ['executable-skill-host', 'skills:tools-list'];
-const EMPTY_INCLUDES: YamlRecord = {};
+const EXPECTED_TASK = parseMap(CANONICAL_TASK_SOURCE);
 
 export function hasCanonicalToolsListTask(source: string): boolean {
-  return isDeepStrictEqual(parseTask(source), EXPECTED_CANONICAL_TASK);
+  return isDeepStrictEqual(parseMap(source), EXPECTED_TASK);
 }
 
-export function hasOnlyCanonicalHostTaskEdge(
-  source: TaskBoundarySource,
-): boolean {
+export function hasOnlyCanonicalHostTaskEdge(source: BoundarySource): boolean {
   if (typeof source === 'string') return hasCanonicalToolsListTask(source);
-  const taskSources: TaskSource[] = [];
-  for (const [path, taskSource] of source) {
+  const tasks: TaskSource[] = [];
+  for (const [path, text] of source) {
     if (
       /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path) ||
-      /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path)
+      /^\.task\/.*\.ya?ml$/u.test(path)
     ) {
-      const entry: TaskSource = { path, source: taskSource };
-      taskSources.push(entry);
+      const task: TaskSource = { path, source: text };
+      tasks.push(task);
     }
   }
-  return hasExactToolsListTaskGraph(taskSources);
+  return hasExactToolsListTaskGraph(tasks);
 }
 
 export function hasExactToolsListTaskGraph(
-  taskSources: readonly TaskSource[],
+  tasks: readonly TaskSource[],
 ): boolean {
-  const sources = new Map(
-    taskSources.map(({ path, source }) => [path, source]),
-  );
-  const canonicalSource = sources.get(CANONICAL_TASKFILE);
+  const sources = new Map(tasks.map((entry) => [entry.path, entry.source]));
+  const canonical = sources.get(CANONICAL_TASKFILE);
+  const root = sources.get(ROOT_TASKFILE);
+  const agentic = sources.get(AGENTIC_AI_TASKFILE);
   if (
-    typeof canonicalSource !== 'string' ||
-    !hasCanonicalToolsListTask(canonicalSource)
-  ) {
+    typeof canonical !== 'string' ||
+    typeof root !== 'string' ||
+    typeof agentic !== 'string' ||
+    !hasCanonicalToolsListTask(canonical) ||
+    !includeMatches([root, 'agentic-ai', '.task/agentic-ai.yml']) ||
+    !includeMatches([
+      agentic,
+      'executable-skill-host',
+      'executable-skill-host.yml',
+    ])
+  )
     return false;
-  }
-  const rootSource = sources.get(ROOT_TASKFILE);
-  const agenticSource = sources.get(AGENTIC_AI_TASKFILE);
-  const rootInclude: IncludeExpectation = {
-    name: 'agentic-ai',
-    source: rootSource ?? '',
-    taskfile: '.task/agentic-ai.yml',
-  };
-  const agenticInclude: IncludeExpectation = {
-    name: 'executable-skill-host',
-    source: agenticSource ?? '',
-    taskfile: 'executable-skill-host.yml',
-  };
-  if (
-    typeof rootSource !== 'string' ||
-    typeof agenticSource !== 'string' ||
-    !hasExactInclude(rootInclude) ||
-    !hasExactInclude(agenticInclude)
-  ) {
-    return false;
-  }
-
-  let canonicalIncludeCount = 0;
-  let agenticIncludeCount = 0;
-  for (const taskSource of taskSources) {
-    const document = parseTask(taskSource.source);
-    if (document === false) return false;
-    const includes = document.includes ?? EMPTY_INCLUDES;
-    for (const [includeName, include] of Object.entries(includes)) {
-      const target = includeTarget(include);
-      if (target === false) continue;
-      const resolution: TaskIncludeResolution = {
-        importer: taskSource.path,
-        target,
-      };
-      const resolved = resolveTaskInclude(resolution);
-      if (resolved === CANONICAL_TASKFILE) canonicalIncludeCount += 1;
-      if (resolved === AGENTIC_AI_TASKFILE) agenticIncludeCount += 1;
-      if (
-        includeName === 'executable-skill-host' &&
-        (taskSource.path !== AGENTIC_AI_TASKFILE ||
-          resolved !== CANONICAL_TASKFILE)
-      ) {
-        return false;
+  let hostIncludes = 0;
+  let agenticIncludes = 0;
+  for (const task of tasks) {
+    const map = parseMap(task.source);
+    if (map === false) return false;
+    const includes = property([map, 'includes']);
+    if (isSkillYamlMap(includes)) {
+      for (const value of Object.values(includes)) {
+        const target =
+          typeof value === 'string'
+            ? value
+            : isSkillYamlMap(value)
+              ? property([value, 'taskfile'])
+              : false;
+        if (target === 'executable-skill-host.yml') hostIncludes += 1;
+        if (target === '.task/agentic-ai.yml') agenticIncludes += 1;
       }
     }
-    const referenceInspection: ProtectedReferenceInspection = {
-      options: {
-        allowCanonicalInclude: taskSource.path === AGENTIC_AI_TASKFILE,
-      },
-      path: [],
-      value: parseYaml(taskSource.source),
-    };
     if (
-      taskSource.path !== CANONICAL_TASKFILE &&
-      containsProtectedReference(referenceInspection)
-    ) {
+      task.path !== CANONICAL_TASKFILE &&
+      protectedTaskSource([task.source, task.path === AGENTIC_AI_TASKFILE])
+    )
       return false;
-    }
   }
-  return canonicalIncludeCount === 1 && agenticIncludeCount === 1;
+  return hostIncludes === 1 && agenticIncludes === 1;
 }
 
-function hasExactInclude(expectation: IncludeExpectation): boolean {
-  const document = parseTask(expectation.source);
-  const expectedInclude = {
-    taskfile: expectation.taskfile,
-    flatten: true,
-  };
-  return (
-    document !== false &&
-    isDeepStrictEqual(document.includes?.[expectation.name], expectedInclude)
-  );
+function includeMatches([source, name, taskfile]: IncludeRequest): boolean {
+  const map = parseMap(source);
+  if (map === false) return false;
+  const includes = property([map, 'includes']);
+  if (!isSkillYamlMap(includes)) return false;
+  const expected = { taskfile, flatten: true };
+  return isDeepStrictEqual(property([includes, name]), expected);
 }
 
-function includeTarget(include: YamlValue): string | false {
-  if (typeof include === 'string') return include;
-  if (!isYamlRecord(include)) return false;
-  return typeof include.taskfile === 'string' ? include.taskfile : false;
-}
-
-function resolveTaskInclude(resolution: TaskIncludeResolution): string {
-  const importerDirectory = resolution.importer.includes('/')
-    ? resolution.importer.slice(0, resolution.importer.lastIndexOf('/'))
-    : '';
-  const components = `${importerDirectory}/${resolution.target}`.split('/');
-  const resolved: string[] = [];
-  for (const component of components) {
-    if (component === '' || component === '.') continue;
-    if (component === '..') resolved.pop();
-    else resolved.push(component);
-  }
-  return resolved.join('/');
-}
-
-function containsProtectedReference(
-  inspection: ProtectedReferenceInspection,
-): boolean {
-  const { options, path, value } = inspection;
-  if (value === false || typeof value === 'undefined') return false;
-  if (typeof value === 'string') {
-    const isCanonicalInclude =
-      options.allowCanonicalInclude &&
-      path.join('.') === 'includes.executable-skill-host.taskfile' &&
-      value === 'executable-skill-host.yml';
-    return (
-      !isCanonicalInclude &&
-      PROTECTED_REFERENCES.some((reference) => value.includes(reference))
-    );
-  }
-  if (typeof value === 'boolean' || typeof value === 'number') return false;
-  if (Array.isArray(value)) {
-    for (const [index, entry] of value.entries()) {
-      const nestedInspection: ProtectedReferenceInspection = {
-        options,
-        path: [...path, String(index)],
-        value: entry,
-      };
-      if (containsProtectedReference(nestedInspection)) return true;
-    }
-    return false;
-  }
-  for (const [key, entry] of Object.entries(value)) {
-    const entryPath = [...path, key];
-    const isCanonicalIncludeKey =
-      options.allowCanonicalInclude &&
-      entryPath.join('.') === 'includes.executable-skill-host';
-    if (
-      !isCanonicalIncludeKey &&
-      PROTECTED_REFERENCES.some((reference) => key.includes(reference))
-    ) {
-      return true;
-    }
-    const nestedInspection: ProtectedReferenceInspection = {
-      options,
-      path: entryPath,
-      value: entry,
-    };
-    if (containsProtectedReference(nestedInspection)) return true;
-  }
+function property([map, key]: PropertyRequest): YamlValue | false {
+  for (const [name, value] of Object.entries(map))
+    if (name === key) return value;
   return false;
 }
 
-function parseTask(source: string): TaskDocument | false {
-  const value = parseYaml(source);
-  return isYamlRecord(value) ? (value as TaskDocument) : false;
-}
-
-function parseYaml(source: string): YamlValue | false {
-  try {
-    return Bun.YAML.parse(source) as YamlValue;
-  } catch {
-    return false;
-  }
-}
-
-function isYamlRecord(value: YamlValue | false): value is YamlRecord {
+function protectedTaskSource([
+  source,
+  allowInclude,
+]: ProtectedSourceRequest): boolean {
+  const text = allowInclude
+    ? source
+        .replace(AGENTIC_INCLUDE_SOURCE, '')
+        .replace(
+          'executable-skill-host: {taskfile: executable-skill-host.yml, flatten: true}',
+          '',
+        )
+    : source;
+  const compact = text.replace(/["'`\\\r\n\t $*?[\]{}()]/gu, '');
   return (
-    value !== false &&
-    Boolean(value) &&
-    typeof value === 'object' &&
-    !Array.isArray(value)
+    compact.includes('executable-skill-host') ||
+    compact.includes('skills:tools-list') ||
+    /execut.ble-skill-hos./u.test(text.replace(/["'`\\\r\n\t ]/gu, '')) ||
+    (/(?:^|[^a-z])(?:go-)?task(?:[^a-z]|$)/iu.test(text) &&
+      /:\s*skills(?:\s*[,}\n])/u.test(text) &&
+      /:\s*tools-list(?:\s*[,}\n])/u.test(text)) ||
+    (text.includes('executable-skill-') && /:\s*host(?:\s*[,}\n])/u.test(text))
   );
+}
+
+function parseMap(source: string): YamlMap | false {
+  if (!sourceWithinBounds(source)) return false;
+  const parsed = parseSkillYamlText(source);
+  return parsed.ok && isSkillYamlMap(parsed.value) ? parsed.value : false;
+}
+
+export function sourceWithinBounds(source: string): boolean {
+  if (new TextEncoder().encode(source).byteLength > TASK_YAML_BYTE_LIMIT)
+    return false;
+  let nodes = 0;
+  let blockIndent = -1;
+  let blockLength = 0;
+  for (const line of source.split('\n')) {
+    if (line.length > SCALAR_LIMIT) return false;
+    const indent = line.length - line.trimStart().length;
+    const trimmed = line.trimStart();
+    if (blockIndent >= 0 && (trimmed === '' || indent > blockIndent)) {
+      blockLength += Math.max(1, line.length - indent);
+      if (blockLength > SCALAR_LIMIT) return false;
+      continue;
+    }
+    blockIndent = -1;
+    blockLength = 0;
+    if (trimmed === '' || trimmed.startsWith('#')) continue;
+    const syntax = trimmed.replace(/\s+#.*$/u, '');
+    let flow = 0;
+    for (const character of syntax) {
+      if (character === '[' || character === '{') flow += 1;
+      if ((character === ']' || character === '}') && flow > 0) flow -= 1;
+      if (/[:,[\]{},]/u.test(character)) nodes += 1;
+      if (flow > DEPTH_LIMIT) return false;
+    }
+    nodes += 1;
+    if (indent + flow > DEPTH_LIMIT || nodes > NODE_LIMIT) return false;
+    if (/(?:^|:|-\s)\s*[>|][+-]?\d?\s*$/u.test(syntax)) blockIndent = indent;
+  }
+  return true;
 }
