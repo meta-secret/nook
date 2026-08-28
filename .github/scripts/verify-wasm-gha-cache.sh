@@ -2,7 +2,6 @@
 set -euo pipefail
 
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
-docker_bin="${DOCKER:-docker}"
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
 deps_fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing NOOK_RUST_DEPS_INPUT_FINGERPRINT}"
 sccache_mode="${SCCACHE_S3_MODE:-external}"
@@ -46,7 +45,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
   # Publish from the already-selected node-local rootless BuildKit shard. A
   # repair solve never imports the ref it is replacing: independent input and
   # source refs may accelerate it, while a miss rebuilds from source.
-  "$docker_bin" buildx bake \
+  docker buildx bake \
     --progress=plain \
     "${bake_args[@]}" \
     --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \

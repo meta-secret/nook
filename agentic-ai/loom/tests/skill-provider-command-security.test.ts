@@ -6,35 +6,6 @@ import {
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
 
-const PROTECTED =
-  '.cortex/teams/ai/dynamic-skills/example-skill/scripts/src/cli.ts';
-const WRAPPER = '.github/scripts/with-healthy-buildkit.sh';
-
-enum SourceOperator {
-  Dot = '.',
-  Source = 'source',
-}
-type SourcedGraphRequest = {
-  readonly child: string;
-  readonly operator: SourceOperator;
-};
-
-function sourcedGraph(request: SourcedGraphRequest): ConfigurationScriptGraph {
-  return {
-    executablePaths: new Set(),
-    roots: ['Taskfile.yml'],
-    sources: new Map([
-      [
-        'Taskfile.yml',
-        `tasks: {audit: {cmds: [${request.operator} scripts/mutate.sh, bash ${WRAPPER}]}}`,
-      ],
-      ['scripts/mutate.sh', request.child],
-      [WRAPPER, 'docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version'],
-    ]),
-    symlinkPaths: new Set(),
-  };
-}
-
 function directGraph(command: string): ConfigurationScriptGraph {
   const root =
     command === '. /etc/os-release'
@@ -43,48 +14,21 @@ function directGraph(command: string): ConfigurationScriptGraph {
   return {
     executablePaths: new Set(),
     roots: [root],
-    sources: new Map([
-      [root, `tasks: {audit: {cmds: [${command}]}}`],
-      [WRAPPER, 'docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version'],
-    ]),
+    sources: new Map([[root, `tasks: {audit: {cmds: [${command}]}}`]]),
     symlinkPaths: new Set(),
   };
 }
 
-test('rejects every sourced parent-shell Docker provenance mutation', () => {
-  const mutations = [
-    `declare -x DOCKER=${PROTECTED}`,
-    `typeset -gx DOCKER=${PROTECTED}`,
-    `export DOCKER=${PROTECTED}`,
-    `printf -v DOCKER %s ${PROTECTED}`,
-    `read DOCKER <<< ${PROTECTED}`,
-    `declare -n ref=DOCKER; ref=${PROTECTED}`,
-    `DOCKER+=${PROTECTED}`,
-    `DOCKER[0]=${PROTECTED}`,
-    `mapfile -t DOCKER <<< ${PROTECTED}`,
-    `readarray DOCKER <<< ${PROTECTED}`,
-    `declare +x DOCKER=${PROTECTED}`,
-  ];
-  for (const operator of [SourceOperator.Source, SourceOperator.Dot])
-    for (const mutation of mutations) {
-      const request: SourcedGraphRequest = { child: mutation, operator };
-      expect(() => configurationScriptPaths(sourcedGraph(request))).toThrow();
-    }
-});
-
-test('rejects interspersed redirection mutation and unaudited sources', () => {
-  for (const command of [
-    `> /tmp/out DOCKER=${PROTECTED}; bash ${WRAPPER}`,
-    `declare > /tmp/out +x DOCKER=${PROTECTED}; bash ${WRAPPER}`,
-    `read <<< ${PROTECTED} DOCKER; bash ${WRAPPER}`,
-    `mapfile <<< ${PROTECTED} DOCKER; bash ${WRAPPER}`,
-    `readarray <<< ${PROTECTED} DOCKER; bash ${WRAPPER}`,
-  ])
-    expect(() => configurationScriptPaths(directGraph(command))).toThrow();
+test('allows only the exact audited source catalog', () => {
   expect(configurationScriptPaths(directGraph('. /etc/os-release'))).toEqual(
     [],
   );
-  for (const command of ['source scripts/other.sh', '. "$DYNAMIC"'])
+  for (const command of [
+    'source scripts/other.sh',
+    '. scripts/other.sh',
+    '. "$DYNAMIC"',
+    'source /etc/lsb-release',
+  ])
     expect(() => configurationScriptPaths(directGraph(command))).toThrow();
 });
 
@@ -97,7 +41,7 @@ test('pins the sole repository source helper', () => {
         'agentic-ai/minds/hive/Taskfile.yml',
         'tasks: {x: {cmds: [. "$HIVE_TASK_DIR/prepare-sccache-context.sh"]}}',
       ],
-      ['agentic-ai/minds/hive/prepare-sccache-context.sh', 'DOCKER=unsafe'],
+      ['agentic-ai/minds/hive/prepare-sccache-context.sh', 'echo unsafe'],
     ]),
     symlinkPaths: new Set(),
   };

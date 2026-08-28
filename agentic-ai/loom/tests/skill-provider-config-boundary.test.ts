@@ -108,7 +108,6 @@ export function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
   const pending: PendingConfiguration[] = graph.roots.map((importer) => ({
-    dockerOverride: false,
     importer,
     positionalArguments: false,
     depth: 0,
@@ -119,7 +118,6 @@ export function configurationScriptPaths(
     const next = pending.pop();
     if (!next) continue;
     const importer = next.importer;
-    const override = next.dockerOverride;
     if (next.depth > MAX_GRAPH_DEPTH || visited.size >= MAX_GRAPH_STATES)
       throw new Error('Runnable configuration graph exceeds its bound.');
     if (
@@ -127,9 +125,7 @@ export function configurationScriptPaths(
       next.positionalArguments.length > MAX_GRAPH_ARGUMENTS
     )
       throw new Error('Runnable configuration arguments exceed their bound.');
-    const overrideKey =
-      override === false ? false : [override.dynamic, override.value];
-    const visitKey = `${importer}\0${JSON.stringify([next.positionalArguments, overrideKey])}`;
+    const visitKey = `${importer}\0${JSON.stringify(next.positionalArguments)}`;
     if (new TextEncoder().encode(visitKey).byteLength > MAX_GRAPH_STATE_BYTES)
       throw new Error('Runnable configuration state exceeds its byte bound.');
     if (visited.has(visitKey)) continue;
@@ -161,7 +157,6 @@ export function configurationScriptPaths(
       source,
     };
     const configurationRequest: ConfigurationReferenceRequest = {
-      dockerOverride: next.dockerOverride,
       inspection: referenceInspection,
       positionalArguments: next.positionalArguments,
     };
@@ -248,7 +243,6 @@ export function configurationScriptPaths(
         }
         scripts.add(dependency);
         const pendingConfiguration: PendingConfiguration = {
-          dockerOverride: reference.dockerOverride,
           importer: dependency,
           positionalArguments: reference.positionalArguments,
           depth: next.depth + 1,
@@ -286,7 +280,6 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
 }
 
 type ConfigurationReferenceRequest = {
-  readonly dockerOverride: ShellLaunchArgument | false;
   readonly inspection: ConfigurationReferenceInspection;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };
@@ -303,7 +296,6 @@ function configurationScriptReferences(
     const launches = runnableCommandSources(commandInspection).flatMap(
       (source): readonly ShellScriptLaunch[] => {
         const shellInspection = {
-          dockerOverride: request.dockerOverride,
           positionalArguments: request.positionalArguments,
           source,
           sourcePath: inspection.importer,
@@ -312,7 +304,6 @@ function configurationScriptReferences(
       },
     );
     return launches.map((launch) => ({
-      dockerOverride: launch.dockerOverride,
       positionalArguments: launch.positionalArguments,
       required: true,
       specifier: launch.specifier,
@@ -323,14 +314,12 @@ function configurationScriptReferences(
     importSource,
   ).map((imported) => ({
     positionalArguments: false,
-    dockerOverride: false,
     required: false,
     specifier: imported.path,
   }));
   const launches = staticTypeScriptScriptLaunches(inspection.source).map(
     (specifier): ConfigurationReference => ({
       positionalArguments: false,
-      dockerOverride: false,
       required: true,
       specifier,
     }),
@@ -905,27 +894,6 @@ test('follows scripts launched from every runnable configuration surface', () =>
   expect(configurationScriptPaths(inertCatalogGraph)).toEqual([
     'scripts/catalog.ts',
   ]);
-  const child = '.github/scripts/with-healthy-buildkit.sh';
-  for (const [prefix, roots] of [
-    [`DOCKER=${PROVIDER_APPLICATION}; `, ['unsafe.sh', 'safe.sh']],
-    [`DOCKER=${PROVIDER_APPLICATION}; `, ['safe.sh', 'unsafe.sh']],
-    [`env DOCKER=${PROVIDER_APPLICATION} `, ['unsafe.sh', 'safe.sh']],
-    [`env DOCKER=${PROVIDER_APPLICATION} `, ['safe.sh', 'unsafe.sh']],
-  ] as const) {
-    const overrideSources = new Map<string, string>([
-      ['safe.sh', `bash ${child}`],
-      ['unsafe.sh', `${prefix}bash ${child}`],
-      [child, 'docker_bin="${DOCKER:-docker}"; "$docker_bin"'],
-      [PROVIDER_APPLICATION, 'export const application = true;'],
-    ]);
-    const overrideGraph: ConfigurationScriptGraph = {
-      executablePaths: new Set(),
-      roots,
-      sources: overrideSources,
-      symlinkPaths: new Set(),
-    };
-    expect(() => configurationScriptPaths(overrideGraph)).toThrow();
-  }
 });
 
 test('rejects a dangerous adapter from the canonical runnable graph', () => {

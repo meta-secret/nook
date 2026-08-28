@@ -114,7 +114,6 @@ function consumeAssignments([request, start]: readonly [
   let index = start;
   for (; index < request.words.length; index += 1) {
     const assignmentRequest = {
-      auditedDockerDefault: false,
       environment: request.environment,
       word: request.words[index] as ShellWord,
     };

@@ -10,7 +10,6 @@ const PROTECTED =
 
 function inspectShell(source: string) {
   const inspection: ShellCommandInspection = {
-    dockerOverride: false,
     positionalArguments: false,
     source,
     sourcePath: false,

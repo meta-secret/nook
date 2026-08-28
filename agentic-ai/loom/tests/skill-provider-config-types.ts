@@ -25,14 +25,12 @@ export type ActionLoaderFixture = {
   readonly source: string;
 };
 export type ConfigurationReference = {
-  readonly dockerOverride: ShellLaunchArgument | false;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly required: boolean;
   readonly specifier: string;
 };
 export type PendingConfiguration = {
   readonly depth: number;
-  readonly dockerOverride: ShellLaunchArgument | false;
   readonly importer: string;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };

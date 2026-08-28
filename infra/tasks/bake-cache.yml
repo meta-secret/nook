@@ -13,7 +13,6 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        docker_bin="${DOCKER:-docker}"
         repo_root="$(git rev-parse --show-toplevel)"
         sim_dir="$repo_root/infra/sim/bake-cache"
         zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"
@@ -45,10 +44,10 @@ tasks:
           printf '%s\n' "$crate_a_input_orig" >"$crate_a_input"
           printf '%s\n' "$crate_b_input_orig" >"$crate_b_input"
           if [ -n "$builder" ]; then
-            "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1
+            docker buildx rm -f "$builder" >/dev/null 2>&1
           fi
-          "$docker_bin" rm -f "$zot_name" >/dev/null 2>&1
-          "$docker_bin" network rm "$network" >/dev/null 2>&1
+          docker rm -f "$zot_name" >/dev/null 2>&1
+          docker network rm "$network" >/dev/null 2>&1
           if [ -n "$buildkit_cfg" ]; then
             rm -f "$buildkit_cfg"
           fi
@@ -97,10 +96,10 @@ tasks:
         create_builder() {
           local name="$1"
           if [ -n "$builder" ]; then
-            "$docker_bin" buildx rm -f "$builder" >/dev/null 2>&1 || true
+            docker buildx rm -f "$builder" >/dev/null 2>&1 || true
           fi
           builder="$name"
-          "$docker_bin" buildx create \
+          docker buildx create \
             --name "$builder" \
             --driver docker-container \
             --driver-opt "network=${network}" \
@@ -128,7 +127,7 @@ tasks:
             CONSUMER_EXACT_AVAILABLE="${BAKE_SIM_CONSUMER_EXACT_AVAILABLE:-}" \
             HIVE_EXACT_AVAILABLE="${BAKE_SIM_HIVE_EXACT_AVAILABLE:-}" \
             NOOK_REGISTRY_CACHE_HOST="$registry_ref" \
-            "$docker_bin" buildx bake \
+            docker buildx bake \
             --progress=plain \
             -f "$sim_dir/docker-bake.hcl" \
             --set "*.context=$sim_dir" \
@@ -147,7 +146,7 @@ tasks:
         registry_ref_code() {
           local repository="$1"
           local tag="${2:-buildcache}"
-          "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+          docker run --rm --network "$network" curlimages/curl:8.12.1 \
             -sS -o /dev/null -w "%{http_code}" \
             -H "Accept: application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" \
             "http://${registry_ref}/v2/${repository}/manifests/${tag}"
@@ -171,7 +170,7 @@ tasks:
           local repository="$1"
           local source_tag="$2"
           local stable_tag="$3"
-          "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+          docker run --rm --network "$network" curlimages/curl:8.12.1 \
             sh -euc '
               manifest="$(mktemp)"
               headers="$(mktemp)"
@@ -196,8 +195,8 @@ tasks:
           "  insecure = true" \
           >"$buildkit_cfg"
 
-        "$docker_bin" network create "$network" >/dev/null
-        "$docker_bin" run -d \
+        docker network create "$network" >/dev/null
+        docker run -d \
           --name "$zot_name" \
           --platform linux/amd64 \
           --network "$network" \
@@ -207,7 +206,7 @@ tasks:
 
         ready=0
         for _ in $(seq 1 60); do
-          if "$docker_bin" run --rm --network "$network" curlimages/curl:8.12.1 \
+          if docker run --rm --network "$network" curlimages/curl:8.12.1 \
             -fsS "http://${registry_ref}/v2/" >/dev/null 2>&1; then
             ready=1
             break
@@ -837,8 +836,8 @@ tasks:
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"
         builder_container="buildx_buildkit_${builder}0"
-        "$docker_bin" restart "$builder_container" >/dev/null
-        "$docker_bin" buildx inspect "$builder" --bootstrap >/dev/null
+        docker restart "$builder_container" >/dev/null
+        docker buildx inspect "$builder" --bootstrap >/dev/null
         bake_plain "$proof_log" combined-leaf
         require_cached_step "$proof_log" "bake-sim-parent-expensive"
         require_cached_step "$proof_log" "bake-sim-leaf-expensive"

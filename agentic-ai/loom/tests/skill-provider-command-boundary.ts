@@ -38,7 +38,6 @@ import {
   type ShellCommandAnalysis,
   type ShellCommandInspection,
   type ShellCommandRequest,
-  type ShellEnvironment,
   type ShellLaunchArgument,
   type ShellParseState,
   type ShellScriptLaunch,
@@ -92,25 +91,10 @@ const TASK_VALUE_OPTIONS = new Set('--dir --taskfile -d -t'.split(' '));
 const ENV_BOOLEAN_OPTIONS = new Set('-i --ignore-environment'.split(' '));
 const ENV_VALUE_OPTIONS = new Set('-u --unset'.split(' '));
 const ENV_ATTACHED_VALUE = /^--unset=[^=]+$/u;
-const AUDITED_DOCKER_DEFAULT_PATHS = new Set([
-  '.github/scripts/verify-wasm-gha-cache.sh',
-  '.github/scripts/with-healthy-buildkit.sh',
-  '.github/scripts/with-remote-buildkit.sh',
-  'infra/tasks/bake-cache.yml',
-]);
-
 export function analyzeShellCommands(
   inspection: ShellCommandInspection,
 ): ShellCommandAnalysis {
   assertBoundedSource(inspection.source);
-  const environment: ShellEnvironment = new Map();
-  if (inspection.dockerOverride !== false) {
-    const override = {
-      ...inspection.dockerOverride,
-      source: inspection.dockerOverride.value,
-    };
-    environment.set('DOCKER', override);
-  }
   const positionalArguments = inspection.positionalArguments
     ? inspection.positionalArguments.map((argument) => ({
         ...argument,
@@ -119,15 +103,12 @@ export function analyzeShellCommands(
     : false;
   const state: ShellParseState = {
     aliases: new Map(),
-    auditedDockerDefault:
-      inspection.sourcePath !== false &&
-      AUDITED_DOCKER_DEFAULT_PATHS.has(inspection.sourcePath),
     casePattern: false,
     commandCount: 0,
     cwd: '',
     cwdProtected: false,
     cwdUnknown: false,
-    environment,
+    environment: new Map(),
     functions: new Map(),
     launches: [],
     positionalArguments,
@@ -210,23 +191,11 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
 }
 
 function analyzeCommand(request: RuntimeCommandRequest): void {
-  const words = withoutRedirections(request.words);
-  if (
-    words.some((word) => /^DOCKER(?:\[[^\]]*\])?(?:\+?=)/u.test(word.value)) &&
-    words.some((word) =>
-      /^DOCKER(?:\[[^\]]*\])?\+=|^DOCKER\[/u.test(word.value),
-    )
-  )
-    throw new Error('DOCKER append or array mutation is forbidden.');
+  const words = [...request.words];
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
-  let index = consumeAssignments([
-    words,
-    0,
-    request.state.environment,
-    request.state.auditedDockerDefault,
-  ]);
+  let index = consumeAssignments([words, 0, request.state.environment]);
   if (index === words.length) return;
   let wordRequest: WordEnvironmentRequest = {
     word: words[index] as ShellWord,
@@ -253,41 +222,17 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
       command.value,
     )
   ) {
-    let assignmentIndex = index + 1;
-    for (; assignmentIndex < words.length; assignmentIndex += 1) {
-      const optionRequest: WordEnvironmentRequest = {
-        word: words[assignmentIndex] as ShellWord,
-        environment: request.state.environment,
-      };
-      const option = resolveWord(optionRequest);
-      if (!/^[+-]/u.test(option.value)) break;
-      if (option.value === '--') {
-        assignmentIndex += 1;
-        break;
-      }
-      if (option.dynamic || /n/u.test(option.value))
-        throw new Error('Dynamic or nameref declaration is forbidden.');
-      if (!/^[+-][aAfFgilrtuxpn]+$/u.test(option.value))
-        throw new Error(`Unsupported declaration option: ${option.value}`);
-    }
-    consumeAssignments([words, assignmentIndex, request.state.environment]);
+    consumeAssignments([words, index + 1, request.state.environment]);
     return;
   }
+  if (/^[<>](?![<>])/u.test(command.value)) return;
   if (/^[A-Za-z_]\w*\+=\(/u.test(command.value)) return;
-  if (command.value === 'for' || command.value === 'select') {
-    const target = words[index + 1];
-    if (target) {
-      const targetRequest: WordEnvironmentRequest = {
-        word: target,
-        environment: request.state.environment,
-      };
-      const resolved = resolveWord(targetRequest);
-      if (resolved.dynamic || resolved.value === 'DOCKER')
-        throw new Error('Dynamic or DOCKER loop variable is forbidden.');
-    }
+  if (
+    ['for', 'select', 'function', '}', 'fi', 'done', 'esac'].includes(
+      command.value,
+    )
+  )
     return;
-  }
-  if (['function', '}', 'fi', 'done', 'esac'].includes(command.value)) return;
   if (command.value === '{') {
     index += 1;
     if (index === words.length) return;
@@ -483,17 +428,6 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
   analyzeRuntime(commandRequest);
 }
 
-function withoutRedirections(words: readonly ShellWord[]): ShellWord[] {
-  const normalized: ShellWord[] = [];
-  for (let index = 0; index < words.length; index += 1) {
-    const value = words[index]?.value ?? '';
-    const redirection = /^(?:\d*)(?:<{1,3}|>{1,2}|<>|>&|<&)(.*)$/u.exec(value);
-    if (!redirection) normalized.push(words[index] as ShellWord);
-    else if ((redirection[1] ?? '').length === 0) index += 1;
-  }
-  return normalized;
-}
-
 function analyzeEval([request, words, start]: readonly [
   RuntimeCommandRequest,
   readonly ShellWord[],
@@ -606,8 +540,7 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
     }
     if (options && word.value.startsWith('-'))
       throw new Error(`Unsupported env option: ${word.value}`);
-    const assignmentRequest = {
-      auditedDockerDefault: false,
+    const assignmentRequest: WordEnvironmentRequest = {
       word,
       environment: request.environment,
     };
@@ -620,14 +553,6 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
 }
 
 function analyzeRuntime(request: RuntimeCommandRequest): void {
-  if (parentMutatorTargetsDocker(request))
-    throw new Error('Dynamic or DOCKER parent-shell mutation is forbidden.');
-  if (
-    ['printf', 'read', 'mapfile', 'readarray', 'getopts'].includes(
-      request.runtime,
-    )
-  )
-    return;
   if (request.runtime === 'bun' || request.runtime === 'node') {
     const executableRequest: RuntimeExecutableRequest = {
       booleanOptions:
@@ -686,37 +611,6 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
     const launchRequest: LaunchRequest = { launch, state: request.state };
     addLaunch(launchRequest);
   }
-}
-
-function parentMutatorTargetsDocker(request: RuntimeCommandRequest): boolean {
-  const resolved = request.words.map((word) => {
-    const wordRequest: WordEnvironmentRequest = {
-      word,
-      environment: request.state.environment,
-    };
-    return resolveWord(wordRequest);
-  });
-  let targets: readonly ShellWord[] = [];
-  if (request.runtime === 'printf') {
-    const index = resolved.findIndex((word) => word.value === '-v');
-    targets = index < 0 ? [] : resolved.slice(index + 1, index + 2);
-  } else if (request.runtime === 'getopts') targets = resolved.slice(1, 2);
-  else if (request.runtime === 'read') {
-    const array = resolved.findIndex((word) => word.value === '-a');
-    const redirect = resolved.findIndex((word) => /^<+/u.test(word.value));
-    const candidates = redirect < 0 ? resolved : resolved.slice(0, redirect);
-    targets =
-      array < 0
-        ? candidates.filter(
-            (word) => !word.value.startsWith('-') && !/^<+/u.test(word.value),
-          )
-        : resolved.slice(array + 1, array + 2);
-  } else if (request.runtime === 'mapfile' || request.runtime === 'readarray') {
-    const redirect = resolved.findIndex((word) => /^<+/u.test(word.value));
-    const candidates = redirect < 0 ? resolved : resolved.slice(0, redirect);
-    targets = candidates.length > 0 ? candidates.slice(-1) : [];
-  }
-  return targets.some((word) => word.dynamic || word.value === 'DOCKER');
 }
 
 function analyzeShellRuntime(request: RuntimeCommandRequest): void {
@@ -884,7 +778,6 @@ function addLaunch(request: LaunchRequest): void {
     value: word.value,
   }));
   const scriptLaunch: ShellScriptLaunch = {
-    dockerOverride: request.state.environment.get('DOCKER') ?? false,
     specifier: value,
     positionalArguments,
   };
