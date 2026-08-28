@@ -142,6 +142,28 @@ fn has_unconditional_veto_identity(observation: &AuthenticationAdvanceControlObs
         || destination_has_disallowed_action_or_provider(&observation.destination_identity)
 }
 
+fn has_semantic_submit_ceremony(
+    observation: &AuthenticationAdvanceControlObservation,
+    authentication_scope_owns_control: bool,
+) -> bool {
+    let standards_email_semantic_submit = authentication_scope_owns_control
+        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
+        && matches!(
+            observation.authentication_username,
+            AuthenticationUsernameEvidence::StandardsBasedEmail
+        );
+    observation.password_field_count > 0
+        || observation.new_password_field_count > 0
+        || observation.one_time_code_field_count > 0
+        || matches!(
+            observation.authentication_username,
+            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+        )
+        || standards_email_semantic_submit
+        || (authentication_scope_owns_control
+            && form_has_authentication_identity(&observation.form_identity))
+}
+
 fn accepts_authentication_advance(
     observation: &AuthenticationAdvanceControlObservation,
     authentication_scope_owns_control: bool,
@@ -192,16 +214,8 @@ impl AuthenticationAdvanceControlObservation {
             self.ownership,
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         );
-        let positively_scoped_authentication_control = authentication_scope_owns_control
-            && form_has_authentication_identity(&self.form_identity);
-        let semantic_submit_ceremony_present = self.password_field_count > 0
-            || self.new_password_field_count > 0
-            || self.one_time_code_field_count > 0
-            || matches!(
-                self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            || positively_scoped_authentication_control;
+        let semantic_submit_ceremony_present =
+            has_semantic_submit_ceremony(self, authentication_scope_owns_control);
         let non_authentication_label =
             looks_like_non_authentication_submit_control_label(&self.label);
         let contextual_password_update = self.new_password_field_count > 0
@@ -240,7 +254,8 @@ impl AuthenticationAdvanceControlObservation {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
-            && looks_like_registration_route_control_label(&self.label)
+            && (looks_like_registration_route_control_label(&self.label)
+                || contains_any_word(&expand_identity_text(&self.label), &["join"]))
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -423,6 +438,53 @@ mod tests {
     }
 
     #[test]
+    fn standards_email_establishes_owned_passwordless_semantic_ceremony() {
+        let standards_email_submit = AuthenticationAdvanceControlObservation {
+            authentication_username: AuthenticationUsernameEvidence::StandardsBasedEmail,
+            form_identity: String::new(),
+            destination_identity: String::new(),
+            label: "Siguiente".to_owned(),
+            ..localized_identity_submit()
+        };
+        for ownership in [
+            PageControlOwnership::OwnedForm,
+            PageControlOwnership::LocallyScoped,
+        ] {
+            assert!(advances_authentication(
+                &AuthenticationAdvanceControlObservation {
+                    ownership,
+                    ..standards_email_submit.clone()
+                }
+            ));
+        }
+
+        for authentication_username in [
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::Absent,
+        ] {
+            assert!(!advances_authentication(
+                &AuthenticationAdvanceControlObservation {
+                    authentication_username,
+                    ..standards_email_submit.clone()
+                }
+            ));
+        }
+
+        for rejected in [
+            AuthenticationAdvanceControlObservation {
+                ownership: PageControlOwnership::Unowned,
+                ..standards_email_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                semantics: PageControlSemantics::Activation,
+                ..standards_email_submit
+            },
+        ] {
+            assert!(!advances_authentication(&rejected));
+        }
+    }
+
+    #[test]
     fn explicit_login_label_or_destination_identifies_password_only_submit() {
         let password_only_submit = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Generic,
@@ -513,7 +575,12 @@ mod tests {
             form_identity: "account-settings".to_owned(),
             ..localized_identity_submit()
         };
-        for label in ["Reset password", "Change password"] {
+        for label in [
+            "Reset password",
+            "Change password",
+            "Save and continue",
+            "Update credentials",
+        ] {
             assert!(advances_authentication(
                 &AuthenticationAdvanceControlObservation {
                     label: label.to_owned(),
@@ -524,8 +591,12 @@ mod tests {
         for label in [
             "Cancel password reset",
             "Cancel password change",
+            "Cancel password update",
             "Delete password reset",
             "Destroy password change",
+            "Delete password update",
+            "Save profile and continue",
+            "Update payment credentials",
         ] {
             assert!(!advances_authentication(
                 &AuthenticationAdvanceControlObservation {

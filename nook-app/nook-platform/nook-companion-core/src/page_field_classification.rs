@@ -290,7 +290,7 @@ pub fn looks_like_password_update_submit_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     matches!(
         identity.as_str(),
-        "save" | "save changes" | "update" | "change"
+        "save" | "save changes" | "save and continue" | "update" | "update credentials" | "change"
     ) || (contains_any_word(&identity, &["password"])
         && contains_any_word(&identity, &["save", "update", "change", "set", "reset"]))
 }
@@ -711,9 +711,21 @@ mod tests {
         assert!(looks_like_password_update_submit_control_label(
             "Save changes"
         ));
+        assert!(looks_like_password_update_submit_control_label(
+            "Save and continue"
+        ));
         assert!(looks_like_password_update_submit_control_label("Update"));
+        assert!(looks_like_password_update_submit_control_label(
+            "Update credentials"
+        ));
         assert!(!looks_like_password_update_submit_control_label(
             "Update profile"
+        ));
+        assert!(!looks_like_password_update_submit_control_label(
+            "Save profile and continue"
+        ));
+        assert!(!looks_like_password_update_submit_control_label(
+            "Update payment credentials"
         ));
         assert!(!looks_like_password_update_submit_control_label(
             "Delete password"
