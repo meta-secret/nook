@@ -23,6 +23,8 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: **P1 / critical `.cortex` writing rule:** split long dense sentences into short sentences, bullets, and lists; reserve tables for compact repeated fields or exact mappings
 - **[cortex-article-structure/SKILL.md](cortex-article-structure/SKILL.md)**
   - Purpose: **P1 / critical `.cortex` article rule:** expose semantic Markdown hierarchy; authored HTML nodes are prohibited, while literal HTML belongs in inline or block code
+- **[executable-skill-host/SKILL.md](executable-skill-host/SKILL.md)**
+  - Purpose: Discover and invoke the closed executable-skill catalog through strict bounded YAML
 - **[cortex-consistency.md](cortex-consistency.md)**
   - Purpose: **P1 / critical `.cortex` GC rule:** verify docs are current, agree with each other, and agree with the code
 - **[product-spec-lifecycle.md](product-spec-lifecycle.md)**

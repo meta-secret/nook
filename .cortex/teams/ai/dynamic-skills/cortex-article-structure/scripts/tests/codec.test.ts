@@ -16,6 +16,7 @@ import {
   CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
   CORTEX_ARTICLE_RESULT_BYTE_LIMIT,
   type AuditCortexArticleStructureRequest,
+  type CortexArticleHeading,
   type CortexArticleSemanticBlock,
   type CortexArticleStructureResult,
 } from '../src/domain.ts';
@@ -327,8 +328,32 @@ test('bounds paths, source lines, codes, and finding messages', () => {
   );
 });
 
-test('rejects control characters in request and result paths', () => {
-  const controls = ['\n', '\t', '\u001b', '\u0001', '\u007f'];
+test('rejects terminal controls while allowing benign joiners', () => {
+  const heading = validRequest.documents[0]?.blocks[0];
+  if (heading?.kind !== CortexArticleSemanticKind.Heading)
+    throw new Error('Expected heading fixture.');
+  const joinedHeading: CortexArticleHeading = {
+    ...heading,
+    text: 'Family 👨‍👩‍👧‍👦️',
+  };
+  const joinedDocument = {
+    ...validRequest.documents[0],
+    blocks: [joinedHeading],
+  };
+  const joinedRequest = { ...validRequest, documents: [joinedDocument] };
+  expect(
+    decodeCortexArticleRequest(JSON.stringify(joinedRequest)).documents[0]
+      ?.blocks[0],
+  ).toEqual(joinedHeading);
+  const controls = [
+    '\n',
+    '\t',
+    '\u001b',
+    '\u0001',
+    '\u007f',
+    '\u061c',
+    '\u2066',
+  ];
   for (const control of controls) {
     const relativePath = `.cortex/exam${control}ple.md`;
     const document = { ...validRequest.documents[0], relativePath };

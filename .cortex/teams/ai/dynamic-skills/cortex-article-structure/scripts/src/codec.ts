@@ -138,7 +138,8 @@ const LEDGER_KEYS = ['relativePath', 'content'] as const;
 const RESULT_KEYS = ['kind', 'findings'] as const;
 const FINDING_KEYS = ['code', 'file', 'line', 'message'] as const;
 const FINDING_CODES = new Set<string>(Object.values(CortexArticleFindingCode));
-const PATH_CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/u;
+const TERMINAL_CONTROL_CHARACTER =
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200e-\u200f\u2028-\u202e\u2066-\u206f]/u;
 const UTF8_ENCODER = new TextEncoder();
 enum SerializedCortexArticleContract {
   Request = 'request',
@@ -676,16 +677,20 @@ function isCortexMarkdownPath(value: string | false): value is string {
 function isBoundedDetail(value: string | false): value is string {
   return (
     typeof value === 'string' &&
-    value.length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT
+    value.length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT &&
+    !TERMINAL_CONTROL_CHARACTER.test(value)
   );
 }
 
 function isBoundedLedgerContent(value: string | false): boolean {
   if (value === false) return true;
   if (typeof value !== 'string') return false;
-  return value
-    .split(/\r?\n/u)
-    .every((line) => line.trim().length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT);
+  return (
+    !TERMINAL_CONTROL_CHARACTER.test(value.replace(/[\r\n]/gu, '')) &&
+    value
+      .split(/\r?\n/u)
+      .every((line) => line.trim().length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT)
+  );
 }
 
 function isPositiveLine(value: number | false): value is number {
@@ -693,7 +698,11 @@ function isPositiveLine(value: number | false): value is number {
 }
 
 function isNonblankString(value: string | false): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    !TERMINAL_CONTROL_CHARACTER.test(value)
+  );
 }
 
 function isSafeRelativePath(value: string | false): value is string {
@@ -702,7 +711,6 @@ function isSafeRelativePath(value: string | false): value is string {
     value.length <= CORTEX_ARTICLE_PATH_LIMIT &&
     !value.startsWith('/') &&
     !value.includes('\\') &&
-    !PATH_CONTROL_CHARACTER.test(value) &&
     value
       .split('/')
       .every((part) => part !== '..' && part !== '.' && part !== '')
