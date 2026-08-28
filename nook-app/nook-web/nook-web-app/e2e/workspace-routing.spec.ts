@@ -205,6 +205,9 @@ test.describe('persistent workspace routing', () => {
       await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
+      await headerDevicesAccess.click()
+      await expect(page).toHaveURL(/\/devices-access$/)
+      await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
       await page.getByTestId('devices-access-back').click()
 
       await expect(page).toHaveURL(origin.path)

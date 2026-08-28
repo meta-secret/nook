@@ -113,8 +113,15 @@
   }
 
   function openDevicesAccessFromHeader() {
-    leaveSecretsEditor()
     const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    if (
+      currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
+      currentRoute.route === WorkspaceRoute.DevicesAccess
+    ) {
+      return
+    }
+
+    leaveSecretsEditor()
     devicesAccessReturnRoute =
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
       currentRoute.route !== WorkspaceRoute.DevicesAccess
