@@ -1,3 +1,68 @@
+fn is_regular_file(path: &std::path::Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+}
+
+fn is_regular_directory(path: &std::path::Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+}
+
+fn is_kebab_slug(value: &str) -> bool {
+    !value.is_empty()
+        && value.split('-').all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit())
+        })
+}
+
+fn is_valid_application_root(cortex_root: &std::path::Path, path: &std::path::Path) -> bool {
+    let Ok(relative) = path.strip_prefix(cortex_root) else {
+        return false;
+    };
+    let parts = relative
+        .iter()
+        .map(|part| part.to_string_lossy())
+        .collect::<Vec<_>>();
+    let (slug, canonical_owner) = match parts.as_slice() {
+        [owner, dynamic, slug, scripts] => (
+            slug.as_ref(),
+            matches!(owner.as_ref(), "gizmo" | "shared")
+                && dynamic == "dynamic-skills"
+                && scripts == "scripts",
+        ),
+        [teams, team, dynamic, slug, scripts] => (
+            slug.as_ref(),
+            teams == "teams"
+                && matches!(
+                    team.as_ref(),
+                    "ai" | "dev-core" | "security" | "sre" | "web-dev"
+                )
+                && dynamic == "dynamic-skills"
+                && scripts == "scripts",
+        ),
+        _ => return false,
+    };
+    let skill_root = path.parent().unwrap_or(path);
+    canonical_owner
+        && is_kebab_slug(slug)
+        && is_regular_file(&skill_root.join("SKILL.md"))
+        && [
+            ".gitignore",
+            ".prettierrc",
+            "bun.lock",
+            "eslint.config.js",
+            "executable-skill.json",
+            "package.json",
+            "tsconfig.json",
+        ]
+        .iter()
+        .all(|name| is_regular_file(&path.join(name)))
+        && ["src", "tests"]
+            .iter()
+            .all(|name| is_regular_directory(&path.join(name)))
+}
+
 #[test]
 fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     let root = std::env::var_os("NOOK_REPO_ROOT").map_or_else(
@@ -39,7 +104,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     }
     let prompt_root = root.join(".github/prompts");
     let cortex_root = root.join(".cortex");
-    let mut cortex_pending = vec![cortex_root];
+    let mut cortex_pending = vec![cortex_root.clone()];
     let mut application_roots = Vec::new();
     while let Some(directory) = cortex_pending.pop() {
         for entry in std::fs::read_dir(directory)? {
@@ -49,18 +114,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
                 continue;
             }
             let path = entry.path();
-            let is_application_root = path.file_name().is_some_and(|name| name == "scripts")
-                && path
-                    .parent()
-                    .is_some_and(|skill_root| skill_root.join("SKILL.md").is_file())
-                && path
-                    .parent()
-                    .and_then(|skill_root| skill_root.parent())
-                    .is_some_and(|owner_root| {
-                        owner_root
-                            .file_name()
-                            .is_some_and(|name| name == "dynamic-skills")
-                    });
+            let is_application_root = is_valid_application_root(&cortex_root, &path);
             if is_application_root {
                 application_roots.push(path);
             } else {
@@ -68,6 +122,30 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
             }
         }
     }
+    application_roots.sort();
+    let taskfile = std::fs::read_to_string(root.join(".task/agentic-ai.yml"))?;
+    let declared = taskfile
+        .lines()
+        .find_map(|line| line.strip_prefix("  SKILL_APPLICATION_DIRS: "))
+        .ok_or_else(|| anyhow::anyhow!("Taskfile must declare SKILL_APPLICATION_DIRS"))?;
+    let mut declared_roots = declared.split_ascii_whitespace().collect::<Vec<_>>();
+    declared_roots.sort_unstable();
+    let actual_roots = application_roots
+        .iter()
+        .map(|path| {
+            path.strip_prefix(&root)
+                .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    anyhow::ensure!(
+        declared_roots == actual_roots,
+        "skills Task inventory must equal canonical executable packages"
+    );
+    let exhaustive_loop = "for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do";
+    anyhow::ensure!(
+        taskfile.matches(exhaustive_loop).count() == 3,
+        "skills install, format, and verify must each consume the complete package inventory"
+    );
     let mut pending = vec![prompt_root.clone()];
     pending.extend(application_roots);
     while let Some(directory) = pending.pop() {

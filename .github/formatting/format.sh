@@ -47,7 +47,7 @@ while IFS= read -r -d '' path; do
       loom_files+=("${path#agentic-ai/loom/}")
       ;;
     .cortex/gizmo/dynamic-skills/*/scripts/* | .cortex/shared/dynamic-skills/*/scripts/* | .cortex/teams/*/dynamic-skills/*/scripts/*)
-      skill_root="${path%%/scripts/*}/scripts"
+      skill_root="${path%/scripts/*}/scripts"
       skill_application_roots+=("$skill_root")
       skill_application_files+=("${path#${skill_root}/}")
       ;;

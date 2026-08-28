@@ -115,16 +115,17 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 
     let skills_install = task_body(&taskfile, "skills:install", "skills:format");
     assert!(
-        skills_install
-            .contains("dir: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts")
+        skills_install.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
+            && skills_install.contains("{{.REPO_ROOT}}/$skill_dir")
             && skills_install.contains("bun install --frozen-lockfile"),
-        "executable applications must install their pinned project"
+        "executable applications must install every pinned project"
     );
     let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
     assert!(
         skills_verify.contains("deps: [skills:install]")
+            && skills_verify.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
             && skills_verify.contains("bun run verify"),
-        "skills:verify must run the complete application project gate"
+        "skills:verify must run every complete application project gate"
     );
 
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");

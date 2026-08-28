@@ -1,4 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
@@ -57,11 +63,38 @@ test('excludes only canonical executable package scripts from Cortex Markdown', 
       'hidden',
     );
     const directoryOptions = { recursive: true } as const;
-    mkdirSync(path.join(skillRoot, 'scripts'), directoryOptions);
+    mkdirSync(path.join(skillRoot, 'scripts', 'src'), directoryOptions);
+    mkdirSync(path.join(skillRoot, 'scripts', 'tests'), directoryOptions);
+    mkdirSync(
+      path.join(skillRoot, 'scripts', 'node_modules', '.bin'),
+      directoryOptions,
+    );
     mkdirSync(unrelatedScripts, directoryOptions);
     mkdirSync(path.join(unknownSkillRoot, 'scripts'), directoryOptions);
-    writeFileSync(path.join(skillRoot, 'SKILL.md'), '# Article Audit\n');
+    writeFileSync(
+      path.join(skillRoot, 'SKILL.md'),
+      '---\nname: article-audit\ndescription: Audit articles.\n---\n\n# Article Audit\n',
+    );
+    for (const name of [
+      '.gitignore',
+      '.prettierrc',
+      'bun.lock',
+      'eslint.config.js',
+      'executable-skill.json',
+      'package.json',
+      'tsconfig.json',
+    ]) {
+      writeFileSync(path.join(skillRoot, 'scripts', name), '{}\n');
+    }
     writeFileSync(path.join(skillRoot, 'scripts', 'README.md'), '# Code\n');
+    writeFileSync(
+      path.join(skillRoot, 'scripts', 'node_modules', 'tool'),
+      '#!/bin/sh\n',
+    );
+    symlinkSync(
+      '../tool',
+      path.join(skillRoot, 'scripts', 'node_modules', '.bin', 'tool'),
+    );
     writeFileSync(path.join(unrelatedScripts, 'policy.md'), '# Policy\n');
     writeFileSync(path.join(unknownSkillRoot, 'SKILL.md'), '# Hidden\n');
     writeFileSync(
@@ -118,6 +151,7 @@ test('reports orphan and malformed executable skill packages by exact path', () 
     mkdirSync(path.join(skillsDir, 'orphan', 'scripts'), directoryOptions);
     mkdirSync(path.join(skillsDir, 'wrong-name'), directoryOptions);
     mkdirSync(path.join(skillsDir, 'mirrored', 'scripts'), directoryOptions);
+    mkdirSync(path.join(skillsDir, 'Bad_Slug'), directoryOptions);
     writeFileSync(
       path.join(skillsDir, 'wrong-name', 'SKILL.md'),
       '---\nname: another-name\ndescription: Test package.\n---\n\n# Test\n',
@@ -130,6 +164,34 @@ test('reports orphan and malformed executable skill packages by exact path', () 
       path.join(skillsDir, 'mirrored', 'scripts', 'SKILL.md'),
       '# Mirror\n',
     );
+    for (const [slug, description] of [
+      ['comment-description', '# comment'],
+      ['null-description', 'null'],
+      ['tilde-description', '~'],
+      ['number-description', '42'],
+      ['empty-description', '""'],
+    ] as const) {
+      mkdirSync(path.join(skillsDir, slug), directoryOptions);
+      writeFileSync(
+        path.join(skillsDir, slug, 'SKILL.md'),
+        `---\nname: ${slug}\ndescription: ${description}\n---\n\n# Test\n`,
+      );
+    }
+    for (const [slug, frontmatter] of [
+      [
+        'duplicate-description',
+        'name: duplicate-description\ndescription: first\ndescription: second',
+      ],
+      ['invalid-yaml', 'name: invalid-yaml\ndescription: ['],
+      ['quoted-description', 'name: quoted-description\n"description": Valid'],
+      ['block-description', 'name: block-description\ndescription: |\n  Valid'],
+    ] as const) {
+      mkdirSync(path.join(skillsDir, slug), directoryOptions);
+      writeFileSync(
+        path.join(skillsDir, slug, 'SKILL.md'),
+        `---\n${frontmatter}\n---\n\n# Test\n`,
+      );
+    }
 
     const packageAuditArgs: AuditExecutableSkillPackagesArgs = {
       repoRoot,
@@ -148,6 +210,31 @@ test('reports orphan and malformed executable skill packages by exact path', () 
     expect(findings).toContain(
       '.cortex/teams/ai/dynamic-skills/mirrored/scripts/SKILL.md: scripts cannot contain a skill-card mirror',
     );
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/Bad_Slug: executable skill directory must use a canonical kebab-case slug',
+    );
+    for (const slug of [
+      'comment-description',
+      'null-description',
+      'tilde-description',
+      'number-description',
+      'empty-description',
+    ]) {
+      expect(findings).toContain(
+        `.cortex/teams/ai/dynamic-skills/${slug}/SKILL.md: SKILL.md description must be a nonempty string`,
+      );
+    }
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/duplicate-description/SKILL.md: SKILL.md frontmatter duplicates description',
+    );
+    expect(findings).toContain(
+      '.cortex/teams/ai/dynamic-skills/invalid-yaml/SKILL.md: SKILL.md frontmatter is invalid YAML',
+    );
+    for (const slug of ['quoted-description', 'block-description']) {
+      expect(findings).not.toContain(
+        `.cortex/teams/ai/dynamic-skills/${slug}/SKILL.md: SKILL.md description must be a nonempty string`,
+      );
+    }
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(repoRoot, removeOptions);

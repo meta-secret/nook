@@ -3,6 +3,11 @@ import { execFileSync } from 'node:child_process';
 import type { ExecFileSyncOptionsWithStringEncoding } from 'node:child_process';
 import path from 'node:path';
 import type { CortexAuditRequest } from '../codec/args/cortex-audit.ts';
+import {
+  asUntrustedYamlNode,
+  isRecord,
+  type UntrustedYamlNode,
+} from '../lib/guards.ts';
 import { lintProseDensity, type DensityFinding } from '../lib/density.ts';
 import { findBrokenRelativeLinks, type BrokenLink } from '../lib/links.ts';
 import { findRepoRoot } from '../lib/repo.ts';
@@ -471,6 +476,12 @@ export function auditExecutableSkillPackages(
     }
     if (!entry.isDirectory()) continue;
     const packageRoot = path.join(args.skillsDir, entry.name);
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(entry.name)) {
+      findings.push(
+        `${path.relative(args.repoRoot, packageRoot)}: executable skill directory must use a canonical kebab-case slug`,
+      );
+      continue;
+    }
     const skillPath = path.join(packageRoot, 'SKILL.md');
     if (!isRegularFile(skillPath)) {
       findings.push(
@@ -553,34 +564,41 @@ function auditExecutableSkillFrontmatter(
   if (typeof frontmatter !== 'string') {
     return [`${relativeSkillPath}: SKILL.md is missing YAML frontmatter`];
   }
-  const values = new Map<string, string>();
+  const fields = new Set<string>();
   for (const line of frontmatter.split(/\r?\n/u)) {
-    const field = /^(name|description):\s*(\S(?:.*\S)?)\s*$/u.exec(line);
+    const field = /^(name|description):/u.exec(line);
     const name = field?.at(1);
-    const value = field?.at(2);
-    if (typeof name === 'string' && typeof value === 'string') {
-      if (values.has(name)) {
+    if (typeof name === 'string') {
+      if (fields.has(name)) {
         return [
           `${relativeSkillPath}: SKILL.md frontmatter duplicates ${name}`,
         ];
       }
-      values.set(name, value);
+      fields.add(name);
     }
   }
+  let parsed: UntrustedYamlNode;
+  try {
+    parsed = asUntrustedYamlNode(
+      Bun.YAML.parse(frontmatter) as UntrustedYamlNode,
+    );
+  } catch {
+    return [`${relativeSkillPath}: SKILL.md frontmatter is invalid YAML`];
+  }
+  const entries = isRecord(parsed) ? Object.entries(parsed) : [];
+  const nameEntry = entries.find(([key]) => key === 'name');
+  const descriptionEntry = entries.find(([key]) => key === 'description');
+  const name = nameEntry ? nameEntry[1] : false;
+  const description = descriptionEntry ? descriptionEntry[1] : false;
   const findings: string[] = [];
-  if (values.get('name') !== args.slug) {
+  if (name !== args.slug) {
     findings.push(
       `${relativeSkillPath}: SKILL.md name must equal directory slug ${args.slug}`,
     );
   }
-  const description = values.get('description');
-  if (
-    typeof description !== 'string' ||
-    description === '""' ||
-    description === "''"
-  ) {
+  if (typeof description !== 'string' || description.trim().length === 0) {
     findings.push(
-      `${relativeSkillPath}: SKILL.md description must be nonempty`,
+      `${relativeSkillPath}: SKILL.md description must be a nonempty string`,
     );
   }
   return findings;
@@ -596,16 +614,34 @@ function isExecutableSkillScriptsDirectory(
 ): boolean {
   if (path.basename(args.candidate) !== 'scripts') return false;
   const skillRoot = path.dirname(args.candidate);
-  if (!isRegularFile(path.join(skillRoot, 'SKILL.md'))) return false;
+  const slug = path.basename(skillRoot);
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(slug)) return false;
+  const skillPath = path.join(skillRoot, 'SKILL.md');
+  if (!isRegularFile(skillPath)) return false;
   const ownerRoot = path.dirname(skillRoot);
   if (path.basename(ownerRoot) !== 'dynamic-skills') return false;
   const relativeOwner = path.relative(args.cortexRoot, ownerRoot);
-  return (
+  const canonicalOwner =
     relativeOwner === path.join('gizmo', 'dynamic-skills') ||
     relativeOwner === path.join('shared', 'dynamic-skills') ||
     ['ai', 'dev-core', 'security', 'sre', 'web-dev'].some(
       (team) => relativeOwner === path.join('teams', team, 'dynamic-skills'),
-    )
+    );
+  if (!canonicalOwner) return false;
+  const frontmatterArgs: AuditExecutableSkillFrontmatterArgs = {
+    repoRoot: path.dirname(args.cortexRoot),
+    skillPath,
+    slug,
+  };
+  return (
+    auditExecutableSkillFrontmatter(frontmatterArgs).length === 0 &&
+    EXECUTABLE_SKILL_PROJECT_FILES.every((name) =>
+      isRegularFile(path.join(args.candidate, name)),
+    ) &&
+    ['src', 'tests'].every((name) =>
+      isRegularDirectory(path.join(args.candidate, name)),
+    ) &&
+    nestedSkillCards(args.candidate).length === 0
   );
 }
 

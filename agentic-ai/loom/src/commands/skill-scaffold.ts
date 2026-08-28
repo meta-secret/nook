@@ -89,7 +89,7 @@ export function findExistingSkillCard(
     ownerRoots
       .flatMap((ownerRoot) => [
         path.join(ownerRoot, `${args.slug}.md`),
-        path.join(ownerRoot, args.slug, 'SKILL.md'),
+        path.join(ownerRoot, args.slug),
       ])
       .find((candidatePath) => existsSync(candidatePath)) ?? false
   );

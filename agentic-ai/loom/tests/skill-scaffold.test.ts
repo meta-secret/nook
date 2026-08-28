@@ -193,7 +193,28 @@ describe('skill scaffold', () => {
       await writeFile(skillPath, '# Article Audit\n', 'utf8');
 
       const findArgs = { cortexRoot, slug: 'article-audit' };
-      expect(findExistingSkillCard(findArgs)).toBe(skillPath);
+      expect(findExistingSkillCard(findArgs)).toBe(skillRoot);
+    } finally {
+      const removeOptions = { recursive: true, force: true } as const;
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('rejects an existing malformed skill directory without SKILL.md', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-malformed-skill-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    const skillRoot = join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'article-audit',
+    );
+    try {
+      const directoryOptions = { recursive: true } as const;
+      await mkdir(skillRoot, directoryOptions);
+      const findArgs = { cortexRoot, slug: 'article-audit' };
+      expect(findExistingSkillCard(findArgs)).toBe(skillRoot);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);
