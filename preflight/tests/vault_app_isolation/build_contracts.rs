@@ -105,15 +105,21 @@ fn production_vault_wasm_is_preloaded_size_optimized_and_budgeted() {
         "nook-app/nook-web/nook-web-app/scripts/verify-app-isolation.ts",
     );
     for required in [
-        "VAULT_WASM_RAW_SIZE_LIMIT",
-        "VAULT_WASM_BROTLI_SIZE_LIMIT",
+        "const VAULT_WASM_RAW_SIZE_LIMIT = 8_300_000",
+        "const VAULT_WASM_BROTLI_SIZE_LIMIT = 2_300_000",
+        "normalizedWasmBuildMode === 'optimized'",
+        "vaultWasm.byteLength > VAULT_WASM_RAW_SIZE_LIMIT",
+        "brotliSize > VAULT_WASM_BROTLI_SIZE_LIMIT",
         "nook_companion_wasm",
         "must contain exactly one vault WASM asset",
         "configureVaultExtensionConnectScopeRuntime",
         "extension_vault_access_scope",
         "is_extension_connect_scope",
     ] {
-        assert!(verifier.contains(required));
+        assert!(
+            verifier.contains(required),
+            "vault WASM production budget contract is missing: {required}"
+        );
     }
 
     let extension_scope = read(
