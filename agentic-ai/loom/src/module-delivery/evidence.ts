@@ -1,4 +1,5 @@
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
+import { freezeProviderEvidenceIdentity } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { runModuleDeliveryGit } from './git-command.ts';
 import {
@@ -356,16 +357,7 @@ function freezeAcceptedEvidence(
     ]),
     claimIdentities: frozenClaims(submission.claimIdentities),
     acceptedProviderEvidence: Object.freeze(
-      submission.acceptedProviderEvidence.map((identity) => {
-        const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
-          ...identity,
-          claimIdentities: frozenClaims(identity.claimIdentities),
-          acceptanceRequirements: Object.freeze([
-            ...identity.acceptanceRequirements,
-          ]),
-        };
-        return Object.freeze(copy);
-      }),
+      submission.acceptedProviderEvidence.map(freezeProviderEvidenceIdentity),
     ),
     evidence: Object.freeze([...submission.evidence]),
     sourceProvenanceDigest: request.provenance,

@@ -136,7 +136,7 @@ function frozenClaim(
   return Object.freeze(copy);
 }
 
-function frozenProviderIdentity(
+export function freezeProviderEvidenceIdentity(
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
   const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
@@ -144,7 +144,7 @@ function frozenProviderIdentity(
     claimIdentities: Object.freeze(identity.claimIdentities.map(frozenClaim)),
     acceptanceRequirements: Object.freeze([...identity.acceptanceRequirements]),
     acceptedProviderEvidence: Object.freeze(
-      identity.acceptedProviderEvidence.map(frozenProviderIdentity),
+      identity.acceptedProviderEvidence.map(freezeProviderEvidenceIdentity),
     ),
   };
   return Object.freeze(copy);
@@ -199,7 +199,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
       acceptanceRequirements: evidence.acceptanceRequirements,
       acceptedProviderEvidence: evidence.acceptedProviderEvidence,
     };
-    return frozenProviderIdentity(acceptedIdentity);
+    return freezeProviderEvidenceIdentity(acceptedIdentity);
   };
   const register = (
     request: AcceptedModuleDeliveryEvidenceInspection,

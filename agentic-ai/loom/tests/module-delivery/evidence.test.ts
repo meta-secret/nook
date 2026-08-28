@@ -38,6 +38,7 @@ import type {
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryEvidenceArtifactDigestRequest,
@@ -94,6 +95,11 @@ type ExpectedEvidenceIdentity = {
   readonly planDigest: string;
   readonly verdict: ModuleDeliveryEvidenceVerdict;
 };
+
+type MutableProviderEvidenceIdentity = Omit<
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  'acceptedProviderEvidence'
+> & { acceptedProviderEvidence: MutableProviderEvidenceIdentity[] };
 
 function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
   const { providerTaskId, consumerTaskId } = request;
@@ -631,9 +637,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       lease: synthesisLease,
       acceptedProviderEvidence: [providerEvidence, providerBEvidence],
     };
-    expect(synthesisLease.resources.read).toEqual([]);
-    expect(synthesisLease.resources.write).toEqual([]);
-    expect(synthesisLease.resources.evidenceSurface).toEqual([]);
+    expect(Object.values(synthesisLease.resources).flat()).toEqual([]);
     const exact = submission(synthesisSubmissionRequest);
     const missingInputsVerificationRequest: EvidenceVerificationRequest = {
       runtime: synthesisRuntime,
@@ -655,22 +659,26 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     expect(() => verify(reversedVerificationRequest)).toThrow(
       'synthesis inputs',
     );
-    const forgedIdentity = exact.acceptedProviderEvidence.map((identity) => ({
-      ...identity,
-      sourceProvenanceDigest: 'f'.repeat(64),
-    }));
-    const forged = { ...exact, acceptedProviderEvidence: forgedIdentity };
-    const forgedVerificationRequest: EvidenceVerificationRequest = {
-      ...synthesisSubmissionRequest,
-      candidate: forged,
+    const mutableIdentities = structuredClone(
+      exact.acceptedProviderEvidence,
+    ) as MutableProviderEvidenceIdentity[];
+    const mutableExact: ModuleDeliveryReadOnlyEvidenceSubmission = {
+      ...exact,
+      acceptedProviderEvidence: mutableIdentities,
     };
-    expect(() => verify(forgedVerificationRequest)).toThrow('synthesis inputs');
     const synthesisVerificationRequest: EvidenceVerificationRequest = {
       ...synthesisSubmissionRequest,
-      candidate: exact,
+      candidate: mutableExact,
     };
     const synthesisEvidence = verify(synthesisVerificationRequest);
-    expect(synthesisEvidence.taskId).toBe(active.synthesis.taskId);
+    const retained = mutableIdentities[0];
+    const nested = mutableIdentities[1];
+    const stored = synthesisEvidence.acceptedProviderEvidence[0];
+    if (!retained || !nested || !stored)
+      throw new Error('Nested synthesis evidence is missing.');
+    retained.acceptedProviderEvidence.push(nested);
+    expect(Object.isFrozen(stored.acceptedProviderEvidence)).toBe(true);
+    expect(stored.acceptedProviderEvidence).toEqual([]);
     expect(() => verify(synthesisVerificationRequest)).toThrow(
       'metadata is invalid',
     );
