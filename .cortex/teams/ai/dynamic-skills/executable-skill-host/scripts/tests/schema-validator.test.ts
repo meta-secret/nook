@@ -55,6 +55,7 @@ test('keeps ambiguous and absent discriminators generic', () => {
   for (const [schema, value] of [
     [semanticBlockSchema(), { line: 1 }],
     [overlapping, { kind: 'shared' }],
+    [overlapping, { kind: 'shared', field: 'value' }],
   ] as const) {
     const request: SkillSchemaValidationRequest = {
       path: 'blocks[0]',

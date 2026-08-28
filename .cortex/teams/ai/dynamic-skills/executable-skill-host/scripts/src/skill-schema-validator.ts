@@ -55,6 +55,7 @@ export function validateSkillInput(
   if ('oneOf' in request.schema) {
     let selected: SkillSchemaValidation | false = false;
     let ambiguous = false;
+    let matches = 0;
     for (const schema of request.schema.oneOf) {
       const variantRequest: SkillSchemaValidationRequest = {
         path: request.path,
@@ -62,7 +63,10 @@ export function validateSkillInput(
         value: request.value,
       };
       const result = validateSkillInput(variantRequest);
-      if (result.ok) return result;
+      if (result.ok) {
+        matches += 1;
+        continue;
+      }
       const discriminatorRequest: SkillDiscriminatorRequest = {
         schema,
         value: request.value,
@@ -71,6 +75,9 @@ export function validateSkillInput(
       if (selected !== false) ambiguous = true;
       selected = result;
     }
+    if (matches === 1) return { ok: true };
+    if (matches > 1)
+      return invalidAt(request.path)('Value matches multiple variants.');
     if (selected !== false && !ambiguous) return selected;
     return invalidAt(request.path)('Value does not match an allowed variant.');
   }
@@ -235,11 +242,16 @@ function validateString(
     );
   }
   const maximumLineLength = request.schema.maxTrimmedLineLength;
+  const lines = request.value.split(/\r\n|\n|\r/u);
+  if (
+    typeof request.schema.maxTrimmedLines === 'number' &&
+    lines.length > request.schema.maxTrimmedLines
+  ) {
+    return invalidAt(request.path)('Value contains too many lines.');
+  }
   if (
     typeof maximumLineLength === 'number' &&
-    request.value
-      .split(/\r?\n/u)
-      .some((line) => line.trim().length > maximumLineLength)
+    lines.some((line) => line.trim().length > maximumLineLength)
   ) {
     return invalidAt(request.path)(
       'A trimmed line exceeds the allowed length.',

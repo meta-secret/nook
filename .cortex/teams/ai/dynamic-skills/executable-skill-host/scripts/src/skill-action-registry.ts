@@ -32,7 +32,6 @@ import {
 } from './skill-schema-validator.ts';
 import { unknownSkillCommandPath } from './skill-command-path.ts';
 export const SKILL_TOOLS_LIST_INVOKE = 'task skills:tools-list';
-export const SKILL_RUN_INVOKE = 'task skills:run CONFIG=<request.yaml>';
 const TOOLS_LIST_EXAMPLE = `skillToolsList:
   list: {}
 `;

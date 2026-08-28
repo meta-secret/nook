@@ -18,7 +18,10 @@ import {
   SKILL_HOST_RESPONSE_BYTE_LIMIT,
   SkillRequestFamily,
 } from '../src/skill-command-domain.ts';
-import type { UntrustedSkillYamlNode } from '../src/skill-yaml-codec.ts';
+import {
+  parseSkillYamlText,
+  type UntrustedSkillYamlNode,
+} from '../src/skill-yaml-codec.ts';
 type SkillCliResponseTransport = {
   readonly ok: boolean;
   readonly family?: string;
@@ -70,6 +73,7 @@ describe('executable skill YAML command protocol', () => {
     const outcome = await runSkillCli(request);
     const response = parseCliResponse(outcome.yaml);
     expect(outcome.exitCode).toBe(0);
+    expect(parseSkillYamlText(outcome.yaml).ok).toBe(true);
     expect(response.ok).toBe(true);
     const actions = response.result?.actions;
     if (!actions) throw new Error('Missing discovered actions.');
@@ -77,6 +81,7 @@ describe('executable skill YAML command protocol', () => {
     for (const action of actions) {
       expect(action.description).not.toBeEmpty();
       expect(action.exampleRequest).not.toBeEmpty();
+      expect(action.exampleRequest).not.toContain('skills:run');
       expect(action.exampleYaml).not.toBeEmpty();
       expect(action.resolvedExampleYaml).toBe(action.exampleYaml);
       expect(action.inputSchema.type).toBe('object');
@@ -168,6 +173,7 @@ describe('executable skill YAML command protocol', () => {
       throw new Error('Missing migration-ledger line bound.');
     }
     expect(textContent.maxTrimmedLineLength).toBe(3_800);
+    expect(textContent.maxTrimmedLines).toBe(50_000);
   });
   test('fails closed with typed error and corrective recovery', () => {
     const outcome = dispatchSkillYamlText(
@@ -261,6 +267,10 @@ describe('executable skill YAML command protocol', () => {
         ),
         'cortexArticleStructure.audit.migrationLedger.relativePath',
       ],
+      [
+        audit.replace('content: false', `content: "${'x\\n'.repeat(50_001)}"`),
+        'cortexArticleStructure.audit.migrationLedger.content',
+      ],
     ] as const;
     for (const [yaml, path] of cases) {
       const response = parseCliResponse(dispatchSkillYamlText(yaml).yaml);
@@ -291,6 +301,7 @@ describe('executable skill YAML command protocol', () => {
         'migrationBaselineEntries[0]',
       ],
       ['content: false', 'content: "MARKER\\u001b"', 'migrationLedger.content'],
+      ['content: false', 'content: "MARKER\\rtext"', 'migrationLedger.content'],
     ] as const;
     for (const [source, replacement, suffix] of cases) {
       const outcome = dispatchSkillYamlText(audit.replace(source, replacement));

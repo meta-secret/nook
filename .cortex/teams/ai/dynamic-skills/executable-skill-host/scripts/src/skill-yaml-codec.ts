@@ -33,7 +33,10 @@ export type SkillYamlParseOutcome =
 const YAML_REFERENCE_FAILURE =
   'YAML anchors and aliases are not supported by executable skills.';
 const YAML_SYNTAX_FAILURE = 'Invalid YAML syntax.';
-const YAML_STRINGIFY_OPTIONS = { indent: 2 } as const;
+const YAML_STRINGIFY_OPTIONS = {
+  aliasDuplicateObjects: false,
+  indent: 2,
+} as const;
 enum SkillYamlAstIssue {
   None = 'none',
   Reference = 'reference',

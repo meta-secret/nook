@@ -164,7 +164,9 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         assert!(manifest.contains("\"verify\":"));
         let eslint = read(&root, &format!("{scripts}/eslint.config.js"));
         assert!(
-            eslint.contains("'max-params': ['error', { max: 1 }]")
+            eslint.contains("files: ['src/**/*.ts', 'tests/**/*.ts']")
+                && eslint.contains("'max-params': ['error', { max: 1 }]")
+                && eslint.contains("unknown:")
                 && eslint.contains("'nook/no-raw-object-arguments': 'error'")
         );
         let typescript = read(&root, &format!("{scripts}/tsconfig.json"));

@@ -685,11 +685,13 @@ function isBoundedDetail(value: string | false): value is string {
 function isBoundedLedgerContent(value: string | false): boolean {
   if (value === false) return true;
   if (typeof value !== 'string') return false;
+  const lines = value.split(/\r\n|\n/u);
   return (
-    !TERMINAL_CONTROL_CHARACTER.test(value.replace(/[\r\n]/gu, '')) &&
-    value
-      .split(/\r?\n/u)
-      .every((line) => line.trim().length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT)
+    lines.length <= CORTEX_ARTICLE_FINDING_LIMIT &&
+    !TERMINAL_CONTROL_CHARACTER.test(value.replace(/\r\n|\n/gu, '')) &&
+    lines.every(
+      (line) => line.trim().length <= CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+    )
   );
 }
 

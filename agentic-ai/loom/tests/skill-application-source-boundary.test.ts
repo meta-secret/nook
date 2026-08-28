@@ -21,7 +21,7 @@ const HOST_CALLS = [
   'closeSync(descriptor)',
   'fstatSync(descriptor)',
   'fstatSync(descriptor)',
-  "openSync(invocation.requestPath, 'r')",
+  'openSync( invocation.requestPath, constants.O_RDONLY | constants.O_NONBLOCK, )',
   'readSync( descriptor, bytes, length, bytes.length - length, length, )',
 ] as const;
 const PROCESS_USES = [
@@ -29,6 +29,14 @@ const PROCESS_USES = [
   'process.exitCode = outcome.exitCode',
   'process.stdout.write(outcome.yaml)',
 ] as const;
+const FORBIDDEN_HOST_GLOBALS = new Set([
+  'Bun',
+  'Date',
+  'Math',
+  'console',
+  'crypto',
+  'performance',
+]);
 type SkillSourceRequest = {
   readonly relativePath: string;
   readonly source: string;
@@ -42,7 +50,7 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
     true,
     ts.ScriptKind.TS,
   );
-  const retained = [...source];
+  const retained = source.split('');
   const hostUses: string[] = [];
   const processUses: string[] = [];
   const erase = (node: ts.Node): string[] =>
@@ -54,7 +62,7 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
       return false;
     const expected =
       relativePath === HOST_CLI && node.moduleSpecifier.text === 'node:fs'
-        ? 'closeSync fstatSync openSync readSync'.split(' ')
+        ? 'closeSync constants fstatSync openSync readSync'.split(' ')
         : relativePath === YAML_CODEC && node.moduleSpecifier.text === 'yaml'
           ? 'ParsedNode isAlias isMap isScalar isSeq parseDocument stringify'.split(
               ' ',
@@ -67,6 +75,7 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
         : [];
     return (
       expected.length > 0 &&
+      !node.importClause?.name &&
       elements.length === expected.length &&
       elements.every(
         (element) =>
@@ -75,6 +84,8 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
     );
   };
   const visit = (node: ts.Node): void => {
+    if (ts.isIdentifier(node) && FORBIDDEN_HOST_GLOBALS.has(node.text))
+      throw new Error('Forbidden host output, clock, or entropy capability.');
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
@@ -129,6 +140,12 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
         throw new Error('Forbidden host filesystem capability.');
       hostUses.push(compact(node.parent));
     }
+    if (
+      relativePath === HOST_CLI &&
+      ts.isIdentifier(node) &&
+      node.text === 'constants'
+    )
+      retained.splice(node.getStart(), node.getWidth(), ...'safeValue');
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
@@ -264,10 +281,19 @@ test('rejects dangerous capabilities from every host layer', async () => {
   const fixtures = [
     [HOST_CLI, "fetch('https://example.com');"],
     [HOST_CLI, 'process.env.SECRET;'],
+    [HOST_CLI, 'console.log(text);'],
+    [HOST_CLI, 'Bun.write(Bun.stderr, text);'],
+    [HOST_CLI, 'Date.now(); Math.random();'],
+    [HOST_CLI, 'performance.now(); crypto.randomUUID();'],
+    [
+      HOST_CLI,
+      "import fs, { closeSync, fstatSync, openSync, readSync } from 'node:fs';",
+    ],
+    [HOST_CLI, `// 👩‍💻\n${host}\nfetch('https://example.com');`],
     [
       HOST_CLI,
       host.replace(
-        "openSync(invocation.requestPath, 'r')",
+        'constants.O_RDONLY | constants.O_NONBLOCK',
         "openSync('/tmp/pwn', 'w')",
       ),
     ],

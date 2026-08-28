@@ -156,6 +156,7 @@ export const CORTEX_ARTICLE_AUDIT_SCHEMA = {
           oneOf: [
             {
               type: 'string',
+              maxTrimmedLines: CORTEX_ARTICLE_FINDING_LIMIT,
               maxTrimmedLineLength: CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
             },
             { const: false },
@@ -170,7 +171,7 @@ const CORTEX_ARTICLE_ACTION = {
   family: 'cortexArticleStructure',
   operation: 'audit',
   description: 'Audit semantic structure in Cortex Markdown articles.',
-  exampleRequest: 'task skills:run CONFIG=<request.yaml>',
+  exampleRequest: 'Unavailable until repository invocation is authorized.',
   exampleYaml: CORTEX_ARTICLE_AUDIT_EXAMPLE,
   resolvedExampleYaml: CORTEX_ARTICLE_AUDIT_EXAMPLE,
   inputSchema: CORTEX_ARTICLE_AUDIT_SCHEMA,

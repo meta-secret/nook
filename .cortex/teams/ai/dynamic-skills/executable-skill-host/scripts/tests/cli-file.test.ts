@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -45,19 +45,18 @@ test('reads and executes a valid request file', async () => {
 });
 test('rejects every invalid request-file transport', async () => {
   const directory = createTemporaryDirectory();
-  const unreadable = join(directory, 'unreadable.yml');
+  const fifo = join(directory, 'request.fifo');
   const oversized = join(directory, 'bom-oversized.yml');
   const invalidUtf8 = join(directory, 'invalid-utf8.yml');
   try {
-    writeFileSync(unreadable, 'skillToolsList:\n  list: {}\n');
-    chmodSync(unreadable, 0o000);
+    expect(Bun.spawnSync(['mkfifo', fifo]).exitCode).toBe(0);
     const oversizedBytes = new Uint8Array(SKILL_HOST_REQUEST_BYTE_LIMIT + 1);
     oversizedBytes.set([0xef, 0xbb, 0xbf]);
     writeFileSync(oversized, oversizedBytes);
     writeFileSync(invalidUtf8, new Uint8Array([0xc3, 0x28]));
     const cases = [
       [join(directory, 'missing.yml'), SkillCommandIssue.RequestFileReadFailed],
-      [unreadable, SkillCommandIssue.RequestFileReadFailed],
+      [fifo, SkillCommandIssue.RequestFileReadFailed],
       [directory, SkillCommandIssue.RequestFileReadFailed],
       [oversized, SkillCommandIssue.RequestTooLarge],
       [invalidUtf8, SkillCommandIssue.RequestFileReadFailed],
@@ -69,7 +68,6 @@ test('rejects every invalid request-file transport', async () => {
       expect(parseError(outcome).errors?.at(0)?.issue).toBe(issue);
     }
   } finally {
-    chmodSync(unreadable, 0o600);
     rmSync(directory, REMOVE_DIRECTORY_OPTIONS);
   }
 });

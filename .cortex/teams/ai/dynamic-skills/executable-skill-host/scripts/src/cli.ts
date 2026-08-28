@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
+import { closeSync, constants, fstatSync, openSync, readSync } from 'node:fs';
 import {
   decodeSkillActionRequest,
   defaultSkillBlueprint,
@@ -66,7 +66,10 @@ export async function runSkillCli(
   }
   let text: string;
   try {
-    const descriptor = openSync(invocation.requestPath, 'r');
+    const descriptor = openSync(
+      invocation.requestPath,
+      constants.O_RDONLY | constants.O_NONBLOCK,
+    );
     try {
       const metadata = fstatSync(descriptor);
       if (!metadata.isFile()) {

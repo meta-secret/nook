@@ -9,6 +9,6 @@
   ],
   "limits": {
     "requestBytes": 4194304,
-    "resultBytes": 5242880
+    "resultBytes": 8454144
   }
 }
