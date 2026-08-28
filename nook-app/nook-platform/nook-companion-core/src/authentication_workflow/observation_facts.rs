@@ -1,52 +1,18 @@
 use super::{
     AuthenticationAdvanceControlEvidence, AuthenticationEnrollmentEvidence,
-    AuthenticationFormObservationPriority, AuthenticationManualCheckpoint,
-    AuthenticationOneTimeCodeProgressionEvidence, AuthenticationPageObservation,
+    AuthenticationFormObservationPriority, AuthenticationPageObservation,
     AuthenticationPageObservations, AuthenticationPasskeyEvidence, AuthenticationWorkflowMatch,
 };
 use crate::page_field_classification::{
-    AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
-    AuthenticationUsernameEvidence, PageControlOwnership,
-    looks_like_one_time_code_auto_submit_signal,
+    AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence, PageControlOwnership,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-/// Detailed browser evidence for the control selected to advance authentication.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", content = "observation", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum AuthenticationDetailedAdvanceControlObservation {
-    #[default]
-    Absent,
-    Observed(AuthenticationAdvanceControlObservation),
-}
-
-impl AuthenticationDetailedAdvanceControlObservation {
-    fn evidence(
-        &self,
-        fields: AuthenticationFieldObservationFacts,
-    ) -> AuthenticationAdvanceControlEvidence {
-        match self {
-            Self::Observed(observation)
-                if observation.is_bounded()
-                    && fields.is_compatible_with_detailed_control(observation)
-                    && matches!(
-                        observation.classify(),
-                        AuthenticationAdvanceControlDecision::AdvancesAuthentication
-                    ) =>
-            {
-                AuthenticationAdvanceControlEvidence::Present
-            }
-            Self::Absent | Self::Observed(_) => AuthenticationAdvanceControlEvidence::Absent,
-        }
-    }
-
-    fn is_bounded(&self) -> bool {
-        matches!(self, Self::Absent)
-            || matches!(self, Self::Observed(observation) if observation.is_bounded())
-    }
-}
+mod ceremony;
+pub use ceremony::{
+    AuthenticationCeremonyObservationFacts, AuthenticationDetailedAdvanceControlObservation,
+};
 
 /// Raw, non-secret field facts observed inside one authentication scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
@@ -82,40 +48,6 @@ impl AuthenticationFieldObservationFacts {
                 observation.ownership,
                 PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
             )
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct AuthenticationCeremonyObservationFacts {
-    /// Legacy reduced evidence retained for wire compatibility; ignored during conversion.
-    pub one_time_code_progression: AuthenticationOneTimeCodeProgressionEvidence,
-    /// Raw executable input/change handler evidence, classified in Rust.
-    #[serde(default)]
-    pub one_time_code_handler_signal: String,
-    pub manual_checkpoint: AuthenticationManualCheckpoint,
-    pub advance_control: AuthenticationAdvanceControlEvidence,
-}
-
-impl AuthenticationCeremonyObservationFacts {
-    fn is_bounded(&self) -> bool {
-        self.one_time_code_handler_signal.len()
-            <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-    }
-
-    fn derived_one_time_code_progression(
-        &self,
-        has_trusted_authentication_context: bool,
-    ) -> AuthenticationOneTimeCodeProgressionEvidence {
-        if !self.is_bounded() || !has_trusted_authentication_context {
-            return AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
-        }
-        if looks_like_one_time_code_auto_submit_signal(&self.one_time_code_handler_signal) {
-            AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
-        } else {
-            AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
-        }
     }
 }
 
@@ -277,6 +209,8 @@ impl AuthenticationPageObservationFactsBatch {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::authentication_workflow::AuthenticationOneTimeCodeProgressionEvidence;
+    use crate::page_field_classification::AuthenticationAdvanceControlDecision;
 
     fn detailed_one_time_code_control(
         form_identity: &str,
