@@ -100,15 +100,36 @@ fn destination_indicates_alternate_provider(destination_identity: &str) -> bool 
         )
 }
 
-fn destination_has_disallowed_action_or_provider(destination_identity: &str) -> bool {
-    looks_like_non_authentication_submit_control_label(destination_identity)
+fn destination_has_disallowed_route_action(destination_identity: &str) -> bool {
+    let identity = expand_identity_text(destination_identity);
+    contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
+        || contains_any_word(
+            &identity,
+            &["billing", "subscribe", "search", "publish", "post"],
+        )
+        || contains_any_word(&identity, &["learn more"])
+}
+
+fn destination_indicates_password_update_route(destination_identity: &str) -> bool {
+    looks_like_password_update_submit_control_label(destination_identity)
+        && !form_identity_indicates_destructive_action(destination_identity)
+        && !destination_has_disallowed_route_action(destination_identity)
+}
+
+fn destination_has_disallowed_action_or_provider(
+    destination_identity: &str,
+    password_update_destination: bool,
+) -> bool {
+    destination_has_disallowed_route_action(destination_identity)
+        || (looks_like_non_authentication_submit_control_label(destination_identity)
+            && !password_update_destination)
         || destination_indicates_alternate_provider(destination_identity)
 }
 
 fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
     identity_indicates_explicit_authentication_route(destination_identity)
         && !control_destination_indicates_non_authentication_route(destination_identity)
-        && !destination_has_disallowed_action_or_provider(destination_identity)
+        && !destination_has_disallowed_action_or_provider(destination_identity, false)
         && !looks_like_registration_route_control_label(destination_identity)
         && !looks_like_password_recovery_route_control_label(destination_identity)
         && !looks_like_auxiliary_authentication_control_label(destination_identity)
@@ -134,12 +155,18 @@ fn has_positive_login_identity(
                 || destination_has_safe_login_identity(&observation.destination_identity)))
 }
 
-fn has_unconditional_veto_identity(observation: &AuthenticationAdvanceControlObservation) -> bool {
+fn has_unconditional_veto_identity(
+    observation: &AuthenticationAdvanceControlObservation,
+    credential_update_destination: bool,
+) -> bool {
     form_identity_indicates_destructive_action(&observation.form_identity)
         || form_identity_indicates_destructive_action(&observation.destination_identity)
         || form_identity_indicates_destructive_action(&observation.label)
         || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
-        || destination_has_disallowed_action_or_provider(&observation.destination_identity)
+        || destination_has_disallowed_action_or_provider(
+            &observation.destination_identity,
+            credential_update_destination,
+        )
 }
 
 fn has_semantic_submit_ceremony(
@@ -220,7 +247,15 @@ impl AuthenticationAdvanceControlObservation {
             looks_like_non_authentication_submit_control_label(&self.label);
         let contextual_password_update = self.new_password_field_count > 0
             && looks_like_password_update_submit_control_label(&self.label);
-        if has_unconditional_veto_identity(self) {
+        let password_update_destination = self.new_password_field_count > 0
+            && destination_indicates_password_update_route(&self.destination_identity);
+        let credential_update_destination = self.new_password_field_count > 0
+            && (control_destination_indicates_registration_route(&self.destination_identity)
+                || control_destination_indicates_password_recovery_route(
+                    &self.destination_identity,
+                )
+                || password_update_destination);
+        if has_unconditional_veto_identity(self, password_update_destination) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
@@ -272,11 +307,6 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let credential_update_destination = self.new_password_field_count > 0
-            && (control_destination_indicates_registration_route(&self.destination_identity)
-                || control_destination_indicates_password_recovery_route(
-                    &self.destination_identity,
-                ));
         if control_destination_indicates_non_authentication_route(&self.destination_identity)
             && !credential_update_destination
         {
@@ -810,6 +840,43 @@ mod tests {
             ..localized_identity_submit()
         };
         assert!(!advances_authentication(&unrelated_reset));
+    }
+
+    #[test]
+    fn password_update_routes_do_not_inherit_button_label_rejections() {
+        let password_update = AuthenticationAdvanceControlObservation {
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            new_password_field_count: 1,
+            form_identity: "account-settings".to_owned(),
+            label: "Continuar".to_owned(),
+            ..localized_identity_submit()
+        };
+        let observes_destination =
+            |destination_identity: &str| AuthenticationAdvanceControlObservation {
+                destination_identity: destination_identity.to_owned(),
+                ..password_update.clone()
+            };
+        let advances_destination = |destination_identity: &str| {
+            advances_authentication(&observes_destination(destination_identity))
+        };
+        assert!(advances_destination("/auth/update-password"));
+        assert!(advances_destination("/auth/save-password"));
+
+        for destination_identity in [
+            "/auth/update-password/delete-account",
+            "/auth/update-password/google",
+        ] {
+            assert!(!advances_destination(destination_identity));
+        }
+        for prefix in ["/auth/update-password", "/password/reset", "/auth/register"] {
+            for suffix in ["cancel", "profile", "payment", "search"] {
+                assert!(!advances_destination(&format!("{prefix}/{suffix}")));
+            }
+        }
+
+        let mut missing_new_password = observes_destination("/auth/update-password");
+        missing_new_password.new_password_field_count = 0;
+        assert!(!advances_authentication(&missing_new_password));
     }
 
     #[test]
