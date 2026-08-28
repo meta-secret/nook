@@ -950,8 +950,9 @@ mod tests {
 
         let destructive_confirmation = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Absent,
-            form_identity: "account-settings /auth/account/delete".to_owned(),
-            label: "Eliminar cuenta".to_owned(),
+            form_identity: "/auth/disable-account".to_owned(),
+            password_field_count: 1,
+            label: "Disable account".to_owned(),
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&destructive_confirmation));
