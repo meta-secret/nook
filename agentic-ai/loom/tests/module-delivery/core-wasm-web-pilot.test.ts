@@ -11,12 +11,14 @@ import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
+  ModuleIntegrationPhase,
   TeamKey,
   cleanupModuleIntegration,
   cleanupModuleWorktree,
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
+  finalizeModuleDeliveryIntegration,
   integrateVerifiedModuleDeliveryTask,
   prepareModuleIntegration,
   prepareModuleWorktree,
@@ -39,6 +41,7 @@ import type {
   CleanupModuleWorktreeRequest,
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
+  FinalizeModuleDeliveryIntegrationRequest,
   IntegrateVerifiedModuleDeliveryTaskRequest,
   ModuleDeliveryBaseline,
   ModuleDeliveryEdgeContract,
@@ -537,6 +540,7 @@ describe('core to WASM to web module delivery pilot', () => {
     fixtures.push(activeFixture);
     const fixtureInput: FixtureInput = { fixture: activeFixture };
     const before = sourceProof(fixtureInput);
+    const sourceGit = fixtureGit(activeFixture);
     const sourceInput: SourceCommitInput = {
       sourceCommit: activeFixture.baselineCommit,
     };
@@ -572,6 +576,25 @@ describe('core to WASM to web module delivery pilot', () => {
       acceptedEvidence: [],
     };
     const admissionState = createModuleDeliveryAdmissionState(stateRequest);
+    const foreignFixture = createGitFixture();
+    fixtures.push(foreignFixture);
+    const foreignGit = fixtureGit(foreignFixture);
+    foreignGit([
+      'fetch',
+      '--quiet',
+      activeFixture.sourceRoot,
+      activeFixture.baselineCommit,
+    ]);
+    const foreignPreparation: PrepareModuleIntegrationRequest = {
+      authority,
+      repositoryRoot: foreignFixture.sourceRoot,
+      workspaceRoot: foreignFixture.workspaceRoot,
+      acceptedPlan,
+      admissionState,
+    };
+    expect(() => prepareModuleIntegration(foreignPreparation)).toThrow(
+      'repository authority is invalid',
+    );
     const preparation: PrepareModuleIntegrationRequest = {
       authority,
       repositoryRoot: activeFixture.sourceRoot,
@@ -581,6 +604,16 @@ describe('core to WASM to web module delivery pilot', () => {
     };
     const initialState = prepareModuleIntegration(preparation);
     integrationCleanups.push(initialState.cleanupHandle);
+    const concurrentState = prepareModuleIntegration(preparation);
+    integrationCleanups.push(concurrentState.cleanupHandle);
+    const prematureFinalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority,
+      acceptedPlan,
+      state: initialState,
+    };
+    expect(() =>
+      finalizeModuleDeliveryIntegration(prematureFinalization),
+    ).toThrow('requires every accepted task');
 
     const coreNodeInput: PlanNodeInput = {
       plan: acceptedPlan,
@@ -609,6 +642,101 @@ describe('core to WASM to web module delivery pilot', () => {
       node: coreNode,
     };
     const coreState = integrateWriter(coreIntegration);
+    const concurrentRefs = sourceGit([
+      'for-each-ref',
+      '--format=%(refname)%00%(objectname)',
+      'refs/nook/module-delivery/',
+    ]);
+    const staleFinalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority,
+      acceptedPlan,
+      state: concurrentState,
+    };
+    expect(() => finalizeModuleDeliveryIntegration(staleFinalization)).toThrow(
+      'invalid or stale',
+    );
+    expect(
+      sourceGit([
+        'for-each-ref',
+        '--format=%(refname)%00%(objectname)',
+        'refs/nook/module-delivery/',
+      ]),
+    ).toBe(concurrentRefs);
+
+    const replayAuthority =
+      createModuleDeliveryGenerationAuthority(authorityRequest);
+    const replayStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority: replayAuthority,
+      acceptedPlan,
+      headCommit: acceptedPlan.plan.sourceCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    };
+    const replayAdmissionState =
+      createModuleDeliveryAdmissionState(replayStateRequest);
+    const replayPreparation: PrepareModuleIntegrationRequest = {
+      authority: replayAuthority,
+      repositoryRoot: activeFixture.sourceRoot,
+      workspaceRoot: activeFixture.workspaceRoot,
+      acceptedPlan,
+      admissionState: replayAdmissionState,
+    };
+    const replayState = prepareModuleIntegration(replayPreparation);
+    integrationCleanups.push(replayState.cleanupHandle);
+    const replayCapabilityRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority: replayAuthority,
+      acceptedPlan,
+      headCommit: coreState.headCommit,
+      integratedWriterFrontiers:
+        coreState.admissionState.integratedWriterFrontiers,
+      acceptedEvidence: [],
+    };
+    expect(() =>
+      createModuleDeliveryAdmissionState(replayCapabilityRequest),
+    ).toThrow('frontier capability is invalid');
+
+    foreignGit([
+      'fetch',
+      '--quiet',
+      activeFixture.sourceRoot,
+      coreState.headCommit,
+    ]);
+    const foreignCorePreparation: WriterRequest = {
+      fixture: foreignFixture,
+      acceptedPlan,
+      node: coreNode,
+      baselineCommit: replayState.headCommit,
+    };
+    const foreignCoreWorkspace = prepareWriter(foreignCorePreparation);
+    const foreignCoreCommit: WriterCommitRequest = {
+      workspace: foreignCoreWorkspace,
+      outputPath: CORE_OUTPUT,
+      contents: CORE_CONTENT,
+      message: 'foreign core capability',
+    };
+    commitWriter(foreignCoreCommit);
+    const replayRef = sourceGit([
+      'for-each-ref',
+      '--format=%(objectname)',
+      'refs/nook/module-delivery/',
+    ]);
+    const foreignIntegration: IntegrateRequest = {
+      authority: replayAuthority,
+      acceptedPlan,
+      state: replayState,
+      workspace: foreignCoreWorkspace,
+      node: coreNode,
+    };
+    expect(() => integrateWriter(foreignIntegration)).toThrow(
+      'handoff repository is invalid',
+    );
+    expect(
+      sourceGit([
+        'for-each-ref',
+        '--format=%(objectname)',
+        'refs/nook/module-delivery/',
+      ]),
+    ).toBe(replayRef);
 
     const wasmNodeInput: PlanNodeInput = {
       plan: acceptedPlan,
@@ -702,46 +830,49 @@ describe('core to WASM to web module delivery pilot', () => {
       node: webNode,
     };
     const finalState = integrateWriter(webIntegration);
+    const finalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority,
+      acceptedPlan,
+      state: finalState,
+    };
+    const finalized = finalizeModuleDeliveryIntegration(finalization);
+    expect(finalized.phase).toBe(ModuleIntegrationPhase.Finalized);
+    expect(finalized.headCommit).toMatch(/^[0-9a-f]{40}$/u);
 
-    const sourceGit = fixtureGit(activeFixture);
-    expect(sourceGit(['show', `${finalState.headCommit}:${CORE_OUTPUT}`])).toBe(
+    expect(sourceGit(['show', `${finalized.headCommit}:${CORE_OUTPUT}`])).toBe(
       CORE_CONTENT.trim(),
     );
-    expect(sourceGit(['show', `${finalState.headCommit}:${WASM_OUTPUT}`])).toBe(
+    expect(sourceGit(['show', `${finalized.headCommit}:${WASM_OUTPUT}`])).toBe(
       WASM_CONTENT.trim(),
     );
-    expect(sourceGit(['show', `${finalState.headCommit}:${WEB_OUTPUT}`])).toBe(
+    expect(sourceGit(['show', `${finalized.headCommit}:${WEB_OUTPUT}`])).toBe(
       WEB_CONTENT.trim(),
     );
     const ancestry = sourceGit([
       'rev-list',
       '--first-parent',
       '--reverse',
-      `${activeFixture.baselineCommit}..${finalState.headCommit}`,
+      `${activeFixture.baselineCommit}..${finalized.headCommit}`,
     ]).split('\n');
-    expect(ancestry).toEqual([
-      coreState.headCommit,
-      wasmState.headCommit,
-      finalState.headCommit,
-    ]);
+    expect(ancestry).toEqual([finalized.headCommit]);
     expect(
       sourceGit([
         'for-each-ref',
         '--format=%(objectname)',
         'refs/nook/module-delivery/',
       ]),
-    ).toBe(finalState.headCommit);
+    ).toContain(finalized.headCommit);
     expect(sourceGit(['rev-parse', 'HEAD'])).toBe(before.head);
     expect(sourceGit(['hash-object', '.git/index'])).toBe(before.indexHash);
     expect(sourceGit(['status', '--porcelain=v1', '-z'])).toBe(before.status);
     expect(nonIntegrationRefs(fixtureInput)).toBe(before.refs);
 
     cleanupWriters();
-    const cleanupRequest: CleanupModuleIntegrationRequest = {
-      cleanupHandle: initialState.cleanupHandle,
-    };
-    expect(cleanupModuleIntegration(cleanupRequest).removed).toBe(true);
-    forgetIntegrationCleanup(cleanupRequest);
+    for (const cleanupHandle of [...integrationCleanups]) {
+      const cleanupRequest: CleanupModuleIntegrationRequest = { cleanupHandle };
+      expect(cleanupModuleIntegration(cleanupRequest).removed).toBe(true);
+      forgetIntegrationCleanup(cleanupRequest);
+    }
     expect(sourceProof(fixtureInput)).toEqual(before);
     expect(sourceGit(['worktree', 'list', '--porcelain'])).not.toContain(
       activeFixture.workspaceRoot,

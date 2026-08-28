@@ -20,7 +20,6 @@ export type {
   ModuleDeliveryLeaseRecording,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
   RestartModuleDeliveryGenerationRequest,
   SelectModuleDeliveryAdmissionsRequest,
@@ -39,6 +38,7 @@ export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryProviderSubmissionKind,
+  ModuleIntegrationPhase,
 } from './integration-provenance.ts';
 export type {
   AcceptedModuleDeliveryEvidence,
@@ -79,4 +79,5 @@ export type {
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
   PrepareModuleIntegrationRequest,
+  RecordModuleDeliveryAttemptDispositionRequest,
 } from './integration-provenance.ts';

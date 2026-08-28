@@ -7,11 +7,16 @@ import {
 import {
   assertSourceSnapshot,
   assertFreshModuleIntegrationState,
+  assertCurrentModuleIntegrationAdmission,
+  assertModuleIntegrationHandoffRepository,
+  assertModuleIntegrationLeaseFrontier,
+  assertModuleIntegrationProviderPrecedence,
   captureSourceSnapshot,
   createIntegrationSession,
   integrationProvenance,
   integrationSession,
   moduleIntegrationRef,
+  moduleIntegrationCompletedWaveCount,
   immutableModuleIntegrationState,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryProviderSubmissionKind,
@@ -25,6 +30,7 @@ import { applyModuleWaveTree } from './tree-integration.ts';
 import {
   assertModuleDeliveryAttemptLeaseAuthority,
   assertModuleDeliveryAdmissionStateAuthority,
+  assertModuleDeliveryAuthorityRepository,
   assertModuleDeliveryGenerationAuthority,
   createModuleDeliveryAdmissionState,
   moduleDeliveryAcceptedEvidenceIdentity,
@@ -34,12 +40,8 @@ import {
 import { EXACT_GIT_COMMIT } from './workspace-paths.ts';
 import type { ModuleDeliveryEvidenceSubmissionVerification } from './evidence.ts';
 import type {
-  AdmissionStateAuthorityInspection,
-  AttemptLeaseAuthorityInspection,
   CreateModuleDeliveryAdmissionStateRequest,
-  GenerationAuthorityInspection,
   ModuleDeliveryAdmissionState,
-  ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
 import type {
@@ -76,7 +78,17 @@ import type {
   IntegrationSessionRegistration,
   IntegrationStateRegistration,
   FreshModuleIntegrationStateInspection,
+  AdmissionStateAuthorityInspection,
+  AttemptLeaseAuthorityInspection,
+  GenerationAuthorityInspection,
+  ModuleDeliveryAuthorityPlanRequest,
+  ModuleDeliveryAuthorityRepositoryInspection,
+  CurrentModuleIntegrationAdmissionInspection,
   ModuleIntegrationRefRequest,
+  ModuleIntegrationHandoffRepositoryInspection,
+  ModuleIntegrationLeaseFrontierInspection,
+  ModuleIntegrationProviderPrecedenceInspection,
+  ModuleIntegrationCompletedWaveCountRequest,
   RecordIntegratedLeaseAcceptanceRequest,
   SourceSnapshotExpectation,
   UpdateModuleIntegrationRefRequest,
@@ -142,17 +154,10 @@ type ProviderLeaseInspection = {
   readonly submission: ModuleDeliveryProviderSubmission;
 };
 
-type ProviderPrecedenceInspection = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state: ModuleIntegrationState;
-  readonly taskId: string;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
-
-type LeaseFrontierInspection = {
-  readonly state: ModuleIntegrationState;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
+type RefreshedWriterFrontiersRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleIntegrationState;
+}>;
 
 export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
   taskId: string;
@@ -166,6 +171,7 @@ export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
 export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
   Readonly<{
     capability: ModuleDeliveryIntegratedWriterFrontierCapability;
+    authority: ModuleDeliveryGenerationAuthority;
     taskId: string;
     attempt: number;
     generation: number;
@@ -175,6 +181,7 @@ export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
   }>;
 
 type IntegratedWriterFrontierProvenance = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
   taskId: string;
   attempt: number;
   generation: number;
@@ -204,12 +211,20 @@ function mintIntegratedWriterFrontier(
   request: MintIntegratedWriterFrontierRequest,
 ): ModuleDeliveryIntegratedWriterFrontierCapability {
   const integratedTaskIds = Object.freeze([...request.integratedTaskIds]);
-  const value: IntegratedWriterFrontierProvenance = {
+  const capabilityValue: ModuleDeliveryIntegratedWriterFrontierCapability = {
+    taskId: request.taskId,
+    attempt: request.attempt,
+    generation: request.generation,
+    planDigest: request.planDigest,
+    headCommit: request.headCommit,
+    integratedTaskIds,
+  };
+  const capability = Object.freeze(capabilityValue);
+  const provenance: IntegratedWriterFrontierProvenance = {
     ...request,
     integratedTaskIds,
   };
-  const capability = Object.freeze(value);
-  WRITER_FRONTIER_PROVENANCE.set(capability, capability);
+  WRITER_FRONTIER_PROVENANCE.set(capability, Object.freeze(provenance));
   return capability;
 }
 
@@ -219,6 +234,7 @@ export function assertModuleDeliveryIntegratedWriterFrontierCapability(
   const provenance = WRITER_FRONTIER_PROVENANCE.get(request.capability);
   if (
     !provenance ||
+    provenance.authority !== request.authority ||
     provenance.taskId !== request.taskId ||
     provenance.attempt !== request.attempt ||
     provenance.generation !== request.generation ||
@@ -425,99 +441,14 @@ function authoritativeProviderLease(
   return inspection.lease;
 }
 
-function assertLeaseFrontierReachable(
-  inspection: LeaseFrontierInspection,
-): void {
-  if (!EXACT_GIT_COMMIT.test(inspection.lease.startingFrontier)) {
-    throw new Error('Provider lease has an invalid starting frontier.');
-  }
-  const invocation: ModuleGitInvocation = {
-    cwd: inspection.state.workspace.sourceRepositoryRoot,
-    args: [
-      'merge-base',
-      '--is-ancestor',
-      inspection.lease.startingFrontier,
-      inspection.state.headCommit,
-    ],
-    allowFailure: true,
-  };
-  if (runModuleDeliveryGit(gitRequest(invocation)).exitCode !== 0) {
-    throw new Error('Provider lease starting frontier is stale or unrelated.');
-  }
-}
-
-function assertProviderPrecedence(
-  inspection: ProviderPrecedenceInspection,
-): void {
-  const predecessors = inspection.acceptedPlan.executionPrecedence
-    .filter((edge) => edge.successorTaskId === inspection.taskId)
-    .map((edge) => edge.predecessorTaskId);
-  for (const predecessor of predecessors) {
-    const acceptedWrite = inspection.state.acceptedWrites.find(
-      (entry) => entry.taskId === predecessor,
-    );
-    const evidenceAccepted = inspection.state.acceptedEvidence.some(
-      (entry) => entry.taskId === predecessor,
-    );
-    if (!acceptedWrite && !evidenceAccepted) {
-      throw new Error(
-        `Provider ${inspection.taskId} is not ready; predecessor ${predecessor} is undispositioned.`,
-      );
-    }
-    if (acceptedWrite) {
-      const invocation: ModuleGitInvocation = {
-        cwd: inspection.state.workspace.sourceRepositoryRoot,
-        args: [
-          'merge-base',
-          '--is-ancestor',
-          acceptedWrite.integrationCommit,
-          inspection.lease.startingFrontier,
-        ],
-        allowFailure: true,
-      };
-      if (runModuleDeliveryGit(gitRequest(invocation)).exitCode !== 0) {
-        throw new Error(
-          `Provider ${inspection.taskId} lease predates integrated predecessor ${predecessor}.`,
-        );
-      }
-    }
-  }
-}
-
-type CompletedWaveCountRequest = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state: ModuleIntegrationState;
-};
-
-function completedWaveCount(request: CompletedWaveCountRequest): number {
-  let completed = 0;
-  for (const wave of request.acceptedPlan.waves) {
-    const complete = wave.every(
-      (taskId) =>
-        request.state.integratedTaskIds.includes(taskId) ||
-        request.state.acceptedEvidence.some((entry) => entry.taskId === taskId),
-    );
-    if (!complete) break;
-    completed += 1;
-  }
-  return completed;
-}
-
-function writerFrontiers(
-  state: ModuleIntegrationState,
-): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
-  const capabilities = STATE_WRITER_FRONTIERS.get(state);
-  if (!capabilities)
-    throw new Error('Module integration writer frontier is invalid.');
-  return capabilities;
-}
-
 function refreshedWriterFrontiers(
-  state: ModuleIntegrationState,
+  request: RefreshedWriterFrontiersRequest,
 ): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
+  const { authority, state } = request;
   return Object.freeze(
     state.acceptedWrites.map((write) => {
       const request: MintIntegratedWriterFrontierRequest = {
+        authority,
         taskId: write.taskId,
         attempt: write.attempt,
         generation: write.generation,
@@ -530,9 +461,23 @@ function refreshedWriterFrontiers(
   );
 }
 
+function writerFrontiers(
+  state: ModuleIntegrationState,
+): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
+  const capabilities = STATE_WRITER_FRONTIERS.get(state);
+  if (!capabilities)
+    throw new Error('Module integration writer frontier is invalid.');
+  return capabilities;
+}
+
 export function prepareModuleIntegration(
   request: PrepareModuleIntegrationRequest,
 ): ModuleIntegrationState {
+  const repositoryInspection: ModuleDeliveryAuthorityRepositoryInspection = {
+    authority: request.authority,
+    repositoryRoot: request.repositoryRoot,
+  };
+  assertModuleDeliveryAuthorityRepository(repositoryInspection);
   const inspection: ModuleDeliveryAuthorityPlanRequest = {
     authority: request.authority,
     acceptedPlan: request.acceptedPlan,
@@ -676,6 +621,11 @@ export function integrateVerifiedModuleDeliveryTask(
     provenance,
   };
   assertFreshModuleIntegrationState(freshInspection);
+  const admissionInspection: CurrentModuleIntegrationAdmissionInspection = {
+    authority: request.authority,
+    state: request.state,
+  };
+  assertCurrentModuleIntegrationAdmission(admissionInspection);
   if (request.state.phase !== ModuleIntegrationPhase.AcceptingProviders) {
     throw new Error('Finalized module integration cannot accept providers.');
   }
@@ -686,11 +636,11 @@ export function integrateVerifiedModuleDeliveryTask(
     submission: request.submission,
   };
   const lease = authoritativeProviderLease(leaseInspection);
-  const frontierInspection: LeaseFrontierInspection = {
+  const frontierInspection: ModuleIntegrationLeaseFrontierInspection = {
     state: request.state,
     lease,
   };
-  assertLeaseFrontierReachable(frontierInspection);
+  assertModuleIntegrationLeaseFrontier(frontierInspection);
   if (
     request.submission.generation !== request.state.generation ||
     (request.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
@@ -711,13 +661,13 @@ export function integrateVerifiedModuleDeliveryTask(
   ) {
     throw new Error(`Provider ${taskId} already has an accepted disposition.`);
   }
-  const precedenceInspection: ProviderPrecedenceInspection = {
+  const precedenceInspection: ModuleIntegrationProviderPrecedenceInspection = {
     acceptedPlan: request.acceptedPlan,
     state: request.state,
     taskId,
     lease,
   };
-  assertProviderPrecedence(precedenceInspection);
+  assertModuleIntegrationProviderPrecedence(precedenceInspection);
   if (request.submission.kind === ModuleDeliveryProviderSubmissionKind.Write) {
     if (node.kind !== ModuleDeliveryTaskKind.Write) {
       throw new Error(`Provider ${taskId} requires read-only evidence.`);
@@ -728,6 +678,11 @@ export function integrateVerifiedModuleDeliveryTask(
       request.submission.acceptedByTeam !== lease.acceptanceOwner
     )
       throw new Error(`Provider ${taskId} lacks terminal owner acceptance.`);
+    const repositoryInspection: ModuleIntegrationHandoffRepositoryInspection = {
+      state: request.state,
+      handoff: request.submission.handoff,
+    };
+    assertModuleIntegrationHandoffRepository(repositoryInspection);
     const expected: ExpectedHandoff = {
       node,
       baselineCommit: lease.startingFrontier,
@@ -744,59 +699,75 @@ export function integrateVerifiedModuleDeliveryTask(
       provenance,
     };
     const headCommit = applyAndValidateWave(application);
-    const provisionalState: ModuleIntegrationState = {
-      ...request.state,
-      integratedTaskIds: [...request.state.integratedTaskIds, taskId],
-      acceptedWrites: [
-        ...request.state.acceptedWrites,
-        {
-          taskId,
-          attempt: request.submission.handoff.attempt,
-          generation: request.submission.generation,
-          planDigest: request.submission.handoff.planDigest,
-          startingFrontier: lease.startingFrontier,
-          integrationCommit: headCommit,
-          acceptedByTeam: request.submission.acceptedByTeam,
-          handoff: request.submission.handoff,
-        },
-      ],
-      headCommit,
-    };
-    const waveCountRequest: CompletedWaveCountRequest = {
-      acceptedPlan: request.acceptedPlan,
-      state: provisionalState,
-    };
-    const stateWithWrite: ModuleIntegrationState = {
-      ...provisionalState,
-      completedWaveCount: completedWaveCount(waveCountRequest),
-    };
-    const capabilities = refreshedWriterFrontiers(stateWithWrite);
-    const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-      authority: request.authority,
-      acceptedPlan: request.acceptedPlan,
-      headCommit,
-      integratedWriterFrontiers: capabilities,
-      acceptedEvidence: stateWithWrite.acceptedEvidence,
-    };
-    const admissionState = createModuleDeliveryAdmissionState(stateRequest);
-    const nextState: ModuleIntegrationState = {
-      ...stateWithWrite,
-      admissionState,
-    };
-    const advance: AdvancedIntegrationStateRequest = {
-      previousState: request.state,
-      nextState,
-      provenance,
-      writerFrontiers: capabilities,
-    };
-    const integrated = advancedIntegrationState(advance);
-    const disposition: RecordIntegratedLeaseAcceptanceRequest = {
-      authority: request.authority,
-      state: admissionState,
-      lease,
-    };
-    recordIntegratedLeaseAcceptance(disposition);
-    return integrated;
+    try {
+      const provisionalState: ModuleIntegrationState = {
+        ...request.state,
+        integratedTaskIds: [...request.state.integratedTaskIds, taskId],
+        acceptedWrites: [
+          ...request.state.acceptedWrites,
+          {
+            taskId,
+            attempt: request.submission.handoff.attempt,
+            generation: request.submission.generation,
+            planDigest: request.submission.handoff.planDigest,
+            startingFrontier: lease.startingFrontier,
+            integrationCommit: headCommit,
+            acceptedByTeam: request.submission.acceptedByTeam,
+            handoff: request.submission.handoff,
+          },
+        ],
+        headCommit,
+      };
+      const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
+        acceptedPlan: request.acceptedPlan,
+        state: provisionalState,
+      };
+      const stateWithWrite: ModuleIntegrationState = {
+        ...provisionalState,
+        completedWaveCount:
+          moduleIntegrationCompletedWaveCount(waveCountRequest),
+      };
+      const frontierRequest: RefreshedWriterFrontiersRequest = {
+        authority: request.authority,
+        state: stateWithWrite,
+      };
+      const capabilities = refreshedWriterFrontiers(frontierRequest);
+      const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+        authority: request.authority,
+        acceptedPlan: request.acceptedPlan,
+        headCommit,
+        integratedWriterFrontiers: capabilities,
+        acceptedEvidence: stateWithWrite.acceptedEvidence,
+      };
+      const admissionState = createModuleDeliveryAdmissionState(stateRequest);
+      const nextState: ModuleIntegrationState = {
+        ...stateWithWrite,
+        admissionState,
+      };
+      const advance: AdvancedIntegrationStateRequest = {
+        previousState: request.state,
+        nextState,
+        provenance,
+        writerFrontiers: capabilities,
+      };
+      const disposition: RecordIntegratedLeaseAcceptanceRequest = {
+        authority: request.authority,
+        state: admissionState,
+        lease,
+      };
+      recordIntegratedLeaseAcceptance(disposition);
+      return advancedIntegrationState(advance);
+    } catch {
+      const rollback: UpdateModuleIntegrationRefRequest = {
+        provenance,
+        nextCommit: headCommit,
+        rollback: true,
+      };
+      updateModuleIntegrationRef(rollback);
+      throw new Error(
+        'Module delivery integration failed and was rolled back.',
+      );
+    }
   }
   const authorizedProviderEvidence = request.state.acceptedEvidence.filter(
     (evidence) =>
@@ -820,13 +791,13 @@ export function integrateVerifiedModuleDeliveryTask(
     ...request.state,
     acceptedEvidence: [...request.state.acceptedEvidence, accepted],
   };
-  const waveCountRequest: CompletedWaveCountRequest = {
+  const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
     acceptedPlan: request.acceptedPlan,
     state: provisionalState,
   };
   const stateWithEvidence: ModuleIntegrationState = {
     ...provisionalState,
-    completedWaveCount: completedWaveCount(waveCountRequest),
+    completedWaveCount: moduleIntegrationCompletedWaveCount(waveCountRequest),
   };
   const capabilities = writerFrontiers(request.state);
   const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
@@ -880,6 +851,11 @@ export function finalizeModuleDeliveryIntegration(
     provenance,
   };
   assertFreshModuleIntegrationState(freshInspection);
+  const admissionInspection: CurrentModuleIntegrationAdmissionInspection = {
+    authority: request.authority,
+    state: request.state,
+  };
+  assertCurrentModuleIntegrationAdmission(admissionInspection);
   if (request.state.phase !== ModuleIntegrationPhase.AcceptingProviders) {
     throw new Error('Module integration is already finalized.');
   }
@@ -943,7 +919,11 @@ export function finalizeModuleDeliveryIntegration(
     completedWaveCount: request.acceptedPlan.waves.length,
     headCommit: canonicalHead,
   };
-  const capabilities = refreshedWriterFrontiers(finalizedState);
+  const frontierRequest: RefreshedWriterFrontiersRequest = {
+    authority: request.authority,
+    state: finalizedState,
+  };
+  const capabilities = refreshedWriterFrontiers(frontierRequest);
   const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority: request.authority,
     acceptedPlan: request.acceptedPlan,

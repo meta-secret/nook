@@ -71,10 +71,8 @@ import type {
   EvidenceFixtureInput,
   GitFixture,
 } from './worktree-test-support.ts';
-
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 const PARENT_RESOURCES: readonly string[] = REQUIRED_PARENT_OWNED_RESOURCES;
-
 type WriteNodeInput = {
   readonly taskId: string;
   readonly sourceCommit: string;
@@ -116,19 +114,16 @@ type IndependentWriterInput = {
   readonly sourceCommit: string;
   readonly writeClaim: string;
 };
-
 enum FixtureLifecycleKind {
   Empty = 'empty',
   Active = 'active',
 }
-
 type FixtureLifecycle =
   | { readonly kind: FixtureLifecycleKind.Empty }
   | {
       readonly kind: FixtureLifecycleKind.Active;
       readonly fixture: GitFixture;
     };
-
 let fixtureLifecycle: FixtureLifecycle = { kind: FixtureLifecycleKind.Empty };
 const fixtures: GitFixture[] = [];
 const workspaces: ModuleWorktreeHandle[] = [];
@@ -136,7 +131,6 @@ const authorities = new WeakMap<
   ModuleIntegrationState,
   ModuleDeliveryGenerationAuthority
 >();
-
 afterEach(() => {
   for (const workspace of workspaces.splice(0).reverse()) {
     const request: CleanupModuleWorktreeRequest = { workspace };
@@ -151,7 +145,6 @@ afterEach(() => {
   }
   fixtureLifecycle = { kind: FixtureLifecycleKind.Empty };
 });
-
 function createTrackedFixture(): GitFixture {
   const trackedFixture = createGitFixture();
   fixtures.push(trackedFixture);
@@ -161,13 +154,11 @@ function createTrackedFixture(): GitFixture {
   };
   return trackedFixture;
 }
-
 function currentFixture(): GitFixture {
   if (fixtureLifecycle.kind === FixtureLifecycleKind.Empty)
     throw new Error('Fixture lifecycle is empty.');
   return fixtureLifecycle.fixture;
 }
-
 function baseline(input: WriteNodeInput): ModuleDeliveryBaseline {
   return input.dependencies.length === 0
     ? {
@@ -179,7 +170,6 @@ function baseline(input: WriteNodeInput): ModuleDeliveryBaseline {
         providerTaskIds: input.dependencies,
       };
 }
-
 function writeNode(input: WriteNodeInput): ModuleDeliveryWriteNodeV2 {
   return {
     kind: ModuleDeliveryTaskKind.Write,
@@ -210,7 +200,6 @@ function writeNode(input: WriteNodeInput): ModuleDeliveryWriteNodeV2 {
     },
   };
 }
-
 function readOnlyNode(input: ReadOnlyNodeInput): ModuleDeliveryReadOnlyNodeV2 {
   return {
     kind: ModuleDeliveryTaskKind.ReadOnly,
@@ -240,7 +229,6 @@ function readOnlyNode(input: ReadOnlyNodeInput): ModuleDeliveryReadOnlyNodeV2 {
     },
   };
 }
-
 function edge(input: EdgeInput): ModuleDeliveryEdgeContract {
   return {
     providerTaskId: input.providerTaskId,
@@ -254,7 +242,6 @@ function edge(input: EdgeInput): ModuleDeliveryEdgeContract {
     owningTests: [`${input.providerTaskId} contract test`],
   };
 }
-
 function acceptedPlan(input: PlanInput): ValidatedModuleDeliveryPlan {
   const plan: ModuleDeliveryPlan = {
     version: 2,
@@ -278,7 +265,6 @@ function acceptedPlan(input: PlanInput): ValidatedModuleDeliveryPlan {
   }
   return validation;
 }
-
 function readOnlyPlan(fixture: GitFixture) {
   const readInput: ReadOnlyNodeInput = {
     taskId: 'core-audit',
@@ -292,7 +278,6 @@ function readOnlyPlan(fixture: GitFixture) {
   };
   return { accepted: acceptedPlan(planInput), audit };
 }
-
 function preparedIntegration(
   accepted: ValidatedModuleDeliveryPlan,
 ): ModuleIntegrationState {
@@ -326,7 +311,6 @@ function preparedIntegration(
   workspaces.push(state.workspace);
   return state;
 }
-
 function preparedWriter(preparation: WriterPreparation): ModuleWorktreeHandle {
   const request: PrepareModuleWorktreeRequest = {
     repositoryRoot: preparation.fixture.sourceRoot,
@@ -340,7 +324,6 @@ function preparedWriter(preparation: WriterPreparation): ModuleWorktreeHandle {
   workspaces.push(workspace);
   return workspace;
 }
-
 function commitWriter(commit: WriterCommit): ModuleDeliveryHandoffSubmission {
   const write = worktreeFileWriter(commit.workspace);
   write([commit.relativePath, commit.contents]);
@@ -356,12 +339,10 @@ function commitWriter(commit: WriterCommit): ModuleDeliveryHandoffSubmission {
     workspace: commit.workspace,
   };
 }
-
 type LeaseLookup = {
   readonly recording: ModuleDeliveryLeaseRecording;
   readonly taskId: string;
 };
-
 function authorityFor(
   state: ModuleIntegrationState,
 ): ModuleDeliveryGenerationAuthority {
@@ -369,7 +350,6 @@ function authorityFor(
   if (!authority) throw new Error('Fixture integration authority is missing.');
   return authority;
 }
-
 function leaseFor(input: LeaseLookup): ModuleDeliveryAttemptLease {
   const lease = input.recording.leases.find(
     (candidate) => candidate.taskId === input.taskId,
@@ -377,7 +357,6 @@ function leaseFor(input: LeaseLookup): ModuleDeliveryAttemptLease {
   if (!lease) throw new Error(`Fixture lease ${input.taskId} is missing.`);
   return lease;
 }
-
 function recordingFor(
   integration: WaveIntegration,
 ): ModuleDeliveryLeaseRecording {
@@ -403,7 +382,6 @@ function recordingFor(
   };
   return recordModuleDeliveryAttemptLeases(leaseRequest);
 }
-
 function integrateRequest(
   request: IntegrateVerifiedModuleDeliveryTaskRequest,
 ): ModuleIntegrationState {
@@ -411,7 +389,6 @@ function integrateRequest(
   authorities.set(state, request.authority);
   return state;
 }
-
 function integrateRequestWithEvidenceTreeListingCount(
   request: IntegrateVerifiedModuleDeliveryTaskRequest,
 ) {
@@ -433,7 +410,6 @@ function integrateRequestWithEvidenceTreeListingCount(
     gitSpy.mockRestore();
   }
 }
-
 function integrateWave(integration: WaveIntegration): ModuleIntegrationState {
   const recording = recordingFor(integration);
   let state = integration.state;
@@ -472,7 +448,6 @@ function integrateWave(integration: WaveIntegration): ModuleIntegrationState {
   }
   return state;
 }
-
 function independentWriter(
   input: IndependentWriterInput,
 ): ModuleDeliveryWriteNodeV2 {
@@ -485,7 +460,6 @@ function independentWriter(
   };
   return writeNode(writeInput);
 }
-
 describe('module delivery wave integration', () => {
   test('integrates a complete wave in accepted topology order without touching source', () => {
     expect('mintIntegratedWriterFrontier' in integrationSource).toBe(false);
@@ -647,7 +621,7 @@ describe('module delivery wave integration', () => {
     );
   });
 
-  test('binds a dependent writer to the exact integrated frontier', () => {
+  test('allows overlapping history only from a frontier carrying predecessor closure', () => {
     const fixture = createTrackedFixture();
     const providerClaim = `${CORE_ROOT}/provider/**`;
     const providerInput: IndependentWriterInput = {
@@ -675,6 +649,20 @@ describe('module delivery wave integration', () => {
     };
     const accepted = acceptedPlan(planInput);
     const state = preparedIntegration(accepted);
+    const staleState = preparedIntegration(accepted);
+    const stalePreparation: WriterPreparation = {
+      fixture,
+      acceptedPlan: accepted,
+      node: consumer,
+      baselineCommit: staleState.headCommit,
+    };
+    const staleWorkspace = preparedWriter(stalePreparation);
+    const staleCommit: WriterCommit = {
+      workspace: staleWorkspace,
+      relativePath: `${CORE_ROOT}/provider/stale.ts`,
+      contents: 'stale\n',
+    };
+    const staleHandoff = commitWriter(staleCommit);
     const providerPreparation: WriterPreparation = {
       fixture,
       acceptedPlan: accepted,
@@ -694,6 +682,20 @@ describe('module delivery wave integration', () => {
       handoffs: [providerHandoff],
     };
     const providerState = integrateWave(firstIntegration);
+    const staleProviderIntegration: WaveIntegration = {
+      acceptedPlan: accepted,
+      state: staleState,
+      handoffs: [providerHandoff],
+    };
+    const staleProviderState = integrateWave(staleProviderIntegration);
+    const staleConsumerIntegration: WaveIntegration = {
+      acceptedPlan: accepted,
+      state: staleProviderState,
+      handoffs: [staleHandoff],
+    };
+    expect(() => integrateWave(staleConsumerIntegration)).toThrow(
+      'Handoff metadata is invalid',
+    );
 
     const consumerPreparation: WriterPreparation = {
       fixture,

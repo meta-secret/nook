@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstatSync, readFileSync, readlinkSync } from 'node:fs';
+import { lstatSync, readFileSync, readlinkSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
@@ -8,6 +8,7 @@ import { assertPreparedModuleWorktreeIdentity } from './workspace.ts';
 import {
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
+  assertModuleDeliveryAdmissionStateAuthority,
   recordModuleDeliveryAttemptDisposition,
 } from './admission.ts';
 
@@ -15,9 +16,7 @@ import type { GitCommandRequest } from './git-command.ts';
 import type {
   ModuleDeliveryAdmissionState,
   ModuleDeliveryAttemptLease,
-  ModuleDeliveryDispositionOutcome,
   ModuleDeliveryGenerationAuthority,
-  RecordModuleDeliveryAttemptDispositionRequest,
 } from './admission.ts';
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
@@ -73,6 +72,37 @@ export type PrepareModuleIntegrationRequest = Readonly<{
   workspaceRoot: string;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   admissionState: ModuleDeliveryAdmissionState;
+}>;
+export type GenerationAuthorityInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  generation: number;
+  planDigest: string;
+}>;
+export type AdmissionStateAuthorityInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleDeliveryAdmissionState;
+}>;
+export type AttemptLeaseAuthorityInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+export type ModuleDeliveryAuthorityPlanRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+}>;
+export type ModuleDeliveryAuthorityRepositoryInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  repositoryRoot: string;
+}>;
+export type ModuleDeliveryDispositionOutcome = Readonly<{
+  kind: ModuleDeliveryAttemptDispositionKind;
+  conclusion: ModuleDeliveryGenerationFenceKind;
+}>;
+export type RecordModuleDeliveryAttemptDispositionRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleDeliveryAdmissionState;
+  lease: ModuleDeliveryAttemptLease;
+  outcome: ModuleDeliveryDispositionOutcome;
 }>;
 
 export type ModuleDeliveryHandoffSubmission = Readonly<{
@@ -256,6 +286,28 @@ export type RecordIntegratedLeaseAcceptanceRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   state: ModuleDeliveryAdmissionState;
   lease: ModuleDeliveryAttemptLease;
+}>;
+export type ModuleIntegrationHandoffRepositoryInspection = Readonly<{
+  state: ModuleIntegrationState;
+  handoff: ModuleDeliveryHandoffSubmission;
+}>;
+export type CurrentModuleIntegrationAdmissionInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleIntegrationState;
+}>;
+export type ModuleIntegrationLeaseFrontierInspection = Readonly<{
+  state: ModuleIntegrationState;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+export type ModuleIntegrationProviderPrecedenceInspection = Readonly<{
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
+  taskId: string;
+  lease: ModuleDeliveryAttemptLease;
+}>;
+export type ModuleIntegrationCompletedWaveCountRequest = Readonly<{
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
 }>;
 
 const BIGINT_STATS_OPTIONS = { bigint: true } as const;
@@ -746,4 +798,109 @@ export function recordIntegratedLeaseAcceptance(
     outcome,
   };
   recordModuleDeliveryAttemptDisposition(request);
+}
+
+export function assertModuleIntegrationHandoffRepository(
+  inspection: ModuleIntegrationHandoffRepositoryInspection,
+): void {
+  const integrationInvocation: GitCommandRequest = {
+    cwd: inspection.state.workspace.sourceRepositoryRoot,
+    args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+  };
+  const handoffInvocation: GitCommandRequest = {
+    cwd: inspection.handoff.workspace.worktreePath,
+    args: ['rev-parse', '--path-format=absolute', '--git-common-dir'],
+  };
+  const integrationGit = realpathSync(
+    gitText(runModuleDeliveryGit(integrationInvocation)),
+  );
+  const handoffGit = realpathSync(
+    gitText(runModuleDeliveryGit(handoffInvocation)),
+  );
+  if (
+    inspection.handoff.workspace.sourceRepositoryRoot !==
+      inspection.state.workspace.sourceRepositoryRoot ||
+    handoffGit !== integrationGit
+  )
+    throw new Error('Module delivery handoff repository is invalid.');
+}
+
+export function assertCurrentModuleIntegrationAdmission(
+  inspection: CurrentModuleIntegrationAdmissionInspection,
+): void {
+  const authorityInspection: AdmissionStateAuthorityInspection = {
+    authority: inspection.authority,
+    state: inspection.state.admissionState,
+  };
+  assertModuleDeliveryAdmissionStateAuthority(authorityInspection);
+}
+
+export function assertModuleIntegrationLeaseFrontier(
+  inspection: ModuleIntegrationLeaseFrontierInspection,
+): void {
+  if (!/^[0-9a-f]{40}$/u.test(inspection.lease.startingFrontier))
+    throw new Error('Provider lease has an invalid starting frontier.');
+  const invocation: GitCommandRequest = {
+    cwd: inspection.state.workspace.sourceRepositoryRoot,
+    args: [
+      'merge-base',
+      '--is-ancestor',
+      inspection.lease.startingFrontier,
+      inspection.state.headCommit,
+    ],
+    allowFailure: true,
+  };
+  if (runModuleDeliveryGit(invocation).exitCode !== 0)
+    throw new Error('Provider lease starting frontier is stale or unrelated.');
+}
+
+export function assertModuleIntegrationProviderPrecedence(
+  inspection: ModuleIntegrationProviderPrecedenceInspection,
+): void {
+  const predecessors = inspection.acceptedPlan.executionPrecedence
+    .filter((edge) => edge.successorTaskId === inspection.taskId)
+    .map((edge) => edge.predecessorTaskId);
+  for (const predecessor of predecessors) {
+    const acceptedWrite = inspection.state.acceptedWrites.find(
+      (entry) => entry.taskId === predecessor,
+    );
+    const evidenceAccepted = inspection.state.acceptedEvidence.some(
+      (entry) => entry.taskId === predecessor,
+    );
+    if (!acceptedWrite && !evidenceAccepted)
+      throw new Error(
+        `Provider ${inspection.taskId} is not ready; predecessor ${predecessor} is undispositioned.`,
+      );
+    if (!acceptedWrite) continue;
+    const invocation: GitCommandRequest = {
+      cwd: inspection.state.workspace.sourceRepositoryRoot,
+      args: [
+        'merge-base',
+        '--is-ancestor',
+        acceptedWrite.integrationCommit,
+        inspection.lease.startingFrontier,
+      ],
+      allowFailure: true,
+    };
+    if (runModuleDeliveryGit(invocation).exitCode !== 0)
+      throw new Error(
+        `Provider ${inspection.taskId} lease predates integrated predecessor ${predecessor}.`,
+      );
+  }
+}
+
+export function moduleIntegrationCompletedWaveCount(
+  request: ModuleIntegrationCompletedWaveCountRequest,
+): number {
+  let completed = 0;
+  for (const wave of request.acceptedPlan.waves) {
+    const complete = wave.every(
+      (taskId) =>
+        request.state.integratedTaskIds.includes(taskId) ||
+        request.state.acceptedEvidence.some((entry) => entry.taskId === taskId),
+    );
+    if (!complete) break;
+    completed += 1;
+  }
+  return completed;
 }

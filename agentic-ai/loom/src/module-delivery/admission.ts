@@ -26,7 +26,16 @@ import type {
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
-import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
+import type {
+  AcceptedModuleDeliveryEvidence,
+  AdmissionStateAuthorityInspection,
+  AttemptLeaseAuthorityInspection,
+  GenerationAuthorityInspection,
+  ModuleDeliveryAuthorityPlanRequest,
+  ModuleDeliveryAuthorityRepositoryInspection,
+  ModuleDeliveryDispositionOutcome,
+  RecordModuleDeliveryAttemptDispositionRequest,
+} from './integration-provenance.ts';
 import { assertModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
 import type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
@@ -131,29 +140,6 @@ export type ModuleDeliveryLeaseRecording = {
   readonly state: ModuleDeliveryAdmissionState;
   readonly leases: readonly ModuleDeliveryAttemptLease[];
 };
-export type ModuleDeliveryDispositionOutcome = {
-  readonly kind: ModuleDeliveryAttemptDispositionKind;
-  readonly conclusion: ModuleDeliveryGenerationFenceKind;
-};
-export type RecordModuleDeliveryAttemptDispositionRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly state: ModuleDeliveryAdmissionState;
-  readonly lease: ModuleDeliveryAttemptLease;
-  readonly outcome: ModuleDeliveryDispositionOutcome;
-};
-export type GenerationAuthorityInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly generation: number;
-  readonly planDigest: string;
-};
-export type AdmissionStateAuthorityInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly state: ModuleDeliveryAdmissionState;
-};
-export type AttemptLeaseAuthorityInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
 type AuthorityState = {
   repositoryRoot: string;
   inputPlan: ValidatedModuleDeliveryPlan;
@@ -173,11 +159,8 @@ type CapabilityProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
 };
-export type ModuleDeliveryAuthorityPlanRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-};
 type IntegratedFrontiersRequest = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
   readonly plan: ValidatedModuleDeliveryPlan;
   readonly headCommit: string;
   readonly entries: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
@@ -295,6 +278,21 @@ export function moduleDeliveryAuthorityPlan(
   );
 }
 
+export function assertModuleDeliveryAuthorityRepository(
+  inspection: ModuleDeliveryAuthorityRepositoryInspection,
+): void {
+  const authority = requiredAuthority(inspection.authority);
+  const authentication: AuthenticateModuleDeliverySourceCommitRequest = {
+    repositoryRoot: inspection.repositoryRoot,
+    sourceCommit: authority.acceptedPlan.plan.sourceCommit,
+  };
+  if (
+    authenticateModuleDeliverySourceCommit(authentication) !==
+    authority.repositoryRoot
+  )
+    throw new Error('Module delivery repository authority is invalid.');
+}
+
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
 ): void {
@@ -379,6 +377,7 @@ export function createModuleDeliveryAdmissionState(
   if (!COMMIT.test(request.headCommit))
     throw new Error('Module delivery admission head must be an exact commit.');
   const frontierRequest: IntegratedFrontiersRequest = {
+    authority: request.authority,
     plan: authority.acceptedPlan,
     headCommit: request.headCommit,
     entries: request.integratedWriterFrontiers,
@@ -825,6 +824,7 @@ function integratedFrontiers(
     const inspection: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
       {
         capability: entry,
+        authority: request.authority,
         taskId: entry.taskId,
         attempt: entry.attempt,
         generation: request.plan.plan.generation,
