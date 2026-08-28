@@ -487,6 +487,41 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn authentication_workflow_snapshot_rejects_mismatched_nested_username_evidence()
+    -> Result<(), wasm_bindgen::JsError> {
+        let detailed = NookAuthenticationPageObservation::from_detailed_control_observation(
+            nook_core::AuthenticationPageObservation {
+                current_password_field_count: 1,
+                ..Default::default()
+            },
+            nook_companion_core::AuthenticationAdvanceControlObservation {
+                actionability: nook_companion_core::PageControlActionability::Actionable,
+                ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                authentication_username:
+                    nook_companion_core::AuthenticationUsernameEvidence::Strong,
+                password_field_count: 1,
+                new_password_field_count: 0,
+                one_time_code_field_count: 0,
+                semantic_submit_control_count: 1,
+                form_identity: String::new(),
+                destination_identity: String::new(),
+                label: "Continue".to_owned(),
+            },
+        );
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&detailed);
+
+        let workflow = authentication_workflow_snapshot(&observations);
+        assert_eq!(
+            workflow.state(),
+            NookAuthenticationWorkflowMatchState::NoMatch
+        );
+        assert!(workflow.snapshot().is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_out_of_bounds_observations() {
         let excessive_field_count =
             NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {

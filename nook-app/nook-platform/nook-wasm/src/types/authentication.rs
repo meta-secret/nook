@@ -31,13 +31,23 @@ impl NookAuthenticationPageObservation {
         mut observation: nook_core::AuthenticationPageObservation,
         control: nook_companion_core::AuthenticationAdvanceControlObservation,
     ) -> Self {
-        observation.advance_control = match control.classify() {
-            nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication => {
-                nook_core::AuthenticationAdvanceControlEvidence::Present
-            }
-            nook_companion_core::AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication => {
-                nook_core::AuthenticationAdvanceControlEvidence::Absent
-            }
+        let fields = nook_companion_core::AuthenticationFieldObservationFacts {
+            username_field_count: observation.username_field_count,
+            current_password_field_count: observation.current_password_field_count,
+            new_password_field_count: observation.new_password_field_count,
+            generic_password_field_count: observation.generic_password_field_count,
+            one_time_code_field_count: observation.one_time_code_field_count,
+        };
+        let control_advances = control.is_bounded()
+            && fields.is_compatible_with_detailed_control(&control)
+            && matches!(
+                control.classify(),
+                nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication
+            );
+        observation.advance_control = if control_advances {
+            nook_core::AuthenticationAdvanceControlEvidence::Present
+        } else {
+            nook_core::AuthenticationAdvanceControlEvidence::Absent
         };
         Self(observation)
     }
