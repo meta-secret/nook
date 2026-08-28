@@ -397,28 +397,29 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsError>
     {
-        let observation = NookAuthenticationPageObservation::from_detailed_control_observation(
-            nook_core::AuthenticationPageObservation {
-                username_field_count: 1,
-                current_password_field_count: 1,
-                advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
-                ..Default::default()
-            },
-            nook_companion_core::AuthenticationAdvanceControlObservation {
-                actionability: nook_companion_core::PageControlActionability::Actionable,
-                ownership: nook_companion_core::PageControlOwnership::OwnedForm,
-                semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
-                authentication_username:
-                    nook_companion_core::AuthenticationUsernameEvidence::Strong,
-                password_field_count: 1,
-                new_password_field_count: 0,
-                one_time_code_field_count: 0,
-                semantic_submit_control_count: 1,
-                form_identity: String::new(),
-                destination_identity: String::new(),
-                label: "Continue".to_owned(),
-            },
-        );
+        let observation =
+            NookAuthenticationPageObservation::from_core_observation_with_detailed_control(
+                nook_core::AuthenticationPageObservation {
+                    username_field_count: 1,
+                    current_password_field_count: 1,
+                    advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
+                    ..Default::default()
+                },
+                nook_companion_core::AuthenticationAdvanceControlObservation {
+                    actionability: nook_companion_core::PageControlActionability::Actionable,
+                    ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                    semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                    authentication_username:
+                        nook_companion_core::AuthenticationUsernameEvidence::Strong,
+                    password_field_count: 1,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 1,
+                    form_identity: String::new(),
+                    destination_identity: String::new(),
+                    label: "Continue".to_owned(),
+                },
+            );
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let snapshot = authentication_workflow_snapshot(&observations).snapshot()?;
@@ -439,12 +440,13 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_forged_reduced_login_evidence()
     -> Result<(), wasm_bindgen::JsError> {
-        let observation =
-            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+        let observation = NookAuthenticationPageObservation::from_core_observation(
+            nook_core::AuthenticationPageObservation {
                 current_password_field_count: 1,
                 advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
                 ..Default::default()
-            });
+            },
+        );
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
 
@@ -455,26 +457,27 @@ mod wasm_tests {
         );
         assert!(workflow.snapshot().is_err());
 
-        let detailed = NookAuthenticationPageObservation::from_detailed_control_observation(
-            nook_core::AuthenticationPageObservation {
-                current_password_field_count: 1,
-                ..Default::default()
-            },
-            nook_companion_core::AuthenticationAdvanceControlObservation {
-                actionability: nook_companion_core::PageControlActionability::Actionable,
-                ownership: nook_companion_core::PageControlOwnership::OwnedForm,
-                semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
-                authentication_username:
-                    nook_companion_core::AuthenticationUsernameEvidence::Absent,
-                password_field_count: 1,
-                new_password_field_count: 0,
-                one_time_code_field_count: 0,
-                semantic_submit_control_count: 1,
-                form_identity: "auth".to_owned(),
-                destination_identity: "/account/eliminar".to_owned(),
-                label: "Continuar".to_owned(),
-            },
-        );
+        let detailed =
+            NookAuthenticationPageObservation::from_core_observation_with_detailed_control(
+                nook_core::AuthenticationPageObservation {
+                    current_password_field_count: 1,
+                    ..Default::default()
+                },
+                nook_companion_core::AuthenticationAdvanceControlObservation {
+                    actionability: nook_companion_core::PageControlActionability::Actionable,
+                    ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                    semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                    authentication_username:
+                        nook_companion_core::AuthenticationUsernameEvidence::Absent,
+                    password_field_count: 1,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 1,
+                    form_identity: "auth".to_owned(),
+                    destination_identity: "/account/eliminar".to_owned(),
+                    label: "Continuar".to_owned(),
+                },
+            );
         let mut detailed_observations = NookAuthenticationPageObservations::new();
         detailed_observations.add(&detailed);
         let detailed_workflow = authentication_workflow_snapshot(&detailed_observations);
@@ -489,26 +492,27 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_mismatched_nested_username_evidence()
     -> Result<(), wasm_bindgen::JsError> {
-        let detailed = NookAuthenticationPageObservation::from_detailed_control_observation(
-            nook_core::AuthenticationPageObservation {
-                current_password_field_count: 1,
-                ..Default::default()
-            },
-            nook_companion_core::AuthenticationAdvanceControlObservation {
-                actionability: nook_companion_core::PageControlActionability::Actionable,
-                ownership: nook_companion_core::PageControlOwnership::OwnedForm,
-                semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
-                authentication_username:
-                    nook_companion_core::AuthenticationUsernameEvidence::Strong,
-                password_field_count: 1,
-                new_password_field_count: 0,
-                one_time_code_field_count: 0,
-                semantic_submit_control_count: 1,
-                form_identity: String::new(),
-                destination_identity: String::new(),
-                label: "Continue".to_owned(),
-            },
-        );
+        let detailed =
+            NookAuthenticationPageObservation::from_core_observation_with_detailed_control(
+                nook_core::AuthenticationPageObservation {
+                    current_password_field_count: 1,
+                    ..Default::default()
+                },
+                nook_companion_core::AuthenticationAdvanceControlObservation {
+                    actionability: nook_companion_core::PageControlActionability::Actionable,
+                    ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                    semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                    authentication_username:
+                        nook_companion_core::AuthenticationUsernameEvidence::Strong,
+                    password_field_count: 1,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 1,
+                    form_identity: String::new(),
+                    destination_identity: String::new(),
+                    label: "Continue".to_owned(),
+                },
+            );
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&detailed);
 
@@ -524,7 +528,8 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_forged_reduced_auto_submit_evidence() {
         let observation =
-            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+            NookAuthenticationPageObservation::from_core_observation(
+                nook_core::AuthenticationPageObservation {
                 one_time_code_field_count: 1,
                 one_time_code_progression:
                     nook_companion_core::AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved,
@@ -543,13 +548,14 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_out_of_bounds_observations() {
-        let excessive_field_count =
-            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+        let excessive_field_count = NookAuthenticationPageObservation::from_core_observation(
+            nook_core::AuthenticationPageObservation {
                 username_field_count: nook_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
                 current_password_field_count: 1,
                 advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
                 ..Default::default()
-            });
+            },
+        );
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&excessive_field_count);
         assert_eq!(
@@ -557,13 +563,14 @@ mod wasm_tests {
             NookAuthenticationWorkflowMatchState::Rejected
         );
 
-        let valid_login =
-            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+        let valid_login = NookAuthenticationPageObservation::from_core_observation(
+            nook_core::AuthenticationPageObservation {
                 username_field_count: 1,
                 current_password_field_count: 1,
                 advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
                 ..Default::default()
-            });
+            },
+        );
         let mut observations = NookAuthenticationPageObservations::new();
         for _ in 0..=nook_core::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS {
             observations.add(&valid_login);

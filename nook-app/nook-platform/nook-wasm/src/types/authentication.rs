@@ -32,32 +32,34 @@ pub struct NookLoginAccount {
 #[wasm_bindgen]
 pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObservation);
 
-#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(
+    pub fn new_from_js(
         #[wasm_bindgen(unchecked_param_type = "AuthenticationPageObservation")]
         observation: wasm_bindgen::JsValue,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let observation = decode_authentication_page_observation(observation)?;
-        Ok(Self::from_reduced_observation(observation))
+        Ok(Self::from_core_observation(observation))
     }
 
     /// Construct page evidence from a detailed, policy-checked control observation.
+    #[wasm_bindgen(js_name = from_detailed_control_observation)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn from_detailed_control_observation(
+    pub fn from_detailed_control_observation_from_js(
         #[wasm_bindgen(unchecked_param_type = "AuthenticationPageObservation")]
         observation: wasm_bindgen::JsValue,
         control: nook_companion_core::AuthenticationAdvanceControlObservation,
     ) -> Result<Self, wasm_bindgen::JsError> {
         let observation = decode_authentication_page_observation(observation)?;
-        Ok(Self::from_detailed_observation(observation, &control))
+        Ok(Self::from_core_observation_with_detailed_control(
+            observation,
+            control,
+        ))
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 fn decode_authentication_page_observation(
     observation: wasm_bindgen::JsValue,
 ) -> Result<nook_core::AuthenticationPageObservation, wasm_bindgen::JsError> {
@@ -65,24 +67,18 @@ fn decode_authentication_page_observation(
         .map_err(|_| wasm_bindgen::JsError::new("authentication page observation is malformed"))
 }
 
-#[cfg(not(target_arch = "wasm32"))]
 impl NookAuthenticationPageObservation {
+    #[cfg(test)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(observation: nook_core::AuthenticationPageObservation) -> Self {
-        Self::from_reduced_observation(observation)
-    }
-
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn from_detailed_control_observation(
-        observation: nook_core::AuthenticationPageObservation,
-        control: nook_companion_core::AuthenticationAdvanceControlObservation,
-    ) -> Self {
-        Self::from_detailed_observation(observation, &control)
+    pub(crate) fn new(observation: nook_core::AuthenticationPageObservation) -> Self {
+        Self::from_core_observation(observation)
     }
 }
 
 impl NookAuthenticationPageObservation {
-    fn from_reduced_observation(mut observation: nook_core::AuthenticationPageObservation) -> Self {
+    pub(crate) fn from_core_observation(
+        mut observation: nook_core::AuthenticationPageObservation,
+    ) -> Self {
         // The reduced page envelope cannot establish that a control belongs to
         // an authentication ceremony. Do not let callers forge continuation
         // evidence by setting this field directly.
@@ -90,6 +86,14 @@ impl NookAuthenticationPageObservation {
         observation.one_time_code_progression =
             nook_companion_core::AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
         Self(observation)
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    pub(crate) fn from_core_observation_with_detailed_control(
+        observation: nook_core::AuthenticationPageObservation,
+        control: nook_companion_core::AuthenticationAdvanceControlObservation,
+    ) -> Self {
+        Self::from_detailed_observation(observation, &control)
     }
 
     fn from_detailed_observation(
