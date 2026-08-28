@@ -255,7 +255,7 @@ impl AuthenticationAdvanceControlObservation {
                     &self.destination_identity,
                 )
                 || password_update_destination);
-        if has_unconditional_veto_identity(self, password_update_destination) {
+        if has_unconditional_veto_identity(self, credential_update_destination) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
@@ -843,7 +843,7 @@ mod tests {
     }
 
     #[test]
-    fn password_update_routes_do_not_inherit_button_label_rejections() {
+    fn credential_update_routes_do_not_inherit_button_label_rejections() {
         let password_update = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Absent,
             new_password_field_count: 1,
@@ -861,19 +861,19 @@ mod tests {
         };
         assert!(advances_destination("/auth/update-password"));
         assert!(advances_destination("/auth/save-password"));
-
+        assert!(advances_destination("/signup/save"));
+        assert!(advances_destination("/recover/update"));
         for destination_identity in [
             "/auth/update-password/delete-account",
             "/auth/update-password/google",
         ] {
             assert!(!advances_destination(destination_identity));
         }
-        for prefix in ["/auth/update-password", "/password/reset", "/auth/register"] {
+        for prefix in ["/auth/update-password", "/recover/update", "/signup/save"] {
             for suffix in ["cancel", "profile", "payment", "search"] {
                 assert!(!advances_destination(&format!("{prefix}/{suffix}")));
             }
         }
-
         let mut missing_new_password = observes_destination("/auth/update-password");
         missing_new_password.new_password_field_count = 0;
         assert!(!advances_authentication(&missing_new_password));
