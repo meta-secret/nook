@@ -2,6 +2,8 @@ import type { TeamKey } from '../team-agents/catalog.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 2;
+export type ModuleDeliveryPlanInputVersion =
+  1 | typeof MODULE_DELIVERY_PLAN_VERSION;
 export const MAX_MODULE_DELIVERY_NODES = 64;
 export const MAX_MODULE_DELIVERY_CONCURRENCY = 16;
 export const MAX_MODULE_DELIVERY_AGENT_DEPTH = 3;
@@ -184,6 +186,9 @@ export type LegacyWriteModuleDeliveryNode = LegacyModuleDeliveryNodeFields & {
   };
 };
 
+export type LegacyModuleDeliveryNode =
+  LegacyReadOnlyModuleDeliveryNode | LegacyWriteModuleDeliveryNode;
+
 export type LegacyModuleDeliveryPlan = {
   readonly version: 1;
   readonly sourceCommit: string;
@@ -192,7 +197,7 @@ export type LegacyModuleDeliveryPlan = {
   readonly maxAttempts: number;
   readonly parentOwnedResources: readonly string[];
   readonly parentJoin: ModuleDeliveryParentJoin;
-  readonly nodes: readonly ModuleDeliveryNode[];
+  readonly nodes: readonly LegacyModuleDeliveryNode[];
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
@@ -201,14 +206,16 @@ export type ReadOnlyModuleDeliveryNode =
 export type WriteModuleDeliveryNode =
   LegacyWriteModuleDeliveryNode | ModuleDeliveryWriteNodeV2;
 export type ModuleDeliveryNode =
-  | LegacyReadOnlyModuleDeliveryNode
-  | LegacyWriteModuleDeliveryNode
-  | ModuleDeliveryNodeV2;
+  LegacyModuleDeliveryNode | ModuleDeliveryNodeV2;
 
 export type ModuleDeliveryPlanInput =
   LegacyModuleDeliveryPlan | ModuleDeliveryPlanV2;
 
-export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
+export type ModuleDeliveryPlan =
+  | (Omit<LegacyModuleDeliveryPlan, 'nodes'> & {
+      readonly nodes: readonly ModuleDeliveryNode[];
+    })
+  | ModuleDeliveryPlanV2;
 
 export enum ModuleDeliveryIssueCode {
   MalformedTransport = 'malformed-transport',
@@ -247,6 +254,7 @@ export enum ModuleDeliveryValidationStatus {
 
 export type AcceptedModuleDeliveryPlan = {
   readonly status: ModuleDeliveryValidationStatus.Accepted;
+  readonly inputVersion: ModuleDeliveryPlanInputVersion;
   readonly plan: ModuleDeliveryPlanV2;
   readonly planDigest: string;
   readonly topologicalOrder: readonly string[];

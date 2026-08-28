@@ -12,6 +12,8 @@ import {
   decodeAndValidateModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 import type {
+  LegacyModuleDeliveryPlan,
+  LegacyModuleDeliveryNode,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryExecutionPrecedence,
@@ -53,6 +55,18 @@ type EdgeFixture = {
 type PlanFixture = {
   readonly nodes: readonly ModuleDeliveryNodeV2[];
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
+};
+
+type LegacyHybridNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
+  readonly kind: ModuleDeliveryTaskKind;
+  readonly team?: TeamKey;
+  readonly functionalOwner?: TeamKey;
+  readonly acceptanceOwner?: TeamKey;
+  readonly parentLineage?: { readonly kind: AgentAttemptParentKind };
+};
+
+type LegacyAdversarialPlan = Omit<LegacyModuleDeliveryPlan, 'nodes'> & {
+  readonly nodes: readonly LegacyHybridNode[];
 };
 
 type NodeFailureFixture = {
@@ -182,6 +196,44 @@ function validate(value: ModuleDeliveryPlanV2): ModuleDeliveryPlanValidation {
   return decodeAndValidateModuleDeliveryPlan(JSON.stringify(value));
 }
 
+function legacyPlan(): LegacyModuleDeliveryPlan {
+  return {
+    version: 1,
+    sourceCommit: SOURCE_COMMIT,
+    maxConcurrency: 1,
+    maxAgentDepth: 2,
+    maxAttempts: 2,
+    parentOwnedResources: PARENT_OWNED_RESOURCES,
+    parentJoin: {
+      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      owner: 'delivery-owner',
+      validationCommands: ['task loom:verify'],
+    },
+    nodes: [
+      {
+        kind: ModuleDeliveryTaskKind.ReadOnly,
+        taskId: 'legacy-core-audit',
+        expert: 'core_expert',
+        moduleRoot: CORE_ROOT,
+        consumerOutcome: 'The parent receives reviewed legacy evidence.',
+        baseline: {
+          kind: ModuleDeliveryBaselineKind.SourceCommit,
+          sourceCommit: SOURCE_COMMIT,
+        },
+        agentDepthLimit: 2,
+        dependencies: [],
+        resources: { read: [`${CORE_ROOT}/**`], write: [] },
+        parentOwnedExclusions: PARENT_OWNED_RESOURCES,
+        acceptance: {
+          commands: ['task core:audit'],
+          evidence: ['Legacy evidence is reviewed.'],
+        },
+      },
+    ],
+    edgeContracts: [],
+  };
+}
+
 function codes(
   result: ModuleDeliveryPlanValidation,
 ): readonly ModuleDeliveryIssueCode[] {
@@ -241,6 +293,60 @@ const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
 ];
 
 describe('reviewed module delivery plan', () => {
+  test('rejects v2-only task forms and authority fields in v1 input', () => {
+    const legacy = legacyPlan();
+    const node = legacy.nodes[0];
+    if (!node) throw new Error('Legacy fixture must contain one node.');
+    const candidates: readonly LegacyAdversarialPlan[] = [
+      {
+        ...legacy,
+        nodes: [{ ...node, kind: ModuleDeliveryTaskKind.EvidenceSynthesis }],
+      },
+      { ...legacy, nodes: [{ ...node, functionalOwner: TeamKey.Ai }] },
+      {
+        ...legacy,
+        nodes: [
+          {
+            ...node,
+            team: TeamKey.DevelopmentCore,
+            acceptanceOwner: TeamKey.Ai,
+            parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+          },
+        ],
+      },
+    ];
+
+    for (const candidate of candidates) {
+      const result = decodeAndValidateModuleDeliveryPlan(
+        JSON.stringify(candidate),
+      );
+      expect(result.status).toBe(ModuleDeliveryValidationStatus.Rejected);
+      expect(codes(result)).toContain(ModuleDeliveryIssueCode.InvalidField);
+    }
+  });
+
+  test('retains whether accepted input was authored as v1 or v2', () => {
+    const legacy = decodeAndValidateModuleDeliveryPlan(
+      JSON.stringify(legacyPlan()),
+    );
+    const fixture: PlanFixture = {
+      nodes: DEFAULT_NODES,
+      edgeContracts: DEFAULT_EDGES,
+    };
+    const current = validate(plan(fixture));
+    expect(legacy.status).toBe(ModuleDeliveryValidationStatus.Accepted);
+    expect(current.status).toBe(ModuleDeliveryValidationStatus.Accepted);
+    if (
+      legacy.status !== ModuleDeliveryValidationStatus.Accepted ||
+      current.status !== ModuleDeliveryValidationStatus.Accepted
+    )
+      return;
+    expect(legacy.inputVersion).toBe(1);
+    expect(current.inputVersion).toBe(2);
+    expect(legacy.plan.version).toBe(2);
+    expect(current.plan.version).toBe(2);
+  });
+
   test('freezes owner acceptance and typed synthesis producer identities', () => {
     const providerFixture: ReadOnlyNodeFixture = {
       taskId: 'provider-audit',

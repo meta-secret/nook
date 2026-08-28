@@ -32,6 +32,7 @@ import type {
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
   ModuleDeliveryParentJoin,
+  ModuleDeliveryPlanInputVersion,
   ModuleDeliveryPlanV2,
   ModuleDeliveryExpectedProducerIdentity,
   ModuleDeliveryEvidenceInputContract,
@@ -369,6 +370,7 @@ class ModulePlanFields {
 export type ModuleDeliveryPlanDecode =
   | {
       readonly status: ModuleDeliveryValidationStatus.Accepted;
+      readonly inputVersion: ModuleDeliveryPlanInputVersion;
       readonly plan: ModuleDeliveryPlanV2;
     }
   | RejectedModuleDeliveryPlan;
@@ -440,7 +442,11 @@ function decodePlanRoot(node: UntrustedYamlNode): ModuleDeliveryPlanDecode {
     nodes: decodeNodes(nodeListRequest),
     edgeContracts: decodeEdgeContracts(fields.list('edgeContracts')),
   };
-  return { status: ModuleDeliveryValidationStatus.Accepted, plan };
+  return {
+    status: ModuleDeliveryValidationStatus.Accepted,
+    inputVersion: version,
+    plan,
+  };
 }
 
 function decodeParentJoin(
@@ -489,10 +495,16 @@ function decodeNode(
   };
   const fields = new ModulePlanFields(fieldRequest);
   const kind = fields.string('kind');
-  if (request.legacy && kind === ModuleDeliveryTaskKind.Write) {
-    fields.requireExactKeys(LegacyModulePlanWriteNodeField);
-  } else if (request.legacy && kind === ModuleDeliveryTaskKind.ReadOnly) {
-    fields.requireExactKeys(LegacyModulePlanReadOnlyNodeField);
+  if (request.legacy) {
+    if (kind === ModuleDeliveryTaskKind.Write) {
+      fields.requireExactKeys(LegacyModulePlanWriteNodeField);
+    } else if (kind === ModuleDeliveryTaskKind.ReadOnly) {
+      fields.requireExactKeys(LegacyModulePlanReadOnlyNodeField);
+    } else {
+      fail(
+        `${path}.kind: legacy plans only support read-only and write tasks.`,
+      );
+    }
   } else if (kind === ModuleDeliveryTaskKind.Write) {
     fields.requireExactKeys(ModulePlanWriteNodeField);
   } else if (kind === ModuleDeliveryTaskKind.ReadOnly) {

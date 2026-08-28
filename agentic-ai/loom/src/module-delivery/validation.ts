@@ -22,6 +22,7 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
   ModuleDeliveryNodeV2,
+  ModuleDeliveryPlanInputVersion,
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryExecutionPrecedence,
@@ -120,18 +121,28 @@ type ModuleDeliveryTopology = {
   readonly executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[];
 };
 
+type DecodedPlanValidationRequest = {
+  readonly plan: ModuleDeliveryPlanV2;
+  readonly inputVersion: ModuleDeliveryPlanInputVersion;
+};
+
 export function decodeAndValidateModuleDeliveryPlan(
   serialized: string,
 ): ModuleDeliveryPlanValidation {
   const decoded = decodeModuleDeliveryPlan(serialized);
   if (decoded.status === ModuleDeliveryValidationStatus.Rejected)
     return decoded;
-  return validateDecodedModuleDeliveryPlan(decoded.plan);
+  const request: DecodedPlanValidationRequest = {
+    plan: decoded.plan,
+    inputVersion: decoded.inputVersion,
+  };
+  return validateDecodedModuleDeliveryPlan(request);
 }
 
 function validateDecodedModuleDeliveryPlan(
-  plan: ModuleDeliveryPlanV2,
+  request: DecodedPlanValidationRequest,
 ): ModuleDeliveryPlanValidation {
+  const { plan, inputVersion } = request;
   const issues: ModuleDeliveryIssue[] = [];
   const nodesById = new Map<string, ModuleDeliveryNodeV2>();
   const state: ValidationState = { plan, issues, nodesById };
@@ -146,6 +157,7 @@ function validateDecodedModuleDeliveryPlan(
   if (issues.length > 0) return rejected(state);
   return {
     status: ModuleDeliveryValidationStatus.Accepted,
+    inputVersion,
     plan,
     planDigest: moduleDeliveryPlanDigest(plan),
     topologicalOrder: topology.order,
