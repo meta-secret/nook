@@ -25,6 +25,22 @@ tasks:
     cmds:
       - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
 
+  skills:run:
+    desc: Run one executable skill action from a domain YAML request (CONFIG=<request.yaml>).
+    deps: [skills:install]
+    requires:
+      vars: [CONFIG]
+    env:
+      NOOK_SKILL_CONFIG: '{{.CONFIG}}'
+    cmds:
+      - bun .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts "$NOOK_SKILL_CONFIG"
+
+  skills:tools-list:
+    desc: List executable skill actions, YAML examples, and request schemas.
+    deps: [skills:install]
+    cmds:
+      - bun .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts --default toolsList
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom

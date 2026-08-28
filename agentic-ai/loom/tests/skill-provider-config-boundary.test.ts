@@ -2,11 +2,15 @@ import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
 import {
+  configurationExecutableSource,
   type ConfigurationReferenceInspection,
   type ConfigurationScriptGraph,
+  declaredTaskVariables,
   type ExecutableProviderReferenceInspection,
   executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
+  isRequiredScriptLaunch,
+  type RequiredScriptLaunchInspection,
   ShellExecutablePolicy,
 } from './skill-provider-executable-script.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
@@ -15,6 +19,17 @@ import {
   executableSkillPackageFromPath,
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
+import {
+  CORTEX_AUDIT,
+  isAuthorizedSkillConsumerEdge,
+  isSkillConsumerDependency,
+  LOOM_ARTICLE_ADAPTER,
+  SKILL_HOST_CLI,
+  SKILL_HOST_REGISTRY,
+  SKILL_PROVIDER_ROOT,
+  type SkillConsumerEdge,
+} from './skill-consumer-boundary.ts';
+import { analyzeSkillHostSource } from './skill-application-source-boundary.test.ts';
 
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -53,16 +68,6 @@ type ActionLoaderFixture = {
   readonly source: string;
 };
 
-type RequiredLaunchInspection = {
-  readonly source: string;
-  readonly specifier: string;
-};
-
-type ApplicationConsumerEdge = {
-  readonly dependency: string;
-  readonly importer: string;
-};
-
 type RepositoryPackageDocument = {
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
@@ -71,14 +76,8 @@ type RepositoryPackageDocument = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const PROVIDER_ROOT =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts';
+const PROVIDER_ROOT = SKILL_PROVIDER_ROOT;
 const PROVIDER_APPLICATION = `${PROVIDER_ROOT}/src/application.ts`;
-const PROVIDER_DOMAIN = `${PROVIDER_ROOT}/src/domain.ts`;
-const PROVIDER_PACKAGE = `${PROVIDER_ROOT}/package.json`;
-const CORTEX_AUDIT = 'agentic-ai/loom/src/commands/cortex-audit.ts';
-const LOOM_ARTICLE_ADAPTER =
-  'agentic-ai/loom/src/lib/cortex-article-structure.ts';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
 const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
 const CONFIGURATION_SCRIPT_REFERENCE =
@@ -137,9 +136,10 @@ function actionSourceRequiresContent(path: string): boolean {
   );
 }
 
-function configurationScriptPaths(
+export function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
+  const knownTaskVariables = declaredTaskVariables(graph.sources);
   const pending = [...graph.roots];
   const visited = new Set<string>();
   const scripts = new Set<string>();
@@ -154,9 +154,17 @@ function configurationScriptPaths(
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
+    const executableSourceRequest = {
+      knownTaskVariables,
+      path: importer,
+      source,
+    };
+    const executableSource = configurationExecutableSource(
+      executableSourceRequest,
+    );
     const referenceInspection: ConfigurationReferenceInspection = {
       importer,
-      source,
+      source: executableSource,
     };
     for (const specifier of configurationScriptReferences(
       referenceInspection,
@@ -183,8 +191,16 @@ function configurationScriptPaths(
       const dependency =
         candidates.find((path) => graph.sources.has(path)) ?? false;
       if (dependency === false) {
-        const launchInspection: RequiredLaunchInspection = {
-          source,
+        if (
+          candidates.some(
+            (candidate) =>
+              candidate.endsWith('.ts') && isSkillConsumerDependency(candidate),
+          )
+        ) {
+          throw new Error(`Unauthorized application edge: ${importer}`);
+        }
+        const launchInspection: RequiredScriptLaunchInspection = {
+          source: executableSource,
           specifier,
         };
         if (isRequiredScriptLaunch(launchInspection)) {
@@ -204,9 +220,9 @@ function configurationScriptPaths(
         CONFIGURATION_SCRIPT_EXTENSION.test(dependency) ||
         isExtensionlessExecutable
       ) {
-        const edge: ApplicationConsumerEdge = { dependency, importer };
-        const applicationEdge = isApplicationDependency(dependency);
-        if (applicationEdge && !isAuthorizedApplicationEdge(edge)) {
+        const edge: SkillConsumerEdge = { dependency, importer };
+        const applicationEdge = isSkillConsumerDependency(dependency);
+        if (applicationEdge && !isAuthorizedSkillConsumerEdge(edge)) {
           throw new Error(`Unauthorized application edge: ${importer}`);
         }
         const adapterInspection = {
@@ -227,7 +243,26 @@ function configurationScriptPaths(
           sources: graph.sources,
         };
         if (
-          !applicationEdge &&
+          dependency.startsWith(`${posix.dirname(SKILL_HOST_REGISTRY)}/`) &&
+          dependency.endsWith('.ts') &&
+          dependency.startsWith(PROVIDER_ROOT) === false
+        ) {
+          const hostSourceRequest = {
+            relativePath: dependency,
+            source: graph.sources.get(dependency) ?? '',
+          };
+          try {
+            analyzeSkillHostSource(hostSourceRequest);
+          } catch {
+            throw new Error(
+              `Skill host violates runtime boundary: ${dependency}`,
+            );
+          }
+        }
+        if (
+          dependency !== LOOM_ARTICLE_ADAPTER &&
+          dependency.startsWith(`${posix.dirname(SKILL_HOST_REGISTRY)}/`) ===
+            false &&
           executableScriptViolatesBoundary(boundaryInspection)
         ) {
           throw new Error(
@@ -243,21 +278,6 @@ function configurationScriptPaths(
     }
   }
   return [...scripts].sort();
-}
-
-function isApplicationDependency(path: string): boolean {
-  return path === LOOM_ARTICLE_ADAPTER || path.startsWith(`${PROVIDER_ROOT}/`);
-}
-
-function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
-  if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
-    return edge.importer === CORTEX_AUDIT;
-  }
-  return (
-    edge.importer === LOOM_ARTICLE_ADAPTER &&
-    (edge.dependency === PROVIDER_APPLICATION ||
-      edge.dependency === PROVIDER_DOMAIN)
-  );
 }
 
 function configurationScriptReferences(
@@ -281,26 +301,13 @@ function configurationScriptReferences(
     ),
   );
   for (const specifier of matched) {
-    const launchInspection: RequiredLaunchInspection = {
+    const launchInspection: RequiredScriptLaunchInspection = {
       source: inspection.source,
       specifier,
     };
     if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
   }
   return [...references];
-}
-
-function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
-  if (inspection.source.includes('{{')) return false;
-  const escapedSpecifier = inspection.specifier.replace(
-    /[.*+?^${}()|[\]\\]/gu,
-    '\\$&',
-  );
-  const launchPattern = new RegExp(
-    `(?:^|[\\s;&|"'=:\\[(])(?:bun|node|bash|sh)\\s+["']?${escapedSpecifier}(?=$|[\\s"';&|])`,
-    'u',
-  );
-  return launchPattern.test(inspection.source);
 }
 
 function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
@@ -418,7 +425,7 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
           `Action relative import is unresolved: ${importer} -> ${imported.path}`,
         );
       }
-      if (isApplicationDependency(dependency)) {
+      if (isSkillConsumerDependency(dependency)) {
         throw new Error(`Unauthorized action application edge: ${importer}`);
       }
       if (graph.symlinkPaths.has(dependency)) {
@@ -521,7 +528,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
     executablePaths: new Set(
       tracked.filter((file) => file.mode === '100755').map((file) => file.path),
     ),
-    roots: configPaths.filter((path) => path !== PROVIDER_PACKAGE),
+    roots: configPaths,
     sources: actionSources,
     symlinkPaths,
   };
@@ -535,7 +542,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
       ...reachableActionPaths,
       ...reachableScriptPaths,
     ]),
-  ).toEqual([PROVIDER_PACKAGE, LOOM_ARTICLE_ADAPTER].sort());
+  ).toEqual(['.task/agentic-ai.yml', LOOM_ARTICLE_ADAPTER]);
+  expect(reachableScriptPaths).toContain(SKILL_HOST_CLI);
+  expect(reachableScriptPaths).toContain(SKILL_HOST_REGISTRY);
 
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
@@ -543,7 +552,6 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
   expect(activeAudit).not.toContain('src/cortex-article-provider');
 });
-
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile\.ya?ml$/u;
   const allPaths = readTrackedRepositoryFiles(REPOSITORY_ROOT).map(
@@ -645,20 +653,24 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     'Action source violates runtime boundary',
   );
 
-  const adapterSources = new Map(sources);
-  adapterSources.set(
-    '.github/actions/nested/neutral.js',
-    `import '../../../${LOOM_ARTICLE_ADAPTER}';`,
-  );
-  adapterSources.set(LOOM_ARTICLE_ADAPTER, 'export const adapter = true;');
-  const adapterGraph: ActionRuntimeGraph = {
-    roots: ['.github/actions/root/action.yml'],
-    sources: adapterSources,
-    symlinkPaths: new Set<string>(),
-  };
-  expect(() => actionRuntimePaths(adapterGraph)).toThrow(
-    'Unauthorized action application edge',
-  );
+  for (const target of [
+    LOOM_ARTICLE_ADAPTER,
+    SKILL_HOST_CLI,
+    SKILL_HOST_REGISTRY,
+  ]) {
+    const alternateSources = new Map(sources);
+    alternateSources.set(
+      '.github/actions/nested/neutral.js',
+      `import '../../../${target}';`,
+    );
+    alternateSources.set(target, 'export const target = true;');
+    const alternateGraph: ActionRuntimeGraph = {
+      roots: ['.github/actions/root/action.yml'],
+      sources: alternateSources,
+      symlinkPaths: new Set<string>(),
+    };
+    expect(() => actionRuntimePaths(alternateGraph), target).toThrow();
+  }
 
   const unresolvedSources = new Map(sources);
   unresolvedSources.delete('.github/actions/nested/main');
@@ -796,6 +808,8 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
 test('follows scripts launched from every runnable configuration surface', () => {
   for (const [path, source] of [
     ['package.json', '{"scripts":{"audit":"bun scripts/facade.ts"}}'],
+    ['package.json', `{"scripts":{"audit":"bun ${SKILL_HOST_CLI}"}}`],
+    ['package.json', `{"scripts":{"audit":"bun ${SKILL_HOST_REGISTRY}"}}`],
     ['package.json', `{"scripts":{"audit":"bun ${LOOM_ARTICLE_ADAPTER}"}}`],
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
@@ -828,6 +842,11 @@ test('follows scripts launched from every runnable configuration surface', () =>
       ],
       [`${PROVIDER_ROOT}/src/audit.ts`, 'export const audit = true;'],
       [LOOM_ARTICLE_ADAPTER, `import '../../../${PROVIDER_APPLICATION}';`],
+      [SKILL_HOST_CLI, `import './skill-action-registry.ts';`],
+      [
+        SKILL_HOST_REGISTRY,
+        `import './cortex-article-structure/src/application.ts';`,
+      ],
       [PROVIDER_APPLICATION, 'export const application = true;'],
     ]);
     const graph: ConfigurationScriptGraph = {
@@ -868,7 +887,6 @@ test('follows scripts launched from every runnable configuration surface', () =>
     'scripts/catalog.ts',
   ]);
 });
-
 test('rejects a dangerous adapter from the canonical runnable graph', () => {
   const sources = new Map<string, string>([
     [
@@ -892,11 +910,11 @@ test('rejects a dangerous adapter from the canonical runnable graph', () => {
     'Article adapter violates boundary',
   );
 });
-
 test('checks external and extensionless configuration scripts as executable sources', () => {
   for (const externalSource of [
     'eval(source);',
     'await import(modulePath);',
+    `import '../${SKILL_HOST_REGISTRY}';`,
     "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
   ]) {
     const sources = new Map<string, string>([
@@ -909,11 +927,8 @@ test('checks external and extensionless configuration scripts as executable sour
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(() => configurationScriptPaths(graph), externalSource).toThrow(
-      'Runnable script violates runtime boundary',
-    );
+    expect(() => configurationScriptPaths(graph), externalSource).toThrow();
   }
-
   const extensionlessSources = new Map<string, string>([
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [./scripts/audit]'],
     ['scripts/audit', 'eval(source);'],
@@ -927,7 +942,6 @@ test('checks external and extensionless configuration scripts as executable sour
   expect(() => configurationScriptPaths(executableGraph)).toThrow(
     'Runnable script violates runtime boundary',
   );
-
   const nonExecutableGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
     roots: ['Taskfile.yml'],

@@ -127,6 +127,19 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && skills_verify.contains("bun run verify"),
         "skills:verify must run every complete application project gate"
     );
+    for (task, next) in [
+        ("skills:run", "skills:tools-list"),
+        ("skills:tools-list", "loom:install"),
+    ] {
+        let body = task_body(&taskfile, task, next);
+        assert!(
+            body.contains("deps: [skills:install]")
+                && body.contains(
+                    ".cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts"
+                ),
+            "{task} must use the canonical host after the frozen install"
+        );
+    }
 
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");
     assert!(
@@ -178,6 +191,7 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         source_gate.contains("analyzeExecutableSkillSource")
             && source_gate
                 .contains(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts")
+            && source_gate.contains("executable-skill-host/scripts")
             && source_gate.contains("readTrackedRepositoryFiles"),
         "loom:verify must AST-audit every tracked executable application source"
     );

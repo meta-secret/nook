@@ -103,8 +103,14 @@ application validates its request, audits it, independently verifies its
 result, and enforces contract bounds without command, network, write, agent, or
 lifecycle authority. Run its project gate with `task skills:verify`.
 Run `task loom:verify` for the recursive AST capability audit and exact
-consumer boundary. The strict-YAML host package is statically audited but has
-no supported invocation until its exact Task reachability lands separately.
+consumer boundary. Use `task skills:tools-list` to discover the host's closed
+schemas, descriptions, and resolved YAML examples. Use
+`task skills:run CONFIG=path/to/request.yaml` to invoke one domain operation.
+Both depend on frozen project installation. Successes and typed corrective
+failures are YAML-only and bounded; failures never reproduce request keys or
+scalar values. Request, provider-result, and host-envelope capacities are
+distinct. The host grants no network, write, process, model, scheduling,
+containment, or lifecycle authority.
 
 ## TypeScript domain structure
 

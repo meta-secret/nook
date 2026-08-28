@@ -1,7 +1,14 @@
 import { expect, test } from 'bun:test';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { parseAllDocuments } from 'yaml';
 import {
   runSkillCli,
   type RunSkillCliRequest,
@@ -109,6 +116,40 @@ test('rejects tagged-key collisions with bounded redaction and silent stderr', (
       SKILL_PROVIDER_RESULT_BYTE_LIMIT,
     );
     expect(stderr).toBe('');
+  } finally {
+    rmSync(directory, REMOVE_DIRECTORY_OPTIONS);
+  }
+});
+test('Task transport keeps stdout YAML-only and CONFIG literal', () => {
+  const directory = createTemporaryDirectory();
+  const repositoryRoot = join(import.meta.dir, '../../../..');
+  const canary = join(directory, 'injected');
+  const spawnOptions = {
+    cwd: repositoryRoot,
+    stderr: 'pipe',
+    stdout: 'pipe',
+  } as const;
+  try {
+    const discovery = Bun.spawnSync(
+      ['task', 'skills:tools-list'],
+      spawnOptions,
+    );
+    const discoveryStdout = discovery.stdout.toString();
+    expect(discovery.exitCode).toBe(0);
+    expect(parseAllDocuments(discoveryStdout)).toHaveLength(1);
+    expect(discoveryStdout).not.toContain('bun install');
+    expect(discovery.stderr.toString()).toContain('bun install');
+    const payload = `$(touch ${canary});"'\n\`touch ${canary}-backtick\``;
+    const invocation = Bun.spawnSync(
+      ['task', 'skills:run', `CONFIG=${payload}`],
+      spawnOptions,
+    );
+    const invocationStdout = invocation.stdout.toString();
+    expect(invocation.exitCode).not.toBe(0);
+    expect(parseAllDocuments(invocationStdout)).toHaveLength(1);
+    expect(invocationStdout).not.toContain('bun install');
+    expect(existsSync(canary)).toBe(false);
+    expect(existsSync(`${canary}-backtick`)).toBe(false);
   } finally {
     rmSync(directory, REMOVE_DIRECTORY_OPTIONS);
   }

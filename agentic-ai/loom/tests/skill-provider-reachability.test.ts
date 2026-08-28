@@ -12,6 +12,17 @@ import {
 import { repositorySubprocessEntrypoints } from './skill-provider-subprocess.ts';
 import { PRODUCTION_SOURCE_EXTENSIONS } from './skill-provider-type-context.ts';
 import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
+import {
+  CORTEX_AUDIT,
+  isAuthorizedSkillConsumerEdge,
+  isSkillConsumerDependency,
+  LOOM_ARTICLE_ADAPTER,
+  SKILL_HOST_CLI,
+  SKILL_HOST_REGISTRY,
+  SKILL_PROVIDER_APPLICATION as ARTICLE_APPLICATION,
+  SKILL_PROVIDER_DOMAIN as ARTICLE_DOMAIN,
+  SKILL_PROVIDER_ROOT,
+} from './skill-consumer-boundary.ts';
 
 type RuntimeDependencyGraphInspection = {
   readonly executablePaths: ReadonlySet<string>;
@@ -62,12 +73,7 @@ type RepositoryPackageDocument = {
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
-const CORTEX_AUDIT = `${LOOM_PRODUCTION_PREFIX}commands/cortex-audit.ts`;
-const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
-const ARTICLE_PROVIDER_PREFIX =
-  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
-const ARTICLE_APPLICATION = `${ARTICLE_PROVIDER_PREFIX}src/application.ts`;
-const ARTICLE_DOMAIN = `${ARTICLE_PROVIDER_PREFIX}src/domain.ts`;
+const ARTICLE_PROVIDER_PREFIX = `${SKILL_PROVIDER_ROOT}/`;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
 const SUBPROCESS_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?|sh)$/u;
 const RUNTIME_SOURCE_SUFFIXES = [
@@ -213,27 +219,13 @@ function runtimeDependencyViolations(
 }
 
 function isSkillApplicationDependency(path: string): boolean {
-  return (
-    path === LOOM_ARTICLE_ADAPTER || path.startsWith(ARTICLE_PROVIDER_PREFIX)
-  );
+  return isSkillConsumerDependency(path);
 }
 
 function isAuthorizedSkillApplicationEdge(
   edge: RuntimeDependencyEdge,
 ): boolean {
-  if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
-    return edge.importer === CORTEX_AUDIT;
-  }
-  if (edge.importer === LOOM_ARTICLE_ADAPTER) {
-    return (
-      edge.dependency === ARTICLE_APPLICATION ||
-      edge.dependency === ARTICLE_DOMAIN
-    );
-  }
-  return (
-    edge.importer.startsWith(ARTICLE_PROVIDER_PREFIX) &&
-    edge.dependency.startsWith(ARTICLE_PROVIDER_PREFIX)
-  );
+  return isAuthorizedSkillConsumerEdge(edge);
 }
 
 function skillApplicationDependencies(
@@ -452,11 +444,13 @@ test('rejects every alternate application consumer edge', () => {
       "import './lib/cortex-article-structure.ts';",
     ],
     ['scripts/alternate.ts', `import '../${ARTICLE_APPLICATION}';`],
+    ['scripts/alternate-host.ts', `import '../${SKILL_HOST_REGISTRY}';`],
     [
       '.github/actions/audit/index.js',
       `import '../../../${LOOM_ARTICLE_ADAPTER}';`,
     ],
     ['scripts/alternate.sh', `#!/bin/sh\nbun ../${LOOM_ARTICLE_ADAPTER}`],
+    ['scripts/alternate-host.sh', `#!/bin/sh\nbun ../${SKILL_HOST_CLI}`],
   ] as const) {
     const sources = new Map(canonical);
     sources.set(root, source);
