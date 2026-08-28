@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
-docker_bin=docker
+docker_bin="${DOCKER:-docker}"
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
 deps_fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing NOOK_RUST_DEPS_INPUT_FINGERPRINT}"
 sccache_mode="${SCCACHE_S3_MODE:-external}"

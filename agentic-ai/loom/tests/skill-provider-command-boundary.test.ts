@@ -268,6 +268,19 @@ test('accepts dynamic inert data after a static non-protected executable', () =>
   );
 });
 
+test('admits only the audited finite Docker injection default', () => {
+  expect(
+    inspectShell('docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version')
+      .launches,
+  ).toEqual([]);
+  for (const source of [
+    'docker_bin="${RUNTIME:-docker}"; "$docker_bin" buildx version',
+    'docker_bin="${DOCKER:-podman}"; "$docker_bin" buildx version',
+    'runner="${DOCKER:-docker}"; "$runner" buildx version',
+  ])
+    expect(() => inspectShell(source), source).toThrow();
+});
+
 test('distinguishes real comments from escaped operator hash literals', () => {
   for (const operator of [';', '&', '|', '(', ')']) {
     const tokens = tokenizeShell(`echo \\${operator}#literal`).map((token) =>

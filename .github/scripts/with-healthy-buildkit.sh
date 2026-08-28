@@ -7,7 +7,7 @@ if [ "$#" -eq 0 ]; then
   exit 2
 fi
 
-docker_bin=docker
+docker_bin="${DOCKER:-docker}"
 health_timeout="${NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60}"
 cleanup_timeout="${NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS:-15}"
 
