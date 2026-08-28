@@ -732,6 +732,33 @@ mod tests {
     }
 
     #[test]
+    fn saved_login_capability_export_rejects_impossible_login_snapshots() {
+        let valid = nook_companion_core::AuthenticationWorkflowSnapshot {
+            kind: nook_companion_core::AuthenticationWorkflowKind::Login,
+            stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
+            action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            approval_requirement:
+                nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
+            observation_index: 0,
+        };
+        assert_eq!(
+            authentication_workflow_saved_login_capability(valid),
+            nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+
+        let contradictory = nook_companion_core::AuthenticationWorkflowSnapshot {
+            stage: nook_companion_core::AuthenticationWorkflowStage::Recovery,
+            ..valid
+        };
+        assert_eq!(
+            authentication_workflow_saved_login_capability(contradictory),
+            nook_companion_core::AuthenticationSavedLoginCapability::Unavailable
+        );
+    }
+
+    #[test]
     fn workflow_wasm_export_rejects_unbounded_observations() {
         let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
             observations: vec![nook_companion_core::AuthenticationPageObservationFacts {

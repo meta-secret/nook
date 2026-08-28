@@ -341,7 +341,7 @@ impl AuthenticationWorkflowSnapshot {
 
     #[must_use]
     pub const fn saved_login_capability(self) -> AuthenticationSavedLoginCapability {
-        if self.approval_requirement_matches_action()
+        if self.matches_classifier_contract()
             && matches!(self.kind, AuthenticationWorkflowKind::Login)
             && matches!(self.action, AuthenticationWorkflowAction::ContinueWithNook)
         {

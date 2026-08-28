@@ -115,11 +115,40 @@ impl AuthenticationWorkflowSnapshot {
 #[cfg(test)]
 mod tests {
     use super::super::{
-        AuthenticationAdvanceControlEvidence, AuthenticationEnrollmentEvidence,
-        AuthenticationManualCheckpoint, AuthenticationOneTimeCodeProgressionEvidence,
-        AuthenticationPageObservation, AuthenticationPasskeyEvidence, AuthenticationWorkflowMatch,
+        AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
+        AuthenticationEnrollmentEvidence, AuthenticationManualCheckpoint,
+        AuthenticationOneTimeCodeProgressionEvidence, AuthenticationPageObservation,
+        AuthenticationPasskeyEvidence, AuthenticationSavedLoginCapability,
+        AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+        AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
         classify_authentication_workflow,
     };
+
+    #[test]
+    fn saved_login_capability_requires_a_complete_login_snapshot() {
+        let valid = AuthenticationWorkflowSnapshot {
+            kind: AuthenticationWorkflowKind::Login,
+            stage: AuthenticationWorkflowStage::Credentials,
+            action: AuthenticationWorkflowAction::ContinueWithNook,
+            current_step: 1,
+            total_steps: 3,
+            approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+            observation_index: 0,
+        };
+        assert_eq!(
+            valid.saved_login_capability(),
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        );
+
+        let contradictory = AuthenticationWorkflowSnapshot {
+            stage: AuthenticationWorkflowStage::Recovery,
+            ..valid
+        };
+        assert_eq!(
+            contradictory.saved_login_capability(),
+            AuthenticationSavedLoginCapability::Unavailable
+        );
+    }
 
     #[test]
     fn every_classifier_snapshot_satisfies_the_wire_contract() {
