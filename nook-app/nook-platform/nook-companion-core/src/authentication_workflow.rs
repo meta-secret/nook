@@ -157,7 +157,7 @@ impl AuthenticationPageObservation {
                 self.enrollment_evidence,
                 AuthenticationEnrollmentEvidence::Absent
             )
-            || !matches!(self.passkey, AuthenticationPasskeyEvidence::Absent)
+            || self.passkey_control_present()
     }
 
     #[must_use]
@@ -188,12 +188,12 @@ impl AuthenticationPageObservation {
 
     #[must_use]
     pub const fn passkey_control_present(self) -> bool {
-        matches!(
-            self.passkey,
+        match self.passkey {
+            AuthenticationPasskeyEvidence::Absent => false,
+            AuthenticationPasskeyEvidence::VaultAccounts { account_count } => account_count > 0,
             AuthenticationPasskeyEvidence::Control
-                | AuthenticationPasskeyEvidence::VaultAccounts { .. }
-                | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. }
-        )
+            | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. } => true,
+        }
     }
 
     #[must_use]
@@ -220,7 +220,7 @@ impl AuthenticationPageObservation {
             AuthenticationWorkflowKind::Manual
         } else if self.password_field_count() > 0
             || self.username_field_count > 0
-            || !matches!(self.passkey, AuthenticationPasskeyEvidence::Absent)
+            || self.passkey_control_present()
         {
             AuthenticationWorkflowKind::Login
         } else {
@@ -907,7 +907,46 @@ mod tests {
     }
 
     #[test]
-    fn vault_accounts_advance_login_and_signup_to_use_passkey() -> anyhow::Result<()> {
+    fn vault_accounts_require_matches_and_advance_credential_flows() -> anyhow::Result<()> {
+        let deserialized_zero =
+            serde_json::from_str(r#"{"kind":"vault-accounts","accountCount":0}"#)?;
+        for passkey in [
+            AuthenticationPasskeyEvidence::VaultAccounts { account_count: 0 },
+            deserialized_zero,
+        ] {
+            for manual_checkpoint in [
+                AuthenticationManualCheckpoint::Absent,
+                AuthenticationManualCheckpoint::Present,
+            ] {
+                let empty = AuthenticationPageObservation {
+                    advance_control: AuthenticationAdvanceControlEvidence::Absent,
+                    manual_checkpoint,
+                    passkey,
+                    ..Default::default()
+                };
+                assert!(!empty.has_authentication_fields());
+                let kind = empty.credential_workflow_kind();
+                assert_eq!(kind, AuthenticationWorkflowKind::Manual);
+                let workflow = classify_authentication_workflow(empty);
+                assert_eq!(workflow, AuthenticationWorkflowMatch::NoMatch);
+            }
+        }
+
+        for passkey in [
+            AuthenticationPasskeyEvidence::Control,
+            AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 0 },
+        ] {
+            let control = AuthenticationPageObservation {
+                advance_control: AuthenticationAdvanceControlEvidence::Absent,
+                passkey,
+                ..Default::default()
+            };
+            let progression = control.progression();
+            assert_eq!(progression, AuthenticationPageProgression::PasskeyControl);
+            let workflow = classify_authentication_workflow(control);
+            assert!(matches!(workflow, AuthenticationWorkflowMatch::Matched(_)));
+        }
+
         let login = AuthenticationPageObservation {
             current_password_field_count: 1,
             advance_control: AuthenticationAdvanceControlEvidence::Absent,
