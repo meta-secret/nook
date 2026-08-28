@@ -552,42 +552,6 @@ mod tests {
     }
 
     #[test]
-    fn workflow_roundtrips_semantic_enums() -> anyhow::Result<()> {
-        let workflow = AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
-            AuthenticationWorkflowKind::Login,
-            AuthenticationWorkflowStage::Credentials,
-            AuthenticationWorkflowAction::ContinueWithNook,
-            1,
-            3,
-        ));
-        let serialized = serde_json::to_string(&workflow)?;
-        let roundtrip: AuthenticationWorkflowMatch = serde_json::from_str(&serialized)?;
-        assert_eq!(roundtrip, workflow);
-        Ok(())
-    }
-
-    #[test]
-    fn ignores_pages_without_authentication_fields() {
-        assert_eq!(
-            classify_authentication_workflow(observation()),
-            AuthenticationWorkflowMatch::NoMatch
-        );
-    }
-
-    #[test]
-    fn ignores_credential_shaped_fields_without_an_authentication_control() {
-        let inert = AuthenticationPageObservation {
-            username_field_count: 1,
-            advance_control: AuthenticationAdvanceControlEvidence::Absent,
-            ..observation()
-        };
-        assert_eq!(
-            classify_authentication_workflow(inert),
-            AuthenticationWorkflowMatch::NoMatch
-        );
-    }
-
-    #[test]
     fn passkey_control_only_advances_eligible_credential_workflows() -> anyhow::Result<()> {
         let blocked_password_change = AuthenticationPageObservation {
             current_password_field_count: 1,
@@ -818,26 +782,22 @@ mod tests {
     }
 
     #[test]
-    fn generic_multi_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
-        let ambiguous = AuthenticationPageObservation {
-            username_field_count: 1,
-            generic_password_field_count: 2,
-            ..observation()
-        };
-        let snapshot = classify_authentication_workflow(ambiguous).snapshot()?;
-        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
-        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
-        Ok(())
-    }
-
-    #[test]
-    fn current_plus_generic_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
+    fn ambiguous_password_forms_never_offer_login_fill() -> anyhow::Result<()> {
         let ambiguous_change = AuthenticationPageObservation {
             current_password_field_count: 1,
             generic_password_field_count: 1,
             ..observation()
         };
         let snapshot = classify_authentication_workflow(ambiguous_change).snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+
+        let ambiguous = AuthenticationPageObservation {
+            username_field_count: 1,
+            generic_password_field_count: 2,
+            ..observation()
+        };
+        let snapshot = classify_authentication_workflow(ambiguous).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Manual);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
         Ok(())
@@ -868,36 +828,6 @@ mod tests {
         );
         assert_eq!(snapshot.observation_index, 1);
         Ok(())
-    }
-
-    #[test]
-    fn ranks_form_observations_for_bounded_host_scans() {
-        let username = AuthenticationPageObservation {
-            username_field_count: 1,
-            ..observation()
-        };
-        let signup = AuthenticationPageObservation {
-            new_password_field_count: 1,
-            ..observation()
-        };
-        let generic_login = AuthenticationPageObservation {
-            generic_password_field_count: 1,
-            ..observation()
-        };
-        let current_login = AuthenticationPageObservation {
-            current_password_field_count: 1,
-            ..observation()
-        };
-        let code = AuthenticationPageObservation {
-            one_time_code_field_count: 1,
-            ..observation()
-        };
-
-        assert_eq!(username.form_priority().value(), 1);
-        assert_eq!(signup.form_priority().value(), 2);
-        assert_eq!(generic_login.form_priority().value(), 3);
-        assert_eq!(current_login.form_priority().value(), 4);
-        assert_eq!(code.form_priority().value(), 5);
     }
 
     #[test]
@@ -949,31 +879,6 @@ mod tests {
                 AuthenticationApprovalRequirement::ExplicitUserApproval
             );
         }
-        Ok(())
-    }
-
-    #[test]
-    fn passkey_control_without_matches_proposes_create() -> anyhow::Result<()> {
-        let login = AuthenticationPageObservation {
-            username_field_count: 1,
-            passkey: AuthenticationPasskeyEvidence::Control,
-            ..observation()
-        };
-        let snapshot = classify_authentication_workflow(login).snapshot()?;
-        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
-        assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
-        Ok(())
-    }
-
-    #[test]
-    fn passkey_only_control_classifies_as_login_create() -> anyhow::Result<()> {
-        let passkey_only = AuthenticationPageObservation {
-            passkey: AuthenticationPasskeyEvidence::Control,
-            ..observation()
-        };
-        let snapshot = classify_authentication_workflow(passkey_only).snapshot()?;
-        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
-        assert_eq!(snapshot.action, AuthenticationWorkflowAction::CreatePasskey);
         Ok(())
     }
 

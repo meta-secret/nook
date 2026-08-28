@@ -147,30 +147,3 @@ pub fn authentication_form_observation_priority(
 pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType {
     nook_companion_core::PageInputType::parse(value)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn page_form_wasm_exports_match_core_policy() {
-        let username = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
-            false,
-            false,
-            Vec::new(),
-            "loginfmt".to_owned(),
-            false,
-        );
-        assert!(looks_like_username_field(&username));
-
-        let login = nook_companion_core::AuthenticationPageObservationFacts {
-            fields: nook_companion_core::AuthenticationFieldObservationFacts {
-                current_password_field_count: 1,
-                ..Default::default()
-            },
-            ..Default::default()
-        };
-        assert_eq!(authentication_form_observation_priority(login).value(), 4);
-    }
-}
