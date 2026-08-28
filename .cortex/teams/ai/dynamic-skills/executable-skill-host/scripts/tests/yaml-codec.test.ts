@@ -4,6 +4,7 @@ import {
   SKILL_YAML_NODE_LIMIT,
   parseSkillYamlText,
   stringifySkillYaml,
+  SKILL_YAML_SCALAR_BYTE_LIMIT,
   type UntrustedSkillYamlNode,
 } from '../src/skill-yaml-codec.ts';
 const YAML_LINE_ENDINGS = ['\n', '\r\n', '\r'] as const;
@@ -156,7 +157,15 @@ test('enforces exact structural node and depth limits', () => {
   expect(parseSkillYamlText(nested(SKILL_YAML_DEPTH_LIMIT + 1)).ok).toBe(false);
 });
 test('stringify preserves scalar trailing line breaks and spaces', () => {
-  for (const value of ['line\n', 'line\n\n', 'line  \n']) {
+  expect(() =>
+    stringifySkillYaml('é'.repeat(SKILL_YAML_SCALAR_BYTE_LIMIT / 2 + 1)),
+  ).toThrow('Invalid YAML response');
+  for (const value of [
+    'line\n',
+    'line\n\n',
+    'line  \n',
+    'é'.repeat(SKILL_YAML_SCALAR_BYTE_LIMIT / 2),
+  ]) {
     const node: UntrustedSkillYamlNode = value;
     const outcome = parseSkillYamlText(stringifySkillYaml(node));
     if (!outcome.ok) throw new Error('Expected scalar round trip.');

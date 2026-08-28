@@ -66,7 +66,7 @@ export function expandStaticShellVariables(source: string): string {
   const values = new Map<string, string | false>();
   for (const match of source.matchAll(STATIC_SHELL_ASSIGNMENT)) {
     const value = match[2] ?? '';
-    if (value.startsWith('$(') || /^\$\{[A-Za-z_]\w*[^}]/u.test(value))
+    if (value.startsWith('$(') || /^\$\{[A-Za-z_]\w*[:#%?+=-]/u.test(value))
       continue;
     values.set(match[1] ?? '', value.includes('$(') ? false : value);
   }
@@ -76,9 +76,14 @@ export function expandStaticShellVariables(source: string): string {
     source = expanded;
   }
   const launch = source.match(
-    /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/u,
+    /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))[^\s;&|]*/u,
   );
-  if (values.has(launch?.[1] || launch?.[2] || ''))
+  if (
+    launch &&
+    (values.has(launch[1] || launch[2] || '') ||
+      launch[0].includes('/dynamic-skills/') ||
+      launch[0].includes('.agents/skills/'))
+  )
     throw new Error('Task launch variable is unresolved.');
   return source;
 }

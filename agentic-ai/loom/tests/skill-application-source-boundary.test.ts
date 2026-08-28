@@ -17,34 +17,20 @@ const ARTICLE_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/';
 const HOST_CLI = `${HOST_ROOT}cli.ts`;
 const YAML_CODEC = `${HOST_ROOT}skill-yaml-codec.ts`;
-const HOST_CALLS = [
-  'closeSync(descriptor)',
-  'fstatSync(descriptor)',
-  'fstatSync(descriptor)',
-  'openSync( invocation.requestPath, constants.O_RDONLY | constants.O_NONBLOCK, )',
-  'readSync( descriptor, bytes, length, bytes.length - length, length, )',
-] as const;
-const HOST_CONSTANT_USES = [
-  'constants.O_NONBLOCK',
-  'constants.O_RDONLY',
-] as const;
-const PROCESS_USES = [
-  'process.argv.slice(2)',
-  'process.exitCode = outcome.exitCode',
-  'process.stdout.write(outcome.yaml)',
-] as const;
-const FORBIDDEN_HOST_GLOBALS = new Set([
-  'alert',
-  'Bun',
-  'confirm',
-  'Date',
-  'Math',
-  'console',
-  'crypto',
-  'performance',
-  'prompt',
-  'reportError',
-]);
+const HOST_CALLS =
+  `closeSync(descriptor);fstatSync(descriptor);fstatSync(descriptor);openSync( invocation.requestPath, constants.O_RDONLY | constants.O_NONBLOCK, );readSync( descriptor, bytes, length, bytes.length - length, length, )`.split(
+    ';',
+  );
+const HOST_CONSTANT_USES = 'constants.O_NONBLOCK constants.O_RDONLY'.split(' ');
+const PROCESS_USES =
+  `process.argv.slice(2);process.exitCode = outcome.exitCode;process.stdout.write(outcome.yaml)`.split(
+    ';',
+  );
+const FORBIDDEN_HOST_GLOBALS = new Set(
+  `alert Bun confirm Date Math console crypto performance prompt reportError`.split(
+    ' ',
+  ),
+);
 type SkillSourceRequest = {
   readonly relativePath: string;
   readonly source: string;
@@ -296,41 +282,29 @@ test('all tracked executable application sources pass the AST capability gate', 
 
 test('rejects dangerous capabilities from every host layer', async () => {
   const host = await Bun.file(join(REPOSITORY_ROOT, HOST_CLI)).text();
-  const mutate = ([from, to]: readonly [string, string]): string =>
-    host.replace(from, to);
+  const mutate = (change: string): string => {
+    const separator = change.indexOf('§');
+    return host.replace(
+      change.slice(0, separator),
+      change.slice(separator + 1),
+    );
+  };
+  const mutations = [
+    "constants.O_RDONLY | constants.O_NONBLOCK§openSync('/tmp/pwn', 'w')",
+    'process.stdout.write(outcome.yaml)§process.stdout.write(bytes)',
+    'const count = readSync(§const rebound = readSync;\nconst count = rebound(',
+  ].map(mutate);
+  const registry = `${HOST_ROOT}skill-action-registry.ts`;
   const fixtures = [
     [HOST_CLI, 'process.env.SECRET;'],
     [HOST_CLI, 'const secret = "secret"; alert(secret);'],
     [HOST_CLI, 'const secret = "secret"; confirm(secret); prompt(secret);'],
     [HOST_CLI, 'const secret = new Error("secret"); reportError(secret);'],
-    [
-      HOST_CLI,
-      mutate([
-        'constants.O_RDONLY | constants.O_NONBLOCK',
-        "openSync('/tmp/pwn', 'w')",
-      ]),
-    ],
-    [
-      HOST_CLI,
-      mutate([
-        'process.stdout.write(outcome.yaml)',
-        'process.stdout.write(bytes)',
-      ]),
-    ],
-    [
-      HOST_CLI,
-      mutate([
-        'const count = readSync(',
-        'const rebound = readSync;\nconst count = rebound(',
-      ]),
-    ],
+    ...mutations.map((source) => [HOST_CLI, source] as const),
     [HOST_CLI, "import { readFileSync as fetch, statSync } from 'node:fs';"],
     [HOST_CLI, `${host}\nconstants.O_CREAT = constants.O_RDONLY;`],
     [YAML_CODEC, "import x from 'arbitrary-package';"],
-    [
-      `${HOST_ROOT}skill-action-registry.ts`,
-      "import { spawn } from 'node:child_process';",
-    ],
+    [registry, "import { spawn } from 'node:child_process';"],
     [
       `${HOST_ROOT}skill-schema-validator.ts`,
       "void import('./skill-command-domain.ts');",

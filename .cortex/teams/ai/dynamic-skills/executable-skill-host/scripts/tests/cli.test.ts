@@ -159,10 +159,10 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(parseResponse(oversizedInput.yaml).errors?.at(0)?.issue).toBe(
       SkillCommandIssue.RequestTooLarge,
     );
-    const oversizedScalar = 'x'.repeat(SKILL_HOST_RESPONSE_BYTE_LIMIT);
+    const oversizedScalar = new Array<string>(9).fill('x'.repeat(1_048_576));
     for (const [exitCode, response] of [
       [0, { ok: true, result: oversizedScalar }],
-      [2, { ok: false, errors: [oversizedScalar] }],
+      [2, { ok: false, errors: oversizedScalar }],
     ] as const) {
       const request: FinalSkillCliResponseRequest = {
         exitCode,
@@ -182,7 +182,7 @@ describe('provider-neutral executable skill YAML host', () => {
     }
   });
   test('returns typed bounded failures for non-finite action results', () => {
-    for (const value of [NaN, Infinity, 9_007_199_254_740_992]) {
+    for (const value of [NaN, Infinity, 2 ** 53, 'é'.repeat(524_289)]) {
       const request: FinalSkillCliResponseRequest = {
         exitCode: 0,
         response: { ok: true, result: value },

@@ -57,7 +57,7 @@ const YAML_PARSE_OPTIONS = {
 const YAML_TO_JS_OPTIONS = { maxAliasCount: 0 } as const;
 export const SKILL_YAML_NODE_LIMIT = 16_384;
 export const SKILL_YAML_DEPTH_LIMIT = 64;
-const SKILL_YAML_SCALAR_BYTE_LIMIT = 1024 * 1024;
+export const SKILL_YAML_SCALAR_BYTE_LIMIT = 1024 * 1024;
 const UTF8_ENCODER = new TextEncoder();
 export function parseSkillYamlText(text: string): SkillYamlParseOutcome {
   try {
@@ -218,20 +218,29 @@ function assertSerializableSkillYaml(value: UntrustedSkillYamlNode): void {
           !Number.isSafeInteger(current.value)))
     )
       throw new Error('Invalid YAML response.');
+    if (oversizedSkillYamlScalar(current.value))
+      throw new Error('Invalid YAML response.');
     if (typeof current.value !== 'object') continue;
     if (seen.has(current.value)) throw new Error('Invalid YAML response.');
     seen.add(current.value);
+    const keys = Array.isArray(current.value) ? [] : Object.keys(current.value);
+    if (keys.some(oversizedSkillYamlScalar))
+      throw new Error('Invalid YAML response.');
     const values = Array.isArray(current.value)
       ? current.value
       : Object.values(current.value);
-    nodes += Array.isArray(current.value)
-      ? 0
-      : Object.keys(current.value).length;
+    nodes += keys.length;
     for (const child of values) {
       const next = { depth: current.depth + 1, value: child };
       pending.push(next);
     }
   }
+}
+function oversizedSkillYamlScalar(value: UntrustedSkillYamlNode): boolean {
+  return (
+    typeof value === 'string' &&
+    UTF8_ENCODER.encode(value).byteLength > SKILL_YAML_SCALAR_BYTE_LIMIT
+  );
 }
 export function isSkillYamlMap(
   value: UntrustedSkillYamlNode,
