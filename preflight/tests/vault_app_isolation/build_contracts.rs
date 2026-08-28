@@ -1,10 +1,23 @@
 use super::*;
 
-fn fake_executable_path(directory: &std::path::Path) -> std::ffi::OsString {
-    let mut path = directory.as_os_str().to_os_string();
-    path.push(":");
-    path.push(std::env::var_os("PATH").unwrap_or_default());
-    path
+fn docker_script_fixture(
+    root: &std::path::Path,
+    relative: &str,
+    directory: &std::path::Path,
+    fake_docker: &std::path::Path,
+) -> anyhow::Result<std::path::PathBuf> {
+    let fake = fake_docker.to_string_lossy();
+    let mut source = read(root, relative);
+    for candidate in [
+        "/usr/local/bin/docker",
+        "/usr/bin/docker",
+        "/opt/homebrew/bin/docker",
+    ] {
+        source = source.replace(candidate, &fake);
+    }
+    let fixture = directory.join("wrapper.sh");
+    fs::write(&fixture, source)?;
+    Ok(fixture)
 }
 
 #[test]
@@ -345,10 +358,17 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
         "infra/tasks/bake-cache.yml",
     ] {
         let source = read(&root, path);
-        assert!(
-            !source.contains("${DOCKER") && !source.contains("docker_bin"),
-            "{path} must invoke literal docker without a runtime override seam"
-        );
+        for required in [
+            "/usr/local/bin/docker",
+            "/usr/bin/docker",
+            "/opt/homebrew/bin/docker",
+            "\"$docker_cli\"",
+        ] {
+            assert!(source.contains(required), "{path} missing {required}");
+        }
+        for forbidden in ["${DOCKER", "docker_bin", "PATH=", "command -v docker"] {
+            assert!(!source.contains(forbidden), "{path} permits {forbidden}");
+        }
     }
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
@@ -442,7 +462,6 @@ fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyho
     let docker_log = temp.join("docker.log");
     let child_pid_file = temp.join("docker-child.pid");
     let command_marker = temp.join("command-ran");
-    let executable_path = fake_executable_path(&temp);
     fs::write(
         &fake_docker,
         r#"#!/usr/bin/env bash
@@ -459,13 +478,18 @@ fi
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
+    let wrapper = docker_script_fixture(
+        &root,
+        ".github/scripts/with-healthy-buildkit.sh",
+        &temp,
+        &fake_docker,
+    )?;
 
     let started = Instant::now();
     let output = Command::new("bash")
-        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .arg(wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
-        .env("PATH", &executable_path)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAKE_DOCKER_CHILD_PID", &child_pid_file)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr-timeout-test")
@@ -526,7 +550,6 @@ fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() -> anyhow
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
     let command_marker = temp.join("command-ran");
-    let executable_path = fake_executable_path(&temp);
     fs::write(&docker_log, "")?;
     fs::write(
         &fake_docker,
@@ -538,12 +561,17 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     let mut permissions = fs::metadata(&fake_docker)?.permissions();
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
+    let wrapper = docker_script_fixture(
+        &root,
+        ".github/scripts/with-healthy-buildkit.sh",
+        &temp,
+        &fake_docker,
+    )?;
 
     let output = Command::new("bash")
-        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .arg(&wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
-        .env("PATH", &executable_path)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env_remove("NOOK_PR_BUILDX_BUILDER")
         .env_remove("BUILDX_BUILDER")
@@ -568,9 +596,8 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
     );
 
     let refused = Command::new("bash")
-        .arg(root.join(".github/scripts/with-healthy-buildkit.sh"))
+        .arg(wrapper)
         .args(["true"])
-        .env("PATH", &executable_path)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-pr")
         .output()?;
     assert!(
@@ -599,7 +626,6 @@ fn arc_delivery_uses_only_remote_buildkit_client_operations() -> anyhow::Result<
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
     let command_marker = temp.join("command-ran");
-    let executable_path = fake_executable_path(&temp);
     fs::write(
         &fake_docker,
         r#"#!/usr/bin/env bash
@@ -614,12 +640,16 @@ fi
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
 
-    let wrapper = root.join(".github/scripts/with-remote-buildkit.sh");
+    let wrapper = docker_script_fixture(
+        &root,
+        ".github/scripts/with-remote-buildkit.sh",
+        &temp,
+        &fake_docker,
+    )?;
     let output = Command::new("bash")
         .arg(&wrapper)
         .args(["bash", "-c", "printf ok > \"$1\"", "nook-test"])
         .arg(&command_marker)
-        .env("PATH", &executable_path)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-1")
         .output()?;
@@ -659,7 +689,6 @@ fi
         .arg(&wrapper)
         .args(["bash", "-c", "printf bad > \"$1\"", "nook-test"])
         .arg(&command_marker)
-        .env("PATH", &executable_path)
         .env("FAKE_DOCKER_LOG", &docker_log)
         .env("FAIL_REMOTE_PROBE", "1")
         .env("NOOK_PR_BUILDX_BUILDER", "nook-arc-run-2")

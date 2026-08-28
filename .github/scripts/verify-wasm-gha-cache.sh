@@ -2,6 +2,13 @@
 set -euo pipefail
 
 repo_root="${REPO_ROOT:-$(git rev-parse --show-toplevel)}"
+if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+else
+  echo "trusted Docker CLI is unavailable" >&2
+  exit 127
+fi
 cache_scope="${GHA_RUST_WASM_DEPS_SCOPE:?missing GHA_RUST_WASM_DEPS_SCOPE}"
 deps_fingerprint="${NOOK_RUST_DEPS_INPUT_FINGERPRINT:?missing NOOK_RUST_DEPS_INPUT_FINGERPRINT}"
 sccache_mode="${SCCACHE_S3_MODE:-external}"
@@ -45,7 +52,7 @@ if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]; then
   # Publish from the already-selected node-local rootless BuildKit shard. A
   # repair solve never imports the ref it is replacing: independent input and
   # source refs may accelerate it, while a miss rebuilds from source.
-  docker buildx bake \
+  "$docker_cli" buildx bake \
     --progress=plain \
     "${bake_args[@]}" \
     --set "builder-wasm-deps-cache-proof.output=type=cacheonly" \

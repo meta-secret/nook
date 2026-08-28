@@ -1,10 +1,13 @@
 import { expect, test } from 'bun:test';
+import { join } from 'node:path';
 import {
   actionRuntimePaths,
   configurationScriptPaths,
 } from './skill-provider-config-boundary.test.ts';
 import type { ConfigurationScriptGraph } from './skill-provider-executable-script.ts';
 import type { ActionRuntimeGraph } from './skill-provider-config-types.ts';
+
+const PROTECTED = '.agents/skills/example-skill/scripts/src/application.ts';
 
 function directGraph(command: string): ConfigurationScriptGraph {
   const root =
@@ -30,6 +33,27 @@ test('allows only the exact audited source catalog', () => {
     'source /etc/lsb-release',
   ])
     expect(() => configurationScriptPaths(directGraph(command))).toThrow();
+});
+
+test('repository PATH cannot shadow the trusted Docker CLI', async () => {
+  const wrapper = '.github/scripts/with-healthy-buildkit.sh';
+  const wrapperSource = await Bun.file(
+    join(import.meta.dir, '../../..', wrapper),
+  ).text();
+  const graph: ConfigurationScriptGraph = {
+    executablePaths: new Set(['.agents/skills/example-skill/scripts/docker']),
+    roots: ['Taskfile.yml'],
+    sources: new Map([
+      [
+        'Taskfile.yml',
+        `tasks: {x: {cmds: [PATH=.agents/skills/example-skill/scripts:$PATH bash ${wrapper}]}}`,
+      ],
+      [wrapper, wrapperSource],
+      ['.agents/skills/example-skill/scripts/docker', `bun ${PROTECTED}`],
+    ]),
+    symlinkPaths: new Set(),
+  };
+  expect(configurationScriptPaths(graph)).toEqual([wrapper]);
 });
 
 test('pins the sole repository source helper', () => {

@@ -9,6 +9,13 @@ fi
 
 health_timeout="${NOOK_BUILDKIT_HEALTH_TIMEOUT_SECONDS:-60}"
 cleanup_timeout="${NOOK_BUILDKIT_CLEANUP_TIMEOUT_SECONDS:-15}"
+if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+else
+  echo "trusted Docker CLI is unavailable" >&2
+  exit 127
+fi
 
 # Never default to a shared docker-container builder. Delivery used to reuse
 # `nook-pr` across local and self-hosted runs; one wedged or concurrent build
@@ -85,8 +92,8 @@ run_with_timeout() {
 }
 
 probe_builder() {
-  docker buildx inspect "$builder" --bootstrap >/dev/null 2>&1 &&
-    docker buildx build \
+  "$docker_cli" buildx inspect "$builder" --bootstrap >/dev/null 2>&1 &&
+    "$docker_cli" buildx build \
       --builder "$builder" \
       --file "$probe_context/Dockerfile" \
       --output type=cacheonly \
@@ -98,14 +105,14 @@ remove_unhealthy_builder() {
   echo "Removing unhealthy BuildKit builder $builder" >&2
 
   local status=0
-  run_with_timeout "$cleanup_timeout" docker rm --force "$container" >/dev/null 2>&1 || status=$?
+  run_with_timeout "$cleanup_timeout" "$docker_cli" rm --force "$container" >/dev/null 2>&1 || status=$?
   if [ "$status" -eq 124 ]; then
     echo "timed out force-removing BuildKit container $container" >&2
     return 1
   fi
 
   status=0
-  run_with_timeout "$cleanup_timeout" docker buildx rm --force "$builder" >/dev/null 2>&1 || status=$?
+  run_with_timeout "$cleanup_timeout" "$docker_cli" buildx rm --force "$builder" >/dev/null 2>&1 || status=$?
   if [ "$status" -eq 124 ]; then
     echo "timed out removing BuildKit builder registration $builder" >&2
     return 1
@@ -113,7 +120,7 @@ remove_unhealthy_builder() {
 
   # The direct container kill is what unblocks a wedged daemon. Remove any
   # orphaned state volume too so the replacement cannot inherit corrupt state.
-  run_with_timeout "$cleanup_timeout" docker volume rm --force "$state_volume" >/dev/null 2>&1 || true
+  run_with_timeout "$cleanup_timeout" "$docker_cli" volume rm --force "$state_volume" >/dev/null 2>&1 || true
 }
 
 probe_status=0
@@ -136,7 +143,7 @@ else
 
   create_status=0
   run_with_timeout "$health_timeout" \
-    docker buildx create \
+    "$docker_cli" buildx create \
       --name "$builder" \
       --driver docker-container \
       --bootstrap || create_status=$?
@@ -151,5 +158,5 @@ else
   fi
 fi
 
-docker buildx use "$builder"
+"$docker_cli" buildx use "$builder"
 "$@"
