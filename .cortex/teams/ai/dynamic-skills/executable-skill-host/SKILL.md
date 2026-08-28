@@ -13,11 +13,10 @@ shape and weaken validation.
 
 ## Pattern and scope
 
-The scripts project owns a closed, code-reviewed catalog and strict YAML
-transport. Its source and tests can list action descriptions, closed input
-schemas, and executable YAML examples, then validate and dispatch exactly one
-root family and nested operation. No supported repository invocation exists
-until a separate reachability change authorizes exact Task entrypoints.
+The scripts project owns strict YAML transport and a closed, code-reviewed
+catalog. This dormant slice lists only its own tools-list action. A separate
+reachability and provider-integration change must add a statically imported
+skill action before authorizing exact Task entrypoints.
 
 The host has no model, scheduling, network, repository-write, process-spawn,
 dynamic import, manifest activation, or lifecycle authority. A Task install may
@@ -37,6 +36,6 @@ recovery request. Request scalars and unknown keys are never echoed.
 ## Application and validation
 
 Keep generic transport here and action schema, example, decode, execution, and
-verification in the owning skill. Catalog imports are static and one-way from
-host to provider. Validate the dormant package with `task skills:verify` and
-`task loom:verify`; do not invoke its CLI directly.
+verification in the owning skill. Provider integration must be static and
+one-way from host to provider. Validate the dormant package with
+`task skills:verify` and `task loom:verify`; do not invoke its CLI directly.

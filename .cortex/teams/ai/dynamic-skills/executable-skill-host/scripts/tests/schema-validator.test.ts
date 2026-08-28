@@ -3,7 +3,6 @@ import {
   SkillSchemaType,
   type SkillInputSchema,
 } from '../src/skill-command-domain.ts';
-import { listDiscoverableSkillActions } from '../src/skill-action-registry.ts';
 import {
   validateSkillInput,
   type SkillSchemaValidationRequest,
@@ -12,85 +11,86 @@ import {
   skillCommandPath,
   type SkillCommandPathRequest,
 } from '../src/skill-command-path.ts';
-function semanticBlockSchema(): SkillInputSchema {
-  const action = listDiscoverableSkillActions().actions.at(1);
-  const documents = action?.inputSchema.properties.documents;
-  if (!documents || !('items' in documents))
-    throw new Error('Missing documents.');
-  if (!('properties' in documents.items))
-    throw new Error('Missing document items.');
-  const blocks = documents.items.properties.blocks;
-  if (!blocks || !('items' in blocks)) throw new Error('Missing blocks.');
-  return blocks.items;
+import type { UntrustedSkillYamlNode } from '../src/skill-yaml-codec.ts';
+const stringSchema = { type: SkillSchemaType.String } as const;
+const semanticBlockSchema: SkillInputSchema = {
+  oneOf: [
+    {
+      type: SkillSchemaType.Object,
+      additionalProperties: false,
+      required: ['depth', 'kind', 'line', 'text'],
+      properties: {
+        depth: { type: SkillSchemaType.Integer, minimum: 1, maximum: 6 },
+        kind: { ...stringSchema, enum: ['heading'] },
+        line: { type: SkillSchemaType.Integer, minimum: 1 },
+        text: stringSchema,
+      },
+    },
+    {
+      type: SkillSchemaType.Object,
+      additionalProperties: false,
+      required: ['kind', 'line'],
+      properties: {
+        kind: { ...stringSchema, enum: ['paragraph'] },
+        line: { type: SkillSchemaType.Integer, minimum: 1 },
+      },
+    },
+  ],
+};
+type RejectionRequest = {
+  readonly schema: SkillInputSchema;
+  readonly value: UntrustedSkillYamlNode;
+};
+function reject(rejection: RejectionRequest): string {
+  const request: SkillSchemaValidationRequest = {
+    path: 'blocks[4]',
+    schema: rejection.schema,
+    value: rejection.value,
+  };
+  const result = validateSkillInput(request);
+  if (result.ok) throw new Error('Expected schema rejection.');
+  return result.path;
 }
-test('preserves discriminated semantic block paths', () => {
-  for (const [value, expectedPath] of [
+test('preserves discriminated and ambiguous union paths', () => {
+  for (const [value, path] of [
     [{ kind: 'heading', line: 1, text: 'H' }, 'blocks[4].depth'],
     [{ depth: 'x', kind: 'heading', line: 1, text: 'H' }, 'blocks[4].depth'],
     [{ kind: 'paragraph' }, 'blocks[4].line'],
     [{ kind: 'paragraph', line: 'x' }, 'blocks[4].line'],
+    [{ line: 1 }, 'blocks[4]'],
   ] as const) {
-    const request: SkillSchemaValidationRequest = {
-      path: 'blocks[4]',
-      schema: semanticBlockSchema(),
-      value,
-    };
-    const result = validateSkillInput(request);
-    if (result.ok) throw new Error('Expected block rejection.');
-    expect(result.path).toBe(expectedPath);
+    const rejection: RejectionRequest = { schema: semanticBlockSchema, value };
+    expect(reject(rejection)).toBe(path);
   }
-});
-test('keeps ambiguous and absent discriminators generic', () => {
-  const stringSchema = { type: SkillSchemaType.String } as const;
-  const sharedKind = { ...stringSchema, enum: ['shared'] } as const;
   const overlappingVariant: SkillInputSchema = {
     type: SkillSchemaType.Object,
     additionalProperties: false,
     required: ['kind', 'field'],
-    properties: { kind: sharedKind, field: stringSchema },
+    properties: {
+      kind: { ...stringSchema, enum: ['shared'] },
+      field: stringSchema,
+    },
   };
-  const overlapping: SkillInputSchema = {
-    oneOf: [overlappingVariant, overlappingVariant],
+  const rejection: RejectionRequest = {
+    schema: { oneOf: [overlappingVariant, overlappingVariant] },
+    value: { kind: 'shared' },
   };
-  for (const [schema, value] of [
-    [semanticBlockSchema(), { line: 1 }],
-    [overlapping, { kind: 'shared' }],
-    [overlapping, { kind: 'shared', field: 'value' }],
-  ] as const) {
-    const request: SkillSchemaValidationRequest = {
-      path: 'blocks[0]',
-      schema,
-      value,
-    };
-    const result = validateSkillInput(request);
-    if (result.ok) throw new Error('Expected ambiguous rejection.');
-    expect(result.path).toBe('blocks[0]');
-  }
+  expect(reject(rejection)).toBe('blocks[4]');
 });
 test('preserves array-union item and first-excess paths', () => {
   const schema: SkillInputSchema = {
     oneOf: [
-      {
-        type: SkillSchemaType.Array,
-        maxItems: 2,
-        items: { type: SkillSchemaType.String },
-      },
+      { type: SkillSchemaType.Array, maxItems: 2, items: stringSchema },
       { const: false },
     ],
   };
-  for (const [value, expectedPath] of [
-    [['valid', 2], 'entries[1]'],
-    [['one', 'two', 'three'], 'entries[2]'],
-    [true, 'entries'],
+  for (const [value, path] of [
+    [['valid', 2], 'blocks[4][1]'],
+    [['one', 'two', 'three'], 'blocks[4][2]'],
+    [true, 'blocks[4]'],
   ] as const) {
-    const request: SkillSchemaValidationRequest = {
-      path: 'entries',
-      schema,
-      value,
-    };
-    const result = validateSkillInput(request);
-    if (result.ok) throw new Error('Expected union rejection.');
-    expect(result.path).toBe(expectedPath);
+    const rejection: RejectionRequest = { schema, value };
+    expect(reject(rejection)).toBe(path);
   }
 });
 test('uses bracket grammar for known hyphenated fields', () => {

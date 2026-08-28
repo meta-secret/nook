@@ -1,12 +1,8 @@
 export enum SkillRequestFamily {
   ToolsList = 'skillToolsList',
-  CortexArticleStructure = 'cortexArticleStructure',
 }
 export enum SkillToolsOperation {
   List = 'list',
-}
-export enum CortexArticleStructureOperation {
-  Audit = 'audit',
 }
 export enum SkillCommandPhase {
   Decode = 'decode',
@@ -83,7 +79,7 @@ export type SkillInputSchema =
 export type DiscoverableSkillAction = {
   readonly skillId: string;
   readonly family: SkillRequestFamily;
-  readonly operation: CortexArticleStructureOperation | SkillToolsOperation;
+  readonly operation: SkillToolsOperation;
   readonly description: string;
   readonly exampleRequest: string;
   readonly exampleYaml: string;

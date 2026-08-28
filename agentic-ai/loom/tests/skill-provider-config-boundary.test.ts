@@ -15,7 +15,10 @@ import {
   executableSkillPackageFromPath,
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
-import { expandStaticTaskVariables } from './taskfile-script-expansion.ts';
+import {
+  expandStaticTaskVariables,
+  isTaskConfigurationPath,
+} from './taskfile-script-expansion.ts';
 
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -96,7 +99,7 @@ const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 function isRunnableConfiguration(path: string): boolean {
   return (
     /(^|\/)package\.json$/u.test(path) ||
-    /(^|\/)Taskfile\.ya?ml$/u.test(path) ||
+    isTaskConfigurationPath(path) ||
     /(^|\/)\.env\.[^/]+$/u.test(path) ||
     /(^|\/)vite\.config\.(?:[cm]?ts|[cm]?js)$/u.test(path) ||
     /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
@@ -156,7 +159,7 @@ function configurationScriptPaths(
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
     const taskExpansionRequest = { importer, source, sources: graph.sources };
-    const referenceSource = /(^|\/)Taskfile\.ya?ml$/u.test(importer)
+    const referenceSource = isTaskConfigurationPath(importer)
       ? expandStaticTaskVariables(taskExpansionRequest)
       : source;
     const referenceInspection: ConfigurationReferenceInspection = {
@@ -297,6 +300,7 @@ function configurationScriptReferences(
 }
 
 function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
+  if (inspection.specifier.includes('/node_modules/.bin/')) return false;
   if (
     inspection.source.includes('{{') &&
     !inspection.specifier.replace(/^\.\//u, '').startsWith('.cortex/')
@@ -556,15 +560,12 @@ test('only the Loom semantic adapter reaches the provider', async () => {
 }, 15_000);
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
-  const taskfilePattern = /(^|\/)Taskfile\.ya?ml$/u;
   const allPaths = readTrackedRepositoryFiles(REPOSITORY_ROOT).map(
     (file) => file.path,
   );
   const runnablePaths = allPaths.filter(isRunnableConfiguration);
-  const expected = allPaths.filter((path) => taskfilePattern.test(path)).sort();
-  const discovered = runnablePaths
-    .filter((path) => taskfilePattern.test(path))
-    .sort();
+  const expected = allPaths.filter(isTaskConfigurationPath).sort();
+  const discovered = runnablePaths.filter(isTaskConfigurationPath).sort();
   expect(discovered).toEqual(expected);
   expect(discovered.some((path) => path.includes('/'))).toBe(true);
   const expectedActions = allPaths
@@ -580,6 +581,7 @@ test('classifies every runnable configuration category at root and nested bounda
     'package.json',
     'nested/package.json',
     'Taskfile.yml',
+    'Taskfile.ci.yml',
     'nested/Taskfile.yaml',
     '.env.test',
     'nested/.env.local',
@@ -823,7 +825,14 @@ test('follows scripts launched from every runnable configuration surface', () =>
       'vars: {host: "{{.other}}", other: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["bun {{.host}}"]',
       'tasks:\n  audit:\n    cmds: ["{{.CONFIG}} --default toolsList"]',
       'tasks:\n  audit:\n    cmds: ["bun scripts/{{.CONFIG}}.ts"]',
+      'tasks:\n  audit:\n    cmds: ["bun {{.host | quote}}"]',
+      'tasks:\n  audit:\n    cmds: ["HOST={{.host}} $HOST"]',
+      'tasks:\n  audit:\n    cmds: ["env HOST={{.host}} bun $HOST"]',
+      'tasks:\n  audit:\n    cmds: ["bun --cwd={{.dir}} cli.ts"]',
+      'tasks:\n  audit:\n    cmds: ["bun --cwd {{.dir}} cli.ts"]',
+      'env: {HOST: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["$HOST"]',
     ].map((source) => ['Taskfile.yml', source] as const),
+    ['.task/audit.yml', 'tasks:\n  audit:\n    cmds: ["bun {{.host2}}"]'],
     [
       '.github/workflows/audit.yml',
       'jobs:\n  audit:\n    steps:\n      - run: bun scripts/facade.ts',
@@ -881,12 +890,16 @@ test('follows scripts launched from every runnable configuration surface', () =>
       'Taskfile.yml',
       'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --config {{.CONFIG}}"]',
     ],
+    [
+      '.task/catalog.yml',
+      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --label {{.LABEL}}"]',
+    ],
     ['scripts/catalog.ts', "const evidencePath = 'scripts/unsafe.test.ts';"],
     ['scripts/unsafe.test.ts', 'eval(source);'],
   ]);
   const inertCatalogGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
-    roots: ['package.json', 'Taskfile.yml'],
+    roots: ['package.json', 'Taskfile.yml', '.task/catalog.yml'],
     sources: inertCatalogSources,
     symlinkPaths: new Set<string>(),
   };

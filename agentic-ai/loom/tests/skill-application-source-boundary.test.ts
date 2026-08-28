@@ -89,21 +89,14 @@ export function analyzeSkillHostSource(request: SkillSourceRequest) {
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
-      node.moduleSpecifier.text.startsWith('.')
-    ) {
-      const dependency = posix.normalize(
-        posix.join(posix.dirname(relativePath), node.moduleSpecifier.text),
-      );
-      const crossSkill =
-        relativePath === `${HOST_ROOT}skill-action-registry.ts` &&
-        [`${ARTICLE_ROOT}action.ts`, `${ARTICLE_ROOT}domain.ts`].includes(
-          dependency,
-        );
-      if (crossSkill) {
-        erase(node);
-        return;
-      }
-    }
+      node.moduleSpecifier.text.startsWith('.') &&
+      !posix
+        .normalize(
+          posix.join(posix.dirname(relativePath), node.moduleSpecifier.text),
+        )
+        .startsWith(HOST_ROOT)
+    )
+      throw new Error('Host imports must remain inside its scripts project.');
     if (
       ts.isImportDeclaration(node) &&
       ts.isStringLiteral(node.moduleSpecifier) &&
@@ -316,6 +309,10 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [
       `${HOST_ROOT}skill-action-registry.ts`,
       "import { spawn } from 'node:child_process';",
+    ],
+    [
+      `${HOST_ROOT}skill-action-registry.ts`,
+      "import '../../../cortex-article-structure/scripts/src/application.ts';",
     ],
     [
       `${HOST_ROOT}skill-schema-validator.ts`,
