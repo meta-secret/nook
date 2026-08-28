@@ -19,6 +19,7 @@ import type {
   ModuleDeliveryExecutionPrecedence,
   ModuleDeliveryBaseline,
   ModuleDeliveryNodeV2,
+  ModuleDeliveryPlan,
   ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
@@ -57,17 +58,35 @@ type PlanFixture = {
   readonly edgeContracts: readonly ModuleDeliveryEdgeContract[];
 };
 
-type LegacyHybridNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
-  readonly kind: ModuleDeliveryTaskKind;
-  readonly team?: TeamKey;
-  readonly functionalOwner?: TeamKey;
-  readonly acceptanceOwner?: TeamKey;
-  readonly parentLineage?: { readonly kind: AgentAttemptParentKind };
+type LegacySynthesisNode = Omit<LegacyModuleDeliveryNode, 'kind'> & {
+  readonly kind: ModuleDeliveryTaskKind.EvidenceSynthesis;
 };
 
-type LegacyAdversarialPlan = Omit<LegacyModuleDeliveryPlan, 'nodes'> & {
-  readonly nodes: readonly LegacyHybridNode[];
+type LegacyOwnerHybridNode = LegacyModuleDeliveryNode & {
+  readonly functionalOwner: TeamKey;
 };
+
+type LegacyLineageHybridNode = LegacyModuleDeliveryNode & {
+  readonly team: TeamKey;
+  readonly acceptanceOwner: TeamKey;
+  readonly parentLineage: { readonly kind: AgentAttemptParentKind };
+};
+
+type LegacyAdversarialNode =
+  LegacySynthesisNode | LegacyOwnerHybridNode | LegacyLineageHybridNode;
+
+type LegacyAdversarialPlan = Omit<LegacyModuleDeliveryPlan, 'nodes'> & {
+  readonly nodes: readonly LegacyAdversarialNode[];
+};
+
+type LegacyInputNode = Extract<
+  ModuleDeliveryPlan,
+  { readonly version: 1 }
+>['nodes'][number];
+
+const LEGACY_INPUT_REJECTS_SYNTHESIS: ModuleDeliveryEvidenceSynthesisNodeV2 extends LegacyInputNode
+  ? false
+  : true = true;
 
 type NodeFailureFixture = {
   readonly node: ModuleDeliveryWriteNodeV2;
@@ -294,6 +313,7 @@ const DEFAULT_EDGES: readonly ModuleDeliveryEdgeContract[] = [
 
 describe('reviewed module delivery plan', () => {
   test('rejects v2-only task forms and authority fields in v1 input', () => {
+    expect(LEGACY_INPUT_REJECTS_SYNTHESIS).toBe(true);
     const legacy = legacyPlan();
     const node = legacy.nodes[0];
     if (!node) throw new Error('Legacy fixture must contain one node.');

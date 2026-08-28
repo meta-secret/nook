@@ -34,7 +34,7 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryHandoffSubmission,
   ModuleDeliveryNode,
-  ModuleDeliveryPlan,
+  LegacyCompatibleModuleDeliveryPlan,
   ModuleIntegrationState,
   ModuleWorktreeHandle,
   PrepareModuleIntegrationRequest,
@@ -219,7 +219,7 @@ function edge(input: EdgeInput): ModuleDeliveryEdgeContract {
 }
 
 function acceptedPlan(input: PlanInput): AcceptedModuleDeliveryPlan {
-  const plan: ModuleDeliveryPlan = {
+  const plan: LegacyCompatibleModuleDeliveryPlan = {
     version: 1,
     sourceCommit: input.sourceCommit,
     maxConcurrency: 3,
