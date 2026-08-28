@@ -63,12 +63,10 @@ type EvidenceFreshnessRequest = Readonly<{
   headCommit: string;
   integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
 }>;
-
 export type ExpectedLineageMapRequest = {
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly entries: readonly ModuleDeliveryExpectedLineage[];
 };
-
 export type ResourceConflictRequest = {
   readonly first: ModuleDeliveryResourceClaims;
   readonly second: ModuleDeliveryResourceClaims;
@@ -116,7 +114,6 @@ export function expectedModuleDeliveryLineageMap(
   }
   return result;
 }
-
 function claimsOverlap(request: ResourceClaimPair): boolean {
   return request.first.some((left) =>
     request.second.some((right) => {
@@ -125,7 +122,6 @@ function claimsOverlap(request: ResourceClaimPair): boolean {
     }),
   );
 }
-
 export function moduleDeliveryResourcesConflict(
   request: ResourceConflictRequest,
 ): boolean {
@@ -136,20 +132,18 @@ export function moduleDeliveryResourcesConflict(
   ];
   return pairs.some(claimsOverlap);
 }
-
 function frozenClaim(
   claim: ModuleDeliveryEvidenceClaimIdentity,
 ): ModuleDeliveryEvidenceClaimIdentity {
   const copy: ModuleDeliveryEvidenceClaimIdentity = { ...claim };
   return Object.freeze(copy);
 }
-
 export function assertEvidenceBound(
   identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
 ): void {
-  const pending = [...identities];
-  if (pending.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
+  if (identities.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
     throw new Error('Accepted provider evidence ancestry is too large.');
+  const pending = [...identities];
   const seen = new Set<ModuleDeliveryAcceptedProviderEvidenceIdentity>();
   for (const current of pending) {
     if (seen.has(current))
@@ -305,6 +299,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
   const collect = (
     request: AcceptedModuleDeliveryEvidenceCollectionRequest,
   ): AcceptedModuleDeliveryEvidenceCollection => {
+    assertEvidenceBound(request.entries);
     const seen = new Set<string>();
     const accepted = request.entries.map((evidence) => {
       const inspection: AcceptedModuleDeliveryEvidenceInspection = {

@@ -42,7 +42,6 @@ import type {
   ModuleDeliveryPlanV2,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
-  RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
@@ -438,16 +437,15 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       candidate: providerCandidate,
     };
     const providerEvidence = verify(providerVerificationRequest);
-    const prematureDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: active.state,
-        lease: providerLease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-        },
-      };
+    const prematureDispositionRequest = {
+      authority: active.authority,
+      state: active.state,
+      lease: providerLease,
+      outcome: {
+        kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+        conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+      },
+    };
     expect(() =>
       recordModuleDeliveryAttemptDisposition(prematureDispositionRequest),
     ).toThrow('lease capability');
@@ -460,23 +458,51 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     };
     const evidenceState =
       createModuleDeliveryAdmissionState(evidenceStateRequest);
-    const omittedEvidenceRequest = {
+    let oversizedRootAccesses = 0;
+    const oversizedRoots = Array(129).fill(providerEvidence);
+    const oversizedHandler: ProxyHandler<AcceptedModuleDeliveryEvidence[]> = {
+      get: (...parameters) => {
+        const [target, property] = parameters;
+        if (property === 'length') return target.length;
+        oversizedRootAccesses += 1;
+        throw new Error('Oversized evidence root was accessed.');
+      },
+    };
+    const oversizedEvidence = new Proxy(oversizedRoots, oversizedHandler);
+    const oversizedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      ...evidenceStateRequest,
+      acceptedEvidence: oversizedEvidence,
+    };
+    expect(() =>
+      createModuleDeliveryAdmissionState(oversizedStateRequest),
+    ).toThrow('ancestry is too large');
+    expect(oversizedRootAccesses).toBe(0);
+    const omittedEvidenceRequest: CreateModuleDeliveryAdmissionStateRequest = {
       ...evidenceStateRequest,
       acceptedEvidence: [],
     };
     expect(() =>
       createModuleDeliveryAdmissionState(omittedEvidenceRequest),
     ).toThrow('cannot discard proof');
-    const providerDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: evidenceState,
-        lease: providerLease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-        },
-      };
+    const providerDispositionRequest = {
+      authority: active.authority,
+      state: evidenceState,
+      lease: providerLease,
+      outcome: {
+        kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+        conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+      },
+    };
+    const unusableDispositionRequest = {
+      ...providerDispositionRequest,
+      outcome: {
+        kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
+        conclusion: ModuleDeliveryGenerationFenceKind.Rejected,
+      },
+    };
+    expect(() =>
+      recordModuleDeliveryAttemptDisposition(unusableDispositionRequest),
+    ).toThrow('lease capability is invalid');
     recordModuleDeliveryAttemptDisposition(providerDispositionRequest);
     const providerRuntime: Runtime = { ...active, state: evidenceState };
     const providerBLeaseRequest: AdmittedLeaseRequest = {
@@ -503,16 +529,11 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     };
     const completeState =
       createModuleDeliveryAdmissionState(completeStateRequest);
-    const providerBDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: completeState,
-        lease: providerBLease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-        },
-      };
+    const providerBDispositionRequest = {
+      ...providerDispositionRequest,
+      state: completeState,
+      lease: providerBLease,
+    };
     recordModuleDeliveryAttemptDisposition(providerBDispositionRequest);
     const synthesisRuntime: Runtime = { ...active, state: completeState };
     const synthesisLeaseRequest: AdmittedLeaseRequest = {
@@ -625,12 +646,11 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     };
     registry.register(registrationB);
     const conflictingEvidence = structuredClone(providerEvidence);
-    const conflictingRegistration: AcceptedModuleDeliveryEvidenceRegistration =
-      {
-        ...registrationB,
-        authority: active.authority,
-        evidence: conflictingEvidence,
-      };
+    const conflictingRegistration = {
+      ...registrationB,
+      authority: active.authority,
+      evidence: conflictingEvidence,
+    };
     expect(() => registry.register(conflictingRegistration)).toThrow(
       'integration closure is inconsistent',
     );

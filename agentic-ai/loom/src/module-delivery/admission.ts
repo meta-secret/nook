@@ -39,39 +39,32 @@ import type {
 } from './authority.ts';
 
 const AUTHORITY = Symbol('module-delivery-generation-authority');
-
 export enum ModuleDeliveryAdmissionSelectionStatus {
   Selected = 'selected',
   Blocked = 'blocked',
 }
-
 export enum ModuleDeliveryAttemptDispositionKind {
   Accepted = 'accepted',
   FinalUnusable = 'final-unusable',
 }
-
 export enum ModuleDeliveryGenerationFenceKind {
   Accepted = 'accepted',
   Cancelled = 'cancelled',
   Failed = 'failed',
   Rejected = 'rejected',
 }
-
 export type ModuleDeliveryGenerationAuthority = Readonly<{
   [AUTHORITY]: true;
 }>;
-
 export type ModuleDeliveryExpectedLineage = Readonly<{
   taskId: string;
   parentLineage: AgentAttemptParent;
 }>;
-
 export type CreateModuleDeliveryGenerationAuthorityRequest = {
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly expectedLineage: readonly ModuleDeliveryExpectedLineage[];
   readonly repositoryRoot: string;
 };
-
 export type CreateModuleDeliveryAdmissionStateRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -79,7 +72,6 @@ export type CreateModuleDeliveryAdmissionStateRequest = {
   readonly integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
   readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
 };
-
 type AttemptIdentity = Readonly<{
   taskId: string;
   attempt: number;
@@ -108,7 +100,6 @@ export type ModuleDeliveryAdmissionState = Readonly<{
   integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
   acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 }>;
-
 export type SelectModuleDeliveryAdmissionsRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -120,7 +111,6 @@ export type ModuleDeliveryAdmissionSelection = {
   readonly pendingTaskIds: readonly string[];
   readonly blockedTaskIds: readonly string[];
 };
-
 export type RecordModuleDeliveryAttemptLeasesRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
@@ -130,7 +120,6 @@ export type ModuleDeliveryLeaseRecording = {
   readonly state: ModuleDeliveryAdmissionState;
   readonly leases: readonly ModuleDeliveryAttemptLease[];
 };
-
 export type ModuleDeliveryDispositionOutcome = {
   readonly kind: ModuleDeliveryAttemptDispositionKind;
   readonly conclusion: ModuleDeliveryGenerationFenceKind;
@@ -141,7 +130,6 @@ export type RecordModuleDeliveryAttemptDispositionRequest = {
   readonly lease: ModuleDeliveryAttemptLease;
   readonly outcome: ModuleDeliveryDispositionOutcome;
 };
-
 export type GenerationAuthorityInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly generation: number;
@@ -155,7 +143,6 @@ export type AttemptLeaseAuthorityInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly lease: ModuleDeliveryAttemptLease;
 };
-
 type AuthorityState = {
   inputPlan: ValidatedModuleDeliveryPlan;
   acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -165,12 +152,10 @@ type AuthorityState = {
   attemptsByTask: Map<string, number>;
   dispositions: ModuleDeliveryAttemptDisposition[];
 };
-
 type StateProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
 };
-
 type CapabilityProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
@@ -867,31 +852,28 @@ function terminallyBlockedTaskIds(
 }
 
 function validDisposition(request: DispositionValidationRequest): boolean {
-  if (request.outcome.kind === ModuleDeliveryAttemptDispositionKind.Accepted) {
-    if (
-      request.outcome.conclusion !== ModuleDeliveryGenerationFenceKind.Accepted
-    )
-      return false;
-    const nodeRequest: NodeLookupRequest = {
-      plan: request.authority.acceptedPlan,
-      taskId: request.lease.taskId,
-    };
-    const node = nodeFor(nodeRequest);
-    return node.kind === ModuleDeliveryTaskKind.Write
-      ? request.state.integratedWriterFrontiers.some(
-          ({ taskId, attempt }) =>
-            taskId === request.lease.taskId &&
-            attempt === request.lease.attempt,
-        )
-      : request.state.acceptedProviderEvidence.some(
-          ({ taskId, attempt }) =>
-            taskId === request.lease.taskId &&
-            attempt === request.lease.attempt,
-        );
-  }
+  const nodeRequest: NodeLookupRequest = {
+    plan: request.authority.acceptedPlan,
+    taskId: request.lease.taskId,
+  };
+  const node = nodeFor(nodeRequest);
+  const proofPresent =
+    node.kind === ModuleDeliveryTaskKind.Write
+      ? request.state.integratedWriterFrontiers
+      : request.state.acceptedProviderEvidence;
+  const exactProofPresent = proofPresent.some(
+    ({ taskId, attempt }) =>
+      taskId === request.lease.taskId && attempt === request.lease.attempt,
+  );
+  if (request.outcome.kind === ModuleDeliveryAttemptDispositionKind.Accepted)
+    return (
+      request.outcome.conclusion ===
+        ModuleDeliveryGenerationFenceKind.Accepted && exactProofPresent
+    );
   return (
     request.outcome.kind ===
       ModuleDeliveryAttemptDispositionKind.FinalUnusable &&
+    !exactProofPresent &&
     (request.outcome.conclusion ===
       ModuleDeliveryGenerationFenceKind.Cancelled ||
       request.outcome.conclusion === ModuleDeliveryGenerationFenceKind.Failed ||
