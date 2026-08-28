@@ -2,7 +2,7 @@ use anyhow::Context as _;
 use std::{
     fs,
     path::{Path, PathBuf},
-    process::{self, Command},
+    process,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -103,42 +103,81 @@ fn files_under(path: &Path, excluded_roots: &[PathBuf]) -> anyhow::Result<Vec<Pa
 }
 
 fn validated_executable_scripts(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
-    let output = Command::new("bun")
-        .arg(root.join("agentic-ai/loom/src/executable-skills/repository-cli.ts"))
-        .arg(root)
-        .arg("--list-roots")
-        .output()
-        .context("failed to run the executable-skill package validator")?;
-    anyhow::ensure!(
-        output.status.success(),
-        "executable-skill package validation failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let relative_roots: Vec<String> = serde_json::from_slice(&output.stdout)?;
     let mut dependency_roots = Vec::new();
-    for relative in relative_roots {
-        let scripts_root = root.join(relative);
-        let metadata = fs::symlink_metadata(&scripts_root)?;
-        anyhow::ensure!(
-            metadata.is_dir() && !metadata.file_type().is_symlink(),
-            "validated scripts root is not a regular directory: {}",
-            scripts_root.display()
-        );
-        let dependency_root = scripts_root.join("node_modules");
-        match fs::symlink_metadata(&dependency_root) {
-            Ok(dependency_metadata) => {
-                anyhow::ensure!(
-                    dependency_metadata.is_dir() && !dependency_metadata.file_type().is_symlink(),
-                    "executable-skill dependency root is unsafe: {}",
-                    dependency_root.display()
-                );
-                dependency_roots.push(dependency_root);
+    for owner in [
+        ".cortex/gizmo/dynamic-skills",
+        ".cortex/shared/dynamic-skills",
+        ".cortex/teams/ai/dynamic-skills",
+        ".cortex/teams/dev-core/dynamic-skills",
+        ".cortex/teams/security/dynamic-skills",
+        ".cortex/teams/sre/dynamic-skills",
+        ".cortex/teams/web-dev/dynamic-skills",
+    ] {
+        let owner_root = root.join(owner);
+        for entry in fs::read_dir(owner_root)? {
+            let skill_root = entry?.path();
+            let Some(slug) = skill_root.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            let scripts_root = skill_root.join("scripts");
+            if !is_kebab_slug(slug)
+                || !is_regular_file(&skill_root.join("SKILL.md"))
+                || !is_canonical_scripts_root(&scripts_root)
+            {
+                continue;
             }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-            Err(error) => return Err(error.into()),
+            let dependency_root = scripts_root.join("node_modules");
+            match fs::symlink_metadata(&dependency_root) {
+                Ok(dependency_metadata) => {
+                    anyhow::ensure!(
+                        dependency_metadata.is_dir()
+                            && !dependency_metadata.file_type().is_symlink(),
+                        "executable-skill dependency root is unsafe: {}",
+                        dependency_root.display()
+                    );
+                    dependency_roots.push(dependency_root);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
         }
     }
     Ok(dependency_roots)
+}
+
+fn is_kebab_slug(value: &str) -> bool {
+    !value.is_empty()
+        && value.split('-').all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|character| character.is_ascii_lowercase() || character.is_ascii_digit())
+        })
+}
+
+fn is_regular_file(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+}
+
+fn is_regular_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+}
+
+fn is_canonical_scripts_root(path: &Path) -> bool {
+    [
+        ".gitignore",
+        ".prettierrc",
+        "bun.lock",
+        "eslint.config.js",
+        "executable-skill.json",
+        "package.json",
+        "tsconfig.json",
+    ]
+    .iter()
+    .all(|name| is_regular_file(&path.join(name)))
+        && ["src", "tests"]
+            .iter()
+            .all(|name| is_regular_directory(&path.join(name)))
 }
 
 fn line_prescribes_native_model_override(line: &str) -> bool {
@@ -424,4 +463,13 @@ fn recursive_scan_excludes_only_validated_skill_dependencies() -> anyhow::Result
         "unexpected excluded-root scan error: {error:#}"
     );
     Ok(())
+}
+
+#[test]
+fn sealed_authority_scan_uses_no_external_runtime() {
+    let source = include_str!("harness_neutral.rs");
+    let process_launch = ["Command", "::new"].concat();
+    let repository_cli = ["repository", "-cli.ts"].concat();
+    assert!(!source.contains(&process_launch));
+    assert!(!source.contains(&repository_cli));
 }

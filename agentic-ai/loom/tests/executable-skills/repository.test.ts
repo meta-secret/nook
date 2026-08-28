@@ -216,14 +216,13 @@ test('derives the package root before nested scripts path segments', () => {
   }
 });
 
-test('repository CLI audits and lists roots from one tracked snapshot', async () => {
+test('repository CLI audits one tracked snapshot', async () => {
   const cli = await readFile(
     join(import.meta.dir, '../../src/executable-skills/repository-cli.ts'),
     'utf8',
   );
   expect(cli.match(/readTrackedRepositoryFiles\(repoRoot\)/gu)).toHaveLength(1);
   expect(cli).toContain('auditExecutableSkillPackageFiles(auditRequest)');
-  expect(cli).toContain('executableSkillPackages(tracked)');
   expect(cli).not.toContain('auditTrackedExecutableSkillPackages');
 });
 
