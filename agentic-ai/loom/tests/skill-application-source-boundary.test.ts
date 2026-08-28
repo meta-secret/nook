@@ -1,17 +1,14 @@
-import { lstatSync } from 'node:fs';
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import {
   analyzeExecutableSkillSource,
   isExecutableSkillApplicationSourcePath,
 } from '../src/executable-skills/source-policy.ts';
-
-type TrackedSourceOptions = {
-  readonly cmd: string[];
-  readonly cwd: string;
-  readonly stderr: 'pipe';
-  readonly stdout: 'pipe';
-};
+import {
+  executableSkillPackageFromPath,
+  executableSkillPackages,
+  readTrackedRepositoryFiles,
+} from '../src/executable-skills/repository.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const ARTICLE_ROOT =
@@ -21,31 +18,23 @@ const SOURCE_PROFILES: ReadonlyMap<string, ExecutableSkillSourceProfile> =
   new Map([[ARTICLE_ROOT.slice(0, -1), analyzeExecutableSkillSource]]);
 
 function executableSkillRootFromTrackedPath(path: string): string | false {
-  const marker = '/scripts/';
-  const index = path.lastIndexOf(marker);
-  const root = index < 0 ? '' : path.slice(0, index + marker.length - 1);
-  return isExecutableSkillApplicationSourcePath(`${root}/src/index.ts`)
-    ? root
+  const skillPackage = executableSkillPackageFromPath(path);
+  return skillPackage !== false &&
+    isExecutableSkillApplicationSourcePath(
+      `${skillPackage.scriptsRoot}/src/index.ts`,
+    )
+    ? skillPackage.scriptsRoot
     : false;
 }
 
 test('all tracked executable application sources pass the AST capability gate', async () => {
-  const options: TrackedSourceOptions = {
-    cmd: ['git', 'ls-files', '--', '.cortex'],
-    cwd: REPOSITORY_ROOT,
-    stderr: 'pipe',
-    stdout: 'pipe',
-  };
-  const result = Bun.spawnSync(options);
-  expect(result.exitCode).toBe(0);
-  const tracked = result.stdout.toString().split('\n').filter(Boolean);
-  const packageRoots = tracked
-    .filter((path) => path.endsWith('/scripts/package.json'))
-    .map((path) => posix.dirname(path))
+  const trackedFiles = readTrackedRepositoryFiles(REPOSITORY_ROOT);
+  const tracked = trackedFiles.map((file) => file.path);
+  const packageRoots = executableSkillPackages(trackedFiles)
+    .map((skillPackage) => skillPackage.scriptsRoot)
     .filter((root) =>
       isExecutableSkillApplicationSourcePath(`${root}/src/index.ts`),
-    )
-    .sort();
+    );
   const implementationRoots = [
     ...new Set(
       tracked.flatMap((path) => {
@@ -73,13 +62,12 @@ test('all tracked executable application sources pass the AST capability gate', 
         requiredDirectory,
       ).toBe(true);
     }
-    for (const path of tracked.filter(
-      (path) => path === `${skillRoot}/SKILL.md` || path.startsWith(`${root}/`),
+    for (const file of trackedFiles.filter(
+      (candidate) =>
+        candidate.path === `${skillRoot}/SKILL.md` ||
+        candidate.path.startsWith(`${root}/`),
     )) {
-      expect(
-        lstatSync(join(REPOSITORY_ROOT, path)).isSymbolicLink(),
-        path,
-      ).toBe(false);
+      expect(file.mode, file.path).toBe('100644');
     }
     const skill = await Bun.file(
       join(REPOSITORY_ROOT, skillRoot, 'SKILL.md'),

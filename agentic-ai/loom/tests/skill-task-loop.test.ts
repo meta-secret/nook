@@ -57,7 +57,7 @@ test('skills package loops stop on the first failing package', async () => {
     const bunPath = join(executableDirectory, 'bun');
     await writeFile(
       bunPath,
-      '#!/usr/bin/env bash\nset -euo pipefail\nif [[ "$PWD" == "$FAIL_PACKAGE" ]]; then exit 23; fi\nprintf reached >"$SECOND_MARKER"\n',
+      '#!/usr/bin/env bash\nset -euo pipefail\nif [[ "$*" == *"repository-cli.ts"* ]]; then exit 0; fi\nif [[ "$PWD" == "$FAIL_PACKAGE" ]]; then exit 23; fi\nprintf reached >"$SECOND_MARKER"\n',
     );
     await chmod(bunPath, 0o755);
     const taskfile = await readFile(TASKFILE_PATH, 'utf8');
@@ -77,6 +77,11 @@ test('skills package loops stop on the first failing package', async () => {
           'first-package second-package',
         )
         .replaceAll('{{.REPO_ROOT}}', fixtureRoot);
+      if (taskName === 'skills:install') {
+        expect(command.indexOf('repository-cli.ts')).toBeLessThan(
+          command.indexOf('for skill_dir'),
+        );
+      }
       const inheritedPath = Bun.env.PATH;
       if (typeof inheritedPath !== 'string')
         throw new Error('The task-loop test requires PATH.');

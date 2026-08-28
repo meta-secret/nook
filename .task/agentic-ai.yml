@@ -11,7 +11,7 @@ tasks:
     desc: Install every executable skill package with its frozen lockfile.
     silent: true
     cmds:
-      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
+      - set -euo pipefail; bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/repository-cli.ts" "{{.REPO_ROOT}}"; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
 
   skills:format:
     desc: Format every executable skill package.

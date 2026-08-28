@@ -9,13 +9,11 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import {
-  auditExecutableSkillPackages,
   listCortexMarkdownFiles,
   listPersistentCortexMarkdownFiles,
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
 import type { CortexAuditReport } from '../src/commands/cortex-audit.ts';
-import type { AuditExecutableSkillPackagesArgs } from '../src/commands/cortex-audit.ts';
 import { CortexStructureFindingCode } from '../src/lib/cortex-document-structure.ts';
 
 test('excludes temporary session memory from persistent Cortex documents', () => {
@@ -134,110 +132,6 @@ test('excludes only canonical executable package scripts from Cortex Markdown', 
   } finally {
     const removeOptions = { recursive: true, force: true } as const;
     rmSync(cortexRoot, removeOptions);
-  }
-});
-
-test('reports orphan and malformed executable skill packages by exact path', () => {
-  const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-skill-package-'));
-  try {
-    const skillsDir = path.join(
-      repoRoot,
-      '.cortex',
-      'teams',
-      'ai',
-      'dynamic-skills',
-    );
-    const directoryOptions = { recursive: true } as const;
-    mkdirSync(path.join(skillsDir, 'orphan', 'scripts'), directoryOptions);
-    mkdirSync(path.join(skillsDir, 'wrong-name'), directoryOptions);
-    mkdirSync(path.join(skillsDir, 'mirrored', 'scripts'), directoryOptions);
-    mkdirSync(path.join(skillsDir, 'Bad_Slug'), directoryOptions);
-    writeFileSync(
-      path.join(skillsDir, 'wrong-name', 'SKILL.md'),
-      '---\nname: another-name\ndescription: Test package.\n---\n\n# Test\n',
-    );
-    writeFileSync(
-      path.join(skillsDir, 'mirrored', 'SKILL.md'),
-      '---\nname: mirrored\ndescription: Test package.\n---\n\n# Test\n',
-    );
-    writeFileSync(
-      path.join(skillsDir, 'mirrored', 'scripts', 'SKILL.md'),
-      '# Mirror\n',
-    );
-    for (const [slug, description] of [
-      ['comment-description', '# comment'],
-      ['null-description', 'null'],
-      ['tilde-description', '~'],
-      ['number-description', '42'],
-      ['empty-description', '""'],
-    ] as const) {
-      mkdirSync(path.join(skillsDir, slug), directoryOptions);
-      writeFileSync(
-        path.join(skillsDir, slug, 'SKILL.md'),
-        `---\nname: ${slug}\ndescription: ${description}\n---\n\n# Test\n`,
-      );
-    }
-    for (const [slug, frontmatter] of [
-      [
-        'duplicate-description',
-        'name: duplicate-description\ndescription: first\ndescription: second',
-      ],
-      ['invalid-yaml', 'name: invalid-yaml\ndescription: ['],
-      ['quoted-description', 'name: quoted-description\n"description": Valid'],
-      ['block-description', 'name: block-description\ndescription: |\n  Valid'],
-    ] as const) {
-      mkdirSync(path.join(skillsDir, slug), directoryOptions);
-      writeFileSync(
-        path.join(skillsDir, slug, 'SKILL.md'),
-        `---\n${frontmatter}\n---\n\n# Test\n`,
-      );
-    }
-
-    const packageAuditArgs: AuditExecutableSkillPackagesArgs = {
-      repoRoot,
-      skillsDir,
-    };
-    const findings = auditExecutableSkillPackages(packageAuditArgs);
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/orphan: executable skill directory is missing SKILL.md',
-    );
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/wrong-name/SKILL.md: SKILL.md name must equal directory slug wrong-name',
-    );
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/wrong-name/scripts: executable skill package is missing scripts',
-    );
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/mirrored/scripts/SKILL.md: scripts cannot contain a skill-card mirror',
-    );
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/Bad_Slug: executable skill directory must use a canonical kebab-case slug',
-    );
-    for (const slug of [
-      'comment-description',
-      'null-description',
-      'tilde-description',
-      'number-description',
-      'empty-description',
-    ]) {
-      expect(findings).toContain(
-        `.cortex/teams/ai/dynamic-skills/${slug}/SKILL.md: SKILL.md description must be a nonempty string`,
-      );
-    }
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/duplicate-description/SKILL.md: SKILL.md frontmatter duplicates description',
-    );
-    expect(findings).toContain(
-      '.cortex/teams/ai/dynamic-skills/invalid-yaml/SKILL.md: SKILL.md frontmatter is invalid YAML',
-    );
-    for (const slug of ['quoted-description', 'block-description']) {
-      expect(findings).not.toContain(
-        `.cortex/teams/ai/dynamic-skills/${slug}/SKILL.md: SKILL.md description must be a nonempty string`,
-      );
-    }
-  } finally {
-    const removeOptions = { recursive: true, force: true } as const;
-    rmSync(repoRoot, removeOptions);
   }
 });
 

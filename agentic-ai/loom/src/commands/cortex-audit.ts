@@ -34,9 +34,13 @@ import {
   type AuditCortexArticleStructureArgs,
   type CortexArticleFinding,
 } from '../lib/cortex-article-structure.ts';
+import {
+  auditTrackedExecutableSkillPackages,
+  type ExecutableSkillPackageFinding,
+} from '../executable-skills/repository.ts';
 export type CortexAuditReport = {
   readonly brokenLinks: BrokenLink[];
-  readonly invalidExecutableSkillPackages: string[];
+  readonly invalidExecutableSkillPackages: readonly ExecutableSkillPackageFinding[];
   readonly missingFromIndex: string[];
   readonly orphanIndexRows: string[];
   readonly prohibitedHarnessSkillPaths: string[];
@@ -184,15 +188,8 @@ export async function runCortexAuditFromDirectory(
     path.join(cortexRoot, 'teams', 'sre', 'dynamic-skills'),
     path.join(cortexRoot, 'teams', 'web-dev', 'dynamic-skills'),
   ];
-  const executableSkillPackageFindings = skillDirectories.flatMap(
-    (skillsDir) => {
-      const packageAuditArgs: AuditExecutableSkillPackagesArgs = {
-        repoRoot,
-        skillsDir,
-      };
-      return auditExecutableSkillPackages(packageAuditArgs);
-    },
-  );
+  const executableSkillPackageFindings =
+    auditTrackedExecutableSkillPackages(repoRoot);
   const skillFiles = skillDirectories
     .flatMap((skillsDir) =>
       existsSync(skillsDir)
@@ -461,79 +458,6 @@ const EXECUTABLE_SKILL_PROJECT_FILES = [
   'package.json',
   'tsconfig.json',
 ] as const;
-
-export type AuditExecutableSkillPackagesArgs = {
-  readonly repoRoot: string;
-  readonly skillsDir: string;
-};
-
-export function auditExecutableSkillPackages(
-  args: AuditExecutableSkillPackagesArgs,
-): string[] {
-  if (!existsSync(args.skillsDir)) return [];
-  const findings: string[] = [];
-  const directoryOptions: { readonly withFileTypes: true } = {
-    withFileTypes: true,
-  };
-  for (const entry of readdirSync(args.skillsDir, directoryOptions)) {
-    if (entry.isSymbolicLink()) {
-      findings.push(
-        `${path.relative(args.repoRoot, path.join(args.skillsDir, entry.name))}: dynamic skill entries cannot be symlinks`,
-      );
-      continue;
-    }
-    if (!entry.isDirectory()) continue;
-    const packageRoot = path.join(args.skillsDir, entry.name);
-    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/u.test(entry.name)) {
-      findings.push(
-        `${path.relative(args.repoRoot, packageRoot)}: executable skill directory must use a canonical kebab-case slug`,
-      );
-      continue;
-    }
-    const skillPath = path.join(packageRoot, 'SKILL.md');
-    if (!isRegularFile(skillPath)) {
-      findings.push(
-        `${path.relative(args.repoRoot, packageRoot)}: executable skill directory is missing SKILL.md`,
-      );
-      continue;
-    }
-    const frontmatterArgs: AuditExecutableSkillFrontmatterArgs = {
-      repoRoot: args.repoRoot,
-      skillPath,
-      slug: entry.name,
-    };
-    findings.push(...auditExecutableSkillFrontmatter(frontmatterArgs));
-    const scriptsRoot = path.join(packageRoot, 'scripts');
-    if (!isRegularDirectory(scriptsRoot)) {
-      findings.push(
-        `${path.relative(args.repoRoot, scriptsRoot)}: executable skill package is missing scripts`,
-      );
-      continue;
-    }
-    for (const required of EXECUTABLE_SKILL_PROJECT_FILES) {
-      const requiredPath = path.join(scriptsRoot, required);
-      if (!isRegularFile(requiredPath)) {
-        findings.push(
-          `${path.relative(args.repoRoot, requiredPath)}: executable skill package file is missing`,
-        );
-      }
-    }
-    for (const required of ['src', 'tests'] as const) {
-      const requiredPath = path.join(scriptsRoot, required);
-      if (!isRegularDirectory(requiredPath)) {
-        findings.push(
-          `${path.relative(args.repoRoot, requiredPath)}: executable skill package directory is missing`,
-        );
-      }
-    }
-    for (const nestedSkillPath of nestedSkillCards(scriptsRoot)) {
-      findings.push(
-        `${path.relative(args.repoRoot, nestedSkillPath)}: scripts cannot contain a skill-card mirror`,
-      );
-    }
-  }
-  return findings.sort();
-}
 
 function nestedSkillCards(scriptsRoot: string): readonly string[] {
   const skillCards: string[] = [];

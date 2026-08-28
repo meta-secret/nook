@@ -195,12 +195,13 @@ export function mechanicalCortexAuditOutput(
     findings.push(finding);
   }
   for (const packageFinding of report.invalidExecutableSkillPackages) {
+    const summary = `${packageFinding.path}: ${packageFinding.issue}`;
     const finding: WorkflowFinding = {
       severity: WorkflowFindingSeverity.Error,
       title: 'Invalid executable-skill package',
-      summary: packageFinding,
-      evidence: [packageFinding],
-      affectedPaths: [packageFinding.split(':').at(0) ?? '.cortex'],
+      summary,
+      evidence: [summary],
+      affectedPaths: [packageFinding.path],
     };
     findings.push(finding);
   }
