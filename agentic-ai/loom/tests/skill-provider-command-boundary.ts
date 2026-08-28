@@ -10,7 +10,7 @@ import {
   applyAliasMutation,
   type AliasRequest,
 } from './skill-provider-shell-alias.ts';
-import { workflowCommandSources } from './skill-provider-workflow-commands.ts';
+export { runnableCommandSources } from './skill-provider-config-commands.ts';
 import {
   isDispatchWrapper,
   resolveDispatchCommand,
@@ -24,14 +24,14 @@ import {
   staticWord,
 } from './skill-provider-shell-environment.ts';
 import {
+  isAuditedSource,
+  type AuditedSourceRequest,
+} from './skill-provider-sourced-seams.ts';
+import {
   ShellSeparator,
-  type CommandCollectionRequest,
-  type ConfigurationMapping,
-  type ConfigurationNode,
   type EnvPrefixRequest,
   type LaunchRequest,
   type PositionalWordsRequest,
-  type RunnableCommandInspection,
   type RuntimeCommandRequest,
   type RuntimeExecutable,
   type RuntimeExecutableRequest,
@@ -43,14 +43,11 @@ import {
   type ShellParseState,
   type ShellScriptLaunch,
   type ShellWord,
-  type TaskStaticVariableRequest,
-  type TaskTemplateRequest,
   type WordEnvironmentRequest,
   type WordsEnvironmentRequest,
 } from './skill-provider-command-types.ts';
 
 export type {
-  RunnableCommandInspection,
   ShellCommandAnalysis,
   ShellCommandInspection,
   ShellLaunchArgument,
@@ -102,35 +99,6 @@ const AUDITED_DOCKER_DEFAULT_PATHS = new Set([
   'infra/tasks/bake-cache.yml',
 ]);
 
-export function runnableCommandSources(
-  inspection: RunnableCommandInspection,
-): readonly string[] {
-  if (inspection.path.endsWith('package.json')) {
-    const document = JSON.parse(inspection.source) as {
-      readonly scripts?: Readonly<Record<string, string>>;
-    };
-    return document.scripts ? Object.values(document.scripts) : [];
-  }
-  if (
-    /\.(?:sh)$/u.test(inspection.path) ||
-    posix.extname(inspection.path) === ''
-  ) {
-    return [inspection.source.replace(/^#![^\n]*(?:\n|$)/u, '')];
-  }
-  if (!/\.ya?ml$/u.test(inspection.path)) return [];
-  const document = Bun.YAML.parse(inspection.source) as ConfigurationNode;
-  if (isTaskPath(inspection.path)) return taskCommands(document);
-  if (/^\.github\/workflows\//u.test(inspection.path)) {
-    const request = { action: false, document };
-    return workflowCommandSources(request);
-  }
-  if (/(^|\/)action\.ya?ml$/u.test(inspection.path)) {
-    const request = { action: true, document };
-    return workflowCommandSources(request);
-  }
-  return [];
-}
-
 export function analyzeShellCommands(
   inspection: ShellCommandInspection,
 ): ShellCommandAnalysis {
@@ -163,6 +131,7 @@ export function analyzeShellCommands(
     functions: new Map(),
     launches: [],
     positionalArguments,
+    sourcePath: inspection.sourcePath,
   };
   const request: ShellCommandRequest = {
     depth: 0,
@@ -188,140 +157,6 @@ export function staticTypeScriptScriptLaunches(
         'u',
       ).test(source);
     });
-}
-
-function isTaskPath(path: string): boolean {
-  return (
-    /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path) || /^\.task\//u.test(path)
-  );
-}
-
-function taskCommands(document: ConfigurationNode): readonly string[] {
-  const root = mapping(document);
-  const tasks = mapping(root.tasks ?? false);
-  const commands: string[] = [];
-  for (const task of Object.values(tasks)) {
-    const taskNode = mapping(task);
-    const start = commands.length;
-    const commandRequest: CommandCollectionRequest = {
-      value: taskNode.cmds ?? false,
-      target: commands,
-    };
-    collectCommandList(commandRequest);
-    const statusRequest: CommandCollectionRequest = {
-      value: taskNode.status ?? false,
-      target: commands,
-    };
-    collectCommandList(statusRequest);
-    const dependencyRequest: CommandCollectionRequest = {
-      value: taskNode.deps ?? false,
-      target: commands,
-    };
-    collectTaskDependencies(dependencyRequest);
-    const preconditionRequest: CommandCollectionRequest = {
-      value: taskNode.preconditions ?? false,
-      target: commands,
-    };
-    collectTaskShellList(preconditionRequest);
-    const variables = mapping(taskNode.vars ?? false);
-    for (const value of Object.values(variables)) {
-      const shell = mapping(value).sh;
-      if (typeof shell === 'string') commands.push(shell);
-    }
-    const variableRequest: TaskStaticVariableRequest = { root, task: taskNode };
-    const staticVariables = taskStaticVariables(variableRequest);
-    const directoryRequest: TaskTemplateRequest = {
-      source: typeof taskNode.dir === 'string' ? taskNode.dir : '',
-      values: staticVariables,
-    };
-    const directory = resolveTaskTemplate(directoryRequest);
-    for (let index = start; index < commands.length; index += 1) {
-      const templateRequest: TaskTemplateRequest = {
-        source: commands[index] ?? '',
-        values: staticVariables,
-      };
-      const command = resolveTaskTemplate(templateRequest);
-      commands[index] =
-        directory.length > 0 ? `cd "${directory}" && ${command}` : command;
-    }
-  }
-  return commands;
-}
-
-function taskStaticVariables(
-  request: TaskStaticVariableRequest,
-): ReadonlyMap<string, string> {
-  const values = new Map<string, string>([
-    ['EXTENSION_ROOT', 'nook-app/nook-web/nook-web-extension'],
-    ['REPO_ROOT', '.'],
-    ['ROOT_DIR', '.'],
-  ]);
-  for (const variables of [
-    mapping(request.root.vars ?? false),
-    mapping(request.task.vars ?? false),
-  ]) {
-    for (const [name, value] of Object.entries(variables)) {
-      if (typeof value === 'string') values.set(name, value);
-    }
-  }
-  for (let step = 0; step < 8; step += 1) {
-    for (const [name, value] of values) {
-      const templateRequest: TaskTemplateRequest = { source: value, values };
-      values.set(name, resolveTaskTemplate(templateRequest));
-    }
-  }
-  return values;
-}
-
-function resolveTaskTemplate(request: TaskTemplateRequest): string {
-  return request.source.replace(/\{\{\.([A-Za-z_]\w*)\}\}/gu, (template) => {
-    const name = /^\{\{\.([A-Za-z_]\w*)\}\}$/u.exec(template)?.[1] ?? '';
-    return request.values.get(name) ?? template;
-  });
-}
-
-function collectCommandList(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const entry of request.value) {
-    if (typeof entry === 'string') request.target.push(entry);
-    else {
-      const command = mapping(entry);
-      for (const field of ['cmd', 'sh'] as const) {
-        if (typeof command[field] === 'string')
-          request.target.push(command[field]);
-      }
-      if (typeof command.task === 'string')
-        request.target.push(`task ${command.task}`);
-      if (typeof command.defer === 'string') request.target.push(command.defer);
-    }
-  }
-}
-
-function collectTaskDependencies(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const entry of request.value) {
-    if (typeof entry === 'string') request.target.push(`task ${entry}`);
-    else {
-      const task = mapping(entry).task;
-      if (typeof task === 'string') request.target.push(`task ${task}`);
-    }
-  }
-}
-
-function collectTaskShellList(request: CommandCollectionRequest): void {
-  if (!Array.isArray(request.value)) return;
-  for (const entry of request.value) {
-    const shell = mapping(entry).sh;
-    if (typeof shell === 'string') request.target.push(shell);
-  }
-}
-
-function mapping(
-  value: ConfigurationNode,
-): Readonly<Record<string, ConfigurationNode>> {
-  return value instanceof Object && !Array.isArray(value)
-    ? (value as Readonly<Record<string, ConfigurationNode>>)
-    : {};
 }
 
 function analyzeCommandSource(request: ShellCommandRequest): void {
@@ -375,7 +210,14 @@ function analyzeCommandSource(request: ShellCommandRequest): void {
 }
 
 function analyzeCommand(request: RuntimeCommandRequest): void {
-  const words = [...request.words];
+  const words = withoutRedirections(request.words);
+  if (
+    words.some((word) => /^DOCKER(?:\[[^\]]*\])?(?:\+?=)/u.test(word.value)) &&
+    words.some((word) =>
+      /^DOCKER(?:\[[^\]]*\])?\+=|^DOCKER\[/u.test(word.value),
+    )
+  )
+    throw new Error('DOCKER append or array mutation is forbidden.');
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
@@ -411,17 +253,41 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
       command.value,
     )
   ) {
-    consumeAssignments([words, index + 1, request.state.environment]);
+    let assignmentIndex = index + 1;
+    for (; assignmentIndex < words.length; assignmentIndex += 1) {
+      const optionRequest: WordEnvironmentRequest = {
+        word: words[assignmentIndex] as ShellWord,
+        environment: request.state.environment,
+      };
+      const option = resolveWord(optionRequest);
+      if (!/^[+-]/u.test(option.value)) break;
+      if (option.value === '--') {
+        assignmentIndex += 1;
+        break;
+      }
+      if (option.dynamic || /n/u.test(option.value))
+        throw new Error('Dynamic or nameref declaration is forbidden.');
+      if (!/^[+-][aAfFgilrtuxpn]+$/u.test(option.value))
+        throw new Error(`Unsupported declaration option: ${option.value}`);
+    }
+    consumeAssignments([words, assignmentIndex, request.state.environment]);
     return;
   }
-  if (/^[<>](?![<>])/u.test(command.value)) return;
   if (/^[A-Za-z_]\w*\+=\(/u.test(command.value)) return;
-  if (
-    ['for', 'select', 'function', '}', 'fi', 'done', 'esac'].includes(
-      command.value,
-    )
-  )
+  if (command.value === 'for' || command.value === 'select') {
+    const target = words[index + 1];
+    if (target) {
+      const targetRequest: WordEnvironmentRequest = {
+        word: target,
+        environment: request.state.environment,
+      };
+      const resolved = resolveWord(targetRequest);
+      if (resolved.dynamic || resolved.value === 'DOCKER')
+        throw new Error('Dynamic or DOCKER loop variable is forbidden.');
+    }
     return;
+  }
+  if (['function', '}', 'fi', 'done', 'esac'].includes(command.value)) return;
   if (command.value === '{') {
     index += 1;
     if (index === words.length) return;
@@ -617,6 +483,17 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
   analyzeRuntime(commandRequest);
 }
 
+function withoutRedirections(words: readonly ShellWord[]): ShellWord[] {
+  const normalized: ShellWord[] = [];
+  for (let index = 0; index < words.length; index += 1) {
+    const value = words[index]?.value ?? '';
+    const redirection = /^(?:\d*)(?:<{1,3}|>{1,2}|<>|>&|<&)(.*)$/u.exec(value);
+    if (!redirection) normalized.push(words[index] as ShellWord);
+    else if ((redirection[1] ?? '').length === 0) index += 1;
+  }
+  return normalized;
+}
+
 function analyzeEval([request, words, start]: readonly [
   RuntimeCommandRequest,
   readonly ShellWord[],
@@ -743,6 +620,14 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
 }
 
 function analyzeRuntime(request: RuntimeCommandRequest): void {
+  if (parentMutatorTargetsDocker(request))
+    throw new Error('Dynamic or DOCKER parent-shell mutation is forbidden.');
+  if (
+    ['printf', 'read', 'mapfile', 'readarray', 'getopts'].includes(
+      request.runtime,
+    )
+  )
+    return;
   if (request.runtime === 'bun' || request.runtime === 'node') {
     const executableRequest: RuntimeExecutableRequest = {
       booleanOptions:
@@ -777,15 +662,20 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
   }
   if (request.runtime === 'source' || request.runtime === '.') {
     const executable = request.words[0];
-    if (!executable) return;
-    if (!executableIsStatic(executable)) return;
-    const launch: RuntimeExecutable = {
-      executable,
-      arguments: request.words.slice(1),
+    if (request.runtime === '.' && !executable) return;
+    const sourceRequest: AuditedSourceRequest = {
+      source: executable?.source ?? '',
+      sourcePath: request.state.sourcePath,
     };
-    const launchRequest: LaunchRequest = { launch, state: request.state };
-    addLaunch(launchRequest);
-    return;
+    if (
+      executable &&
+      request.words.length === 1 &&
+      isAuditedSource(sourceRequest)
+    )
+      return;
+    throw new Error(
+      `Unsupported sourced shell execution in ${request.state.sourcePath || 'inline'}: ${executable?.source ?? 'missing'}`,
+    );
   }
   const directExecutable = staticWord(request.runtime);
   if (looksLikeRepositoryScript(directExecutable.value)) {
@@ -796,6 +686,37 @@ function analyzeRuntime(request: RuntimeCommandRequest): void {
     const launchRequest: LaunchRequest = { launch, state: request.state };
     addLaunch(launchRequest);
   }
+}
+
+function parentMutatorTargetsDocker(request: RuntimeCommandRequest): boolean {
+  const resolved = request.words.map((word) => {
+    const wordRequest: WordEnvironmentRequest = {
+      word,
+      environment: request.state.environment,
+    };
+    return resolveWord(wordRequest);
+  });
+  let targets: readonly ShellWord[] = [];
+  if (request.runtime === 'printf') {
+    const index = resolved.findIndex((word) => word.value === '-v');
+    targets = index < 0 ? [] : resolved.slice(index + 1, index + 2);
+  } else if (request.runtime === 'getopts') targets = resolved.slice(1, 2);
+  else if (request.runtime === 'read') {
+    const array = resolved.findIndex((word) => word.value === '-a');
+    const redirect = resolved.findIndex((word) => /^<+/u.test(word.value));
+    const candidates = redirect < 0 ? resolved : resolved.slice(0, redirect);
+    targets =
+      array < 0
+        ? candidates.filter(
+            (word) => !word.value.startsWith('-') && !/^<+/u.test(word.value),
+          )
+        : resolved.slice(array + 1, array + 2);
+  } else if (request.runtime === 'mapfile' || request.runtime === 'readarray') {
+    const redirect = resolved.findIndex((word) => /^<+/u.test(word.value));
+    const candidates = redirect < 0 ? resolved : resolved.slice(0, redirect);
+    targets = candidates.length > 0 ? candidates.slice(-1) : [];
+  }
+  return targets.some((word) => word.dynamic || word.value === 'DOCKER');
 }
 
 function analyzeShellRuntime(request: RuntimeCommandRequest): void {

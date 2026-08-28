@@ -21,62 +21,23 @@ import {
 } from './skill-provider-command-boundary.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
+import { assertRunnableConfigurationBytes } from './skill-provider-config-commands.ts';
+import { AUDITED_SOURCE_SEAMS } from './skill-provider-sourced-seams.ts';
 import {
   executableSkillPackageFromPath,
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
-
-type ActionRuntimeGraph = {
-  readonly roots: readonly string[];
-  readonly sources: ReadonlyMap<string, string>;
-  readonly symlinkPaths: ReadonlySet<string>;
-};
-type GitHubActionStep = {
-  readonly uses?: string;
-};
-type GitHubActionRuns = {
-  readonly main?: string;
-  readonly post?: string;
-  readonly pre?: string;
-  readonly steps?: readonly GitHubActionStep[];
-  readonly using?: string;
-};
-type GitHubActionDocument = {
-  readonly runs?: GitHubActionRuns;
-};
-type ActionDependencyResolution = {
-  readonly importer: string;
-  readonly sources: ReadonlyMap<string, string>;
-  readonly specifier: string;
-};
-type ActionTranspilerOptions = {
-  readonly loader: 'tsx';
-};
-type ActionLoaderFixture = {
-  readonly path: string;
-  readonly source: string;
-};
-type ConfigurationReference = {
-  readonly dockerOverride: ShellLaunchArgument | false;
-  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
-  readonly required: boolean;
-  readonly specifier: string;
-};
-type PendingConfiguration = {
-  readonly dockerOverride: ShellLaunchArgument | false;
-  readonly importer: string;
-  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
-};
-type ApplicationConsumerEdge = {
-  readonly dependency: string;
-  readonly importer: string;
-};
-type RepositoryPackageDocument = {
-  readonly dependencies?: Readonly<Record<string, string>>;
-  readonly devDependencies?: Readonly<Record<string, string>>;
-  readonly name?: string;
-  readonly optionalDependencies?: Readonly<Record<string, string>>;
-};
+import type {
+  ActionDependencyResolution,
+  ActionLoaderFixture,
+  ActionRuntimeGraph,
+  ActionTranspilerOptions,
+  ApplicationConsumerEdge,
+  ConfigurationReference,
+  GitHubActionDocument,
+  PendingConfiguration,
+  RepositoryPackageDocument,
+} from './skill-provider-config-types.ts';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const PROVIDER_ROOT =
@@ -95,6 +56,10 @@ const ACTION_SOURCE_SUFFIXES = [
 ] as const;
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
+const MAX_GRAPH_STATES = 4_096;
+const MAX_GRAPH_DEPTH = 32;
+const MAX_GRAPH_STATE_BYTES = 65_536;
+const MAX_GRAPH_ARGUMENTS = 256;
 
 function isRunnableConfiguration(path: string): boolean {
   return (
@@ -139,13 +104,14 @@ function actionSourceRequiresContent(path: string): boolean {
   );
 }
 
-function configurationScriptPaths(
+export function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
   const pending: PendingConfiguration[] = graph.roots.map((importer) => ({
     dockerOverride: false,
     importer,
     positionalArguments: false,
+    depth: 0,
   }));
   const visited = new Set<string>();
   const scripts = new Set<string>();
@@ -154,9 +120,18 @@ function configurationScriptPaths(
     if (!next) continue;
     const importer = next.importer;
     const override = next.dockerOverride;
+    if (next.depth > MAX_GRAPH_DEPTH || visited.size >= MAX_GRAPH_STATES)
+      throw new Error('Runnable configuration graph exceeds its bound.');
+    if (
+      next.positionalArguments !== false &&
+      next.positionalArguments.length > MAX_GRAPH_ARGUMENTS
+    )
+      throw new Error('Runnable configuration arguments exceed their bound.');
     const overrideKey =
       override === false ? false : [override.dynamic, override.value];
     const visitKey = `${importer}\0${JSON.stringify([next.positionalArguments, overrideKey])}`;
+    if (new TextEncoder().encode(visitKey).byteLength > MAX_GRAPH_STATE_BYTES)
+      throw new Error('Runnable configuration state exceeds its byte bound.');
     if (visited.has(visitKey)) continue;
     visited.add(visitKey);
     const source = graph.sources.get(importer);
@@ -165,6 +140,21 @@ function configurationScriptPaths(
     }
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
+    }
+    for (const seam of AUDITED_SOURCE_SEAMS.filter(
+      (candidate) => candidate.sourcePath === importer,
+    )) {
+      if (!source.includes(seam.marker))
+        throw new Error(`Audited source seam is absent: ${importer}`);
+      if (seam.targetPath === false || seam.digest === false) continue;
+      const target = graph.sources.get(seam.targetPath) ?? '';
+      const digest = new Bun.CryptoHasher('sha256')
+        .update(target)
+        .digest('hex');
+      if (digest !== seam.digest)
+        throw new Error(
+          `Audited source helper has drifted: ${seam.targetPath}`,
+        );
     }
     const referenceInspection: ConfigurationReferenceInspection = {
       importer,
@@ -261,6 +251,7 @@ function configurationScriptPaths(
           dockerOverride: reference.dockerOverride,
           importer: dependency,
           positionalArguments: reference.positionalArguments,
+          depth: next.depth + 1,
         };
         pending.push(pendingConfiguration);
       }
@@ -347,7 +338,9 @@ function configurationScriptReferences(
   return [...imports, ...launches];
 }
 
-function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
+export function actionRuntimePaths(
+  graph: ActionRuntimeGraph,
+): readonly string[] {
   const pending = [...graph.roots];
   const pendingSources: string[] = [];
   const visited = new Set<string>();
@@ -364,6 +357,7 @@ function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
     if (typeof source !== 'string') {
       throw new Error(`Tracked action manifest is unreadable: ${manifestPath}`);
     }
+    assertRunnableConfigurationBytes(source);
     const document = Bun.YAML.parse(source) as GitHubActionDocument;
     const runs = document?.runs;
     if (!runs || typeof runs.using !== 'string') {
@@ -489,6 +483,7 @@ function isRepositoryBackedActionSpecifier(
     : (segments[0] ?? '');
   for (const [path, source] of resolution.sources) {
     if (!path.endsWith('package.json') || source.length === 0) continue;
+    assertRunnableConfigurationBytes(source);
     let document: RepositoryPackageDocument;
     try {
       document = JSON.parse(source) as RepositoryPackageDocument;

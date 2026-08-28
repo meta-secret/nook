@@ -95,6 +95,7 @@ export type ShellParseState = {
   readonly functions: Map<string, string>;
   readonly launches: ShellScriptLaunch[];
   positionalArguments: readonly ShellWord[] | false;
+  readonly sourcePath: string | false;
 };
 
 export type RuntimeExecutable = {
