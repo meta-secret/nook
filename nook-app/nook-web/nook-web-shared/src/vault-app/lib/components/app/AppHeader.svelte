@@ -55,13 +55,15 @@
     onOpenDevicesAccess: () => void
   } = $props()
 
-  const workspaceHeaderActionsVisible = $derived(
+  const authenticatedSessionControlsVisible = $derived(
     vault.isAuthenticated &&
-      workspaceAccessAvailable &&
       !vault.helpOpen &&
       !legalPageOpen &&
       !logsPage &&
       !extensionConnectRoute,
+  )
+  const devicesAccessVisible = $derived(
+    authenticatedSessionControlsVisible && workspaceAccessAvailable,
   )
   let mobileToolsOpen = $state(false)
   let mobileToolsRoot = $state<HTMLDivElement>()
@@ -115,22 +117,24 @@
     </div>
 
     <div class="flex shrink-0 items-center gap-2">
-      {#if workspaceHeaderActionsVisible}
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
-          data-testid="header-devices-access-btn"
-          title={vault.t(I18N_KEYS.DevicesAccessTitle)}
-          disabled={vault.isVerifying || vault.isInitializing}
-          onclick={onOpenDevicesAccess}
-        >
-          <KeyRound class="size-4" />
-          <span class="hidden lg:inline"
-            >{vault.t(I18N_KEYS.DevicesAccessTitle)}</span
+      {#if authenticatedSessionControlsVisible}
+        {#if devicesAccessVisible}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+            data-testid="header-devices-access-btn"
+            title={vault.t(I18N_KEYS.DevicesAccessTitle)}
+            disabled={vault.isVerifying || vault.isInitializing}
+            onclick={onOpenDevicesAccess}
           >
-        </Button>
+            <KeyRound class="size-4" />
+            <span class="hidden lg:inline"
+              >{vault.t(I18N_KEYS.DevicesAccessTitle)}</span
+            >
+          </Button>
+        {/if}
         <Button
           type="button"
           variant="outline"
@@ -229,7 +233,11 @@
         </div>
       {/if}
 
-      <div class={workspaceHeaderActionsVisible ? 'hidden sm:block' : 'block'}>
+      <div
+        class={authenticatedSessionControlsVisible
+          ? 'hidden sm:block'
+          : 'block'}
+      >
         <HeaderLanguageSelect {vault} />
       </div>
 
@@ -246,7 +254,7 @@
 
       <button
         type="button"
-        class="size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {workspaceHeaderActionsVisible
+        class="size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {authenticatedSessionControlsVisible
           ? 'hidden sm:inline-flex'
           : 'inline-flex'}"
         aria-label={colorMode === ColorMode.Dark

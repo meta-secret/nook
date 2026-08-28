@@ -198,6 +198,16 @@ test.describe('persistent workspace routing', () => {
       page.getByTestId('sentinel-genesis-participant-step'),
     ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
     await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+    await expect(page.getByTestId('header-lock-vault-btn')).toBeVisible()
+    await expect(page.getByTestId('header-lock-vault-btn')).toBeEnabled()
+
+    await page.setViewportSize({ width: 320, height: 780 })
+    await expect(page.getByTestId('header-mobile-tools-btn')).toBeVisible()
+    await page.getByTestId('header-mobile-tools-btn').click()
+    await expect(page.getByTestId('header-mobile-lock-vault-btn')).toBeVisible()
+    await expect(page.getByTestId('header-mobile-lock-vault-btn')).toBeEnabled()
+    await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+    await page.keyboard.press('Escape')
 
     await page.evaluate(() => {
       window.dispatchEvent(new PopStateEvent('popstate'))
