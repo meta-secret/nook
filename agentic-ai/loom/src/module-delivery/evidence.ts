@@ -11,7 +11,10 @@ import {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryProviderSubmissionKind,
+  assertAcceptedModuleDeliveryEvidence,
+  moduleDeliveryAcceptedEvidenceIdentity,
   moduleDeliveryEvidenceSha256,
+  registerAcceptedModuleDeliveryEvidence,
 } from './integration-provenance.ts';
 
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
@@ -30,6 +33,7 @@ import type { GitCommandRequest } from './git-command.ts';
 import type {
   AcceptedModuleDeliveryEvidence,
   AcceptedModuleDeliveryEvidenceInspection,
+  AcceptedModuleDeliveryEvidenceRegistration,
   ModuleDeliveryReadOnlyEvidenceSubmission,
 } from './integration-provenance.ts';
 
@@ -61,6 +65,7 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
   functionalOwner: TeamKey;
   acceptanceOwner: TeamKey;
   sourceCommit: string;
+  verifiedHeadCommit: string;
   artifactIdentity: string;
   artifactDigest: string;
   sourceProvenanceDigest: string;
@@ -129,16 +134,14 @@ type AuthorizedIdentitiesRequest = {
 type FreezeAcceptedEvidenceRequest = {
   readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
   readonly provenance: string;
+  readonly verificationHeadCommit: string;
 };
 type EvidenceNodeRequest = {
   readonly plan: ValidatedModuleDeliveryPlan;
   readonly taskId: string;
 };
 
-const acceptedEvidenceAuthorities = new WeakMap<
-  AcceptedModuleDeliveryEvidence,
-  ModuleDeliveryGenerationAuthority
->();
+const acceptedEvidenceLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const COMMIT = /^[0-9a-f]{40}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 
@@ -221,6 +224,13 @@ export function verifyModuleDeliveryEvidenceSubmission(
   };
   const authorized = authorizedIdentities(identitiesRequest);
   if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
+    if (
+      JSON.stringify(authorized) !==
+      JSON.stringify(verification.lease.authorizedProviderEvidence)
+    )
+      throw new Error(
+        `Evidence synthesis inputs are invalid for ${node.taskId}.`,
+      );
     const synthesisRequest: SynthesisInputsRequest = {
       node,
       submission: verification.submission,
@@ -252,45 +262,16 @@ export function verifyModuleDeliveryEvidenceSubmission(
   const freezeRequest: FreezeAcceptedEvidenceRequest = {
     submission: verification.submission,
     provenance: sourceProvenanceDigest(verification.submission),
+    verificationHeadCommit: verification.state.headCommit,
   };
   const accepted = freezeAcceptedEvidence(freezeRequest);
-  acceptedEvidenceAuthorities.set(accepted, verification.authority);
-  return accepted;
-}
-
-export function assertAcceptedModuleDeliveryEvidence(
-  inspection: AcceptedModuleDeliveryEvidenceInspection,
-): void {
-  if (
-    acceptedEvidenceAuthorities.get(inspection.evidence) !==
-    inspection.authority
-  )
-    throw new Error('Accepted module delivery evidence authority is invalid.');
-}
-
-export function moduleDeliveryAcceptedEvidenceIdentity(
-  evidence: AcceptedModuleDeliveryEvidence,
-): ModuleDeliveryAcceptedProviderEvidenceIdentity {
-  if (!acceptedEvidenceAuthorities.has(evidence))
-    throw new Error('Accepted module delivery evidence is forged.');
-  const identity: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
-    schemaVersion: evidence.schemaVersion,
-    generation: evidence.generation,
-    planDigest: evidence.planDigest,
-    taskId: evidence.taskId,
-    attempt: evidence.attempt,
-    producerTeam: evidence.producerTeam,
-    functionalOwner: evidence.functionalOwner,
-    acceptanceOwner: evidence.acceptanceOwner,
-    sourceCommit: evidence.sourceCommit,
-    artifactIdentity: evidence.artifactIdentity,
-    artifactDigest: evidence.artifactDigest,
-    sourceProvenanceDigest: evidence.sourceProvenanceDigest,
-    verdict: evidence.verdict,
-    claimIdentities: frozenClaims(evidence.claimIdentities),
-    acceptanceRequirements: Object.freeze([...evidence.acceptanceRequirements]),
+  const registration: AcceptedModuleDeliveryEvidenceRegistration = {
+    authority: verification.authority,
+    evidence: accepted,
   };
-  return Object.freeze(identity);
+  registerAcceptedModuleDeliveryEvidence(registration);
+  acceptedEvidenceLeases.add(verification.lease);
+  return accepted;
 }
 
 function assertSubmissionMetadata(request: SubmissionMetadataRequest): void {
@@ -298,6 +279,7 @@ function assertSubmissionMetadata(request: SubmissionMetadataRequest): void {
   const lease = request.verification.lease;
   const node = request.node;
   if (
+    acceptedEvidenceLeases.has(lease) ||
     node.kind === ModuleDeliveryTaskKind.Write ||
     submission.kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence ||
     submission.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION ||
@@ -448,6 +430,7 @@ function freezeAcceptedEvidence(
     ),
     evidence: Object.freeze([...submission.evidence]),
     sourceProvenanceDigest: request.provenance,
+    verifiedHeadCommit: request.verificationHeadCommit,
   };
   return Object.freeze(accepted);
 }

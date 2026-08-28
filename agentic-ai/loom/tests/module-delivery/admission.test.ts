@@ -216,7 +216,7 @@ function lease(request: LeaseRequest): ModuleDeliveryAttemptLease {
 }
 
 describe('module delivery admission authority', () => {
-  test('selects the deterministic maximal safe set and requires exact integrated frontiers', () => {
+  test('selects the maximal safe set and rejects unproven writer frontiers', () => {
     const active = defaultRuntime();
     const first = select(active);
     expect(first.status).toBe(ModuleDeliveryAdmissionSelectionStatus.Selected);
@@ -235,56 +235,32 @@ describe('module delivery admission authority', () => {
         Object.isFrozen(resources.read),
       ),
     ).toBe(true);
-    const alphaAdmission = first.admissions.find(
-      ({ taskId }) => taskId === 'alpha',
-    );
-    if (!alphaAdmission) throw new Error('Alpha admission is missing.');
-    const alphaLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
-      authority: active.authority,
-      state: active.state,
-      admissions: [alphaAdmission],
-    };
-    const alphaLease =
-      recordModuleDeliveryAttemptLeases(alphaLeaseRequest).leases[0];
-    if (!alphaLease) throw new Error('Alpha lease is missing.');
-
+    const forgedFrontier = {
+      taskId: 'alpha',
+      attempt: 1,
+      generation: 1,
+      planDigest: active.accepted.planDigest,
+      headCommit: INTEGRATED,
+      integratedTaskIds: ['alpha'],
+    } as never;
+    const unrelatedFrontier = {
+      taskId: 'beta',
+      attempt: 1,
+      generation: 1,
+      planDigest: active.accepted.planDigest,
+      headCommit: 'f'.repeat(40),
+      integratedTaskIds: ['beta'],
+    } as never;
     const advancedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       headCommit: INTEGRATED,
-      integratedWriterFrontiers: [{ taskId: 'alpha', headCommit: INTEGRATED }],
-      acceptedEvidence: [],
-    };
-    const advancedState =
-      createModuleDeliveryAdmissionState(advancedStateRequest);
-    expect(() => select(active)).toThrow('stale');
-    const acceptedDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: advancedState,
-        lease: alphaLease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-        },
-      };
-    recordModuleDeliveryAttemptDisposition(acceptedDispositionRequest);
-    const advancedRuntime: Runtime = { ...active, state: advancedState };
-    const advanced = select(advancedRuntime);
-    expect(
-      advanced.admissions.find(({ taskId }) => taskId === 'consumer')
-        ?.startingFrontier,
-    ).toBe(INTEGRATED);
-    const mismatchedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-      authority: active.authority,
-      acceptedPlan: active.accepted,
-      headCommit: 'f'.repeat(40),
-      integratedWriterFrontiers: [{ taskId: 'alpha', headCommit: INTEGRATED }],
+      integratedWriterFrontiers: [forgedFrontier, unrelatedFrontier],
       acceptedEvidence: [],
     };
     expect(() =>
-      createModuleDeliveryAdmissionState(mismatchedStateRequest),
-    ).toThrow('exact integrated writer frontier');
+      createModuleDeliveryAdmissionState(advancedStateRequest),
+    ).toThrow('capability is invalid');
   });
 
   test('snapshots validated metadata and rejects forged plans and lineage', () => {
@@ -417,6 +393,17 @@ describe('module delivery admission authority', () => {
 
     const secondPlan: ModuleDeliveryPlanV2 = { ...PLAN, generation: 2 };
     const second = validate(secondPlan);
+    const forgedSecond: ValidatedModuleDeliveryPlan = { ...second, waves: [] };
+    const invalidRestartRequest: RestartModuleDeliveryGenerationRequest = {
+      authority: active.authority,
+      previousState: dispositionState,
+      acceptedPlan: forgedSecond,
+      expectedLineage: lineage(second),
+    };
+    expect(() =>
+      restartModuleDeliveryGeneration(invalidRestartRequest),
+    ).toThrow('metadata is inconsistent');
+    expect(select(retryRuntime).admissions.length).toBeGreaterThan(0);
     const restartRequest: RestartModuleDeliveryGenerationRequest = {
       authority: active.authority,
       previousState: dispositionState,

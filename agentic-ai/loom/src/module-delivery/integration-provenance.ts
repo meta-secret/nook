@@ -12,6 +12,7 @@ import type {
   ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
+import type { ValidatedModuleDeliveryPlan } from './domain.ts';
 import type {
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
@@ -50,12 +51,123 @@ export type ModuleDeliveryReadOnlyEvidenceSubmission = Readonly<{
 
 export type AcceptedModuleDeliveryEvidence =
   ModuleDeliveryReadOnlyEvidenceSubmission &
-    Readonly<{ sourceProvenanceDigest: string }>;
+    Readonly<{ sourceProvenanceDigest: string; verifiedHeadCommit: string }>;
 
 export type AcceptedModuleDeliveryEvidenceInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly evidence: AcceptedModuleDeliveryEvidence;
 };
+export type AcceptedModuleDeliveryEvidenceRegistration =
+  AcceptedModuleDeliveryEvidenceInspection;
+
+type StringSequencePair = Readonly<{
+  first: readonly string[];
+  second: readonly string[];
+}>;
+
+export type AcceptedModuleDeliveryEvidenceCollectionRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  entries: readonly AcceptedModuleDeliveryEvidence[];
+  headCommit: string;
+}>;
+
+export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
+  accepted: readonly AcceptedModuleDeliveryEvidence[];
+  identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+}>;
+
+const ACCEPTED_EVIDENCE_AUTHORITIES = new WeakMap<
+  AcceptedModuleDeliveryEvidence,
+  ModuleDeliveryGenerationAuthority
+>();
+
+function frozenEvidenceClaimIdentity(
+  claim: ModuleDeliveryEvidenceClaimIdentity,
+): ModuleDeliveryEvidenceClaimIdentity {
+  const copy: ModuleDeliveryEvidenceClaimIdentity = { ...claim };
+  return Object.freeze(copy);
+}
+
+export function registerAcceptedModuleDeliveryEvidence(
+  registration: AcceptedModuleDeliveryEvidenceRegistration,
+): void {
+  if (ACCEPTED_EVIDENCE_AUTHORITIES.has(registration.evidence))
+    throw new Error('Accepted module delivery evidence is already registered.');
+  ACCEPTED_EVIDENCE_AUTHORITIES.set(
+    registration.evidence,
+    registration.authority,
+  );
+}
+
+export function assertAcceptedModuleDeliveryEvidence(
+  inspection: AcceptedModuleDeliveryEvidenceInspection,
+): void {
+  if (
+    ACCEPTED_EVIDENCE_AUTHORITIES.get(inspection.evidence) !==
+    inspection.authority
+  )
+    throw new Error('Accepted module delivery evidence authority is invalid.');
+}
+
+export function moduleDeliveryAcceptedEvidenceIdentity(
+  evidence: AcceptedModuleDeliveryEvidence,
+): ModuleDeliveryAcceptedProviderEvidenceIdentity {
+  if (!ACCEPTED_EVIDENCE_AUTHORITIES.has(evidence))
+    throw new Error('Accepted module delivery evidence is forged.');
+  const identity: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
+    schemaVersion: evidence.schemaVersion,
+    generation: evidence.generation,
+    planDigest: evidence.planDigest,
+    taskId: evidence.taskId,
+    attempt: evidence.attempt,
+    producerTeam: evidence.producerTeam,
+    functionalOwner: evidence.functionalOwner,
+    acceptanceOwner: evidence.acceptanceOwner,
+    sourceCommit: evidence.sourceCommit,
+    verifiedHeadCommit: evidence.verifiedHeadCommit,
+    artifactIdentity: evidence.artifactIdentity,
+    artifactDigest: evidence.artifactDigest,
+    sourceProvenanceDigest: evidence.sourceProvenanceDigest,
+    verdict: evidence.verdict,
+    claimIdentities: Object.freeze(
+      evidence.claimIdentities.map(frozenEvidenceClaimIdentity),
+    ),
+    acceptanceRequirements: Object.freeze([...evidence.acceptanceRequirements]),
+  };
+  return Object.freeze(identity);
+}
+
+export function collectAcceptedModuleDeliveryEvidence(
+  request: AcceptedModuleDeliveryEvidenceCollectionRequest,
+): AcceptedModuleDeliveryEvidenceCollection {
+  const seen = new Set<string>();
+  const accepted = request.entries.map((evidence) => {
+    const inspection: AcceptedModuleDeliveryEvidenceInspection = {
+      authority: request.authority,
+      evidence,
+    };
+    assertAcceptedModuleDeliveryEvidence(inspection);
+    const identity = moduleDeliveryAcceptedEvidenceIdentity(evidence);
+    if (
+      identity.generation !== request.acceptedPlan.plan.generation ||
+      identity.planDigest !== request.acceptedPlan.planDigest ||
+      seen.has(identity.taskId) ||
+      (identity.claimIdentities.length > 0 &&
+        identity.verifiedHeadCommit !== request.headCommit)
+    )
+      throw new Error(`Accepted evidence is invalid for ${identity.taskId}.`);
+    seen.add(identity.taskId);
+    return evidence;
+  });
+  const collection: AcceptedModuleDeliveryEvidenceCollection = {
+    accepted: Object.freeze([...accepted]),
+    identities: Object.freeze(
+      accepted.map(moduleDeliveryAcceptedEvidenceIdentity),
+    ),
+  };
+  return Object.freeze(collection);
+}
 
 export function moduleDeliveryEvidenceSha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -109,6 +221,31 @@ export type IntegrationStateRegistration = {
   readonly session: ModuleIntegrationSession;
 };
 
+const INTEGRATED_WRITER_FRONTIER_CAPABILITY = Symbol(
+  'module-delivery-integrated-writer-frontier-capability',
+);
+
+export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
+  [INTEGRATED_WRITER_FRONTIER_CAPABILITY]: true;
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  headCommit: string;
+  integratedTaskIds: readonly string[];
+}>;
+
+export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
+  Readonly<{
+    capability: ModuleDeliveryIntegratedWriterFrontierCapability;
+    taskId: string;
+    attempt: number;
+    generation: number;
+    planDigest: string;
+    headCommit: string;
+    integratedTaskIds: readonly string[];
+  }>;
+
 type ModuleGitInvocation = {
   readonly cwd: string;
   readonly args: readonly string[];
@@ -158,6 +295,10 @@ const SESSIONS = new WeakMap<
   ModuleIntegrationSession
 >();
 const RETIRED_STATES = new WeakSet<ModuleIntegrationState>();
+const INTEGRATED_WRITER_FRONTIER_CAPABILITIES = new WeakMap<
+  ModuleDeliveryIntegratedWriterFrontierCapability,
+  ModuleIntegrationState
+>();
 
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
   if ('allowFailure' in invocation) {
@@ -470,6 +611,47 @@ export function integrationProvenance(
     throw new Error('Module integration state lacks private provenance.');
   }
   return provenance;
+}
+
+function sameStrings(pair: StringSequencePair): boolean {
+  if (pair.first.length !== pair.second.length) return false;
+  for (let index = 0; index < pair.first.length; index += 1) {
+    if (pair.first[index] !== pair.second[index]) return false;
+  }
+  return true;
+}
+
+export function assertModuleDeliveryIntegratedWriterFrontierCapability(
+  request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
+): void {
+  const capability = request.capability;
+  const state = INTEGRATED_WRITER_FRONTIER_CAPABILITIES.get(capability);
+  if (!state)
+    throw new Error('Integrated writer frontier capability is invalid.');
+  const provenance = integrationProvenance(state);
+  const taskIds: StringSequencePair = {
+    first: capability.integratedTaskIds,
+    second: request.integratedTaskIds,
+  };
+  const stateTaskIds: StringSequencePair = {
+    first: capability.integratedTaskIds,
+    second: state.integratedTaskIds,
+  };
+  if (
+    capability[INTEGRATED_WRITER_FRONTIER_CAPABILITY] !== true ||
+    capability.taskId !== request.taskId ||
+    capability.attempt !== request.attempt ||
+    capability.generation !== request.generation ||
+    capability.planDigest !== request.planDigest ||
+    capability.headCommit !== request.headCommit ||
+    !sameStrings(taskIds) ||
+    !sameStrings(stateTaskIds) ||
+    provenance.planDigest !== capability.planDigest ||
+    provenance.headCommit !== capability.headCommit ||
+    state.planDigest !== capability.planDigest ||
+    state.headCommit !== capability.headCommit
+  )
+    throw new Error('Integrated writer frontier capability is invalid.');
 }
 
 export function retireIntegrationState(state: ModuleIntegrationState): void {

@@ -54,6 +54,7 @@ import type {
 import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
+const WEB_ROOT = 'nook-app/nook-web/nook-web-app';
 
 type Runtime = {
   readonly fixture: GitFixture;
@@ -61,6 +62,7 @@ type Runtime = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
   readonly provider: ModuleDeliveryReadOnlyNodeV2;
+  readonly providerB: ModuleDeliveryReadOnlyNodeV2;
   readonly synthesis: ModuleDeliveryEvidenceSynthesisNodeV2;
 };
 
@@ -135,6 +137,18 @@ function runtime(): Runtime {
       evidence: ['Core evidence is complete.'],
     },
   };
+  const providerB: ModuleDeliveryReadOnlyNodeV2 = {
+    ...provider,
+    taskId: 'web-evidence',
+    team: TeamKey.WebDevelopment,
+    expert: 'web_expert',
+    moduleRoot: WEB_ROOT,
+    resources: { read: [WEB_ROOT], write: [], evidenceSurface: [WEB_ROOT] },
+    acceptance: {
+      commands: ['task web:evidence'],
+      evidence: ['Web evidence is complete.'],
+    },
+  };
   const synthesis: ModuleDeliveryEvidenceSynthesisNodeV2 = {
     kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
     taskId: 'evidence-synthesis',
@@ -147,10 +161,10 @@ function runtime(): Runtime {
     consumerOutcome: 'Accepted provider evidence is synthesized.',
     baseline: {
       kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
-      providerTaskIds: [provider.taskId],
+      providerTaskIds: [provider.taskId, providerB.taskId],
     },
     agentDepthLimit: 2,
-    dependencies: [provider.taskId],
+    dependencies: [provider.taskId, providerB.taskId],
     resources: { read: [], write: [], evidenceSurface: [] },
     parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
     acceptance: {
@@ -166,11 +180,21 @@ function runtime(): Runtime {
           functionalOwner: provider.functionalOwner,
           acceptanceOwner: provider.acceptanceOwner,
         },
+        {
+          taskId: providerB.taskId,
+          team: providerB.team,
+          functionalOwner: providerB.functionalOwner,
+          acceptanceOwner: providerB.acceptanceOwner,
+        },
       ],
     },
   };
   const edgeRequest: EvidenceEdgeRequest = {
     providerTaskId: provider.taskId,
+    consumerTaskId: synthesis.taskId,
+  };
+  const edgeBRequest: EvidenceEdgeRequest = {
+    providerTaskId: providerB.taskId,
     consumerTaskId: synthesis.taskId,
   };
   const plan: ModuleDeliveryPlanV2 = {
@@ -186,8 +210,8 @@ function runtime(): Runtime {
       owner: 'delivery-owner',
       validationCommands: ['task loom:verify'],
     },
-    nodes: [synthesis, provider],
-    edgeContracts: [edge(edgeRequest)],
+    nodes: [synthesis, providerB, provider],
+    edgeContracts: [edge(edgeRequest), edge(edgeBRequest)],
   };
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
@@ -208,7 +232,15 @@ function runtime(): Runtime {
     acceptedEvidence: [],
   };
   const state = createModuleDeliveryAdmissionState(stateRequest);
-  return { fixture, accepted: result, authority, state, provider, synthesis };
+  return {
+    fixture,
+    accepted: result,
+    authority,
+    state,
+    provider,
+    providerB,
+    synthesis,
+  };
 }
 
 function admittedLease(
@@ -382,8 +414,15 @@ test('accepts exact repository evidence and releases its lease only after accept
     };
     const synthesis = selectModuleDeliveryAdmissions(synthesisSelectionRequest);
     expect(synthesis.admissions.map(({ taskId }) => taskId)).toEqual([
-      active.synthesis.taskId,
+      active.providerB.taskId,
     ]);
+    const advancedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      ...evidenceStateRequest,
+      headCommit: 'f'.repeat(40),
+    };
+    expect(() =>
+      createModuleDeliveryAdmissionState(advancedStateRequest),
+    ).toThrow('Accepted evidence is invalid');
   } finally {
     disposeGitFixture(active.fixture);
   }
@@ -434,6 +473,7 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
     const forgedEvidence: AcceptedModuleDeliveryEvidence = {
       ...exact,
       sourceProvenanceDigest: 'f'.repeat(64),
+      verifiedHeadCommit: active.fixture.baselineCommit,
     };
     const forgedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
@@ -532,7 +572,43 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
         },
       };
     recordModuleDeliveryAttemptDisposition(providerDispositionRequest);
-    const synthesisRuntime: Runtime = { ...active, state: evidenceState };
+    const providerRuntime: Runtime = { ...active, state: evidenceState };
+    const providerBLeaseRequest: AdmittedLeaseRequest = {
+      runtime: providerRuntime,
+      taskId: active.providerB.taskId,
+    };
+    const providerBLease = admittedLease(providerBLeaseRequest);
+    const providerBSubmissionRequest: EvidenceSubmissionRequest = {
+      runtime: providerRuntime,
+      lease: providerBLease,
+      acceptedProviderEvidence: [],
+    };
+    const providerBVerificationRequest: EvidenceVerificationRequest = {
+      ...providerBSubmissionRequest,
+      candidate: submission(providerBSubmissionRequest),
+    };
+    const providerBEvidence = verify(providerBVerificationRequest);
+    const completeStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      headCommit: active.fixture.baselineCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [providerEvidence, providerBEvidence],
+    };
+    const completeState =
+      createModuleDeliveryAdmissionState(completeStateRequest);
+    const providerBDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
+        authority: active.authority,
+        state: completeState,
+        lease: providerBLease,
+        outcome: {
+          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+        },
+      };
+    recordModuleDeliveryAttemptDisposition(providerBDispositionRequest);
+    const synthesisRuntime: Runtime = { ...active, state: completeState };
     const synthesisLeaseRequest: AdmittedLeaseRequest = {
       runtime: synthesisRuntime,
       taskId: active.synthesis.taskId,
@@ -541,16 +617,12 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const synthesisSubmissionRequest: EvidenceSubmissionRequest = {
       runtime: synthesisRuntime,
       lease: synthesisLease,
-      acceptedProviderEvidence: [providerEvidence],
+      acceptedProviderEvidence: [providerEvidence, providerBEvidence],
     };
+    expect(synthesisLease.resources.read).toEqual([]);
+    expect(synthesisLease.resources.write).toEqual([]);
+    expect(synthesisLease.resources.evidenceSurface).toEqual([]);
     const exact = submission(synthesisSubmissionRequest);
-    const synthesisVerificationRequest: EvidenceVerificationRequest = {
-      ...synthesisSubmissionRequest,
-      candidate: exact,
-    };
-    expect(verify(synthesisVerificationRequest).taskId).toBe(
-      active.synthesis.taskId,
-    );
     const missingInputsVerificationRequest: EvidenceVerificationRequest = {
       runtime: synthesisRuntime,
       lease: synthesisLease,
@@ -558,6 +630,17 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       acceptedProviderEvidence: [],
     };
     expect(() => verify(missingInputsVerificationRequest)).toThrow(
+      'synthesis inputs',
+    );
+    const reversedSubmissionRequest: EvidenceSubmissionRequest = {
+      ...synthesisSubmissionRequest,
+      acceptedProviderEvidence: [providerBEvidence, providerEvidence],
+    };
+    const reversedVerificationRequest: EvidenceVerificationRequest = {
+      ...reversedSubmissionRequest,
+      candidate: submission(reversedSubmissionRequest),
+    };
+    expect(() => verify(reversedVerificationRequest)).toThrow(
       'synthesis inputs',
     );
     const forgedIdentity = exact.acceptedProviderEvidence.map((identity) => ({
@@ -570,6 +653,16 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       candidate: forged,
     };
     expect(() => verify(forgedVerificationRequest)).toThrow('synthesis inputs');
+    const synthesisVerificationRequest: EvidenceVerificationRequest = {
+      ...synthesisSubmissionRequest,
+      candidate: exact,
+    };
+    expect(verify(synthesisVerificationRequest).taskId).toBe(
+      active.synthesis.taskId,
+    );
+    expect(() => verify(synthesisVerificationRequest)).toThrow(
+      'metadata is invalid',
+    );
   } finally {
     disposeGitFixture(active.fixture);
   }
