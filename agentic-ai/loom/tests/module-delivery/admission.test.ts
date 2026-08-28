@@ -111,6 +111,11 @@ const betaRequest: WriteNodeRequest = {
   dependencies: [],
   path: 'beta',
 };
+const gammaRequest: WriteNodeRequest = {
+  taskId: 'gamma',
+  dependencies: [],
+  path: 'gamma',
+};
 const consumerRequest: WriteNodeRequest = {
   taskId: 'consumer',
   dependencies: ['alpha'],
@@ -118,6 +123,7 @@ const consumerRequest: WriteNodeRequest = {
 };
 const alpha = writeNode(alphaRequest);
 const beta = writeNode(betaRequest);
+const gamma = writeNode(gammaRequest);
 const consumer = writeNode(consumerRequest);
 const edge: ModuleDeliveryEdgeContract = {
   providerTaskId: 'alpha',
@@ -143,7 +149,7 @@ const PLAN: ModuleDeliveryPlanV2 = {
     owner: 'delivery-owner',
     validationCommands: ['task loom:verify'],
   },
-  nodes: [consumer, beta, alpha],
+  nodes: [consumer, gamma, beta, alpha],
   edgeContracts: [edge],
 };
 
@@ -311,9 +317,7 @@ describe('module delivery admission authority', () => {
       ).toThrow('source commit is not authenticated');
     }
 
-    const wrongLineage: readonly ModuleDeliveryExpectedLineage[] = lineage(
-      validate(PLAN),
-    ).map(({ taskId }) => ({
+    const wrongLineage = lineage(validate(PLAN)).map(({ taskId }) => ({
       taskId,
       parentLineage: {
         kind: AgentAttemptParentKind.AgentAttempt,
@@ -363,7 +367,11 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and reports exhausted closure', () => {
-    const active = runtime(validate(PLAN));
+    const exhaustionPlan: ModuleDeliveryPlanV2 = {
+      ...PLAN,
+      maxConcurrency: 1,
+    };
+    const active = runtime(validate(exhaustionPlan));
     const firstLeaseRequest: LeaseRequest = {
       runtime: active,
       taskId: 'alpha',
@@ -401,15 +409,18 @@ describe('module delivery admission authority', () => {
       state: exhaustedState,
     };
     const exhaustedSelection = select(exhaustedRuntime);
-    expect(exhaustedSelection.status).toBe(
-      ModuleDeliveryAdmissionSelectionStatus.Selected,
-    );
-    expect(
-      exhaustedSelection.admissions.map(
-        ({ taskId, attempt }) => `${taskId}:${attempt}`,
-      ),
-    ).toEqual(['beta:1']);
+    const selected = ModuleDeliveryAdmissionSelectionStatus.Selected;
+    expect(exhaustedSelection.status).toBe(selected);
     expect(exhaustedSelection.blockedTaskIds).toEqual(['alpha', 'consumer']);
+    const betaLeaseRequest: LeaseRequest = {
+      runtime: exhaustedRuntime,
+      taskId: 'beta',
+    };
+    lease(betaLeaseRequest);
+    const ongoingSelection = select(exhaustedRuntime);
+    expect(ongoingSelection.status).toBe(selected);
+    expect(ongoingSelection.admissions).toEqual([]);
+    expect(ongoingSelection.pendingTaskIds).toEqual(['gamma']);
   });
 });
 

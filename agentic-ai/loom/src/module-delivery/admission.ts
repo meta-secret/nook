@@ -546,7 +546,10 @@ export function selectModuleDeliveryAdmissions(
   }
   const selectionRequest = {
     status:
-      admissions.length > 0 || blockedTaskIds.length === 0
+      admissions.length > 0 ||
+      authority.activeLeases.size > 0 ||
+      pendingTaskIds.length > 0 ||
+      blockedTaskIds.length === 0
         ? ModuleDeliveryAdmissionSelectionStatus.Selected
         : ModuleDeliveryAdmissionSelectionStatus.Blocked,
     admissions,

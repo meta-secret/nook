@@ -4,47 +4,28 @@ export {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
-  assertAcceptedModuleDeliveryEvidence,
-  assertModuleDeliveryAdmissionStateAuthority,
-  assertModuleDeliveryAttemptLeaseAuthority,
-  assertModuleDeliveryGenerationAuthority,
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
-  moduleDeliveryAcceptedEvidenceIdentity,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
   selectModuleDeliveryAdmissions,
   verifyModuleDeliveryEvidenceSubmission,
 } from './admission.ts';
 export type {
-  AdmissionStateAuthorityInspection,
-  AttemptLeaseAuthorityInspection,
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
-  GenerationAuthorityInspection,
-  ModuleDeliveryAdmission,
-  ModuleDeliveryAdmissionSelection,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryAttemptLease,
-  ModuleDeliveryAuthorityPlanRequest,
-  ModuleDeliveryDispositionOutcome,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryLeaseRecording,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
   SelectModuleDeliveryAdmissionsRequest,
 } from './admission.ts';
-export {
-  moduleDeliveryEvidenceArtifactDigest,
-  moduleDeliveryEvidenceClaimIdentities,
-} from './evidence.ts';
+export { moduleDeliveryEvidenceArtifactDigest } from './evidence.ts';
 export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceArtifactDigestRequest,
-  ModuleDeliveryEvidenceClaimIdentity,
-  ModuleDeliveryEvidenceDigestRequest,
-  ModuleDeliveryEvidenceSubmissionVerification,
 } from './evidence.ts';
 export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
@@ -58,7 +39,6 @@ export type {
   ModuleDeliveryIntegratedWriterFrontierCapability,
   ModuleDeliveryReadOnlyEvidenceSubmission,
 } from './integration-provenance.ts';
-export type { AcceptedModuleDeliveryEvidenceInspection } from './authority.ts';
 export { cleanupModuleWorktree, prepareModuleWorktree } from './workspace.ts';
 export { verifyModuleCommitHandoff } from './handoff.ts';
 export {

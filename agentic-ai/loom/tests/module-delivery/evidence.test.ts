@@ -17,9 +17,7 @@ import {
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
-  moduleDeliveryAcceptedEvidenceIdentity,
   moduleDeliveryEvidenceArtifactDigest,
-  moduleDeliveryEvidenceClaimIdentities,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
   selectModuleDeliveryAdmissions,
@@ -39,9 +37,7 @@ import type {
   ModuleDeliveryAttemptLease,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryEvidenceArtifactDigestRequest,
-  ModuleDeliveryEvidenceDigestRequest,
   ModuleDeliveryEvidenceSynthesisNodeV2,
-  ModuleDeliveryEvidenceSubmissionVerification,
   ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV2,
   ModuleDeliveryReadOnlyEvidenceSubmission,
@@ -51,6 +47,12 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
+import { moduleDeliveryAcceptedEvidenceIdentity } from '../../src/module-delivery/admission.ts';
+import { moduleDeliveryEvidenceClaimIdentities } from '../../src/module-delivery/evidence.ts';
+import type {
+  ModuleDeliveryEvidenceDigestRequest,
+  ModuleDeliveryEvidenceSubmissionVerification,
+} from '../../src/module-delivery/evidence.ts';
 import type { AcceptedModuleDeliveryEvidenceRegistration } from '../../src/module-delivery/authority.ts';
 import type { GitFixture } from './worktree-test-support.ts';
 
@@ -562,20 +564,23 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const stored = synthesisEvidence.acceptedProviderEvidence[0];
     if (!retained || !nested || !stored)
       throw new Error('Nested synthesis evidence is missing.');
-    const carryRegistry =
+    const registry =
       evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
-    retained.acceptedProviderEvidence = Array(129).fill(nested);
-    expect(() =>
-      evidenceAuthority.freezeProviderEvidenceIdentity(retained),
-    ).toThrow('ancestry is too large');
-    retained.acceptedProviderEvidence = [retained];
-    const cyclicArtifactRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
+    const artifact = {
       ...exact,
-      acceptedProviderEvidence: [retained],
+      acceptedProviderEvidence: Array(129).fill(nested),
     };
-    expect(() =>
-      moduleDeliveryEvidenceArtifactDigest(cyclicArtifactRequest),
-    ).toThrow('ancestry is cyclic');
+    const digest = moduleDeliveryEvidenceArtifactDigest;
+    expect(() => digest(artifact)).toThrow('ancestry is too large');
+    const aggregateRoot = structuredClone(retained);
+    aggregateRoot.acceptedProviderEvidence = Array(127)
+      .fill(nested)
+      .map((identity) => structuredClone(identity));
+    artifact.acceptedProviderEvidence = [aggregateRoot, nested];
+    expect(() => digest(artifact)).toThrow('ancestry is too large');
+    retained.acceptedProviderEvidence = [retained];
+    artifact.acceptedProviderEvidence = [retained];
+    expect(() => digest(artifact)).toThrow('ancestry is cyclic');
     const cyclicEvidence = {
       ...synthesisEvidence,
       acceptedProviderEvidence: [retained],
@@ -585,11 +590,10 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       evidence: cyclicEvidence,
       integratedTaskIds: [],
     };
-    expect(() => carryRegistry.register(cyclicRegistration)).toThrow(
+    expect(() => registry.register(cyclicRegistration)).toThrow(
       'ancestry is cyclic',
     );
-    retained.acceptedProviderEvidence = [];
-    retained.acceptedProviderEvidence.push(nested);
+    retained.acceptedProviderEvidence = [nested];
     expect(stored).not.toEqual(retained);
     for (const evidence of [
       providerEvidence,
@@ -601,7 +605,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
         evidence,
         integratedTaskIds: ['writer-a'],
       };
-      carryRegistry.register(registration);
+      registry.register(registration);
     }
     const authorityBRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
       acceptedPlan: active.accepted,
@@ -619,7 +623,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       evidence: evidenceB,
       integratedTaskIds: [],
     };
-    carryRegistry.register(registrationB);
+    registry.register(registrationB);
     const conflictingEvidence = structuredClone(providerEvidence);
     const conflictingRegistration: AcceptedModuleDeliveryEvidenceRegistration =
       {
@@ -627,7 +631,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
         authority: active.authority,
         evidence: conflictingEvidence,
       };
-    expect(() => carryRegistry.register(conflictingRegistration)).toThrow(
+    expect(() => registry.register(conflictingRegistration)).toThrow(
       'integration closure is inconsistent',
     );
     const disjointRequest = {
@@ -640,7 +644,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
         { taskId: 'writer-b', claims: ['agentic-ai/**'] },
       ],
     };
-    expect(carryRegistry.collect(disjointRequest).accepted).toEqual([
+    expect(registry.collect(disjointRequest).accepted).toEqual([
       synthesisEvidence,
     ]);
     const overlappingRequest = {
@@ -650,7 +654,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
         { taskId: 'writer-c', claims: [`${CORE_ROOT}/**`] },
       ],
     };
-    expect(() => carryRegistry.collect(overlappingRequest)).toThrow(
+    expect(() => registry.collect(overlappingRequest)).toThrow(
       'Accepted evidence is invalid',
     );
   } finally {

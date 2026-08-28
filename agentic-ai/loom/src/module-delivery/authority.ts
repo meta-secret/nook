@@ -43,7 +43,6 @@ export type AcceptedModuleDeliveryEvidenceCollectionRequest = Readonly<{
   headCommit: string;
   integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
 }>;
-
 export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
   accepted: readonly AcceptedModuleDeliveryEvidence[];
   identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
@@ -58,7 +57,6 @@ export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
     request: AcceptedModuleDeliveryEvidenceCollectionRequest,
   ) => AcceptedModuleDeliveryEvidenceCollection;
 }>;
-
 type EvidenceFreshnessRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity;
@@ -75,12 +73,10 @@ export type ResourceConflictRequest = {
   readonly first: ModuleDeliveryResourceClaims;
   readonly second: ModuleDeliveryResourceClaims;
 };
-
 type ResourceClaimPair = {
   readonly first: readonly string[];
   readonly second: readonly string[];
 };
-
 export function trustedModuleDeliveryPlanSnapshot(
   candidate: ValidatedModuleDeliveryPlan,
 ): ValidatedModuleDeliveryPlan {
@@ -99,7 +95,6 @@ export function trustedModuleDeliveryPlanSnapshot(
     throw new Error('Validated module delivery plan metadata is inconsistent.');
   return accepted;
 }
-
 export function expectedModuleDeliveryLineageMap(
   request: ExpectedLineageMapRequest,
 ): ReadonlyMap<string, AgentAttemptParent> {
@@ -149,10 +144,12 @@ function frozenClaim(
   return Object.freeze(copy);
 }
 
-export function freezeProviderEvidenceIdentity(
-  identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
-): ModuleDeliveryAcceptedProviderEvidenceIdentity {
-  const pending = [identity];
+export function assertEvidenceBound(
+  identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
+): void {
+  const pending = [...identities];
+  if (pending.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
+    throw new Error('Accepted provider evidence ancestry is too large.');
   const seen = new Set<ModuleDeliveryAcceptedProviderEvidenceIdentity>();
   for (const current of pending) {
     if (seen.has(current))
@@ -165,6 +162,12 @@ export function freezeProviderEvidenceIdentity(
       throw new Error('Accepted provider evidence ancestry is too large.');
     pending.push(...current.acceptedProviderEvidence);
   }
+}
+
+export function freezeProviderEvidenceIdentity(
+  identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
+): ModuleDeliveryAcceptedProviderEvidenceIdentity {
+  assertEvidenceBound([identity]);
   const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
     ...identity,
     claimIdentities: Object.freeze(identity.claimIdentities.map(frozenClaim)),

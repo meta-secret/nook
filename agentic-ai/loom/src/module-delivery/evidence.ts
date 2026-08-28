@@ -1,4 +1,5 @@
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
+import { assertEvidenceBound } from './authority.ts';
 import { freezeProviderEvidenceIdentity } from './authority.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { runModuleDeliveryGit } from './git-command.ts';
@@ -155,7 +156,7 @@ export function moduleDeliveryEvidenceClaimIdentities(
 export function moduleDeliveryEvidenceArtifactDigest(
   request: ModuleDeliveryEvidenceArtifactDigestRequest,
 ): string {
-  request.acceptedProviderEvidence.forEach(freezeProviderEvidenceIdentity);
+  assertEvidenceBound(request.acceptedProviderEvidence);
   const content: EvidenceArtifactDigestContent = {
     artifactIdentity: request.artifactIdentity,
     evidence: request.evidence,
@@ -182,9 +183,7 @@ export function validateModuleDeliveryEvidenceSubmission(
   };
   assertSubmissionMetadata(metadataRequest);
   const authorized = request.authorized;
-  verification.submission.acceptedProviderEvidence.forEach(
-    freezeProviderEvidenceIdentity,
-  );
+  assertEvidenceBound(verification.submission.acceptedProviderEvidence);
   if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
     if (
       JSON.stringify(authorized) !==
