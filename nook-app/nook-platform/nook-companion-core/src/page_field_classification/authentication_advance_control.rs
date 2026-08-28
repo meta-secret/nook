@@ -112,7 +112,10 @@ fn destination_has_disallowed_route_action(destination_identity: &str) -> bool {
 }
 
 fn destination_indicates_password_update_route(destination_identity: &str) -> bool {
-    looks_like_password_update_submit_control_label(destination_identity)
+    let identity = expand_identity_text(destination_identity);
+    (looks_like_password_update_submit_control_label(destination_identity)
+        || (contains_any_word(&identity, &["credential", "credentials"])
+            && contains_any_word(&identity, &["save", "update", "change", "set", "reset"])))
         && !form_identity_indicates_destructive_action(destination_identity)
         && !destination_has_disallowed_route_action(destination_identity)
 }
@@ -677,19 +680,16 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(advances_authentication(&profile_login_form));
-
         let settings_login_destination = AuthenticationAdvanceControlObservation {
             destination_identity: "/account/settings/login".to_owned(),
             ..localized_identity_submit.clone()
         };
         assert!(advances_authentication(&settings_login_destination));
-
         let profile_only_destination = AuthenticationAdvanceControlObservation {
             destination_identity: "/account/settings/profile".to_owned(),
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&profile_only_destination));
-
         let destructive_login_destination = AuthenticationAdvanceControlObservation {
             destination_identity: "/account/settings/login/delete".to_owned(),
             ..localized_identity_submit
@@ -722,13 +722,11 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&standards_email_newsletter_submit));
-
         let standards_email_login_submit = AuthenticationAdvanceControlObservation {
             label: "Sign in".to_owned(),
             ..standards_email_newsletter_submit
         };
         assert!(advances_authentication(&standards_email_login_submit));
-
         let alternate_provider_submit = AuthenticationAdvanceControlObservation {
             label: "Sign in with Google".to_owned(),
             ..localized_identity_submit.clone()
@@ -856,6 +854,8 @@ mod tests {
         assert!(advances_destination("/auth/save-password"));
         assert!(advances_destination("/signup/save"));
         assert!(advances_destination("/recover/update"));
+        assert!(advances_destination("/account/details/change-password"));
+        assert!(advances_destination("/account/details/update-credentials"));
         for destination_identity in [
             "/auth/update-password/delete-account",
             "/auth/update-password/google",

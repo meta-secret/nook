@@ -19,18 +19,12 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {
     let identity = expand_identity_text(form_identity);
     let changes_account_detail =
-        contains_any_word(
-            &identity,
-            &[
-                "email",
-                "username",
-                "user name",
-                "phone",
-                "profile",
-                "account detail",
-                "details",
-            ],
-        ) && contains_any_word(&identity, &["change", "update", "edit", "save"]);
+        contains_any_word(&identity, &["change", "update", "edit", "save"])
+            && (contains_any_word(
+                &identity,
+                &["email", "username", "user name", "phone", "profile"],
+            ) || (contains_any_word(&identity, &["account detail", "details"])
+                && !contains_any_word(&identity, &["password", "credential", "credentials"])));
     let transaction_action = contains_any_word(
         &identity,
         &[
@@ -170,7 +164,14 @@ mod tests {
         ] {
             assert!(form_identity_indicates_destructive_action(identity));
         }
-        for identity in ["Change password", "Update credentials", "Sign in", "signin"] {
+        for identity in [
+            "Change password",
+            "Update credentials",
+            "/account/details/change-password",
+            "/account/details/update-credentials",
+            "Sign in",
+            "signin",
+        ] {
             assert!(!form_identity_indicates_destructive_action(identity));
         }
     }
