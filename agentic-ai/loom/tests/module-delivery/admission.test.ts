@@ -421,7 +421,7 @@ describe('module delivery admission authority', () => {
     expect(exhaustedSelection.status).toBe(
       ModuleDeliveryAdmissionSelectionStatus.Blocked,
     );
-    expect(exhaustedSelection.blockedTaskIds).toContain('alpha');
+    expect(exhaustedSelection.blockedTaskIds).toEqual(['alpha', 'consumer']);
     expect(() => select(active)).toThrow('superseded');
   });
 });
