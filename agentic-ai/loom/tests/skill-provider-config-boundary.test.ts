@@ -835,9 +835,9 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', `{"scripts":{"audit":"bun ${HOST_ROOT}\\"cli.ts\\""}}`],
     ['package.json', `root=${HOST_ROOT.slice(0, -1)}; bun "$root/cli.ts"`],
     ['package.json', `a=${HOST_ROOT.slice(0, -1)}; b=$a; bun "$b/cli.ts"`],
-    ['package.json', 'a=$b; b=$a; bun "$b/cli.ts"'],
-    ['package.json', `root=$PWD/${HOST_ROOT}cli.ts; bun "$root"`],
-    ['package.json', `root=\${PWD}/${HOST_ROOT}cli.ts; bun "$root"`],
+    ['package.json', 'a=$b; b=$a; sh "$b/cli.ts"'],
+    ['package.json', `root=$PWD/${HOST_ROOT}cli.ts; bun --smol "$root"`],
+    ['package.json', `root=\${PWD}/${HOST_ROOT}; node --conditions=x "$root"`],
     ...['$(printf src)', '`printf src`'].map(
       (part) =>
         ['package.json', `a=${HOST_ROOT}; bun "\${a}/${part}/cli.ts"`] as const,

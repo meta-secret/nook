@@ -76,7 +76,7 @@ export function expandStaticShellVariables(source: string): string {
     source = expanded;
   }
   const launch = source.match(
-    /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*(?:\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*)|\()|`)[^\s;&|]*/u,
+    /\b(?:bun|node|bash|sh)[ \t]+(?:(?:run[ \t]+)?[^\s;&|]*(?:\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*)|\()|`)[^\s;&|]*|(?:[^\s;&|]+[ \t]+)+[^\s;&|]*(?:\$(?:\{[A-Za-z_]\w*\}|[A-Za-z_]\w*|\()|`)[^\s;&|]*)/u,
   );
   if (
     launch &&
