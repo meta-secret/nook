@@ -65,6 +65,9 @@ impl AuthenticationWorkflowSnapshot {
             (AuthenticationWorkflowKind::Signup, _) => {
                 AuthenticationWorkflowCandidatePriority::Signup
             }
+            (AuthenticationWorkflowKind::Login, AuthenticationWorkflowAction::TakeOver) => {
+                AuthenticationWorkflowCandidatePriority::ManualLoginTakeover
+            }
             (AuthenticationWorkflowKind::Login, _) => {
                 AuthenticationWorkflowCandidatePriority::Login
             }
@@ -80,6 +83,7 @@ enum AuthenticationWorkflowCandidatePriority {
     Manual,
     Login,
     Signup,
+    ManualLoginTakeover,
     CredentialChangeOrPasskeySetup,
     SavedLogin,
     SecondFactorOrPasskeyUse,
@@ -113,5 +117,56 @@ impl AuthenticationPageObservations {
             }
         }
         selected
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::authentication_workflow::{
+        AuthenticationAdvanceControlEvidence, AuthenticationManualCheckpoint,
+    };
+
+    fn observation() -> AuthenticationPageObservation {
+        AuthenticationPageObservation {
+            advance_control: AuthenticationAdvanceControlEvidence::Present,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn manual_login_takeover_outranks_signup_but_not_password_change() -> anyhow::Result<()> {
+        let signup = AuthenticationPageObservation {
+            new_password_field_count: 1,
+            ..observation()
+        };
+        let manual_login = AuthenticationPageObservation {
+            username_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            manual_checkpoint: AuthenticationManualCheckpoint::Present,
+            ..observation()
+        };
+        let snapshot = AuthenticationPageObservations {
+            observations: vec![signup, manual_login],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
+        assert_eq!(snapshot.action, AuthenticationWorkflowAction::TakeOver);
+        assert_eq!(snapshot.observation_index, 1);
+
+        let password_change = AuthenticationPageObservation {
+            current_password_field_count: 1,
+            new_password_field_count: 1,
+            ..observation()
+        };
+        let snapshot = AuthenticationPageObservations {
+            observations: vec![manual_login, password_change],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::PasswordChange);
+        assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 }

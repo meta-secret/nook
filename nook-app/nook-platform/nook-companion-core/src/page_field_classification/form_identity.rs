@@ -18,28 +18,56 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
 
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {
     let identity = expand_identity_text(form_identity);
-    contains_any_word(
+    let changes_account_detail =
+        contains_any_word(
+            &identity,
+            &[
+                "email",
+                "username",
+                "user name",
+                "phone",
+                "profile",
+                "account detail",
+                "details",
+            ],
+        ) && contains_any_word(&identity, &["change", "update", "edit", "save"]);
+    let transaction_action = contains_any_word(
         &identity,
         &[
-            "delete",
-            "remove",
-            "deactivate",
-            "disable",
-            "unlink",
-            "disconnect",
-            "logout",
-            "log out",
-            "signout",
-            "sign out",
-            "revoke",
-            "suspend",
-            "close account",
-            "erase",
-            "destroy",
-            "terminate",
-            "eliminar",
+            "pay",
+            "payment",
+            "checkout",
+            "purchase",
+            "buy",
+            "place order",
+            "confirm order",
+            "cart",
         ],
-    )
+    );
+    changes_account_detail
+        || transaction_action
+        || contains_any_word(
+            &identity,
+            &[
+                "delete",
+                "remove",
+                "deactivate",
+                "disable",
+                "unlink",
+                "disconnect",
+                "logout",
+                "log out",
+                "signout",
+                "sign out",
+                "revoke",
+                "suspend",
+                "close account",
+                "erase",
+                "destroy",
+                "terminate",
+                "eliminar",
+            ],
+        )
 }
 
 pub(super) fn form_identity_indicates_non_authentication_account_management(
@@ -121,4 +149,29 @@ pub(super) fn control_destination_indicates_password_recovery_route(
     contains_any_word(&identity, &["recover", "recovery", "forgot password"])
         || (contains_any_word(&identity, &["reset"])
             && contains_any_word(&identity, &["password", "credential"]))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unconditional_vetoes_cover_account_detail_and_transaction_actions() {
+        for identity in [
+            "/auth/change-email",
+            "Update username",
+            "Edit phone",
+            "Save profile",
+            "Change account details",
+            "Pay now",
+            "/checkout/confirm",
+            "Purchase",
+            "Place order",
+        ] {
+            assert!(form_identity_indicates_destructive_action(identity));
+        }
+        for identity in ["Change password", "Update credentials", "Sign in", "signin"] {
+            assert!(!form_identity_indicates_destructive_action(identity));
+        }
+    }
 }

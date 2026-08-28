@@ -700,21 +700,21 @@ mod tests {
     #[test]
     fn rejects_non_advance_authentication_controls() {
         let localized_identity_submit = localized_identity_submit();
-
-        let account_email_submit = AuthenticationAdvanceControlObservation {
-            form_identity: "account-settings".to_owned(),
-            label: "Apply".to_owned(),
+        let transaction_code_submit = AuthenticationAdvanceControlObservation {
+            authentication_username: AuthenticationUsernameEvidence::Absent,
+            one_time_code_field_count: 1,
+            form_identity: "checkout".to_owned(),
+            destination_identity: "/checkout/confirm".to_owned(),
+            label: "Pay now".to_owned(),
             ..localized_identity_submit.clone()
         };
-        assert!(!advances_authentication(&account_email_submit));
-
+        assert!(!advances_authentication(&transaction_code_submit));
         let neutral_newsletter_submit = AuthenticationAdvanceControlObservation {
             form_identity: String::new(),
             label: "Continue".to_owned(),
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&neutral_newsletter_submit));
-
         let standards_email_newsletter_submit = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::StandardsBasedEmail,
             form_identity: String::new(),
@@ -966,10 +966,10 @@ mod tests {
 
         let localized_destructive_password_submit = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Absent,
-            form_identity: "auth".to_owned(),
-            destination_identity: "/account/eliminar".to_owned(),
+            form_identity: "/auth/change-email".to_owned(),
+            destination_identity: String::new(),
             password_field_count: 1,
-            label: "Continuar".to_owned(),
+            label: "Change email".to_owned(),
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(
