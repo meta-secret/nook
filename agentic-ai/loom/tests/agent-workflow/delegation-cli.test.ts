@@ -108,7 +108,11 @@ describe('delegated agent journal CLI', () => {
       const startStderr = await new Response(startProcess.stderr).text();
       expect(() => JSON.parse(startStdout)).not.toThrow();
       expect(startStdout).not.toContain('gizmo');
-      expect(startStderr).toBe('gizmo\n');
+      expect(startStderr).toBe(
+        ['gizmo', '└─ contract-auditor', '  └─ inspect contract', ''].join(
+          '\n',
+        ),
+      );
       const admissionPath = join(workingDirectory, 'admission.json');
       const admissionRequest = {
         runId: request.runId,

@@ -17,7 +17,7 @@ import { renderDelegationPlanTree } from '../../src/agent-workflow/delegation-pl
 const SOURCE_COMMIT = '0123456789abcdef0123456789abcdef01234567';
 const ROOT: DelegationAttemptIdentity = {
   task: 'coordinate-delivery',
-  agent: 'gizmo',
+  agent: 'delivery-coordinator',
   attempt: 1,
 };
 const AI: DelegationAttemptIdentity = {
@@ -45,7 +45,11 @@ describe('delegation plan tree', () => {
   test('renders a root-only plan cleanly', () => {
     const rootInput: DeclarationInput = { identity: ROOT, depth: 1 };
     const root = declaration(rootInput);
-    expect(renderDelegationPlanTree(plan([root]))).toBe('gizmo\n');
+    expect(renderDelegationPlanTree(plan([root]))).toBe(
+      ['gizmo', '└─ delivery-coordinator', '  └─ coordinate delivery', ''].join(
+        '\n',
+      ),
+    );
   });
 
   test('preserves plan order and actual parent-child hierarchy', () => {
@@ -84,14 +88,16 @@ describe('delegation plan tree', () => {
     expect(renderDelegationPlanTree(plan([root, ai, web, core, review]))).toBe(
       [
         'gizmo',
-        '├─ ai',
-        '│ └─ update cortex',
-        '├─ web-dev',
-        '│ └─ create security key component',
-        '│    └─ security',
-        '│      └─ review auth contract',
-        '└─ core-dev',
-        '  └─ auth module implementation',
+        '└─ delivery-coordinator',
+        '  └─ coordinate delivery',
+        '     ├─ ai',
+        '     │ └─ update cortex',
+        '     ├─ web-dev',
+        '     │ └─ create security key component',
+        '     │    └─ security',
+        '     │      └─ review auth contract',
+        '     └─ core-dev',
+        '       └─ auth module implementation',
         '',
       ].join('\n'),
     );
