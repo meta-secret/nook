@@ -828,6 +828,9 @@ test('follows scripts launched from every runnable configuration surface', () =>
       'tasks:\n  audit:\n    cmds: ["bun {{.host | quote}}"]',
       'tasks:\n  audit:\n    cmds: ["HOST={{.host}} $HOST"]',
       'tasks:\n  audit:\n    cmds: ["env HOST={{.host}} bun $HOST"]',
+      'tasks:\n  audit:\n    cmds: ["env -i HOST={{.host}} bun ${HOST}"]',
+      'tasks:\n  audit:\n    cmds: ["bun run scripts/${HOST}.ts"]',
+      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts & $HOST"]',
       'tasks:\n  audit:\n    cmds: ["bun --cwd={{.dir}} cli.ts"]',
       'tasks:\n  audit:\n    cmds: ["bun --cwd {{.dir}} cli.ts"]',
       'env: {HOST: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["$HOST"]',
@@ -894,12 +897,21 @@ test('follows scripts launched from every runnable configuration surface', () =>
       '.task/catalog.yml',
       'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --label {{.LABEL}}"]',
     ],
+    [
+      '.task/env-catalog.yml',
+      'env: {HOST: scripts/catalog.ts}\ntasks:\n  audit:\n    cmds: ["env -i bun run scripts/catalog.ts --label $HOST"]',
+    ],
     ['scripts/catalog.ts', "const evidencePath = 'scripts/unsafe.test.ts';"],
     ['scripts/unsafe.test.ts', 'eval(source);'],
   ]);
   const inertCatalogGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
-    roots: ['package.json', 'Taskfile.yml', '.task/catalog.yml'],
+    roots: [
+      'package.json',
+      'Taskfile.yml',
+      '.task/catalog.yml',
+      '.task/env-catalog.yml',
+    ],
     sources: inertCatalogSources,
     symlinkPaths: new Set<string>(),
   };

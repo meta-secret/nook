@@ -24,7 +24,11 @@ const TASK_VARIABLE_TEMPLATE = /\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu;
 const TASK_DEFAULT_TEMPLATE =
   /\{\{\s*(?:default\s+"([^"]*)"\s+\.[A-Za-z_][A-Za-z0-9_]*|\.[A-Za-z_][A-Za-z0-9_]*\s*\|\s*default\s+"([^"]*)")\s*\}\}/gu;
 const TASK_SHELL_TOKEN =
-  /&&|\|\||[;|\n]|[^\s;&|]*\{\{[^{}]+\}\}[^\s;&|]*|"(?:\\.|[^"])*"|'[^']*'|[^\s;&|]+/gu;
+  /&&|\|\||[;&|\n]|(?:\{\{[^{}]+\}\}|\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)|"(?:\\.|[^"])*"|'[^']*'|[^\s;&|$"'{}]+)+/gu;
+const SHELL_VARIABLE =
+  /\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/gu;
+const DYNAMIC_SHELL_VARIABLE =
+  /\$(?:\{[A-Za-z_][A-Za-z0-9_]*\}|[A-Za-z_][A-Za-z0-9_]*)/u;
 const TASK_INTERPRETERS = new Set(['bash', 'bun', 'node', 'sh']);
 const REPOSITORY_ROOT_COMMAND =
   'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi';
@@ -89,6 +93,17 @@ export function expandStaticTaskVariables(
             return '.';
           }
           if (
+            typeof replacement !== 'string' &&
+            typeof replacement?.sh === 'string'
+          ) {
+            const shell = expand(replacement.sh);
+            const directory = /^cd\s+["']([^"']+)["']\s+&&\s+pwd$/u.exec(
+              shell,
+            )?.[1];
+            if (directory && !containsLaunchVariable(directory))
+              return directory;
+          }
+          if (
             typeof replacement !== 'string' ||
             stack.includes(name) ||
             expansions++ >= 64
@@ -108,10 +123,11 @@ export function expandStaticTaskVariables(
         const launchRequest: StaticTaskLaunchRequest = {
           environment,
           expand,
+          references: [],
           source: expanded,
         };
         assertStaticTaskLaunch(launchRequest);
-        return [expanded];
+        return [expanded, ...launchRequest.references];
       });
     })
     .join('\n');
@@ -126,6 +142,7 @@ function replaceStaticTaskDefaults(text: string): string {
 type StaticTaskLaunchRequest = {
   readonly environment: Readonly<Record<string, TaskVariable>>;
   readonly expand: (text: string) => string;
+  readonly references: string[];
   readonly source: string;
 };
 function assertStaticTaskLaunch(request: StaticTaskLaunchRequest): void {
@@ -133,12 +150,16 @@ function assertStaticTaskLaunch(request: StaticTaskLaunchRequest): void {
     .replace(/\\\r?\n/gu, ' ')
     .match(TASK_SHELL_TOKEN);
   const segments: string[][] = [[]];
+  const bindings = new Map<string, TaskVariable>(
+    Object.entries(request.environment),
+  );
   for (const token of tokens ?? []) {
-    if (/^(?:&&|\|\||;|\||\n)$/u.test(token)) segments.push([]);
+    if (/^(?:&&|\|\||;|&|\||\n)$/u.test(token)) segments.push([]);
     else segments.at(-1)?.push(token);
   }
   for (const segment of segments) {
     const segmentRequest: TaskSegmentRequest = {
+      bindings,
       launch: request,
       tokens: segment,
     };
@@ -148,27 +169,46 @@ function assertStaticTaskLaunch(request: StaticTaskLaunchRequest): void {
   }
 }
 type TaskSegmentRequest = {
+  readonly bindings: TaskBindings;
   readonly launch: StaticTaskLaunchRequest;
   readonly tokens: readonly string[];
 };
+type TaskBindings = Map<string, TaskVariable>;
 function taskSegmentHasDynamicLaunch(request: TaskSegmentRequest): boolean {
   const { tokens } = request;
-  const bindings = new Map<string, TaskVariable>(
-    Object.entries(request.launch.environment),
-  );
+  const shellBindings = request.bindings;
+  const childBindings = new Map(shellBindings);
+  const resolving = new Set<string>();
+  let resolutions = 0;
   const resolve = (token: string): string => {
-    const value = unquote(token);
-    const reference = /^\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?$/u.exec(value)?.[1];
-    if (!reference) return value;
-    const binding = bindings.get(reference);
-    return typeof binding === 'string' ? request.launch.expand(binding) : value;
+    let value = unquote(token);
+    if (token.startsWith("'")) return value;
+    for (const match of value.matchAll(SHELL_VARIABLE)) {
+      const reference = match[1] ?? match[2];
+      if (!reference || resolving.has(reference) || resolutions++ >= 64)
+        continue;
+      const binding = shellBindings.get(reference);
+      if (typeof binding !== 'string') continue;
+      resolving.add(reference);
+      const replacement = resolve(request.launch.expand(binding));
+      resolving.delete(reference);
+      value = value.replace(match[0], replacement);
+    }
+    return value;
   };
   let index = 0;
+  const prefixAssignments: Array<readonly [string, TaskVariable]> = [];
   while (index < tokens.length) {
     const assignment = taskAssignment(tokens[index] ?? '');
     if (assignment === false) break;
-    bindings.set(assignment[0], assignment[1]);
+    prefixAssignments.push(assignment);
+    childBindings.set(assignment[0], assignment[1]);
     index += 1;
+  }
+  if (index >= tokens.length) {
+    for (const [name, value] of prefixAssignments)
+      shellBindings.set(name, value);
+    return false;
   }
   while (['command', 'exec', 'env'].includes(unquote(tokens[index] ?? ''))) {
     const wrapper = unquote(tokens[index] ?? '');
@@ -176,30 +216,83 @@ function taskSegmentHasDynamicLaunch(request: TaskSegmentRequest): boolean {
     if (wrapper !== 'env') continue;
     while (index < tokens.length) {
       const assignment = taskAssignment(tokens[index] ?? '');
-      if (assignment === false) break;
-      bindings.set(assignment[0], assignment[1]);
+      if (assignment !== false) {
+        childBindings.set(assignment[0], assignment[1]);
+        index += 1;
+        continue;
+      }
+      const option = unquote(tokens[index] ?? '');
+      if (option === '--') {
+        index += 1;
+        break;
+      }
+      if (!option.startsWith('-')) break;
       index += 1;
+      if (/^(?:-i|--ignore-environment)$/u.test(option)) childBindings.clear();
+      if (/^(?:-u|--unset|-C|--chdir|-S|--split-string)$/u.test(option)) {
+        const operand = resolve(tokens[index] ?? '');
+        if (/^(?:-u|--unset)$/u.test(option)) childBindings.delete(operand);
+        if (
+          /^(?:-C|--chdir)$/u.test(option) &&
+          containsLaunchVariable(operand)
+        ) {
+          return true;
+        }
+        if (/^(?:-S|--split-string)$/u.test(option)) {
+          const splitRequest: StaticTaskLaunchRequest = {
+            ...request.launch,
+            environment: taskEnvironment(childBindings),
+            source: operand,
+          };
+          assertStaticTaskLaunch(splitRequest);
+        }
+        index += 1;
+      } else if (
+        /^--chdir=/u.test(option) &&
+        containsLaunchVariable(resolve(option))
+      ) {
+        return true;
+      } else if (/^--unset=/u.test(option)) {
+        childBindings.delete(option.slice(option.indexOf('=') + 1));
+      } else if (/^--split-string=/u.test(option)) {
+        const splitRequest: StaticTaskLaunchRequest = {
+          ...request.launch,
+          environment: taskEnvironment(childBindings),
+          source: resolve(option.slice(option.indexOf('=') + 1)),
+        };
+        assertStaticTaskLaunch(splitRequest);
+      }
     }
   }
   const executable = resolve(tokens[index] ?? '');
-  if (containsTaskTemplate(executable)) return true;
+  if (containsLaunchVariable(executable)) return true;
   if (unquote(executable) === 'cd') {
-    return containsTaskTemplate(resolve(tokens[index + 1] ?? ''));
+    return containsLaunchVariable(resolve(tokens[index + 1] ?? ''));
   }
-  if (!TASK_INTERPRETERS.has(unquote(executable))) return false;
+  if (!TASK_INTERPRETERS.has(unquote(executable))) {
+    request.launch.references.push(executable);
+    return false;
+  }
   index += 1;
+  if (
+    /^(?:bash|sh)$/u.test(unquote(executable)) &&
+    unquote(tokens[index] ?? '').startsWith('<<')
+  ) {
+    for (const [name, value] of childBindings) shellBindings.set(name, value);
+  }
   while (
     index < tokens.length &&
     unquote(tokens[index] ?? '').startsWith('-')
   ) {
     const option = resolve(tokens[index] ?? '');
-    if (containsTaskTemplate(option)) return true;
+    if (containsLaunchVariable(option)) return true;
     if (
       /^(?:bash|sh)$/u.test(unquote(executable)) &&
       unquote(option) === '-c'
     ) {
       const nestedRequest: StaticTaskLaunchRequest = {
         ...request.launch,
+        environment: taskEnvironment(childBindings),
         source: unquote(tokens[index + 1] ?? ''),
       };
       assertStaticTaskLaunch(nestedRequest);
@@ -207,22 +300,36 @@ function taskSegmentHasDynamicLaunch(request: TaskSegmentRequest): boolean {
     }
     if (unquote(option) === '--cwd') {
       index += 1;
-      if (containsTaskTemplate(resolve(tokens[index] ?? ''))) return true;
+      if (containsLaunchVariable(resolve(tokens[index] ?? ''))) return true;
     }
     index += 1;
   }
-  return containsTaskTemplate(resolve(tokens[index] ?? ''));
+  if (unquote(executable) === 'bun' && unquote(tokens[index] ?? '') === 'run') {
+    index += 1;
+    while (unquote(tokens[index] ?? '').startsWith('-')) {
+      const option = unquote(tokens[index] ?? '');
+      index += 1;
+      if (/^(?:--cwd|--env-file|--filter|--shell)$/u.test(option)) index += 1;
+    }
+  }
+  const target = resolve(tokens[index] ?? '');
+  if (containsLaunchVariable(target)) return true;
+  request.launch.references.push(target);
+  return false;
+}
+function taskEnvironment(bindings: TaskBindings): Record<string, TaskVariable> {
+  return Object.fromEntries(bindings);
 }
 function taskAssignment(
   token: string,
 ): readonly [string, TaskVariable] | false {
-  const match = /^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/u.exec(token);
+  const match = /^([A-Za-z_][A-Za-z0-9_]*)=([\s\S]*)$/u.exec(token);
   return match?.[1] && typeof match[2] === 'string'
     ? [match[1], unquote(match[2])]
     : false;
 }
-function containsTaskTemplate(value: string): boolean {
-  return /\{\{[^{}]+\}\}/u.test(value);
+function containsLaunchVariable(value: string): boolean {
+  return /\{\{[^{}]+\}\}/u.test(value) || DYNAMIC_SHELL_VARIABLE.test(value);
 }
 function unquote(value: string): string {
   return /^(?:"[\s\S]*"|'[\s\S]*')$/u.test(value) ? value.slice(1, -1) : value;
