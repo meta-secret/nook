@@ -8,6 +8,8 @@ use super::control_identity::{
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
 };
 use super::form_identity::{
+    control_destination_indicates_alternate_provider,
+    control_destination_indicates_generic_oauth_authorization_route,
     control_destination_indicates_non_authentication_route,
     control_destination_indicates_password_recovery_route,
     control_destination_indicates_registration_route,
@@ -83,25 +85,6 @@ fn form_has_authentication_identity(form_identity: &str) -> bool {
     identity_indicates_explicit_authentication_route(form_identity)
 }
 
-fn destination_indicates_alternate_provider(destination_identity: &str) -> bool {
-    looks_like_alternate_authentication_route_control_label(destination_identity)
-        || contains_any_word(
-            &expand_identity_text(destination_identity),
-            &[
-                "oauth",
-                "google",
-                "apple",
-                "microsoft",
-                "facebook",
-                "github",
-                "gitlab",
-                "linkedin",
-                "twitter",
-                "okta",
-            ],
-        )
-}
-
 fn destination_has_disallowed_route_action(destination_identity: &str) -> bool {
     let identity = expand_identity_text(destination_identity);
     contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
@@ -123,18 +106,22 @@ fn destination_indicates_password_update_route(destination_identity: &str) -> bo
 fn destination_has_disallowed_action_or_provider(
     destination_identity: &str,
     password_update_destination: bool,
+    allow_generic_oauth_authorization: bool,
 ) -> bool {
     destination_has_disallowed_route_action(destination_identity)
         || (looks_like_non_authentication_submit_control_label(destination_identity)
             && !password_update_destination
             && !control_destination_indicates_safe_post_login_route(destination_identity))
-        || destination_indicates_alternate_provider(destination_identity)
+        || control_destination_indicates_alternate_provider(
+            destination_identity,
+            allow_generic_oauth_authorization,
+        )
 }
 
 fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
     identity_indicates_explicit_authentication_route(destination_identity)
         && !control_destination_indicates_non_authentication_route(destination_identity)
-        && !destination_has_disallowed_action_or_provider(destination_identity, false)
+        && !destination_has_disallowed_action_or_provider(destination_identity, false, false)
         && !looks_like_registration_route_control_label(destination_identity)
         && !looks_like_password_recovery_route_control_label(destination_identity)
         && !looks_like_auxiliary_authentication_control_label(destination_identity)
@@ -164,6 +151,17 @@ fn has_unconditional_veto_identity(
     observation: &AuthenticationAdvanceControlObservation,
     credential_update_destination: bool,
 ) -> bool {
+    let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
+        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
+        && matches!(
+            observation.authentication_username,
+            AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+        )
+        && observation.password_field_count > 0
+        && looks_like_explicit_authentication_advance_control_label(&observation.label)
+        && control_destination_indicates_generic_oauth_authorization_route(
+            &observation.destination_identity,
+        );
     form_identity_indicates_destructive_action(&observation.form_identity)
         || form_identity_indicates_destructive_action(&observation.destination_identity)
         || form_identity_indicates_destructive_action(&observation.label)
@@ -171,6 +169,7 @@ fn has_unconditional_veto_identity(
         || destination_has_disallowed_action_or_provider(
             &observation.destination_identity,
             credential_update_destination,
+            primary_oauth_login,
         )
 }
 

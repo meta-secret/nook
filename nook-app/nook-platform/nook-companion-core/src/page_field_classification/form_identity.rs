@@ -1,3 +1,4 @@
+use super::control_identity::looks_like_alternate_authentication_route_control_label;
 use super::{contains_any_word, expand_identity_text};
 
 pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -> bool {
@@ -14,6 +15,45 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
             "authentication",
         ],
     )
+}
+
+pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
+    destination_identity: &str,
+) -> bool {
+    let normalized = destination_identity.trim().to_ascii_lowercase();
+    let route = normalized
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .trim_end_matches('/');
+    route == "/oauth2/authorize"
+}
+
+pub(super) fn control_destination_indicates_alternate_provider(
+    destination_identity: &str,
+    allow_generic_oauth_authorization: bool,
+) -> bool {
+    let identity = expand_identity_text(destination_identity);
+    looks_like_alternate_authentication_route_control_label(destination_identity)
+        || contains_any_word(
+            &identity,
+            &[
+                "google",
+                "apple",
+                "microsoft",
+                "facebook",
+                "github",
+                "gitlab",
+                "linkedin",
+                "twitter",
+                "okta",
+            ],
+        )
+        || (contains_any_word(&identity, &["oauth"])
+            && !(allow_generic_oauth_authorization
+                && control_destination_indicates_generic_oauth_authorization_route(
+                    destination_identity,
+                )))
 }
 
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {

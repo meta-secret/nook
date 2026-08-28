@@ -610,6 +610,90 @@ mod tests {
     }
 
     #[test]
+    fn generic_oauth_authorization_advances_only_a_primary_login() {
+        let control = |authentication_username: crate::AuthenticationUsernameEvidence,
+                       ownership: crate::PageControlOwnership,
+                       destination_identity: &str,
+                       label: &str| AuthenticationAdvanceControlObservation {
+            actionability: crate::PageControlActionability::Actionable,
+            ownership,
+            semantics: crate::PageControlSemantics::SemanticSubmit,
+            authentication_username,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            form_identity: String::new(),
+            destination_identity: destination_identity.to_owned(),
+            label: label.to_owned(),
+        };
+        for evidence in [
+            crate::AuthenticationUsernameEvidence::Strong,
+            crate::AuthenticationUsernameEvidence::Explicit,
+        ] {
+            assert_eq!(
+                control(
+                    evidence,
+                    crate::PageControlOwnership::OwnedForm,
+                    "/oauth2/authorize",
+                    "Sign in",
+                )
+                .classify(),
+                AuthenticationAdvanceControlDecision::AdvancesAuthentication
+            );
+        }
+        for rejected in [
+            control(
+                crate::AuthenticationUsernameEvidence::Generic,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Sign in",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Strong,
+                crate::PageControlOwnership::Unowned,
+                "/oauth2/authorize",
+                "Sign in",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Strong,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth/google",
+                "Sign in",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Explicit,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize/google",
+                "Sign in",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Strong,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Continue with Google",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Explicit,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Continue with Apple",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Explicit,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Continue",
+            ),
+        ] {
+            assert_eq!(
+                rejected.classify(),
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+            );
+        }
+    }
+
+    #[test]
     fn financial_one_time_code_controls_cannot_outrank_a_real_login() -> anyhow::Result<()> {
         for identity in [
             "Transfer funds",
