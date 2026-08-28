@@ -91,6 +91,11 @@ fn has_positive_login_identity(
     ) || form_has_authentication_identity(form_identity)
 }
 
+fn has_destructive_identity(observation: &AuthenticationAdvanceControlObservation) -> bool {
+    form_identity_indicates_destructive_action(&observation.form_identity)
+        || form_identity_indicates_destructive_action(&observation.destination_identity)
+}
+
 fn accepts_authentication_advance(
     observation: &AuthenticationAdvanceControlObservation,
     authentication_scope_owns_control: bool,
@@ -155,7 +160,7 @@ impl AuthenticationAdvanceControlObservation {
             looks_like_non_authentication_submit_control_label(&self.label);
         let contextual_password_update = self.new_password_field_count > 0
             && looks_like_password_update_submit_control_label(&self.label);
-        if form_identity_indicates_destructive_action(&self.form_identity) {
+        if has_destructive_identity(self) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
@@ -520,6 +525,23 @@ mod tests {
             ..localized_identity_submit()
         };
         assert!(!advances_authentication(&unrelated_reset));
+    }
+
+    #[test]
+    fn destructive_password_reset_destination_is_an_unconditional_veto() {
+        let ordinary_reset = AuthenticationAdvanceControlObservation {
+            destination_identity: "/password/reset".to_owned(),
+            new_password_field_count: 1,
+            label: "Continuar".to_owned(),
+            ..localized_identity_submit()
+        };
+        assert!(advances_authentication(&ordinary_reset));
+
+        let destructive_reset = AuthenticationAdvanceControlObservation {
+            destination_identity: "/password/reset/delete-account".to_owned(),
+            ..ordinary_reset
+        };
+        assert!(!advances_authentication(&destructive_reset));
     }
 
     #[test]
