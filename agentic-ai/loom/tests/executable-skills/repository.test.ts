@@ -273,7 +273,17 @@ test('parsed JSON keys cannot hide runtime dependency fields', async () => {
 test('bounds and sanitizes adversarial package diagnostics', async () => {
   const repoRoot = await packageFixture();
   try {
-    const dangerous = [':colon', '\nnewline', '\u0007control', '\u202ebidi'];
+    const dangerous = [
+      ':colon',
+      '\\backslash',
+      '\nnewline',
+      '\u0007control',
+      '\u2028line',
+      '\u2029paragraph',
+      '\u202ebidi',
+      '\u206aisolate',
+      '\u206fcontrol',
+    ];
     const files = trackedFiles();
     const oversizedPath: TrackedRepositoryFile = {
       mode: '100755',
@@ -301,7 +311,17 @@ test('bounds and sanitizes adversarial package diagnostics', async () => {
     for (const finding of findings) {
       expect(finding.path.length).toBeLessThanOrEqual(512);
       expect(finding.issue.length).toBeLessThanOrEqual(512);
-      for (const dangerousCharacter of [':', '\n', '\u0007', '\u202e']) {
+      for (const dangerousCharacter of [
+        ':',
+        '\\',
+        '\n',
+        '\u0007',
+        '\u2028',
+        '\u2029',
+        '\u202e',
+        '\u206a',
+        '\u206f',
+      ]) {
         expect(finding.path).not.toContain(dangerousCharacter);
       }
       expect(finding.issue).not.toContain('colon');

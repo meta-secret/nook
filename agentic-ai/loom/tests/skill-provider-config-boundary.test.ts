@@ -91,13 +91,13 @@ const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 
 function isRunnableConfiguration(path: string): boolean {
   return (
-    path.endsWith('/package.json') ||
+    /(^|\/)package\.json$/u.test(path) ||
     /(^|\/)Taskfile\.ya?ml$/u.test(path) ||
     /(^|\/)\.env\.[^/]+$/u.test(path) ||
     /(^|\/)vite\.config\.(?:[cm]?ts|[cm]?js)$/u.test(path) ||
     /^\.task\/.*\.ya?ml$/u.test(path) ||
     /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path) ||
-    /^\.github\/actions\/.*\/action\.ya?ml$/u.test(path)
+    /^\.github\/actions\/(?:.*\/)?action\.ya?ml$/u.test(path)
   );
 }
 
@@ -554,6 +554,34 @@ test('runnable configuration inventory includes Taskfiles and actions', () => {
     .sort();
   const discoveredActions = runnablePaths.filter(isActionManifest).sort();
   expect(discoveredActions).toEqual(expectedActions);
+});
+
+test('classifies every runnable configuration category at root and nested boundaries', () => {
+  const expected = [
+    'package.json',
+    'nested/package.json',
+    'Taskfile.yml',
+    'nested/Taskfile.yaml',
+    '.env.test',
+    'nested/.env.local',
+    'vite.config.ts',
+    'nested/vite.config.mjs',
+    '.task/root.yml',
+    '.task/nested/task.yaml',
+    '.github/workflows/policy.yml',
+    '.github/actions/action.yml',
+    '.github/actions/nested/action.yaml',
+  ];
+  const candidates = [
+    ...expected,
+    'package.json.backup',
+    '.github/workflows/nested/policy.yml',
+    '.github/actions/action.yml/child',
+    '.github/actions/nested/not-action.yml',
+    'nested/.task/task.yml',
+    'nested/vite.config.css',
+  ];
+  expect(candidates.filter(isRunnableConfiguration)).toEqual(expected);
 });
 
 test('follows JavaScript action entrypoints and nested local actions', () => {
