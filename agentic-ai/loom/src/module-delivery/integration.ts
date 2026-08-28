@@ -1,35 +1,83 @@
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
-import {
-  ModuleDeliveryBaselineKind,
-  ModuleDeliveryTaskKind,
-  ModuleDeliveryValidationStatus,
-} from './domain.ts';
+import { ModuleDeliveryTaskKind } from './domain.ts';
 import {
   moduleCommitChangedPaths,
   verifyModuleCommitHandoff,
 } from './handoff.ts';
 import {
   assertSourceSnapshot,
+  assertModuleIntegrationAcceptedPlanState,
+  assertFreshModuleIntegrationState,
+  assertCurrentModuleIntegrationAdmission,
+  assertModuleIntegrationHandoffRepository,
+  assertModuleIntegrationLeaseFrontier,
+  assertModuleIntegrationProviderPrecedence,
   captureSourceSnapshot,
+  cleanupRegisteredModuleIntegration,
   createIntegrationSession,
   integrationProvenance,
-  integrationSession,
+  moduleIntegrationRef,
+  moduleIntegrationCompletedWaveCount,
+  moduleIntegrationNodeByTaskId,
+  immutableModuleIntegrationState,
+  ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryProviderSubmissionKind,
+  ModuleIntegrationPhase,
+  recordIntegratedLeaseAcceptance,
   registerIntegrationState,
   retireIntegrationState,
+  updateModuleIntegrationRef,
 } from './integration-provenance.ts';
 import { applyModuleWaveTree } from './tree-integration.ts';
-import { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
+import { validatedCanonicalWriterClosure } from './integration-finalization.ts';
+import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
+import {
+  assertModuleDeliveryAttemptLeaseAuthority,
+  assertModuleDeliveryAdmissionStateAuthority,
+  assertModuleDeliveryAuthorityRepository,
+  assertModuleDeliveryGenerationAuthority,
+  commitFinalModuleDeliveryAdmissionState,
+  createModuleDeliveryAdmissionState,
+  moduleDeliveryAcceptedEvidenceIdentity,
+  moduleDeliveryAuthorityPlan,
+  prepareFinalModuleDeliveryAdmissionState,
+  rollbackFinalModuleDeliveryAdmissionState,
+  verifyModuleDeliveryEvidenceSubmission,
+} from './admission.ts';
 import { EXACT_GIT_COMMIT } from './workspace-paths.ts';
+import type { ModuleDeliveryEvidenceSubmissionVerification } from './evidence.ts';
+import type {
+  CommitFinalModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryAdmissionStateRequest,
+  ModuleDeliveryAdmissionState,
+  ModuleDeliveryGenerationAuthority,
+  PrepareFinalModuleDeliveryAdmissionStateRequest,
+  RollbackFinalModuleDeliveryAdmissionStateRequest,
+} from './admission.ts';
+import type {
+  CleanupModuleIntegrationRequest,
+  CleanupModuleIntegrationResult,
+  FinalizeModuleDeliveryIntegrationRequest,
+  IntegrateVerifiedModuleDeliveryTaskRequest,
+  ModuleDeliveryHandoffSubmission,
+  ModuleDeliveryProviderSubmission,
+  ModuleDeliveryWriteProviderSubmission,
+  ModuleIntegrationCleanupHandle,
+  ModuleIntegrationState,
+  PrepareModuleIntegrationRequest,
+  ModuleDeliveryCanonicalEvidenceTransition,
+  AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
+  CanonicalEvidenceTransitionProvenance,
+} from './integration-provenance.ts';
 import {
   assertPreparedModuleWorktreeIdentity,
   cleanupModuleWorktree,
   prepareModuleWorktree,
 } from './workspace.ts';
-
 import type { GitCommandRequest } from './git-command.ts';
 import type {
-  ValidatedModuleDeliveryPlan,
   ModuleDeliveryNode,
+  ValidatedModuleDeliveryPlan,
   WriteModuleDeliveryNode,
 } from './domain.ts';
 import type {
@@ -39,7 +87,25 @@ import type {
 import type {
   ModuleIntegrationProvenance,
   ModuleIntegrationSession,
+  IntegrationSessionRegistration,
+  IntegrationStateRegistration,
+  FreshModuleIntegrationStateInspection,
+  AdmissionStateAuthorityInspection,
+  AttemptLeaseAuthorityInspection,
+  GenerationAuthorityInspection,
+  ModuleDeliveryAuthorityPlanRequest,
+  ModuleDeliveryAuthorityRepositoryInspection,
+  CurrentModuleIntegrationAdmissionInspection,
+  ModuleIntegrationRefRequest,
+  ModuleIntegrationHandoffRepositoryInspection,
+  ModuleIntegrationLeaseFrontierInspection,
+  ModuleIntegrationProviderPrecedenceInspection,
+  ModuleIntegrationCompletedWaveCountRequest,
+  AcceptedPlanStateInspection,
+  ModuleIntegrationNodeLookup,
+  RecordIntegratedLeaseAcceptanceRequest,
   SourceSnapshotExpectation,
+  UpdateModuleIntegrationRefRequest,
 } from './integration-provenance.ts';
 import type {
   ApplyModuleWaveTreeRequest,
@@ -50,70 +116,14 @@ import type {
   ModuleWorktreeHandle,
   PrepareModuleWorktreeRequest,
 } from './workspace.ts';
+import type { ModuleDeliveryAttemptLease } from './admission.ts';
 
 const INTEGRATION_TASK_ID = 'module-delivery-integration';
-export const MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE =
-  'Module delivery integration is inactive until trusted admission and evidence authority are available.';
-
-function rejectInactiveModuleDeliveryIntegration(): void {
-  throw new Error(MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE);
-}
-
-export type PrepareModuleIntegrationRequest = {
-  readonly repositoryRoot: string;
-  readonly workspaceRoot: string;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-};
-
-export type ModuleDeliveryHandoffSubmission = {
-  readonly taskId: string;
-  readonly attempt: number;
-  readonly planDigest: string;
-  readonly baselineCommit: string;
-  readonly commit: string;
-  readonly workspace: ModuleWorktreeHandle;
-};
-
-export type ModuleIntegrationState = {
-  readonly planDigest: string;
-  readonly sourceCommit: string;
-  readonly topologicalOrder: readonly string[];
-  readonly waves: readonly (readonly string[])[];
-  readonly completedWaveCount: number;
-  readonly integratedTaskIds: readonly string[];
-  readonly headCommit: string;
-  readonly workspace: ModuleWorktreeHandle;
-  readonly cleanupHandle: ModuleIntegrationCleanupHandle;
-};
-
-export type ModuleIntegrationCleanupHandle = {
-  readonly sessionId: string;
-};
-
-export type IntegrateVerifiedModuleDeliveryWaveRequest = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state: ModuleIntegrationState;
-  readonly waveIndex: number;
-  readonly handoffs: readonly ModuleDeliveryHandoffSubmission[];
-};
-
-export type CleanupModuleIntegrationRequest = {
-  readonly cleanupHandle: ModuleIntegrationCleanupHandle;
-};
-
-export type CleanupModuleIntegrationResult = {
-  readonly removed: boolean;
-};
 
 type ModuleGitInvocation = {
   readonly cwd: string;
   readonly args: readonly string[];
   readonly allowFailure?: boolean;
-};
-
-type AcceptedPlanInspection = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state?: ModuleIntegrationState;
 };
 
 type ExpectedHandoff = {
@@ -122,66 +132,68 @@ type ExpectedHandoff = {
   readonly submission: ModuleDeliveryHandoffSubmission;
 };
 
-type HandoffCollectionRequest = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state: ModuleIntegrationState;
-  readonly wave: readonly string[];
-  readonly handoffs: readonly ModuleDeliveryHandoffSubmission[];
-};
-
-type StringArrayPair = {
-  readonly first: readonly string[];
-  readonly second: readonly string[];
-};
-
-type WaveArrayPair = {
-  readonly first: readonly (readonly string[])[];
-  readonly second: readonly (readonly string[])[];
-};
-
-type NodeLookup = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly taskId: string;
-};
-
-type ExpectedBaselineRequest = {
-  readonly node: WriteModuleDeliveryNode;
-  readonly state: ModuleIntegrationState;
-};
-
 type ExpectedHandoffVerification = {
   readonly expected: ExpectedHandoff;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
 
-type WaveApplication = {
+type ValidatedWaveApplication = {
   readonly state: ModuleIntegrationState;
   readonly expectedHandoffs: readonly ExpectedHandoff[];
-};
-
-type ValidatedWaveApplication = WaveApplication & {
   readonly provenance: ModuleIntegrationProvenance;
 };
 
-type FreshIntegrationInspection = {
-  readonly state: ModuleIntegrationState;
+type AdvancedIntegrationStateRequest = {
+  readonly previousState: ModuleIntegrationState;
+  readonly nextState: ModuleIntegrationState;
   readonly provenance: ModuleIntegrationProvenance;
+  readonly writerFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
 };
 
-type IntegrationRefUpdate = {
-  readonly provenance: ModuleIntegrationProvenance;
-  readonly nextCommit: string;
+type ProviderLeaseInspection = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
+  readonly lease: ModuleDeliveryAttemptLease;
+  readonly submission: ModuleDeliveryProviderSubmission;
 };
 
-type IntegrationRefIdentity = {
-  readonly workspace: ModuleWorktreeHandle;
-  readonly planDigest: string;
-};
+type RefreshedWriterFrontiersRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleIntegrationState;
+}>;
 
-type IntegrationRefLookup = {
-  readonly workspace: ModuleWorktreeHandle;
-  readonly ref: string;
-};
+export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  headCommit: string;
+  integratedTaskIds: readonly string[];
+}>;
+
+export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
+  Readonly<{
+    capability: ModuleDeliveryIntegratedWriterFrontierCapability;
+    authority: ModuleDeliveryGenerationAuthority;
+    taskId: string;
+    attempt: number;
+    generation: number;
+    planDigest: string;
+    headCommit: string;
+    integratedTaskIds: readonly string[];
+  }>;
+
+type IntegratedWriterFrontierProvenance = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  headCommit: string;
+  integratedTaskIds: readonly string[];
+}>;
+
+type MintIntegratedWriterFrontierRequest = IntegratedWriterFrontierProvenance;
 
 const ZERO_COMMIT = '0'.repeat(40);
 const PROHIBITED_MATERIALIZATION_FILES = new Set([
@@ -189,6 +201,90 @@ const PROHIBITED_MATERIALIZATION_FILES = new Set([
   '.gitmodules',
   '.lfsconfig',
 ]);
+const WRITER_FRONTIER_PROVENANCE = new WeakMap<
+  ModuleDeliveryIntegratedWriterFrontierCapability,
+  IntegratedWriterFrontierProvenance
+>();
+const CANONICAL_EVIDENCE_TRANSITIONS = new WeakMap<
+  ModuleDeliveryCanonicalEvidenceTransition,
+  CanonicalEvidenceTransitionProvenance
+>();
+const STATE_WRITER_FRONTIERS = new WeakMap<
+  ModuleIntegrationState,
+  readonly ModuleDeliveryIntegratedWriterFrontierCapability[]
+>();
+
+function mintIntegratedWriterFrontier(
+  request: MintIntegratedWriterFrontierRequest,
+): ModuleDeliveryIntegratedWriterFrontierCapability {
+  const integratedTaskIds = Object.freeze([...request.integratedTaskIds]);
+  const capabilityValue: ModuleDeliveryIntegratedWriterFrontierCapability = {
+    taskId: request.taskId,
+    attempt: request.attempt,
+    generation: request.generation,
+    planDigest: request.planDigest,
+    headCommit: request.headCommit,
+    integratedTaskIds,
+  };
+  const capability = Object.freeze(capabilityValue);
+  const provenance: IntegratedWriterFrontierProvenance = {
+    ...request,
+    integratedTaskIds,
+  };
+  WRITER_FRONTIER_PROVENANCE.set(capability, Object.freeze(provenance));
+  return capability;
+}
+
+export function assertModuleDeliveryIntegratedWriterFrontierCapability(
+  request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
+): void {
+  const provenance = WRITER_FRONTIER_PROVENANCE.get(request.capability);
+  if (
+    !provenance ||
+    provenance.authority !== request.authority ||
+    provenance.taskId !== request.taskId ||
+    provenance.attempt !== request.attempt ||
+    provenance.generation !== request.generation ||
+    provenance.planDigest !== request.planDigest ||
+    provenance.headCommit !== request.headCommit ||
+    JSON.stringify(provenance.integratedTaskIds) !==
+      JSON.stringify(request.integratedTaskIds)
+  )
+    throw new Error('Integrated writer frontier capability is invalid.');
+}
+
+export function assertModuleDeliveryCanonicalEvidenceTransition(
+  request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
+): void {
+  const provenance = CANONICAL_EVIDENCE_TRANSITIONS.get(request.transition);
+  if (
+    !provenance ||
+    provenance.authority !== request.authority ||
+    provenance.previousHeadCommit !== request.previousHeadCommit ||
+    provenance.canonicalHeadCommit !== request.canonicalHeadCommit ||
+    JSON.stringify(provenance.integratedTaskIds) !==
+      JSON.stringify(request.integratedTaskIds)
+  )
+    throw new Error('Canonical evidence transition is invalid.');
+}
+
+function canonicalEvidenceTransition(
+  request: CanonicalEvidenceTransitionProvenance,
+): ModuleDeliveryCanonicalEvidenceTransition {
+  const integratedTaskIds = Object.freeze([...request.integratedTaskIds]);
+  const transitionValue: ModuleDeliveryCanonicalEvidenceTransition = {
+    previousHeadCommit: request.previousHeadCommit,
+    canonicalHeadCommit: request.canonicalHeadCommit,
+    integratedTaskIds,
+  };
+  const transition = Object.freeze(transitionValue);
+  const provenance: CanonicalEvidenceTransitionProvenance = {
+    ...request,
+    integratedTaskIds,
+  };
+  CANONICAL_EVIDENCE_TRANSITIONS.set(transition, Object.freeze(provenance));
+  return transition;
+}
 
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
   if ('allowFailure' in invocation) {
@@ -205,280 +301,6 @@ function gitInvocation(invocation: ModuleGitInvocation): string {
   return gitText(runModuleDeliveryGit(gitRequest(invocation)));
 }
 
-function arraysEqual(pair: StringArrayPair): boolean {
-  return JSON.stringify(pair.first) === JSON.stringify(pair.second);
-}
-
-function wavesEqual(pair: WaveArrayPair): boolean {
-  return JSON.stringify(pair.first) === JSON.stringify(pair.second);
-}
-
-function assertAcceptedPlan(inspection: AcceptedPlanInspection): void {
-  const validation = decodeAndValidateModuleDeliveryPlan(
-    JSON.stringify(inspection.acceptedPlan.plan),
-  );
-  if (validation.status !== ModuleDeliveryValidationStatus.Accepted) {
-    throw new Error('Module integration requires an accepted plan.');
-  }
-  const acceptedOrderPair: StringArrayPair = {
-    first: validation.topologicalOrder,
-    second: inspection.acceptedPlan.topologicalOrder,
-  };
-  const acceptedWavePair: WaveArrayPair = {
-    first: validation.waves,
-    second: inspection.acceptedPlan.waves,
-  };
-  if (
-    validation.planDigest !== inspection.acceptedPlan.planDigest ||
-    !arraysEqual(acceptedOrderPair) ||
-    !wavesEqual(acceptedWavePair)
-  ) {
-    throw new Error('Accepted module delivery plan metadata is inconsistent.');
-  }
-  const stateOrderPair: StringArrayPair = {
-    first: inspection.state?.topologicalOrder ?? [],
-    second: validation.topologicalOrder,
-  };
-  const stateWavePair: WaveArrayPair = {
-    first: inspection.state?.waves ?? [],
-    second: validation.waves,
-  };
-  if (
-    inspection.state &&
-    (inspection.state.planDigest !== validation.planDigest ||
-      inspection.state.sourceCommit !== validation.plan.sourceCommit ||
-      !arraysEqual(stateOrderPair) ||
-      !wavesEqual(stateWavePair))
-  ) {
-    throw new Error(
-      'Module integration state does not match the accepted plan.',
-    );
-  }
-}
-
-function currentWorkspaceHead(workspace: ModuleWorktreeHandle): string {
-  const invocation: ModuleGitInvocation = {
-    cwd: workspace.worktreePath,
-    args: ['rev-parse', '--verify', 'HEAD^{commit}'],
-  };
-  return gitInvocation(invocation);
-}
-
-function integrationRef(identity: IntegrationRefIdentity): string {
-  return `refs/nook/module-delivery/${identity.planDigest}/${identity.workspace.worktreeId}`;
-}
-
-function refCommit(lookup: IntegrationRefLookup): string {
-  const invocation: ModuleGitInvocation = {
-    cwd: lookup.workspace.sourceRepositoryRoot,
-    args: ['rev-parse', '--verify', `${lookup.ref}^{commit}`],
-  };
-  return gitInvocation(invocation);
-}
-
-function updateIntegrationRef(update: IntegrationRefUpdate): void {
-  const invocation: ModuleGitInvocation = {
-    cwd: update.provenance.workspace.sourceRepositoryRoot,
-    args: [
-      'update-ref',
-      '--create-reflog',
-      update.provenance.session.integrationRef,
-      update.nextCommit,
-      update.provenance.headCommit,
-    ],
-  };
-  runModuleDeliveryGit(gitRequest(invocation));
-}
-
-function rollbackIntegrationRef(update: IntegrationRefUpdate): void {
-  const invocation: ModuleGitInvocation = {
-    cwd: update.provenance.workspace.sourceRepositoryRoot,
-    args: [
-      'update-ref',
-      update.provenance.session.integrationRef,
-      update.provenance.headCommit,
-      update.nextCommit,
-    ],
-  };
-  runModuleDeliveryGit(gitRequest(invocation));
-}
-
-function assertPersistedSnapshots(
-  inspection: FreshIntegrationInspection,
-): void {
-  const sourceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: inspection.state.workspace.sourceRepositoryRoot,
-    expected: inspection.provenance.sourceSnapshot,
-  };
-  assertSourceSnapshot(sourceExpectation);
-  const workspaceExpectation: SourceSnapshotExpectation = {
-    repositoryRoot: inspection.state.workspace.worktreePath,
-    expected: inspection.provenance.workspaceSnapshot,
-  };
-  assertSourceSnapshot(workspaceExpectation);
-}
-
-function assertFreshIntegrationState(
-  inspection: FreshIntegrationInspection,
-): void {
-  const state = inspection.state;
-  const provenance = inspection.provenance;
-  if (
-    provenance.planDigest !== state.planDigest ||
-    provenance.sourceCommit !== state.sourceCommit ||
-    provenance.completedWaveCount !== state.completedWaveCount ||
-    provenance.headCommit !== state.headCommit ||
-    provenance.workspace !== state.workspace
-  ) {
-    throw new Error(
-      'Module integration state violates its private provenance.',
-    );
-  }
-  if (
-    !Number.isSafeInteger(state.completedWaveCount) ||
-    state.completedWaveCount < 0 ||
-    state.completedWaveCount > state.waves.length
-  ) {
-    throw new Error('Module integration state has an invalid wave frontier.');
-  }
-  const expectedIntegratedTaskIds = state.waves
-    .slice(0, state.completedWaveCount)
-    .flat();
-  const integratedPair: StringArrayPair = {
-    first: state.integratedTaskIds,
-    second: expectedIntegratedTaskIds,
-  };
-  if (!arraysEqual(integratedPair)) {
-    throw new Error(
-      'Module integration state has an inconsistent task frontier.',
-    );
-  }
-  assertPreparedModuleWorktreeIdentity(state.workspace);
-  if (
-    state.workspace.planDigest !== state.planDigest ||
-    state.workspace.baselineCommit !== state.sourceCommit ||
-    state.workspace.taskId !== INTEGRATION_TASK_ID ||
-    state.workspace.attempt !== 1
-  ) {
-    throw new Error('Module integration workspace metadata is inconsistent.');
-  }
-  if (currentWorkspaceHead(state.workspace) !== state.sourceCommit) {
-    throw new Error(
-      'Module integration worktree was changed without authority.',
-    );
-  }
-  if (
-    provenance.session.cleaned ||
-    provenance.session.cleanupHandle !== state.cleanupHandle ||
-    provenance.session.workspace !== state.workspace ||
-    provenance.session.currentHead !== state.headCommit
-  ) {
-    throw new Error('Module integration session is stale or already cleaned.');
-  }
-  const refLookup: IntegrationRefLookup = {
-    workspace: state.workspace,
-    ref: provenance.session.integrationRef,
-  };
-  if (refCommit(refLookup) !== state.headCommit) {
-    throw new Error('Module integration state is stale.');
-  }
-  const branchInvocation: ModuleGitInvocation = {
-    cwd: state.workspace.worktreePath,
-    args: ['symbolic-ref', '--quiet', 'HEAD'],
-    allowFailure: true,
-  };
-  if (runModuleDeliveryGit(gitRequest(branchInvocation)).exitCode === 0) {
-    throw new Error('Module integration workspace must keep detached HEAD.');
-  }
-}
-
-function immutableState(state: ModuleIntegrationState): ModuleIntegrationState {
-  const topologicalOrder = Object.freeze([...state.topologicalOrder]);
-  const waves = Object.freeze(
-    state.waves.map((wave) => Object.freeze([...wave])),
-  );
-  const integratedTaskIds = Object.freeze([...state.integratedTaskIds]);
-  const workspaceCopy: ModuleWorktreeHandle = { ...state.workspace };
-  const workspace = Object.isFrozen(state.workspace)
-    ? state.workspace
-    : Object.freeze(workspaceCopy);
-  const stateCopy: ModuleIntegrationState = {
-    ...state,
-    topologicalOrder,
-    waves,
-    integratedTaskIds,
-    workspace,
-  };
-  return Object.freeze(stateCopy);
-}
-
-function nodeByTaskId(lookup: NodeLookup): ModuleDeliveryNode {
-  const node = lookup.acceptedPlan.plan.nodes.find(
-    (candidate) => candidate.taskId === lookup.taskId,
-  );
-  if (!node) throw new Error(`Accepted plan is missing task ${lookup.taskId}.`);
-  return node;
-}
-
-function expectedBaseline(request: ExpectedBaselineRequest): string {
-  return request.node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit
-    ? request.node.baseline.sourceCommit
-    : request.state.headCommit;
-}
-
-function collectExpectedHandoffs(
-  request: HandoffCollectionRequest,
-): readonly ExpectedHandoff[] {
-  const writeNodes = request.wave
-    .map((taskId) => {
-      const lookup: NodeLookup = {
-        acceptedPlan: request.acceptedPlan,
-        taskId,
-      };
-      return nodeByTaskId(lookup);
-    })
-    .filter(
-      (node): node is WriteModuleDeliveryNode =>
-        node.kind === ModuleDeliveryTaskKind.Write,
-    );
-  const expectedIds = writeNodes.map((node) => node.taskId).sort();
-  const suppliedIds = request.handoffs.map((handoff) => handoff.taskId).sort();
-  const identityPair: StringArrayPair = {
-    first: expectedIds,
-    second: suppliedIds,
-  };
-  if (!arraysEqual(identityPair)) {
-    throw new Error(
-      'Wave handoffs must exactly equal the accepted write tasks in the wave.',
-    );
-  }
-  const submissions = new Map<string, ModuleDeliveryHandoffSubmission>();
-  for (const submission of request.handoffs) {
-    if (submissions.has(submission.taskId)) {
-      throw new Error(`Wave contains duplicate handoff ${submission.taskId}.`);
-    }
-    submissions.set(submission.taskId, submission);
-  }
-  const orderedWriteNodes = request.state.topologicalOrder.flatMap((taskId) =>
-    writeNodes.filter((node) => node.taskId === taskId),
-  );
-  return orderedWriteNodes.map((node) => {
-    const submission = submissions.get(node.taskId);
-    if (!submission) {
-      throw new Error(`Wave is missing handoff ${node.taskId}.`);
-    }
-    const baselineRequest: ExpectedBaselineRequest = {
-      node,
-      state: request.state,
-    };
-    return {
-      node,
-      baselineCommit: expectedBaseline(baselineRequest),
-      submission,
-    };
-  });
-}
-
 function verifyExpectedHandoff(
   verification: ExpectedHandoffVerification,
 ): void {
@@ -486,7 +308,6 @@ function verifyExpectedHandoff(
   if (
     handoff.taskId !== verification.expected.node.taskId ||
     handoff.attempt < 1 ||
-    handoff.attempt > verification.acceptedPlan.plan.maxAttempts ||
     handoff.planDigest !== verification.acceptedPlan.planDigest ||
     handoff.baselineCommit !== verification.expected.baselineCommit ||
     handoff.workspace.taskId !== handoff.taskId ||
@@ -558,29 +379,138 @@ function applyAndValidateWave(application: ValidatedWaveApplication): string {
     handoffs,
   };
   const headCommit = applyModuleWaveTree(applyRequest);
-  const refUpdate: IntegrationRefUpdate = {
+  const refUpdate: UpdateModuleIntegrationRefRequest = {
     provenance: application.provenance,
     nextCommit: headCommit,
+    rollback: false,
   };
-  updateIntegrationRef(refUpdate);
+  updateModuleIntegrationRef(refUpdate);
   try {
     assertSourceSnapshot(sourceExpectation);
     assertSourceSnapshot(workspaceExpectation);
     return headCommit;
   } catch {
-    rollbackIntegrationRef(refUpdate);
+    const rollback: UpdateModuleIntegrationRefRequest = {
+      provenance: application.provenance,
+      nextCommit: headCommit,
+      rollback: true,
+    };
+    updateModuleIntegrationRef(rollback);
     throw new Error('Module delivery wave failed and was fully rolled back.');
   }
+}
+
+function advancedIntegrationState(
+  request: AdvancedIntegrationStateRequest,
+): ModuleIntegrationState {
+  const immutable = immutableModuleIntegrationState(request.nextState);
+  request.provenance.session.currentHead = immutable.headCommit;
+  const registration: IntegrationStateRegistration = {
+    authority: request.provenance.authority,
+    state: immutable,
+    sourceSnapshot: request.provenance.sourceSnapshot,
+    workspaceSnapshot: request.provenance.workspaceSnapshot,
+    session: request.provenance.session,
+  };
+  registerIntegrationState(registration);
+  STATE_WRITER_FRONTIERS.set(immutable, request.writerFrontiers);
+  retireIntegrationState(request.previousState);
+  return immutable;
+}
+
+function authoritativeProviderLease(
+  inspection: ProviderLeaseInspection,
+): ModuleDeliveryAttemptLease {
+  const stateInspection: AttemptLeaseAuthorityInspection = {
+    authority: inspection.authority,
+    lease: inspection.lease,
+  };
+  assertModuleDeliveryAttemptLeaseAuthority(stateInspection);
+  if (
+    inspection.lease.generation !== inspection.acceptedPlan.plan.generation ||
+    inspection.lease.planDigest !== inspection.acceptedPlan.planDigest
+  ) {
+    throw new Error('Provider lease belongs to an obsolete plan.');
+  }
+  const taskId =
+    inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
+      ? inspection.submission.handoff.taskId
+      : inspection.submission.taskId;
+  const attempt =
+    inspection.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
+      ? inspection.submission.handoff.attempt
+      : inspection.submission.attempt;
+  if (
+    inspection.lease.taskId !== taskId ||
+    inspection.lease.attempt !== attempt
+  ) {
+    throw new Error(
+      `Provider ${taskId} has no authoritative unreleased lease.`,
+    );
+  }
+  return inspection.lease;
+}
+
+function refreshedWriterFrontiers(
+  request: RefreshedWriterFrontiersRequest,
+): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
+  const { authority, state } = request;
+  return Object.freeze(
+    state.acceptedWrites.map((write) => {
+      const request: MintIntegratedWriterFrontierRequest = {
+        authority,
+        taskId: write.taskId,
+        attempt: write.attempt,
+        generation: write.generation,
+        planDigest: write.planDigest,
+        headCommit: state.headCommit,
+        integratedTaskIds: state.integratedTaskIds,
+      };
+      return mintIntegratedWriterFrontier(request);
+    }),
+  );
+}
+
+function writerFrontiers(
+  state: ModuleIntegrationState,
+): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
+  const capabilities = STATE_WRITER_FRONTIERS.get(state);
+  if (!capabilities)
+    throw new Error('Module integration writer frontier is invalid.');
+  return capabilities;
 }
 
 export function prepareModuleIntegration(
   request: PrepareModuleIntegrationRequest,
 ): ModuleIntegrationState {
-  rejectInactiveModuleDeliveryIntegration();
-  const inspection: AcceptedPlanInspection = {
+  const repositoryInspection: ModuleDeliveryAuthorityRepositoryInspection = {
+    authority: request.authority,
+    repositoryRoot: request.repositoryRoot,
+  };
+  assertModuleDeliveryAuthorityRepository(repositoryInspection);
+  const inspection: ModuleDeliveryAuthorityPlanRequest = {
+    authority: request.authority,
     acceptedPlan: request.acceptedPlan,
   };
-  assertAcceptedPlan(inspection);
+  moduleDeliveryAuthorityPlan(inspection);
+  const authorityInspection: GenerationAuthorityInspection = {
+    authority: request.authority,
+    generation: request.acceptedPlan.plan.generation,
+    planDigest: request.acceptedPlan.planDigest,
+  };
+  assertModuleDeliveryGenerationAuthority(authorityInspection);
+  const stateInspection: AdmissionStateAuthorityInspection = {
+    authority: request.authority,
+    state: request.admissionState,
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  if (
+    request.admissionState.generation !==
+      request.acceptedPlan.plan.generation ||
+    request.admissionState.planDigest !== request.acceptedPlan.planDigest ||
+    request.admissionState.headCommit !== request.acceptedPlan.plan.sourceCommit
+  )
+    throw new Error('Module integration admission state is inconsistent.');
   const before = captureSourceSnapshot(request.repositoryRoot);
   const prepareRequest: PrepareModuleWorktreeRequest = {
     repositoryRoot: request.repositoryRoot,
@@ -595,11 +525,11 @@ export function prepareModuleIntegration(
     repositoryRoot: request.repositoryRoot,
     expected: before,
   };
-  const refIdentity: IntegrationRefIdentity = {
+  const refRequest: ModuleIntegrationRefRequest = {
     workspace,
     planDigest: request.acceptedPlan.planDigest,
   };
-  const ref = integrationRef(refIdentity);
+  const ref = moduleIntegrationRef(refRequest);
   const createRefInvocation: ModuleGitInvocation = {
     cwd: workspace.sourceRepositoryRoot,
     args: [
@@ -620,32 +550,39 @@ export function prepareModuleIntegration(
     };
     const cleanupHandle = Object.freeze(cleanupHandleValue);
     const state: ModuleIntegrationState = {
+      phase: ModuleIntegrationPhase.AcceptingProviders,
+      generation: request.acceptedPlan.plan.generation,
       planDigest: request.acceptedPlan.planDigest,
       sourceCommit: request.acceptedPlan.plan.sourceCommit,
       topologicalOrder: request.acceptedPlan.topologicalOrder,
       waves: request.acceptedPlan.waves,
       completedWaveCount: 0,
       integratedTaskIds: [],
+      acceptedWrites: [],
+      acceptedEvidence: [],
       headCommit: request.acceptedPlan.plan.sourceCommit,
+      admissionState: request.admissionState,
       workspace,
       cleanupHandle,
     };
-    const immutable = immutableState(state);
+    const immutable = immutableModuleIntegrationState(state);
     const workspaceSnapshot = captureSourceSnapshot(workspace.worktreePath);
-    const sessionRegistration = {
+    const sessionRegistration: IntegrationSessionRegistration = {
       cleanupHandle,
       workspace: immutable.workspace,
       integrationRef: ref,
       currentHead: immutable.headCommit,
-    } as const;
+    };
     const session = createIntegrationSession(sessionRegistration);
-    const registration = {
+    const registration: IntegrationStateRegistration = {
+      authority: request.authority,
       state: immutable,
       sourceSnapshot: before,
       workspaceSnapshot,
       session,
-    } as const;
+    };
     registerIntegrationState(registration);
+    STATE_WRITER_FRONTIERS.set(immutable, Object.freeze([]));
     return immutable;
   } catch {
     let refDeleted = true;
@@ -671,99 +608,393 @@ export function prepareModuleIntegration(
   }
 }
 
-export function integrateVerifiedModuleDeliveryWave(
-  request: IntegrateVerifiedModuleDeliveryWaveRequest,
+export function integrateVerifiedModuleDeliveryTask(
+  request: IntegrateVerifiedModuleDeliveryTaskRequest,
 ): ModuleIntegrationState {
-  rejectInactiveModuleDeliveryIntegration();
-  const inspection: AcceptedPlanInspection = {
+  const inspection: AcceptedPlanStateInspection = {
+    authority: request.authority,
     acceptedPlan: request.acceptedPlan,
     state: request.state,
   };
+  moduleDeliveryAuthorityPlan(inspection);
+  assertModuleIntegrationAcceptedPlanState(inspection);
+  const authorityInspection: GenerationAuthorityInspection = {
+    authority: request.authority,
+    generation: request.acceptedPlan.plan.generation,
+    planDigest: request.acceptedPlan.planDigest,
+  };
+  assertModuleDeliveryGenerationAuthority(authorityInspection);
   const provenance = integrationProvenance(request.state);
-  assertAcceptedPlan(inspection);
-  const freshInspection: FreshIntegrationInspection = {
+  if (provenance.authority !== request.authority)
+    throw new Error('Module integration authority does not own this state.');
+  const freshInspection: FreshModuleIntegrationStateInspection = {
     state: request.state,
     provenance,
   };
-  assertFreshIntegrationState(freshInspection);
-  assertPersistedSnapshots(freshInspection);
-  if (
-    !Number.isSafeInteger(request.waveIndex) ||
-    request.waveIndex !== request.state.completedWaveCount
-  ) {
-    throw new Error('Requested module delivery wave is stale or out of order.');
+  assertFreshModuleIntegrationState(freshInspection);
+  const admissionInspection: CurrentModuleIntegrationAdmissionInspection = {
+    authority: request.authority,
+    state: request.state,
+  };
+  assertCurrentModuleIntegrationAdmission(admissionInspection);
+  if (request.state.phase !== ModuleIntegrationPhase.AcceptingProviders) {
+    throw new Error('Finalized module integration cannot accept providers.');
   }
-  const wave = request.acceptedPlan.waves[request.waveIndex];
-  if (!wave) throw new Error('Requested module delivery wave does not exist.');
-  const collectionRequest: HandoffCollectionRequest = {
+  const leaseInspection: ProviderLeaseInspection = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    lease: request.lease,
+    submission: request.submission,
+  };
+  const lease = authoritativeProviderLease(leaseInspection);
+  const frontierInspection: ModuleIntegrationLeaseFrontierInspection = {
+    state: request.state,
+    lease,
+  };
+  assertModuleIntegrationLeaseFrontier(frontierInspection);
+  if (
+    request.submission.generation !== request.state.generation ||
+    (request.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
+      ? request.submission.handoff.planDigest
+      : request.submission.planDigest) !== request.state.planDigest
+  ) {
+    throw new Error('Provider output belongs to an obsolete plan generation.');
+  }
+  const taskId =
+    request.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
+      ? request.submission.handoff.taskId
+      : request.submission.taskId;
+  const lookup: ModuleIntegrationNodeLookup = {
+    acceptedPlan: request.acceptedPlan,
+    taskId,
+  };
+  const node = moduleIntegrationNodeByTaskId(lookup);
+  if (
+    request.state.integratedTaskIds.includes(taskId) ||
+    request.state.acceptedEvidence.some((entry) => entry.taskId === taskId)
+  ) {
+    throw new Error(`Provider ${taskId} already has an accepted disposition.`);
+  }
+  const precedenceInspection: ModuleIntegrationProviderPrecedenceInspection = {
     acceptedPlan: request.acceptedPlan,
     state: request.state,
-    wave,
-    handoffs: request.handoffs,
+    taskId,
+    lease,
   };
-  const expectedHandoffs = collectExpectedHandoffs(collectionRequest);
-  for (const expected of expectedHandoffs) {
+  assertModuleIntegrationProviderPrecedence(precedenceInspection);
+  if (request.submission.kind === ModuleDeliveryProviderSubmissionKind.Write) {
+    if (node.kind !== ModuleDeliveryTaskKind.Write) {
+      throw new Error(`Provider ${taskId} requires read-only evidence.`);
+    }
+    if (
+      request.submission.verdict !==
+        ModuleDeliveryEvidenceVerdict.TerminalSuccess ||
+      request.submission.acceptedByTeam !== lease.acceptanceOwner
+    )
+      throw new Error(`Provider ${taskId} lacks terminal owner acceptance.`);
+    const repositoryInspection: ModuleIntegrationHandoffRepositoryInspection = {
+      state: request.state,
+      handoff: request.submission.handoff,
+    };
+    assertModuleIntegrationHandoffRepository(repositoryInspection);
+    const expected: ExpectedHandoff = {
+      node,
+      baselineCommit: lease.startingFrontier,
+      submission: request.submission.handoff,
+    };
     const verification: ExpectedHandoffVerification = {
       expected,
       acceptedPlan: request.acceptedPlan,
     };
     verifyExpectedHandoff(verification);
+    const application: ValidatedWaveApplication = {
+      state: request.state,
+      expectedHandoffs: [expected],
+      provenance,
+    };
+    const headCommit = applyAndValidateWave(application);
+    try {
+      const provisionalState: ModuleIntegrationState = {
+        ...request.state,
+        integratedTaskIds: [...request.state.integratedTaskIds, taskId],
+        acceptedWrites: [
+          ...request.state.acceptedWrites,
+          {
+            taskId,
+            attempt: request.submission.handoff.attempt,
+            generation: request.submission.generation,
+            planDigest: request.submission.handoff.planDigest,
+            startingFrontier: lease.startingFrontier,
+            integrationCommit: headCommit,
+            acceptedByTeam: request.submission.acceptedByTeam,
+            handoff: request.submission.handoff,
+          },
+        ],
+        headCommit,
+      };
+      const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
+        acceptedPlan: request.acceptedPlan,
+        state: provisionalState,
+      };
+      const stateWithWrite: ModuleIntegrationState = {
+        ...provisionalState,
+        completedWaveCount:
+          moduleIntegrationCompletedWaveCount(waveCountRequest),
+      };
+      const frontierRequest: RefreshedWriterFrontiersRequest = {
+        authority: request.authority,
+        state: stateWithWrite,
+      };
+      const capabilities = refreshedWriterFrontiers(frontierRequest);
+      const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+        authority: request.authority,
+        acceptedPlan: request.acceptedPlan,
+        headCommit,
+        integratedWriterFrontiers: capabilities,
+        acceptedEvidence: stateWithWrite.acceptedEvidence,
+      };
+      const admissionState = createModuleDeliveryAdmissionState(stateRequest);
+      const nextState: ModuleIntegrationState = {
+        ...stateWithWrite,
+        admissionState,
+      };
+      const advance: AdvancedIntegrationStateRequest = {
+        previousState: request.state,
+        nextState,
+        provenance,
+        writerFrontiers: capabilities,
+      };
+      const disposition: RecordIntegratedLeaseAcceptanceRequest = {
+        authority: request.authority,
+        state: admissionState,
+        lease,
+      };
+      recordIntegratedLeaseAcceptance(disposition);
+      return advancedIntegrationState(advance);
+    } catch {
+      const rollback: UpdateModuleIntegrationRefRequest = {
+        provenance,
+        nextCommit: headCommit,
+        rollback: true,
+      };
+      updateModuleIntegrationRef(rollback);
+      throw new Error(
+        'Module delivery integration failed and was rolled back.',
+      );
+    }
   }
-  const application: ValidatedWaveApplication = {
+  const authorizedProviderEvidence = request.state.acceptedEvidence.filter(
+    (evidence) =>
+      lease.authorizedProviderEvidence.some(
+        (identity) =>
+          JSON.stringify(identity) ===
+          JSON.stringify(moduleDeliveryAcceptedEvidenceIdentity(evidence)),
+      ),
+  );
+  const evidenceRequest: ModuleDeliveryEvidenceSubmissionVerification = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    state: request.state.admissionState,
+    submission: request.submission,
+    lease,
+    authorizedProviderEvidence,
+  };
+  const accepted = verifyModuleDeliveryEvidenceSubmission(evidenceRequest);
+  const provisionalState: ModuleIntegrationState = {
+    ...request.state,
+    acceptedEvidence: [...request.state.acceptedEvidence, accepted],
+  };
+  const waveCountRequest: ModuleIntegrationCompletedWaveCountRequest = {
+    acceptedPlan: request.acceptedPlan,
+    state: provisionalState,
+  };
+  const stateWithEvidence: ModuleIntegrationState = {
+    ...provisionalState,
+    completedWaveCount: moduleIntegrationCompletedWaveCount(waveCountRequest),
+  };
+  const capabilities = writerFrontiers(request.state);
+  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    headCommit: stateWithEvidence.headCommit,
+    integratedWriterFrontiers: capabilities,
+    acceptedEvidence: stateWithEvidence.acceptedEvidence,
+  };
+  const admissionState = createModuleDeliveryAdmissionState(stateRequest);
+  const nextState: ModuleIntegrationState = {
+    ...stateWithEvidence,
+    admissionState,
+  };
+  const advance: AdvancedIntegrationStateRequest = {
+    previousState: request.state,
+    nextState,
+    provenance,
+    writerFrontiers: capabilities,
+  };
+  const integrated = advancedIntegrationState(advance);
+  const disposition: RecordIntegratedLeaseAcceptanceRequest = {
+    authority: request.authority,
+    state: admissionState,
+    lease,
+  };
+  recordIntegratedLeaseAcceptance(disposition);
+  return integrated;
+}
+
+export function finalizeModuleDeliveryIntegration(
+  request: FinalizeModuleDeliveryIntegrationRequest,
+): ModuleIntegrationState {
+  const inspection: AcceptedPlanStateInspection = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
     state: request.state,
-    expectedHandoffs,
+  };
+  moduleDeliveryAuthorityPlan(inspection);
+  assertModuleIntegrationAcceptedPlanState(inspection);
+  const authorityInspection: GenerationAuthorityInspection = {
+    authority: request.authority,
+    generation: request.acceptedPlan.plan.generation,
+    planDigest: request.acceptedPlan.planDigest,
+  };
+  assertModuleDeliveryGenerationAuthority(authorityInspection);
+  const provenance = integrationProvenance(request.state);
+  if (provenance.authority !== request.authority)
+    throw new Error('Module integration authority does not own this state.');
+  const freshInspection: FreshModuleIntegrationStateInspection = {
+    state: request.state,
     provenance,
   };
-  const headCommit = applyAndValidateWave(application);
-  const integratedTaskIds = [...request.state.integratedTaskIds, ...wave];
-  const state: ModuleIntegrationState = {
-    ...request.state,
-    completedWaveCount: request.waveIndex + 1,
-    integratedTaskIds,
-    headCommit,
+  assertFreshModuleIntegrationState(freshInspection);
+  const admissionInspection: CurrentModuleIntegrationAdmissionInspection = {
+    authority: request.authority,
+    state: request.state,
   };
-  const immutable = immutableState(state);
-  provenance.session.currentHead = headCommit;
-  const registration = {
-    state: immutable,
-    sourceSnapshot: provenance.sourceSnapshot,
-    workspaceSnapshot: provenance.workspaceSnapshot,
-    session: provenance.session,
-  } as const;
-  registerIntegrationState(registration);
-  retireIntegrationState(request.state);
-  return immutable;
+  assertCurrentModuleIntegrationAdmission(admissionInspection);
+  if (request.state.phase !== ModuleIntegrationPhase.AcceptingProviders) {
+    throw new Error('Module integration is already finalized.');
+  }
+  const allAccepted = request.acceptedPlan.plan.nodes.every((node) =>
+    node.kind === ModuleDeliveryTaskKind.Write
+      ? request.state.acceptedWrites.some(
+          (entry) => entry.taskId === node.taskId,
+        )
+      : request.state.acceptedEvidence.some(
+          (entry) => entry.taskId === node.taskId,
+        ),
+  );
+  if (!allAccepted) {
+    throw new Error('Final module join requires every accepted task result.');
+  }
+  const handoffs: TreeHandoff[] = request.acceptedPlan.topologicalOrder.flatMap(
+    (taskId) =>
+      request.state.acceptedWrites
+        .filter((entry) => entry.taskId === taskId)
+        .map((entry) => ({
+          taskId: entry.taskId,
+          baselineCommit: entry.startingFrontier,
+          commit: entry.handoff.commit,
+        })),
+  );
+  const application: ApplyModuleWaveTreeRequest = {
+    workspace: request.state.workspace,
+    currentHead: request.state.sourceCommit,
+    handoffs,
+  };
+  const canonicalHead =
+    handoffs.length === 0
+      ? request.state.headCommit
+      : applyModuleWaveTree(application);
+  const sourceExpectation: SourceSnapshotExpectation = {
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    expected: provenance.sourceSnapshot,
+  };
+  assertSourceSnapshot(sourceExpectation);
+  const workspaceExpectation: SourceSnapshotExpectation = {
+    repositoryRoot: request.state.workspace.worktreePath,
+    expected: provenance.workspaceSnapshot,
+  };
+  assertSourceSnapshot(workspaceExpectation);
+  const canonicalInspection: CanonicalModuleFinalizationInspection = {
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    previousHeadCommit: request.state.headCommit,
+    canonicalHeadCommit: canonicalHead,
+    acceptedPlan: request.acceptedPlan,
+    integratedTaskIds: request.state.integratedTaskIds,
+  };
+  const writerTaskIds = validatedCanonicalWriterClosure(canonicalInspection);
+  const finalizedState: ModuleIntegrationState = {
+    ...request.state,
+    phase: ModuleIntegrationPhase.Finalized,
+    completedWaveCount: request.acceptedPlan.waves.length,
+    headCommit: canonicalHead,
+  };
+  const frontierRequest: RefreshedWriterFrontiersRequest = {
+    authority: request.authority,
+    state: finalizedState,
+  };
+  const capabilities = refreshedWriterFrontiers(frontierRequest);
+  const transitionRequest: CanonicalEvidenceTransitionProvenance = {
+    authority: request.authority,
+    previousHeadCommit: request.state.headCommit,
+    canonicalHeadCommit: canonicalHead,
+    integratedTaskIds: writerTaskIds,
+  };
+  const canonicalTransition = canonicalEvidenceTransition(transitionRequest);
+  const stateRequest: PrepareFinalModuleDeliveryAdmissionStateRequest = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    headCommit: canonicalHead,
+    integratedWriterFrontiers: capabilities,
+    acceptedEvidence: finalizedState.acceptedEvidence,
+    previousState: request.state.admissionState,
+    canonicalTransition,
+  };
+  const admissionState = prepareFinalModuleDeliveryAdmissionState(stateRequest);
+  const nextState: ModuleIntegrationState = {
+    ...finalizedState,
+    admissionState,
+  };
+  const advance: AdvancedIntegrationStateRequest = {
+    previousState: request.state,
+    nextState,
+    provenance,
+    writerFrontiers: capabilities,
+  };
+  const refUpdate: UpdateModuleIntegrationRefRequest = {
+    provenance,
+    nextCommit: canonicalHead,
+    rollback: false,
+  };
+  updateModuleIntegrationRef(refUpdate);
+  try {
+    const commitRequest: CommitFinalModuleDeliveryAdmissionStateRequest = {
+      authority: request.authority,
+      previousState: request.state.admissionState,
+      state: admissionState,
+    };
+    commitFinalModuleDeliveryAdmissionState(commitRequest);
+    return advancedIntegrationState(advance);
+  } catch {
+    const admissionRollback: RollbackFinalModuleDeliveryAdmissionStateRequest =
+      {
+        authority: request.authority,
+        finalizedState: admissionState,
+        previousState: request.state.admissionState,
+      };
+    rollbackFinalModuleDeliveryAdmissionState(admissionRollback);
+    const refRollback: UpdateModuleIntegrationRefRequest = {
+      provenance,
+      nextCommit: canonicalHead,
+      rollback: true,
+    };
+    updateModuleIntegrationRef(refRollback);
+    throw new Error('Final module join failed and was fully rolled back.');
+  }
 }
 
 export function cleanupModuleIntegration(
   request: CleanupModuleIntegrationRequest,
 ): CleanupModuleIntegrationResult {
-  const session = integrationSession(request.cleanupHandle);
-  if (session.cleaned) return { removed: false };
-  const deleteInvocation: ModuleGitInvocation = {
-    cwd: session.workspace.sourceRepositoryRoot,
-    args: ['update-ref', '-d', session.integrationRef, session.currentHead],
-  };
-  runModuleDeliveryGit(gitRequest(deleteInvocation));
-  const cleanupRequest: CleanupModuleWorktreeRequest = {
-    workspace: session.workspace,
-  };
-  try {
-    cleanupModuleWorktree(cleanupRequest);
-  } catch {
-    const restoreInvocation: ModuleGitInvocation = {
-      cwd: session.workspace.sourceRepositoryRoot,
-      args: [
-        'update-ref',
-        '--create-reflog',
-        session.integrationRef,
-        session.currentHead,
-        ZERO_COMMIT,
-      ],
-    };
-    runModuleDeliveryGit(gitRequest(restoreInvocation));
-    throw new Error('Module integration cleanup failed and restored its ref.');
-  }
-  session.cleaned = true;
-  return { removed: true };
+  return cleanupRegisteredModuleIntegration(request);
 }
