@@ -133,16 +133,16 @@
   })
 
   const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
-    identityContext.kind ===
-      NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
-      vault.loginDeviceKeysCapable
+    identityContext.kind === LoginVaultIdentityContextKind.Loading
       ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
-      : {
-          kind: DeviceKeysUnlockCapabilityKind.Unavailable,
-          reason:
-            identityContext.kind === LoginVaultIdentityContextKind.Loading
-              ? vault.t(I18N_KEYS.LoginIdentityContextLoading)
-              : identityContext.kind === LoginVaultIdentityContextKind.Failed
+      : identityContext.kind ===
+            NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
+          vault.loginDeviceKeysCapable
+        ? { kind: DeviceKeysUnlockCapabilityKind.Available }
+        : {
+            kind: DeviceKeysUnlockCapabilityKind.Unavailable,
+            reason:
+              identityContext.kind === LoginVaultIdentityContextKind.Failed
                 ? vault.t(I18N_KEYS.LoginIdentityContextFailed)
                 : identityContext.kind ===
                     NookSelectedVaultIdentityContextKind.Empty
@@ -151,7 +151,7 @@
                       NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent
                     ? vault.t(I18N_KEYS.LoginIdentityContextMismatch)
                     : vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
-        },
+          },
   )
 </script>
 
