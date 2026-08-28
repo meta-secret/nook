@@ -1,12 +1,14 @@
 import {
+  authenticateModuleDeliverySourceCommit,
   copyModuleDeliveryAdmission,
   createAcceptedModuleDeliveryEvidenceRegistry,
   expectedModuleDeliveryLineageMap,
+  frozenModuleDeliveryResources,
   freezeModuleDeliveryAdmissionSelection,
   moduleDeliveryResourcesConflict,
+  moduleDeliveryNode as nodeFor,
   trustedModuleDeliveryPlanSnapshot,
 } from './authority.ts';
-import { runModuleDeliveryGit } from './git-command.ts';
 import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
@@ -32,9 +34,12 @@ import type {
 } from './integration-provenance.ts';
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
+  AcceptedModuleDeliveryEvidenceRegistry,
   AcceptedModuleDeliveryEvidenceInspection,
   AcceptedModuleDeliveryEvidenceRegistration,
+  AuthenticateModuleDeliverySourceCommitRequest,
   ExpectedLineageMapRequest,
+  FrozenModuleDeliveryResourcesRequest,
   ResourceConflictRequest,
 } from './authority.ts';
 
@@ -71,6 +76,12 @@ export type CreateModuleDeliveryAdmissionStateRequest = {
   readonly headCommit: string;
   readonly integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
   readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
+};
+export type RestartModuleDeliveryGenerationRequest = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
+  readonly previousState: ModuleDeliveryAdmissionState;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
+  readonly expectedLineage: readonly ModuleDeliveryExpectedLineage[];
 };
 type AttemptIdentity = Readonly<{
   taskId: string;
@@ -144,6 +155,7 @@ export type AttemptLeaseAuthorityInspection = {
   readonly lease: ModuleDeliveryAttemptLease;
 };
 type AuthorityState = {
+  repositoryRoot: string;
   inputPlan: ValidatedModuleDeliveryPlan;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   expectedLineage: ReadonlyMap<string, AgentAttemptParent>;
@@ -151,6 +163,7 @@ type AuthorityState = {
   leaseHistory: Map<string, ModuleDeliveryAttemptLease>;
   attemptsByTask: Map<string, number>;
   dispositions: ModuleDeliveryAttemptDisposition[];
+  evidenceRegistry: AcceptedModuleDeliveryEvidenceRegistry;
 };
 type StateProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
@@ -192,10 +205,6 @@ type DispositionValidationRequest = {
   readonly lease: ModuleDeliveryAttemptLease;
   readonly outcome: ModuleDeliveryDispositionOutcome;
 };
-type FrozenResourcesRequest = {
-  readonly node: ModuleDeliveryNodeV2;
-  readonly plan: ValidatedModuleDeliveryPlan;
-};
 type StartingFrontierRequest = {
   readonly authority: AuthorityState;
   readonly state: ModuleDeliveryAdmissionState;
@@ -225,21 +234,23 @@ const leaseProvenance = new WeakMap<
 const consumedAdmissions = new WeakSet<ModuleDeliveryAdmission>();
 const disposedLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const acceptedEvidenceLeases = new WeakSet<ModuleDeliveryAttemptLease>();
-const acceptedEvidenceRegistry = createAcceptedModuleDeliveryEvidenceRegistry();
-
+const evidenceAuthorities = new WeakMap<
+  AcceptedModuleDeliveryEvidence,
+  ModuleDeliveryGenerationAuthority
+>();
 const COMMIT = /^[0-9a-f]{40}$/u;
 
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
   const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
-  const commitRequest = {
-    cwd: request.repositoryRoot,
-    args: ['cat-file', '-e', `${acceptedPlan.plan.sourceCommit}^{commit}`],
-    allowFailure: true,
+  const authenticationRequest: AuthenticateModuleDeliverySourceCommitRequest = {
+    repositoryRoot: request.repositoryRoot,
+    sourceCommit: acceptedPlan.plan.sourceCommit,
   };
-  if (runModuleDeliveryGit(commitRequest).exitCode !== 0)
-    throw new Error('Module delivery source commit is not authenticated.');
+  const repositoryRoot = authenticateModuleDeliverySourceCommit(
+    authenticationRequest,
+  );
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,
@@ -248,6 +259,7 @@ export function createModuleDeliveryGenerationAuthority(
   const value: ModuleDeliveryGenerationAuthority = { [AUTHORITY]: true };
   const authority = Object.freeze(value);
   const authorityState: AuthorityState = {
+    repositoryRoot,
     inputPlan: request.acceptedPlan,
     acceptedPlan,
     expectedLineage,
@@ -255,6 +267,7 @@ export function createModuleDeliveryGenerationAuthority(
     leaseHistory: new Map(),
     attemptsByTask: new Map(),
     dispositions: [],
+    evidenceRegistry: createAcceptedModuleDeliveryEvidenceRegistry(),
   };
   authorityStates.set(authority, authorityState);
   return authority;
@@ -285,18 +298,20 @@ export function moduleDeliveryAuthorityPlan(
 export function assertAcceptedModuleDeliveryEvidence(
   inspection: AcceptedModuleDeliveryEvidenceInspection,
 ): void {
-  acceptedEvidenceRegistry.assert(inspection);
+  requiredAuthority(inspection.authority).evidenceRegistry.assert(inspection);
 }
 
 export function moduleDeliveryAcceptedEvidenceIdentity(
   evidence: AcceptedModuleDeliveryEvidence,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
-  return acceptedEvidenceRegistry.identity(evidence);
+  const authority = authorityForAcceptedEvidence(evidence);
+  return authority.evidenceRegistry.identity(evidence);
 }
 
 export function verifyModuleDeliveryEvidenceSubmission(
   verification: ModuleDeliveryEvidenceSubmissionVerification,
 ): AcceptedModuleDeliveryEvidence {
+  const authority = requiredAuthority(verification.authority);
   const planRequest: ModuleDeliveryAuthorityPlanRequest = {
     authority: verification.authority,
     acceptedPlan: verification.acceptedPlan,
@@ -329,8 +344,8 @@ export function verifyModuleDeliveryEvidenceSubmission(
         authority: verification.authority,
         evidence,
       };
-      acceptedEvidenceRegistry.assert(inspection);
-      const identity = acceptedEvidenceRegistry.identity(evidence);
+      authority.evidenceRegistry.assert(inspection);
+      const identity = authority.evidenceRegistry.identity(evidence);
       if (seen.has(identity.taskId))
         throw new Error(`Duplicate accepted evidence for ${identity.taskId}.`);
       seen.add(identity.taskId);
@@ -350,7 +365,8 @@ export function verifyModuleDeliveryEvidenceSubmission(
     evidence: accepted,
     integratedTaskIds,
   };
-  acceptedEvidenceRegistry.register(registration);
+  authority.evidenceRegistry.register(registration);
+  evidenceAuthorities.set(accepted, verification.authority);
   acceptedEvidenceLeases.add(verification.lease);
   return accepted;
 }
@@ -386,7 +402,7 @@ export function createModuleDeliveryAdmissionState(
     headCommit: request.headCommit,
     integratedWrites,
   };
-  const evidence = acceptedEvidenceRegistry.collect(evidenceRequest);
+  const evidence = authority.evidenceRegistry.collect(evidenceRequest);
   const previousState = currentStates.get(request.authority);
   if (previousState) {
     const previousProvenance = stateProvenance.get(previousState);
@@ -415,6 +431,80 @@ export function createModuleDeliveryAdmissionState(
     authority: request.authority,
     acceptedEvidence: evidence.accepted,
   };
+  stateProvenance.set(state, provenance);
+  currentStates.set(request.authority, state);
+  return state;
+}
+
+export function restartModuleDeliveryGeneration(
+  request: RestartModuleDeliveryGenerationRequest,
+): ModuleDeliveryAdmissionState {
+  const stateInspection: AdmissionStateAuthorityInspection = {
+    authority: request.authority,
+    state: request.previousState,
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  const authority = requiredAuthority(request.authority);
+  const dispositionKeys = new Set(authority.dispositions.map(attemptKey));
+  if (
+    authority.activeLeases.size > 0 ||
+    [...authority.leaseHistory.values()].some(
+      (lease) => !dispositionKeys.has(attemptKey(lease)),
+    )
+  )
+    throw new Error(
+      'Generation restart requires authoritative terminal release evidence.',
+    );
+  const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
+  if (acceptedPlan.plan.generation <= request.previousState.generation)
+    throw new Error(
+      'A superseding module plan requires a newer immutable generation.',
+    );
+  const authenticationRequest: AuthenticateModuleDeliverySourceCommitRequest = {
+    repositoryRoot: authority.repositoryRoot,
+    sourceCommit: acceptedPlan.plan.sourceCommit,
+  };
+  authenticateModuleDeliverySourceCommit(authenticationRequest);
+  const lineageRequest: ExpectedLineageMapRequest = {
+    acceptedPlan,
+    entries: request.expectedLineage,
+  };
+  const expectedLineage = expectedModuleDeliveryLineageMap(lineageRequest);
+  const previousTaskIds = new Set(
+    authority.acceptedPlan.plan.nodes.map(({ taskId }) => taskId),
+  );
+  const attemptsByTask = new Map<string, number>();
+  for (const { taskId } of acceptedPlan.plan.nodes) {
+    const attempts = authority.attemptsByTask.get(taskId);
+    if (previousTaskIds.has(taskId) && attempts)
+      attemptsByTask.set(taskId, attempts);
+  }
+  const frontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[] =
+    Object.freeze([]);
+  const identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] =
+    Object.freeze([]);
+  const evidence: readonly AcceptedModuleDeliveryEvidence[] = Object.freeze([]);
+  const stateValue: ModuleDeliveryAdmissionState = {
+    generation: acceptedPlan.plan.generation,
+    planDigest: acceptedPlan.planDigest,
+    headCommit: acceptedPlan.plan.sourceCommit,
+    integratedWriterFrontiers: frontiers,
+    acceptedProviderEvidence: identities,
+  };
+  const state = Object.freeze(stateValue);
+  const provenance: StateProvenance = {
+    authority: request.authority,
+    acceptedEvidence: evidence,
+  };
+  const evidenceRegistry = createAcceptedModuleDeliveryEvidenceRegistry();
+  authority.inputPlan = request.acceptedPlan;
+  authority.acceptedPlan = acceptedPlan;
+  authority.expectedLineage = expectedLineage;
+  authority.activeLeases = new Map();
+  authority.leaseHistory = new Map();
+  authority.attemptsByTask = attemptsByTask;
+  authority.dispositions = [];
+  authority.evidenceRegistry = evidenceRegistry;
   stateProvenance.set(state, provenance);
   currentStates.set(request.authority, state);
   return state;
@@ -467,11 +557,11 @@ export function selectModuleDeliveryAdmissions(
       !taskReady(readyRequest)
     )
       continue;
-    const resourcesRequest: FrozenResourcesRequest = {
+    const resourcesRequest: FrozenModuleDeliveryResourcesRequest = {
       node,
       plan: authority.acceptedPlan,
     };
-    const resources = frozenResources(resourcesRequest);
+    const resources = frozenModuleDeliveryResources(resourcesRequest);
     if (
       admissions.length >= Math.max(available, 0) ||
       [...authority.activeLeases.values(), ...admissions].some((active) => {
@@ -666,6 +756,15 @@ function requiredAuthority(
   return state;
 }
 
+function authorityForAcceptedEvidence(
+  evidence: AcceptedModuleDeliveryEvidence,
+): AuthorityState {
+  const authority = evidenceAuthorities.get(evidence);
+  if (!authority)
+    throw new Error('Accepted module delivery evidence is forged.');
+  return requiredAuthority(authority);
+}
+
 function authorityForState(
   state: ModuleDeliveryAdmissionState,
 ): AuthorityState {
@@ -737,15 +836,6 @@ function integratedFrontiers(
     return entry;
   });
   return Object.freeze(result);
-}
-
-function nodeFor(request: NodeLookupRequest): ModuleDeliveryNodeV2 {
-  const node = request.plan.plan.nodes.find(
-    (candidate) => candidate.taskId === request.taskId,
-  );
-  if (!node)
-    throw new Error(`Validated plan is missing task ${request.taskId}.`);
-  return node;
 }
 
 function taskPending(request: AuthorityTaskRequest): boolean {
@@ -879,29 +969,6 @@ function validDisposition(request: DispositionValidationRequest): boolean {
       request.outcome.conclusion === ModuleDeliveryGenerationFenceKind.Failed ||
       request.outcome.conclusion === ModuleDeliveryGenerationFenceKind.Rejected)
   );
-}
-
-function frozenResources(
-  request: FrozenResourcesRequest,
-): ModuleDeliveryResourceClaims {
-  const evidenceReads =
-    request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
-      ? []
-      : request.node.dependencies.flatMap((taskId) => {
-          const nodeRequest: NodeLookupRequest = { plan: request.plan, taskId };
-          const provider = nodeFor(nodeRequest);
-          return provider.kind === ModuleDeliveryTaskKind.ReadOnly
-            ? provider.resources.evidenceSurface
-            : [];
-        });
-  const resources: ModuleDeliveryResourceClaims = {
-    read: Object.freeze([
-      ...new Set([...request.node.resources.read, ...evidenceReads]),
-    ]),
-    write: Object.freeze([...request.node.resources.write]),
-    evidenceSurface: Object.freeze([...request.node.resources.evidenceSurface]),
-  };
-  return Object.freeze(resources);
 }
 
 function startingFrontier(request: StartingFrontierRequest): string {

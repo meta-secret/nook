@@ -1,5 +1,11 @@
+import { realpathSync } from 'node:fs';
+
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
-import { ModuleDeliveryValidationStatus } from './domain.ts';
+import {
+  ModuleDeliveryTaskKind,
+  ModuleDeliveryValidationStatus,
+} from './domain.ts';
+import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
 
 import type {
@@ -14,6 +20,7 @@ import type {
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
 import type {
+  ModuleDeliveryNodeV2,
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
@@ -75,6 +82,44 @@ type ResourceClaimPair = {
   readonly first: readonly string[];
   readonly second: readonly string[];
 };
+export type AuthenticateModuleDeliverySourceCommitRequest = {
+  readonly repositoryRoot: string;
+  readonly sourceCommit: string;
+};
+export type FrozenModuleDeliveryResourcesRequest = {
+  readonly node: ModuleDeliveryNodeV2;
+  readonly plan: ValidatedModuleDeliveryPlan;
+};
+export type ModuleDeliveryNodeLookupRequest = {
+  readonly plan: ValidatedModuleDeliveryPlan;
+  readonly taskId: string;
+};
+
+export function authenticateModuleDeliverySourceCommit(
+  request: AuthenticateModuleDeliverySourceCommitRequest,
+): string {
+  const repositoryRoot = realpathSync(request.repositoryRoot);
+  const rootRequest = {
+    cwd: repositoryRoot,
+    args: ['rev-parse', '--show-toplevel'],
+    allowFailure: true,
+  };
+  const rootResult = runModuleDeliveryGit(rootRequest);
+  if (
+    rootResult.exitCode !== 0 ||
+    realpathSync(gitText(rootResult)) !== repositoryRoot
+  )
+    throw new Error('Module delivery repository root is not canonical.');
+  const commitRequest = {
+    cwd: repositoryRoot,
+    args: ['cat-file', '-e', `${request.sourceCommit}^{commit}`],
+    allowFailure: true,
+  };
+  if (runModuleDeliveryGit(commitRequest).exitCode !== 0)
+    throw new Error('Module delivery source commit is not authenticated.');
+  return repositoryRoot;
+}
+
 export function trustedModuleDeliveryPlanSnapshot(
   candidate: ValidatedModuleDeliveryPlan,
 ): ValidatedModuleDeliveryPlan {
@@ -92,6 +137,43 @@ export function trustedModuleDeliveryPlanSnapshot(
   )
     throw new Error('Validated module delivery plan metadata is inconsistent.');
   return accepted;
+}
+
+export function frozenModuleDeliveryResources(
+  request: FrozenModuleDeliveryResourcesRequest,
+): ModuleDeliveryResourceClaims {
+  const evidenceReads =
+    request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
+      ? []
+      : request.node.dependencies.flatMap((taskId) => {
+          const lookupRequest: ModuleDeliveryNodeLookupRequest = {
+            plan: request.plan,
+            taskId,
+          };
+          const provider = moduleDeliveryNode(lookupRequest);
+          return provider.kind === ModuleDeliveryTaskKind.ReadOnly
+            ? provider.resources.evidenceSurface
+            : [];
+        });
+  const resources: ModuleDeliveryResourceClaims = {
+    read: Object.freeze([
+      ...new Set([...request.node.resources.read, ...evidenceReads]),
+    ]),
+    write: Object.freeze([...request.node.resources.write]),
+    evidenceSurface: Object.freeze([...request.node.resources.evidenceSurface]),
+  };
+  return Object.freeze(resources);
+}
+
+export function moduleDeliveryNode(
+  request: ModuleDeliveryNodeLookupRequest,
+): ModuleDeliveryNodeV2 {
+  const node = request.plan.plan.nodes.find(
+    (candidate) => candidate.taskId === request.taskId,
+  );
+  if (!node)
+    throw new Error(`Validated plan is missing task ${request.taskId}.`);
+  return node;
 }
 export function expectedModuleDeliveryLineageMap(
   request: ExpectedLineageMapRequest,
