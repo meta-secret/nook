@@ -149,28 +149,63 @@ on request.
                 </span>
               {/if}
               {#if row.passkeySummary.kind === PasskeyCardSummaryKind.Present}
-                <p class="mt-1 text-xs leading-relaxed text-muted-foreground">
-                  {row.passkeySummary.summary.modeLabel}
-                </p>
                 <dl
-                  class="mt-4 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-border pt-4 lg:grid-cols-4"
+                  class="mt-4 grid min-w-0 grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2"
                   data-testid="devices-access-passkey-facts"
                 >
                   {#each row.passkeySummary.summary.facts as fact (fact.kind)}
-                    <div class="min-w-0" data-kind={fact.kind}>
-                      <dt class="text-xs text-muted-foreground">
-                        {fact.label}
-                      </dt>
-                      <dd
-                        class="mt-1 break-words text-sm text-foreground"
-                        class:font-mono={fact.kind ===
-                          PasskeyCardFactKind.Fingerprint}
-                        class:break-all={fact.kind ===
-                          PasskeyCardFactKind.Fingerprint}
+                    {#if fact.kind === PasskeyCardFactKind.Keeper}
+                      <div
+                        class="col-span-full min-w-0 rounded-md bg-muted/35 px-3 py-2.5"
+                        data-kind={fact.kind}
+                        data-priority="primary"
                       >
-                        {fact.value}
-                      </dd>
-                    </div>
+                        <dt class="text-xs font-medium text-muted-foreground">
+                          {fact.label}
+                        </dt>
+                        <dd
+                          class="mt-0.5 break-words text-base font-semibold text-foreground"
+                        >
+                          {fact.value}
+                        </dd>
+                      </div>
+                    {/if}
+                  {/each}
+                  {#each row.passkeySummary.summary.facts as fact (fact.kind)}
+                    {#if fact.kind === PasskeyCardFactKind.Fingerprint}
+                      <div
+                        class="col-span-full min-w-0"
+                        data-kind={fact.kind}
+                        data-priority="secondary"
+                      >
+                        <dt class="text-xs text-muted-foreground">
+                          {fact.label}
+                        </dt>
+                        <dd
+                          class="mt-0.5 break-all font-mono text-xs leading-relaxed text-foreground"
+                        >
+                          {fact.value}
+                        </dd>
+                      </div>
+                    {/if}
+                  {/each}
+                  {#each row.passkeySummary.summary.facts as fact (fact.kind)}
+                    {#if fact.kind === PasskeyCardFactKind.Created || fact.kind === PasskeyCardFactKind.LastUsed}
+                      <div
+                        class="min-w-0 border-t border-border/70 pt-3"
+                        data-kind={fact.kind}
+                        data-priority="supporting"
+                      >
+                        <dt class="text-[0.6875rem] text-muted-foreground">
+                          {fact.label}
+                        </dt>
+                        <dd
+                          class="mt-0.5 break-words text-xs text-muted-foreground"
+                        >
+                          {fact.value}
+                        </dd>
+                      </div>
+                    {/if}
                   {/each}
                 </dl>
               {:else if row.kind === IdentityKeyInventoryRowKind.Protector}
@@ -181,28 +216,33 @@ on request.
             </span>
           </div>
 
-          <div class="mt-5 ml-5 border-l border-border pl-7 sm:ml-8 sm:pl-9">
+          <div
+            class="mt-4 ml-5 border-l-2 border-border/70 bg-muted/15 px-3 py-2 sm:ml-13"
+            role="group"
+            aria-label={vault.t(I18N_KEYS.DevicesAccessAppsHeading)}
+            data-testid="devices-access-apps-group"
+          >
             <p class="access-micro-label text-muted-foreground">
               {vault.t(I18N_KEYS.DevicesAccessAppsHeading)}
             </p>
-            <ul class="mt-2 divide-y divide-border/70">
+            <ul class="mt-1 divide-y divide-border/60">
               {#each row.apps as app (app.key)}
-                <li class="py-3" data-testid="devices-access-app">
+                <li class="py-2" data-testid="devices-access-app">
                   <div class="flex min-w-0 items-start gap-3">
                     <MonitorSmartphone
                       class="mt-0.5 size-4 shrink-0 text-muted-foreground"
                       aria-hidden="true"
                     />
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium text-foreground">
+                      <p
+                        class="break-words text-sm font-medium text-foreground"
+                      >
                         {app.title}
                       </p>
-                      <p
-                        class="mt-0.5 text-xs leading-relaxed text-muted-foreground"
-                      >
+                      <p class="mt-0.5 text-xs text-muted-foreground">
                         {app.relationship}
                       </p>
-                      <details class="mt-2 text-xs text-muted-foreground">
+                      <details class="mt-1.5 text-xs text-muted-foreground">
                         <summary
                           class="w-fit cursor-pointer select-none hover:text-foreground"
                         >
