@@ -449,6 +449,19 @@ tasks:
       - npm ci
       - npm test
 
+  ci-agent:watch-review-comments:
+    desc: Watch one Nook PR for newly created review feedback.
+    deps:
+      - ci-agent:build
+    requires:
+      vars: [PR]
+    vars:
+      POLL_SECONDS: '{{default "15" .POLL_SECONDS}}'
+    cmds:
+      - >-
+        node "{{.CI_AGENT_DIR}}/dist/main/main.js" watch-review-comments
+        --pr "{{.PR}}" --poll-seconds "{{.POLL_SECONDS}}"
+
   ci-agent:smoke:
     desc: Verify exitCiAgent terminates despite open handles.
     dir: '{{.CI_AGENT_DIR}}'

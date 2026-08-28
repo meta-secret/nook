@@ -45,6 +45,13 @@ Use these authorities for product knowledge and evidence-backed promotion.
 - [Product specification lifecycle](dynamic-skills/product-spec-lifecycle.md)
 - [Agent self-improvement](dynamic-skills/self-improvement.md)
 
+## External feedback observation
+
+Use this skill for the bounded native subagent that observes new review feedback
+on one Nook pull request.
+
+- [GitHub review comment watcher](dynamic-skills/github-review-comment-watcher.md)
+
 ## AI workflows
 
 Use these workflows for AI-owned skills and cross-package changes.

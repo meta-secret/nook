@@ -31,6 +31,8 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: Keep every agent inside its assigned feature and focused issue set
 - **[code-review-comments.md](../../../gizmo/dynamic-skills/code-review-comments.md)**
   - Purpose: Address active actionable feedback and resolve its review conversations
+- **[github-review-comment-watcher.md](github-review-comment-watcher.md)**
+  - Purpose: Observe new PR review feedback through a read-only process and let a native watcher subagent forward typed references to active Gizmo
 - **[dynamic-skill-authoring.md](dynamic-skill-authoring.md)**
   - Purpose: Capture user feedback as durable team-owned Cortex skill cards
 - **[efficient-pr-delivery.md](../../../gizmo/dynamic-skills/efficient-pr-delivery.md)**

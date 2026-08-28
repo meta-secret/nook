@@ -40,6 +40,19 @@ behalf of a team subagent.
 If Gizmo cannot start a required team subagent, Gizmo reports the blocker.
 Gizmo must not silently take over the task.
 
+### Reactive review feedback
+
+Once a PR exists and reactive review handling is in scope, Gizmo keeps its turn
+active and uses the active harness to start one bounded read-only native review
+comment watcher subagent for that PR. Gizmo retains all GitHub and delivery
+authority, then joins and stops the watcher before completing its task.
+
+Follow the AI-owned
+[GitHub review comment watcher](teams/ai/dynamic-skills/github-review-comment-watcher.md)
+for the observation and forwarding contract. The active harness remains the
+authority for creation, model selection, communication, and cancellation;
+Markdown does not schedule the watcher.
+
 ### Integrated verdict
 
 Gizmo owns the final integrated PR verdict for the exact head.

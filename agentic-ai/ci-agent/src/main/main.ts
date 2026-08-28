@@ -11,6 +11,7 @@ import {
   runPrReviewRequest,
   runPrReviewStabilization,
 } from "./pr-review.js";
+import { runReviewCommentWatch } from "./review-comment-watch.js";
 
 async function runAgentCommand(): Promise<void> {
   const loadedConfig = loadConfig();
@@ -50,9 +51,12 @@ async function main(): Promise<void> {
     case "pr-review-stabilize":
       await runPrReviewStabilization();
       break;
+    case "watch-review-comments":
+      await runReviewCommentWatch(process.argv.slice(3));
+      break;
     default:
       throw new Error(
-        `Unknown command: ${command} (expected agent, fix, implement, pr-preflight, pr-ready, pr-review, or pr-review-stabilize)`,
+        `Unknown command: ${command} (expected agent, fix, implement, pr-preflight, pr-ready, pr-review, pr-review-stabilize, or watch-review-comments)`,
       );
   }
 }
