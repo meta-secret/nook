@@ -47,9 +47,13 @@ while IFS= read -r -d '' path; do
       loom_files+=("${path#agentic-ai/loom/}")
       ;;
     .cortex/gizmo/dynamic-skills/*/scripts/* | .cortex/shared/dynamic-skills/*/scripts/* | .cortex/teams/*/dynamic-skills/*/scripts/*)
-      skill_root="${path%/scripts/*}/scripts"
+      if [[ ! "$path" =~ ^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$ ]]; then
+        echo "format: invalid executable-skill path: $path" >&2
+        exit 1
+      fi
+      skill_root="${BASH_REMATCH[1]}"
       skill_application_roots+=("$skill_root")
-      skill_application_files+=("${path#${skill_root}/}")
+      skill_application_files+=("${BASH_REMATCH[3]}")
       ;;
     tooling/eslint-rules/no-raw-object-arguments.js)
       shared_tooling_files+=("$path")
