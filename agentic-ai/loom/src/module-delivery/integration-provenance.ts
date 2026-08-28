@@ -6,11 +6,60 @@ import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
 
 import type { GitCommandRequest } from './git-command.ts';
+import type { ModuleDeliveryGenerationAuthority } from './admission.ts';
+import type {
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryEvidenceClaimIdentity,
+} from './evidence.ts';
+import type { TeamKey } from '../team-agents/catalog.ts';
 import type {
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
 } from './integration.ts';
 import type { ModuleWorktreeHandle } from './workspace.ts';
+
+export const MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 1;
+
+export enum ModuleDeliveryProviderSubmissionKind {
+  ReadOnlyEvidence = 'read-only-evidence',
+}
+
+export enum ModuleDeliveryEvidenceVerdict {
+  TerminalSuccess = 'terminal-success',
+}
+
+export type ModuleDeliveryReadOnlyEvidenceSubmission = Readonly<{
+  kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence;
+  schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  sourceCommit: string;
+  producerTeam: TeamKey;
+  functionalOwner: TeamKey;
+  acceptanceOwner: TeamKey;
+  acceptanceRequirements: readonly string[];
+  claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  artifactIdentity: string;
+  artifactDigest: string;
+  verdict: ModuleDeliveryEvidenceVerdict;
+  evidence: readonly string[];
+}>;
+
+export type AcceptedModuleDeliveryEvidence =
+  ModuleDeliveryReadOnlyEvidenceSubmission &
+    Readonly<{ sourceProvenanceDigest: string }>;
+
+export type AcceptedModuleDeliveryEvidenceInspection = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
+  readonly evidence: AcceptedModuleDeliveryEvidence;
+};
+
+export function moduleDeliveryEvidenceSha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
 
 export type SourceRepositorySnapshot = {
   readonly headCommit: string;
