@@ -1,4 +1,4 @@
-import type { TeamKey } from '../team-agents/catalog.ts';
+import { TeamKey } from '../team-agents/catalog.ts';
 import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 
 export const MODULE_DELIVERY_PLAN_VERSION = 2;
@@ -25,6 +25,31 @@ export enum ModuleDeliveryTaskKind {
   ReadOnly = 'read-only',
   EvidenceSynthesis = 'evidence-synthesis',
   Write = 'write',
+}
+
+export type ModuleDeliveryTaskTeamRequest = {
+  readonly kind: ModuleDeliveryTaskKind;
+  readonly moduleRoot: string;
+  readonly expertContextPaths: readonly string[];
+};
+
+export function moduleDeliveryTaskTeam(
+  request: ModuleDeliveryTaskTeamRequest,
+): TeamKey | false {
+  if (request.kind === ModuleDeliveryTaskKind.Write) {
+    if (request.moduleRoot.startsWith('nook-app/nook-platform/'))
+      return TeamKey.DevelopmentCore;
+    if (request.moduleRoot.startsWith('nook-app/nook-web/'))
+      return TeamKey.WebDevelopment;
+    return false;
+  }
+  if (request.expertContextPaths.includes('.cortex/teams/ai/AGENTS.md'))
+    return TeamKey.Ai;
+  if (request.expertContextPaths.includes('.cortex/teams/web-dev/AGENTS.md'))
+    return TeamKey.WebDevelopment;
+  if (request.expertContextPaths.includes('.cortex/teams/dev-core/AGENTS.md'))
+    return TeamKey.DevelopmentCore;
+  return false;
 }
 
 export enum ModuleDeliveryEvidenceInputSchema {

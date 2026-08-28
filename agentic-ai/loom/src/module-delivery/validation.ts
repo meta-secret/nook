@@ -5,7 +5,6 @@ import {
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import type { ModuleExpertProfile } from '../module-experts/catalog.ts';
-import { TeamKey } from '../team-agents/catalog.ts';
 import { decodeModuleDeliveryPlan, moduleDeliveryPlanDigest } from './codec.ts';
 import {
   MAX_MODULE_DELIVERY_AGENT_DEPTH,
@@ -17,6 +16,7 @@ import {
   ModuleDeliveryIssueCode,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
+  moduleDeliveryTaskTeam,
 } from './domain.ts';
 import type {
   ModuleDeliveryEdgeContract,
@@ -311,13 +311,18 @@ function validateOwnership(request: NodeValidationRequest): void {
 }
 
 function validateModuleScope(request: ModuleScopeRequest): void {
-  const expectedTeam = expertTeam(request.profile);
+  const teamRequest = {
+    kind: request.node.kind,
+    moduleRoot: request.node.moduleRoot,
+    expertContextPaths: request.profile.canonicalContextPaths,
+  };
+  const expectedTeam = moduleDeliveryTaskTeam(teamRequest);
   if (request.node.team !== expectedTeam) {
     const issueRequest: IssueRequest = {
       state: request.state,
       code: ModuleDeliveryIssueCode.TeamOwnershipMismatch,
       path: `${request.path}.team`,
-      message: `${request.node.expert} requires team ${expectedTeam}.`,
+      message: `${request.node.taskId} requires task team ${expectedTeam}.`,
     };
     issue(issueRequest);
   }
@@ -350,18 +355,6 @@ function validateModuleScope(request: ModuleScopeRequest): void {
     };
     validateProfileProtectedWrite(protectedRequest);
   }
-}
-
-function expertTeam(profile: ModuleExpertProfile): TeamKey {
-  if (profile.canonicalContextPaths.includes('.cortex/teams/ai/AGENTS.md'))
-    return TeamKey.Ai;
-  if (profile.canonicalContextPaths.includes('.cortex/teams/web-dev/AGENTS.md'))
-    return TeamKey.WebDevelopment;
-  if (
-    profile.canonicalContextPaths.includes('.cortex/teams/dev-core/AGENTS.md')
-  )
-    return TeamKey.DevelopmentCore;
-  throw new Error(`Registered expert ${profile.name} has no canonical team.`);
 }
 
 function validateProfileProtectedWrite(
@@ -875,8 +868,19 @@ function buildExecutionDependencies(
         first: writer.resources.write,
         second: provider.resources.evidenceSurface,
       };
-      if (claimsOverlap(overlap)) {
-        dependencies.get(provider.taskId)?.add(writer.taskId);
+      if (claimContainment.resourceClaimListsOverlap(overlap)) {
+        const predecessors = dependencies.get(provider.taskId);
+        if (!predecessors?.has(writer.taskId)) {
+          predecessors?.add(writer.taskId);
+          const issueRequest: IssueRequest = {
+            state,
+            code: ModuleDeliveryIssueCode.BaselineMismatch,
+            path: `$.nodes[${state.plan.nodes.indexOf(provider)}].baseline`,
+            message:
+              'Evidence tasks overlapping a writer must declare that dependency and its integrated baseline.',
+          };
+          issue(issueRequest);
+        }
       }
     }
   }
@@ -955,18 +959,9 @@ function nodesConflict(pair: NodePair): boolean {
     second: pair.first.resources.read,
   };
   return (
-    claimsOverlap(writeWrite) ||
-    claimsOverlap(firstWriteRead) ||
-    claimsOverlap(secondWriteRead)
-  );
-}
-
-function claimsOverlap(request: ClaimPair): boolean {
-  return request.first.some((first) =>
-    request.second.some((second) => {
-      const pair: TaskResourcePatternPair = { first, second };
-      return taskResourcePatternsOverlap(pair);
-    }),
+    claimContainment.resourceClaimListsOverlap(writeWrite) ||
+    claimContainment.resourceClaimListsOverlap(firstWriteRead) ||
+    claimContainment.resourceClaimListsOverlap(secondWriteRead)
   );
 }
 

@@ -110,9 +110,7 @@ function writeNode(fixture: WriteNodeFixture): ModuleDeliveryWriteNodeV2 {
     team:
       fixture.expert === 'web_expert'
         ? TeamKey.WebDevelopment
-        : fixture.expert === 'internal_api_expert'
-          ? TeamKey.Ai
-          : TeamKey.DevelopmentCore,
+        : TeamKey.DevelopmentCore,
     functionalOwner: TeamKey.Ai,
     acceptanceOwner: TeamKey.Ai,
     parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
@@ -573,6 +571,30 @@ describe('reviewed module delivery plan', () => {
 });
 
 describe('task execution and canonical ownership', () => {
+  test('keeps implementation ownership separate from expert routing', () => {
+    expect(WASM_NODE.expert).toBe('internal_api_expert');
+    expect(WASM_NODE.team).toBe(TeamKey.DevelopmentCore);
+    const acceptedFixture: PlanFixture = {
+      nodes: [CORE_NODE, WASM_NODE],
+      edgeContracts: [CORE_WASM_EDGE],
+    };
+    expect(validate(plan(acceptedFixture)).status).toBe(
+      ModuleDeliveryValidationStatus.Accepted,
+    );
+
+    const expertOwnedWasm: ModuleDeliveryWriteNodeV2 = {
+      ...WASM_NODE,
+      team: TeamKey.Ai,
+    };
+    const rejectedFixture: PlanFixture = {
+      nodes: [CORE_NODE, expertOwnedWasm],
+      edgeContracts: [CORE_WASM_EDGE],
+    };
+    expect(codes(validate(plan(rejectedFixture)))).toContain(
+      ModuleDeliveryIssueCode.TeamOwnershipMismatch,
+    );
+  });
+
   test('permits empty writes only for an explicitly read-only task', () => {
     const auditFixture: ReadOnlyNodeFixture = {
       taskId: 'core-audit',
@@ -789,6 +811,23 @@ describe('task execution and canonical ownership', () => {
 });
 
 describe('dependency edges and resource safety', () => {
+  test('rejects stale source baselines for derived evidence predecessors', () => {
+    const auditFixture: ReadOnlyNodeFixture = {
+      taskId: 'core-audit',
+      expert: 'core_expert',
+      moduleRoot: CORE_ROOT,
+      dependencies: [],
+    };
+    const staleAudit = readOnlyNode(auditFixture);
+    const staleFixture: PlanFixture = {
+      nodes: [staleAudit, CORE_NODE],
+      edgeContracts: [],
+    };
+    expect(codes(validate(plan(staleFixture)))).toContain(
+      ModuleDeliveryIssueCode.BaselineMismatch,
+    );
+  });
+
   test('requires exact edge contracts for fan-in and multiple consumers', () => {
     const secondConsumerFixture: WriteNodeFixture = {
       taskId: 'web-second',

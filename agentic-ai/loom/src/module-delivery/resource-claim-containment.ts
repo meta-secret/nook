@@ -1,4 +1,6 @@
 import { resourceClaimMatchesPath } from './resource-claims.ts';
+import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
+import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import type { ResourcePathMatchRequest } from './resource-claims.ts';
 
 type ResourceClaimContainmentRequest = {
@@ -10,6 +12,22 @@ export type EvidenceCoverageRequest = {
   readonly read: readonly string[];
   readonly evidenceSurface: readonly string[];
 };
+
+export type ResourceClaimListPair = {
+  readonly first: readonly string[];
+  readonly second: readonly string[];
+};
+
+export function resourceClaimListsOverlap(
+  request: ResourceClaimListPair,
+): boolean {
+  return request.first.some((first) =>
+    request.second.some((second) => {
+      const pair: TaskResourcePatternPair = { first, second };
+      return taskResourcePatternsOverlap(pair);
+    }),
+  );
+}
 
 type BasenameContainmentRequest = {
   readonly coveringBasename: string;

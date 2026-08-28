@@ -10,7 +10,10 @@ import {
   ModuleDeliveryJoinKind,
   ModuleDeliveryTaskKind,
 } from '../../src/module-delivery/index.ts';
-import type { ModuleDeliveryPlanV2 } from '../../src/module-delivery/index.ts';
+import type {
+  LegacyModuleDeliveryPlan,
+  ModuleDeliveryPlanV2,
+} from '../../src/module-delivery/index.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 
 const REPOSITORY_ROOT = resolve(import.meta.dir, '../../../..');
@@ -64,6 +67,44 @@ function cliPlan(): ModuleDeliveryPlanV2 {
   };
 }
 
+function legacyCliPlan(): LegacyModuleDeliveryPlan {
+  return {
+    version: 1,
+    sourceCommit: SOURCE_COMMIT,
+    maxConcurrency: 1,
+    maxAgentDepth: 2,
+    maxAttempts: 2,
+    parentOwnedResources: [...REQUIRED_PARENT_OWNED_RESOURCES],
+    parentJoin: {
+      kind: ModuleDeliveryJoinKind.OrderedCommitHandoffs,
+      owner: 'delivery-owner',
+      validationCommands: ['task loom:verify'],
+    },
+    nodes: [
+      {
+        kind: ModuleDeliveryTaskKind.ReadOnly,
+        taskId: 'legacy-core-audit',
+        expert: 'core_expert',
+        moduleRoot: CORE_ROOT,
+        consumerOutcome: 'Legacy evidence is decoded for compatibility only.',
+        baseline: {
+          kind: ModuleDeliveryBaselineKind.SourceCommit,
+          sourceCommit: SOURCE_COMMIT,
+        },
+        agentDepthLimit: 2,
+        dependencies: [],
+        resources: { read: [`${CORE_ROOT}/**`], write: [] },
+        parentOwnedExclusions: [...REQUIRED_PARENT_OWNED_RESOURCES],
+        acceptance: {
+          commands: ['task loom:module-experts:validate'],
+          evidence: ['Legacy evidence is complete.'],
+        },
+      },
+    ],
+    edgeContracts: [],
+  };
+}
+
 function resultLine(output: string): string {
   return output.split('\n').find((line) => line.startsWith('{"status"')) ?? '';
 }
@@ -73,8 +114,10 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
   const cleanupOptions: RmOptions = { recursive: true, force: true };
   try {
     const acceptedPath = join(directory, 'accepted.json');
+    const legacyPath = join(directory, 'legacy.json');
     const rejectedPath = join(directory, 'rejected.json');
     await writeFile(acceptedPath, JSON.stringify(cliPlan()), 'utf8');
+    await writeFile(legacyPath, JSON.stringify(legacyCliPlan()), 'utf8');
     await writeFile(rejectedPath, '{', 'utf8');
 
     const acceptedCommand = [
@@ -96,7 +139,26 @@ test('module delivery CLI validates one plan file with deterministic JSON', asyn
     const secondResult = resultLine(second.stdout.toString());
     expect(firstResult).toBe(secondResult);
     expect(firstResult).toContain('"status":"accepted"');
+    expect(firstResult).toContain('"inputVersion":2');
     expect(firstResult).toMatch(/"planDigest":"[0-9a-f]{64}"/u);
+
+    const legacyCommand = [
+      'task',
+      '--dir',
+      REPOSITORY_ROOT,
+      'loom:module-delivery:validate',
+      `PLAN=${legacyPath}`,
+    ];
+    const legacyOptions = {
+      cmd: legacyCommand,
+      stderr: 'pipe' as const,
+      stdout: 'pipe' as const,
+    };
+    const legacy = Bun.spawnSync(legacyOptions);
+    expect(legacy.exitCode).not.toBe(0);
+    expect(resultLine(legacy.stdout.toString())).toContain(
+      'Canonical CLI admission requires plan version 2.',
+    );
 
     const rejectedCommand = [
       'task',

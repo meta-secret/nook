@@ -24,6 +24,7 @@ import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
+  moduleDeliveryTaskTeam,
 } from './domain.ts';
 import { TeamKey } from '../team-agents/catalog.ts';
 import type {
@@ -69,6 +70,11 @@ type ModulePlanResourceDecodeRequest = ModulePlanObjectDecodeRequest & {
 };
 type ModulePlanAcceptanceDecodeRequest = ModulePlanObjectDecodeRequest & {
   readonly legacy: boolean;
+};
+type LegacyTaskTeamRequest = {
+  readonly kind: string;
+  readonly expert: string;
+  readonly moduleRoot: string;
 };
 type ModulePlanDigestNodeLookup = {
   readonly plan: ModuleDeliveryPlanV2;
@@ -526,9 +532,16 @@ function decodeNode(
     record: fields.recordField('baseline'),
     path: `${path}.baseline`,
   };
+  const expert = fields.identifier('expert');
+  const moduleRoot = fields.string('moduleRoot');
+  const legacyTeamRequest: LegacyTaskTeamRequest = {
+    kind,
+    expert,
+    moduleRoot,
+  };
   const teamRequest: ModuleDeliveryTeamDecodeRequest = {
     value: request.legacy
-      ? legacyExpertTeam(fields.string('expert'))
+      ? legacyTaskTeam(legacyTeamRequest)
       : fields.string('team'),
     path,
   };
@@ -568,8 +581,8 @@ function decodeNode(
     functionalOwner: decodeTeam(functionalOwnerRequest),
     acceptanceOwner: decodeTeam(acceptanceOwnerRequest),
     parentLineage,
-    expert: fields.identifier('expert'),
-    moduleRoot: fields.string('moduleRoot'),
+    expert,
+    moduleRoot,
     consumerOutcome: fields.string('consumerOutcome'),
     baseline: decodeBaseline(baselineRequest),
     agentDepthLimit: fields.positiveInteger('agentDepthLimit'),
@@ -662,16 +675,21 @@ function decodeTeam(request: ModuleDeliveryTeamDecodeRequest): TeamKey {
   return request.value as TeamKey;
 }
 
-function legacyExpertTeam(expert: string): TeamKey {
-  const profile = MODULE_EXPERT_CATALOG.find(({ name }) => name === expert);
-  if (!profile) return TeamKey.Ai;
-  if (profile.canonicalContextPaths.includes('.cortex/teams/web-dev/AGENTS.md'))
-    return TeamKey.WebDevelopment;
-  if (
-    profile.canonicalContextPaths.includes('.cortex/teams/dev-core/AGENTS.md')
-  )
-    return TeamKey.DevelopmentCore;
-  return TeamKey.Ai;
+function legacyTaskTeam(request: LegacyTaskTeamRequest): TeamKey {
+  const profile = MODULE_EXPERT_CATALOG.find(
+    ({ name }) => name === request.expert,
+  );
+  const taskKind = Object.values(ModuleDeliveryTaskKind).find(
+    (candidate) => candidate === request.kind,
+  );
+  if (!taskKind) return TeamKey.Ai;
+  const teamRequest = {
+    kind: taskKind,
+    moduleRoot: request.moduleRoot,
+    expertContextPaths: profile?.canonicalContextPaths ?? [],
+  };
+  const team = moduleDeliveryTaskTeam(teamRequest);
+  return team === false ? TeamKey.Ai : team;
 }
 
 function decodeParentLineage(
