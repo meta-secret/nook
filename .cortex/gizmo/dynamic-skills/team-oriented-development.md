@@ -24,18 +24,24 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 6. Freeze the initial known graph and every capability or expertise contract.
 7. Validate deterministic topology and fail closed on cycles.
 8. Report a cycle's blocked dependency to Gizmo.
-9. Keep claims leased until Gizmo conclusively accepts, rejects, or cancels the
-   output.
+9. Keep claims leased until Gizmo records a conclusive output disposition. The
+   active harness performs cancellation and owns worker-attempt lifecycle.
 10. Apply canonical [subagent delegation](../workflows/subagent-delegation.md).
-11. Snapshot an exact starting frontier for each selected task.
-12. Create one worker attempt for each selected task.
-13. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-14. Follow [subagent delegation](../workflows/subagent-delegation.md) for
+11. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
+    exact frontier data.
+12. Gizmo validates the computed batch, selects and admission-authorizes task
+    records, freezes and owns their exact starting frontiers, and supplies
+    their contracts to the active harness.
+13. The active harness alone creates and operates attempts for the authorized
+    records. It does not select or admit records or snapshot or change
+    frontiers.
+14. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+15. Follow [subagent delegation](../workflows/subagent-delegation.md) for
    dispatch and integration.
-15. Route cross-team dependencies through Gizmo.
-16. Require each team to implement its own tests, Cortex updates, and review
+16. Route cross-team dependencies through Gizmo.
+17. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-17. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+18. Follow [Team-oriented development](../workflows/team-oriented-development.md)
    for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
@@ -67,7 +73,10 @@ This skill does not replace module ownership, internal API review, or subagent e
 ## Validation
 
 Confirm that every capability has one functional owner. Confirm that every
-task has one team identity. Confirm that every expertise implementation is a
+task has one team identity. Confirm that Loom/Nook computed candidate and exact
+frontier data, Gizmo validated and admission-authorized each selected record and
+froze its frontier, and the harness only operated authorized attempts. Confirm
+that every expertise implementation is a
 separate task whose team identity is the provider team and whose functional
 owner is explicit acceptance metadata. Confirm that every ready selected task
 received one worker attempt after its exact frontier existed. Confirm that
@@ -75,4 +84,5 @@ every expertise provider stayed inside its explicit code and test scope,
 preserved the frozen contract, and returned to the functional owner for
 acceptance before Gizmo integration. Confirm that Git frontiers contain write
 predecessors while accepted read-only evidence remains in parent task state.
-Confirm the remaining canonical delegation criteria.
+Confirm the harness did not select or admit records or snapshot or change
+frontiers. Confirm the remaining canonical delegation criteria.

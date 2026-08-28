@@ -45,9 +45,12 @@ authority.
 1. Gizmo keeps delivery-control work in its own context.
 2. Gizmo recursively discovers bounded functional task records.
 3. Gizmo assigns exactly one team identity to each task.
-4. Gizmo creates a worker attempt only after the task is ready and its exact
-   starting frontier exists.
-5. Gizmo applies the operational workflow routed through its delivery context.
+4. Loom/Nook computes eligible candidates, conflicts, capacity, leases, and
+   exact frontier data; Gizmo validates the batch, selects and
+   admission-authorizes records, and freezes and owns their starting frontiers.
+5. Gizmo supplies each authorized contract to the active harness. The harness
+   alone creates and operates attempts and never selects or admits records or
+   snapshots or changes frontiers.
 Rules 6-12 remain in that owning context.
 13. The assigned worker loads only its own context's `AGENTS.md` and knowledge
    graph.

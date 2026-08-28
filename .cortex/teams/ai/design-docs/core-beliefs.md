@@ -78,15 +78,18 @@ These are the core engineering beliefs that guide the development of Nook. Becau
 - **Every implementation mission** follows
   [mission delivery](../../../gizmo/workflows/mission-delivery.md).
 - Responsible team agents own implementation and scoped fixes.
-- Gizmo owns delivery planning, team dispatch, integration, review coordination,
-  validation, readiness, and merge.
+- Gizmo owns delivery planning, team-task admission authorization and contract
+  submission, integration, review coordination, validation, readiness, and
+  merge. The active harness creates and runs authorized attempts.
 - The delivery pipeline has these ordered steps:
   1. Gizmo fetches the repository and plans from `origin/main`.
-  2. Gizmo dispatches implementation to the responsible team agent.
+  2. Gizmo admission-authorizes the implementation task and submits its bounded
+     contract to the active harness, which creates and runs the attempt.
   3. Gizmo integrates the verified implementation handoff.
   4. Gizmo runs Loom pre-push and updates the PR.
   5. Gizmo runs focused hosted execution and complete PR validation.
-  6. Gizmo dispatches failures, comments, and conflicts to responsible teams.
+  6. Gizmo admission-authorizes each bounded correction task and submits its
+     contract to the active harness, which creates and runs the attempt.
   7. Gizmo integrates verified fixes and repeats exact-head validation.
   8. Gizmo runs readiness and completes the squash merge.
 - **Do not stop at push or readiness.** Gizmo owns the PR through squash merge

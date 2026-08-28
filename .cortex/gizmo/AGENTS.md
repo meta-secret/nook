@@ -29,9 +29,14 @@ Gizmo never gives its own graph to a team subagent.
 - Freeze the initial known graph, resource claims, dependencies, and acceptance
   evidence before dispatch.
 - Choose exactly one team identity for each task.
+- Use team identity only to select worker context; use the recorded functional
+  owner to control semantic acceptance.
 - Keep each attempt's claims leased until Gizmo conclusively dispositions its
   output.
-- Snapshot immutable starting frontiers for the selected tasks.
+- Use Loom/Nook tooling to compute eligible candidates, conflicts, capacity,
+  leases, and exact frontier data.
+- Validate each computed batch, select and admission-authorize task records,
+  and freeze and own their exact starting frontiers.
 - Supply the team identity and bounded task contract to the active harness.
 - Apply [canonical delegation](workflows/subagent-delegation.md) for topology,
   admission, evidence, integration, retries, and joins.
@@ -54,13 +59,17 @@ Gizmo never gives its own graph to a team subagent.
 2. Recursively discover initial bounded task records and provider edges.
 3. Select exactly one team identity for every team task.
 4. Freeze the initial known graph before dispatch.
-5. Execute the canonical delegation workflow.
-6. Verify each returned result against its task identity, starting frontier,
+5. Validate Loom/Nook's computed candidate batch, select and
+   admission-authorize ready task records, freeze their exact starting
+   frontiers, and supply their contracts to the active harness.
+6. Request creation and other attempt-lifecycle operations through the active
+   harness and observe its returned results.
+7. Verify each returned result against its task identity, starting frontier,
    resource scope, and acceptance evidence.
-7. Route every implementation finding back to its responsible team.
-8. Use the all-task barrier only for the final parent-owned join.
-9. Validate the integrated exact head and record the final verdict.
-10. Complete readiness, merge, and Workbench publication when the verdict is
+8. Route every implementation finding back to its responsible team.
+9. Use the all-task barrier only for the final parent-owned join.
+10. Validate the integrated exact head and record the final verdict.
+11. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
 
 Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
@@ -71,7 +80,8 @@ rules.
 Gizmo adds delivery-specific decisions. It selects the functional owner,
 freezes each team task, routes expertise handoffs to the recorded functional
 owner for acceptance, integrates accepted handoffs, and controls shared
-lifecycle state.
+integrated and external delivery state. The active harness alone owns
+worker-attempt lifecycle.
 
 Direct providers form edge-local readiness barriers.
 
@@ -86,6 +96,14 @@ Direct providers form edge-local readiness barriers.
 
 Hazard ordering and late-plan mutation follow the canonical delegation
 workflow; failed topology returns to Gizmo instead of waiting.
+
+An active worker never dispatches another worker. If it discovers a missing
+dependency, it returns the need to Gizmo. Gizmo conclusively dispositions the
+old attempt, creates a replacement immutable generation with the provider as a
+separate task and explicit functional owner. Loom/Nook computes the replacement
+candidate data, Gizmo validates and admission-authorizes the task and freezes
+its frontier, and the harness creates the attempt after old-generation
+disposition.
 
 ## Verdict rules
 
@@ -106,6 +124,11 @@ Gizmo owns the final integrated PR verdict.
 Completion proves:
 
 - every task stayed inside one declared team boundary;
+- every task recorded its functional owner separately from context-selecting
+  team identity;
+- every expertise handoff was semantically accepted by its recorded functional
+  owner before integration;
+- no active leased worker attempt created another worker attempt;
 - every accepted writer returned a verified commit;
 - every required team and security verdict is satisfied;
 - the final verdict names the exact integrated head; and

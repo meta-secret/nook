@@ -7,8 +7,8 @@ Status: Architecture decision with staged implementation.
 Nook separates repository policy from native harness coordination.
 
 - **Cortex** documents what a workflow means.
-- **Codex, Cursor, or another capable harness** creates and coordinates native
-  subagents.
+- **Codex, Cursor, or another capable harness** creates and operates only
+  Gizmo-authorized native worker attempts.
 - **Loom** may execute reviewed static read-only workflow graphs.
 - **Nook tools** validate task contracts, isolated workspace handoffs, and
   deterministic integration evidence.
@@ -53,7 +53,7 @@ Runtime inputs have bounded authority:
 
 ### Hierarchy semantics
 
-Native hierarchy follows the root
+Native task lineage follows the root
 [team worker contract](../../../AGENTS.md#team-worker-contract) and
 [subagent delegation](../../../gizmo/workflows/subagent-delegation.md).
 
@@ -62,17 +62,26 @@ That hierarchy is an optional separate workflow.
 It does not constrain capable native harness delegation beyond the repository's
 task contract and ownership rules.
 
+For native delegation, parent lineage and authority bounds are frozen task
+metadata for validation and aggregation. They do not authorize an active
+leased worker attempt to create another worker attempt. A missing dependency
+returns to Gizmo for a replacement immutable generation, Loom/Nook candidate
+computation, Gizmo admission authorization and frontier freezing, and harness
+attempt creation after old-generation disposition.
+
 ### Local feature-development boundary
 
 Feature planning uses the
 [module-oriented development workflow](../../../gizmo/workflows/module-oriented-development.md).
 
 - The feature dependency DAG controls readiness.
-- The agent hierarchy records semantic parentage.
+- Frozen task lineage records semantic parentage and authority bounds.
 - Dependency chains do not increase hierarchy depth.
 - Named semantic roles come from the
   [module expert registry](../architecture/module-experts.md).
 - Every task carries a mandatory team identity separate from its expert.
+- Team identity selects context only; explicit functional-owner metadata
+  controls semantic acceptance, including acceptance of expertise results.
 - `internal_api_expert` owns changed inter-module and WASM consumer contracts.
 - Expert catalog paths route knowledge and do not grant write authority.
 - Write-capable nodes use isolated workspaces and verified commit handoffs.
@@ -117,13 +126,14 @@ For those compiled workflows, the module owns:
 
 - the compiled workflow catalog;
 - graph validation;
-- deterministic ready-wave scheduling;
-- one disposable worker per reached task attempt;
+- deterministic eligible-candidate, conflict, capacity, lease, and exact
+  frontier computation;
 - typed result and artifact handoff;
 - resource-conflict checks;
 - append-only workflow events;
 - terminal projections;
-- timeout and cancellation state.
+- declared timeout, retry, and cancellation policy supplied as lifecycle
+  requests to the active harness.
 
 - **Retries:** Retries are not implicit. A workflow that needs them must declare
   and test that policy explicitly.
@@ -146,11 +156,15 @@ The active Codex, Cursor, or other capable harness is the primary worker
 adapter.
 
 Its universal responsibilities are defined by the root worker contract and
-subagent delegation workflow. This architecture adds one boundary: Nook does
-not start another Codex or Cursor process to coordinate native subagents.
+subagent delegation workflow. It only creates, starts, runs, retries, cancels,
+and communicates with attempts for Gizmo-authorized records. It does not
+compute candidates, select or admit records, or snapshot or change frontiers.
+Nook does not start another Codex or Cursor process to coordinate native
+subagents.
 
 The existing Loom Codex SDK adapter remains available for reviewed static
-read-only workflows.
+read-only workflows. When used, it is the active harness adapter for those
+authorized attempts, not task-selection or frontier authority.
 It is not required for module-expert dispatch or module-DAG implementation.
 
 ### Event store and materialized views
@@ -179,12 +193,14 @@ No optional artifact may gate:
 - retries;
 - cancellation;
 - dependency joins;
-- nested delegation;
+- worker creation;
 - synthesis;
 - completion.
 
-The active harness remains the coordination authority.
-The delivery owner validates accepted commits and evidence against current
+Loom/Nook remains deterministic candidate and frontier-data authority. Gizmo
+remains selection, admission-authorization, frontier-freezing, and integrated
+delivery authority. The active harness remains only worker-attempt lifecycle
+authority. Gizmo validates accepted commits and evidence against current
 repository state before integration.
 
 ### Delivery owner
@@ -254,8 +270,10 @@ The parallel wave contains these tasks:
 The optional catalog grows one reviewed workflow at a time.
 Use it only when a static deterministic graph is independently useful.
 
-Native Coding Bro delivery and module-DAG implementation remain harness-owned.
-They do not require compiled Loom workflows.
+Native Coding Bro delivery and module-DAG implementation retain the same split:
+Loom/Nook computes deterministic candidate data, Gizmo owns authorization and
+frontiers, and the harness owns only attempt lifecycle. They do not require a
+compiled Loom workflow.
 
 The optional Loom catalog keeps these boundaries:
 
@@ -268,16 +286,19 @@ The optional Loom catalog keeps these boundaries:
 The static Loom workflow foundation is complete and remains available for
 bounded read-only audits.
 
-Harness-native module delivery proceeds separately:
+Native module delivery proceeds separately:
 
 1. Validate a frozen module DAG and task contracts.
-2. Prepare one isolated workspace for each ready write-capable task.
-3. Let the active harness coordinate subagents.
-4. Verify each returned commit against its baseline and write scope.
-5. Integrate accepted commits in deterministic dependency order.
-6. Bind consumers to the exact integrated provider commit.
-7. Give retries fresh isolated state.
-8. Prove the full provider-to-consumer path with focused tests.
+2. Let Loom/Nook compute candidates, conflicts, capacity, leases, and frontier
+   data.
+3. Let Gizmo validate the batch, admission-authorize records, freeze frontiers,
+   and prepare isolated workspaces for authorized writers.
+4. Let the active harness create and operate only those authorized attempts.
+5. Verify each returned commit against its baseline and write scope.
+6. Integrate accepted commits in deterministic dependency order.
+7. Bind consumers to the exact integrated provider commit.
+8. Give authorized retries fresh isolated state through the harness.
+9. Prove the full provider-to-consumer path with focused tests.
 
 Optional journals and views may document the run for humans.
 They do not participate in the control path.
@@ -294,7 +315,10 @@ This decision does not:
 - map local software development onto Hive;
 - allow concurrent writers in one worktree;
 - transfer lifecycle ownership to child workers;
-- let nested delegation widen a frozen task or ownership scope;
+- let an active leased worker attempt create another worker attempt;
+- treat frozen lineage metadata as self-dispatch authority;
+- let the active harness select or admit task records or snapshot or change
+  frontiers;
 - require Loom to coordinate native harness subagents;
 - require JSONL or Markdown artifacts for workflow progress.
 

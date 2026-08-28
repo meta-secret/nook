@@ -5,7 +5,7 @@
 Design feature behavior top-down and implement accepted module contracts
 bottom-up.
 
-One delivery owner freezes the plan and owns the PR lifecycle.
+One delivery owner freezes the plan and owns integrated PR and Workbench state.
 Worker dispatch follows the root
 [team worker contract](../../AGENTS.md#team-worker-contract) and
 [subagent delegation](subagent-delegation.md).
@@ -24,6 +24,7 @@ Each node declares:
 
 - a stable task ID;
 - exactly one team identity;
+- an explicit functional owner;
 - one registered expert;
 - the consumer outcome;
 - provider dependencies;
@@ -45,10 +46,12 @@ Each edge declares:
 - owning contract tests.
 
 The delivery owner recursively discovers task records and freezes the initial
-known graph before dispatch. Team identity selects context and semantic
-acceptance ownership. The registered expert selects bounded module knowledge
-and never substitutes for team identity. A ready selected node receives one
-worker attempt only after its exact starting frontier exists.
+known graph before dispatch. Team identity selects only team context. The
+explicit functional owner controls semantic acceptance; for an expertise node,
+that owner accepts the expertise-provider team's result before Gizmo
+integration. The registered expert selects bounded module knowledge and never
+substitutes for either field. A ready selected node receives one worker attempt
+only after its exact starting frontier exists.
 
 ### Execution graph and admission
 
@@ -66,18 +69,23 @@ constraints before dispatch.
 
 Every attempt leases its resource claims. A consumer lease also includes the
 evidence-surface claims it relies on. Worker termination does not release the
-lease. Gizmo releases it only after accepted write integration, accepted
-read-only evidence, or a recorded unusable rejection or cancellation.
+lease. Gizmo records a conclusive disposition after accepted write integration,
+accepted read-only evidence, or unusable rejection or cancellation; only then
+does Loom/Nook release the lease.
 
-The harness computes capacity as
+Loom/Nook computes eligible candidates, conflicts, leases, exact frontier data,
+and capacity as
 `max(0, maxConcurrency - unreleasedLeaseCount)`.
 It visits ready nodes in stable task order, excludes conflicts with unreleased
-leases, and greedily selects a maximal admission batch only up to that capacity.
-It snapshots all selected frontiers before creating the batch's worker
-attempts. An admission batch is not a completion or integration barrier.
+leases, and computes a maximal safe candidate batch only up to that capacity.
+Gizmo validates the batch, selects and admission-authorizes task records, and
+freezes and owns their exact starting frontiers before supplying contracts to
+the active harness. The harness only creates and operates the authorized worker
+attempts; it does not select or admit records or snapshot or change frontiers.
+An admission batch is not a completion or integration barrier.
 
-- A child may delegate only within its assigned node and declared depth bound.
-- Nested delegation cannot add graph nodes, change edges, or widen write scope.
+- A worker attempt holding a claim lease cannot create another worker attempt.
+- Frozen parent lineage and authority bounds do not grant self-dispatch.
 
 ## Contract-first planning
 
@@ -120,8 +128,10 @@ Implementation follows dependency readiness.
 1. Complete and test the lowest provider against its frozen edge contract.
 2. Verify and integrate an accepted write provider immediately.
 3. Verify and accept read-only evidence through its versioned typed handoff.
-4. Record unusable output, then release its lease and recompute admission.
-5. Bind each ready consumer to its complete write-predecessor frontier.
+4. Record unusable output, then let Loom/Nook release its lease and recompute
+   candidates.
+5. Validate the computed successor and freeze its complete
+   write-predecessor frontier before admission authorization.
 6. Continue provider-locally toward the feature root while unrelated work runs.
 7. Use the all-task barrier only for the final parent-owned join, then run
    repository delivery gates.
@@ -158,8 +168,8 @@ and accepted. If an existing provider path requires evidence before the writer,
 the combined graph is cyclic and validation rejects the plan before dispatch.
 The plan must remove the overlap or repair the dependencies; ordinary execution
 does not accept stale consumers and then selectively revalidate them. The
-active harness retains scheduling, cancellation, retry, and lifecycle
-authority.
+active harness retains only authorized attempt creation, start, run,
+communication, retry, cancellation, and lifecycle authority.
 
 For example, `nook-core` must be accepted and integrated before `nook-wasm`
 starts. The web consumer then starts from the integrated frontier containing
@@ -168,25 +178,29 @@ that chain advances.
 
 ## Late provider discovery and generation restart
 
-The initial graph is frozen. A worker reports an unknown provider to Gizmo;
-every late mutation then uses the complete
+The initial graph is frozen. A worker reports an unknown provider to Gizmo and
+does not dispatch it. Gizmo conclusively dispositions the old attempt; every
+late mutation then uses the complete
 [immutable generation restart](subagent-delegation.md#immutable-generation-restart).
 All old-generation attempts are cancelled or rejected, accepted evidence and
 private integration state are abandoned, and every reached task retries fresh
-from the replacement generation's declared source and exact frontier. No old
-output migrates.
+from the replacement generation's declared source and exact frontier. The new
+provider is a separate task with its own team identity, functional owner, and
+resources. After old-generation disposition, Loom/Nook computes its candidacy
+and frontier; Gizmo validates and admission-authorizes it and freezes that
+frontier; only then does the harness create its attempt. No old output migrates.
 
 ## Flat hierarchy
 
 The plan declares a task-specific hierarchy depth bound.
 
-- The harness enforces the bound for native subagent delegation.
-- A child may create a descendant only inside its assigned task contract.
-- A descendant inherits its task's starting frontier, ownership limits, and delivery
-  owner.
-- Nested delegation cannot authorize another feature-DAG node.
-- Nested delegation cannot acquire GitHub, Workbench, shared-file, or merge
+- The frozen task graph records parent lineage and bounded authority.
+- Lineage supports validation and aggregation; it grants no worker-creation
   authority.
+- No active leased attempt may create a descendant or any other attempt.
+- Only Gizmo admission-authorizes records from a validated immutable
+  generation and freezes their frontiers. The harness only creates their
+  authorized attempts.
 
 Module dependency chains affect readiness.
 They do not create deeper agent lineage.
@@ -212,9 +226,12 @@ Before implementation, verify the canonical
 [delegation validation](subagent-delegation.md#validation) and
 these module-specific requirements:
 
-- every node has one team identity separate from a registered expert;
+- every node has one team identity, one explicit functional owner, and a
+  separate registered expert;
+- every expertise result is accepted by its functional owner before Gizmo
+  integration;
 - every changed boundary has a reviewed external API and provider-owned tests;
-- every task has exact frontier, scope, isolation, and hierarchy rules;
+- every task has exact frontier, scope, isolation, and frozen lineage rules;
 - every read-only task has a read-covered evidence surface and typed handoff;
 - every successor receives its complete write-predecessor closure; and
 - only the delivery owner performs the final all-task join.

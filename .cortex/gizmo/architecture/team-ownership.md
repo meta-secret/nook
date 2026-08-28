@@ -13,7 +13,8 @@ Gizmo retains shared integration and delivery actions.
 
 Every capability has one functional owner.
 
-- Gizmo may own coordination, integration, or lifecycle capabilities.
+- Gizmo may own delivery coordination, integration, or external delivery-state
+  capabilities. The active harness owns worker-attempt lifecycle.
 - One engineering team owns every implementation capability.
 - Gizmo is never an implementation expertise provider.
 
@@ -34,7 +35,7 @@ A capability may also require one expertise provider.
 - It owns implementation quality, focused tests, review fixes, and validation
   fixes inside that scope.
 - It does not own consumer-team Cortex, capability semantics, shared files, or
-  delivery lifecycle state.
+  delivery state.
 - It returns its semantic handoff to the functional owner for acceptance before
   Gizmo integrates it.
 
@@ -46,7 +47,11 @@ Team identity is task-scoped.
 - Gizmo assigns exactly one team identity to each bounded task.
 - A mission may reach many tasks with the same or different team identities.
 - Discovery creates task records. It does not create worker attempts.
-- Each ready selected task receives one worker attempt.
+- Loom/Nook computes eligible candidates, conflicts, capacity, leases, and
+  exact frontier data.
+- Gizmo validates the computed batch, selects and admission-authorizes task
+  records, and freezes and owns their exact starting frontiers.
+- Each authorized task receives one harness-created worker attempt.
 - Every attempt leases its claims until Gizmo conclusively dispositions its
   output.
 - Accepted write output is verified and integrated before release.
@@ -72,7 +77,8 @@ Skill ownership is separate from implementation delegation.
 
 ### Gizmo delivery control
 
-Gizmo owns coordination, integration, and lifecycle capabilities.
+Gizmo owns delivery coordination, integration, and external delivery-state
+mutations. The active harness alone owns worker-attempt lifecycle.
 
 - **Primary Cortex:** `.cortex/gizmo/`.
 - **Primary state:** Workbench, integrated Git state, pull requests, review
@@ -175,7 +181,8 @@ Shared Cortex contains knowledge that genuinely serves multiple teams.
 - Shared integration files remain serialized under Gizmo.
 
 Shared integration includes root manifests, lockfiles, generated bindings,
-cross-team registries, the root graph, and delivery lifecycle state.
+cross-team registries, the root graph, and integrated or external delivery
+state.
 
 A team agent may propose a required shared-file change.
 Gizmo decides the integration order and assigns the final writer.
@@ -186,7 +193,8 @@ Gizmo assigns the human request before implementation starts.
 
 1. Describe the observable functionality without assigning files yet.
 2. Recursively discover concrete task records and their provider dependencies.
-3. Assign coordination, integration, and lifecycle capabilities to Gizmo.
+3. Assign delivery coordination and integration to Gizmo. The active harness
+   alone owns worker-attempt creation and lifecycle.
 4. Assign each implementation task to AI, development core, security, SRE, or
    web development.
 5. When another team's implementation expertise is required, create a separate
@@ -197,9 +205,15 @@ Gizmo assigns the human request before implementation starts.
    acceptance evidence.
 8. Assign exactly one team identity to every reached task.
 9. Apply the canonical delegation workflow.
-11. Snapshot exact starting frontiers for selected tasks.
-12. Create one worker attempt for each selected task.
-13. Keep shared files and lifecycle state in the parent-owned join.
+11. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
+    exact frontier data.
+12. Gizmo validates the computed batch, selects and admission-authorizes task
+    records, freezes and owns their exact starting frontiers, and supplies
+    their contracts to the active harness.
+13. The active harness creates and operates one worker attempt for each
+    authorized record and owns attempt lifecycle. It does not select or admit
+    records or snapshot or change frontiers.
+14. Keep shared files and the final integration join with Gizmo.
 
 File location does not override semantic ownership.
 
@@ -245,8 +259,8 @@ another team has the implementation discipline needed to realize it safely.
    owner, not as another task identity.
 5. Freeze the accepted input contract and observable output.
 6. Declare exact code and test paths the provider may change.
-7. Declare consumer Cortex, capability semantics, shared files, and lifecycle
-   state forbidden.
+7. Declare consumer Cortex, capability semantics, shared files, integrated
+   delivery state, and worker-attempt lifecycle forbidden.
 8. Give the worker only the provider team's `AGENTS.md`, knowledge graph, and
    task-relevant authorities. Supply the frozen consumer contract as read-only
    task metadata; do not load the consumer team's graph.
@@ -274,7 +288,7 @@ That responsibility includes:
 - fixes for validation failures caused by the team's change; and
 - a bounded semantic handoff with evidence.
 
-Gizmo retains external lifecycle mutations.
+Gizmo retains external delivery-state mutations.
 
 - Team agents may diagnose review comments and implement their scoped fixes.
 - Only Gizmo replies, resolves conversations, pushes the integrated branch,
@@ -301,7 +315,12 @@ The final integration must prove:
 - each team supplied its own tests and review fixes;
 - shared files were serialized;
 - every reached task had one team identity;
-- every ready selected task had one worker attempt and an exact frontier;
+- Loom/Nook computed candidate, conflict, capacity, lease, and exact frontier
+  data;
+- Gizmo validated each batch, admission-authorized each selected task, and
+  froze and owned its exact starting frontier;
+- every authorized task had one harness-created worker attempt, and the harness
+  did not select or admit records or snapshot or change frontiers;
 - every lease release followed a conclusive output disposition;
 - every read-only task declared an evidence surface;
 - every successor Git frontier contained its full write-predecessor closure;

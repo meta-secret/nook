@@ -24,15 +24,20 @@ Gizmo must:
    - the tests or evidence that prove completion.
 4. Assign exactly one team identity to each task.
 5. Freeze the initial known task graph before dispatch.
-6. Apply canonical topology, admission, evidence, integration, and generation
-   rules from [subagent delegation](gizmo/workflows/subagent-delegation.md).
-7. Review every returned result against the requested outcome.
-8. Send incomplete or incorrect work back to the responsible subagent.
-9. Recursively call the responsible subagent with feedback until the mission
-   is complete or a real blocker requires human direction.
+6. Use Loom/Nook tooling to deterministically compute eligible candidates,
+   conflicts, capacity, leases, and exact frontier data under
+   [subagent delegation](gizmo/workflows/subagent-delegation.md).
+7. Validate the computed batch, select and admission-authorize its task
+   records, freeze their exact starting frontiers, and supply their bounded
+   contracts to the active harness.
+8. Observe and review every returned result against the requested outcome.
+9. When correction or retry is required, update the bounded contract and
+   request that lifecycle operation through the active harness until the
+   mission is complete or a real blocker requires human direction.
 
 Every reached unit receives a task record. A ready task receives one worker
-attempt only after its exact starting frontier exists. Each worker receives one
+attempt only after Gizmo freezes its exact starting frontier from Loom/Nook's
+computed data and admission-authorizes the record. Each worker receives one
 team identity, one task, that frontier, allowed files, forbidden files, and
 required proof. Team identity belongs to the task. It is not a singular
 identity for the mission.
@@ -42,8 +47,9 @@ verified handoff commits and control shared delivery state. Gizmo must not
 write product code, scripts, configuration, tests, or Cortex documentation on
 behalf of a team subagent.
 
-If Gizmo cannot start a required team subagent, Gizmo reports the blocker.
-Gizmo must not silently take over the task.
+If the active harness cannot create or start a required worker attempt after
+Gizmo admission-authorizes its task record, Gizmo reports the blocker. Gizmo
+must not silently take over the task.
 
 ### Integrated verdict
 
@@ -99,10 +105,10 @@ Typed evidence, deterministic admission, provider-local joins, immutable
 generation restart, and the final join follow
 [subagent delegation](gizmo/workflows/subagent-delegation.md).
 
-The active harness owns worker creation and native worker labels or names.
-It also owns same-model inheritance. Any explicit model selection remains
-harness-owned. The harness owns scheduling, communication, retries,
-cancellation, and terminal barriers.
+The active harness alone creates, starts, runs, retries, and cancels worker
+attempts and owns worker-attempt lifecycle. It also owns native worker labels
+or names, same-model inheritance, scheduling, communication, and terminal
+barriers. Any explicit model selection remains harness-owned.
 
 Repository profile files are not semantic, capability, context, model, or
 lifecycle authority.
@@ -169,7 +175,8 @@ and creates one task per required unit before that unit starts.
 - The agent reports the required capability and consumer contract.
 - Gizmo routes that dependency to the responsible team.
 - Gizmo assigns shared-file changes and integrates accepted subagent commits.
-- Gizmo owns lifecycle state.
+- Gizmo owns integrated delivery, PR, and Workbench state and requests worker
+  lifecycle operations through the active harness.
 
 Security review does not transfer implementation ownership.
 
@@ -196,10 +203,12 @@ Security review does not transfer implementation ownership.
   - Returns the provider's handoff to the functional owner for acceptance
     before integration.
 
-Gizmo may run team subagents one after another when their changes cannot safely
-overlap. Claims remain leased after worker termination until Gizmo records a
-conclusive disposition. Every lease release triggers readiness and admission
-recomputation. Gizmo remains outside team implementation tasks.
+Gizmo may select and admission-authorize ready task records in sequence when
+their changes cannot safely overlap, then supply their bounded contracts to the
+active harness. Claims remain leased after worker termination until Gizmo
+records a conclusive disposition. Every lease release triggers readiness and
+candidate recomputation by Loom/Nook. Gizmo remains outside team implementation
+tasks.
 
 ## Universal repository boundaries
 

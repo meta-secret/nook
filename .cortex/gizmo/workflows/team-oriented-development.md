@@ -25,20 +25,37 @@ Gizmo writes the team assignments before implementation starts.
 10. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
 11. Apply [subagent delegation](subagent-delegation.md) for operational worker
    rules and integration.
+12. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
+    exact frontier data.
+13. Let Gizmo validate the computed batch, select and admission-authorize task
+    records, freeze and own their exact starting frontiers, and supply their
+    contracts to the active harness.
+14. Let the active harness create and operate attempts only for those
+    authorized records. It does not select or admit records or snapshot or
+    change frontiers.
 
-Worker termination does not release claims. Gizmo releases a lease only after
-the output is conclusively dispositioned.
+Worker termination does not release claims. Gizmo records the conclusive output
+disposition; Loom/Nook then releases the lease and recomputes eligibility and
+capacity. The active harness does neither.
 
 - Accepted write output is verified and integrated.
 - Accepted read-only evidence is verified and accepted into parent task state.
 - Rejected or cancelled output is recorded and cannot be used.
 
-The canonical workflow defines capacity, hazard ordering, provider-local joins,
-and immutable generation restart.
+The canonical workflow defines Loom/Nook capacity and candidate computation,
+Gizmo admission authorization and frontier ownership, hazard ordering,
+provider-local joins, and immutable generation restart.
 
 ## Dispatch team agents
 
 Use a team subagent when the task has clear ownership, files, and proof.
+
+### Dispatch meaning
+
+Here, **dispatch** means Gizmo admission-authorizes the bounded task record and
+submits its contract to the active harness; the harness creates and runs the
+attempt. Dispatch does not give the harness task-selection or admission
+authority.
 
 The root [context selection contract](../../AGENTS.md#mandatory-context-selection)
 maps each team identity to its entry points.
@@ -88,7 +105,8 @@ Each team agent owns its entire declared technical slice.
 8. Implement every valid team-scoped correction.
 9. Return typed artifacts and an agent-authored semantic view.
 
-The team agent must not mutate shared lifecycle state.
+The team agent must not mutate integrated delivery state or worker-attempt
+lifecycle.
 
 ## Request another team's functionality
 
@@ -135,7 +153,8 @@ permission to edit another team's code.
 ## Integrate and deliver
 
 Gizmo uses provider edges as local barriers. It does not wait for unrelated
-tasks before activating a successor.
+tasks before validating and admission-authorizing a Loom/Nook-computed
+successor.
 
 1. Verify each task's team identity, frontier, scope, result, tests, and
    semantic view.
@@ -148,9 +167,10 @@ Canonical delegation supplies the intervening evidence and lease steps.
 11. Verify each read-only provider's exact source commit, then accept its
     evidence into parent task state.
 12. Record any other rejected or cancelled output as unusable.
-13. Release each lease after conclusive disposition.
-18. Bind every ready successor to the exact Git frontier containing its complete
-   write-predecessor closure.
+13. After Gizmo records each conclusive disposition, let Loom/Nook release the
+    lease and recompute eligibility and capacity. The harness does neither.
+18. Freeze each authorized successor's exact Git frontier containing its
+   complete write-predecessor closure.
 20. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
 21. Route review and validation failures back to the responsible team.
 22. Repeat until every team-owned correction is complete.
@@ -165,10 +185,12 @@ blocking team verdict or a required blocking security verdict.
 ## Validation
 
 Completion requires one exact team identity per team task.
-Each ready selected task has one worker attempt. Each capability has one owner
-team. Each expertise implementation is a separate task whose one team identity
-is its provider team, with the functional owner recorded as acceptance metadata
-and acceptance owner.
+Each Gizmo-authorized task has one harness-created worker attempt. Loom/Nook
+computes candidates and exact frontier data; Gizmo validates, selects,
+admission-authorizes, and freezes frontiers; the harness does not perform those
+actions. Each capability has one owner team. Each expertise implementation is a
+separate task whose one team identity is its provider team, with the functional
+owner recorded as acceptance metadata and acceptance owner.
 Completion also requires explicit cross-team contracts, team-owned tests and
 review fixes, one shared-state writer, root aggregation, and green exact-head
 delivery gates.

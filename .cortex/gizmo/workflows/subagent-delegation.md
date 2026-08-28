@@ -22,9 +22,11 @@ A capable agent environment MUST delegate when all of these conditions hold:
   - Do not use a movable branch name as a worker baseline.
 - Do not require one common baseline for the whole mission.
 - Record the delegation decision in the task plan.
-- Let the active harness own same-model inheritance and any explicit selection.
+- Let the active harness own same-model inheritance and any explicit model
+  selection.
 - Do not encode model selection in the repository task contract.
-- If the host cannot start the required subagents:
+- If the active harness cannot create or start the required authorized
+  attempts:
   - report an implementation blocker;
   - do not let Gizmo implement the assigned task; and
   - do not invent an undocumented subagent runner.
@@ -87,6 +89,7 @@ Every subagent task must declare:
 
 - a stable task ID;
 - exactly one team identity;
+- an explicit functional owner;
 - any separate semantic role or expert required by the task;
 - its exact baseline;
 - its purpose;
@@ -101,8 +104,12 @@ Every subagent task must declare:
 - forbidden mutations;
 - its parent-owned join.
 
-Team identity selects context and semantic acceptance ownership. A semantic
-role or expert selects bounded knowledge. Neither field can replace the other.
+Team identity selects only the worker's team context. The explicit functional
+owner controls semantic acceptance. For an expertise task, the team identity
+names the expertise-provider team while the functional owner remains the
+acceptance owner whose approval is required before Gizmo integration. A
+semantic role or expert selects bounded knowledge. None of these fields can
+replace another.
 
 ### Attempts and results
 
@@ -110,10 +117,13 @@ Create one disposable worker attempt only when the task is ready and its exact
 starting frontier exists.
 
 Do not create a second worker for the same task and attempt.
+An active worker attempt whose claims remain leased must not create any worker
+attempt. Worker claims are not subleased.
 
 A retry is a new attempt of the same logical task.
 
-- The worker returns a bounded result to the parent.
+- The worker returns a bounded result to Gizmo under its frozen parent-lineage
+  metadata.
 - The result contains:
 
 - status;
@@ -122,10 +132,13 @@ A retry is a new attempt of the same logical task.
 - affected paths;
 - proposed changes or a verified commit handoff;
 - risks;
-- notes for the parent.
+- notes for Gizmo.
 
-- The parent validates the result against current task state.
-- The parent does not merge worker conclusions blindly.
+- A worker that discovers a missing dependency returns that need to Gizmo. It
+  does not create the provider or another worker.
+
+- Gizmo validates the result against current task state.
+- Gizmo does not merge worker conclusions blindly.
 
 ## Task discovery and admission batches
 
@@ -137,21 +150,24 @@ dispatched.
 3. Repeat for each provider until all leaves are independently executable.
 4. Create one task record for every reached task.
 5. Assign exactly one team identity to every task record.
-6. Freeze the initial known graph before dispatch.
-7. Derive deterministic execution constraints.
+6. Record each task's explicit functional owner. For an expertise task, record
+   that functional owner as its acceptance owner separately from the
+   expertise-provider team identity.
+7. Freeze the initial known graph before dispatch.
+8. Derive deterministic execution constraints.
    - Every writer whose write claims overlap a read-only provider's evidence
      surface is a predecessor of that evidence provider, regardless of their
      existing declared order.
    - Otherwise-unordered conflicting tasks are serialized in stable execution
      order instead of making the plan invalid.
-8. Run deterministic topology and cycle validation over declared and derived
+9. Run deterministic topology and cycle validation over declared and derived
    constraints.
    - A cycle fails closed.
    - An existing evidence-provider-before-writer dependency conflicts with the
      required writer-before-provider constraint and is rejected before
      dispatch.
    - Report the blocked dependency to Gizmo instead of waiting.
-9. Freeze resource claims, acceptance evidence, stable task order, and the
+10. Freeze resource claims, acceptance evidence, stable task order, and the
    parent-owned join.
 
 ### Typed provider handoffs
@@ -159,14 +175,14 @@ dispatched.
 A write provider satisfies its consumer edge only when it is:
 
 - terminal-successful;
-- semantically accepted by the responsible owner;
+- semantically accepted by the task's recorded functional owner;
 - commit-verified against its declared frontier and resource scope; and
 - integrated into the consumer's Git frontier.
 
 A read-only provider satisfies its consumer edge only when it is:
 
 - terminal-successful;
-- semantically accepted by the responsible owner;
+- semantically accepted by the task's recorded functional owner;
 - represented by a versioned typed evidence handoff;
 - verified against its exact source commit and evidence-surface content
   identities; and
@@ -186,31 +202,39 @@ Dispatch follows these rules:
 - A task becomes ready when every direct provider satisfies its edge barrier.
 - A task is not selectable until its exact starting Git frontier exists.
 - Read-only evidence is not required in Git ancestry.
-- Every attempt leases its resource claims.
-- A consumer lease also includes evidence-surface claims it relies on.
+- Loom/Nook deterministically computes eligible candidates, claim conflicts,
+  available capacity, required leases, and exact starting-frontier data.
+- A computed consumer lease includes the evidence-surface claims it relies on.
+- Gizmo validates the computed candidate batch against the frozen generation.
+- Gizmo selects and admission-authorizes task records only from that valid
+  batch and freezes and owns each selected record's exact starting frontier.
+- Loom/Nook records the computed lease before Gizmo supplies the authorized
+  bounded contract to the active harness.
 - Worker termination does not release the lease.
-- Gizmo releases it only after conclusively dispositioning the output.
-- The harness computes available capacity as
+- Gizmo records a conclusive output disposition before Loom/Nook releases it.
+- Loom/Nook computes available capacity as
   `max(0, maxConcurrency - unreleasedLeaseCount)`.
-- It visits ready pending tasks in stable task order.
+- Loom/Nook visits ready pending tasks in stable task order.
 - It first excludes tasks that conflict with any unreleased lease from prior
   admission batches.
 - It then greedily selects a task when its claims do not conflict with claims
-  already selected for the new admission batch.
+  already included in the new candidate batch.
 - Claims conflict when they overlap and either task writes.
 - Selection stops when available capacity is exhausted.
-- The resulting set is the deterministic maximal safe admission batch under
+- The resulting set is the deterministic maximal safe candidate batch under
   that capacity.
-- The harness snapshots every selected starting frontier before creating any
-  attempt in that batch.
-- It creates one worker attempt for each selected task.
+- Gizmo freezes every selected starting frontier before requesting any attempt
+  in that batch.
+- The active harness creates, starts, runs, communicates with, retries, or
+  cancels attempts only for Gizmo-authorized records. It does not compute
+  candidates, select or admit task records, or snapshot or change frontiers.
 - Ready tasks excluded by conflicts remain pending for the next recomputation.
 - Read-only audits may overlap, including audits of the same evidence.
 - Concurrent writers require isolated workspaces and disjoint resource claims.
-- After each Git integration or read-only evidence acceptance, Gizmo recomputes
-  readiness on affected outgoing edges.
-- Each newly ready successor binds to the exact integrated frontier that
-  contains its complete write-predecessor closure.
+- After each Git integration or read-only evidence acceptance, Loom/Nook
+  recomputes readiness and exact frontier data on affected outgoing edges.
+- Gizmo validates that data and freezes each authorized successor's exact
+  integrated frontier containing its complete write-predecessor closure.
 - Unrelated work continues. Admission batches are not completion or integration
   barriers.
 - The all-task terminal barrier exists only for the final parent-owned join.
@@ -227,9 +251,9 @@ Gizmo records exactly one conclusive disposition for each terminal output.
 - **Rejected or cancelled:** record that the output cannot be used.
 
 The attempt lease remains held until its disposition is complete. Every lease
-release triggers readiness and admission recomputation. Completion of provider
-A may therefore make A's consumer selectable while unrelated provider B from
-the same admission batch is still active.
+release triggers Loom/Nook readiness and candidate recomputation. Completion of
+provider A may therefore make A's consumer eligible while unrelated provider B
+from the same admission batch is still active.
 
 ### Evidence-safe execution ordering
 
@@ -264,8 +288,8 @@ revalidation exception. A plan may permit evidence-before-writer ordering only
 through a separately specified full-generation revalidation protocol that
 prevents old evidence and every result derived from it from being accepted in
 the replacement generation. This workflow defines no such protocol, so it
-fails closed. Harness scheduling, cancellation, retries, and lifecycle state
-remain harness-owned.
+fails closed. Authorized attempt creation, start, run, communication, retry,
+cancellation, and lifecycle remain harness-owned.
 
 ### Immutable generation restart
 
@@ -276,14 +300,29 @@ Any late provider, edge, claim, acceptance, or other plan mutation creates a
 new immutable plan generation and digest. Selective state or handoff migration
 is not supported.
 
+#### Missing dependency
+
+A missing dependency discovered by an active worker is a late provider. The
+worker returns the need to Gizmo without dispatching it. Gizmo records a
+conclusive unusable disposition for the old attempt and follows the complete
+generation restart below. The replacement generation records the provider as
+a separate task with its own team identity, functional owner, resources, and
+edges. Only after every old-generation attempt is conclusively dispositioned
+may Loom/Nook compute replacement candidates for Gizmo validation and
+admission authorization. The harness creates attempts only for those authorized
+records.
+
 For any late mutation:
 
 1. Report it to Gizmo and invalidate the complete old generation.
-2. Cancel active attempts; reject terminal-but-unaccepted output; release each
-   lease only after recording that disposition.
+2. Gizmo requests cancellation through the active harness, rejects
+   terminal-but-unaccepted output, and records each conclusive disposition
+   before Loom/Nook releases its lease.
 3. Abandon accepted evidence and private integration state.
 4. Rebuild and cycle-check the graph as a new immutable generation.
-5. Retry every reached task from its new declared source and exact frontier.
+5. Let Loom/Nook compute replacement candidate and frontier data; Gizmo
+   validates, admission-authorizes, and freezes each selected frontier; and the
+   active harness retries only those authorized records.
 
 Old-generation results may remain inspectable but cannot be reused.
 
@@ -304,15 +343,17 @@ Module-oriented work follows
 - Give every write-capable worker an isolated workspace.
 - Verify every returned commit against its exact baseline and allowed paths.
 - Bind every downstream task to the exact integrated provider commit.
-- Keep shared files and lifecycle state with Gizmo.
+- Keep shared files and integrated or external delivery state with Gizmo.
 
 The plan declares a task-specific hierarchy depth bound.
-The harness enforces that bound.
-A child may delegate within its assigned task only.
-Nested delegation cannot add a feature-DAG node, widen write scope, or acquire
-delivery authority.
+The frozen graph records parent lineage and bounded authority for every task.
+Those fields support validation and result aggregation; they do not authorize
+an active worker to create another worker. Only Gizmo may add a newly discovered
+dependency through a replacement immutable generation, and only the harness
+may create its attempt after Gizmo admission-authorizes it and freezes its
+frontier following old-generation disposition.
 `ModuleExpertEvidence`, Markdown, and `parentActions` are recommendations.
-They do not authorize descendants or lifecycle mutations.
+They do not authorize worker creation or lifecycle mutations.
 
 ## Team-oriented implementation
 
@@ -341,16 +382,17 @@ Team ownership does not add hierarchy depth or scheduling authority.
 
 ## Hierarchical event protocol
 
-The active harness owns the live subagent hierarchy.
+The active harness owns only worker-attempt creation and live attempt execution
+for Gizmo-authorized records in the frozen task lineage.
 
 Its native control path includes:
 
-- creation and communication;
-- dependency-ready scheduling;
-- retries and cancellation;
-- terminal barriers;
-- nested delegation within declared bounds;
-- parent and root synthesis.
+- creation, start, run, and communication for authorized attempts;
+- retries and cancellation requested through Gizmo;
+- terminal-state reporting.
+
+No active leased worker attempt may invoke that creation authority. A worker
+reports a missing dependency to Gizmo for immutable generation restart.
 
 It also owns native worker labels or names, same-model inheritance, and any
 explicit model selection.
@@ -378,8 +420,8 @@ parent lineage, local sequence, and timestamp.
 - Child streams never decide eligibility, joins, retries, or completion.
 
 The existing Loom recording commands may preserve optional audit evidence.
-Ordinary native delegation does not require `start`, `admit`, `record`, or
-`finalize` before the harness proceeds.
+They do not select or admit native task records. Gizmo authorization remains
+mandatory before the harness creates or proceeds with an attempt.
 
 ### Semantic materialized views
 
@@ -391,17 +433,21 @@ A Markdown view may preserve an agent's conclusions for human inspection.
 - Never require a view before dispatch, continuation, retry, join, or
   completion.
 
-### Parent aggregation and continuation
+### Gizmo aggregation and continuation
 
-The harness passes child results to the owning parent and enforces declared
-barriers.
+The harness passes worker results to Gizmo with their frozen parent lineage.
+Loom/Nook computes barrier and candidate state. Lineage does not imply a live
+parent worker.
 
-Before integration, the parent verifies identity, lineage, baseline, scope,
-handoff, and team acceptance. It dispositions each result provider-locally,
-releases the lease, recomputes readiness and capacity, and binds successors to
-their complete integrated predecessor frontier. Failures remain parent-owned.
+Before integration, Gizmo verifies identity, lineage, baseline, scope,
+handoff, and the recorded functional owner's semantic acceptance. It
+dispositions each result provider-locally and integrates accepted writes or
+evidence. Loom/Nook then releases the lease and recomputes readiness, conflicts,
+capacity, and exact frontier
+data. Gizmo validates that computation and freezes authorized successors'
+frontiers. Failures remain Gizmo-owned.
 
-The parent may author a Markdown summary for humans.
+Gizmo may author a Markdown summary for humans.
 That summary is optional.
 
 ### Processing storage and retention
@@ -553,16 +599,23 @@ Before integration, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
+- every task recorded an explicit functional owner separately from team
+  identity;
+- every expertise result received semantic acceptance from its recorded
+  functional owner before Gizmo integration;
 - the repository task contract did not prescribe a native label or model;
 - every reached task has a task record;
 - every selected ready task has one harness-visible worker attempt;
 - every task record declares read and write resource claims;
 - every read-only task record declares a non-empty evidence surface covered by
   its read claims;
-- every child records the correct parent lineage;
-- every task stayed inside its declared hierarchy depth bound;
-- no descendant widened its assigned task or write scope;
-- every parent result covers the declared child terminal barrier;
+- every task records its correct frozen parent lineage and authority bound;
+- no active leased worker attempt created another worker attempt;
+- every missing dependency returned to Gizmo instead of being self-dispatched;
+- every newly discovered provider entered a replacement immutable generation
+  as a separate normally admitted task after old-attempt disposition;
+- Gizmo's aggregate covers every terminal barrier declared by the frozen task
+  lineage;
 - write scopes did not overlap;
 - every write-capable attempt used an isolated workspace;
 - every retry started from fresh isolated state;
@@ -576,14 +629,22 @@ Before integration, verify:
 - declared and derived execution order was deterministic and acyclic;
 - admission was stable, conflict-safe, and capped by available
   `maxConcurrency` after every unreleased lease;
+- Loom/Nook computed eligible candidates, conflicts, capacity, leases, and
+  exact frontier data;
+- Gizmo validated each computed batch, selected and admission-authorized task
+  records, and froze and owned every exact starting frontier;
+- the active harness created and operated attempts only for Gizmo-authorized
+  records and never selected or admitted tasks or snapshotted or changed a
+  frontier;
 - every consumer lease included relied-on evidence-surface claims;
 - worker termination did not release a claim lease;
 - every claim lease remained held until conclusive output disposition;
 - accepted writes were verified and integrated before lease release;
 - accepted read-only evidence used the verified typed handoff;
 - rejected or cancelled output was recorded as unusable before lease release;
-- every lease release triggered readiness and admission recomputation;
-- selected frontiers were snapshotted before attempts were created;
+- every lease release triggered Loom/Nook readiness and candidate
+  recomputation;
+- Gizmo froze selected frontiers before attempts were created;
 - conflict-excluded ready tasks remained pending for recomputation;
 - otherwise-unordered non-evidence conflicts were serialized and every writer
   overlapping an evidence surface preceded its read-only provider;
@@ -594,12 +655,14 @@ Before integration, verify:
   no result or private state, and retried every reached task in a validated new
   generation;
 - every cycle failed closed and reported its blocked dependency to Gizmo;
-- readiness was recomputed after every Git integration or evidence acceptance;
+- Loom/Nook recomputed readiness and frontier data after every Git integration
+  or evidence acceptance;
 - provider results were dispositioned locally without a whole-admission-batch
   barrier;
 - no known evidence hazard required rollback or invalidation of an already
   accepted consumer;
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
-- the parent reviewed all evidence;
-- only Gizmo mutated shared lifecycle state.
+- Gizmo reviewed all evidence;
+- only Gizmo mutated integrated and external delivery state, and only the
+  active harness owned worker-attempt lifecycle.

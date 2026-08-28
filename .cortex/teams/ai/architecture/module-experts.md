@@ -27,8 +27,10 @@ expert.
 - The internal API expert may inspect an accepted provider-consumer boundary
   across teams. It remains read-only and cannot transfer ownership.
 
-The delivery owner selects the team and its acceptance context before invoking
-the bounded expert role.
+Gizmo selects the team and acceptance context, admission-authorizes the bounded
+expert-role task, and submits its contract to the active harness. In this
+registry, **invoke** means that submission followed by the harness creating and
+running the attempt; it never means Gizmo creates or runs a worker.
 The expert must not expand into another team's implementation scope.
 
 ## Registry contract
