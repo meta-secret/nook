@@ -5,6 +5,7 @@ import {
   type ConfigurationReferenceInspection,
   type ConfigurationScriptGraph,
   type ExecutableProviderReferenceInspection,
+  expandStaticShellVariables,
   executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
   ShellExecutablePolicy,
@@ -56,25 +57,21 @@ type ActionLoaderFixture = {
   readonly path: string;
   readonly source: string;
 };
-
 type RequiredLaunchInspection = {
   readonly source: string;
   readonly specifier: string;
 };
-
 type ApplicationConsumerEdge = {
   readonly dependency: string;
   readonly importer: string;
   readonly source: string;
 };
-
 type RepositoryPackageDocument = {
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
   readonly name?: string;
   readonly optionalDependencies?: Readonly<Record<string, string>>;
 };
-
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const PROVIDER_ROOT =
   '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts';
@@ -96,7 +93,6 @@ const ACTION_SOURCE_SUFFIXES = [
 ] as const;
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
-
 function isTaskConfiguration(path: string): boolean {
   return /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path);
 }
@@ -295,7 +291,8 @@ function configurationScriptReferences(
 ): readonly string[] {
   const source = inspection.source;
   const launchSource = source.replace(/["'`\\]/gu, '');
-  const matched = [source, launchSource].flatMap((candidate) => {
+  const expandedSource = expandStaticShellVariables(launchSource);
+  const matched = [source, expandedSource].flatMap((candidate) => {
     CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
     EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
     return [
@@ -316,7 +313,7 @@ function configurationScriptReferences(
   );
   for (const specifier of matched) {
     const launchInspection: RequiredLaunchInspection = {
-      source: launchSource,
+      source: expandedSource,
       specifier,
     };
     if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
@@ -836,6 +833,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', `{"scripts":{"audit":"bun ${LOOM_ARTICLE_ADAPTER}"}}`],
     ['package.json', `{"scripts":{"audit":"bun ${HOST_CLI}"}}`],
     ['package.json', `{"scripts":{"audit":"bun ${HOST_ROOT}\\"cli.ts\\""}}`],
+    ['package.json', `root=${HOST_ROOT.slice(0, -1)}; bun "$root/cli.ts"`],
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
       'Taskfile.yml',
@@ -881,7 +879,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(() => configurationScriptPaths(graph), path).toThrow(
+    expect(() => configurationScriptPaths(graph), `${path}:${source}`).toThrow(
       /Unauthorized application edge|runtime boundary|Runnable script is untracked|Task launch variable/u,
     );
   }

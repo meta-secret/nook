@@ -71,9 +71,9 @@ folder form `<dynamic-skills>/<slug>/SKILL.md` and put the ordinary Bun and
 TypeScript project under its co-located `scripts/` directory. The project must
 have a frozen lockfile, package manifest, TypeScript and ESLint configuration,
 focused `src/` and `tests/`, and the repository 1,000-line source limit. It must
-not contain another `SKILL.md` or become a harness mirror. The Cortex article
-application is in-process only; strict YAML discovery and invocation remain
-follow-up work.
+not contain another `SKILL.md` or become a harness mirror. Provider-neutral
+strict YAML discovery is available through `task skills:tools-list`. Public
+Cortex article action discovery and invocation remain B2 follow-up work.
 
 For a new card scaffold, prefer Loom:
 

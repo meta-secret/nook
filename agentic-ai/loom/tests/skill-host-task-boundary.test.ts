@@ -7,7 +7,6 @@ import {
   HOST_CLI,
   TASK_YAML_BYTE_LIMIT,
 } from './skill-host-task-boundary.ts';
-
 type Source = { readonly path: string; readonly source: string };
 const REPOSITORY_ROOT = `${import.meta.dir}/../../..`;
 const ROOT_SOURCE = await Bun.file(`${REPOSITORY_ROOT}/Taskfile.yml`).text();
@@ -23,13 +22,11 @@ function graph(provided?: readonly Source[]): readonly Source[] {
     ...extras,
   ];
 }
-
 test('accepts only the exact finite public tools-list Task schema', () => {
   expect(hasOnlyCanonicalHostTaskEdge(CANONICAL_TASK_SOURCE)).toBe(true);
   const mutated = CANONICAL_TASK_SOURCE.replace('true', 'false');
   expect(hasOnlyCanonicalHostTaskEdge(mutated)).toBe(false);
 });
-
 test('requires one exact flattened include chain', () => {
   expect(hasExactToolsListTaskGraph(graph())).toBe(true);
   for (const extra of [
@@ -50,7 +47,6 @@ test('requires one exact flattened include chain', () => {
   ])
     expect(hasExactToolsListTaskGraph(graph([extra]))).toBe(false);
 });
-
 test('rejects strict YAML hazards before conversion', () => {
   const hazards = [
     '%YAML 1.2\n---\nsafe: true\n',
@@ -70,7 +66,6 @@ test('rejects strict YAML hazards before conversion', () => {
     ).toBe(false);
   }
 });
-
 test('rejects every proven alternate repository Task declaration', () => {
   const root = HOST_CLI.slice(0, -7);
   const cases = [

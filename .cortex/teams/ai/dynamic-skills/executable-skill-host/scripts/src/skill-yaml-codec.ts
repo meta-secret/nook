@@ -211,7 +211,12 @@ function assertSerializableSkillYaml(value: UntrustedSkillYamlNode): void {
     nodes += 1;
     if (nodes > SKILL_YAML_NODE_LIMIT || current.depth > SKILL_YAML_DEPTH_LIMIT)
       throw new Error('Invalid YAML response.');
-    if (typeof current.value === 'number' && !Number.isFinite(current.value))
+    if (
+      typeof current.value === 'number' &&
+      (!Number.isFinite(current.value) ||
+        (Number.isInteger(current.value) &&
+          !Number.isSafeInteger(current.value)))
+    )
       throw new Error('Invalid YAML response.');
     if (typeof current.value !== 'object') continue;
     if (seen.has(current.value)) throw new Error('Invalid YAML response.');

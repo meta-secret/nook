@@ -182,7 +182,7 @@ describe('provider-neutral executable skill YAML host', () => {
     }
   });
   test('returns typed bounded failures for non-finite action results', () => {
-    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+    for (const value of [NaN, Infinity, 9_007_199_254_740_992]) {
       const request: FinalSkillCliResponseRequest = {
         exitCode: 0,
         response: { ok: true, result: value },

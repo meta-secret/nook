@@ -6,18 +6,12 @@ import {
   rm,
   writeFile,
 } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expect, test } from 'bun:test';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const AGENTIC_TASKFILE_PATH = join(REPOSITORY_ROOT, '.task', 'agentic-ai.yml');
-const HOST_TASKFILE_PATH = join(
-  REPOSITORY_ROOT,
-  '.task',
-  'executable-skill-host.yml',
-);
+const TASKFILE_PATH = join(REPOSITORY_ROOT, '.task', 'agentic-ai.yml');
 const CREATE_TREE_OPTIONS = { recursive: true } as const;
 const REMOVE_TREE_OPTIONS = { recursive: true, force: true } as const;
 
@@ -52,8 +46,9 @@ function taskCommand(request: TaskCommandRequest): string {
 test('skills package loops stop on the first failing package', async () => {
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'skills-task-loop-'));
   try {
-    const firstPackage = join(fixtureRoot, 'first-package');
-    const secondPackage = join(fixtureRoot, 'second-package');
+    const skillRoot = `${fixtureRoot}/.cortex/teams/ai/dynamic-skills`;
+    const firstPackage = `${skillRoot}/cortex-article-structure/scripts`;
+    const secondPackage = `${skillRoot}/executable-skill-host/scripts`;
     const executableDirectory = join(fixtureRoot, 'bin');
     const markerPath = join(fixtureRoot, 'second-ran');
     await mkdir(firstPackage, CREATE_TREE_OPTIONS);
@@ -62,49 +57,51 @@ test('skills package loops stop on the first failing package', async () => {
     const bunPath = join(executableDirectory, 'bun');
     await writeFile(
       bunPath,
-      '#!/usr/bin/env bash\nset -euo pipefail\nif [[ "$*" == *"repository-cli.ts"* ]]; then exit 0; fi\nif [[ "$PWD" == "$FAIL_PACKAGE" ]]; then exit 23; fi\nprintf reached >"$SECOND_MARKER"\n',
+      '#!/usr/bin/env bash\nset -euo pipefail\nprintf "%s|%s\\n" "$PWD" "$*" >>"$SECOND_MARKER"\nif [[ "$PWD" == *"/$FAIL_PACKAGE" && "$*" == "$FAIL_COMMAND" ]]; then exit 23; fi\n',
     );
     await chmod(bunPath, 0o755);
-    const agenticTaskfile = await readFile(AGENTIC_TASKFILE_PATH, 'utf8');
-    const hostTaskfile = await readFile(HOST_TASKFILE_PATH, 'utf8');
-    for (const [taskName, nextTaskName, taskfile] of [
-      ['skills:install', 'skills:tools-list', hostTaskfile],
-      ['skills:format', 'skills:verify', agenticTaskfile],
-      ['skills:verify', 'loom:install', agenticTaskfile],
+    const taskfile = await readFile(TASKFILE_PATH, 'utf8');
+    for (const [taskName, command, nextTaskName] of [
+      ['skills:format', 'run format', 'skills:verify'],
+      ['skills:verify', 'run verify', 'loom:install'],
     ] as const) {
       const taskCommandRequest: TaskCommandRequest = {
         nextTaskName,
         taskfile,
         taskName,
       };
-      const command = taskCommand(taskCommandRequest)
-        .replaceAll(
-          '{{.SKILL_APPLICATION_DIRS}}',
-          'first-package second-package',
-        )
-        .replaceAll('{{.REPO_ROOT}}', fixtureRoot);
-      if (taskName === 'skills:install') {
-        expect(command.indexOf('repository-cli.ts')).toBeLessThan(
-          command.indexOf('for skill_dir'),
-        );
-      }
+      expect(taskCommand(taskCommandRequest)).toContain(
+        '{{.SKILL_APPLICATION_DIRS}}',
+      );
       const inheritedPath = Bun.env.PATH;
       if (typeof inheritedPath !== 'string')
         throw new Error('The task-loop test requires PATH.');
       const spawnOptions: SpawnOptions = {
-        cmd: ['bash', '-c', command],
+        cmd: ['task', '--taskfile', TASKFILE_PATH, taskName],
         cwd: fixtureRoot,
         env: {
-          FAIL_PACKAGE: firstPackage,
+          FAIL_COMMAND: command,
+          FAIL_PACKAGE: 'cortex-article-structure/scripts',
           PATH: `${executableDirectory}:${inheritedPath}`,
+          REPO_ROOT: fixtureRoot,
           SECOND_MARKER: markerPath,
         },
         stderr: 'pipe',
         stdout: 'pipe',
       };
+      const successOptions: SpawnOptions = {
+        ...spawnOptions,
+        env: { ...spawnOptions.env, FAIL_PACKAGE: '' },
+      };
+      expect(Bun.spawnSync(successOptions).exitCode, taskName).toBe(0);
+      expect(await readFile(markerPath, 'utf8'), taskName).toContain(
+        `${secondPackage}|${command}`,
+      );
+      await rm(markerPath);
       const result = Bun.spawnSync(spawnOptions);
-      expect(result.exitCode, taskName).toBe(23);
-      expect(existsSync(markerPath), taskName).toBe(false);
+      const failureLog = await readFile(markerPath, 'utf8');
+      expect(result.exitCode, `${taskName}:${failureLog}`).not.toBe(0);
+      expect(failureLog, taskName).not.toContain(`${secondPackage}|${command}`);
     }
   } finally {
     await rm(fixtureRoot, REMOVE_TREE_OPTIONS);

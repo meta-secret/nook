@@ -48,8 +48,20 @@ const SHELL_PROVIDER_EXECUTION =
 const SHELL_REPOSITORY_SCRIPT_EXECUTION =
   /(?:^|[\n;&|])\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)(?:(?:exec|command)\s+)?(?:bun|node|bash|sh|source|\.)\s+(?!-)[^\n;&|]+/gmu;
 type BoundaryTranspilerOptions = { readonly loader: 'tsx' };
+type ShellExpansionMatch = string[];
 const boundaryTranspilerOptions: BoundaryTranspilerOptions = { loader: 'tsx' };
 const BOUNDARY_TRANSPILER = new Bun.Transpiler(boundaryTranspilerOptions);
+
+export function expandStaticShellVariables(source: string): string {
+  const values = new Map<string, string>();
+  for (const match of source.matchAll(/\b([A-Za-z_]\w*)=([^\s;&|]+)/gmu))
+    values.set(match[1] ?? '', match[2] ?? '');
+  return source.replace(
+    /\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/gmu,
+    (...match: ShellExpansionMatch) =>
+      values.get(match[1] || match[2] || '') ?? match[0] ?? '',
+  );
+}
 
 export function executableScriptViolatesBoundary(
   inspection: ExecutableScriptInspection,
