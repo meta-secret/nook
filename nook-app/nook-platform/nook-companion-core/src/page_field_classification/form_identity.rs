@@ -12,6 +12,7 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             "erase",
             "destroy",
             "terminate",
+            "eliminar",
         ],
     )
 }

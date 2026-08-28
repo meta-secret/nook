@@ -454,6 +454,35 @@ mod wasm_tests {
             NookAuthenticationWorkflowMatchState::NoMatch
         );
         assert!(workflow.snapshot().is_err());
+
+        let detailed = NookAuthenticationPageObservation::from_detailed_control_observation(
+            nook_core::AuthenticationPageObservation {
+                current_password_field_count: 1,
+                ..Default::default()
+            },
+            nook_companion_core::AuthenticationAdvanceControlObservation {
+                actionability: nook_companion_core::PageControlActionability::Actionable,
+                ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                authentication_username:
+                    nook_companion_core::AuthenticationUsernameEvidence::Absent,
+                password_field_count: 1,
+                new_password_field_count: 0,
+                one_time_code_field_count: 0,
+                semantic_submit_control_count: 1,
+                form_identity: "auth".to_owned(),
+                destination_identity: "/account/eliminar".to_owned(),
+                label: "Continuar".to_owned(),
+            },
+        );
+        let mut detailed_observations = NookAuthenticationPageObservations::new();
+        detailed_observations.add(&detailed);
+        let detailed_workflow = authentication_workflow_snapshot(&detailed_observations);
+        assert_eq!(
+            detailed_workflow.state(),
+            NookAuthenticationWorkflowMatchState::NoMatch
+        );
+        assert!(detailed_workflow.snapshot().is_err());
         Ok(())
     }
 

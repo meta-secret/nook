@@ -497,9 +497,10 @@ mod tests {
 
         let localized_destructive_password_submit = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Absent,
-            form_identity: String::new(),
+            form_identity: "auth".to_owned(),
+            destination_identity: "/account/eliminar".to_owned(),
             password_field_count: 1,
-            label: "Eliminar cuenta".to_owned(),
+            label: "Continuar".to_owned(),
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(

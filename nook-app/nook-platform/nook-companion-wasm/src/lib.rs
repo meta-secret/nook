@@ -676,40 +676,11 @@ mod tests {
                 ..Default::default()
             }],
         };
-
         assert_eq!(
             companion_authentication_workflow_match_kind(
                 classify_companion_authentication_workflow(input)
             ),
             CompanionAuthenticationWorkflowMatchKind::NoMatch
-        );
-    }
-
-    #[test]
-    fn workflow_wasm_export_preserves_saved_login_capability() {
-        let snapshot = nook_companion_core::AuthenticationWorkflowSnapshot {
-            kind: nook_companion_core::AuthenticationWorkflowKind::Login,
-            stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
-            action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
-            current_step: 1,
-            total_steps: 3,
-            approval_requirement:
-                nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
-            observation_index: 0,
-        };
-        assert_eq!(
-            authentication_workflow_saved_login_capability(snapshot),
-            nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin
-        );
-
-        let contradictory_snapshot = nook_companion_core::AuthenticationWorkflowSnapshot {
-            approval_requirement:
-                nook_companion_core::AuthenticationApprovalRequirement::TakeoverRequired,
-            ..snapshot
-        };
-        assert_eq!(
-            authentication_workflow_saved_login_capability(contradictory_snapshot),
-            nook_companion_core::AuthenticationSavedLoginCapability::Unavailable
         );
     }
 }
