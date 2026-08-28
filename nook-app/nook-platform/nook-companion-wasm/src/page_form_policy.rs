@@ -127,6 +127,12 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+    nook_companion_core::looks_like_login_advance_control_label(label)
+}
+
+#[wasm_bindgen]
+#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_authentication_advance_control(
     observation: nook_companion_core::AuthenticationAdvanceControlObservation,

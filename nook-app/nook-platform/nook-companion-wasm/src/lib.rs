@@ -641,6 +641,27 @@ mod tests {
     }
 
     #[test]
+    fn login_advance_control_compatibility_export_matches_core_policy() {
+        let compatibility_export: fn(&str) -> bool = looks_like_login_advance_control_label;
+
+        for label in ["Continue", "SignIn", "Log in", "Submit"] {
+            assert_eq!(
+                compatibility_export(label),
+                nook_companion_core::looks_like_login_advance_control_label(label)
+            );
+            assert!(compatibility_export(label));
+        }
+
+        for label in ["Learn more", "Subscribe", "Delete account"] {
+            assert_eq!(
+                compatibility_export(label),
+                nook_companion_core::looks_like_login_advance_control_label(label)
+            );
+            assert!(!compatibility_export(label));
+        }
+    }
+
+    #[test]
     fn workflow_wasm_export_rejects_unbounded_observations() {
         let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
             observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
