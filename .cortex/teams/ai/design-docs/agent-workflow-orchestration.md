@@ -173,6 +173,9 @@ Its universal responsibilities are defined by the root worker contract and
 subagent delegation workflow. It only creates, starts, runs, retries, cancels,
 and communicates with attempts for Gizmo-authorized records. It does not
 compute candidates, select or admit records, or snapshot or change frontiers.
+Each authorized `(task ID, attempt ID)` maps to exactly one harness-visible
+worker attempt. Logical tasks may retry sequentially with distinct attempt IDs,
+but never have more than one concurrently active attempt.
 Nook does not start another Codex or Cursor process to coordinate native
 subagents.
 
@@ -220,6 +223,15 @@ remains only worker-attempt lifecycle authority. The legacy standalone audit is
 the explicit read-only exception above and cannot establish those properties.
 Gizmo validates accepted commits and evidence against current repository state
 before integration.
+
+Future ordinary accepted-evidence synthesis follows that same authority split.
+Its immutable generation freezes provider edges, expected producer identities,
+typed input schema, and acceptance criteria, not artifacts that do not exist
+yet. After every required provider succeeds and its evidence is accepted,
+Gizmo binds the authorized synthesis attempt to the exact accepted artifacts,
+digests, and inherited provenance matching those frozen terms. This is
+admission data, not a plan mutation. Ordinary execution remains fail-closed
+until the installed validator enforces the full contract.
 
 ### Delivery owner
 
@@ -272,11 +284,15 @@ The parallel wave contains these tasks:
     Codex attempt.
   - The cleanliness check includes untracked files.
 - **Evidence flow:** Every task returns typed evidence.
-  - The all-terminal join waits for every declared arrival, including failed
-    evidence lanes.
-  - Every lane exposes a Markdown view to synthesis.
-  - The synthesis task deduplicates findings and authors the root aggregate
-    view.
+  - The legacy all-terminal join waits for every declared terminal observation,
+    including failed lanes.
+  - Every lane exposes a verified terminal-observation Markdown view to the
+    diagnostic aggregator.
+  - The diagnostic aggregation task deduplicates findings and authors the root
+    aggregate view.
+  - A failed observation is never accepted provider evidence. Neither it nor
+    the aggregate output can satisfy an ordinary provider edge or claim the
+    future accepted-evidence synthesis contract.
   - Workflow findings distinguish semantic policy, deterministic leaves,
     bounded agent tasks, compiled graph candidates, delivery-owner actions, and
     ephemeral guidance.
@@ -316,8 +332,9 @@ Native module delivery proceeds separately:
 2. Validate a frozen module DAG and task contracts only after that gate passes.
 3. Let Loom/Nook compute candidates, conflicts, capacity, leases, and frontier
    data.
-4. Let Gizmo validate the batch, admission-authorize records, freeze frontiers,
-   and prepare isolated workspaces for authorized writers.
+4. Let Gizmo validate the batch, select task records, admission-authorize one
+   exact attempt ID per selection, freeze frontiers, and prepare isolated
+   workspaces for authorized writers.
 5. Let the active harness create and operate only those authorized attempts.
 6. Verify each returned commit against its baseline and write scope.
 7. Integrate accepted commits in deterministic dependency order.

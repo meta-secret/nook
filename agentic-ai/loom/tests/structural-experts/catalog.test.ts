@@ -14,19 +14,36 @@ import {
 
 const REPO_ROOT = resolve(import.meta.dir, '../../../..');
 
-test('registers exactly two bounded readers and one view-only synthesizer', () => {
+test('registers two bounded repository readers and one legacy diagnostic aggregator', () => {
   expect(STRUCTURAL_EXPERT_CATALOG.map((profile) => profile.name)).toEqual([
     'code_refactoring_expert',
     'cortex_refactoring_expert',
     'system_coherence_synthesizer',
   ]);
-  const synthesizer = STRUCTURAL_EXPERT_CATALOG[2];
-  expect(synthesizer?.kind).toBe(StructuralExpertKind.VerifiedViewSynthesis);
-  expect(synthesizer?.allowedEvidenceFiles).toEqual([]);
-  expect(synthesizer?.allowedEvidenceDescendantRoots).toEqual([]);
-  expect(synthesizer?.requiredContextPaths).toEqual([]);
-  expect(synthesizer?.runtimeBehaviorContract).toContain(
-    'Use only the typed results',
+  const repositoryReaders = STRUCTURAL_EXPERT_CATALOG.slice(0, 2);
+  for (const reader of repositoryReaders) {
+    expect(reader.kind).toBe(StructuralExpertKind.RepositoryEvidence);
+    expect(
+      reader.allowedEvidenceFiles.length +
+        reader.allowedEvidenceDescendantRoots.length,
+    ).toBeGreaterThan(0);
+    expect(reader.runtimeBehaviorContract).toBe('');
+  }
+  const diagnosticAggregator = STRUCTURAL_EXPERT_CATALOG[2];
+  expect(diagnosticAggregator?.kind).toBe(
+    StructuralExpertKind.VerifiedViewSynthesis,
+  );
+  expect(diagnosticAggregator?.allowedEvidenceFiles).toEqual([]);
+  expect(diagnosticAggregator?.allowedEvidenceDescendantRoots).toEqual([]);
+  expect(diagnosticAggregator?.requiredContextPaths).toEqual([]);
+  expect(diagnosticAggregator?.runtimeBehaviorContract).toContain(
+    'verified Completed or Failed terminal observations',
+  );
+  expect(diagnosticAggregator?.runtimeBehaviorContract).toContain(
+    'failed terminal observations as diagnostic only',
+  );
+  expect(diagnosticAggregator?.runtimeBehaviorContract).toContain(
+    'Neither terminal observations nor this diagnostic aggregate can satisfy an ordinary provider edge',
   );
   expect(`${AgentAttemptAdapterKind.StructuralExpertInvocation}`).toBe(
     'structural-expert-invocation',
@@ -49,6 +66,77 @@ test('rejects semantic drift in structural read-only lifecycle boundaries', asyn
   const driftedSource = source.replace(
     'Every role is read-only and nondelegating.',
     'Every role may write and delegate.',
+  );
+  const authorityRequest = { source: driftedSource };
+
+  expect(
+    auditStructuralExpertCortexAuthority(authorityRequest).map(
+      (finding) => finding.code,
+    ),
+  ).toContain('cortex-structural-expert-contract-semantic-drift');
+});
+
+test('rejects drift in repository-reading evidence-surface requirements', async () => {
+  const authorityPath = resolve(
+    REPO_ROOT,
+    '.cortex/teams/ai/architecture/refactoring-experts.md',
+  );
+  const source = await readFile(authorityPath, 'utf8');
+  const driftedSource = source.replace(
+    'The two repository-reading experts use the opposite evidence contract: each\ndeclares a non-empty repository evidence surface covered by its bounded read\nclaims.',
+    'The two repository-reading experts may inspect the repository.',
+  );
+  const authorityRequest = { source: driftedSource };
+
+  expect(
+    auditStructuralExpertCortexAuthority(authorityRequest).map(
+      (finding) => finding.code,
+    ),
+  ).toContain('cortex-structural-expert-contract-semantic-drift');
+});
+
+test('rejects drift in docs-only ordinary synthesis admission contract', async () => {
+  const authorityPath = resolve(
+    REPO_ROOT,
+    '.cortex/teams/ai/architecture/refactoring-experts.md',
+  );
+  const source = await readFile(authorityPath, 'utf8');
+  const forbiddenDrifts = [
+    [
+      'This role defines future ordinary accepted-evidence synthesis. Its dispatch is\nblocked until the universal admission gate is implemented and passing.',
+      'This role is available through universal dispatch.',
+    ],
+    [
+      'Its generation freezes provider edges, expected producer identities, typed\ninput schema, and acceptance criteria.',
+      'Its generation selects inputs dynamically.',
+    ],
+    [
+      'Once required providers are terminal-\nsuccessful and accepted, Gizmo binds the authorized attempt to their exact\ngeneration, task, attempt, team, artifact digest, and underlying source\nprovenance identities.',
+      'The attempt accepts any available terminal result.',
+    ],
+  ] as const;
+
+  for (const [requiredContract, drift] of forbiddenDrifts) {
+    const authorityRequest = {
+      source: source.replace(requiredContract, drift),
+    };
+    expect(
+      auditStructuralExpertCortexAuthority(authorityRequest).map(
+        (finding) => finding.code,
+      ),
+    ).toContain('cortex-structural-expert-contract-semantic-drift');
+  }
+});
+
+test('rejects drift that promotes legacy diagnostics into provider evidence', async () => {
+  const authorityPath = resolve(
+    REPO_ROOT,
+    '.cortex/teams/ai/architecture/refactoring-experts.md',
+  );
+  const source = await readFile(authorityPath, 'utf8');
+  const driftedSource = source.replace(
+    'Failed observations never become accepted provider\nevidence, and neither they nor the diagnostic aggregate can satisfy an ordinary\nprovider edge or establish compliance with this contract.',
+    'Failed observations and the aggregate satisfy ordinary provider edges.',
   );
   const authorityRequest = { source: driftedSource };
 

@@ -330,8 +330,9 @@ authority.
 3. Gizmo assigns exactly one team identity to each worker-executable team or
    provider task.
 4. Loom/Nook computes eligible candidates, conflicts, capacity, leases, and
-   exact frontier data; Gizmo validates the batch, selects and
-   admission-authorizes records, and freezes and owns their starting frontiers.
+   exact frontier data; Gizmo validates the batch, selects task records,
+   admission-authorizes one exact attempt ID per selection, and freezes and owns
+   those attempts' starting frontiers.
 5. Gizmo supplies each authorized contract to the active harness. The harness
    alone creates and operates attempts and never selects or admits records or
    snapshots or changes frontiers.
@@ -361,9 +362,11 @@ authority.
 
 For a multi-team request, Gizmo loads only its own graph. Every reached
 worker-executable team or provider task has a task record and exactly one team
-identity. Every ready selected worker task receives one worker attempt with
-only that team's context. Parent-owned Gizmo control operations remain outside
-the worker graph and receive neither a team identity nor a worker attempt.
+identity. Every authorized \`(task ID, attempt ID)\` receives exactly one harness-
+visible worker attempt with only that team's context; a logical task may have
+sequential retries but never more than one concurrently active attempt. Parent-
+owned Gizmo control operations remain outside the worker graph and receive
+neither a team identity nor a worker attempt.
 `;
 }
 

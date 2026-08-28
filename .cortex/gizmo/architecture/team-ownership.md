@@ -52,9 +52,12 @@ Team identity is task-scoped.
 - Discovery creates task records. It does not create worker attempts.
 - Loom/Nook computes eligible candidates, conflicts, capacity, leases, and
   exact frontier data.
-- Gizmo validates the computed batch, selects and admission-authorizes task
-  records, and freezes and owns their exact starting frontiers.
-- Each authorized task receives one harness-created worker attempt.
+- Gizmo validates the computed batch, selects task records, admission-authorizes
+  one exact attempt ID per selection, and freezes and owns those attempts' exact
+  starting frontiers.
+- Each authorized `(task ID, attempt ID)` receives exactly one harness-visible
+  worker attempt. A logical task may receive sequential retry attempts but
+  never has more than one concurrently active attempt.
 - Every attempt leases its claims until Gizmo conclusively dispositions its
   output.
 - Accepted write output is verified and integrated before release.
@@ -223,12 +226,14 @@ Gizmo assigns the human request before implementation starts.
    complete admission contract.
 10. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
     exact frontier data.
-11. Gizmo validates the computed batch, selects and admission-authorizes task
-    records, freezes and owns their exact starting frontiers, and supplies
-    their contracts to the active harness.
-12. The active harness creates and operates one worker attempt for each
-    authorized record and owns attempt lifecycle. It does not select or admit
-    records or snapshot or change frontiers.
+11. Gizmo validates the computed batch, selects task records, admission-
+    authorizes one exact attempt ID per selection, freezes and owns those
+    attempts' exact starting frontiers, and supplies their contracts to the
+    active harness.
+12. The active harness creates and operates exactly one worker attempt for each
+    authorized `(task ID, attempt ID)` and owns attempt lifecycle. A logical
+    task may retry sequentially but never has concurrent active attempts. The
+    harness does not select or admit records or snapshot or change frontiers.
 13. Keep shared files and the final integration join with Gizmo.
 
 File location does not override semantic ownership.
@@ -335,14 +340,21 @@ The final integration must prove:
 - every reached worker task had one team identity;
 - Loom/Nook computed candidate, conflict, capacity, lease, and exact frontier
   data;
-- Gizmo validated each batch, admission-authorized each selected task, and
-  froze and owned its exact starting frontier;
-- every authorized worker task had one harness-created worker attempt, and the
-  harness did not select or admit records or snapshot or change frontiers;
+- Gizmo validated each batch, selected task records, admission-authorized one
+  exact attempt ID per selection, and froze and owned each attempt's exact
+  starting frontier;
+- every authorized `(task ID, attempt ID)` had exactly one harness-visible
+  worker attempt, no logical task had more than one concurrently active
+  attempt, and the harness did not select or admit records or snapshot or
+  change frontiers;
 - parent-owned control operations remained outside the worker task-record
   graph, had no team identity, and caused no worker attempt;
 - every lease release followed a conclusive output disposition;
-- every read-only task declared an evidence surface;
+- every repository-reading read-only task declared a non-empty read-covered
+  evidence surface, and every evidence-only synthesis task declared empty
+  repository claims and evidence surface plus frozen provider edges, expected
+  producer identities, input schema, and acceptance criteria, with exact
+  accepted evidence identities bound only at attempt authorization;
 - every successor Git frontier contained its full write-predecessor closure;
 - every successor had accepted and current read-only predecessor evidence in
   parent task state; and

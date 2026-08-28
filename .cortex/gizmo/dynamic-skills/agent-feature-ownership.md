@@ -40,7 +40,10 @@ Treat every other active task as foreign work.
 - A child worker is not another delivery owner.
 - Gizmo may assign a bounded worker task:
   - an exact immutable baseline;
-  - a read-only evidence surface; or
+  - a non-empty read-covered repository evidence surface;
+  - empty repository claims and evidence surface plus frozen provider edges,
+    expected producer identities, input schema, and acceptance criteria for
+    evidence-only synthesis; or
   - an isolated and disjoint write scope.
 - The worker returns its result to Gizmo under frozen parent-lineage metadata.
   - While its claims remain leased, it must not create another worker attempt.

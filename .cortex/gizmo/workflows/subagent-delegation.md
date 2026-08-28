@@ -38,7 +38,9 @@ multi-team delegation path, not only module delivery. Before dispatch, an
 installed typed Loom/Nook validator and focused tests must encode and enforce:
 
 - immutable generation identity, team identity, functional owner, resource
-  claims, evidence surfaces, provider edges, and acceptance evidence;
+  claims, repository evidence surfaces, typed accepted provider-evidence
+  inputs, provider edges, task-attempt identity and admission cardinality, and
+  acceptance evidence;
 - derived evidence-hazard ordering, stable conflict serialization, topology,
   and cycle rejection;
 - deterministic eligibility, conflict, capacity, lease, and exact-frontier
@@ -123,9 +125,17 @@ Every subagent task must declare:
 - its purpose;
 - its allowed files;
 - its read and write resource claims;
-- whether it is read-only;
-- its evidence surface: the exact non-empty subset of read claims used by a
-  read-only task, or an empty set for a write-capable task;
+- whether it is repository-reading read-only, evidence-only synthesis, or
+  write-capable;
+- its repository evidence surface:
+  - a repository-reading read-only task declares the exact non-empty subset of
+    its read claims used to produce evidence;
+  - an evidence-only synthesis task declares empty repository read claims,
+    write claims, and evidence surface; and
+  - a write-capable task declares an empty evidence surface;
+- for evidence-only synthesis, its frozen provider edges, expected producer
+  identities, typed input schema, and acceptance criteria; exact accepted
+  artifact, digest, and provenance identities are not knowable yet;
 - its dependencies;
 - its hierarchy depth bound;
 - its expected result shape;
@@ -142,18 +152,28 @@ replace another.
 
 ### Attempts and results
 
-Create one disposable worker attempt only when the task is ready and its exact
-starting frontier exists.
+Create one disposable worker attempt only when that exact task attempt is
+admission-authorized, the logical task is ready, and its exact starting frontier
+exists.
 
-Do not create a second worker for the same task and attempt.
+Each authorized `(task ID, attempt ID)` maps to exactly one harness-visible
+worker attempt. Do not create a second worker for the same task attempt, and
+never allow more than one concurrently active attempt for one logical task.
 An active worker attempt whose claims remain leased must not create any worker
 attempt. Worker claims are not subleased.
+
+#### Retry sequencing
 
 A normal retry is a new attempt of the same logical task under the exact same
 frozen task contract, acceptance evidence, generation, and starting-frontier
 rule. It receives fresh isolated attempt state. Changing the task contract,
 resource claims, provider edges, or acceptance evidence is not a retry; it is a
 plan mutation that requires a new immutable generation.
+
+A retry may be admitted only after the preceding attempt is terminal,
+conclusively dispositioned, and no longer active. The logical task may therefore
+have sequential attempts, each with a unique attempt ID, but never concurrent
+attempts.
 
 - The worker returns a bounded result to Gizmo under its frozen parent-lineage
   metadata.
@@ -220,16 +240,35 @@ A read-only provider satisfies its consumer edge only when it is:
 - terminal-successful;
 - semantically accepted by the task's recorded functional owner;
 - represented by a versioned typed evidence handoff;
-- verified against its exact source commit and evidence-surface content
-  identities; and
+- provenance-verified under the applicable read-only contract; and
 - accepted as evidence in parent task state.
 
-The evidence handoff identifies the plan generation, task, attempt, team,
-source commit, evidence artifact and digest, and every declared
-evidence-surface claim with its content identity. The evidence surface is
-non-empty, separately represented, and covered by the task's read claims. An
-empty, unverified, wrong-generation, or wrong-team handoff cannot satisfy a
-provider edge.
+For a repository-reading read-only provider, provenance verification binds the
+handoff to its exact source commit and every non-empty evidence-surface claim's
+content identity. The surface is separately represented and covered by the
+task's repository read claims.
+
+For an evidence-only synthesis provider, provenance verification binds the
+handoff to a non-empty immutable list of typed accepted provider-evidence input
+identities. Each input identifies its provider generation, task, attempt, team,
+accepted artifact, digest, and underlying source provenance. The synthesis task
+has empty repository read claims, write claims, and evidence surface and must
+not inspect the repository. Empty or unaccepted provider inputs cannot satisfy
+its contract.
+
+#### Ordinary synthesis binding
+
+The generation freezes the synthesis provider edges, expected producer
+identities, typed input schema, and acceptance criteria before dispatch. Only
+after all required providers are terminal-successful and accepted does Gizmo
+bind an authorized synthesis attempt to their exact artifact, digest, and
+provenance identities. That admission-time binding fills the frozen contract
+and is not a plan mutation.
+
+Every evidence handoff identifies its own plan generation, task, attempt, team,
+evidence artifact, and digest plus the applicable repository surface or typed
+provider-input identities. An unverified, wrong-generation, wrong-team, or
+wrong-attempt handoff cannot satisfy a provider edge.
 
 ### Ready admission
 
@@ -240,10 +279,13 @@ Dispatch follows these rules:
 - Read-only evidence is not required in Git ancestry.
 - Loom/Nook deterministically computes eligible candidates, claim conflicts,
   available capacity, required leases, and exact starting-frontier data.
-- A computed consumer lease includes the evidence-surface claims it relies on.
+- A computed consumer lease includes the repository evidence-surface claims it
+  relies on. Evidence-only synthesis admission instead binds its immutable
+  non-empty typed accepted provider-evidence input identities.
 - Gizmo validates the computed candidate batch against the frozen generation.
-- Gizmo selects and admission-authorizes task records only from that valid
-  batch and freezes and owns each selected record's exact starting frontier.
+- Gizmo selects task records only from that valid batch, admission-authorizes
+  one exact attempt ID for each selection, and freezes and owns each authorized
+  task attempt's exact starting frontier.
 - Loom/Nook records the computed lease before Gizmo supplies the authorized
   bounded contract to the active harness.
 - Worker termination does not release the lease.
@@ -262,7 +304,7 @@ Dispatch follows these rules:
 - Gizmo freezes every selected starting frontier before requesting any attempt
   in that batch.
 - The active harness creates, starts, runs, communicates with, retries, or
-  cancels attempts only for Gizmo-authorized records. It does not compute
+  cancels only Gizmo-authorized task attempts. It does not compute
   candidates, select or admit task records, or snapshot or change frontiers.
 - Ready tasks excluded by conflicts remain pending for the next recomputation.
 - Read-only audits may overlap, including audits of the same evidence.
@@ -281,9 +323,10 @@ Gizmo records exactly one conclusive disposition for each terminal output.
 
 - **Accepted write:** verify the commit and scope, then integrate that provider
   immediately without waiting for other tasks from its admission batch.
-- **Accepted read-only:** verify the typed evidence handoff and exact source,
-  then accept the evidence into parent task state without waiting for other
-  tasks from its admission batch.
+- **Accepted read-only:** verify the typed evidence handoff and its exact
+  repository-source provenance or typed accepted provider-evidence inputs, then
+  accept the evidence into parent task state without waiting for other tasks
+  from its admission batch.
 - **Rejected or cancelled:** record that the output cannot be used.
 
 The attempt lease remains held until its disposition is complete. Every lease
@@ -293,10 +336,27 @@ from the same admission batch is still active.
 
 ### Evidence-safe execution ordering
 
-For a read-only evidence provider, the evidence surface is the exact non-empty
-set of its read claims whose content contributes to its evidence. An
-overlapping writer is any task with a write claim that overlaps any claim in
-that surface.
+For a repository-reading read-only evidence provider, the evidence surface is
+the exact non-empty set of its read claims whose content contributes to its
+evidence. An overlapping writer is any task with a write claim that overlaps
+any claim in that surface.
+
+An evidence-only synthesis task has no repository evidence surface and creates
+no writer-before-evidence edges from repository claims. Its readiness instead
+requires accepted evidence matching every frozen provider edge, expected
+producer identity, input schema, and acceptance criterion. Gizmo then binds the
+exact accepted input identities while authorizing the attempt.
+
+A failed or cancelled provider may yield a separate typed terminal observation
+for diagnosis. That observation is not accepted provider evidence, cannot
+satisfy a provider edge, and cannot make an evidence-only synthesis task ready.
+It is not an input to ordinary accepted-evidence synthesis. Failure of a
+required provider lane therefore stops that synthesis join. A separately
+reviewed legacy standalone diagnostic aggregator may consume terminal
+observations under its narrower static contract, but its output cannot satisfy
+an ordinary provider edge or claim this admission contract.
+
+#### Repository hazard order
 
 Before dispatch, the deterministic validator derives a
 writer-before-evidence-provider constraint for every overlapping writer. This
@@ -548,7 +608,12 @@ when code
 or Cortex structure is the requested maintenance surface.
 
 - The registry contains two repository-reading structural experts.
-- `system_coherence_synthesizer` receives only verified evidence.
+- Each repository-reading expert declares a non-empty repository evidence
+  surface covered by its read claims.
+- `system_coherence_synthesizer` declares empty repository read claims, write
+  claims, and evidence surface. Its generation freezes expected producers,
+  input schema, edges, and acceptance; Gizmo binds exact accepted evidence and
+  provenance identities when authorizing the ready attempt.
 - Gizmo declares all tasks and integrates accepted corrections from the
   responsible team subagents.
 - Structural roles do not delegate or create another tier.
@@ -658,10 +723,15 @@ Before integration, verify:
   exactly one team identity;
 - every parent-owned Gizmo control operation stayed outside the worker graph
   and had no worker team identity or harness-created attempt;
-- every selected ready task has one harness-visible worker attempt;
+- every authorized `(task ID, attempt ID)` had exactly one harness-visible
+  worker attempt, every logical task had at most one concurrently active
+  attempt, and sequential retries used distinct attempt IDs;
 - every worker task record declares read and write resource claims;
-- every read-only task record declares a non-empty evidence surface covered by
-  its read claims;
+- every repository-reading read-only task declares a non-empty repository
+  evidence surface covered by its read claims;
+- every evidence-only synthesis task declares empty repository read claims,
+  write claims, and evidence surface plus frozen provider edges, expected
+  producer identities, typed input schema, and acceptance criteria;
 - every write-capable task record declares an empty evidence surface;
 - every worker task records its correct frozen parent lineage and authority
   bound;
@@ -702,18 +772,25 @@ Before integration, verify:
 - the active harness created and operated attempts only for Gizmo-authorized
   records and never selected or admitted tasks or snapshotted or changed a
   frontier;
-- every consumer lease included relied-on evidence-surface claims;
+- every consumer lease included relied-on repository evidence-surface claims,
+  while evidence-only synthesis admission bound exact accepted artifact,
+  digest, provider, and inherited-provenance identities matching its frozen
+  input contract;
 - worker termination did not release a claim lease;
 - every claim lease remained held until conclusive output disposition;
 - accepted writes were verified and integrated before lease release;
-- accepted read-only evidence used the verified typed handoff;
+- accepted repository-reading evidence used the verified typed handoff and
+  exact repository provenance, and accepted evidence-only synthesis used the
+  verified typed handoff and all attempt-bound provider-evidence input
+  identities matching its frozen input contract;
 - rejected or cancelled output was recorded as unusable before lease release;
 - every lease release triggered Loom/Nook readiness and candidate
   recomputation;
 - Gizmo froze selected frontiers before attempts were created;
 - conflict-excluded ready tasks remained pending for recomputation;
 - otherwise-unordered non-evidence conflicts were serialized and every writer
-  overlapping an evidence surface preceded its read-only provider;
+  overlapping a repository evidence surface preceded its repository-reading
+  read-only provider;
 - evidence-hazard cycles failed closed before dispatch;
 - no declared evidence-provider-before-writer dependency bypassed the
   mandatory writer-before-provider constraint;

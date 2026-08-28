@@ -94,8 +94,9 @@ test('renders the complete canonical Cortex context router', () => {
     'Loom/Nook computes eligible candidates, conflicts, capacity, leases, and',
   );
   expect(markdown).toContain(
-    'admission-authorizes records, and freezes and owns their starting frontiers.',
+    'admission-authorizes one exact attempt ID per selection, and freezes and owns',
   );
+  expect(markdown).toContain("those attempts' starting frontiers.");
   expect(markdown).toContain(
     'alone creates and operates attempts and never selects or admits records or',
   );
@@ -107,7 +108,13 @@ test('renders the complete canonical Cortex context router', () => {
     'immutable generation restart; do not implicitly or selectively invalidate',
   );
   expect(markdown).toContain(
-    'Parent-owned Gizmo control operations remain outside',
+    'attempt. Parent-\nowned Gizmo control operations remain outside',
+  );
+  expect(markdown).toContain(
+    'Every authorized `(task ID, attempt ID)` receives exactly one harness-',
+  );
+  expect(markdown).toContain(
+    'sequential retries but never more than one concurrently active attempt.',
   );
 });
 

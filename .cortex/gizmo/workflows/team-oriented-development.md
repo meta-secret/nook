@@ -26,7 +26,10 @@ Gizmo writes the team assignments before implementation starts.
 5. Record the same functional-owner team as acceptance metadata and acceptance
    owner on every expertise task for that capability.
 6. Freeze the initial known graph before dispatch.
-7. Record the exact claims used by each read-only evidence surface.
+7. For repository-reading read-only work, record the exact non-empty evidence
+   surface covered by read claims. For evidence-only synthesis, record empty
+   repository claims and evidence surface, and freeze provider edges, expected
+   producer identities, typed input schema, and acceptance criteria.
 8. Validate deterministic topology and fail closed on cycles.
 9. Report the blocked dependency to Gizmo when a cycle exists.
 10. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
@@ -36,9 +39,10 @@ Gizmo writes the team assignments before implementation starts.
    validator cannot enforce the complete canonical admission contract.
 12. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
     exact frontier data.
-13. Let Gizmo validate the computed batch, select and admission-authorize task
-    records, freeze and own their exact starting frontiers, and supply their
-    contracts to the active harness.
+13. Let Gizmo validate the computed batch, select task records, admission-
+    authorize one exact attempt ID per selection, freeze and own those
+    attempts' exact starting frontiers, and supply their contracts to the active
+    harness.
 14. Let the active harness create and operate attempts only for those
     authorized records. It does not select or admit records or snapshot or
     change frontiers.
@@ -186,8 +190,13 @@ performs them at their named barriers.
    consumer's Git frontier.
 Canonical delegation supplies the intervening evidence and lease steps.
 5. Require each read-only provider to be terminal-successful and accepted.
-6. Verify each read-only provider's exact source commit, then accept its
-   evidence into parent task state.
+6. Verify each read-only provider according to its evidence kind, then accept
+   its evidence into parent task state:
+   - for a repository-reading provider, bind the handoff to its exact source
+     commit and every read-covered evidence-surface content identity; and
+   - for evidence-only synthesis, bind the handoff to its exact immutable typed
+     accepted provider-evidence input identities and their inherited source
+     provenance, without requiring a fictitious repository source commit.
 7. Record any other rejected or cancelled output as unusable.
 8. After Gizmo records each conclusive disposition, let Loom/Nook release the
     lease and recompute eligibility and capacity. The harness does neither.
@@ -207,11 +216,13 @@ blocking team verdict or a required blocking security verdict.
 ## Validation
 
 Completion requires one exact team identity per worker-executable team or
-provider task. Each Gizmo-authorized worker task has one harness-created worker
-attempt. Parent-owned control operations remain outside that graph and never
-create attempts. Loom/Nook
-computes candidates and exact frontier data; Gizmo validates, selects,
-admission-authorizes, and freezes frontiers; the harness does not perform those
+provider task. Each authorized `(task ID, attempt ID)` has exactly one harness-
+visible worker attempt; a logical task may retry sequentially but never has
+more than one concurrently active attempt. Parent-owned control operations
+remain outside that graph and never create attempts. Loom/Nook
+computes candidates and exact frontier data; Gizmo validates, selects task
+records, admission-authorizes exact attempt IDs, and freezes frontiers; the
+harness does not perform those
 actions. Each capability has one owner team and zero or more expertise tasks.
 Each expertise task has one provider-team identity, with the same functional
 owner recorded as acceptance metadata and acceptance owner.
@@ -223,3 +234,12 @@ multi-team dispatch also requires executable enforcement of the complete
 canonical admission contract. Normal retries preserve the frozen contract and
 acceptance evidence; contract or acceptance changes create a new generation
 whose authorized records all receive fresh attempts.
+Repository-reading read-only tasks require non-empty read-covered evidence
+surfaces and acceptance verification against their exact source commit and
+surface content identities. Evidence-only synthesis tasks require empty
+repository claims and evidence surfaces. Their generations freeze provider
+edges, expected producer identities, input schema, and acceptance criteria;
+Gizmo binds exact accepted artifacts, digests, provider identities, and
+inherited provenance when authorizing the ready attempt. That binding is not a
+plan mutation and does not use a repository source commit.
+Write-capable tasks require empty evidence surfaces.

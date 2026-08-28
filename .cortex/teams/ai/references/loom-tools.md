@@ -55,9 +55,13 @@ That workflow contains:
 
 - an exact-baseline task;
 - four fixed read-only agent audits and one mechanical audit in parallel;
-  - an all-terminal evidence join;
-- one finding-synthesis task;
+  - a legacy all-terminal diagnostic-observation join;
+- one diagnostic finding-aggregation task whose output cannot satisfy an
+  ordinary provider edge or claim accepted-evidence synthesis compliance;
 - the existing `cortexAudit` leaf.
+
+Completed and failed lane observations remain available to that diagnostic
+aggregator. Failed observations are not accepted provider evidence.
 
 The workflow audit lane also classifies:
 

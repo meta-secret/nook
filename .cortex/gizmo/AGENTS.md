@@ -38,8 +38,9 @@ Gizmo never gives its own graph to a team subagent.
   dispositions its output and Loom/Nook releases the lease.
 - Use Loom/Nook tooling to compute eligible candidates, conflicts, capacity,
   leases, and exact frontier data.
-- Validate each computed batch, select and admission-authorize task records,
-  and freeze and own their exact starting frontiers.
+- Validate each computed batch, select task records, admission-authorize one
+  exact attempt ID per selection, and freeze and own those attempts' exact
+  starting frontiers.
 - Supply the team identity and bounded task contract to the active harness.
 - Apply [canonical delegation](workflows/subagent-delegation.md) for topology,
   admission, evidence, integration, retries, and joins.
@@ -68,9 +69,10 @@ Gizmo never gives its own graph to a team subagent.
 3. Select exactly one team identity for every worker-executable team or
    provider task.
 4. Freeze the initial known graph before dispatch.
-5. Validate Loom/Nook's computed candidate batch, select and
-   admission-authorize ready task records, freeze their exact starting
-   frontiers, and supply their contracts to the active harness.
+5. Validate Loom/Nook's computed candidate batch, select ready task records,
+   admission-authorize one exact attempt ID per selection, freeze those
+   attempts' exact starting frontiers, and supply their contracts to the active
+   harness.
 6. Request creation and other attempt-lifecycle operations through the active
    harness and observe its returned results.
 7. Verify each returned result against its task identity, starting frontier,
@@ -99,10 +101,18 @@ Direct providers form edge-local readiness barriers.
 
 - A write provider must be terminal-successful, accepted, commit-verified, and
   integrated into the consumer's Git frontier.
-- A read-only provider must be terminal-successful, accepted, exact-source
-  verified, and accepted into parent task state.
+- A repository-reading read-only provider must be terminal-successful,
+  accepted, exact-source verified, and accepted into parent task state.
+- An evidence-only synthesis provider must have empty repository read claims,
+  write claims, and evidence surface. Its generation freezes provider edges,
+  expected producer identities, typed input schema, and acceptance criteria;
+  Gizmo binds exact accepted evidence and provenance identities when
+  authorizing the ready attempt.
 - Read-only evidence does not enter Git ancestry.
-- Its task record names the exact evidence surface and resource claims.
+- Its task record names the exact repository evidence surface and resource
+  claims, or its empty repository claims and frozen evidence-input contract for
+  evidence-only synthesis. Admission-time binding of matching accepted
+  artifacts is not a plan mutation.
 - A consumer attempt leases the evidence-surface claims it relies on.
 - Readiness does not wait for unrelated tasks.
 
@@ -147,6 +157,9 @@ Completion proves:
   no worker team identity or harness-created attempt;
 - every expertise handoff was semantically accepted by its recorded functional
   owner before integration;
+- every authorized `(task ID, attempt ID)` mapped to exactly one harness-visible
+  worker attempt, with no more than one concurrently active attempt per logical
+  task;
 - no active leased worker attempt created another worker attempt;
 - every accepted writer returned a verified commit;
 - every required team and security verdict is satisfied;

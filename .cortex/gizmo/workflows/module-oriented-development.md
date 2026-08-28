@@ -31,8 +31,8 @@ Each node declares:
 - provider dependencies;
 - read and write resource claims;
 - an evidence surface:
-  - a read-only node declares the exact non-empty subset of its read claims used
-    to produce evidence; and
+  - a repository-reading read-only node declares the exact non-empty subset of
+    its read claims used to produce evidence; and
   - a write-capable node declares an empty evidence surface;
 - the starting-frontier rule;
 - the isolated workspace policy for write-capable work;
@@ -54,8 +54,10 @@ known graph before dispatch. Team identity selects only team context. The
 explicit functional owner controls semantic acceptance; for an expertise node,
 that owner accepts the expertise-provider team's result before Gizmo
 integration. The registered expert selects bounded module knowledge and never
-substitutes for either field. A ready selected node receives one worker attempt
-only after its exact starting frontier exists.
+substitutes for either field. Each authorized `(task ID, attempt ID)` receives
+exactly one harness-visible worker attempt only after its exact starting
+frontier exists. A logical node may retry sequentially but never has more than
+one concurrently active attempt.
 
 ### Executable enforcement gate
 
@@ -73,8 +75,9 @@ missing typed runtime.
 The validator augments declared provider edges with deterministic execution
 constraints before dispatch.
 
-- Every writer that overlaps a read-only evidence surface is ordered before
-  that evidence provider, regardless of their existing declared order.
+- Every writer that overlaps a repository-reading read-only evidence surface is
+  ordered before that evidence provider, regardless of their existing declared
+  order.
 - Other otherwise-unordered conflicting nodes are serialized in stable
   execution order instead of rejected.
 - An existing provider dependency that requires evidence before an overlapping
@@ -93,9 +96,10 @@ and capacity as
 `max(0, maxConcurrency - unreleasedLeaseCount)`.
 It visits ready nodes in stable task order, excludes conflicts with unreleased
 leases, and computes a maximal safe candidate batch only up to that capacity.
-Gizmo validates the batch, selects and admission-authorizes task records, and
-freezes and owns their exact starting frontiers before supplying contracts to
-the active harness. The harness only creates and operates the authorized worker
+Gizmo validates the batch, selects task records, admission-authorizes one exact
+attempt ID per selection, and freezes and owns those attempts' exact starting
+frontiers before supplying contracts to the active harness. The harness only
+creates and operates the authorized worker
 attempts; it does not select or admit records or snapshot or change frontiers.
 An admission batch is not a completion or integration barrier.
 
@@ -124,8 +128,8 @@ contract:
 
 - one stable semantic expert role;
 - the task's mandatory and separate team identity;
-- for a read-only expert task, a non-empty evidence surface covered by its read
-  claims;
+- for a repository-reading read-only expert task, a non-empty evidence surface
+  covered by its read claims;
 - for a write-capable implementation task, an empty evidence surface;
 - task-selected authority anchors and skills; and
 - expected module evidence fields.
@@ -252,9 +256,11 @@ these module-specific requirements:
   integration;
 - every changed boundary has a reviewed external API and provider-owned tests;
 - every task has exact frontier, scope, isolation, and frozen lineage rules;
-- every read-only task has a non-empty read-covered evidence surface and typed
-  handoff;
+- every repository-reading read-only task has a non-empty read-covered evidence
+  surface and typed handoff;
 - every write-capable task has an empty evidence surface;
+- every authorized `(task ID, attempt ID)` had exactly one harness-visible
+  worker attempt and no logical task had concurrent active attempts;
 - every successor receives its complete write-predecessor closure; and
 - only the delivery owner performs the final all-task join.
 

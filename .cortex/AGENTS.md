@@ -31,9 +31,9 @@ Gizmo must:
 7. Before ordinary multi-team dispatch, require the installed typed validator
    to enforce the complete canonical admission contract. If it cannot, fail
    closed before any worker attempt.
-8. Validate the computed batch, select and admission-authorize its task
-   records, freeze their exact starting frontiers, and supply their bounded
-   contracts to the active harness.
+8. Validate the computed batch, select task records, admission-authorize one
+   exact attempt ID for each selection, freeze those attempts' exact starting
+   frontiers, and supply their bounded contracts to the active harness.
 9. Observe and review every returned result against the requested outcome.
 10. For a normal retry, preserve the exact frozen task contract and acceptance
     evidence and request a fresh attempt through the active harness. A contract
@@ -45,12 +45,14 @@ Gizmo must:
     worker tasks. Parent-owned control operations have no worker team identity,
     never cause harness-created attempts, and run at their required barriers.
 
-Every reached worker-executable team or provider unit receives a task record. A
-ready worker task receives one worker attempt only after Gizmo freezes its
-exact starting frontier from Loom/Nook's computed data and
-admission-authorizes the record. Each worker receives one team identity, one
-task, that frontier, allowed files, forbidden files, and required proof. Team
-identity belongs to the task. It is not a singular identity for the mission.
+Every reached worker-executable team or provider unit receives a task record.
+Each authorized `(task ID, attempt ID)` receives exactly one harness-visible
+worker attempt only after Gizmo freezes its exact starting frontier and
+admission-authorizes that task attempt. A logical task may have sequential
+retry attempts with distinct IDs, but never more than one concurrently active
+attempt. Each worker receives one team identity, one task attempt, that
+frontier, allowed files, forbidden files, and required proof. Team identity
+belongs to the task. It is not a singular identity for the mission.
 
 Gizmo may inspect the repository and subagent evidence. Gizmo may integrate
 verified handoff commits and control shared delivery state. Gizmo must not
@@ -88,7 +90,10 @@ Gizmo supplies a bounded task contract for that identity.
 - It names allowed and forbidden paths.
 - It names dependencies, acceptance evidence, the hierarchy bound, and the
   parent-owned join.
-- It names the resource claims used by read-only evidence.
+- It names repository resource claims and evidence surfaces for repository-
+  reading evidence. For evidence-only synthesis, the generation instead freezes
+  provider edges, expected producer identities, the typed input schema, and
+  acceptance criteria.
 - It gives the worker only its own team entry points and task-relevant
   authorities.
 - It requires an isolated workspace and verified handoff for write-capable
@@ -104,19 +109,30 @@ A write provider satisfies its consumer edge only when it is:
   and
 - integrated into the consumer's Git frontier.
 
-A read-only provider satisfies its consumer edge only when it is:
+A repository-reading read-only provider satisfies its consumer edge only when
+it is:
 
 - terminal-successful;
 - semantically accepted by its responsible owner;
 - verified against its exact source commit; and
 - accepted as evidence in the parent task state.
 
+An evidence-only synthesis provider declares empty repository read claims,
+write claims, and evidence surface. After every required provider succeeds and
+its evidence is accepted, Gizmo binds the synthesis attempt to the exact non-
+empty accepted artifacts, digests, provider identities, and inherited source
+provenance. This admission-time binding implements the frozen input contract;
+it is not a plan mutation. The synthesis provider satisfies its edge only
+through the resulting versioned typed handoff.
+
+#### Lifecycle authority
+
 Typed evidence, deterministic admission, provider-local joins, immutable
 generation restart, and the final join follow
 [subagent delegation](gizmo/workflows/subagent-delegation.md).
 
 The active harness owns worker creation and native worker labels or names.
-For Gizmo-authorized records, it alone starts, runs, retries, cancels, and
+For Gizmo-authorized task attempts, it alone starts, runs, retries, cancels, and
 communicates with worker attempts and owns their lifecycle. It also owns
 same-model inheritance and terminal-state reporting. Any explicit model
 selection remains harness-owned. The harness does not select or admit task
@@ -219,9 +235,10 @@ Security review does not transfer implementation ownership.
   - Returns the provider's handoff to the functional owner for acceptance
     before integration.
 
-Gizmo may select and admission-authorize ready task records in sequence when
-their changes cannot safely overlap, then supply their bounded contracts to the
-active harness. Claims remain leased after worker termination until Gizmo
+Gizmo may select ready task records in sequence when their changes cannot
+safely overlap, admission-authorize one exact attempt ID for each selection,
+then supply their bounded contracts to the active harness. Claims remain leased
+after worker termination until Gizmo
 records a conclusive disposition. Every lease release triggers readiness and
 candidate recomputation by Loom/Nook. Gizmo remains outside team implementation
 tasks.

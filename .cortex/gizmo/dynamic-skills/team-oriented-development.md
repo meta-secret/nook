@@ -35,9 +35,10 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
     typed validator cannot enforce the complete admission contract.
 11. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
     exact frontier data.
-12. Gizmo validates the computed batch, selects and admission-authorizes task
-    records, freezes and owns their exact starting frontiers, and supplies
-    their contracts to the active harness.
+12. Gizmo validates the computed batch, selects task records, admission-
+    authorizes one exact attempt ID per selection, freezes and owns those
+    attempts' exact starting frontiers, and supplies their contracts to the
+    active harness.
 13. The active harness alone creates and operates attempts for the authorized
     records. It does not select or admit records or snapshot or change
     frontiers.
@@ -87,8 +88,10 @@ admission-authorized each selected record and froze its frontier, and the
 harness only operated authorized attempts. Confirm that every capability has
 zero or more separate expertise tasks, each with exactly one provider-team
 identity and the same functional owner as explicit acceptance metadata and
-acceptance owner. Confirm that every ready selected worker task received one
-worker attempt after its exact frontier existed.
+acceptance owner. Confirm that every authorized `(task ID, attempt ID)` received
+exactly one harness-visible worker attempt after its exact frontier existed,
+logical tasks retried only sequentially, and no logical task had concurrent
+active attempts.
 Confirm that every expertise provider stayed inside its explicit code and test
 scope, preserved the frozen contract, and returned to the functional owner for
 acceptance before Gizmo integration. Confirm that Git frontiers contain write
@@ -97,4 +100,11 @@ Confirm the harness did not select or admit records or snapshot or change
 frontiers. Confirm that normal retries preserved the exact frozen contract and
 acceptance evidence, while any contract or acceptance change created a new
 immutable generation with fresh attempts for every authorized record. Confirm
-the remaining canonical delegation criteria.
+that repository-reading read-only tasks used non-empty read-covered evidence
+surfaces, evidence-only synthesis tasks used empty repository claims and
+evidence surfaces plus generation-frozen provider edges, expected producer
+identities, input schema, and acceptance criteria, with exact accepted evidence
+identities bound by Gizmo only when authorizing ready attempts. Confirm that
+this binding was not treated as a plan mutation, that write-capable tasks used
+empty evidence surfaces, and that the remaining canonical delegation criteria
+passed.

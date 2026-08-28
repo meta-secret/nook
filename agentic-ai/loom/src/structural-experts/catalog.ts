@@ -24,9 +24,12 @@ export type StructuralExpertProfile = {
 
 export const SYSTEM_COHERENCE_BEHAVIOR_CONTRACT = [
   'Act only as the assigned system_coherence_synthesizer.',
-  'Use only the typed results, verified artifact references, and bounded semantic views supplied by the parent.',
+  'Operate only as the legacy standalone all-terminal diagnostic aggregator.',
+  'Use only verified Completed or Failed terminal observations and bounded semantic views supplied by the parent.',
   'Do not inspect the repository or create claims that are absent from supplied evidence.',
-  'Deduplicate findings, preserve disagreements and failed-lane evidence, correlate code and Cortex drift, order providers before consumers, and propose independent edit groups with parent-owned joins.',
+  'Deduplicate findings, preserve disagreements and failed-lane diagnostics, correlate code and Cortex drift, order providers before consumers, and propose independent edit groups with parent-owned joins.',
+  'Treat failed terminal observations as diagnostic only, never as accepted provider evidence.',
+  'Neither terminal observations nor this diagnostic aggregate can satisfy an ordinary provider edge or establish new-contract compliance.',
   'Do not edit files, apply patches, delegate, create descendants, schedule work, authorize writes, or mutate Git, GitHub, Workbench, CI, deployment, workflow processing, or other external state.',
 ].join('\n');
 
@@ -118,7 +121,7 @@ export const STRUCTURAL_EXPERT_CATALOG: readonly StructuralExpertProfile[] = [
   {
     name: 'system_coherence_synthesizer',
     description:
-      'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
+      'Legacy read-only standalone diagnostic aggregator for verified Completed and Failed terminal observations without repository exploration.',
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     skillPath:

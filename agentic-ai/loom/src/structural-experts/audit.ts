@@ -118,7 +118,7 @@ const EXPECTED_PROFILES = [
   {
     name: 'system_coherence_synthesizer',
     description:
-      'Read-only synthesizer that reconciles only replay-verified child results and views without repository exploration.',
+      'Legacy read-only standalone diagnostic aggregator for verified Completed and Failed terminal observations without repository exploration.',
     resultKind: WorkflowResultKind.SystemCoherenceSynthesis,
     kind: StructuralExpertKind.VerifiedViewSynthesis,
     skillPath:
@@ -139,10 +139,19 @@ const STRUCTURAL_EXPERT_CORTEX_AUTHORITY_PATH =
 const STRUCTURAL_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
   [
     {
+      heading: '## Overview',
+      requiredMarkers: [
+        'The future ordinary synthesizer receives terminal-successful, verified, accepted expert evidence.',
+        'Its generation freezes expected producers, provider edges, input schema, and acceptance criteria; Gizmo binds exact accepted artifact, digest, and provenance identities when authorizing the ready attempt.',
+        'The existing legacy standalone Cortex-audit aggregation is a different diagnostic role.',
+        'It may receive verified completed and failed terminal observations, but failed observations are not accepted provider evidence and its output cannot satisfy an ordinary provider edge or claim new-contract compliance.',
+      ],
+    },
+    {
       heading: '## Registry contract',
       requiredMarkers: [
         'one stable structural role and attempt identity;',
-        'one bounded read scope;',
+        'either a bounded repository read scope or bounded typed provider-evidence inputs;',
         'Every role is read-only and nondelegating.',
         'This Cortex registry defines each stable semantic role, capability, context, and evidence contract.',
         'Children cannot add tasks, descendants, resource claims, or workflow tiers.',
@@ -160,8 +169,16 @@ const STRUCTURAL_EXPERT_CONTRACT_SECTIONS: readonly MarkdownContractSection[] =
     {
       heading: '## `system_coherence_synthesizer`',
       requiredMarkers: [
+        'This role defines future ordinary accepted-evidence synthesis. Its dispatch is blocked until the universal admission gate is implemented and passing.',
         'It receives only typed results, verified artifact references, and bounded semantic views.',
+        'It declares empty repository read claims, write claims, and evidence surface.',
+        'Its generation freezes provider edges, expected producer identities, typed input schema, and acceptance criteria.',
+        'Gizmo binds the authorized attempt to their exact generation, task, attempt, team, artifact digest, and underlying source provenance identities.',
         'It has no repository read scope.',
+        'The legacy standalone Cortex-audit diagnostic aggregator is not this ordinary role.',
+        'Its all-terminal join may supply verified completed and failed terminal observations for reporting.',
+        'Failed observations never become accepted provider evidence, and neither they nor the diagnostic aggregate can satisfy an ordinary provider edge or establish compliance with this contract.',
+        'The two repository-reading experts use the opposite evidence contract: each declares a non-empty repository evidence surface covered by its bounded read claims.',
         'It cannot schedule successors or authorize writes.',
       ],
     },
@@ -421,7 +438,7 @@ function validateRoleIsolation(
       code: 'invalid-structural-role-isolation',
       path: STRUCTURAL_EXPERT_CATALOG_PATH,
       message:
-        'Evidence experts require bounded repository roots; synthesis must receive verified child views only.',
+        'Repository evidence experts require bounded repository scope; legacy diagnostic aggregation must remain repository-blind and use verified terminal observations only.',
     };
     request.findings.push(finding);
   }

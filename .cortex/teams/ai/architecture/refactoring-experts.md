@@ -16,8 +16,18 @@ It also contains one synthesis-only role:
 
 - `system_coherence_synthesizer`.
 
-The synthesizer receives verified expert evidence.
+The future ordinary synthesizer receives terminal-successful, verified,
+accepted expert evidence. Its generation freezes expected producers, provider
+edges, input schema, and acceptance criteria; Gizmo binds exact accepted
+artifact, digest, and provenance identities when authorizing the ready attempt.
+That binding is not a plan mutation.
 It does not inspect the repository.
+
+The existing legacy standalone Cortex-audit aggregation is a different
+diagnostic role. It may receive verified completed and failed terminal
+observations, but failed observations are not accepted provider evidence and
+its output cannot satisfy an ordinary provider edge or claim new-contract
+compliance.
 
 These roles are separate from the production
 [module expert registry](module-experts.md).
@@ -33,7 +43,8 @@ Every structural expert attempt follows the root
 This registry adds:
 
 - one stable structural role and attempt identity;
-- one bounded read scope;
+- either a bounded repository read scope or bounded typed provider-evidence
+  inputs;
 - the relevant canonical lenses; and
 - the role-specific evidence shape.
 
@@ -118,11 +129,16 @@ Each authorization binds:
 - expert;
 - attempt;
 - depth two;
+- repository read claims and evidence surface, or frozen provider edges,
+  expected producer identities, typed input schema, and acceptance criteria;
 - immediate parent;
 - exact evidence paths for a repository-reading role.
 
-The synthesis authorization has no repository evidence paths.
-Its invocation names the replay-verified child result and view projections.
+The ordinary synthesis generation has no repository evidence paths. Its later
+attempt authorization names the exact replay-verified accepted child artifacts,
+digests, provenance, and view projections that satisfy the frozen terms. This
+binding is not a generation mutation. A failed required lane stops the ordinary
+synthesis join.
 
 ### Code refactoring result
 
@@ -244,6 +260,13 @@ A topic-local task reads the owning authority and its one-hop context.
 A repository-wide task uses the compiled Cortex full-garbage-collection
 workflow for bounded evidence collection.
 
+### Context isolation
+
+Both forms load only AI team context. Foreign-team documents may be declared as
+bounded repository evidence paths, but the expert never loads another team's
+graph, entrypoint, skills, or context. It reports any need for foreign-team
+semantic ownership to Gizmo, which routes that team.
+
 The expert proposes the smallest correction that restores one clear owner.
 It preserves disagreements and uncertainty when evidence cannot resolve them.
 It must not silently rewrite product or architectural meaning.
@@ -255,7 +278,8 @@ conflict resolution.
 
 ## `system_coherence_synthesizer`
 
-This role reconciles verified structural evidence.
+This role defines future ordinary accepted-evidence synthesis. Its dispatch is
+blocked until the universal admission gate is implemented and passing.
 
 It may receive:
 
@@ -266,12 +290,18 @@ It may receive:
 
 It receives only typed results, verified artifact references, and bounded
 semantic views.
-It has no repository read scope.
+It declares empty repository read claims, write claims, and evidence surface.
+Its generation freezes provider edges, expected producer identities, typed
+input schema, and acceptance criteria. Once required providers are terminal-
+successful and accepted, Gizmo binds the authorized attempt to their exact
+generation, task, attempt, team, artifact digest, and underlying source
+provenance identities. That binding is not a plan mutation. It has no
+repository read scope.
 
 The synthesizer:
 
 - deduplicates findings;
-- preserves disagreements and failed-lane evidence;
+- preserves disagreements present in accepted provider evidence;
 - correlates code and Cortex drift;
 - orders provider corrections before consumer corrections;
 - identifies safe independent edit groups;
@@ -280,6 +310,16 @@ The synthesizer:
 
 It cannot create findings from unverified repository claims.
 It cannot schedule successors or authorize writes.
+
+The legacy standalone Cortex-audit diagnostic aggregator is not this ordinary
+role. Its all-terminal join may supply verified completed and failed terminal
+observations for reporting. Failed observations never become accepted provider
+evidence, and neither they nor the diagnostic aggregate can satisfy an ordinary
+provider edge or establish compliance with this contract.
+
+The two repository-reading experts use the opposite evidence contract: each
+declares a non-empty repository evidence surface covered by its bounded read
+claims. Write-capable correction tasks declare an empty evidence surface.
 
 ## Deterministic extraction boundary
 
@@ -345,4 +385,11 @@ Validate direct skill routing by checking:
 - every canonical skill card is indexed;
 - no tracked `.agents`, `.cursor`, or `.claude` skill mirror exists;
 - the Cortex registry contains exactly the two repository-reading roles and one
-  synthesis-only role.
+  synthesis-only role;
+- each repository-reading role has a non-empty read-covered evidence surface;
+  and
+- the synthesizer has empty repository claims and evidence surface plus non-
+  empty frozen provider edges, expected producer identities, input schema, and
+  acceptance criteria; Gizmo binds exact accepted input identities only at
+  attempt authorization, every required provider edge is terminal-successful
+  and accepted, and legacy failed-lane observations remain diagnostic-only.
