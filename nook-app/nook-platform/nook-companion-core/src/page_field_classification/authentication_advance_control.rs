@@ -81,12 +81,36 @@ fn form_has_authentication_identity(form_identity: &str) -> bool {
     identity_indicates_explicit_authentication_route(form_identity)
 }
 
+fn destination_indicates_alternate_provider(destination_identity: &str) -> bool {
+    looks_like_alternate_authentication_route_control_label(destination_identity)
+        || contains_any_word(
+            &expand_identity_text(destination_identity),
+            &[
+                "oauth",
+                "google",
+                "apple",
+                "microsoft",
+                "facebook",
+                "github",
+                "gitlab",
+                "linkedin",
+                "twitter",
+                "okta",
+            ],
+        )
+}
+
+fn destination_has_disallowed_action_or_provider(destination_identity: &str) -> bool {
+    looks_like_non_authentication_submit_control_label(destination_identity)
+        || destination_indicates_alternate_provider(destination_identity)
+}
+
 fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
     identity_indicates_explicit_authentication_route(destination_identity)
         && !control_destination_indicates_non_authentication_route(destination_identity)
+        && !destination_has_disallowed_action_or_provider(destination_identity)
         && !looks_like_registration_route_control_label(destination_identity)
         && !looks_like_password_recovery_route_control_label(destination_identity)
-        && !looks_like_alternate_authentication_route_control_label(destination_identity)
         && !looks_like_auxiliary_authentication_control_label(destination_identity)
 }
 
@@ -115,6 +139,7 @@ fn has_unconditional_veto_identity(observation: &AuthenticationAdvanceControlObs
         || form_identity_indicates_destructive_action(&observation.destination_identity)
         || form_identity_indicates_destructive_action(&observation.label)
         || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
+        || destination_has_disallowed_action_or_provider(&observation.destination_identity)
 }
 
 fn accepts_authentication_advance(
@@ -425,6 +450,24 @@ mod tests {
             },
             AuthenticationAdvanceControlObservation {
                 destination_identity: "/profile".to_owned(),
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                destination_identity: "/login/cancel".to_owned(),
+                label: "Siguiente".to_owned(),
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                destination_identity: "/login/cancel".to_owned(),
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                destination_identity: "/login/google".to_owned(),
+                label: "Siguiente".to_owned(),
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                destination_identity: "/login/google".to_owned(),
                 ..password_only_submit.clone()
             },
             AuthenticationAdvanceControlObservation {
