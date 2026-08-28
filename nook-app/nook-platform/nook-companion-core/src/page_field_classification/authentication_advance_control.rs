@@ -81,20 +81,33 @@ fn form_has_authentication_identity(form_identity: &str) -> bool {
     identity_indicates_explicit_authentication_route(form_identity)
 }
 
+fn destination_has_safe_login_identity(destination_identity: &str) -> bool {
+    identity_indicates_explicit_authentication_route(destination_identity)
+        && !control_destination_indicates_non_authentication_route(destination_identity)
+        && !looks_like_registration_route_control_label(destination_identity)
+        && !looks_like_password_recovery_route_control_label(destination_identity)
+        && !looks_like_alternate_authentication_route_control_label(destination_identity)
+        && !looks_like_auxiliary_authentication_control_label(destination_identity)
+}
+
 fn has_positive_login_identity(
     observation: &AuthenticationAdvanceControlObservation,
     authentication_scope_owns_control: bool,
 ) -> bool {
+    let owned_semantic_submit = authentication_scope_owns_control
+        && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
     matches!(
         observation.authentication_username,
         AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
     ) || form_has_authentication_identity(&observation.form_identity)
-        || (authentication_scope_owns_control
-            && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
+        || (owned_semantic_submit
             && matches!(
                 observation.authentication_username,
                 AuthenticationUsernameEvidence::StandardsBasedEmail
             ))
+        || (owned_semantic_submit
+            && (looks_like_explicit_authentication_advance_control_label(&observation.label)
+                || destination_has_safe_login_identity(&observation.destination_identity)))
 }
 
 fn has_unconditional_veto_identity(observation: &AuthenticationAdvanceControlObservation) -> bool {
@@ -382,6 +395,71 @@ mod tests {
             ..standards_email_submit
         };
         assert!(!advances_authentication(&non_submit_email_control));
+    }
+
+    #[test]
+    fn explicit_login_label_or_destination_identifies_password_only_submit() {
+        let password_only_submit = AuthenticationAdvanceControlObservation {
+            authentication_username: AuthenticationUsernameEvidence::Generic,
+            password_field_count: 1,
+            form_identity: String::new(),
+            destination_identity: String::new(),
+            label: "Sign in".to_owned(),
+            ..localized_identity_submit()
+        };
+        assert!(advances_authentication(&password_only_submit));
+
+        let destination_only_submit = AuthenticationAdvanceControlObservation {
+            ownership: PageControlOwnership::LocallyScoped,
+            destination_identity: "/login".to_owned(),
+            label: "Siguiente".to_owned(),
+            ..password_only_submit.clone()
+        };
+        assert!(advances_authentication(&destination_only_submit));
+
+        for rejected in [
+            AuthenticationAdvanceControlObservation {
+                destination_identity: "/profile".to_owned(),
+                label: "Siguiente".to_owned(),
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                destination_identity: "/profile".to_owned(),
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                ownership: PageControlOwnership::Unowned,
+                ..password_only_submit.clone()
+            },
+            AuthenticationAdvanceControlObservation {
+                semantics: PageControlSemantics::Activation,
+                ..password_only_submit.clone()
+            },
+        ] {
+            assert!(!advances_authentication(&rejected));
+        }
+
+        for label in [
+            "Create account",
+            "Forgot password?",
+            "Continue with Google",
+            "Show password",
+            "Cancel password reset",
+        ] {
+            assert!(!advances_authentication(
+                &AuthenticationAdvanceControlObservation {
+                    destination_identity: "/login".to_owned(),
+                    label: label.to_owned(),
+                    ..password_only_submit.clone()
+                }
+            ));
+        }
+
+        let destructive_destination = AuthenticationAdvanceControlObservation {
+            destination_identity: "/login/delete-account".to_owned(),
+            ..password_only_submit
+        };
+        assert!(!advances_authentication(&destructive_destination));
     }
 
     #[test]
