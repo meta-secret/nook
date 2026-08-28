@@ -375,6 +375,13 @@ const fn classify_enrollment_workflow(
     }
     if observation.authenticator_setup_hint() {
         if observation.one_time_code_field_count > 0 {
+            if matches!(
+                observation.progression(),
+                AuthenticationPageProgression::Blocked
+                    | AuthenticationPageProgression::PasskeyControl
+            ) {
+                return AuthenticationWorkflowMatch::NoMatch;
+            }
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Verification,
@@ -701,7 +708,7 @@ mod tests {
     }
 
     #[test]
-    fn classifies_authenticator_setup_and_verify_enrollment() -> anyhow::Result<()> {
+    fn gates_authenticator_enrollment_verification_on_progression() -> anyhow::Result<()> {
         let setup = AuthenticationPageObservation {
             enrollment_evidence: AuthenticationEnrollmentEvidence::AuthenticatorSetup,
             ..observation()
@@ -714,15 +721,57 @@ mod tests {
             AuthenticationWorkflowAction::EnrollAuthenticator
         );
 
-        let verify = AuthenticationPageObservation {
+        let blocked_verify = AuthenticationPageObservation {
+            enrollment_evidence: AuthenticationEnrollmentEvidence::AuthenticatorSetup,
+            one_time_code_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            ..observation()
+        };
+        assert_eq!(
+            classify_authentication_workflow(blocked_verify),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        let controlled_verify = AuthenticationPageObservation {
             enrollment_evidence: AuthenticationEnrollmentEvidence::AuthenticatorSetup,
             one_time_code_field_count: 1,
             ..observation()
         };
-        let verify = classify_authentication_workflow(verify).snapshot()?;
-        assert_eq!(verify.kind, AuthenticationWorkflowKind::TotpEnrollment);
-        assert_eq!(verify.stage, AuthenticationWorkflowStage::Verification);
-        assert_eq!(verify.action, AuthenticationWorkflowAction::FillTotp);
+        let controlled_verify = classify_authentication_workflow(controlled_verify).snapshot()?;
+        assert_eq!(
+            controlled_verify.kind,
+            AuthenticationWorkflowKind::TotpEnrollment
+        );
+        assert_eq!(
+            controlled_verify.stage,
+            AuthenticationWorkflowStage::Verification
+        );
+        assert_eq!(
+            controlled_verify.action,
+            AuthenticationWorkflowAction::FillTotp
+        );
+
+        let auto_submit_verify = AuthenticationPageObservation {
+            enrollment_evidence: AuthenticationEnrollmentEvidence::AuthenticatorSetup,
+            one_time_code_field_count: 1,
+            one_time_code_progression:
+                AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            ..observation()
+        };
+        let auto_submit_verify = classify_authentication_workflow(auto_submit_verify).snapshot()?;
+        assert_eq!(
+            auto_submit_verify.kind,
+            AuthenticationWorkflowKind::TotpEnrollment
+        );
+        assert_eq!(
+            auto_submit_verify.stage,
+            AuthenticationWorkflowStage::Verification
+        );
+        assert_eq!(
+            auto_submit_verify.action,
+            AuthenticationWorkflowAction::FillTotp
+        );
         Ok(())
     }
 

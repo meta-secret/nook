@@ -1,10 +1,45 @@
 //! Direct browser evidence that filling a one-time code advances the ceremony.
 
 const INPUT_EVENT_ATTRIBUTES: &[&str] = &["oninput=", "onchange="];
+const DIRECT_FORM_SUBMIT_CALLS: &[&str] = &["this.form.requestsubmit(", "this.form.submit("];
+
+fn is_receiver_expression_boundary(value: Option<char>) -> bool {
+    value.is_none_or(|character| {
+        matches!(
+            character,
+            '(' | ')'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | ';'
+                | ','
+                | ':'
+                | '?'
+                | '='
+                | '+'
+                | '-'
+                | '*'
+                | '/'
+                | '%'
+                | '!'
+                | '&'
+                | '|'
+                | '^'
+                | '~'
+                | '<'
+                | '>'
+        )
+    })
+}
 
 fn handler_submits_form(value: &str) -> bool {
     let handler = value.to_ascii_lowercase().replace(char::is_whitespace, "");
-    handler.contains("this.form.requestsubmit(") || handler.contains("this.form.submit(")
+    DIRECT_FORM_SUBMIT_CALLS.iter().any(|call| {
+        handler
+            .match_indices(call)
+            .any(|(index, _)| is_receiver_expression_boundary(handler[..index].chars().next_back()))
+    })
 }
 
 /// True only when an executable input/change handler directly submits the form.
@@ -48,6 +83,19 @@ mod tests {
         ));
         assert!(!looks_like_one_time_code_auto_submit_signal(
             "data-submit-on-input=true"
+        ));
+    }
+
+    #[test]
+    fn rejects_suffixed_and_forged_this_receivers() {
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "oninput=notthis.form.submit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "onchange=controller.this.form.requestSubmit()"
+        ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "oninput=thisSuffix.form.submit()"
         ));
     }
 
