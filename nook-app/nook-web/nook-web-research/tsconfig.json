@@ -19,6 +19,8 @@
     "types": ["vite/client"]
   },
   "include": [
+    "e2e/**/*.ts",
+    "playwright.config.ts",
     "src/**/*.d.ts",
     "src/**/*.ts",
     "src/**/*.svelte",
