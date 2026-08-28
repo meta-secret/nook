@@ -181,6 +181,9 @@ export function validateModuleDeliveryEvidenceSubmission(
   };
   assertSubmissionMetadata(metadataRequest);
   const authorized = request.authorized;
+  verification.submission.acceptedProviderEvidence.forEach(
+    freezeProviderEvidenceIdentity,
+  );
   if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
     if (
       JSON.stringify(authorized) !==

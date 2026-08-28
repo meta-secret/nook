@@ -217,6 +217,7 @@ function runtime(): Runtime {
     throw new Error(JSON.stringify(result.issues));
   const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
     acceptedPlan: result,
+    repositoryRoot: fixture.sourceRoot,
     expectedLineage: result.plan.nodes.map((node) => ({
       taskId: node.taskId,
       parentLineage: node.parentLineage,
@@ -561,6 +562,11 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     const stored = synthesisEvidence.acceptedProviderEvidence[0];
     if (!retained || !nested || !stored)
       throw new Error('Nested synthesis evidence is missing.');
+    retained.acceptedProviderEvidence = Array(129).fill(nested);
+    expect(() =>
+      evidenceAuthority.freezeProviderEvidenceIdentity(retained),
+    ).toThrow('ancestry is too large');
+    retained.acceptedProviderEvidence = [];
     retained.acceptedProviderEvidence.push(nested);
     expect(stored).not.toEqual(retained);
     const carryRegistry =
@@ -579,6 +585,7 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     }
     const authorityBRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
       acceptedPlan: active.accepted,
+      repositoryRoot: active.fixture.sourceRoot,
       expectedLineage: active.accepted.plan.nodes.map((node) => ({
         taskId: node.taskId,
         parentLineage: node.parentLineage,

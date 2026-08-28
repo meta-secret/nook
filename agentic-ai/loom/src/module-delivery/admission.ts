@@ -6,6 +6,7 @@ import {
   moduleDeliveryResourcesConflict,
   trustedModuleDeliveryPlanSnapshot,
 } from './authority.ts';
+import { runModuleDeliveryGit } from './git-command.ts';
 import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
@@ -68,6 +69,7 @@ export type ModuleDeliveryExpectedLineage = Readonly<{
 export type CreateModuleDeliveryGenerationAuthorityRequest = {
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly expectedLineage: readonly ModuleDeliveryExpectedLineage[];
+  readonly repositoryRoot: string;
 };
 
 export type CreateModuleDeliveryAdmissionStateRequest = {
@@ -253,6 +255,13 @@ export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
   const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
+  const commitRequest = {
+    cwd: request.repositoryRoot,
+    args: ['cat-file', '-e', `${acceptedPlan.plan.sourceCommit}^{commit}`],
+    allowFailure: true,
+  };
+  if (runModuleDeliveryGit(commitRequest).exitCode !== 0)
+    throw new Error('Module delivery source commit is not authenticated.');
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,
@@ -458,15 +467,6 @@ export function selectModuleDeliveryAdmissions(
   const authority = authorityStateForPlan(planRequest);
   assertModuleDeliveryAdmissionStateAuthority(request);
   const blockedTaskIds = terminallyBlockedTaskIds(authority);
-  if (blockedTaskIds.length > 0) {
-    const selectionRequest = {
-      status: ModuleDeliveryAdmissionSelectionStatus.Blocked,
-      admissions: [],
-      pendingTaskIds: [],
-      blockedTaskIds,
-    };
-    return freezeModuleDeliveryAdmissionSelection(selectionRequest);
-  }
   const available =
     authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
   const admissions: ModuleDeliveryAdmission[] = [];
@@ -483,7 +483,12 @@ export function selectModuleDeliveryAdmissions(
       state: request.state,
       node,
     };
-    if (!taskPending(taskRequest) || !taskReady(readyRequest)) continue;
+    if (
+      blockedTaskIds.includes(taskId) ||
+      !taskPending(taskRequest) ||
+      !taskReady(readyRequest)
+    )
+      continue;
     const resourcesRequest: FrozenResourcesRequest = {
       node,
       plan: authority.acceptedPlan,
@@ -547,10 +552,13 @@ export function selectModuleDeliveryAdmissions(
     admissions.push(admission);
   }
   const selectionRequest = {
-    status: ModuleDeliveryAdmissionSelectionStatus.Selected,
+    status:
+      admissions.length > 0 || blockedTaskIds.length === 0
+        ? ModuleDeliveryAdmissionSelectionStatus.Selected
+        : ModuleDeliveryAdmissionSelectionStatus.Blocked,
     admissions,
     pendingTaskIds,
-    blockedTaskIds: [],
+    blockedTaskIds,
   };
   return freezeModuleDeliveryAdmissionSelection(selectionRequest);
 }

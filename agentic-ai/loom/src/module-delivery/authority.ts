@@ -23,6 +23,7 @@ import type {
 } from './evidence.ts';
 import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
 
+const MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES = 128;
 export type AcceptedModuleDeliveryEvidenceInspection = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly evidence: AcceptedModuleDeliveryEvidence;
@@ -151,6 +152,12 @@ function frozenClaim(
 export function freezeProviderEvidenceIdentity(
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity,
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
+  const pending = [identity];
+  for (const current of pending) {
+    pending.push(...current.acceptedProviderEvidence);
+    if (pending.length > MAX_EXPANDED_PROVIDER_EVIDENCE_IDENTITIES)
+      throw new Error('Accepted provider evidence ancestry is too large.');
+  }
   const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
     ...identity,
     claimIdentities: Object.freeze(identity.claimIdentities.map(frozenClaim)),
@@ -266,6 +273,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
   const register = (
     request: AcceptedModuleDeliveryEvidenceRegistration,
   ): void => {
+    freezeProviderEvidenceIdentity(request.evidence);
     if (authorities.has(request.evidence))
       throw new Error(
         'Accepted module delivery evidence is already registered.',

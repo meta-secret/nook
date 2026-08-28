@@ -1,7 +1,12 @@
-import { describe, expect, test } from 'bun:test';
+import { afterAll, describe, expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 import { moduleDeliveryAuthorityPlan } from '../../src/module-delivery/admission.ts';
+import {
+  createGitFixture,
+  disposeGitFixture,
+  fixtureGit,
+} from './worktree-test-support.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -39,26 +44,19 @@ import type {
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 
-const SOURCE = '0123456789abcdef0123456789abcdef01234567';
-const INTEGRATED = '89abcdef0123456789abcdef0123456789abcdef';
+const fixture = createGitFixture();
+const SOURCE = fixture.baselineCommit;
 const ROOT = 'nook-app/nook-platform/nook-core';
-
 type Runtime = {
   readonly accepted: ValidatedModuleDeliveryPlan;
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
 };
-
 type WriteNodeRequest = {
   readonly taskId: string;
   readonly dependencies: readonly string[];
   readonly path: string;
 };
-
-type RuntimeCreationRequest = {
-  readonly plan: ValidatedModuleDeliveryPlan;
-};
-
 type LeaseRequest = {
   readonly runtime: Runtime;
   readonly taskId: string;
@@ -151,6 +149,16 @@ const PLAN: ModuleDeliveryPlanV2 = {
   edgeContracts: [edge],
 };
 
+function planAt(sourceCommit: string): ModuleDeliveryPlanV2 {
+  const plan = structuredClone(PLAN);
+  const source = { sourceCommit };
+  Object.assign(plan, source);
+  for (const node of plan.nodes)
+    if (node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit)
+      Object.assign(node.baseline, source);
+  return plan;
+}
+
 function validate(plan: ModuleDeliveryPlanV2): ValidatedModuleDeliveryPlan {
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
@@ -167,13 +175,20 @@ function lineage(
   }));
 }
 
-function runtime(request: RuntimeCreationRequest): Runtime {
-  const { plan } = request;
-  const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
+function authorityRequest(
+  plan: ValidatedModuleDeliveryPlan,
+): CreateModuleDeliveryGenerationAuthorityRequest {
+  return {
     acceptedPlan: plan,
     expectedLineage: lineage(plan),
+    repositoryRoot: fixture.sourceRoot,
   };
-  const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
+}
+
+function runtime(plan: ValidatedModuleDeliveryPlan): Runtime {
+  const authority = createModuleDeliveryGenerationAuthority(
+    authorityRequest(plan),
+  );
   const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority,
     acceptedPlan: plan,
@@ -183,11 +198,6 @@ function runtime(request: RuntimeCreationRequest): Runtime {
   };
   const state = createModuleDeliveryAdmissionState(stateRequest);
   return { accepted: plan, authority, state };
-}
-
-function defaultRuntime(): Runtime {
-  const request: RuntimeCreationRequest = { plan: validate(PLAN) };
-  return runtime(request);
 }
 
 function select(active: Runtime) {
@@ -218,7 +228,7 @@ function lease(request: LeaseRequest): ModuleDeliveryAttemptLease {
 
 describe('module delivery admission authority', () => {
   test('selects the maximal safe set and rejects unproven writer frontiers', () => {
-    const active = defaultRuntime();
+    const active = runtime(validate(PLAN));
     const first = select(active);
     expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
       'alpha',
@@ -229,7 +239,7 @@ describe('module delivery admission authority', () => {
       attempt: 1,
       generation: 1,
       planDigest: active.accepted.planDigest,
-      headCommit: INTEGRATED,
+      headCommit: '89abcdef0123456789abcdef0123456789abcdef',
       integratedTaskIds: ['alpha'],
     } as never;
     const unrelatedFrontier = {
@@ -243,7 +253,7 @@ describe('module delivery admission authority', () => {
     const advancedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
-      headCommit: INTEGRATED,
+      headCommit: '89abcdef0123456789abcdef0123456789abcdef',
       integratedWriterFrontiers: [forgedFrontier, unrelatedFrontier],
       acceptedEvidence: [],
     };
@@ -261,8 +271,7 @@ describe('module delivery admission authority', () => {
 
   test('snapshots validated metadata and rejects forged plans and lineage', () => {
     const accepted = validate(PLAN);
-    const activeRuntimeRequest: RuntimeCreationRequest = { plan: accepted };
-    const active = runtime(activeRuntimeRequest);
+    const active = runtime(accepted);
     const sourceNode = accepted.plan.nodes.find(
       ({ taskId }) => taskId === 'alpha',
     );
@@ -287,14 +296,22 @@ describe('module delivery admission authority', () => {
       ...validate(PLAN),
       topologicalOrder: ['consumer', 'alpha', 'beta'],
     };
-    const forgedAuthorityRequest: CreateModuleDeliveryGenerationAuthorityRequest =
-      {
-        acceptedPlan: forged,
-        expectedLineage: lineage(forged),
-      };
+    const forgedAuthorityRequest = authorityRequest(forged);
     expect(() =>
       createModuleDeliveryGenerationAuthority(forgedAuthorityRequest),
     ).toThrow('metadata is inconsistent');
+
+    for (const sourceCommit of [
+      'f'.repeat(40),
+      fixtureGit(fixture)(['rev-parse', `${SOURCE}:module/seed.txt`]),
+    ]) {
+      const sourceAuthorityRequest = authorityRequest(
+        validate(planAt(sourceCommit)),
+      );
+      expect(() =>
+        createModuleDeliveryGenerationAuthority(sourceAuthorityRequest),
+      ).toThrow('source commit is not authenticated');
+    }
 
     const wrongLineage: readonly ModuleDeliveryExpectedLineage[] = lineage(
       validate(PLAN),
@@ -307,18 +324,17 @@ describe('module delivery admission authority', () => {
         attempt: 2,
       },
     }));
-    const wrongLineageAuthorityRequest: CreateModuleDeliveryGenerationAuthorityRequest =
-      {
-        acceptedPlan: validate(PLAN),
-        expectedLineage: wrongLineage,
-      };
+    const wrongLineageAuthorityRequest = {
+      ...authorityRequest(validate(PLAN)),
+      expectedLineage: wrongLineage,
+    };
     expect(() =>
       createModuleDeliveryGenerationAuthority(wrongLineageAuthorityRequest),
     ).toThrow('Expected lineage is invalid');
   });
 
   test('rejects forged states, admissions, leases, attempts, and duplicates', () => {
-    const active = defaultRuntime();
+    const active = runtime(validate(PLAN));
     const admission = select(active).admissions[0];
     if (!admission) throw new Error('Admission is missing.');
     const forgedState: ModuleDeliveryAdmissionState = { ...active.state };
@@ -350,7 +366,7 @@ describe('module delivery admission authority', () => {
   });
 
   test('retains lease history through disposition and restarts without stale generation state', () => {
-    const active = defaultRuntime();
+    const active = runtime(validate(PLAN));
     const firstLeaseRequest: LeaseRequest = {
       runtime: active,
       taskId: 'alpha',
@@ -419,9 +435,16 @@ describe('module delivery admission authority', () => {
     };
     const exhaustedSelection = select(exhaustedRuntime);
     expect(exhaustedSelection.status).toBe(
-      ModuleDeliveryAdmissionSelectionStatus.Blocked,
+      ModuleDeliveryAdmissionSelectionStatus.Selected,
     );
+    expect(
+      exhaustedSelection.admissions.map(
+        ({ taskId, attempt }) => `${taskId}:${attempt}`,
+      ),
+    ).toEqual(['beta:1']);
     expect(exhaustedSelection.blockedTaskIds).toEqual(['alpha', 'consumer']);
     expect(() => select(active)).toThrow('superseded');
   });
 });
+
+afterAll(() => disposeGitFixture(fixture));
