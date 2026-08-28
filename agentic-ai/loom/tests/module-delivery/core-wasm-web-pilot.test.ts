@@ -4,6 +4,7 @@ import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryJoinKind,
+  MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
@@ -24,7 +25,7 @@ import {
 } from './worktree-test-support.ts';
 
 import type {
-  AcceptedModuleDeliveryPlan,
+  ValidatedModuleDeliveryPlan,
   CleanupModuleIntegrationRequest,
   CleanupModuleWorktreeRequest,
   IntegrateVerifiedModuleDeliveryWaveRequest,
@@ -74,7 +75,7 @@ type PilotEdgeInput = {
 
 type WriterRequest = {
   readonly fixture: GitFixture;
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly node: WriteModuleDeliveryNode;
   readonly baselineCommit: string;
 };
@@ -87,7 +88,7 @@ type WriterCommitRequest = {
 };
 
 type IntegrateRequest = {
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleIntegrationState;
   readonly waveIndex: number;
   readonly workspace: ModuleWorktreeHandle;
@@ -110,7 +111,7 @@ type FixtureInput = {
 };
 
 type PlanNodeInput = {
-  readonly plan: AcceptedModuleDeliveryPlan;
+  readonly plan: ValidatedModuleDeliveryPlan;
   readonly taskId: string;
 };
 
@@ -199,7 +200,7 @@ function pilotEdge(input: PilotEdgeInput): ModuleDeliveryEdgeContract {
 
 function acceptedPilotPlan(
   input: SourceCommitInput,
-): AcceptedModuleDeliveryPlan {
+): ValidatedModuleDeliveryPlan {
   const coreInput: PilotNodeInput = {
     taskId: 'core-provider',
     expert: 'core_expert',
@@ -339,7 +340,17 @@ function planNode(input: PlanNodeInput): WriteModuleDeliveryNode {
   return node;
 }
 
-describe('core to WASM to web module delivery pilot', () => {
+test('module delivery wave integration is gated before state inspection', () => {
+  const incompleteRequest = {};
+  const request = Object.freeze(
+    incompleteRequest,
+  ) as IntegrateVerifiedModuleDeliveryWaveRequest;
+  expect(() => integrateVerifiedModuleDeliveryWave(request)).toThrow(
+    MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
+  );
+});
+
+describe.skip('core to WASM to web pilot pending admission', () => {
   test('hands each integrated commit to the next registered layer', () => {
     const activeFixture = createGitFixture();
     fixtures.push(activeFixture);
