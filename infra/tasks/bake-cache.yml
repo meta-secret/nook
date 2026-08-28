@@ -13,7 +13,7 @@ tasks:
     cmds:
       - |
         set -euo pipefail
-        docker_bin="${DOCKER:-docker}"
+        docker_bin=docker
         repo_root="$(git rev-parse --show-toplevel)"
         sim_dir="$repo_root/infra/sim/bake-cache"
         zot_image="{{.BAKE_CACHE_ZOT_IMAGE}}"

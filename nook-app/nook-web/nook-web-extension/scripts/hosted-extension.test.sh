@@ -219,7 +219,6 @@ expect_failure env NOOK_EXTENSION_REMOTE_DEBUGGING_PORT=abc \
 CHROME_BIN="$fake_browser"
 expect_failure launch_browser chrome "$installed"
 unset CHROME_BIN
-
 missing_browser="$fixture/missing-browser"
 expect_failure launch_browser_binary chrome "$missing_browser" "$installed" "$NOOK_EXTENSION_PROFILE_ROOT/chrome-extension-pr-410" '' '' 'Chromium'
 non_executable_browser="$fixture/non-executable-browser"

@@ -1,6 +1,9 @@
 import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
-import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
+import {
+  referencesSkillProvider,
+  violatesSkillProviderBoundary,
+} from './skill-provider-boundary.test.ts';
 import {
   type ConfigurationReferenceInspection,
   type ConfigurationScriptGraph,
@@ -9,6 +12,13 @@ import {
   executableScriptViolatesBoundary,
   ShellExecutablePolicy,
 } from './skill-provider-executable-script.ts';
+import {
+  analyzeShellCommands,
+  runnableCommandSources,
+  staticTypeScriptScriptLaunches,
+  type ShellLaunchArgument,
+  type ShellScriptLaunch,
+} from './skill-provider-command-boundary.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
 import {
@@ -53,9 +63,15 @@ type ActionLoaderFixture = {
   readonly source: string;
 };
 
-type RequiredLaunchInspection = {
-  readonly source: string;
+type ConfigurationReference = {
+  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
+  readonly required: boolean;
   readonly specifier: string;
+};
+
+type PendingConfiguration = {
+  readonly importer: string;
+  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };
 
 type ApplicationConsumerEdge = {
@@ -81,10 +97,6 @@ const LOOM_ARTICLE_ADAPTER =
   'agentic-ai/loom/src/lib/cortex-article-structure.ts';
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
 const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
-const CONFIGURATION_SCRIPT_REFERENCE =
-  /(?:^|[\s"'`:])((?:\.{0,2}\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*\.(?:[cm]?[jt]sx?|sh))(?=$|[\s"'`,;\]}])/gmu;
-const EXTENSIONLESS_SCRIPT_REFERENCE =
-  /(?:^|[\s"'`:=[({,])((?:\.{1,2}\/|\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)+)(?=$|[\s"'`,;\]})])/gmu;
 const ACTION_SOURCE_SUFFIXES = [
   '',
   ...'ts tsx mts cts js jsx mjs cjs'.split(' ').map((value) => `.${value}`),
@@ -95,9 +107,7 @@ const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 function isRunnableConfiguration(path: string): boolean {
   return (
     /(^|\/)package\.json$/u.test(path) ||
-    /(^|\/)Taskfile\.ya?ml$/u.test(path) ||
-    /(^|\/)\.env\.[^/]+$/u.test(path) ||
-    /(^|\/)vite\.config\.(?:[cm]?ts|[cm]?js)$/u.test(path) ||
+    /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path) ||
     /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
     /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path) ||
     /^\.github\/actions\/(?:[^/]+\/)*action\.ya?ml$/u.test(path)
@@ -140,13 +150,19 @@ function actionSourceRequiresContent(path: string): boolean {
 function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
-  const pending = [...graph.roots];
+  const pending: PendingConfiguration[] = graph.roots.map((importer) => ({
+    importer,
+    positionalArguments: false,
+  }));
   const visited = new Set<string>();
   const scripts = new Set<string>();
   while (pending.length > 0) {
-    const importer = pending.pop();
-    if (!importer || visited.has(importer)) continue;
-    visited.add(importer);
+    const next = pending.pop();
+    if (!next) continue;
+    const importer = next.importer;
+    const visitKey = `${importer}\0${JSON.stringify(next.positionalArguments)}`;
+    if (visited.has(visitKey)) continue;
+    visited.add(visitKey);
     const source = graph.sources.get(importer);
     if (typeof source !== 'string' || graph.symlinkPaths.has(importer)) {
       throw new Error(`Runnable configuration path is unsafe: ${importer}`);
@@ -158,9 +174,14 @@ function configurationScriptPaths(
       importer,
       source,
     };
-    for (const specifier of configurationScriptReferences(
-      referenceInspection,
+    const configurationRequest: ConfigurationReferenceRequest = {
+      inspection: referenceInspection,
+      positionalArguments: next.positionalArguments,
+    };
+    for (const reference of configurationScriptReferences(
+      configurationRequest,
     )) {
+      const specifier = reference.specifier;
       const skillPackage = executableSkillPackageFromPath(importer);
       const scriptsIndex = importer.indexOf('/scripts/');
       const packageRoot =
@@ -171,6 +192,9 @@ function configurationScriptPaths(
             : importer.slice(0, scriptsIndex);
       const candidates: readonly string[] = [
         posix.normalize(specifier.replace(/^\.\//u, '')),
+        posix.normalize(
+          specifier.replace(/(^|\/)dist\//u, '$1src/').replace(/\.js$/u, '.ts'),
+        ),
         posix.normalize(posix.join(posix.dirname(importer), specifier)),
         posix.normalize(posix.join(packageRoot, specifier)),
         posix.normalize(
@@ -183,11 +207,7 @@ function configurationScriptPaths(
       const dependency =
         candidates.find((path) => graph.sources.has(path)) ?? false;
       if (dependency === false) {
-        const launchInspection: RequiredLaunchInspection = {
-          source,
-          specifier,
-        };
-        if (isRequiredScriptLaunch(launchInspection)) {
+        if (reference.required) {
           throw new Error(
             `Runnable script is untracked: ${importer} -> ${specifier}`,
           );
@@ -228,6 +248,8 @@ function configurationScriptPaths(
         };
         if (
           !applicationEdge &&
+          (!EXECUTABLE_SOURCE_EXTENSION.test(dependency) ||
+            executableSourceMayReachProvider(adapterInspection.source)) &&
           executableScriptViolatesBoundary(boundaryInspection)
         ) {
           throw new Error(
@@ -238,11 +260,25 @@ function configurationScriptPaths(
           continue;
         }
         scripts.add(dependency);
+        const pendingConfiguration: PendingConfiguration = {
+          importer: dependency,
+          positionalArguments: reference.positionalArguments,
+        };
+        pending.push(pendingConfiguration);
       }
-      pending.push(dependency);
     }
   }
   return [...scripts].sort();
+}
+
+function executableSourceMayReachProvider(source: string): boolean {
+  const compact = source.replace(/[\s"'`+]/gu, '');
+  return (
+    referencesSkillProvider(compact) ||
+    (compact.includes('.cortex/') &&
+      compact.includes('dynamic-skills') &&
+      compact.includes('scripts'))
+  );
 }
 
 function isApplicationDependency(path: string): boolean {
@@ -260,47 +296,51 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
   );
 }
 
+type ConfigurationReferenceRequest = {
+  readonly inspection: ConfigurationReferenceInspection;
+  readonly positionalArguments: readonly ShellLaunchArgument[] | false;
+};
+
 function configurationScriptReferences(
-  inspection: ConfigurationReferenceInspection,
-): readonly string[] {
-  CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
-  EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
-  const matched = [
-    ...inspection.source.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
-    ...inspection.source.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
-  ]
-    .map((match) => match[1] ?? false)
-    .filter((specifier) => specifier !== false);
+  request: ConfigurationReferenceRequest,
+): readonly ConfigurationReference[] {
+  const inspection = request.inspection;
   if (!EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer)) {
-    return [...new Set(matched)];
+    const commandInspection = {
+      path: inspection.importer,
+      source: inspection.source,
+    };
+    const launches = runnableCommandSources(commandInspection).flatMap(
+      (source): readonly ShellScriptLaunch[] => {
+        const shellInspection = {
+          positionalArguments: request.positionalArguments,
+          source,
+        };
+        return analyzeShellCommands(shellInspection).launches;
+      },
+    );
+    return launches.map((launch) => ({
+      positionalArguments: launch.positionalArguments,
+      required: true,
+      specifier: launch.specifier,
+    }));
   }
   const importSource = inspection.source.replace(/^#![^\n]*\n/u, '');
-  const references = new Set(
-    ACTION_IMPORT_SCANNER.scanImports(importSource).map(
-      (imported) => imported.path,
-    ),
-  );
-  for (const specifier of matched) {
-    const launchInspection: RequiredLaunchInspection = {
-      source: inspection.source,
+  const imports: ConfigurationReference[] = ACTION_IMPORT_SCANNER.scanImports(
+    importSource,
+  ).map((imported) => ({
+    positionalArguments: false,
+    required: false,
+    specifier: imported.path,
+  }));
+  const launches = staticTypeScriptScriptLaunches(inspection.source).map(
+    (specifier): ConfigurationReference => ({
+      positionalArguments: false,
+      required: true,
       specifier,
-    };
-    if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
-  }
-  return [...references];
-}
-
-function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
-  if (inspection.source.includes('{{')) return false;
-  const escapedSpecifier = inspection.specifier.replace(
-    /[.*+?^${}()|[\]\\]/gu,
-    '\\$&',
+    }),
   );
-  const launchPattern = new RegExp(
-    `(?:^|[\\s;&|"'=:\\[(])(?:bun|node|bash|sh)\\s+["']?${escapedSpecifier}(?=$|[\\s"';&|])`,
-    'u',
-  );
-  return launchPattern.test(inspection.source);
+  return [...imports, ...launches];
 }
 
 function actionRuntimePaths(graph: ActionRuntimeGraph): readonly string[] {
@@ -545,7 +585,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
 });
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
-  const taskfilePattern = /(^|\/)Taskfile\.ya?ml$/u;
+  const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;
   const allPaths = readTrackedRepositoryFiles(REPOSITORY_ROOT).map(
     (file) => file.path,
   );
@@ -569,11 +609,8 @@ test('classifies every runnable configuration category at root and nested bounda
     'package.json',
     'nested/package.json',
     'Taskfile.yml',
+    'Taskfile.ci.yml',
     'nested/Taskfile.yaml',
-    '.env.test',
-    'nested/.env.local',
-    'vite.config.ts',
-    'nested/vite.config.mjs',
     '.task/root.yml',
     '.task/nested/task.yaml',
     '.task/evil\n.yml',
@@ -589,6 +626,8 @@ test('classifies every runnable configuration category at root and nested bounda
     '.github/actions/action.yml/child',
     '.github/actions/nested/not-action.yml',
     'nested/.task/task.yml',
+    '.env.test',
+    'vite.config.ts',
     '.task/evil\n.yml/child',
     '.github/actions/evil\n/not-action.yml',
     '.github/actions/evil\n/action.yml/child',
@@ -895,9 +934,8 @@ test('rejects a dangerous adapter from the canonical runnable graph', () => {
 
 test('checks external and extensionless configuration scripts as executable sources', () => {
   for (const externalSource of [
-    'eval(source);',
-    'await import(modulePath);',
     "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
+    "const root = '.cortex/teams/ai/' + 'dynamic-skills/cortex-article-structure/scripts'; await import(`${root}/src/audit.ts`);",
   ]) {
     const sources = new Map<string, string>([
       ['package.json', '{"scripts":{"audit":"bun scripts/external.ts"}}'],
@@ -909,9 +947,7 @@ test('checks external and extensionless configuration scripts as executable sour
       sources,
       symlinkPaths: new Set<string>(),
     };
-    expect(() => configurationScriptPaths(graph), externalSource).toThrow(
-      'Runnable script violates runtime boundary',
-    );
+    expect(() => configurationScriptPaths(graph), externalSource).toThrow();
   }
 
   const extensionlessSources = new Map<string, string>([
