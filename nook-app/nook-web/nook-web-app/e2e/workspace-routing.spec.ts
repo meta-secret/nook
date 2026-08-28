@@ -3,6 +3,7 @@ import {
   authorizeDeviceProtection,
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  signedSentinelInvitation,
 } from './helpers'
 
 type WorkspaceRoutingWindow = Window & {
@@ -176,6 +177,36 @@ test.describe('persistent workspace routing', () => {
       await expect(page.getByTestId('vault-panel')).toBeVisible()
       await expect(page.getByTestId('header-devices-access-btn')).toBeVisible()
     }
+  })
+
+  test('does not queue header access while an invitation preserves the access gate', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    const invitation = await signedSentinelInvitation()
+
+    await page.evaluate((request) => {
+      history.pushState(
+        {},
+        '',
+        `/vault#sentinel-request=${encodeURIComponent(request)}`,
+      )
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    }, invitation)
+
+    await expect(
+      page.getByTestId('sentinel-genesis-participant-step'),
+    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(page.getByTestId('header-devices-access-btn')).toHaveCount(0)
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    })
+
+    await expect(page).toHaveURL(/\/vault$/)
+    await expect(page.getByTestId('vault-panel')).toBeVisible()
+    await expect(page.getByTestId('header-devices-access-btn')).toBeVisible()
+    await expect(page.getByTestId('devices-access-dashboard')).toHaveCount(0)
   })
 
   test('returns header access to the originating workspace route', async ({

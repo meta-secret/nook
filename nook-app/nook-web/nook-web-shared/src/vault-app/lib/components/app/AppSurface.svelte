@@ -66,6 +66,10 @@
   } = $props()
 
   let headerDevicesAccessRequestGeneration = $state(0)
+
+  $effect(() => {
+    if (preserveAccessGate) headerDevicesAccessRequestGeneration = 0
+  })
 </script>
 
 {#if appLogsPage}
@@ -82,11 +86,13 @@
       legalPageOpen={legalPageState.kind === LegalRouteKind.Legal}
       {logsPage}
       {extensionConnectRoute}
+      workspaceAccessAvailable={!preserveAccessGate}
       {extensionSetupState}
       {onNavigateHome}
       {onToggleColorMode}
       onPairExtension={() => void onExtensionConnect()}
       onOpenDevicesAccess={() => {
+        if (preserveAccessGate) return
         headerDevicesAccessRequestGeneration += 1
       }}
     />

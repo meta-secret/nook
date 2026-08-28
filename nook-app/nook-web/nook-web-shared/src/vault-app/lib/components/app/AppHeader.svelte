@@ -34,6 +34,7 @@
     legalPageOpen,
     logsPage,
     extensionConnectRoute,
+    workspaceAccessAvailable,
     extensionSetupState,
     onNavigateHome,
     onToggleColorMode,
@@ -46,6 +47,7 @@
     legalPageOpen: boolean
     logsPage: boolean
     extensionConnectRoute: boolean
+    workspaceAccessAvailable: boolean
     extensionSetupState: ExtensionSetupOffer
     onNavigateHome: () => void
     onToggleColorMode: () => void
@@ -55,6 +57,7 @@
 
   const workspaceHeaderActionsVisible = $derived(
     vault.isAuthenticated &&
+      workspaceAccessAvailable &&
       !vault.helpOpen &&
       !legalPageOpen &&
       !logsPage &&
