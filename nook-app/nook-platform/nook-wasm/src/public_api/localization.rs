@@ -58,9 +58,6 @@ pub fn assess_vault_security(
 pub fn authentication_workflow_snapshot(
     observations: &NookAuthenticationPageObservations,
 ) -> NookAuthenticationWorkflowMatch {
-    let observations = nook_core::AuthenticationPageObservations {
-        observations: observations.as_core().to_vec(),
-    };
     NookAuthenticationWorkflowMatch::from_core(observations.classify())
 }
 

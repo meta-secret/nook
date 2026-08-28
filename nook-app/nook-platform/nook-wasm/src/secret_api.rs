@@ -397,13 +397,28 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_preserves_core_policy() -> Result<(), wasm_bindgen::JsError>
     {
-        let observation =
-            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+        let observation = NookAuthenticationPageObservation::from_detailed_control_observation(
+            nook_core::AuthenticationPageObservation {
                 username_field_count: 1,
                 current_password_field_count: 1,
                 advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
                 ..Default::default()
-            });
+            },
+            nook_companion_core::AuthenticationAdvanceControlObservation {
+                actionability: nook_companion_core::PageControlActionability::Actionable,
+                ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                authentication_username:
+                    nook_companion_core::AuthenticationUsernameEvidence::Strong,
+                password_field_count: 1,
+                new_password_field_count: 0,
+                one_time_code_field_count: 0,
+                semantic_submit_control_count: 1,
+                form_identity: String::new(),
+                destination_identity: String::new(),
+                label: "Continue".to_owned(),
+            },
+        );
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&observation);
         let snapshot = authentication_workflow_snapshot(&observations).snapshot()?;
@@ -418,6 +433,27 @@ mod wasm_tests {
         assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert_eq!(snapshot.observation_index(), 0);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn authentication_workflow_snapshot_rejects_forged_reduced_login_evidence()
+    -> Result<(), wasm_bindgen::JsError> {
+        let observation =
+            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+                current_password_field_count: 1,
+                advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
+                ..Default::default()
+            });
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&observation);
+
+        let workflow = authentication_workflow_snapshot(&observations);
+        assert_eq!(
+            workflow.state(),
+            NookAuthenticationWorkflowMatchState::NoMatch
+        );
+        assert!(workflow.snapshot().is_err());
         Ok(())
     }
 

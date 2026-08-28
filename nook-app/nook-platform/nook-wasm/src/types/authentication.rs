@@ -16,7 +16,29 @@ pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObserv
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(observation: nook_core::AuthenticationPageObservation) -> Self {
+    pub fn new(mut observation: nook_core::AuthenticationPageObservation) -> Self {
+        // The reduced page envelope cannot establish that a control belongs to
+        // an authentication ceremony. Do not let callers forge continuation
+        // evidence by setting this field directly.
+        observation.advance_control = nook_core::AuthenticationAdvanceControlEvidence::Absent;
+        Self(observation)
+    }
+
+    /// Construct page evidence from a detailed, policy-checked control observation.
+    #[wasm_bindgen(js_name = fromDetailedControlObservation)]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn from_detailed_control_observation(
+        mut observation: nook_core::AuthenticationPageObservation,
+        control: nook_companion_core::AuthenticationAdvanceControlObservation,
+    ) -> Self {
+        observation.advance_control = match control.classify() {
+            nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication => {
+                nook_core::AuthenticationAdvanceControlEvidence::Present
+            }
+            nook_companion_core::AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication => {
+                nook_core::AuthenticationAdvanceControlEvidence::Absent
+            }
+        };
         Self(observation)
     }
 }
@@ -40,6 +62,13 @@ impl NookAuthenticationPageObservations {
 impl NookAuthenticationPageObservations {
     pub(crate) fn as_core(&self) -> &[nook_core::AuthenticationPageObservation] {
         &self.0
+    }
+
+    pub(crate) fn classify(&self) -> nook_core::AuthenticationWorkflowMatch {
+        nook_core::AuthenticationPageObservations {
+            observations: self.0.clone(),
+        }
+        .classify()
     }
 }
 
