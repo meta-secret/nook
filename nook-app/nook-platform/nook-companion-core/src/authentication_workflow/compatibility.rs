@@ -8,7 +8,7 @@ use super::{
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-pub const AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT: &str = r#"
+pub const AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT: &str = r"
 export interface AuthenticationPageObservation {
     usernameFieldCount: number;
     currentPasswordFieldCount: number;
@@ -25,11 +25,13 @@ export interface AuthenticationPageObservation {
 export interface AuthenticationPageObservations {
     observations: AuthenticationPageObservation[];
 }
-"#;
+";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(type = "AuthenticationPageObservation", from_wasm_abi)]
+// The boolean fields are the immutable current-main wire contract retained for compatibility.
+#[allow(clippy::struct_excessive_bools)]
 pub struct AuthenticationPageObservationCompatibility {
     pub username_field_count: u32,
     pub current_password_field_count: u32,
