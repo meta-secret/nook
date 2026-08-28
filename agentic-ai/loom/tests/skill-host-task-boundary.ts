@@ -26,6 +26,14 @@ export const HOST_CLI_TEMPLATE = `{{.REPO_ROOT}}/${HOST_CLI}`;
 export const TOOLS_LIST_COMMAND = `bun "${HOST_CLI_TEMPLATE}" --default toolsList`;
 const TASK_PATH_REFERENCE =
   /(?:\{\{\s*\.REPO_ROOT\s*\}\}\/)?(?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+/gu;
+const TASK_COMMAND_CHARACTER_LIMIT = 16_384;
+const TASK_COMMAND_WORD_LIMIT = 1_024;
+
+enum ShellQuote {
+  Double = '"',
+  None = '',
+  Single = "'",
+}
 
 export function hasCanonicalToolsListTask(source: string): boolean {
   const document = Bun.YAML.parse(source) as TaskDocument;
@@ -52,16 +60,20 @@ export function hasOnlyCanonicalHostTaskEdge(source: string): boolean {
       const value =
         typeof command === 'string' ? command : (command.cmd ?? command.defer);
       if (typeof value !== 'string') continue;
-      const withoutRoot = value.replace(/\{\{\s*\.REPO_ROOT\s*\}\}\//gu, '');
-      for (const match of withoutRoot.matchAll(TASK_PATH_REFERENCE)) {
-        const paths = [
-          posix.normalize(match[0]),
-          posix.normalize(
-            posix.join(posix.dirname(CANONICAL_TASKFILE), match[0]),
-          ),
-        ];
-        const hostPath = paths.find((path) => path.startsWith(HOST_ROOT));
-        if (hostPath) hostEdges.push([taskName, hostPath]);
+      const words = taskShellWords(value);
+      if (words === false) return false;
+      for (const word of words) {
+        const withoutRoot = word.replace(/\{\{\s*\.REPO_ROOT\s*\}\}\//gu, '');
+        for (const match of withoutRoot.matchAll(TASK_PATH_REFERENCE)) {
+          const paths = [
+            posix.normalize(match[0]),
+            posix.normalize(
+              posix.join(posix.dirname(CANONICAL_TASKFILE), match[0]),
+            ),
+          ];
+          const hostPath = paths.find((path) => path.startsWith(HOST_ROOT));
+          if (hostPath) hostEdges.push([taskName, hostPath]);
+        }
       }
     }
   }
@@ -70,4 +82,37 @@ export function hasOnlyCanonicalHostTaskEdge(source: string): boolean {
     hostEdges[0]?.[0] === 'skills:tools-list' &&
     hostEdges[0]?.[1] === HOST_CLI
   );
+}
+
+function taskShellWords(command: string): readonly string[] | false {
+  if (command.length > TASK_COMMAND_CHARACTER_LIMIT) return false;
+  const words: string[] = [];
+  let word = '';
+  let quote = ShellQuote.None;
+  for (let index = 0; index < command.length; index += 1) {
+    const character = command[index] ?? '';
+    if (quote !== ShellQuote.None) {
+      if (character === quote) quote = ShellQuote.None;
+      else if (character === '\\' && quote === ShellQuote.Double) {
+        index += 1;
+        if (index >= command.length) return false;
+        word += command[index] ?? '';
+      } else word += character;
+      continue;
+    }
+    if (character === ShellQuote.Single || character === ShellQuote.Double) {
+      quote = character;
+    } else if (character === '\\') {
+      index += 1;
+      if (index >= command.length) return false;
+      word += command[index] ?? '';
+    } else if (/[\s;&|]/u.test(character)) {
+      if (word.length > 0) words.push(word);
+      word = '';
+      if (words.length > TASK_COMMAND_WORD_LIMIT) return false;
+    } else word += character;
+  }
+  if (quote !== ShellQuote.None) return false;
+  if (word.length > 0) words.push(word);
+  return words.length <= TASK_COMMAND_WORD_LIMIT ? words : false;
 }

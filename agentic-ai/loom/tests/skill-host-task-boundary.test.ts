@@ -36,8 +36,12 @@ test('binds the host edge to the originating canonical task', () => {
     `../${HOST_CLI}`,
     `temporary/../../${HOST_CLI}`,
     HOST_CLI.replace('/src/cli.ts', '/src/../src/cli.ts'),
+    HOST_CLI.replace('/src/cli.ts', '/"src/cli.ts"'),
+    HOST_CLI.replace('/src/cli.ts', "/'src/'cli.ts"),
+    HOST_CLI.replace('/src/cli.ts', "/src/'cli'.ts"),
+    `"${HOST_CLI.slice(0, -6)}"'cli'.ts`,
   ]) {
-    const source = `${CANONICAL_SOURCE}\n  extra:\n    cmds:\n      - bun "${reference}" --default toolsList\n`;
+    const source = `${CANONICAL_SOURCE}\n  extra:\n    cmds:\n      - bun ${reference} --default toolsList\n`;
     expect(hasCanonicalToolsListTask(source), reference).toBe(true);
     expect(hasOnlyCanonicalHostTaskEdge(source), reference).toBe(false);
   }

@@ -100,6 +100,25 @@ test('uses bracket grammar for known hyphenated fields', () => {
   };
   expect(skillCommandPath(request)).toBe('root["known-field"]');
 });
+test('counts string limits in Unicode code points', () => {
+  for (const [schema, accepted, rejected] of [
+    [{ type: SkillSchemaType.String, maxLength: 2 }, '😀a', '😀ab'],
+    [
+      { type: SkillSchemaType.String, maxTrimmedLineLength: 2 },
+      '  😀a  ',
+      '  😀ab  ',
+    ],
+  ] as const) {
+    const acceptedRequest: SkillSchemaValidationRequest = {
+      path: 'text',
+      schema,
+      value: accepted,
+    };
+    expect(validateSkillInput(acceptedRequest).ok).toBe(true);
+    const rejection: RejectionRequest = { schema, value: rejected };
+    expect(reject(rejection)).toBe('blocks[4]');
+  }
+});
 test('accepts only safe integer values', () => {
   const schema: SkillInputSchema = {
     type: SkillSchemaType.Integer,

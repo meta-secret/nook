@@ -234,7 +234,7 @@ function validateString(
   }
   if (
     typeof request.schema.maxLength === 'number' &&
-    request.value.length > request.schema.maxLength
+    unicodeCodePointLength(request.value) > request.schema.maxLength
   ) {
     return invalidAt(request.path)(
       `Expected at most ${request.schema.maxLength} characters.`,
@@ -250,7 +250,9 @@ function validateString(
   }
   if (
     typeof maximumLineLength === 'number' &&
-    lines.some((line) => line.trim().length > maximumLineLength)
+    lines.some(
+      (line) => unicodeCodePointLength(line.trim()) > maximumLineLength,
+    )
   ) {
     return invalidAt(request.path)(
       'A trimmed line exceeds the allowed length.',
@@ -268,6 +270,9 @@ function validateString(
     );
   }
   return { ok: true };
+}
+function unicodeCodePointLength(value: string): number {
+  return [...value].length;
 }
 function validateInteger(
   request: SkillIntegerValidationRequest,
