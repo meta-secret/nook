@@ -29,16 +29,9 @@ the output is conclusively dispositioned.
 - Accepted write output is verified and integrated.
 - Accepted read-only evidence is verified and accepted into parent task state.
 - Rejected or cancelled output is recorded and cannot be used.
-- Every release triggers readiness and wave recomputation.
 
-Select each wave in stable task order. Greedily include every ready task that
-conflicts with neither an active lease nor a claim selected for the new wave.
-Snapshot each selected frontier, then create one worker attempt per selected
-task. Leave excluded ready tasks pending for the next readiness recomputation.
-
-Read-only audits may overlap. Claims conflict when they overlap and either task
-writes. Concurrent writers require isolated workspaces and disjoint resource
-claims.
+The canonical workflow defines capacity, hazard ordering, provider-local joins,
+and immutable generation restart.
 
 ## Dispatch team agents
 
@@ -98,12 +91,8 @@ When a team needs a provider owned elsewhere:
 2. Report the provider team and required external contract.
 3. State acceptance evidence and affected consumer work.
 4. Return the dependency to Gizmo.
-5. If the provider was unknown, invalidate and stop or cancel the current
-   attempt.
-6. Let Gizmo add the provider task and edge, then replan the affected graph.
-7. Rerun deterministic topology and cycle validation.
-   - If a cycle exists, fail closed and report the blocked dependency to Gizmo.
-8. Resume through a fresh attempt only after the provider barrier is satisfied.
+5. Let Gizmo apply the canonical late-plan mutation procedure when the provider
+   was absent from the frozen graph.
 
 Cross-team requests do not authorize direct edits in the provider team's paths.
 
@@ -139,27 +128,14 @@ tasks before activating a successor.
 3. Require each write provider to be terminal-successful and accepted.
 4. Verify each write provider's commit and scope, then integrate it into the
    consumer's Git frontier.
-5. Check affected read-only evidence surfaces before releasing the write lease.
-6. Verify that each declared evidence surface is head-stable for the consumer
-   frontier.
-   - An overlapping write integration triggers the check.
-   - Consumer leases include relied-on evidence-surface claims.
-7. If evidence is stale, invalidate every active or terminal-but-unaccepted
-   consumer attempt that relied on it.
-8. Stop or cancel active consumers.
-9. Reject completed-but-unaccepted outputs and record them as unusable.
+Canonical delegation supplies the intervening evidence and lease steps.
 10. Require each read-only provider to be terminal-successful and accepted.
 11. Verify each read-only provider's exact source commit, then accept its
     evidence into parent task state.
 12. Record any other rejected or cancelled output as unusable.
 13. Release each lease after conclusive disposition.
-14. Recompute readiness and wave selection after every lease release.
-15. Rerun stale evidence at the exact new consumer frontier.
-16. Accept it again, then retry each consumer as a fresh attempt.
-17. Recompute readiness after evidence acceptance or reacceptance.
 18. Bind every ready successor to the exact Git frontier containing its complete
    write-predecessor closure.
-19. Select the next deterministic maximal safe wave against active leases.
 20. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
 21. Route review and validation failures back to the responsible team.
 22. Repeat until every team-owned correction is complete.

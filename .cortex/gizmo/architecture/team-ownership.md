@@ -47,19 +47,12 @@ Team identity is task-scoped.
 - Accepted read-only evidence is verified and accepted into parent state before
   release.
 - Rejected or cancelled output is recorded as unusable before release.
-- Every lease release triggers readiness and wave recomputation.
-- A read-only task record names the exact resource claims used as its evidence
-  surface.
-- Accepted read-only evidence must remain unchanged at the consumer frontier.
-- An overlapping write triggers the check.
-- Changed evidence is rerun and accepted again at the consumer frontier.
 - A consumer lease includes relied-on evidence-surface claims.
-- Stale evidence invalidates active and terminal-but-unaccepted consumers.
-- Active consumers stop or cancel. Unaccepted terminal outputs are rejected.
-- Affected consumers retry as fresh attempts.
 - Worker attempt count follows ready selected tasks. It does not follow team
   count.
 - Team ownership does not collapse several tasks into one mission-wide worker.
+- Operational semantics follow
+  [subagent delegation](../workflows/subagent-delegation.md).
 
 Skill ownership is separate from implementation delegation.
 
@@ -195,8 +188,7 @@ Gizmo assigns the human request before implementation starts.
 7. Freeze the initial known graph, contracts, resource claims, forbidden scope,
    tests, evidence surfaces, and acceptance evidence.
 8. Assign exactly one team identity to every reached task.
-9. Validate deterministic topology and fail closed on cycles.
-10. Select a stable-order maximal safe wave against active claim leases.
+9. Apply the canonical delegation workflow.
 11. Snapshot exact starting frontiers for selected tasks.
 12. Create one worker attempt for each selected task.
 13. Keep shared files and lifecycle state in the parent-owned join.
@@ -229,19 +221,9 @@ It reports a dependency containing:
 
 The team agent must not implement the provider inside its own layer.
 
-When the provider was absent from the frozen graph:
-
-1. The agent reports the unknown provider.
-2. The harness invalidates and stops or cancels the affected attempt.
-3. Gizmo adds the provider task and edge.
-4. Gizmo replans the affected graph and recursively discovers provider needs.
-5. Gizmo reruns deterministic topology and cycle validation.
-   - A cycle fails closed.
-   - Gizmo receives the blocked dependency.
-6. Gizmo accepts a write provider through Git integration.
-7. Gizmo accepts a read-only provider through parent task evidence state.
-8. Gizmo retries the consumer from a fresh frontier after the provider barrier
-   is satisfied.
+If the provider was absent from the frozen graph, Gizmo applies the immutable
+generation restart in
+[subagent delegation](../workflows/subagent-delegation.md#immutable-generation-restart).
 
 ## Cross-team expertise protocol
 
@@ -298,16 +280,10 @@ The final integration must prove:
 - shared files were serialized;
 - every reached task had one team identity;
 - every ready selected task had one worker attempt and an exact frontier;
-- every active claim lease participated in wave conflict checks;
 - every lease release followed a conclusive output disposition;
-- every lease release triggered readiness and wave recomputation;
-- every graph mutation passed deterministic topology and cycle validation;
-- every late provider invalidated the affected attempt before replanning;
 - every read-only task declared an evidence surface;
-- every accepted read-only result was head-stable for its consumer frontier;
-- stale evidence invalidated every active or terminal-but-unaccepted consumer;
-- invalidated consumer outputs were recorded as unusable;
 - every successor Git frontier contained its full write-predecessor closure;
 - every successor had accepted and current read-only predecessor evidence in
   parent task state; and
+- canonical delegation acceptance criteria passed;
 - Gizmo validated the integrated exact head.

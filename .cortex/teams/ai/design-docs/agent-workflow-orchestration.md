@@ -72,6 +72,7 @@ Feature planning uses the
 - Dependency chains do not increase hierarchy depth.
 - Named semantic roles come from the
   [module expert registry](../architecture/module-experts.md).
+- Every task carries a mandatory team identity separate from its expert.
 - `internal_api_expert` owns changed inter-module and WASM consumer contracts.
 - Expert catalog paths route knowledge and do not grant write authority.
 - Write-capable nodes use isolated workspaces and verified commit handoffs.

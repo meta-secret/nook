@@ -47,16 +47,8 @@ authority.
 3. Gizmo assigns exactly one team identity to each task.
 4. Gizmo creates a worker attempt only after the task is ready and its exact
    starting frontier exists.
-5. An unknown provider invalidates the affected attempt and returns to Gizmo
-   for graph replanning.
-6. Every graph mutation reruns deterministic topology and cycle validation.
-7. Cycles fail closed and return the blocked dependency to Gizmo.
-8. Wave selection includes claims in every unreleased lease.
-9. Worker termination does not release a lease.
-10. Gizmo releases it after accepted integration, accepted evidence, or a
-    recorded unusable rejection or cancellation.
-11. Read-only evidence must remain head-stable for the consumer frontier.
-12. Stale evidence invalidates active and terminal-but-unaccepted consumers.
+5. Gizmo applies the operational workflow routed through its delivery context.
+Rules 6-12 remain in that owning context.
 13. The assigned worker loads only its own context's `AGENTS.md` and knowledge
    graph.
 14. Open only documents needed for the assigned functionality.

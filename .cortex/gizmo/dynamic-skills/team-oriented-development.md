@@ -23,22 +23,16 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 7. Report a cycle's blocked dependency to Gizmo.
 8. Keep claims leased until Gizmo conclusively accepts, rejects, or cancels the
    output.
-9. Select a stable-order maximal safe wave against all active claim leases.
+9. Apply canonical [subagent delegation](../workflows/subagent-delegation.md).
 10. Snapshot an exact starting frontier for each selected task.
-11. Create one worker attempt per selected task and dispatch the wave.
+11. Create one worker attempt for each selected task.
 12. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
 13. Follow [subagent delegation](../workflows/subagent-delegation.md) for
    dispatch and integration.
 14. Route cross-team dependencies through Gizmo.
-15. Invalidate and stop or cancel an attempt that discovers an unknown provider.
-16. Add the provider task and edge, then revalidate the affected graph.
-17. Prove read-only evidence head-stable before consumer dispatch.
-18. Invalidate active and terminal-but-unaccepted consumers of stale evidence.
-19. Record invalidated outputs as unusable.
-20. Rerun the evidence and retry each consumer as a fresh attempt.
-21. Require each team to implement its own tests, Cortex updates, and review
+15. Require each team to implement its own tests, Cortex updates, and review
    fixes for its assigned task.
-22. Follow [Team-oriented development](../workflows/team-oriented-development.md)
+16. Follow [Team-oriented development](../workflows/team-oriented-development.md)
    for team-specific execution and validation.
 
 When a unit changes a security boundary, name security acceptance separately
@@ -73,8 +67,4 @@ task has one team identity. Confirm that every ready selected task received one
 worker attempt after its exact frontier existed. Confirm that every expertise
 provider stayed inside its explicit code and test scope. Confirm that Git
 frontiers contain write predecessors while accepted read-only evidence remains
-in parent task state. Confirm that active claim leases constrained wave
-selection. Confirm that leases released only after conclusive output
-disposition. Confirm that every release triggered readiness recomputation.
-Confirm that every graph mutation passed cycle validation. Confirm that stale
-evidence invalidated and restarted every affected unaccepted consumer.
+in parent task state. Confirm the remaining canonical delegation criteria.

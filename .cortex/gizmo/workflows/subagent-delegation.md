@@ -86,7 +86,8 @@ This rule preserves
 Every subagent task must declare:
 
 - a stable task ID;
-- one semantic role or team identity;
+- exactly one team identity;
+- any separate semantic role or expert required by the task;
 - its exact baseline;
 - its purpose;
 - its allowed files or evidence surface;
@@ -99,6 +100,11 @@ Every subagent task must declare:
 - its acceptance evidence;
 - forbidden mutations;
 - its parent-owned join.
+
+Team identity selects context and semantic acceptance ownership. A semantic
+role or expert selects bounded knowledge. Neither field can replace the other.
+
+### Attempts and results
 
 Create one disposable worker attempt only when the task is ready and its exact
 starting frontier exists.
@@ -121,7 +127,7 @@ A retry is a new attempt of the same logical task.
 - The parent validates the result against current task state.
 - The parent does not merge worker conclusions blindly.
 
-## Task discovery and ready waves
+## Task discovery and admission batches
 
 Gizmo recursively discovers every necessary bounded task before that task is
 dispatched.
@@ -132,13 +138,19 @@ dispatched.
 4. Create one task record for every reached task.
 5. Assign exactly one team identity to every task record.
 6. Freeze the initial known graph before dispatch.
-7. Run deterministic topology and cycle validation.
+7. Derive deterministic execution constraints.
+   - A writer that overlaps a read-only provider's evidence surface runs before
+     that evidence provider.
+   - Otherwise-unordered conflicting tasks are serialized in stable execution
+     order instead of making the plan invalid.
+8. Run deterministic topology and cycle validation over declared and derived
+   constraints.
    - A cycle fails closed.
    - Report the blocked dependency to Gizmo instead of waiting.
-8. Freeze resource claims, acceptance evidence, stable task order, and the
+9. Freeze resource claims, acceptance evidence, stable task order, and the
    parent-owned join.
 
-### Ready wave dispatch
+### Typed provider handoffs
 
 A write provider satisfies its consumer edge only when it is:
 
@@ -151,8 +163,19 @@ A read-only provider satisfies its consumer edge only when it is:
 
 - terminal-successful;
 - semantically accepted by the responsible owner;
-- verified against its exact source commit; and
+- represented by a versioned typed evidence handoff;
+- verified against its exact source commit and evidence-surface content
+  identities; and
 - accepted as evidence in parent task state.
+
+The evidence handoff identifies the plan generation, task, attempt, team,
+source commit, evidence artifact and digest, and every declared
+evidence-surface claim with its content identity. The evidence surface is
+non-empty, separately represented, and covered by the task's read claims. An
+empty, unverified, wrong-generation, or wrong-team handoff cannot satisfy a
+provider edge.
+
+### Ready admission
 
 Dispatch follows these rules:
 
@@ -163,14 +186,19 @@ Dispatch follows these rules:
 - A consumer lease also includes evidence-surface claims it relies on.
 - Worker termination does not release the lease.
 - Gizmo releases it only after conclusively dispositioning the output.
-- The harness visits ready pending tasks in stable task order.
-- It first excludes tasks that conflict with any active lease from prior waves.
+- The harness computes available capacity as
+  `max(0, maxConcurrency - unreleasedLeaseCount)`.
+- It visits ready pending tasks in stable task order.
+- It first excludes tasks that conflict with any unreleased lease from prior
+  admission batches.
 - It then greedily selects a task when its claims do not conflict with claims
-  already selected for the new wave.
+  already selected for the new admission batch.
 - Claims conflict when they overlap and either task writes.
-- The resulting set is the deterministic maximal safe wave.
+- Selection stops when available capacity is exhausted.
+- The resulting set is the deterministic maximal safe admission batch under
+  that capacity.
 - The harness snapshots every selected starting frontier before creating any
-  attempt in that wave.
+  attempt in that batch.
 - It creates one worker attempt for each selected task.
 - Ready tasks excluded by conflicts remain pending for the next recomputation.
 - Read-only audits may overlap, including audits of the same evidence.
@@ -179,78 +207,69 @@ Dispatch follows these rules:
   readiness on affected outgoing edges.
 - Each newly ready successor binds to the exact integrated frontier that
   contains its complete write-predecessor closure.
-- Unrelated work continues. No global wait separates waves.
+- Unrelated work continues. Admission batches are not completion or integration
+  barriers.
 - The all-task terminal barrier exists only for the final parent-owned join.
 
 ### Output disposition and lease release
 
 Gizmo records exactly one conclusive disposition for each terminal output.
 
-- **Accepted write:** verify the commit and scope, then integrate it.
-  Complete any resulting stale-evidence and consumer invalidation before lease
-  release.
-- **Accepted read-only:** verify the exact source, then accept the evidence into
-  parent task state.
+- **Accepted write:** verify the commit and scope, then integrate that provider
+  immediately without waiting for other tasks from its admission batch.
+- **Accepted read-only:** verify the typed evidence handoff and exact source,
+  then accept the evidence into parent task state without waiting for other
+  tasks from its admission batch.
 - **Rejected or cancelled:** record that the output cannot be used.
 
 The attempt lease remains held until its disposition is complete. Every lease
-release triggers readiness and wave recomputation.
+release triggers readiness and admission recomputation. Completion of provider
+A may therefore make A's consumer selectable while unrelated provider B from
+the same admission batch is still active.
 
-### Read-only evidence stability
+### Evidence-safe execution ordering
 
 The task record names every resource claim used to produce read-only evidence.
 Those claims are its evidence surface.
 
-Before consumer dispatch:
+Before dispatch, the deterministic validator derives a write-before-evidence
+constraint for every otherwise-unordered writer whose write claim overlaps a
+read-only provider's evidence surface. The evidence provider starts only from a
+frontier containing those integrated writers. Its consumers start only after
+the typed evidence handoff is verified and accepted.
 
-1. Compare the evidence surface at the provider's exact source commit with the
-   consumer's exact frontier.
-2. Treat the evidence as head-stable only when every claimed resource has the
-   same content identity.
-3. Trigger this check whenever a write integration overlaps the evidence
-   surface.
-4. If the surface changed, identify every consumer attempt that relied on the
-   evidence.
-5. Invalidate every active or terminal-but-unaccepted consumer attempt.
-6. Stop or cancel active attempts.
-7. Reject completed-but-unaccepted outputs.
-8. Record every invalidated output as unusable.
-9. Release each consumer lease only after that disposition is recorded.
-10. Invalidate the accepted evidence.
-11. Rerun the read-only provider against the exact new consumer frontier.
-12. Verify the exact source commit and accept the replacement evidence in parent
-   task state.
-13. Retry each affected consumer as a fresh attempt.
-14. Recompute readiness after reacceptance and every lease release.
+For other otherwise-unordered overlapping claims, the validator derives a
+stable serialization constraint. The later task starts from a frontier
+containing the earlier integrated write. Overlap therefore delays a task; it
+does not reject an otherwise valid plan.
 
-Only consumers of the changed evidence surface are delayed. Independent claims
-remain eligible for parallel work.
+#### Validation outcome
 
-### Late provider discovery
+The combined declared and derived execution graph must remain acyclic. If
+write-before-evidence ordering creates a cycle, the plan fails closed and Gizmo
+must split the evidence surface or repair the provider design. Known hazards
+cannot leave an accepted consumer stale, so ordinary execution never rolls
+back or invalidates an already accepted consumer.
+
+### Immutable generation restart
 
 The frozen initial graph controls dispatch. A worker cannot add its own task or
 dependency edge.
 
-When a running task discovers an unknown provider:
+Any late provider, edge, claim, acceptance, or other plan mutation creates a
+new immutable plan generation and digest. Selective state or handoff migration
+is not supported.
 
-1. The worker reports the provider and affected consumer contract.
-2. The harness invalidates the current attempt.
-3. The harness stops or cancels that attempt.
-4. Gizmo adds the bounded provider task and dependency edge.
-5. Gizmo recursively discovers any dependencies of the new provider.
-6. Gizmo replans the affected graph in stable task order.
-7. Gizmo reruns deterministic topology and cycle validation.
-   - A cycle fails closed.
-   - Gizmo receives the blocked dependency instead of waiting.
-8. Gizmo freezes the validated affected graph.
-9. Unaffected tasks continue from their existing records and frontiers.
-10. A write provider passes through commit verification and Git integration.
-11. A read-only provider passes through exact-source verification and evidence
-   acceptance in parent task state.
-12. The consumer retries only as a fresh attempt from a fresh frontier after
-    every new provider barrier is satisfied.
+For any late mutation:
 
-Output from the invalidated attempt cannot satisfy acceptance or integration.
+1. Report it to Gizmo and invalidate the complete old generation.
+2. Cancel active attempts; reject terminal-but-unaccepted output; release each
+   lease only after recording that disposition.
+3. Abandon accepted evidence and private integration state.
+4. Rebuild and cycle-check the graph as a new immutable generation.
+5. Retry every reached task from its new declared source and exact frontier.
+
+Old-generation results may remain inspectable but cannot be reused.
 
 ## Module-oriented feature development
 
@@ -361,28 +380,10 @@ A Markdown view may preserve an agent's conclusions for human inspection.
 The harness passes child results to the owning parent and enforces declared
 barriers.
 
-Before integration, the parent:
-
-1. checks task identity and lineage;
-2. verifies the exact baseline;
-3. verifies changed paths and commit ancestry;
-4. verifies acceptance evidence;
-5. reconciles failures and disagreements;
-6. integrates accepted commits in deterministic dependency order;
-7. accepts read-only evidence into parent task state or integrates a write
-   commit into the Git frontier;
-8. checks affected read-only evidence surfaces after a write integration;
-9. invalidates active and terminal-but-unaccepted consumers of stale evidence;
-10. stops or cancels active consumers and rejects unaccepted terminal outputs;
-11. records rejected or cancelled output as unusable;
-12. releases each lease after its conclusive disposition;
-13. recomputes readiness and wave selection after every lease release;
-14. reruns stale evidence at the consumer frontier;
-15. retries affected consumers as fresh attempts;
-16. recomputes readiness after acceptance or reacceptance;
-17. binds downstream work to the exact integrated frontier containing its
-   complete write-predecessor closure; and
-18. selects the next deterministic maximal safe wave against active leases.
+Before integration, the parent verifies identity, lineage, baseline, scope,
+handoff, and team acceptance. It dispositions each result provider-locally,
+releases the lease, recomputes readiness and capacity, and binds successors to
+their complete integrated predecessor frontier. Failures remain parent-owned.
 
 The parent may author a Markdown summary for humans.
 That summary is optional.
@@ -540,7 +541,8 @@ Before integration, verify:
 - every reached task has a task record;
 - every selected ready task has one harness-visible worker attempt;
 - every task record declares read and write resource claims;
-- every read-only task record declares its evidence surface;
+- every read-only task record declares a non-empty evidence surface covered by
+  its read claims;
 - every child records the correct parent lineage;
 - every task stayed inside its declared hierarchy depth bound;
 - no descendant widened its assigned task or write scope;
@@ -555,32 +557,30 @@ Before integration, verify:
   closure;
 - read-only evidence was accepted in parent task state without a Git-ancestry
   requirement;
-- integration follows deterministic dependency order;
-- every wave was greedily maximal under stable task order and resource claims;
-- every wave excluded conflicts with every unreleased claim lease;
+- declared and derived execution order was deterministic and acyclic;
+- admission was stable, conflict-safe, and capped by available
+  `maxConcurrency` after every unreleased lease;
 - every consumer lease included relied-on evidence-surface claims;
 - worker termination did not release a claim lease;
 - every claim lease remained held until conclusive output disposition;
 - accepted writes were verified and integrated before lease release;
-- accepted read-only evidence was verified and accepted before lease release;
+- accepted read-only evidence used the verified typed handoff;
 - rejected or cancelled output was recorded as unusable before lease release;
-- every lease release triggered readiness and wave recomputation;
-- every selected frontier was snapshotted before wave attempts were created;
+- every lease release triggered readiness and admission recomputation;
+- selected frontiers were snapshotted before attempts were created;
 - conflict-excluded ready tasks remained pending for recomputation;
-- every late provider invalidated and stopped or cancelled the affected attempt;
-- every graph mutation reran deterministic topology and cycle validation;
+- unordered conflicts were serialized and known writers preceded affected
+  evidence;
+- evidence-hazard cycles failed closed before dispatch;
+- late mutations cancelled or rejected every old-generation attempt, migrated
+  no result or private state, and retried every reached task in a validated new
+  generation;
 - every cycle failed closed and reported its blocked dependency to Gizmo;
-- every late-provider consumer retry used fresh attempt state and a fresh
-  frontier;
 - readiness was recomputed after every Git integration or evidence acceptance;
-- overlapping write integrations triggered evidence-surface stability checks;
-- stale evidence invalidated every active or terminal-but-unaccepted consumer;
-- active consumers were stopped or cancelled;
-- completed-but-unaccepted consumer outputs were rejected as unusable;
-- stale read-only evidence was rerun and reaccepted at the exact consumer
-  frontier;
-- each affected consumer retried as a fresh attempt;
-- readiness was recomputed after read-only evidence reacceptance;
+- provider results were dispositioned locally without a whole-admission-batch
+  barrier;
+- no known evidence hazard required rollback or invalidation of an already
+  accepted consumer;
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - the parent reviewed all evidence;

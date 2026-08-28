@@ -16,6 +16,8 @@ Universal worker behavior follows the root
 ## Engineering team routing
 
 Every module expert runs inside one engineering-team ownership domain.
+Every task records one mandatory team identity separately from its registered
+expert.
 
 - Portable Rust, companion-domain, core, and Rust/WASM bridge evidence routes
   through the development-core team graph.
@@ -25,7 +27,8 @@ Every module expert runs inside one engineering-team ownership domain.
 - The internal API expert may inspect an accepted provider-consumer boundary
   across teams. It remains read-only and cannot transfer ownership.
 
-The delivery owner selects the team before invoking a module expert.
+The delivery owner selects the team and its acceptance context before invoking
+the bounded expert role.
 The expert must not expand into another team's implementation scope.
 
 ## Registry contract

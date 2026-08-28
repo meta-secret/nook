@@ -24,25 +24,11 @@ Gizmo must:
    - the tests or evidence that prove completion.
 4. Assign exactly one team identity to each task.
 5. Freeze the initial known task graph before dispatch.
-6. Validate deterministic topology and reject cycles.
-7. Select a deterministic maximal safe wave against all active claim leases.
-8. Snapshot each selected task's exact starting frontier.
-9. Create one worker attempt for each selected task and lease its claims.
-10. Conclusively disposition every terminal output.
-    - Verify and integrate accepted write output.
-    - Complete any resulting stale-evidence invalidation.
-    - Verify and accept read-only evidence into parent task state.
-    - Record rejected or cancelled output as unusable.
-11. Release its lease only after that disposition is recorded.
-12. Recompute readiness after every lease release.
-13. Rerun and reaccept stale evidence.
-14. Retry affected consumers as fresh attempts.
-15. Recompute readiness after acceptance or reacceptance.
-16. Bind each successor to the exact integrated frontier that contains its
-   complete write-predecessor closure.
-17. Review every returned result against the requested outcome.
-18. Send incomplete or incorrect work back to the responsible subagent.
-19. Recursively call the responsible subagent with feedback until the mission
+6. Apply canonical topology, admission, evidence, integration, and generation
+   rules from [subagent delegation](gizmo/workflows/subagent-delegation.md).
+7. Review every returned result against the requested outcome.
+8. Send incomplete or incorrect work back to the responsible subagent.
+9. Recursively call the responsible subagent with feedback until the mission
    is complete or a real blocker requires human direction.
 
 Every reached unit receives a task record. A ready task receives one worker
@@ -109,30 +95,9 @@ A read-only provider satisfies its consumer edge only when it is:
 - verified against its exact source commit; and
 - accepted as evidence in the parent task state.
 
-- The successor starts from the exact integrated frontier that contains its
-  complete write-predecessor closure.
-- Read-only evidence is not required in Git ancestry.
-- A consumer lease includes the evidence-surface claims it relies on.
-- Before consumer dispatch, read-only evidence must be head-stable for the
-  consumer frontier.
-- An overlapping write integration triggers that stability check.
-- Stale evidence invalidates every active or terminal-but-unaccepted consumer
-  attempt that relied on it.
-- Active attempts are stopped or cancelled.
-- Terminal-but-unaccepted outputs are rejected and cannot be used.
-- Evidence is rerun against the new consumer frontier and accepted again.
-- Each affected consumer retries as a fresh attempt.
-- The harness recomputes readiness after write integration or read-only
-  evidence acceptance or reacceptance.
-- Provider edges are local barriers.
-- An all-task barrier is reserved for the final parent-owned join.
-- The initial known graph is frozen before dispatch.
-- An unknown provider invalidates and stops or cancels the affected attempt.
-- Gizmo adds the provider task and edge, then replans the affected graph.
-- Every graph change reruns deterministic topology and cycle validation.
-- A cycle fails closed and returns the blocked dependency to Gizmo.
-- The consumer retries as a fresh attempt from a fresh frontier after the new
-  provider barrier is satisfied.
+Typed evidence, deterministic admission, provider-local joins, immutable
+generation restart, and the final join follow
+[subagent delegation](gizmo/workflows/subagent-delegation.md).
 
 The active harness owns worker creation and native worker labels or names.
 It also owns same-model inheritance. Any explicit model selection remains
@@ -141,9 +106,6 @@ cancellation, and terminal barriers.
 
 Repository profile files are not semantic, capability, context, model, or
 lifecycle authority.
-
-Operational dispatch, isolation, retry, evidence, and join rules live in
-[subagent delegation](gizmo/workflows/subagent-delegation.md).
 
 ## Mandatory context selection
 
@@ -230,15 +192,8 @@ Security review does not transfer implementation ownership.
 
 Gizmo may run team subagents one after another when their changes cannot safely
 overlap. Claims remain leased after worker termination until Gizmo records a
-conclusive disposition. A disposition is accepted and integrated write output,
-accepted read-only evidence, or rejected or cancelled output that cannot be
-used. Every lease release triggers readiness and wave recomputation.
-
-Gizmo greedily selects a maximal safe wave in stable task order against active
-leases and claims selected for the new wave. Read-only audits may overlap. Any
-overlapping claims conflict when either task writes. Concurrent writers require
-isolated workspaces and disjoint resource claims. Gizmo still must not implement
-their tasks.
+conclusive disposition. Every lease release triggers readiness and admission
+recomputation. Gizmo remains outside team implementation tasks.
 
 ## Universal repository boundaries
 
