@@ -7,10 +7,58 @@ import { pathExists } from './workspace-paths.ts';
 
 import type { GitCommandRequest } from './git-command.ts';
 import type {
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryEvidenceClaimIdentity,
+} from './evidence.ts';
+import type { TeamKey } from '../team-agents/catalog.ts';
+import type {
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
 } from './integration.ts';
 import type { ModuleWorktreeHandle } from './workspace.ts';
+
+export const MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 1;
+
+export enum ModuleDeliveryProviderSubmissionKind {
+  ReadOnlyEvidence = 'read-only-evidence',
+}
+
+export enum ModuleDeliveryEvidenceVerdict {
+  TerminalSuccess = 'terminal-success',
+}
+
+export type ModuleDeliveryReadOnlyEvidenceSubmission = Readonly<{
+  kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence;
+  schemaVersion: typeof MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION;
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  sourceCommit: string;
+  producerTeam: TeamKey;
+  functionalOwner: TeamKey;
+  acceptanceOwner: TeamKey;
+  acceptanceRequirements: readonly string[];
+  claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
+  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+  artifactIdentity: string;
+  artifactDigest: string;
+  verdict: ModuleDeliveryEvidenceVerdict;
+  evidence: readonly string[];
+}>;
+
+export type AcceptedModuleDeliveryEvidence =
+  ModuleDeliveryReadOnlyEvidenceSubmission &
+    Readonly<{ sourceProvenanceDigest: string; verifiedHeadCommit: string }>;
+
+type StringSequencePair = Readonly<{
+  first: readonly string[];
+  second: readonly string[];
+}>;
+
+export function moduleDeliveryEvidenceSha256(value: string): string {
+  return createHash('sha256').update(value).digest('hex');
+}
 
 export type SourceRepositorySnapshot = {
   readonly headCommit: string;
@@ -59,6 +107,31 @@ export type IntegrationStateRegistration = {
   readonly workspaceSnapshot: SourceRepositorySnapshot;
   readonly session: ModuleIntegrationSession;
 };
+
+const INTEGRATED_WRITER_FRONTIER_CAPABILITY = Symbol(
+  'module-delivery-integrated-writer-frontier-capability',
+);
+
+export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
+  [INTEGRATED_WRITER_FRONTIER_CAPABILITY]: true;
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  headCommit: string;
+  integratedTaskIds: readonly string[];
+}>;
+
+export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
+  Readonly<{
+    capability: ModuleDeliveryIntegratedWriterFrontierCapability;
+    taskId: string;
+    attempt: number;
+    generation: number;
+    planDigest: string;
+    headCommit: string;
+    integratedTaskIds: readonly string[];
+  }>;
 
 type ModuleGitInvocation = {
   readonly cwd: string;
@@ -109,6 +182,10 @@ const SESSIONS = new WeakMap<
   ModuleIntegrationSession
 >();
 const RETIRED_STATES = new WeakSet<ModuleIntegrationState>();
+const INTEGRATED_WRITER_FRONTIER_CAPABILITIES = new WeakMap<
+  ModuleDeliveryIntegratedWriterFrontierCapability,
+  ModuleIntegrationState
+>();
 
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
   if ('allowFailure' in invocation) {
@@ -421,6 +498,47 @@ export function integrationProvenance(
     throw new Error('Module integration state lacks private provenance.');
   }
   return provenance;
+}
+
+function sameStrings(pair: StringSequencePair): boolean {
+  if (pair.first.length !== pair.second.length) return false;
+  for (let index = 0; index < pair.first.length; index += 1) {
+    if (pair.first[index] !== pair.second[index]) return false;
+  }
+  return true;
+}
+
+export function assertModuleDeliveryIntegratedWriterFrontierCapability(
+  request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
+): void {
+  const capability = request.capability;
+  const state = INTEGRATED_WRITER_FRONTIER_CAPABILITIES.get(capability);
+  if (!state)
+    throw new Error('Integrated writer frontier capability is invalid.');
+  const provenance = integrationProvenance(state);
+  const taskIds: StringSequencePair = {
+    first: capability.integratedTaskIds,
+    second: request.integratedTaskIds,
+  };
+  const stateTaskIds: StringSequencePair = {
+    first: capability.integratedTaskIds,
+    second: state.integratedTaskIds,
+  };
+  if (
+    capability[INTEGRATED_WRITER_FRONTIER_CAPABILITY] !== true ||
+    capability.taskId !== request.taskId ||
+    capability.attempt !== request.attempt ||
+    capability.generation !== request.generation ||
+    capability.planDigest !== request.planDigest ||
+    capability.headCommit !== request.headCommit ||
+    !sameStrings(taskIds) ||
+    !sameStrings(stateTaskIds) ||
+    provenance.planDigest !== capability.planDigest ||
+    provenance.headCommit !== capability.headCommit ||
+    state.planDigest !== capability.planDigest ||
+    state.headCommit !== capability.headCommit
+  )
+    throw new Error('Integrated writer frontier capability is invalid.');
 }
 
 export function retireIntegrationState(state: ModuleIntegrationState): void {

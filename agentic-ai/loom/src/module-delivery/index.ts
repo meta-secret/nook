@@ -1,5 +1,44 @@
 export { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
 export { decodeCompatibleModuleDeliveryPlan } from './codec.ts';
+export {
+  ModuleDeliveryAdmissionSelectionStatus,
+  ModuleDeliveryAttemptDispositionKind,
+  ModuleDeliveryGenerationFenceKind,
+  createModuleDeliveryAdmissionState,
+  createModuleDeliveryGenerationAuthority,
+  recordModuleDeliveryAttemptDisposition,
+  recordModuleDeliveryAttemptLeases,
+  selectModuleDeliveryAdmissions,
+  verifyModuleDeliveryEvidenceSubmission,
+} from './admission.ts';
+export type {
+  CreateModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryGenerationAuthorityRequest,
+  ModuleDeliveryAdmissionState,
+  ModuleDeliveryAttemptLease,
+  ModuleDeliveryExpectedLineage,
+  ModuleDeliveryGenerationAuthority,
+  RecordModuleDeliveryAttemptDispositionRequest,
+  RecordModuleDeliveryAttemptLeasesRequest,
+  SelectModuleDeliveryAdmissionsRequest,
+} from './admission.ts';
+export { moduleDeliveryEvidenceArtifactDigest } from './evidence.ts';
+export type {
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryEvidenceArtifactDigestRequest,
+} from './evidence.ts';
+export {
+  MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
+  ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryProviderSubmissionKind,
+  assertModuleDeliveryIntegratedWriterFrontierCapability,
+} from './integration-provenance.ts';
+export type {
+  AcceptedModuleDeliveryEvidence,
+  AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
+  ModuleDeliveryIntegratedWriterFrontierCapability,
+  ModuleDeliveryReadOnlyEvidenceSubmission,
+} from './integration-provenance.ts';
 export { cleanupModuleWorktree, prepareModuleWorktree } from './workspace.ts';
 export { verifyModuleCommitHandoff } from './handoff.ts';
 export {
