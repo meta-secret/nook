@@ -104,7 +104,11 @@ describe('delegated agent journal CLI', () => {
       } as const;
       const startProcess = Bun.spawn(startCommand, spawnOptions);
       expect(await startProcess.exited).toBe(0);
-      await new Response(startProcess.stdout).text();
+      const startStdout = await new Response(startProcess.stdout).text();
+      const startStderr = await new Response(startProcess.stderr).text();
+      expect(() => JSON.parse(startStdout)).not.toThrow();
+      expect(startStdout).not.toContain('gizmo');
+      expect(startStderr).toBe('gizmo\n');
       const admissionPath = join(workingDirectory, 'admission.json');
       const admissionRequest = {
         runId: request.runId,
