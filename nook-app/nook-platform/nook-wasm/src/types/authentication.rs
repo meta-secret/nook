@@ -27,7 +27,6 @@ impl NookAuthenticationPageObservation {
     }
 
     /// Construct page evidence from a detailed, policy-checked control observation.
-    #[wasm_bindgen(js_name = fromDetailedControlObservation)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn from_detailed_control_observation(
         mut observation: nook_core::AuthenticationPageObservation,
