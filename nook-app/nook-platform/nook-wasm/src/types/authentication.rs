@@ -1,5 +1,25 @@
 use super::wasm_bindgen;
 
+#[wasm_bindgen(typescript_custom_section)]
+const AUTHENTICATION_PAGE_OBSERVATION_TYPESCRIPT: &str = r"
+export interface AuthenticationPageObservation {
+    usernameFieldCount: number;
+    currentPasswordFieldCount: number;
+    newPasswordFieldCount: number;
+    genericPasswordFieldCount: number;
+    oneTimeCodeFieldCount: number;
+    oneTimeCodeProgression: 'advance-control-required' | 'auto-submit-observed';
+    manualCheckpoint: 'absent' | 'present';
+    enrollmentEvidence: 'absent' | 'authenticator-setup' | 'backup-codes' | 'authenticator-setup-and-backup-codes';
+    advanceControl: 'absent' | 'present';
+    passkey:
+        | { kind: 'absent' }
+        | { kind: 'control' }
+        | { kind: 'vault-accounts'; accountCount: number }
+        | { kind: 'control-and-vault-accounts'; accountCount: number };
+}
+";
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookLoginAccount {
@@ -12,11 +32,57 @@ pub struct NookLoginAccount {
 #[wasm_bindgen]
 pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObservation);
 
+#[cfg(target_arch = "wasm32")]
 #[wasm_bindgen]
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(mut observation: nook_core::AuthenticationPageObservation) -> Self {
+    pub fn new(
+        #[wasm_bindgen(unchecked_param_type = "AuthenticationPageObservation")]
+        observation: wasm_bindgen::JsValue,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let observation = decode_authentication_page_observation(observation)?;
+        Ok(Self::from_reduced_observation(observation))
+    }
+
+    /// Construct page evidence from a detailed, policy-checked control observation.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn from_detailed_control_observation(
+        #[wasm_bindgen(unchecked_param_type = "AuthenticationPageObservation")]
+        observation: wasm_bindgen::JsValue,
+        control: nook_companion_core::AuthenticationAdvanceControlObservation,
+    ) -> Result<Self, wasm_bindgen::JsError> {
+        let observation = decode_authentication_page_observation(observation)?;
+        Ok(Self::from_detailed_observation(observation, &control))
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn decode_authentication_page_observation(
+    observation: wasm_bindgen::JsValue,
+) -> Result<nook_core::AuthenticationPageObservation, wasm_bindgen::JsError> {
+    serde_wasm_bindgen::from_value(observation)
+        .map_err(|_| wasm_bindgen::JsError::new("authentication page observation is malformed"))
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+impl NookAuthenticationPageObservation {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(observation: nook_core::AuthenticationPageObservation) -> Self {
+        Self::from_reduced_observation(observation)
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn from_detailed_control_observation(
+        observation: nook_core::AuthenticationPageObservation,
+        control: nook_companion_core::AuthenticationAdvanceControlObservation,
+    ) -> Self {
+        Self::from_detailed_observation(observation, &control)
+    }
+}
+
+impl NookAuthenticationPageObservation {
+    fn from_reduced_observation(mut observation: nook_core::AuthenticationPageObservation) -> Self {
         // The reduced page envelope cannot establish that a control belongs to
         // an authentication ceremony. Do not let callers forge continuation
         // evidence by setting this field directly.
@@ -26,11 +92,9 @@ impl NookAuthenticationPageObservation {
         Self(observation)
     }
 
-    /// Construct page evidence from a detailed, policy-checked control observation.
-    #[allow(clippy::needless_pass_by_value)]
-    pub fn from_detailed_control_observation(
+    fn from_detailed_observation(
         mut observation: nook_core::AuthenticationPageObservation,
-        control: nook_companion_core::AuthenticationAdvanceControlObservation,
+        control: &nook_companion_core::AuthenticationAdvanceControlObservation,
     ) -> Self {
         // The reduced page envelope cannot establish auto-submit progression.
         observation.one_time_code_progression =
@@ -43,7 +107,7 @@ impl NookAuthenticationPageObservation {
             one_time_code_field_count: observation.one_time_code_field_count,
         };
         let control_advances = control.is_bounded()
-            && fields.is_compatible_with_detailed_control(&control)
+            && fields.is_compatible_with_detailed_control(control)
             && matches!(
                 control.classify(),
                 nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication

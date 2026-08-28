@@ -119,9 +119,8 @@ impl AuthenticationApprovalRequirement {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservation {
     pub username_field_count: u32,
     pub current_password_field_count: u32,
