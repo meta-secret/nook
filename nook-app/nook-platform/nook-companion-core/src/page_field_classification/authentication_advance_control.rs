@@ -958,7 +958,8 @@ mod tests {
         assert!(!advances_authentication(&unlink_confirmation));
 
         let destructive_login_fallback = AuthenticationAdvanceControlObservation {
-            label: "Continue to delete account".to_owned(),
+            form_identity: "/auth/logout".to_owned(),
+            label: "Sign out".to_owned(),
             ..destructive_confirmation.clone()
         };
         assert!(!advances_authentication(&destructive_login_fallback));
