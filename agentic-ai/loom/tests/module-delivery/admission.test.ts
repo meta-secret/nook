@@ -1,7 +1,12 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
-import { moduleDeliveryAuthorityPlan } from '../../src/module-delivery/admission.ts';
+import {
+  assertAcceptedModuleDeliveryEvidence,
+  moduleDeliveryAcceptedEvidenceIdentity,
+  moduleDeliveryAuthorityPlan,
+} from '../../src/module-delivery/admission.ts';
+import { moduleDeliveryEvidenceClaimIdentities } from '../../src/module-delivery/evidence.ts';
 import {
   createGitFixture,
   disposeGitFixture,
@@ -15,29 +20,37 @@ import {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryBaselineKind,
+  ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryGenerationFenceKind,
   ModuleDeliveryJoinKind,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
+  ModuleDeliveryProviderSubmissionKind,
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
+  moduleDeliveryEvidenceArtifactDigest,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
   restartModuleDeliveryGeneration,
   selectModuleDeliveryAdmissions,
+  verifyModuleDeliveryEvidenceSubmission,
 } from '../../src/module-delivery/index.ts';
 
 import type {
+  AcceptedModuleDeliveryEvidence,
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryEdgeContract,
+  ModuleDeliveryEvidenceArtifactDigestRequest,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV2,
+  ModuleDeliveryReadOnlyEvidenceSubmission,
+  ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
   RecordModuleDeliveryAttemptDispositionRequest,
   RecordModuleDeliveryAttemptLeasesRequest,
@@ -45,6 +58,10 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
+import type {
+  ModuleDeliveryEvidenceDigestRequest,
+  ModuleDeliveryEvidenceSubmissionVerification,
+} from '../../src/module-delivery/evidence.ts';
 
 const fixture = createGitFixture();
 const SOURCE = fixture.baselineCommit;
@@ -87,10 +104,10 @@ type GenerationPlanRequest = {
   readonly generation: number;
   readonly includeGamma: boolean;
 };
-type CancelledLeaseRequest = {
-  readonly runtime: Runtime;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
+type CancelledLeaseRequest = Readonly<{
+  runtime: Runtime;
+  lease: ModuleDeliveryAttemptLease;
+}>;
 type GenerationRestartRequest = {
   readonly runtime: Runtime;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
@@ -99,9 +116,16 @@ type GenerationPlanUpdate = {
   readonly generation: number;
   readonly nodes: ModuleDeliveryPlanV2['nodes'];
 };
-type PlanConcurrencyUpdate = {
-  readonly maxConcurrency: number;
+type PlanConcurrencyUpdate = { readonly maxConcurrency: number };
+type EvidenceSubmissionRequest = {
+  readonly runtime: Runtime;
+  readonly lease: ModuleDeliveryAttemptLease;
+  readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
 };
+type AcceptedEvidenceResult = Readonly<{
+  evidence: AcceptedModuleDeliveryEvidence;
+  state: ModuleDeliveryAdmissionState;
+}>;
 
 function writeNode(request: WriteNodeRequest): ModuleDeliveryWriteNodeV2 {
   const { taskId, dependencies, path } = request;
@@ -286,12 +310,6 @@ function lease(request: LeaseRequest): ModuleDeliveryAttemptLease {
   return leased;
 }
 
-function disposeLease(
-  request: RecordModuleDeliveryAttemptDispositionRequest,
-): ModuleDeliveryAdmissionState {
-  return recordModuleDeliveryAttemptDisposition(request);
-}
-
 function cancelledLease(
   request: CancelledLeaseRequest,
 ): RecordModuleDeliveryAttemptDispositionRequest {
@@ -315,6 +333,90 @@ function restartRequest(
     acceptedPlan: request.acceptedPlan,
     expectedLineage: lineage(request.acceptedPlan),
   };
+}
+
+function evidenceSubmission(
+  request: EvidenceSubmissionRequest,
+): ModuleDeliveryReadOnlyEvidenceSubmission {
+  const node = request.runtime.accepted.plan.nodes.find(
+    ({ taskId }) => taskId === request.lease.taskId,
+  );
+  if (!node || node.kind === ModuleDeliveryTaskKind.Write)
+    throw new Error('Evidence node is missing.');
+  const acceptedProviderEvidence = request.acceptedEvidence.map(
+    moduleDeliveryAcceptedEvidenceIdentity,
+  );
+  const claimRequest: ModuleDeliveryEvidenceDigestRequest = {
+    repositoryRoot: fixture.sourceRoot,
+    sourceCommit: request.lease.startingFrontier,
+    evidenceSurface: node.resources.evidenceSurface,
+  };
+  const claimIdentities =
+    node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
+      ? []
+      : moduleDeliveryEvidenceClaimIdentities(claimRequest);
+  const artifactIdentity = `evidence/${node.taskId}.json`;
+  const evidence = [`${node.taskId} reviewed.`];
+  const digestRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
+    artifactIdentity,
+    evidence,
+    acceptanceRequirements: request.lease.acceptanceRequirements,
+    acceptedProviderEvidence,
+  };
+  return {
+    kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
+    schemaVersion: 1,
+    taskId: node.taskId,
+    attempt: request.lease.attempt,
+    generation: request.lease.generation,
+    planDigest: request.lease.planDigest,
+    sourceCommit: request.lease.startingFrontier,
+    producerTeam: request.lease.team,
+    functionalOwner: request.lease.functionalOwner,
+    acceptanceOwner: request.lease.acceptanceOwner,
+    acceptanceRequirements: request.lease.acceptanceRequirements,
+    claimIdentities,
+    acceptedProviderEvidence,
+    artifactIdentity,
+    artifactDigest: moduleDeliveryEvidenceArtifactDigest(digestRequest),
+    verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+    evidence,
+  };
+}
+
+function acceptEvidence(
+  request: EvidenceSubmissionRequest,
+): AcceptedEvidenceResult {
+  const submission = evidenceSubmission(request);
+  const verification: ModuleDeliveryEvidenceSubmissionVerification = {
+    authority: request.runtime.authority,
+    acceptedPlan: request.runtime.accepted,
+    repositoryRoot: fixture.sourceRoot,
+    state: request.runtime.state,
+    submission,
+    lease: request.lease,
+    authorizedProviderEvidence: request.acceptedEvidence,
+  };
+  const evidence = verifyModuleDeliveryEvidenceSubmission(verification);
+  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+    authority: request.runtime.authority,
+    acceptedPlan: request.runtime.accepted,
+    headCommit: request.runtime.state.headCommit,
+    integratedWriterFrontiers: [],
+    acceptedEvidence: [...request.acceptedEvidence, evidence],
+  };
+  const state = createModuleDeliveryAdmissionState(stateRequest);
+  const dispositionRequest: RecordModuleDeliveryAttemptDispositionRequest = {
+    authority: request.runtime.authority,
+    state,
+    lease: request.lease,
+    outcome: {
+      kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+      conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+    },
+  };
+  recordModuleDeliveryAttemptDisposition(dispositionRequest);
+  return { evidence, state };
 }
 
 describe('module delivery admission authority', () => {
@@ -622,7 +724,7 @@ describe('module delivery admission authority', () => {
       runtime: active,
       lease: leasedAlpha,
     };
-    disposeLease(cancelledLease(cancellationRequest));
+    recordModuleDeliveryAttemptDisposition(cancelledLease(cancellationRequest));
     assertPriorGenerationUsable();
   });
 
@@ -647,7 +749,7 @@ describe('module delivery admission authority', () => {
       runtime: active,
       lease: alphaLease,
     };
-    disposeLease(cancelledLease(cancellationRequest));
+    recordModuleDeliveryAttemptDisposition(cancelledLease(cancellationRequest));
     const replacementPlanRequest: GenerationPlanRequest = {
       sourceCommit: REPLACEMENT_SOURCE,
       generation: 2,
@@ -715,6 +817,123 @@ describe('module delivery admission authority', () => {
     );
   });
 
+  test('retires accepted evidence authority across immutable generations', () => {
+    const provider: ModuleDeliveryReadOnlyNodeV2 = {
+      kind: ModuleDeliveryTaskKind.ReadOnly,
+      taskId: 'provider-evidence',
+      team: TeamKey.DevelopmentCore,
+      functionalOwner: TeamKey.Ai,
+      acceptanceOwner: TeamKey.Ai,
+      parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+      expert: 'core_expert',
+      moduleRoot: ROOT,
+      consumerOutcome: 'AI receives accepted provider evidence.',
+      baseline: {
+        kind: ModuleDeliveryBaselineKind.SourceCommit,
+        sourceCommit: SOURCE,
+      },
+      agentDepthLimit: 2,
+      dependencies: [],
+      resources: {
+        read: [`${ROOT}/**`],
+        write: [],
+        evidenceSurface: [`${ROOT}/**`],
+      },
+      parentOwnedExclusions: REQUIRED_PARENT_OWNED_RESOURCES,
+      acceptance: alpha.acceptance,
+    };
+    const firstPlan: ModuleDeliveryPlanV2 = {
+      ...PLAN,
+      nodes: [provider],
+      edgeContracts: [],
+    };
+    const first = runtime(validate(firstPlan));
+    const firstLeaseRequest: LeaseRequest = {
+      runtime: first,
+      taskId: provider.taskId,
+    };
+    const firstLease = lease(firstLeaseRequest);
+    const firstSubmissionRequest: EvidenceSubmissionRequest = {
+      runtime: first,
+      lease: firstLease,
+      acceptedEvidence: [],
+    };
+    const acceptedFirst = acceptEvidence(firstSubmissionRequest);
+    const terminalFirst: Runtime = { ...first, state: acceptedFirst.state };
+    const secondPlan = structuredClone(firstPlan);
+    const secondPlanUpdate = {
+      generation: 2,
+      sourceCommit: REPLACEMENT_SOURCE,
+    };
+    Object.assign(secondPlan, secondPlanUpdate);
+    const secondProvider = secondPlan.nodes.find(
+      ({ taskId }) => taskId === provider.taskId,
+    );
+    if (
+      !secondProvider ||
+      secondProvider.baseline.kind !== ModuleDeliveryBaselineKind.SourceCommit
+    )
+      throw new Error('Second-generation provider is missing.');
+    const secondBaselineUpdate = { sourceCommit: REPLACEMENT_SOURCE };
+    Object.assign(secondProvider.baseline, secondBaselineUpdate);
+    const acceptedSecondPlan = validate(secondPlan);
+    const generationRestartRequest: GenerationRestartRequest = {
+      runtime: terminalFirst,
+      acceptedPlan: acceptedSecondPlan,
+    };
+    const restartedState = restartModuleDeliveryGeneration(
+      restartRequest(generationRestartRequest),
+    );
+    const evidenceInspection = {
+      authority: first.authority,
+      evidence: acceptedFirst.evidence,
+    };
+    expect(() =>
+      assertAcceptedModuleDeliveryEvidence(evidenceInspection),
+    ).toThrow('evidence authority is invalid');
+    expect(() =>
+      moduleDeliveryAcceptedEvidenceIdentity(acceptedFirst.evidence),
+    ).toThrow('evidence is forged');
+    const staleStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority: first.authority,
+      acceptedPlan: acceptedSecondPlan,
+      headCommit: REPLACEMENT_SOURCE,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [acceptedFirst.evidence],
+    };
+    expect(() => createModuleDeliveryAdmissionState(staleStateRequest)).toThrow(
+      'evidence authority is invalid',
+    );
+    const second: Runtime = {
+      accepted: acceptedSecondPlan,
+      authority: first.authority,
+      state: restartedState,
+    };
+    const secondLeaseRequest: LeaseRequest = {
+      runtime: second,
+      taskId: provider.taskId,
+    };
+    const secondLease = lease(secondLeaseRequest);
+    const secondSubmissionRequest: EvidenceSubmissionRequest = {
+      runtime: second,
+      lease: secondLease,
+      acceptedEvidence: [],
+    };
+    const secondSubmission = evidenceSubmission(secondSubmissionRequest);
+    const staleAuthorization: ModuleDeliveryEvidenceSubmissionVerification = {
+      authority: second.authority,
+      acceptedPlan: second.accepted,
+      repositoryRoot: fixture.sourceRoot,
+      state: second.state,
+      submission: secondSubmission,
+      lease: secondLease,
+      authorizedProviderEvidence: [acceptedFirst.evidence],
+    };
+    expect(() =>
+      verifyModuleDeliveryEvidenceSubmission(staleAuthorization),
+    ).toThrow('evidence authority is invalid');
+  });
+
   test('carries attempt exhaustion across generations and propagates blocked closure', () => {
     const firstPlanRequest: GenerationPlanRequest = {
       sourceCommit: SOURCE,
@@ -736,7 +955,9 @@ describe('module delivery admission authority', () => {
         runtime: active,
         lease: alphaLease,
       };
-      disposeLease(cancelledLease(cancellationRequest));
+      recordModuleDeliveryAttemptDisposition(
+        cancelledLease(cancellationRequest),
+      );
     }
     const replacementPlanRequest: GenerationPlanRequest = {
       sourceCommit: REPLACEMENT_SOURCE,
