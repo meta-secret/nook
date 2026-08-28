@@ -33,16 +33,29 @@ test('walk the access chain from passkey to app to vaults', async ({
   await expect(keyInventory).toBeVisible()
   await expect(keyRows).toHaveCount(1)
   await expect(keyRows.nth(0)).toHaveAttribute('data-kind', 'protector')
-  await expect(page.getByTestId('devices-access-app')).toHaveCount(1)
+  const appsGroup = page.getByTestId('devices-access-apps-group')
+  const app = appsGroup.getByTestId('devices-access-app')
+  await expect(app).toHaveCount(1)
   await expect(keyInventory).toContainText('Passkey')
-  await expect(keyInventory).toContainText('Apps')
-  await expect(keyInventory).toContainText('Nook in this browser')
   const listPasskeyFacts = page.getByTestId('devices-access-passkey-facts')
-  await expect(listPasskeyFacts).toContainText('Passkey ID')
-  await expect(listPasskeyFacts).toContainText('passkey_')
-  await expect(listPasskeyFacts).toContainText('Stored with')
+  const keeperFact = listPasskeyFacts.locator('[data-kind="keeper"]')
+  const passkeyIdFact = listPasskeyFacts.locator('[data-kind="fingerprint"]')
+  const supportingFacts = listPasskeyFacts.locator(
+    '[data-priority="supporting"]',
+  )
+  await expect(keeperFact).toHaveAttribute('data-priority', 'primary')
+  await expect(keeperFact).toContainText('Stored with')
+  await expect(passkeyIdFact).toHaveAttribute('data-priority', 'secondary')
+  await expect(passkeyIdFact).toContainText('Passkey ID')
+  await expect(passkeyIdFact).toContainText('passkey_')
+  await expect(supportingFacts).toHaveCount(2)
   await expect(listPasskeyFacts).toContainText('First recorded by Nook')
   await expect(listPasskeyFacts).toContainText('Last used')
+  await expect(
+    keyInventory.getByText('Passkey · recoverable identity', { exact: true }),
+  ).toHaveCount(0)
+  await expect(appsGroup).toContainText('Apps')
+  await expect(app).toContainText('Nook in this browser')
   await expect(page.getByTestId('devices-access-app-id')).not.toBeVisible()
   await expect(
     page.getByTestId('devices-access-relationship-details'),
