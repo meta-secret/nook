@@ -1,6 +1,13 @@
 <script lang="ts">
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { ArrowLeft, BookOpen, Lock, Moon, Sun } from '@lucide/svelte'
+  import {
+    ArrowLeft,
+    BookOpen,
+    KeyRound,
+    Lock,
+    Moon,
+    Sun,
+  } from '@lucide/svelte'
   import {
     configured_vault_application_is_sentinel,
     simple_vault_app_url,
@@ -13,6 +20,10 @@
   import { ColorMode } from '$lib/app/theme'
   import type { VaultState } from '$lib/vault.svelte'
   import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
+  import {
+    SettingsAccordionSection,
+    SettingsSection,
+  } from '$lib/vault/state/ui.svelte'
 
   const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
   const SIMPLE_VAULT_APP_URL = simple_vault_app_url(
@@ -63,16 +74,33 @@
         class="rounded-lg overflow-hidden"
       />
       {#if vault.isAuthenticated && !legalPageOpen && !logsPage && !vault.helpOpen}
-        <VaultSwitcher
-          {vault}
-          {extensionSetupState}
-          {onPairExtension}
-        />
+        <VaultSwitcher {vault} {extensionSetupState} {onPairExtension} />
       {/if}
     </div>
 
     <div class="flex shrink-0 items-center gap-2">
       {#if vault.isAuthenticated && !vault.helpOpen && !legalPageOpen}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+          data-testid="header-devices-access-btn"
+          title={vault.t(I18N_KEYS.DevicesAccessTitle)}
+          disabled={vault.isVerifying || vault.isInitializing}
+          onclick={() => {
+            const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
+              section: SettingsSection.DevicesAccess,
+              accordion: SettingsAccordionSection.Devices,
+            }
+            vault.openSettings(settingsRequest)
+          }}
+        >
+          <KeyRound class="size-4" />
+          <span class="hidden lg:inline"
+            >{vault.t(I18N_KEYS.DevicesAccessTitle)}</span
+          >
+        </Button>
         <Button
           type="button"
           variant="outline"
@@ -84,7 +112,9 @@
           onclick={() => vault.lockVault()}
         >
           <Lock class="size-4" />
-          <span class="hidden sm:inline">{vault.t(I18N_KEYS.CommonLockVault)}</span>
+          <span class="hidden sm:inline"
+            >{vault.t(I18N_KEYS.CommonLockVault)}</span
+          >
         </Button>
         <div
           class="mx-0.5 h-6 w-px shrink-0 bg-border/60"

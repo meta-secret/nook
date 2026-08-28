@@ -31,6 +31,7 @@
     type PasswordUnlockCapability,
   } from './login-unlock-state'
   import {
+    loginVaultIdentityContextAllowsDeviceKeyAttempt,
     loadLoginVaultIdentityContext,
     LoginVaultIdentityContextKind,
     type LoginVaultIdentityContext as LoginVaultIdentityContextState,
@@ -115,7 +116,13 @@
     const storeId = vaultEntry.entry.storeId
     const generation = ++identityContextLoadGeneration
     identityContext = { kind: LoginVaultIdentityContextKind.Loading }
-    void loadLoginVaultIdentityContext(vault.requireManager(), storeId)
+    const identityContextRequest: Parameters<
+      typeof loadLoginVaultIdentityContext
+    >[0] = {
+      manager: vault.requireManager(),
+      storeId,
+    }
+    void loadLoginVaultIdentityContext(identityContextRequest)
       .then((context) => {
         if (generation !== identityContextLoadGeneration) return
         identityContext = context
@@ -135,8 +142,7 @@
   const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
     identityContext.kind === LoginVaultIdentityContextKind.Loading
       ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
-      : identityContext.kind ===
-            NookSelectedVaultIdentityContextKind.LinkedWithCurrent &&
+      : loginVaultIdentityContextAllowsDeviceKeyAttempt(identityContext) &&
           vault.loginDeviceKeysCapable
         ? { kind: DeviceKeysUnlockCapabilityKind.Available }
         : {

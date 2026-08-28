@@ -5,7 +5,7 @@
   }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -101,6 +101,16 @@
     onEditorOpenChange(false)
   }
 
+  async function closeDevicesAccess() {
+    vault.closeSettings()
+    await tick()
+    document
+      .querySelector<HTMLButtonElement>(
+        '[data-testid="header-devices-access-btn"]',
+      )
+      ?.focus()
+  }
+
   onDestroy(() => {
     onEditorOpenChange(false)
   })
@@ -148,7 +158,10 @@
         />
       {/if}
       {#if vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess}
-        <DevicesAccessDashboard {vault} onBack={() => vault.closeSettings()} />
+        <DevicesAccessDashboard
+          {vault}
+          onBack={() => void closeDevicesAccess()}
+        />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}

@@ -174,6 +174,13 @@ test.describe('login unlock flow (local-first)', () => {
       await joinClose.click()
     }
 
+    const reviewIdentities = page.getByTestId('login-review-identities')
+    await expect(reviewIdentities).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await reviewIdentities.click()
+    await expect(page.getByTestId('devices-access-back')).toBeFocused()
+    await page.getByTestId('devices-access-back').click()
+    await expect(reviewIdentities).toBeFocused()
+
     await unlockVaultOnLogin(page, {
       entryLabel: 'Recovery',
       password: 'recovery-pass-99',

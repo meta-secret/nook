@@ -178,6 +178,7 @@
 
   let devicesAccessOpen = $state(loginDevicesAccessRouteOpen())
   let devicesAccessTrigger = $state(DevicesAccessTriggerKind.Header)
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
   let devicesAccessHost = $state<DevicesAccessHostMount>({
     kind: DevicesAccessHostMountKind.Unmounted,
   })
@@ -218,9 +219,25 @@
       ?.focus()
   }
 
+  async function restoreIdentityContextFocus(): Promise<void> {
+    // The unlock step reloads its typed identity projection after it remounts.
+    // Keep restoring focus while that quiet context replaces its loading view.
+    for (let frame = 0; frame < 30; frame += 1) {
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => resolve()),
+      )
+      focusHostButton('login-review-identities')
+    }
+  }
+
   async function openDevicesAccess(
     trigger: DevicesAccessTriggerKind,
   ): Promise<void> {
+    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    devicesAccessReturnRoute =
+      currentRoute.kind === WorkspaceRouteLookupKind.Workspace
+        ? currentRoute.route
+        : WorkspaceRoute.Vault
     devicesAccessTrigger = trigger
     devicesAccessOpen = true
     pushWorkspaceRoute(WorkspaceRoute.DevicesAccess)
@@ -235,19 +252,24 @@
 
   async function closeDevicesAccess(): Promise<void> {
     devicesAccessOpen = false
-    pushWorkspaceRoute(WorkspaceRoute.Vault)
+    pushWorkspaceRoute(devicesAccessReturnRoute)
     const applyWorkspaceRouteArgs2: Parameters<typeof applyWorkspaceRoute>[0] =
       {
         state: vault,
-        route: WorkspaceRoute.Vault,
+        route: devicesAccessReturnRoute,
       }
     applyWorkspaceRoute(applyWorkspaceRouteArgs2)
     await tick()
     const testId =
       devicesAccessTrigger === DevicesAccessTriggerKind.Nudge
         ? 'devices-access-nudge-review'
-        : 'login-devices-access'
+        : devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext
+          ? 'login-review-identities'
+          : 'login-devices-access'
     focusHostButton(testId)
+    if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
+      await restoreIdentityContextFocus()
+    }
   }
 
   onMount(() => {
@@ -699,7 +721,7 @@
               {onUnlock}
               {onUnlockWithPassword}
               onOpenDevicesAccess={() =>
-                openDevicesAccess(DevicesAccessTriggerKind.Header)}
+                openDevicesAccess(DevicesAccessTriggerKind.IdentityContext)}
               {onSwitchVault}
               onCreateAnotherVault={onCreateDeviceVault}
               onImportFromSync={() => {

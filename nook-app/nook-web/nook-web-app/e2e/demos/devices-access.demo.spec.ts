@@ -45,10 +45,7 @@ test('walk the access chain from passkey to app to vaults', async ({
     timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
   })
   await expect(page.getByTestId('vault-devices-access-tab')).toHaveCount(0)
-  await page.evaluate(() => {
-    history.pushState(history.state, '', '/devices-access')
-    window.dispatchEvent(new PopStateEvent('popstate'))
-  })
+  await page.getByTestId('header-devices-access-btn').click()
   await expect(page).toHaveURL(/\/devices-access$/)
   const dashboard = page.getByTestId('devices-access-dashboard')
   await expect(dashboard).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })

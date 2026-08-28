@@ -4,7 +4,11 @@ import {
   type NookIdentitySnapshot,
   type NookVaultManager,
 } from '$app-wasm'
-import { loadLoginVaultIdentityContext } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
+import {
+  loginVaultIdentityContextAllowsDeviceKeyAttempt,
+  loadLoginVaultIdentityContext,
+  LoginVaultIdentityContextKind,
+} from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
 
 function linkedIdentity(
   identityId: string,
@@ -58,6 +62,28 @@ function managerWithContext({
 }
 
 describe('login vault identity context', () => {
+  test('keeps device-key recovery initiation available for a linked identity mismatch', () => {
+    expect(
+      loginVaultIdentityContextAllowsDeviceKeyAttempt({
+        kind: NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent,
+        identities: [{ identityId: 'identity-peer', label: 'Peer identity' }],
+      }),
+    ).toBe(true)
+  })
+
+  test('does not initiate device keys before context loads or without a linked identity', () => {
+    expect(
+      loginVaultIdentityContextAllowsDeviceKeyAttempt({
+        kind: LoginVaultIdentityContextKind.Loading,
+      }),
+    ).toBe(false)
+    expect(
+      loginVaultIdentityContextAllowsDeviceKeyAttempt({
+        kind: NookSelectedVaultIdentityContextKind.Empty,
+      }),
+    ).toBe(false)
+  })
+
   test('loads the Rust-selected identities for the requested vault', async () => {
     const { manager, selectedVaultRequest } = managerWithContext({
       kind: NookSelectedVaultIdentityContextKind.LinkedWithCurrent,
@@ -68,10 +94,10 @@ describe('login vault identity context', () => {
       currentIdentity: ['identity-personal', 'Personal'],
     })
 
-    const context = await loadLoginVaultIdentityContext(
+    const context = await loadLoginVaultIdentityContext({
       manager,
-      'store_selectedvault',
-    )
+      storeId: 'store_selectedvault',
+    })
 
     expect(selectedVaultRequest).toHaveBeenCalledWith('store_selectedvault')
     expect(context).toEqual({
@@ -93,10 +119,10 @@ describe('login vault identity context', () => {
       identities: [['identity-work', 'Work']],
     })
 
-    const context = await loadLoginVaultIdentityContext(
+    const context = await loadLoginVaultIdentityContext({
       manager,
-      'store_selectedvault',
-    )
+      storeId: 'store_selectedvault',
+    })
 
     expect(context).toEqual({
       kind: NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent,
@@ -111,10 +137,10 @@ describe('login vault identity context', () => {
       identities: [],
     })
 
-    const context = await loadLoginVaultIdentityContext(
+    const context = await loadLoginVaultIdentityContext({
       manager,
-      'store_selectedvault',
-    )
+      storeId: 'store_selectedvault',
+    })
 
     expect(context).toEqual({
       kind: NookSelectedVaultIdentityContextKind.Empty,

@@ -23,6 +23,16 @@ test.describe('persistent workspace routing', () => {
 
     await expect(page.getByTestId('vault-devices-access-tab')).toHaveCount(0)
 
+    const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
+    await headerDevicesAccess.click()
+    await expect(page).toHaveURL(/\/devices-access$/)
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await page.getByTestId('devices-access-back').click()
+    await expect(page).toHaveURL(/\/vault$/)
+    await expect(headerDevicesAccess).toBeFocused()
+
     await page.getByTestId('vault-admin-tab').click()
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
