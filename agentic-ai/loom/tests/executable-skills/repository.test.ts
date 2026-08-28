@@ -328,16 +328,25 @@ test('never follows noncanonical tracked document symlinks', async () => {
 test('rejects executable packages under undeclared team owners', async () => {
   const repoRoot = await packageFixture();
   try {
-    const typo: TrackedRepositoryFile = {
+    const candidates = [
+      '.cortex/gizm0/dynamic-skills/example/scripts/package.json',
+      '.cortex/tools/dynamic-skills/example/SKILL.md',
+      '.cortex/teams/unknown/dynamic-skills/example/scripts/src/index.ts',
+      '.cortex/teams/dynamic-skills/example/scripts/package.json',
+    ];
+    const files = candidates.map((filePath) => ({
       mode: '100644',
-      path: '.cortex/teams/a1/dynamic-skills/example/scripts/package.json',
-    };
-    const findings = audit(repoRoot)([...trackedFiles(), typo]);
-    const expectedFinding = {
-      path: '.cortex',
-      issue: 'tracked executable-skill package has an undeclared owner',
-    };
-    expect(findings).toContainEqual(expectedFinding);
+      path: filePath,
+    }));
+    expect(
+      candidates.every(
+        (candidate) => executableSkillPackageFromPath(candidate) !== false,
+      ),
+    ).toBe(true);
+    const findings = audit(repoRoot)([...trackedFiles(), ...files]);
+    expect(
+      findings.filter((finding) => finding.issue.includes('undeclared owner')),
+    ).toHaveLength(candidates.length);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }

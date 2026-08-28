@@ -18,12 +18,10 @@ const SKILL_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const OWNER_ROOT =
   '\\.cortex/(?:gizmo|shared|teams/(?:ai|dev-core|security|sre|web-dev))/dynamic-skills';
 const EXECUTABLE_PACKAGE_PATH = new RegExp(
-  `^(${OWNER_ROOT}/([^/]+))(?:/SKILL\\.md|/scripts(?:/|$))`,
+  '^(\\.cortex/(?:[^/]+/)*dynamic-skills/([^/]+))(?:/SKILL\\.md|/scripts(?:/|$))',
   'u',
 );
 const DECLARED_OWNER_PATH = new RegExp(`^${OWNER_ROOT}/`, 'u');
-const ANY_OWNER_PACKAGE =
-  /^\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/(?:SKILL\.md|scripts\/)/u;
 const CONFIG_HASHES = {
   prettier: '5342eced2ab6be14cc6716a764019f8a037da054a5c10c5c69ed428a43f739cb',
   eslint: 'b313fdacd4b3546a85f6eef821483b427157aea6e7d8b5a51877d78b8fb7130c',
@@ -182,25 +180,20 @@ function inspectExecutableSkillPackageFiles(
   const collector: FindingCollector = { findings: [], bytes: 0 };
   const npmPackages = new Set<string>();
   for (const file of tracked) {
-    if (
-      ANY_OWNER_PACKAGE.test(file.path) &&
-      !DECLARED_OWNER_PATH.test(file.path)
-    ) {
-      addFinding(collector)('.cortex')(
-        'tracked executable-skill package has an undeclared owner',
-      );
-    }
-    if (
-      DECLARED_OWNER_PATH.test(file.path) &&
-      (file.path.includes('/scripts/') || file.path.endsWith('/SKILL.md')) &&
-      dangerousPath(file.path)
-    ) {
+    const skillPackage = executableSkillPackageFromPath(file.path);
+    if (skillPackage !== false && dangerousPath(file.path)) {
       addFinding(collector)('.cortex')(
         'tracked skill path contains unsafe characters',
       );
     }
   }
   for (const skillPackage of executableSkillPackages(tracked)) {
+    if (!DECLARED_OWNER_PATH.test(`${skillPackage.packageRoot}/`)) {
+      addFinding(collector)('.cortex')(
+        'tracked executable-skill package has an undeclared owner',
+      );
+      continue;
+    }
     if (!SKILL_SLUG.test(skillPackage.slug)) {
       addFinding(collector)(
         safeFindingPath(skillPackage.packageRoot)('.cortex'),
