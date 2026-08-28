@@ -1,14 +1,47 @@
 //! Typed runtime response boundary for authentication workflow snapshots.
 
-use crate::authentication_workflow::AuthenticationWorkflowSnapshot;
-use serde::{Deserialize, Serialize};
+use crate::authentication_workflow::{
+    AuthenticationApprovalRequirement, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+pub struct AuthenticationWorkflowSnapshotWire {
+    kind: AuthenticationWorkflowKind,
+    stage: AuthenticationWorkflowStage,
+    action: AuthenticationWorkflowAction,
+    current_step: u8,
+    total_steps: u8,
+    requires_human_approval: bool,
+    observation_index: u32,
+}
+
+impl AuthenticationWorkflowSnapshotWire {
+    const fn into_snapshot(self) -> Option<AuthenticationWorkflowSnapshot> {
+        if !self.requires_human_approval {
+            return None;
+        }
+        Some(AuthenticationWorkflowSnapshot {
+            kind: self.kind,
+            stage: self.stage,
+            action: self.action,
+            current_step: self.current_step,
+            total_steps: self.total_steps,
+            approval_requirement: AuthenticationApprovalRequirement::for_action(self.action),
+            observation_index: self.observation_index,
+        })
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct AuthenticationWorkflowMatchedResponseWire {
     ok: bool,
-    snapshot: AuthenticationWorkflowSnapshot,
+    snapshot: AuthenticationWorkflowSnapshotWire,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
@@ -34,16 +67,37 @@ pub enum AuthenticationWorkflowSnapshotResponseWire {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
+#[serde(untagged)]
 #[tsify(into_wasm_abi)]
 pub enum AuthenticationWorkflowSnapshotResponse {
     Matched {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
         snapshot: AuthenticationWorkflowSnapshot,
     },
-    NoMatch,
+    NoMatch {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
+    },
     Rejected {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
         reason: String,
     },
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationWorkflowSnapshotResponseKind {
+    Matched,
+    NoMatch,
+    Rejected,
+}
+
+impl Serialize for AuthenticationWorkflowSnapshotResponseKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u8(*self as u8)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -116,17 +170,26 @@ pub fn decode_authentication_workflow_snapshot_response(
     match wire {
         AuthenticationWorkflowSnapshotResponseWire::Matched(
             AuthenticationWorkflowMatchedResponseWire { ok: true, snapshot },
-        ) if snapshot.approval_requirement_matches_action() => {
-            Ok(AuthenticationWorkflowSnapshotResponse::Matched { snapshot })
+        ) => {
+            let Some(snapshot) = snapshot.into_snapshot() else {
+                return Err(AuthenticationWorkflowSnapshotResponseDecodeError);
+            };
+            Ok(AuthenticationWorkflowSnapshotResponse::Matched {
+                kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
+                snapshot,
+            })
         }
         AuthenticationWorkflowSnapshotResponseWire::NoMatch(
             AuthenticationWorkflowNoMatchResponseWire { ok: true },
-        ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch),
+        ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
+            kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
+        }),
         AuthenticationWorkflowSnapshotResponseWire::Rejected(
             AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
-        ) if !reason.trim().is_empty() => {
-            Ok(AuthenticationWorkflowSnapshotResponse::Rejected { reason })
-        }
+        ) if !reason.trim().is_empty() => Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
+            kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
+            reason,
+        }),
         AuthenticationWorkflowSnapshotResponseWire::Matched(_)
         | AuthenticationWorkflowSnapshotResponseWire::NoMatch(_)
         | AuthenticationWorkflowSnapshotResponseWire::Rejected(_) => {
@@ -176,7 +239,7 @@ mod tests {
     #[test]
     fn enforces_the_rust_snapshot_contract() -> anyhow::Result<()> {
         let valid = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
         )?;
         assert!(matches!(
             decode_authentication_workflow_snapshot_response(valid)?,
@@ -185,7 +248,7 @@ mod tests {
 
         assert!(
             serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":-1,"totalSteps":300,"approvalRequirement":"explicit-user-approval","observationIndex":-1}}"#,
+                r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":-1,"totalSteps":300,"requiresHumanApproval":true,"observationIndex":-1}}"#,
             )
             .is_err()
         );
@@ -195,7 +258,9 @@ mod tests {
         );
         assert_eq!(
             decode_authentication_workflow_snapshot_response(no_match)?,
-            AuthenticationWorkflowSnapshotResponse::NoMatch
+            AuthenticationWorkflowSnapshotResponse::NoMatch {
+                kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
+            }
         );
 
         let rejected = AuthenticationWorkflowSnapshotResponseWire::Rejected(
@@ -207,6 +272,7 @@ mod tests {
         assert_eq!(
             decode_authentication_workflow_snapshot_response(rejected)?,
             AuthenticationWorkflowSnapshotResponse::Rejected {
+                kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
                 reason: "vault-locked".to_owned(),
             }
         );
@@ -214,29 +280,24 @@ mod tests {
         let contradictory_matched = serde_json::from_str::<
             AuthenticationWorkflowSnapshotResponseWire,
         >(
-            r#"{"ok":false,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":false,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":true,"observationIndex":0}}"#,
         )?;
         assert_eq!(
             decode_authentication_workflow_snapshot_response(contradictory_matched),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
 
-        for contradictory_approval in [
-            r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"approvalRequirement":"takeover-required","observationIndex":0}}"#,
-            r#"{"ok":true,"snapshot":{"kind":"login","stage":"manual","action":"take-over","currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
-        ] {
-            let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                contradictory_approval,
-            )?;
-            assert_eq!(
-                decode_authentication_workflow_snapshot_response(wire),
-                Err(AuthenticationWorkflowSnapshotResponseDecodeError)
-            );
-        }
+        let denied_approval = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"requiresHumanApproval":false,"observationIndex":0}}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(denied_approval),
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
 
         assert!(
             serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                r#"{"ok":true,"snapshot":{"kind":"login","stage":"credentials","action":"continue-with-nook","currentStep":1,"totalSteps":3,"observationIndex":0}}"#,
+                r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"observationIndex":0}}"#,
             )
             .is_err()
         );

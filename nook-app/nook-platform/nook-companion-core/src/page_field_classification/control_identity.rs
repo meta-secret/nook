@@ -1,4 +1,6 @@
-use super::{contains_any_word, expand_identity_text, looks_like_login_advance_control_label};
+use super::{
+    contains_any_word, expand_identity_text, looks_like_unrestricted_login_advance_control_label,
+};
 
 pub(super) fn looks_like_alternate_authentication_route_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
@@ -26,7 +28,7 @@ pub(super) fn looks_like_alternate_authentication_route_control_label(label: &st
         &identity,
         &["with", "using", "via", "use", "choose", "select"],
     );
-    selects_alternate_provider || !looks_like_login_advance_control_label(label)
+    selects_alternate_provider || !looks_like_unrestricted_login_advance_control_label(label)
 }
 
 pub(super) fn looks_like_explicit_authentication_advance_control_label(label: &str) -> bool {

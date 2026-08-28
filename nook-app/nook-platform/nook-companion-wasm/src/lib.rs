@@ -17,6 +17,10 @@ pub use page_form_policy::*;
 const EXTENSION_VAULT_EVENT_TYPESCRIPT: &str =
     nook_companion_core::EXTENSION_VAULT_EVENT_TYPESCRIPT;
 
+#[wasm_bindgen(typescript_custom_section)]
+const AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT: &str =
+    nook_companion_core::AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT;
+
 #[wasm_bindgen]
 #[must_use]
 pub fn validate_extension_session_request(
@@ -222,6 +226,15 @@ pub fn matching_extension_persistence_stores(
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn classify_companion_authentication_workflow(
+    input: nook_companion_core::AuthenticationPageObservationsCompatibility,
+) -> nook_companion_core::AuthenticationWorkflowMatch {
+    input.into_observations().classify()
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_companion_authentication_workflow_facts(
     input: nook_companion_core::AuthenticationPageObservationFactsBatch,
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
     input.classify()
@@ -652,13 +665,70 @@ mod tests {
             assert!(compatibility_export(label));
         }
 
-        for label in ["Learn more", "Subscribe", "Delete account"] {
+        for label in [
+            "Learn more",
+            "Subscribe",
+            "Delete account",
+            "Continue to delete account",
+            "Continue to reset password",
+            "Continue with Google",
+        ] {
             assert_eq!(
                 compatibility_export(label),
                 nook_companion_core::looks_like_login_advance_control_label(label)
             );
             assert!(!compatibility_export(label));
         }
+        assert!(!compatibility_export(&"x".repeat(
+            nook_companion_core::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1
+        )));
+    }
+
+    #[test]
+    fn current_main_workflow_compatibility_exports_remain_usable() {
+        assert_eq!(
+            nook_companion_core::AuthenticationWorkflowKind::Login as u32,
+            0
+        );
+        assert_eq!(
+            nook_companion_core::AuthenticationWorkflowStage::Credentials as u32,
+            0
+        );
+        assert_eq!(
+            nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook as u32,
+            0
+        );
+        assert_eq!(
+            nook_companion_core::AuthenticationWorkflowSnapshotResponseKind::Matched as u32,
+            0
+        );
+
+        let observation = nook_companion_core::AuthenticationPageObservationCompatibility {
+            username_field_count: 1,
+            current_password_field_count: 1,
+            new_password_field_count: 0,
+            generic_password_field_count: 0,
+            one_time_code_field_count: 0,
+            manual_checkpoint_present: false,
+            authenticator_setup_hint: false,
+            backup_codes_hint: false,
+            passkey_control_present: false,
+            matching_passkey_account_count: 0,
+        };
+        assert_eq!(authentication_form_observation_priority(observation), 4);
+
+        let workflow = classify_companion_authentication_workflow(
+            nook_companion_core::AuthenticationPageObservationsCompatibility {
+                observations: vec![observation],
+            },
+        );
+        assert!(matches!(
+            workflow,
+            nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == nook_companion_core::AuthenticationWorkflowKind::Login
+                    && snapshot.action
+                        == nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook
+        ));
     }
 
     #[test]
@@ -675,7 +745,7 @@ mod tests {
         };
         assert_eq!(
             companion_authentication_workflow_match_kind(
-                classify_companion_authentication_workflow(input)
+                classify_companion_authentication_workflow_facts(input)
             ),
             CompanionAuthenticationWorkflowMatchKind::Rejected
         );
@@ -699,7 +769,7 @@ mod tests {
         };
         assert_eq!(
             companion_authentication_workflow_match_kind(
-                classify_companion_authentication_workflow(input)
+                classify_companion_authentication_workflow_facts(input)
             ),
             CompanionAuthenticationWorkflowMatchKind::NoMatch
         );
@@ -733,7 +803,7 @@ mod tests {
             }],
         };
         assert!(matches!(
-            classify_companion_authentication_workflow(legitimate_submit),
+            classify_companion_authentication_workflow_facts(legitimate_submit),
             nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot)
                 if snapshot.action
                     == nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook

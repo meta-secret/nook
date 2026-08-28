@@ -240,6 +240,19 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 /// True when an activatable control advances an authentication ceremony.
 #[must_use]
 pub fn looks_like_login_advance_control_label(label: &str) -> bool {
+    if label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        || form_identity::form_identity_indicates_destructive_action(label)
+        || looks_like_non_authentication_submit_control_label(label)
+        || control_identity::looks_like_password_recovery_route_control_label(label)
+        || control_identity::looks_like_registration_route_control_label(label)
+        || control_identity::looks_like_alternate_authentication_route_control_label(label)
+    {
+        return false;
+    }
+    looks_like_unrestricted_login_advance_control_label(label)
+}
+
+pub(super) fn looks_like_unrestricted_login_advance_control_label(label: &str) -> bool {
     let identity = expand_identity_text(label);
     contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
 }
@@ -653,6 +666,18 @@ mod tests {
         assert!(looks_like_login_advance_control_label("Submit"));
         assert!(!looks_like_login_advance_control_label("Learn more"));
         assert!(!looks_like_login_advance_control_label("Subscribe"));
+        assert!(!looks_like_login_advance_control_label(
+            "Continue to delete account"
+        ));
+        assert!(!looks_like_login_advance_control_label(
+            "Continue to reset password"
+        ));
+        assert!(!looks_like_login_advance_control_label(
+            "Continue with Google"
+        ));
+        assert!(!looks_like_login_advance_control_label(
+            &"x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
+        ));
     }
 
     #[test]

@@ -1,11 +1,11 @@
 //! Stable browser-companion vocabulary for authentication workflows.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use tsify::Tsify;
+use wasm_bindgen::prelude::wasm_bindgen;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationWorkflowKind {
     Login,
     Signup,
@@ -29,9 +29,36 @@ impl AuthenticationWorkflowKind {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+impl Serialize for AuthenticationWorkflowKind {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationWorkflowKind {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Login),
+            1 => Ok(Self::Signup),
+            2 => Ok(Self::PasswordChange),
+            3 => Ok(Self::TotpChallenge),
+            4 => Ok(Self::TotpEnrollment),
+            5 => Ok(Self::Manual),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication workflow kind: {value}"
+            ))),
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationWorkflowStage {
     Credentials,
     SecondFactor,
@@ -55,9 +82,36 @@ impl AuthenticationWorkflowStage {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+impl Serialize for AuthenticationWorkflowStage {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationWorkflowStage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::Credentials),
+            1 => Ok(Self::SecondFactor),
+            2 => Ok(Self::Verification),
+            3 => Ok(Self::Setup),
+            4 => Ok(Self::Recovery),
+            5 => Ok(Self::Manual),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication workflow stage: {value}"
+            ))),
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AuthenticationWorkflowAction {
     ContinueWithNook,
     GeneratePassword,
@@ -66,6 +120,35 @@ pub enum AuthenticationWorkflowAction {
     UsePasskey,
     CreatePasskey,
     TakeOver,
+}
+
+impl Serialize for AuthenticationWorkflowAction {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_u32(*self as u32)
+    }
+}
+
+impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            0 => Ok(Self::ContinueWithNook),
+            1 => Ok(Self::GeneratePassword),
+            2 => Ok(Self::FillTotp),
+            3 => Ok(Self::EnrollAuthenticator),
+            4 => Ok(Self::UsePasskey),
+            5 => Ok(Self::CreatePasskey),
+            6 => Ok(Self::TakeOver),
+            value => Err(serde::de::Error::custom(format!(
+                "invalid authentication workflow action: {value}"
+            ))),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -95,62 +178,44 @@ impl AuthenticationWorkflowAction {
 mod tests {
     use super::*;
 
-    fn assert_semantic_roundtrip<T>(values: &[(T, &str)]) -> anyhow::Result<()>
+    fn assert_numeric_roundtrip<T>(values: &[T]) -> anyhow::Result<()>
     where
         T: Copy + PartialEq + std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
     {
-        for (value, expected) in values {
-            let serialized = serde_json::to_string(value)?;
-            assert_eq!(serialized, format!("\"{expected}\""));
-            assert_eq!(serde_json::from_str::<T>(&serialized)?, *value);
+        for (expected, value) in values.iter().copied().enumerate() {
+            let serialized = serde_json::to_string(&value)?;
+            assert_eq!(serialized, expected.to_string());
+            assert_eq!(serde_json::from_str::<T>(&serialized)?, value);
         }
         Ok(())
     }
 
     #[test]
-    fn workflow_vocabulary_roundtrips_semantic_variants() -> anyhow::Result<()> {
-        assert_semantic_roundtrip(&[
-            (AuthenticationWorkflowKind::Login, "login"),
-            (AuthenticationWorkflowKind::Signup, "signup"),
-            (
-                AuthenticationWorkflowKind::PasswordChange,
-                "password-change",
-            ),
-            (AuthenticationWorkflowKind::TotpChallenge, "totp-challenge"),
-            (
-                AuthenticationWorkflowKind::TotpEnrollment,
-                "totp-enrollment",
-            ),
-            (AuthenticationWorkflowKind::Manual, "manual"),
+    fn workflow_vocabulary_roundtrips_generated_numeric_values() -> anyhow::Result<()> {
+        assert_numeric_roundtrip(&[
+            AuthenticationWorkflowKind::Login,
+            AuthenticationWorkflowKind::Signup,
+            AuthenticationWorkflowKind::PasswordChange,
+            AuthenticationWorkflowKind::TotpChallenge,
+            AuthenticationWorkflowKind::TotpEnrollment,
+            AuthenticationWorkflowKind::Manual,
         ])?;
-        assert_semantic_roundtrip(&[
-            (AuthenticationWorkflowStage::Credentials, "credentials"),
-            (AuthenticationWorkflowStage::SecondFactor, "second-factor"),
-            (AuthenticationWorkflowStage::Verification, "verification"),
-            (AuthenticationWorkflowStage::Setup, "setup"),
-            (AuthenticationWorkflowStage::Recovery, "recovery"),
-            (AuthenticationWorkflowStage::Manual, "manual"),
+        assert_numeric_roundtrip(&[
+            AuthenticationWorkflowStage::Credentials,
+            AuthenticationWorkflowStage::SecondFactor,
+            AuthenticationWorkflowStage::Verification,
+            AuthenticationWorkflowStage::Setup,
+            AuthenticationWorkflowStage::Recovery,
+            AuthenticationWorkflowStage::Manual,
         ])?;
-        assert_semantic_roundtrip(&[
-            (
-                AuthenticationWorkflowAction::ContinueWithNook,
-                "continue-with-nook",
-            ),
-            (
-                AuthenticationWorkflowAction::GeneratePassword,
-                "generate-password",
-            ),
-            (AuthenticationWorkflowAction::FillTotp, "fill-totp"),
-            (
-                AuthenticationWorkflowAction::EnrollAuthenticator,
-                "enroll-authenticator",
-            ),
-            (AuthenticationWorkflowAction::UsePasskey, "use-passkey"),
-            (
-                AuthenticationWorkflowAction::CreatePasskey,
-                "create-passkey",
-            ),
-            (AuthenticationWorkflowAction::TakeOver, "take-over"),
+        assert_numeric_roundtrip(&[
+            AuthenticationWorkflowAction::ContinueWithNook,
+            AuthenticationWorkflowAction::GeneratePassword,
+            AuthenticationWorkflowAction::FillTotp,
+            AuthenticationWorkflowAction::EnrollAuthenticator,
+            AuthenticationWorkflowAction::UsePasskey,
+            AuthenticationWorkflowAction::CreatePasskey,
+            AuthenticationWorkflowAction::TakeOver,
         ])?;
         assert_semantic_roundtrip(&[
             (
@@ -162,5 +227,17 @@ mod tests {
                 "fill-saved-login",
             ),
         ])
+    }
+
+    fn assert_semantic_roundtrip<T>(values: &[(T, &str)]) -> anyhow::Result<()>
+    where
+        T: Copy + PartialEq + std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
+    {
+        for (value, expected) in values {
+            let serialized = serde_json::to_string(value)?;
+            assert_eq!(serialized, format!("\"{expected}\""));
+            assert_eq!(serde_json::from_str::<T>(&serialized)?, *value);
+        }
+        Ok(())
     }
 }

@@ -1,5 +1,21 @@
 use super::{contains_any_word, expand_identity_text};
 
+pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(identity),
+        &[
+            "login",
+            "log in",
+            "signin",
+            "sign in",
+            "sign-in",
+            "identity",
+            "auth",
+            "authentication",
+        ],
+    )
+}
+
 pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) -> bool {
     let identity = expand_identity_text(form_identity);
     contains_any_word(
@@ -42,8 +58,7 @@ pub(super) fn control_destination_indicates_non_authentication_route(
         return false;
     }
     let identity = expand_identity_text(destination_identity);
-    form_identity_indicates_destructive_action(&identity)
-        || form_identity_indicates_non_authentication_account_management(&identity)
+    if form_identity_indicates_destructive_action(&identity)
         || contains_any_word(
             &identity,
             &[
@@ -58,6 +73,11 @@ pub(super) fn control_destination_indicates_non_authentication_route(
                 "reset password",
             ],
         )
+    {
+        return true;
+    }
+    !identity_indicates_explicit_authentication_route(&identity)
+        && form_identity_indicates_non_authentication_account_management(&identity)
 }
 
 pub(super) fn control_destination_indicates_registration_route(destination_identity: &str) -> bool {

@@ -143,6 +143,14 @@ pub fn classify_authentication_advance_control(
 #[wasm_bindgen]
 #[must_use]
 pub fn authentication_form_observation_priority(
+    observation: nook_companion_core::AuthenticationPageObservationCompatibility,
+) -> u8 {
+    observation.into_observation().form_priority().value()
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn authentication_form_observation_facts_priority(
     observation: nook_companion_core::AuthenticationPageObservationFacts,
 ) -> nook_companion_core::AuthenticationFormObservationPriority {
     observation.form_priority()

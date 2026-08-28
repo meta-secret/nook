@@ -12,6 +12,7 @@ use super::form_identity::{
     control_destination_indicates_password_recovery_route,
     control_destination_indicates_registration_route, form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
+    identity_indicates_explicit_authentication_route,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
@@ -77,19 +78,7 @@ pub enum AuthenticationAdvanceControlDecision {
 }
 
 fn form_has_authentication_identity(form_identity: &str) -> bool {
-    contains_any_word(
-        &expand_identity_text(form_identity),
-        &[
-            "login",
-            "log in",
-            "signin",
-            "sign in",
-            "sign-in",
-            "identity",
-            "auth",
-            "authentication",
-        ],
-    )
+    identity_indicates_explicit_authentication_route(form_identity)
 }
 
 fn has_positive_login_identity(
@@ -172,6 +161,7 @@ impl AuthenticationAdvanceControlObservation {
         if self.new_password_field_count == 0
             && self.one_time_code_field_count == 0
             && form_identity_indicates_non_authentication_account_management(&self.form_identity)
+            && !form_has_authentication_identity(&self.form_identity)
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -363,6 +353,35 @@ mod tests {
             ..localized_identity_submit.clone()
         };
         assert!(!advances_authentication(&unowned_login_labeled_activation));
+    }
+
+    #[test]
+    fn explicit_login_identity_outranks_incidental_account_management_tokens() {
+        let localized_identity_submit = localized_identity_submit();
+
+        let profile_login_form = AuthenticationAdvanceControlObservation {
+            form_identity: "profile-login".to_owned(),
+            ..localized_identity_submit.clone()
+        };
+        assert!(advances_authentication(&profile_login_form));
+
+        let settings_login_destination = AuthenticationAdvanceControlObservation {
+            destination_identity: "/account/settings/login".to_owned(),
+            ..localized_identity_submit.clone()
+        };
+        assert!(advances_authentication(&settings_login_destination));
+
+        let profile_only_destination = AuthenticationAdvanceControlObservation {
+            destination_identity: "/account/settings/profile".to_owned(),
+            ..localized_identity_submit.clone()
+        };
+        assert!(!advances_authentication(&profile_only_destination));
+
+        let destructive_login_destination = AuthenticationAdvanceControlObservation {
+            destination_identity: "/account/settings/login/delete".to_owned(),
+            ..localized_identity_submit
+        };
+        assert!(!advances_authentication(&destructive_login_destination));
     }
 
     #[test]

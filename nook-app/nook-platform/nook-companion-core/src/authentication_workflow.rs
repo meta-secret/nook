@@ -5,11 +5,16 @@
 //! user is in it, and which action Nook may offer next.
 
 mod candidate_selection;
+mod compatibility;
 mod observation_facts;
 mod observation_validation;
 mod vocabulary;
 
 pub use candidate_selection::AuthenticationFormObservationPriority;
+pub use compatibility::{
+    AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT, AuthenticationPageObservationCompatibility,
+    AuthenticationPageObservationsCompatibility,
+};
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyObservationFacts,
@@ -114,9 +119,8 @@ impl AuthenticationApprovalRequirement {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservation {
     pub username_field_count: u32,
     pub current_password_field_count: u32,
@@ -272,9 +276,8 @@ pub enum AuthenticationWorkflowMatch {
     Matched(AuthenticationWorkflowSnapshot),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationPageObservations {
     pub observations: Vec<AuthenticationPageObservation>,
 }
