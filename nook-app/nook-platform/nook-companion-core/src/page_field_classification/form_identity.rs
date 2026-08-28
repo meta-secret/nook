@@ -1,4 +1,7 @@
-use super::control_identity::looks_like_alternate_authentication_route_control_label;
+use super::control_identity::{
+    identity_names_external_authentication_provider,
+    looks_like_alternate_authentication_route_control_label,
+};
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
     looks_like_password_update_submit_control_label,
@@ -66,30 +69,27 @@ pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
     route == "/oauth2/authorize"
 }
 
-pub(super) fn identity_names_external_authentication_provider(identity: &str) -> bool {
-    contains_any_word(
-        &expand_identity_text(identity),
-        &[
-            "google",
-            "apple",
-            "microsoft",
-            "facebook",
-            "github",
-            "gitlab",
-            "linkedin",
-            "twitter",
-            "okta",
-        ],
-    )
+fn control_destination_route_identity(destination_identity: &str) -> &str {
+    let destination = destination_identity.trim();
+    let authority = destination
+        .strip_prefix("https://")
+        .or_else(|| destination.strip_prefix("http://"))
+        .or_else(|| destination.strip_prefix("//"));
+    authority.map_or(destination, |value| {
+        value
+            .find(['/', '?', '#'])
+            .map_or("", |index| &value[index..])
+    })
 }
 
 pub(super) fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
     allow_generic_oauth_authorization: bool,
 ) -> bool {
-    looks_like_alternate_authentication_route_control_label(destination_identity)
-        || identity_names_external_authentication_provider(destination_identity)
-        || (contains_any_word(&expand_identity_text(destination_identity), &["oauth"])
+    let route_identity = control_destination_route_identity(destination_identity);
+    looks_like_alternate_authentication_route_control_label(route_identity)
+        || identity_names_external_authentication_provider(route_identity)
+        || (contains_any_word(&expand_identity_text(route_identity), &["oauth"])
             && !(allow_generic_oauth_authorization
                 && control_destination_indicates_generic_oauth_authorization_route(
                     destination_identity,

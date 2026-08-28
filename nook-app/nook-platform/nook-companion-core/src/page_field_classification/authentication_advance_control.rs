@@ -1,6 +1,7 @@
 //! Authentication advance-control classification from browser-observed facts.
 
 use super::control_identity::{
+    identity_names_external_authentication_provider,
     looks_like_alternate_authentication_route_control_label,
     looks_like_auxiliary_authentication_control_label,
     looks_like_explicit_authentication_advance_control_label,
@@ -19,7 +20,6 @@ use super::form_identity::{
     form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
     identity_indicates_explicit_authentication_route,
-    identity_names_external_authentication_provider,
     one_time_code_control_has_authentication_context,
 };
 use super::{

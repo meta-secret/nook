@@ -319,6 +319,27 @@ mod tests {
         }
     }
 
+    fn password_control(
+        authentication_username: crate::AuthenticationUsernameEvidence,
+        ownership: crate::PageControlOwnership,
+        destination_identity: &str,
+        label: &str,
+    ) -> AuthenticationAdvanceControlObservation {
+        AuthenticationAdvanceControlObservation {
+            actionability: crate::PageControlActionability::Actionable,
+            ownership,
+            semantics: crate::PageControlSemantics::SemanticSubmit,
+            authentication_username,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            form_identity: String::new(),
+            destination_identity: destination_identity.to_owned(),
+            label: label.to_owned(),
+        }
+    }
+
     #[test]
     fn rejects_semantic_evidence_outside_rust_vocabulary() {
         let input = serde_json::json!({
@@ -630,22 +651,7 @@ mod tests {
 
     #[test]
     fn generic_oauth_authorization_advances_only_a_primary_login() {
-        let control = |authentication_username: crate::AuthenticationUsernameEvidence,
-                       ownership: crate::PageControlOwnership,
-                       destination_identity: &str,
-                       label: &str| AuthenticationAdvanceControlObservation {
-            actionability: crate::PageControlActionability::Actionable,
-            ownership,
-            semantics: crate::PageControlSemantics::SemanticSubmit,
-            authentication_username,
-            password_field_count: 1,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 1,
-            form_identity: String::new(),
-            destination_identity: destination_identity.to_owned(),
-            label: label.to_owned(),
-        };
+        let control = password_control;
         for evidence in [
             crate::AuthenticationUsernameEvidence::Strong,
             crate::AuthenticationUsernameEvidence::Explicit,
@@ -726,6 +732,50 @@ mod tests {
             assert_eq!(
                 rejected.classify(),
                 AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+            );
+        }
+    }
+
+    #[test]
+    fn provider_hostnames_do_not_override_login_route_identity() {
+        for (evidence, destination) in [
+            (
+                crate::AuthenticationUsernameEvidence::Strong,
+                "https://github.com/session",
+            ),
+            (
+                crate::AuthenticationUsernameEvidence::Explicit,
+                "https://gitlab.com/users/sign_in",
+            ),
+        ] {
+            assert_eq!(
+                password_control(
+                    evidence,
+                    crate::PageControlOwnership::OwnedForm,
+                    destination,
+                    "Sign in",
+                )
+                .classify(),
+                AuthenticationAdvanceControlDecision::AdvancesAuthentication
+            );
+        }
+        for (destination, label) in [
+            ("/oauth/github", "Sign in"),
+            ("/login/google", "Sign in"),
+            ("https://accounts.google.com/o/oauth2/v2/auth", "Sign in"),
+            ("https://github.com/login/oauth/authorize", "Sign in"),
+            ("https://github.com/session", "Continue with GitHub"),
+        ] {
+            assert_eq!(
+                password_control(
+                    crate::AuthenticationUsernameEvidence::Strong,
+                    crate::PageControlOwnership::OwnedForm,
+                    destination,
+                    label,
+                )
+                .classify(),
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+                "{destination} {label}"
             );
         }
     }
