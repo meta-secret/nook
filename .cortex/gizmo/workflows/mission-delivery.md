@@ -4,8 +4,9 @@
 
 Gizmo delivers each implementation mission through bounded team subagents.
 
-Gizmo owns integration and lifecycle state. Gizmo never implements the feature
-or a resulting fix.
+Gizmo owns integrated and external delivery state. The active harness alone
+owns worker-attempt lifecycle. Gizmo never implements the feature or a
+resulting fix.
 
 ## Required authorities
 
@@ -46,6 +47,11 @@ or a resulting fix.
    - Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
    - Apply [subagent delegation](subagent-delegation.md) for operational worker
      rules.
+   - Let Loom/Nook compute eligible candidates, conflicts, capacity, leases,
+     and exact frontier data.
+   - Validate the computed batch, select and admission-authorize ready task
+     records, freeze their exact starting frontiers, and supply their contracts
+     to the active harness.
 4. **Accept implementation handoffs.**
    - Wait for each required dependency or terminal barrier.
    - Verify each commit against its baseline and write scope.
@@ -54,7 +60,8 @@ or a resulting fix.
 5. **Integrate accepted commits.**
    - Integrate in deterministic dependency order.
    - Bind each downstream task to the exact integrated commit.
-   - Keep shared files and lifecycle mutations serialized under Gizmo.
+   - Keep shared files and integrated or external delivery-state mutations
+     serialized under Gizmo.
 6. **Prepare the integrated head.**
    - Run `task loom:pre-push` before each push.
    - Commit and push the coherent integrated change.
@@ -65,7 +72,8 @@ or a resulting fix.
 7. **Validate and repair through teams.**
    - Trigger the repository-owned exact-head review and validation path.
    - Route each review or CI finding to its functional owner.
-   - Dispatch a bounded fix task from the current integrated head.
+   - Admission-authorize a bounded fix task from the current integrated head
+     and request its attempt through the active harness.
    - Require a verified fix commit and focused evidence.
    - Integrate the fix, push, and validate the replacement head.
    - Gizmo must not edit the implementation to resolve a finding.

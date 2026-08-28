@@ -30,6 +30,13 @@ For implementation tasks, Gizmo's default job is to land an integrated PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
 implementation edits.
 
+### Dispatch meaning
+
+When this document says Gizmo **dispatches work to a team**, `dispatch` means
+Gizmo admission-authorizes the bounded task record and submits its contract to
+the active harness. The harness creates and runs the worker attempt. This
+definition does not change GitHub Actions or Hive workflow-dispatch terminology.
+
 Before establishing a PR path, apply the
 [major architectural initiative rule](../../teams/ai/dynamic-skills/self-improvement.md#user-authority-for-major-architectural-initiatives).
 Stop at analysis and proposals when a major direction comes from agent
@@ -304,8 +311,10 @@ Never commit directly on `main`.
 
 ### 2. Implement
 
-Gizmo dispatches the bounded slice described by the task plan. The responsible
-team implements it and preserves its owning interfaces and acceptance evidence.
+Gizmo dispatches the bounded slice described by the task plan: it
+admission-authorizes that task record and submits the bounded contract to the
+active harness, which creates and runs the attempt. The responsible team
+implements it and preserves its owning interfaces and acceptance evidence.
 
 Capture meaningful discoveries and evidence in `.cortex/.session/`. The session
 file remains provisional and untracked.

@@ -19,13 +19,36 @@ Gizmo never gives its own graph to a team subagent.
 ## Owned responsibilities
 
 - Interpret the mission and publish its public-safe plan.
-- Classify each task by functional owner and optional expertise provider.
-- Freeze baselines, write scopes, dependencies, and acceptance evidence.
-- Choose exactly one team identity for each task.
+- Recursively discover every necessary bounded worker-executable team task and
+  provider dependency as task records. Track parent-owned control operations
+  separately outside that graph.
+- Classify each capability by functional owner.
+- For each other team that must implement named files, create a separate
+  expertise task whose only team identity is that expertise-provider team. A
+  capability may have zero or more such tasks.
+- Record the same functional owner as every expertise task's acceptance owner
+  and immutable contract metadata.
+- Freeze the initial known graph, resource claims, dependencies, and acceptance
+  evidence before dispatch.
+- Choose exactly one team identity for each worker-executable team or provider
+  task.
+- Use team identity only to select worker context; use the recorded functional
+  owner to control semantic acceptance.
+- Keep each worker attempt's claims leased until Gizmo conclusively
+  dispositions its output and Loom/Nook releases the lease.
+- Use Loom/Nook tooling to compute eligible candidates, conflicts, capacity,
+  leases, and exact frontier data.
+- Validate each computed batch, select task records, admission-authorize one
+  exact attempt ID per selection, and freeze and own those attempts' exact
+  starting frontiers.
 - Supply the team identity and bounded task contract to the active harness.
-- Resolve dependencies and integrate verified commit handoffs.
-- Mutate Workbench, integrated Git state, pull requests, review threads,
-  validation requests, readiness, and merge state.
+- Apply [canonical delegation](workflows/subagent-delegation.md) for topology,
+  admission, evidence, integration, retries, and joins.
+- Fail closed before ordinary multi-team dispatch unless the installed typed
+  validator enforces that complete admission contract.
+- Mutate Workbench, integrated Git state, pull requests, review coordination
+  and verdict, review replies and thread state, validation requests, readiness,
+  and merge state.
 - Issue the final integrated exact-head PR verdict.
 
 ## Forbidden responsibilities
@@ -40,15 +63,27 @@ Gizmo never gives its own graph to a team subagent.
 ## Delivery procedure
 
 1. Define the requested outcome and completion evidence.
-2. Split the work into bounded team tasks.
-3. Select exactly one team identity for every team task.
-4. Dispatch every task through the responsible team context.
-5. Verify each returned commit against its baseline and scope.
-6. Integrate accepted commits in dependency order.
-7. Route every implementation finding back to its responsible team.
-8. Validate the integrated exact head.
-9. Record the final integrated verdict.
-10. Complete readiness, merge, and Workbench publication when the verdict is
+2. Recursively discover initial bounded worker-executable team and provider
+   task records and provider edges; track parent-owned control operations
+   separately.
+3. Select exactly one team identity for every worker-executable team or
+   provider task.
+4. Freeze the initial known graph before dispatch.
+5. Validate Loom/Nook's computed candidate batch, select ready task records,
+   admission-authorize one exact attempt ID per selection, freeze those
+   attempts' exact starting frontiers, and supply their contracts to the active
+   harness.
+6. Request creation and other attempt-lifecycle operations through the active
+   harness and observe its returned results.
+7. Verify each returned result against its task identity, starting frontier,
+   resource scope, and acceptance evidence.
+8. Route every implementation finding back to its responsible team.
+9. Request a normal retry only on the exact frozen task contract and acceptance
+   evidence with fresh isolated attempt state. Start a new immutable generation
+   for any contract or acceptance change.
+10. Use the all-task barrier only for the final parent-owned join.
+11. Validate the integrated exact head and record the final verdict.
+12. Complete readiness, merge, and Workbench publication when the verdict is
    ready.
 
 Use the root [team worker contract](../AGENTS.md#team-worker-contract) for
@@ -57,8 +92,44 @@ universal requirements. Use
 rules.
 
 Gizmo adds delivery-specific decisions. It selects the functional owner,
-freezes the team task, integrates accepted handoffs, and controls shared
-lifecycle state.
+freezes each team task, routes expertise handoffs to the recorded functional
+owner for acceptance, integrates accepted handoffs, and controls shared
+integrated and external delivery state. The active harness alone owns
+worker-attempt lifecycle.
+
+Direct providers form edge-local readiness barriers.
+
+- A write provider must be terminal-successful, accepted, commit-verified, and
+  integrated into the consumer's Git frontier.
+- A repository-reading read-only provider must be terminal-successful,
+  accepted, exact-source verified, and accepted into parent task state.
+- An evidence-only synthesis provider must have empty repository read claims,
+  write claims, and evidence surface. Its generation freezes provider edges,
+  expected producer identities, typed input schema, and acceptance criteria;
+  Gizmo binds exact accepted evidence and provenance identities when
+  authorizing the ready attempt.
+- Read-only evidence does not enter Git ancestry.
+- Its task record names the exact repository evidence surface and resource
+  claims, or its empty repository claims and frozen evidence-input contract for
+  evidence-only synthesis. Admission-time binding of matching accepted
+  artifacts is not a plan mutation.
+- A consumer attempt leases the evidence-surface claims it relies on.
+- Readiness does not wait for unrelated tasks.
+
+Hazard ordering, stale evidence that requires re-execution, and late-plan
+mutation follow the canonical complete generation restart; failed topology
+returns to Gizmo instead of waiting. Accepted consumers are never implicitly or
+selectively invalidated.
+
+An active worker never dispatches another worker. If it discovers a missing
+dependency, it returns the need to Gizmo. Gizmo conclusively dispositions the
+old attempt, creates a replacement immutable generation with the provider as a
+separate task and explicit functional owner. Loom/Nook computes the replacement
+candidate data, Gizmo validates and admission-authorizes records and freezes
+their frontiers, and the harness creates a fresh attempt for every authorized
+replacement-generation record after old-generation disposition. Surviving same
+logical tasks receive retries; newly discovered providers receive first
+attempts.
 
 ## Verdict rules
 
@@ -78,7 +149,18 @@ Gizmo owns the final integrated PR verdict.
 
 Completion proves:
 
-- every task stayed inside one declared team boundary;
+- every worker-executable team or provider task stayed inside one declared team
+  boundary;
+- every worker-executable team or provider task recorded its functional owner
+  separately from its context-selecting team identity;
+- parent-owned Gizmo control operations stayed outside the worker graph and had
+  no worker team identity or harness-created attempt;
+- every expertise handoff was semantically accepted by its recorded functional
+  owner before integration;
+- every authorized `(task ID, attempt ID)` mapped to exactly one harness-visible
+  worker attempt, with no more than one concurrently active attempt per logical
+  task;
+- no active leased worker attempt created another worker attempt;
 - every accepted writer returned a verified commit;
 - every required team and security verdict is satisfied;
 - the final verdict names the exact integrated head; and

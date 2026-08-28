@@ -17,6 +17,12 @@ Full package docs: [`agentic-ai/loom/README.md`](../../../../agentic-ai/loom/REA
 
 ## Static agent workflow boundary
 
+The existing static SDK workflow is a legacy standalone reviewed read-only
+path outside Gizmo multi-team admission. Its scheduler selects its fixed graph's
+tasks and invokes the SDK directly. It cannot claim, authorize, or execute the
+ordinary multi-team delegation contract, and it is not an implementation
+worker path.
+
 Static workflows live under:
 
 ```text
@@ -41,13 +47,24 @@ task loom:module-experts:validate
 
 Add `PLAN=1` for topology validation without worker execution.
 
+Without `PLAN=1`, `loom:agent-workflow:cortex-audit` executes only that narrow
+legacy standalone read-only contract. Its success is not evidence that the
+installed runtime enforces ordinary multi-team admission.
+
 That workflow contains:
 
 - an exact-baseline task;
 - four fixed read-only agent audits and one mechanical audit in parallel;
-  - an all-terminal evidence join;
-- one finding-synthesis task;
+  - a legacy all-terminal diagnostic-observation join;
+- one `FindingSynthesizer` diagnostic aggregation task producing
+  `CortexSynthesis`; its output cannot satisfy an ordinary provider edge or
+  claim accepted-evidence synthesis compliance;
 - the existing `cortexAudit` leaf.
+
+Completed and failed lane observations remain available to that diagnostic
+aggregator. Failed observations are not accepted provider evidence.
+This lane is separate from the `loom-structural-experts`
+`system_coherence_synthesizer` / `SystemCoherenceSynthesis` diagnostic lane.
 
 The workflow audit lane also classifies:
 
