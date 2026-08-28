@@ -9,6 +9,7 @@ use super::control_identity::{
 };
 use super::form_identity::{
     control_destination_indicates_non_authentication_route,
+    control_destination_indicates_password_recovery_route,
     control_destination_indicates_registration_route, form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
 };
@@ -215,9 +216,13 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
+        let credential_update_destination = self.new_password_field_count > 0
+            && (control_destination_indicates_registration_route(&self.destination_identity)
+                || control_destination_indicates_password_recovery_route(
+                    &self.destination_identity,
+                ));
         if control_destination_indicates_non_authentication_route(&self.destination_identity)
-            && (self.new_password_field_count == 0
-                || !control_destination_indicates_registration_route(&self.destination_identity))
+            && !credential_update_destination
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -470,6 +475,32 @@ mod tests {
                 ..login
             }
         ));
+    }
+
+    #[test]
+    fn password_recovery_destination_requires_new_password_evidence() {
+        for destination in ["/password/recover", "/password/reset"] {
+            let login = AuthenticationAdvanceControlObservation {
+                destination_identity: destination.to_owned(),
+                label: "Continuar".to_owned(),
+                ..localized_identity_submit()
+            };
+            assert!(!advances_authentication(&login));
+            assert!(advances_authentication(
+                &AuthenticationAdvanceControlObservation {
+                    new_password_field_count: 1,
+                    ..login
+                }
+            ));
+        }
+
+        let unrelated_reset = AuthenticationAdvanceControlObservation {
+            destination_identity: "/account/reset".to_owned(),
+            new_password_field_count: 1,
+            label: "Continuar".to_owned(),
+            ..localized_identity_submit()
+        };
+        assert!(!advances_authentication(&unrelated_reset));
     }
 
     #[test]

@@ -1,40 +1,20 @@
 //! Direct browser evidence that filling a one-time code advances the ceremony.
 
-const DECLARATIVE_AUTO_SUBMIT_ATTRIBUTES: &[&str] = &[
-    "data-auto-submit=",
-    "data-autosubmit=",
-    "data-submit-on-input=",
-];
-
 const INPUT_EVENT_ATTRIBUTES: &[&str] = &["oninput=", "onchange="];
-
-fn declarative_signal_is_enabled(value: &str) -> bool {
-    !matches!(
-        value
-            .trim()
-            .trim_matches(['\'', '"'])
-            .to_ascii_lowercase()
-            .as_str(),
-        "" | "0" | "false" | "no" | "off"
-    )
-}
 
 fn handler_submits_form(value: &str) -> bool {
     let handler = value.to_ascii_lowercase().replace(char::is_whitespace, "");
     handler.contains("this.form.requestsubmit(") || handler.contains("this.form.submit(")
 }
 
-/// True only when selected raw DOM attributes directly describe OTP submission.
+/// True only when an executable input/change handler directly submits the form.
 #[must_use]
 pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
+    if signal.len() > super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES {
+        return false;
+    }
     signal.lines().any(|line| {
         let lower = line.trim().to_ascii_lowercase();
-        if let Some(attribute) = DECLARATIVE_AUTO_SUBMIT_ATTRIBUTES
-            .iter()
-            .find(|attribute| lower.starts_with(**attribute))
-        {
-            return declarative_signal_is_enabled(&lower[attribute.len()..]);
-        }
         INPUT_EVENT_ATTRIBUTES.iter().any(|attribute| {
             lower
                 .strip_prefix(attribute)
@@ -55,9 +35,6 @@ mod tests {
         assert!(looks_like_one_time_code_auto_submit_signal(
             "onchange=this.form.submit()"
         ));
-        assert!(looks_like_one_time_code_auto_submit_signal(
-            "data-auto-submit=true"
-        ));
     }
 
     #[test]
@@ -67,7 +44,19 @@ mod tests {
             "oninput=validateCode()"
         ));
         assert!(!looks_like_one_time_code_auto_submit_signal(
-            "data-auto-submit=false"
+            "data-auto-submit=true"
         ));
+        assert!(!looks_like_one_time_code_auto_submit_signal(
+            "data-submit-on-input=true"
+        ));
+    }
+
+    #[test]
+    fn rejects_oversized_handler_signals_before_scanning() {
+        let oversized = format!(
+            "oninput=this.form.submit(){}",
+            "x".repeat(super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+        );
+        assert!(!looks_like_one_time_code_auto_submit_signal(&oversized));
     }
 }

@@ -21,6 +21,8 @@ impl NookAuthenticationPageObservation {
         // an authentication ceremony. Do not let callers forge continuation
         // evidence by setting this field directly.
         observation.advance_control = nook_core::AuthenticationAdvanceControlEvidence::Absent;
+        observation.one_time_code_progression =
+            nook_companion_core::AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
         Self(observation)
     }
 
@@ -31,6 +33,9 @@ impl NookAuthenticationPageObservation {
         mut observation: nook_core::AuthenticationPageObservation,
         control: nook_companion_core::AuthenticationAdvanceControlObservation,
     ) -> Self {
+        // The reduced page envelope cannot establish auto-submit progression.
+        observation.one_time_code_progression =
+            nook_companion_core::AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
         let fields = nook_companion_core::AuthenticationFieldObservationFacts {
             username_field_count: observation.username_field_count,
             current_password_field_count: observation.current_password_field_count,

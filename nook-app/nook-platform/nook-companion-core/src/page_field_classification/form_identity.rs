@@ -54,6 +54,7 @@ pub(super) fn control_destination_indicates_non_authentication_route(
                 "recover",
                 "recovery",
                 "forgot password",
+                "reset",
                 "reset password",
             ],
         )
@@ -67,4 +68,16 @@ pub(super) fn control_destination_indicates_registration_route(destination_ident
         &expand_identity_text(destination_identity),
         &["register", "registration", "signup", "sign up"],
     )
+}
+
+pub(super) fn control_destination_indicates_password_recovery_route(
+    destination_identity: &str,
+) -> bool {
+    if destination_identity.trim().is_empty() {
+        return false;
+    }
+    let identity = expand_identity_text(destination_identity);
+    contains_any_word(&identity, &["recover", "recovery", "forgot password"])
+        || (contains_any_word(&identity, &["reset"])
+            && contains_any_word(&identity, &["password", "credential"]))
 }

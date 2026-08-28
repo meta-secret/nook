@@ -7,6 +7,7 @@ use super::{
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
     AuthenticationUsernameEvidence, PageControlOwnership,
+    looks_like_one_time_code_auto_submit_signal,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -83,13 +84,35 @@ impl AuthenticationFieldObservationFacts {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationCeremonyObservationFacts {
+    /// Legacy reduced evidence retained for wire compatibility; ignored during conversion.
     pub one_time_code_progression: AuthenticationOneTimeCodeProgressionEvidence,
+    /// Raw executable input/change handler evidence, classified in Rust.
+    #[serde(default)]
+    pub one_time_code_handler_signal: String,
     pub manual_checkpoint: AuthenticationManualCheckpoint,
     pub advance_control: AuthenticationAdvanceControlEvidence,
+}
+
+impl AuthenticationCeremonyObservationFacts {
+    fn is_bounded(&self) -> bool {
+        self.one_time_code_handler_signal.len()
+            <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+    }
+
+    fn derived_one_time_code_progression(&self) -> AuthenticationOneTimeCodeProgressionEvidence {
+        if !self.is_bounded() {
+            return AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
+        }
+        if looks_like_one_time_code_auto_submit_signal(&self.one_time_code_handler_signal) {
+            AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
+        } else {
+            AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
@@ -188,6 +211,10 @@ pub struct AuthenticationPageObservationFacts {
 }
 
 impl AuthenticationPageObservationFacts {
+    fn is_bounded(&self) -> bool {
+        self.ceremony.is_bounded() && self.detailed_advance_control.is_bounded()
+    }
+
     #[must_use]
     pub fn into_observation(self) -> AuthenticationPageObservation {
         AuthenticationPageObservation {
@@ -196,7 +223,7 @@ impl AuthenticationPageObservationFacts {
             new_password_field_count: self.fields.new_password_field_count,
             generic_password_field_count: self.fields.generic_password_field_count,
             one_time_code_field_count: self.fields.one_time_code_field_count,
-            one_time_code_progression: self.ceremony.one_time_code_progression,
+            one_time_code_progression: self.ceremony.derived_one_time_code_progression(),
             manual_checkpoint: self.ceremony.manual_checkpoint,
             enrollment_evidence: self.authenticator.enrollment_evidence(),
             advance_control: self.detailed_advance_control.evidence(self.fields),
@@ -223,7 +250,7 @@ impl AuthenticationPageObservationFactsBatch {
         if self
             .observations
             .iter()
-            .any(|observation| !observation.detailed_advance_control.is_bounded())
+            .any(|observation| !observation.is_bounded())
         {
             return AuthenticationWorkflowMatch::Rejected;
         }
@@ -341,6 +368,74 @@ mod tests {
         assert_eq!(
             signup_with_login_control.into_observation().advance_control,
             AuthenticationAdvanceControlEvidence::Absent
+        );
+    }
+
+    #[test]
+    fn derives_one_time_code_progression_from_trusted_handler_signal() {
+        let forged = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_progression:
+                    AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            forged.into_observation().one_time_code_progression,
+            AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
+        );
+
+        let trusted = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_handler_signal: "oninput=this.form.requestSubmit()".to_owned(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(
+            trusted.into_observation().one_time_code_progression,
+            AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
+        );
+    }
+
+    #[test]
+    fn rejects_oversized_one_time_code_handler_signal() {
+        let facts = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                one_time_code_handler_signal: format!(
+                    "oninput=this.form.submit(){}",
+                    "x".repeat(
+                        crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+                    )
+                ),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(
+            facts.clone().into_observation().one_time_code_progression,
+            AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
+        );
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Rejected
         );
     }
 

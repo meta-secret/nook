@@ -522,6 +522,26 @@ mod wasm_tests {
     }
 
     #[wasm_bindgen_test]
+    fn authentication_workflow_snapshot_rejects_forged_reduced_auto_submit_evidence() {
+        let observation =
+            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+                one_time_code_field_count: 1,
+                one_time_code_progression:
+                    nook_companion_core::AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved,
+                ..Default::default()
+            });
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&observation);
+
+        let workflow = authentication_workflow_snapshot(&observations);
+        assert_eq!(
+            workflow.state(),
+            NookAuthenticationWorkflowMatchState::NoMatch
+        );
+        assert!(workflow.snapshot().is_err());
+    }
+
+    #[wasm_bindgen_test]
     fn authentication_workflow_snapshot_rejects_out_of_bounds_observations() {
         let excessive_field_count =
             NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
