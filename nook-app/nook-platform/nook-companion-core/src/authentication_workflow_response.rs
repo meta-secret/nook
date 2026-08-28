@@ -31,7 +31,7 @@ impl AuthenticationWorkflowSnapshotWire {
             approval_requirement: self.approval_requirement,
             observation_index: self.observation_index,
         };
-        if snapshot.approval_requirement_matches_action() {
+        if snapshot.matches_classifier_contract() {
             Some(snapshot)
         } else {
             None
@@ -247,25 +247,67 @@ mod tests {
 
     #[test]
     fn producer_snapshot_roundtrips_through_the_consumer_decoder() -> anyhow::Result<()> {
-        let snapshot = AuthenticationWorkflowSnapshot {
-            kind: AuthenticationWorkflowKind::Manual,
-            stage: AuthenticationWorkflowStage::Manual,
-            action: AuthenticationWorkflowAction::TakeOver,
-            current_step: 1,
-            total_steps: 1,
-            approval_requirement: AuthenticationApprovalRequirement::TakeoverRequired,
-            observation_index: 2,
-        };
-        let serialized =
-            serde_json::to_string(&AuthenticationWorkflowMatchedProducer { ok: true, snapshot })?;
-        let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(&serialized)?;
-        assert_eq!(
-            decode_authentication_workflow_snapshot_response(wire)?,
-            AuthenticationWorkflowSnapshotResponse::Matched {
-                kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
+        for snapshot in [
+            AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::Login,
+                stage: AuthenticationWorkflowStage::Credentials,
+                action: AuthenticationWorkflowAction::CreatePasskey,
+                current_step: 1,
+                total_steps: 3,
+                approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+                observation_index: 0,
+            },
+            AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::Signup,
+                stage: AuthenticationWorkflowStage::Credentials,
+                action: AuthenticationWorkflowAction::UsePasskey,
+                current_step: 2,
+                total_steps: 5,
+                approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+                observation_index: 1,
+            },
+            AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::TotpEnrollment,
+                stage: AuthenticationWorkflowStage::Verification,
+                action: AuthenticationWorkflowAction::FillTotp,
+                current_step: 3,
+                total_steps: 5,
+                approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+                observation_index: 2,
+            },
+            AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::TotpEnrollment,
+                stage: AuthenticationWorkflowStage::Manual,
+                action: AuthenticationWorkflowAction::TakeOver,
+                current_step: 4,
+                total_steps: 5,
+                approval_requirement: AuthenticationApprovalRequirement::TakeoverRequired,
+                observation_index: 3,
+            },
+            AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::Manual,
+                stage: AuthenticationWorkflowStage::Manual,
+                action: AuthenticationWorkflowAction::TakeOver,
+                current_step: 1,
+                total_steps: 1,
+                approval_requirement: AuthenticationApprovalRequirement::TakeoverRequired,
+                observation_index: 4,
+            },
+        ] {
+            let serialized = serde_json::to_string(&AuthenticationWorkflowMatchedProducer {
+                ok: true,
                 snapshot,
-            }
-        );
+            })?;
+            let wire =
+                serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(&serialized)?;
+            assert_eq!(
+                decode_authentication_workflow_snapshot_response(wire)?,
+                AuthenticationWorkflowSnapshotResponse::Matched {
+                    kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
+                    snapshot,
+                }
+            );
+        }
         Ok(())
     }
 
@@ -327,6 +369,22 @@ mod tests {
             decode_authentication_workflow_snapshot_response(mismatched_approval),
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         );
+
+        for contradictory_snapshot in [
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":4,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":0,"totalSteps":3,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":0,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":2,"totalSteps":1,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":4,"approvalRequirement":"explicit-user-approval","observationIndex":0}}"#,
+        ] {
+            let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+                contradictory_snapshot,
+            )?;
+            assert_eq!(
+                decode_authentication_workflow_snapshot_response(wire),
+                Err(AuthenticationWorkflowSnapshotResponseDecodeError),
+            );
+        }
 
         assert!(
             serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
