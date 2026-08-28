@@ -7,7 +7,8 @@ Nook divides responsibility across five engineering teams.
 The split controls code, Cortex, agent routing, contracts, tests, and review-fix
 responsibility.
 
-Gizmo retains shared integration and delivery actions.
+Gizmo retains shared integration and delivery actions as parent-owned control
+operations outside the worker task-record graph.
 
 ## Ownership dimensions
 
@@ -23,12 +24,13 @@ Every capability has one functional owner.
 - File location is evidence of normal ownership. It does not prevent explicit
   expertise delegation.
 
-A capability may also require one expertise provider.
+A capability may require zero or more expertise providers.
 
-- Gizmo creates a separate delegated expertise task.
-- The task's exactly one team identity is the expertise-provider team.
-- The task records the functional-owner team as acceptance metadata and
-  acceptance owner. Functional ownership is not a second task identity.
+- Gizmo creates one separate delegated expertise task for each required
+  provider team.
+- Each task's exactly one team identity is its expertise-provider team.
+- Every such task records the same functional-owner team as acceptance metadata
+  and acceptance owner. Functional ownership is not a second task identity.
 - The provider changes the named files after Gizmo freezes the functional
   contract.
 - Its task scope names the frozen contract and allowed code and test files.
@@ -44,7 +46,8 @@ module, or capability to the provider team.
 
 Team identity is task-scoped.
 
-- Gizmo assigns exactly one team identity to each bounded task.
+- Recursive discovery covers only worker-executable team and provider tasks.
+- Gizmo assigns exactly one team identity to each bounded worker task.
 - A mission may reach many tasks with the same or different team identities.
 - Discovery creates task records. It does not create worker attempts.
 - Loom/Nook computes eligible candidates, conflicts, capacity, leases, and
@@ -65,6 +68,13 @@ Team identity is task-scoped.
 - Operational semantics follow
   [subagent delegation](../workflows/subagent-delegation.md).
 
+Gizmo tracks integration, review coordination and verdict, review replies and
+thread state, pull-request, readiness, merge, and Workbench actions separately
+as parent-owned control operations. Implementation corrections and review
+fixes remain team worker tasks. Parent-owned control operations have no worker
+team identity, never cause harness-created attempts, and Gizmo performs them at
+their required barriers.
+
 Skill ownership is separate from implementation delegation.
 
 - A functional owner may load a specifically linked foreign-team skill as
@@ -82,7 +92,8 @@ mutations. The active harness alone owns worker-attempt lifecycle.
 
 - **Primary Cortex:** `.cortex/gizmo/`.
 - **Primary state:** Workbench, integrated Git state, pull requests, review
-  threads, validation requests, readiness, and merge state.
+  coordination and verdict, review replies and thread state, validation
+  requests, readiness, and merge state.
 
 Gizmo must not implement a team capability or fix.
 
@@ -192,28 +203,33 @@ Gizmo decides the integration order and assigns the final writer.
 Gizmo assigns the human request before implementation starts.
 
 1. Describe the observable functionality without assigning files yet.
-2. Recursively discover concrete task records and their provider dependencies.
-3. Assign delivery coordination and integration to Gizmo. The active harness
-   alone owns worker-attempt creation and lifecycle.
+2. Recursively discover concrete worker-executable team and provider task
+   records and their provider dependencies.
+3. Track delivery coordination and integration separately as parent-owned
+   Gizmo control operations. The active harness alone owns worker-attempt
+   creation and lifecycle for authorized worker task records.
 4. Assign each implementation task to AI, development core, security, SRE, or
    web development.
-5. When another team's implementation expertise is required, create a separate
-   task with that provider team as its only team identity.
+5. For every other team whose implementation expertise is required, create a
+   separate task with that provider team as its only team identity. A capability
+   may require zero or more such tasks.
 6. Identify every cross-team provider and consumer contract.
 7. Freeze the initial known graph, contracts, functional-owner acceptance
    metadata, resource claims, forbidden scope, tests, evidence surfaces, and
    acceptance evidence.
-8. Assign exactly one team identity to every reached task.
-9. Apply the canonical delegation workflow.
-11. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
+8. Assign exactly one team identity to every reached worker task.
+9. Apply the canonical delegation workflow and fail closed before ordinary
+   multi-team dispatch while the installed typed validator cannot enforce its
+   complete admission contract.
+10. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
     exact frontier data.
-12. Gizmo validates the computed batch, selects and admission-authorizes task
+11. Gizmo validates the computed batch, selects and admission-authorizes task
     records, freezes and owns their exact starting frontiers, and supplies
     their contracts to the active harness.
-13. The active harness creates and operates one worker attempt for each
+12. The active harness creates and operates one worker attempt for each
     authorized record and owns attempt lifecycle. It does not select or admit
     records or snapshot or change frontiers.
-14. Keep shared files and the final integration join with Gizmo.
+13. Keep shared files and the final integration join with Gizmo.
 
 File location does not override semantic ownership.
 
@@ -253,10 +269,11 @@ Expertise delegation applies when the functional contract is already owned but
 another team has the implementation discipline needed to realize it safely.
 
 1. Keep one functional owner for the capability.
-2. Create a separate expertise implementation task.
-3. Give that task exactly one team identity: the expertise-provider team.
-4. Record the functional-owner team as acceptance metadata and acceptance
-   owner, not as another task identity.
+2. For each required provider team, create a separate expertise implementation
+   task. Zero expertise tasks are valid when no provider is needed.
+3. Give each task exactly one team identity: its expertise-provider team.
+4. Record the same functional-owner team on every task as acceptance metadata
+   and acceptance owner, not as another task identity.
 5. Freeze the accepted input contract and observable output.
 6. Declare exact code and test paths the provider may change.
 7. Declare consumer Cortex, capability semantics, shared files, integrated
@@ -300,9 +317,10 @@ The final integration must prove:
 
 - every changed path has one responsible team;
 - every capability has one functional owner;
-- every expertise implementation is a separate task with exactly one team
-  identity equal to its provider team;
-- every expertise task names its functional owner as acceptance metadata and
+- every capability has zero or more separate expertise tasks, one per required
+  provider team;
+- every expertise task has exactly one team identity equal to its provider team
+  and names the capability's same functional owner as acceptance metadata and
   acceptance owner;
 - every changed security boundary has named security acceptance evidence;
 - no expertise provider changed consumer Cortex, capability semantics, shared
@@ -314,17 +332,21 @@ The final integration must prove:
 - cross-team contracts were frozen before consumer integration;
 - each team supplied its own tests and review fixes;
 - shared files were serialized;
-- every reached task had one team identity;
+- every reached worker task had one team identity;
 - Loom/Nook computed candidate, conflict, capacity, lease, and exact frontier
   data;
 - Gizmo validated each batch, admission-authorized each selected task, and
   froze and owned its exact starting frontier;
-- every authorized task had one harness-created worker attempt, and the harness
-  did not select or admit records or snapshot or change frontiers;
+- every authorized worker task had one harness-created worker attempt, and the
+  harness did not select or admit records or snapshot or change frontiers;
+- parent-owned control operations remained outside the worker task-record
+  graph, had no team identity, and caused no worker attempt;
 - every lease release followed a conclusive output disposition;
 - every read-only task declared an evidence surface;
 - every successor Git frontier contained its full write-predecessor closure;
 - every successor had accepted and current read-only predecessor evidence in
   parent task state; and
 - canonical delegation acceptance criteria passed;
+- ordinary multi-team dispatch remained blocked unless the installed typed
+  validator enforced the complete canonical admission contract;
 - Gizmo validated the integrated exact head.

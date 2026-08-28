@@ -31,6 +31,34 @@ A capable agent environment MUST delegate when all of these conditions hold:
   - do not let Gizmo implement the assigned task; and
   - do not invent an undocumented subagent runner.
 
+### Executable enforcement gate
+
+The full admission contract in this workflow applies to every ordinary
+multi-team delegation path, not only module delivery. Before dispatch, an
+installed typed Loom/Nook validator and focused tests must encode and enforce:
+
+- immutable generation identity, team identity, functional owner, resource
+  claims, evidence surfaces, provider edges, and acceptance evidence;
+- derived evidence-hazard ordering, stable conflict serialization, topology,
+  and cycle rejection;
+- deterministic eligibility, conflict, capacity, lease, and exact-frontier
+  computation; and
+- Gizmo batch validation, record selection, admission authorization, and
+  frontier freezing before harness attempt creation.
+
+The currently installed generic agent-workflow delegation schema does not
+encode that contract, and the module-delivery validator is not a universal
+ordinary-delegation validator. Therefore ordinary multi-team delegation fails
+closed before any worker attempt. Do not manually approximate the contract,
+reuse a narrower validation result, or dispatch through an unvalidated path.
+Report the missing typed-runtime capability to Gizmo and wait for compatible
+executable enforcement.
+
+The reviewed `loom:agent-workflow:cortex-audit` SDK path is a legacy standalone
+read-only workflow outside ordinary Gizmo multi-team admission. Its internal
+static scheduler does not prove or enforce this contract and must not be used
+to claim, authorize, or execute ordinary multi-team delegation.
+
 ## Deterministic work belongs to tools
 
 Simple does not mean agent-shaped.
@@ -121,7 +149,11 @@ Do not create a second worker for the same task and attempt.
 An active worker attempt whose claims remain leased must not create any worker
 attempt. Worker claims are not subleased.
 
-A retry is a new attempt of the same logical task.
+A normal retry is a new attempt of the same logical task under the exact same
+frozen task contract, acceptance evidence, generation, and starting-frontier
+rule. It receives fresh isolated attempt state. Changing the task contract,
+resource claims, provider edges, or acceptance evidence is not a retry; it is a
+plan mutation that requires a new immutable generation.
 
 - The worker returns a bounded result to Gizmo under its frozen parent-lineage
   metadata.
@@ -143,16 +175,19 @@ A retry is a new attempt of the same logical task.
 
 ## Task discovery and admission batches
 
-Gizmo recursively discovers every necessary bounded task before that task is
-dispatched.
+Gizmo recursively discovers every necessary bounded worker-executable team or
+provider task before that task is dispatched. Parent-owned Gizmo control
+operations are tracked separately and never enter this worker graph.
 
 1. Start from the requested outcomes.
 2. Identify every direct provider needed for each outcome.
 3. Repeat for each provider until all leaves are independently executable.
-4. Create one task record for every reached task.
-5. Assign exactly one team identity to every task record.
-6. Record each task's explicit functional owner. For an expertise task, record
-   that functional owner as its acceptance owner separately from the
+4. Create one task record for every reached worker-executable team or provider
+   task.
+5. Assign exactly one team identity to every worker-executable team or provider
+   task record.
+6. Record each worker task's explicit functional owner. For an expertise task,
+   record that functional owner as its acceptance owner separately from the
    expertise-provider team identity.
 7. Freeze the initial known graph before dispatch.
 8. Derive deterministic execution constraints.
@@ -301,6 +336,12 @@ Any late provider, edge, claim, acceptance, or other plan mutation creates a
 new immutable plan generation and digest. Selective state or handoff migration
 is not supported.
 
+If stale read-only evidence requires re-execution, treat it as a plan mutation:
+the complete old generation is invalid. Do not implicitly or selectively
+invalidate or revalidate accepted consumers. Follow the complete restart below;
+old-generation results may remain inspectable but are unusable in the
+replacement generation.
+
 #### Missing dependency
 
 A missing dependency discovered by an active worker is a late provider. The
@@ -323,7 +364,9 @@ For any late mutation:
 4. Rebuild and cycle-check the graph as a new immutable generation.
 5. Let Loom/Nook compute replacement candidate and frontier data; Gizmo
    validates, admission-authorizes, and freezes each selected frontier; and the
-   active harness retries only those authorized records.
+   active harness creates a fresh attempt for every authorized replacement-
+   generation record. An attempt for a surviving same logical task is a retry;
+   an attempt for a newly discovered provider is that task's first attempt.
 
 Old-generation results may remain inspectable but cannot be reused.
 
@@ -347,7 +390,8 @@ Module-oriented work follows
 - Keep shared files and integrated or external delivery state with Gizmo.
 
 The plan declares a task-specific hierarchy depth bound.
-The frozen graph records parent lineage and bounded authority for every task.
+The frozen worker graph records parent lineage and bounded authority for every
+worker-executable team or provider task.
 Those fields support validation and result aggregation; they do not authorize
 an active worker to create another worker. Only Gizmo may add a newly discovered
 dependency through a replacement immutable generation, and only the harness
@@ -361,11 +405,14 @@ They do not authorize worker creation or lifecycle mutations.
 Implementation delegation also follows
 [Team-oriented development](team-oriented-development.md).
 
-- Assign each task to AI, development core, security, SRE, or web development
-  before starting workers.
+- Assign each worker-executable team or provider task to AI, development core,
+  security, SRE, or web development before starting workers.
 - Give every team worker one exact team identity and explicit code and Cortex
   paths.
-- Keep write-capable team agents in isolated workspaces with disjoint scopes.
+- Keep concurrently selected or active write-capable team agents in isolated
+  workspaces with disjoint scopes. Deterministically serialized writers may
+  overlap only in their declared precedence order and without concurrent
+  leases.
 - Require each team agent to own its implementation, tests, Cortex updates,
   review fixes, and validation fixes.
 - Let a team agent report a dependency on another team to Gizmo.
@@ -572,7 +619,9 @@ Keep one owner when work is:
 
 - Concurrent writers must not share one worktree.
 - Write-capable workers need isolated worktrees or disposable workspaces.
-- Their file scopes must be disjoint.
+- Concurrently selected or active writers' file scopes must be disjoint.
+- Deterministically serialized scope overlaps must follow their declared
+  precedence and must not hold concurrent leases.
 - Every retry needs fresh isolated attempt state from the declared baseline.
 - A successful writer returns a commit with verifiable baseline ancestry.
 - The parent still owns integration.
@@ -600,27 +649,37 @@ Before integration, verify:
 
 - every worker used its declared exact baseline;
 - every team worker used its declared team identity;
-- every task recorded an explicit functional owner separately from team
-  identity;
+- every worker-executable team or provider task recorded an explicit functional
+  owner separately from team identity;
 - every expertise result received semantic acceptance from its recorded
   functional owner before Gizmo integration;
 - the repository task contract did not prescribe a native label or model;
-- every reached task has a task record;
+- every reached worker-executable team or provider task has a task record and
+  exactly one team identity;
+- every parent-owned Gizmo control operation stayed outside the worker graph
+  and had no worker team identity or harness-created attempt;
 - every selected ready task has one harness-visible worker attempt;
-- every task record declares read and write resource claims;
+- every worker task record declares read and write resource claims;
 - every read-only task record declares a non-empty evidence surface covered by
   its read claims;
 - every write-capable task record declares an empty evidence surface;
-- every task records its correct frozen parent lineage and authority bound;
+- every worker task records its correct frozen parent lineage and authority
+  bound;
 - no active leased worker attempt created another worker attempt;
 - every missing dependency returned to Gizmo instead of being self-dispatched;
 - every newly discovered provider entered a replacement immutable generation
   as a separate normally admitted task after old-attempt disposition;
 - Gizmo's aggregate covers every terminal barrier declared by the frozen task
   lineage;
-- write scopes did not overlap;
+- concurrently selected or active write scopes did not overlap;
+- every deterministically serialized write-scope overlap followed its declared
+  precedence without concurrent leases;
 - every write-capable attempt used an isolated workspace;
-- every retry started from fresh isolated state;
+- every normal retry kept the exact frozen task contract, acceptance evidence,
+  generation, and starting-frontier rule while starting from fresh isolated
+  attempt state;
+- every task-contract, claim, edge, or acceptance-evidence change created a new
+  immutable generation instead of mutating a retry;
 - every accepted commit descends from its exact baseline;
 - every accepted commit changes only allowed paths;
 - every downstream task binds to the exact integrated provider commit;
@@ -633,6 +692,11 @@ Before integration, verify:
   `maxConcurrency` after every unreleased lease;
 - Loom/Nook computed eligible candidates, conflicts, capacity, leases, and
   exact frontier data;
+- before ordinary multi-team dispatch, the installed typed validator and
+  focused tests encoded and enforced the complete admission contract; otherwise
+  execution failed closed before any attempt;
+- the legacy standalone read-only Cortex-audit SDK workflow was not used to
+  claim, authorize, or execute ordinary multi-team delegation;
 - Gizmo validated each computed batch, selected and admission-authorized task
   records, and froze and owned every exact starting frontier;
 - the active harness created and operated attempts only for Gizmo-authorized
@@ -654,15 +718,18 @@ Before integration, verify:
 - no declared evidence-provider-before-writer dependency bypassed the
   mandatory writer-before-provider constraint;
 - late mutations cancelled or rejected every old-generation attempt, migrated
-  no result or private state, and retried every reached task in a validated new
-  generation;
+  no result or private state, and created fresh attempts for all authorized
+  replacement-generation records; surviving same logical tasks were retries
+  and newly discovered providers received first attempts;
 - every cycle failed closed and reported its blocked dependency to Gizmo;
 - Loom/Nook recomputed readiness and frontier data after every Git integration
   or evidence acceptance;
 - provider results were dispositioned locally without a whole-admission-batch
   barrier;
-- no known evidence hazard required rollback or invalidation of an already
-  accepted consumer;
+- deterministic hazard ordering prevented stale evidence in accepted
+  consumers, and any late mutation that would stale accepted evidence used a
+  complete generation restart without selective accepted-consumer
+  invalidation or revalidation;
 - no global barrier delayed dependency-ready work before the final join;
 - optional JSONL and Markdown evidence did not gate harness progress;
 - Gizmo reviewed all evidence;

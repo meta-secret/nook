@@ -43,15 +43,28 @@ authority.
 ## Routing rules
 
 1. Gizmo keeps delivery-control work in its own context.
-2. Gizmo recursively discovers bounded functional task records.
-3. Gizmo assigns exactly one team identity to each task.
+2. Gizmo recursively discovers bounded worker-executable team and provider task
+   records. Parent-owned control operations remain outside that graph.
+3. Gizmo assigns exactly one team identity to each worker-executable team or
+   provider task.
 4. Loom/Nook computes eligible candidates, conflicts, capacity, leases, and
    exact frontier data; Gizmo validates the batch, selects and
    admission-authorizes records, and freezes and owns their starting frontiers.
 5. Gizmo supplies each authorized contract to the active harness. The harness
    alone creates and operates attempts and never selects or admits records or
    snapshots or changes frontiers.
-Rules 6-12 remain in that owning context.
+6. An unknown provider is a late mutation: it returns to Gizmo and invalidates
+   the complete old generation for immutable generation restart.
+7. Every graph mutation reruns deterministic topology and cycle validation.
+8. Cycles fail closed and return the blocked dependency to Gizmo.
+9. Wave selection includes claims in every unreleased lease.
+10. Worker termination does not release a lease.
+11. Gizmo records each conclusive output disposition; Loom/Nook then releases
+    its lease and recomputes readiness and candidate data.
+12. Deterministic hazard ordering prevents stale evidence in accepted
+    consumers. If stale evidence requires re-execution, use the complete
+    immutable generation restart; do not implicitly or selectively invalidate
+    or revalidate accepted consumers.
 13. The assigned worker loads only its own context's `AGENTS.md` and knowledge
    graph.
 14. Open only documents needed for the assigned functionality.
@@ -64,6 +77,8 @@ Rules 6-12 remain in that owning context.
 20. Route security architecture and acceptance questions to security without
    transferring implementation ownership from the functional team.
 
-For a multi-team request, Gizmo loads only its own graph. Every reached task has
-a task record. Every ready selected task receives one worker attempt with only
-the context for that task's team identity.
+For a multi-team request, Gizmo loads only its own graph. Every reached
+worker-executable team or provider task has a task record and exactly one team
+identity. Every ready selected worker task receives one worker attempt with
+only that team's context. Parent-owned Gizmo control operations remain outside
+the worker graph and receive neither a team identity nor a worker attempt.

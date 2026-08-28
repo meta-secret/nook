@@ -9,7 +9,8 @@ Nook separates repository policy from native harness coordination.
 - **Cortex** documents what a workflow means.
 - **Codex, Cursor, or another capable harness** creates and operates only
   Gizmo-authorized native worker attempts.
-- **Loom** may execute reviewed static read-only workflow graphs.
+- **Loom** may execute the legacy standalone reviewed static read-only workflow
+  graph described below. That path is outside Gizmo multi-team admission.
 - **Nook tools** validate task contracts, isolated workspace handoffs, and
   deterministic integration evidence.
 
@@ -23,6 +24,16 @@ This decision applies only to workflows compiled into Loom.
 Native harness delegation does not require a Loom graph.
 
 Each compiled Loom workflow has a fixed, reviewed graph.
+
+The existing `loom:agent-workflow:cortex-audit` command is a legacy standalone
+read-only workflow. Its static scheduler selects its own eligible tasks and its
+Codex SDK adapter directly creates their attempts. It predates and sits outside
+the ordinary Gizmo multi-team admission contract. It must not be used to claim,
+authorize, or execute that contract. Adding another standalone exception or
+using this path for implementation work requires a separately reviewed
+architecture decision.
+
+### Reviewed graph contract
 
 The compiled definition owns:
 
@@ -122,18 +133,18 @@ The module boundary is one-way:
 - It may call existing Loom tools through typed adapters.
 - Existing leaf tools do not import the workflow module.
 
-For those compiled workflows, the module owns:
+For that legacy standalone compiled workflow, the module owns its narrower
+internal control path:
 
 - the compiled workflow catalog;
 - graph validation;
-- deterministic eligible-candidate, conflict, capacity, lease, and exact
-  frontier computation;
+- deterministic eligibility and scheduling for its fixed read-only graph;
 - typed result and artifact handoff;
 - resource-conflict checks;
 - append-only workflow events;
 - terminal projections;
-- declared timeout, retry, and cancellation policy supplied as lifecycle
-  requests to the active harness.
+- declared timeout, retry, and cancellation policy executed by its standalone
+  scheduler and SDK runtime.
 
 - **Retries:** Retries are not implicit. A workflow that needs them must declare
   and test that policy explicitly.
@@ -149,6 +160,9 @@ task loom:agent-workflow:cortex-audit BASELINE=<40-character-commit-sha>
 
 - The repository Task wrapper is the canonical entrypoint.
 - The bare `loom-agent-workflow` binary is an internal package entrypoint.
+- This command proves only its reviewed standalone read-only workflow contract.
+  It does not perform Gizmo admission and cannot validate or authorize ordinary
+  multi-team delegation.
 
 ### Codex worker adapter
 
@@ -162,10 +176,12 @@ compute candidates, select or admit records, or snapshot or change frontiers.
 Nook does not start another Codex or Cursor process to coordinate native
 subagents.
 
-The existing Loom Codex SDK adapter remains available for reviewed static
-read-only workflows. When used, it is the active harness adapter for those
-authorized attempts, not task-selection or frontier authority.
-It is not required for module-expert dispatch or module-DAG implementation.
+The existing Loom Codex SDK adapter remains available only inside the legacy
+standalone reviewed read-only workflow. Its static scheduler selects tasks and
+directly invokes the adapter; those attempts are not Gizmo-admitted records.
+This narrow historical path is not the native harness boundary and must not be
+used for module experts, module-DAG implementation, or any ordinary multi-team
+delegation claim.
 
 ### Event store and materialized views
 
@@ -197,11 +213,13 @@ No optional artifact may gate:
 - synthesis;
 - completion.
 
-Loom/Nook remains deterministic candidate and frontier-data authority. Gizmo
-remains selection, admission-authorization, frontier-freezing, and integrated
-delivery authority. The active harness remains only worker-attempt lifecycle
-authority. Gizmo validates accepted commits and evidence against current
-repository state before integration.
+For ordinary multi-team delegation, Loom/Nook remains deterministic candidate
+and frontier-data authority, Gizmo remains selection, admission-authorization,
+frontier-freezing, and integrated-delivery authority, and the active harness
+remains only worker-attempt lifecycle authority. The legacy standalone audit is
+the explicit read-only exception above and cannot establish those properties.
+Gizmo validates accepted commits and evidence against current repository state
+before integration.
 
 ### Delivery owner
 
@@ -213,9 +231,13 @@ That owner controls:
 - shared-file edits;
 - Workbench state;
 - branch and pull-request state;
-- review replies and resolution;
+- review coordination and verdict;
+- review replies and thread state;
 - validation requests;
 - readiness and merge.
+
+Implementation corrections and review or validation fixes remain responsible-
+team worker tasks.
 
 Read-only workers return evidence. Write-capable workers return verified commit
 handoffs from their isolated workspaces.
@@ -288,17 +310,24 @@ bounded read-only audits.
 
 Native module delivery proceeds separately:
 
-1. Validate a frozen module DAG and task contracts.
-2. Let Loom/Nook compute candidates, conflicts, capacity, leases, and frontier
+1. Verify that the installed typed validator and focused tests enforce the full
+   canonical admission contract. The current installed runtime does not, so
+   ordinary multi-team delivery fails closed before dispatch.
+2. Validate a frozen module DAG and task contracts only after that gate passes.
+3. Let Loom/Nook compute candidates, conflicts, capacity, leases, and frontier
    data.
-3. Let Gizmo validate the batch, admission-authorize records, freeze frontiers,
+4. Let Gizmo validate the batch, admission-authorize records, freeze frontiers,
    and prepare isolated workspaces for authorized writers.
-4. Let the active harness create and operate only those authorized attempts.
-5. Verify each returned commit against its baseline and write scope.
-6. Integrate accepted commits in deterministic dependency order.
-7. Bind consumers to the exact integrated provider commit.
-8. Give authorized retries fresh isolated state through the harness.
-9. Prove the full provider-to-consumer path with focused tests.
+5. Let the active harness create and operate only those authorized attempts.
+6. Verify each returned commit against its baseline and write scope.
+7. Integrate accepted commits in deterministic dependency order.
+8. Bind consumers to the exact integrated provider commit.
+9. Give normal retries fresh isolated state under the exact frozen task
+   contract and acceptance evidence. Any contract or acceptance change starts
+   a new immutable generation with fresh attempts for every authorized record;
+   surviving logical tasks are retries and new providers receive first
+   attempts.
+10. Prove the full provider-to-consumer path with focused tests.
 
 Optional journals and views may document the run for humans.
 They do not participate in the control path.

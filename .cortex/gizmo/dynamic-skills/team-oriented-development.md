@@ -15,18 +15,24 @@ Use this skill whenever a request touches code, scripts, infrastructure, tests, 
 ## Preferred pattern
 
 1. Read [Engineering team ownership](../architecture/team-ownership.md).
-2. Recursively discover every necessary bounded task record and provider edge.
-3. Assign exactly one team identity to each task.
-4. When another team must provide implementation expertise, create a separate
-   task whose only team identity is the provider team.
-5. Record the functional owner as acceptance metadata and acceptance owner on
-   that expertise task.
+2. Recursively discover every necessary bounded worker-executable team or
+   provider task record and provider edge. Track parent-owned Gizmo control
+   operations separately outside the worker graph.
+3. Assign exactly one team identity to each worker-executable team or provider
+   task.
+4. For every other team that must provide implementation expertise, create a
+   separate task whose only team identity is that provider team. A capability
+   may require zero or more such tasks.
+5. Record the same functional owner as acceptance metadata and acceptance owner
+   on every expertise task for that capability.
 6. Freeze the initial known graph and every capability or expertise contract.
 7. Validate deterministic topology and fail closed on cycles.
 8. Report a cycle's blocked dependency to Gizmo.
 9. Keep claims leased until Gizmo records a conclusive output disposition. The
    active harness performs cancellation and owns worker-attempt lifecycle.
-10. Apply canonical [subagent delegation](../workflows/subagent-delegation.md).
+10. Apply canonical [subagent delegation](../workflows/subagent-delegation.md)
+    and fail closed before ordinary multi-team dispatch while the installed
+    typed validator cannot enforce the complete admission contract.
 11. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
     exact frontier data.
 12. Gizmo validates the computed batch, selects and admission-authorizes task
@@ -72,17 +78,23 @@ This skill does not replace module ownership, internal API review, or subagent e
 
 ## Validation
 
-Confirm that every capability has one functional owner. Confirm that every
-task has one team identity. Confirm that Loom/Nook computed candidate and exact
-frontier data, Gizmo validated and admission-authorized each selected record and
-froze its frontier, and the harness only operated authorized attempts. Confirm
-that every expertise implementation is a
-separate task whose team identity is the provider team and whose functional
-owner is explicit acceptance metadata. Confirm that every ready selected task
-received one worker attempt after its exact frontier existed. Confirm that
-every expertise provider stayed inside its explicit code and test scope,
-preserved the frozen contract, and returned to the functional owner for
+Confirm that every worker-executable capability has one functional owner and
+every worker-executable team or provider task has one team identity. Confirm
+that parent-owned Gizmo control operations stayed outside the worker graph and
+received neither a team identity nor a harness-created attempt. Confirm that
+Loom/Nook computed candidate and exact frontier data, Gizmo validated and
+admission-authorized each selected record and froze its frontier, and the
+harness only operated authorized attempts. Confirm that every capability has
+zero or more separate expertise tasks, each with exactly one provider-team
+identity and the same functional owner as explicit acceptance metadata and
+acceptance owner. Confirm that every ready selected worker task received one
+worker attempt after its exact frontier existed.
+Confirm that every expertise provider stayed inside its explicit code and test
+scope, preserved the frozen contract, and returned to the functional owner for
 acceptance before Gizmo integration. Confirm that Git frontiers contain write
 predecessors while accepted read-only evidence remains in parent task state.
 Confirm the harness did not select or admit records or snapshot or change
-frontiers. Confirm the remaining canonical delegation criteria.
+frontiers. Confirm that normal retries preserved the exact frozen contract and
+acceptance evidence, while any contract or acceptance change created a new
+immutable generation with fresh attempts for every authorized record. Confirm
+the remaining canonical delegation criteria.

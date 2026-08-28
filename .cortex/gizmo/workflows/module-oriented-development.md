@@ -59,29 +59,14 @@ only after its exact starting frontier exists.
 
 ### Executable enforcement gate
 
-This document defines the target semantic policy. Documentation alone does not
-make the installed runtime validator capable of enforcing that policy.
-
-Before using this multi-team module-delivery path, verify that the installed
-typed validator schema and focused tests encode and enforce all of these
-requirements:
-
-- required team identity on every node;
-- a non-empty, read-covered evidence surface only for read-only nodes and an
-  empty evidence surface for write-capable nodes;
-- immutable plan-generation identity on tasks, handoffs, and accepted evidence;
-- derived writer-before-evidence and conflict-serialization constraints;
-- deterministic candidate, conflict, capacity, lease, and exact-frontier
-  computation; and
-- Gizmo validation, admission authorization, and frontier freezing before
-  harness attempt creation.
-
-If the installed validator cannot encode and enforce any required field or
-invariant, fail closed before dispatch. Do not execute this path. A validation
-result from an incompatible schema proves only that narrower schema and cannot
-authorize this path. Report the missing typed-runtime dependency to Gizmo and
-wait for a compatible typed runtime. Markdown policy or manual review cannot
-substitute for executable enforcement.
+The universal
+[executable enforcement gate](subagent-delegation.md#executable-enforcement-gate)
+applies here and to every ordinary multi-team delegation path. The currently
+installed validator does not enforce the complete canonical admission contract,
+so this module-delivery path fails closed before dispatch. Its narrower schema
+or tests cannot authorize this path. Markdown policy, manual review, or the
+legacy standalone read-only Cortex-audit workflow cannot substitute for the
+missing typed runtime.
 
 ### Execution graph and admission
 
@@ -215,12 +200,14 @@ does not dispatch it. Gizmo conclusively dispositions the old attempt; every
 late mutation then uses the complete
 [immutable generation restart](subagent-delegation.md#immutable-generation-restart).
 All old-generation attempts are cancelled or rejected, accepted evidence and
-private integration state are abandoned, and every reached task retries fresh
-from the replacement generation's declared source and exact frontier. The new
-provider is a separate task with its own team identity, functional owner, and
-resources. After old-generation disposition, Loom/Nook computes its candidacy
-and frontier; Gizmo validates and admission-authorizes it and freezes that
-frontier; only then does the harness create its attempt. No old output migrates.
+private integration state are abandoned. Every authorized replacement-
+generation record receives a fresh attempt from its declared source and exact
+frontier. A surviving same logical task receives a retry; the new provider is a
+separate task with its own team identity, functional owner, resources, and
+first attempt. After old-generation disposition, Loom/Nook computes candidacy
+and frontiers; Gizmo validates and admission-authorizes records and freezes
+their frontiers; only then does the harness create those attempts. No old
+output migrates.
 
 ## Flat hierarchy
 

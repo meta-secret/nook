@@ -14,8 +14,9 @@ The main task-owning agent is **Gizmo**.
 Gizmo must:
 
 1. Understand the requested outcome.
-2. Recursively discover every necessary bounded task and provider dependency
-   as task records.
+2. Recursively discover every necessary worker-executable bounded team or
+   provider task and provider dependency as task records. Track parent-owned
+   control operations separately from that graph.
 3. For each task, name:
    - the responsible team;
    - the expected result;
@@ -27,20 +28,29 @@ Gizmo must:
 6. Use Loom/Nook tooling to deterministically compute eligible candidates,
    conflicts, capacity, leases, and exact frontier data under
    [subagent delegation](gizmo/workflows/subagent-delegation.md).
-7. Validate the computed batch, select and admission-authorize its task
+7. Before ordinary multi-team dispatch, require the installed typed validator
+   to enforce the complete canonical admission contract. If it cannot, fail
+   closed before any worker attempt.
+8. Validate the computed batch, select and admission-authorize its task
    records, freeze their exact starting frontiers, and supply their bounded
    contracts to the active harness.
-8. Observe and review every returned result against the requested outcome.
-9. When correction or retry is required, update the bounded contract and
-   request that lifecycle operation through the active harness until the
-   mission is complete or a real blocker requires human direction.
+9. Observe and review every returned result against the requested outcome.
+10. For a normal retry, preserve the exact frozen task contract and acceptance
+    evidence and request a fresh attempt through the active harness. A contract
+    or acceptance change requires a new immutable generation.
+11. Track integration, review coordination and verdict, review replies and
+    thread state, pull-request, readiness, merge, and Workbench actions
+    separately as parent-owned control operations outside the worker
+    task-record graph. Implementation corrections and review fixes remain team
+    worker tasks. Parent-owned control operations have no worker team identity,
+    never cause harness-created attempts, and run at their required barriers.
 
-Every reached unit receives a task record. A ready task receives one worker
-attempt only after Gizmo freezes its exact starting frontier from Loom/Nook's
-computed data and admission-authorizes the record. Each worker receives one
-team identity, one task, that frontier, allowed files, forbidden files, and
-required proof. Team identity belongs to the task. It is not a singular
-identity for the mission.
+Every reached worker-executable team or provider unit receives a task record. A
+ready worker task receives one worker attempt only after Gizmo freezes its
+exact starting frontier from Loom/Nook's computed data and
+admission-authorizes the record. Each worker receives one team identity, one
+task, that frontier, allowed files, forbidden files, and required proof. Team
+identity belongs to the task. It is not a singular identity for the mission.
 
 Gizmo may inspect the repository and subagent evidence. Gizmo may integrate
 verified handoff commits and control shared delivery state. Gizmo must not
@@ -158,17 +168,21 @@ files.
 
 ## Multi-team requests
 
-Gizmo is the single delivery owner. Gizmo recursively discovers bounded tasks
-and creates one task per required unit before that unit starts.
+Gizmo is the single delivery owner. Gizmo recursively discovers bounded
+worker-executable team and provider tasks and creates one task per required
+worker unit before that unit starts. It tracks parent-owned control operations
+separately.
 
 - Each capability has one functional-owner team that controls capability
   semantics, Cortex authority, and acceptance.
 - Each task has exactly one team identity.
-- When another team's engineering expertise is required, Gizmo creates a
-  separate expertise implementation task. Its only team identity is the
-  expertise-provider team.
-- The expertise task records the functional-owner team as acceptance metadata,
-  not as a second task identity.
+- A capability may require zero or more expertise providers. Gizmo creates one
+  separate expertise implementation task for each provider team that must
+  change named files.
+- Each expertise task has exactly one team identity: its expertise-provider
+  team. Every expertise task for that capability records the same
+  functional-owner team as acceptance metadata and acceptance owner, not as a
+  second task identity.
 - The expertise contract names the frozen functional contract, acceptance
   owner, allowed files, forbidden files, accepted inputs, tests, and evidence.
 - Each team agent receives only its team contract and task-relevant authority.
@@ -198,8 +212,8 @@ Security review does not transfer implementation ownership.
   - Implements Cortex, Loom, agent skills, routing, and agent automation.
 - **Gizmo**
   - Assigns each implementation task to its normal team owner.
-  - Creates a separate provider-team task when another team must change named
-    files.
+  - Creates one separate provider-team task for each additional team that must
+    change named files; a capability may have zero or more such tasks.
   - Records the functional owner, frozen contract, allowed files, forbidden
     files, tests, and acceptance evidence on that expertise task.
   - Returns the provider's handoff to the functional owner for acceptance
@@ -227,8 +241,10 @@ tasks.
   Another active agent's work is read-only. When ownership is missing or
   ambiguous, wait for an explicit user, owner, or orchestrator handoff. See
   [agent feature ownership](gizmo/dynamic-skills/agent-feature-ownership.md).
-- Only Gizmo mutates Workbench, integrated Git state, pull
-  requests, review threads, validation requests, readiness, and merge state.
+- Only Gizmo mutates Workbench, integrated Git state, pull requests, review
+  coordination and verdict, review replies and thread state, validation
+  requests, readiness, and merge state. Team workers implement corrections and
+  review or validation fixes inside their assigned task scope.
 - Portable security behavior stays in Rust/WASM when development core owns the
   implementation. Security owns cross-team security architecture and review.
   Web code receives public typed projections only.

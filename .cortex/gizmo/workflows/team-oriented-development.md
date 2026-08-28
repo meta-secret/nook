@@ -11,13 +11,20 @@ boundaries and [Subagent delegation](subagent-delegation.md) for worker rules.
 
 Gizmo writes the team assignments before implementation starts.
 
-1. Recursively discover every necessary bounded task record and provider edge.
+1. Recursively discover every necessary worker-executable team or provider
+   task record and provider edge.
 2. Assign each task to exactly one semantic team identity.
-3. When another team's expertise is required to change files, create a separate
-   expertise task whose only team identity is the provider team.
-4. Keep shared integration and delivery actions as Gizmo tasks.
-5. Record the functional-owner team as acceptance metadata and acceptance owner
-   on the expertise task.
+3. For every other team whose expertise is required to change files, create a
+   separate expertise task whose only team identity is that provider team. A
+   capability may require zero or more such tasks.
+4. Track integration, review coordination and verdict, review replies and
+   thread state, pull-request, readiness, merge, and Workbench actions
+   separately as parent-owned Gizmo control operations. Implementation
+   corrections and review fixes remain worker tasks. Parent-owned control
+   operations are outside the worker task-record graph, have no worker team
+   identity, and never cause harness-created attempts.
+5. Record the same functional-owner team as acceptance metadata and acceptance
+   owner on every expertise task for that capability.
 6. Freeze the initial known graph before dispatch.
 7. Record the exact claims used by each read-only evidence surface.
 8. Validate deterministic topology and fail closed on cycles.
@@ -25,6 +32,8 @@ Gizmo writes the team assignments before implementation starts.
 10. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
 11. Apply [subagent delegation](subagent-delegation.md) for operational worker
    rules and integration.
+   Ordinary multi-team dispatch fails closed while the installed typed
+   validator cannot enforce the complete canonical admission contract.
 12. Let Loom/Nook compute eligible candidates, conflicts, capacity, leases, and
     exact frontier data.
 13. Let Gizmo validate the computed batch, select and admission-authorize task
@@ -45,6 +54,10 @@ capacity. The active harness does neither.
 The canonical workflow defines Loom/Nook capacity and candidate computation,
 Gizmo admission authorization and frontier ownership, hazard ordering,
 provider-local joins, and immutable generation restart.
+
+Recursive task discovery applies only to worker-executable team and provider
+tasks. Gizmo performs each separately tracked control operation when its
+required provider-local or final delivery barrier is satisfied.
 
 ## Dispatch team agents
 
@@ -131,9 +144,11 @@ functional owner may apply specifically linked read-only policy to its own
 implementation.
 
 1. Keep the requesting team as functional owner.
-2. Create a separate expertise implementation task.
-3. Assign exactly one task team identity: the provider team.
-4. Record the requesting team as acceptance metadata and acceptance owner.
+2. Create one separate expertise implementation task for every required
+   provider team; zero tasks are valid when no provider is needed.
+3. Assign each task exactly one team identity: its provider team.
+4. Record the same requesting team on every task as acceptance metadata and
+   acceptance owner.
 5. Freeze the functional contract and exact code and test paths for the
    provider.
 6. Give the worker only the provider team's context and the frozen contract as
@@ -156,6 +171,13 @@ Gizmo uses provider edges as local barriers. It does not wait for unrelated
 tasks before validating and admission-authorizing a Loom/Nook-computed
 successor.
 
+The following steps are parent-owned control operations, not task records.
+They cover review coordination and verdict, review replies, and thread state,
+but not implementation corrections or review fixes. Those remain responsible-
+team worker tasks. Parent-owned operations do not receive team identities or
+cause worker attempts. Gizmo tracks them separately from the worker graph and
+performs them at their named barriers.
+
 1. Verify each task's team identity, frontier, scope, result, tests, and
    semantic view.
 2. Reconcile cross-team contract disagreements.
@@ -163,34 +185,41 @@ successor.
 4. Verify each write provider's commit and scope, then integrate it into the
    consumer's Git frontier.
 Canonical delegation supplies the intervening evidence and lease steps.
-10. Require each read-only provider to be terminal-successful and accepted.
-11. Verify each read-only provider's exact source commit, then accept its
-    evidence into parent task state.
-12. Record any other rejected or cancelled output as unusable.
-13. After Gizmo records each conclusive disposition, let Loom/Nook release the
+5. Require each read-only provider to be terminal-successful and accepted.
+6. Verify each read-only provider's exact source commit, then accept its
+   evidence into parent task state.
+7. Record any other rejected or cancelled output as unusable.
+8. After Gizmo records each conclusive disposition, let Loom/Nook release the
     lease and recompute eligibility and capacity. The harness does neither.
-18. Freeze each authorized successor's exact Git frontier containing its
-   complete write-predecessor closure.
-20. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
-21. Route review and validation failures back to the responsible team.
-22. Repeat until every team-owned correction is complete.
-23. Reserve the all-task barrier for the final parent-owned join.
-24. Run exact-head validation and readiness through Gizmo's delivery workflow.
-25. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
-   Gizmo.
+9. Freeze each authorized successor's exact Git frontier containing its
+    complete write-predecessor closure.
+10. Serialize shared manifests, bindings, registries, and knowledge-graph edits.
+11. Route review and validation failures back to the responsible team.
+12. Repeat until every team-owned correction is complete.
+13. Reserve the all-worker-task barrier for the final parent-owned join.
+14. Run exact-head validation and readiness through Gizmo's delivery workflow.
+15. Keep GitHub, Workbench, push, check, readiness, and merge mutations with
+    Gizmo.
 
 Gizmo owns the final integrated verdict. Gizmo cannot override a required
 blocking team verdict or a required blocking security verdict.
 
 ## Validation
 
-Completion requires one exact team identity per team task.
-Each Gizmo-authorized task has one harness-created worker attempt. Loom/Nook
+Completion requires one exact team identity per worker-executable team or
+provider task. Each Gizmo-authorized worker task has one harness-created worker
+attempt. Parent-owned control operations remain outside that graph and never
+create attempts. Loom/Nook
 computes candidates and exact frontier data; Gizmo validates, selects,
 admission-authorizes, and freezes frontiers; the harness does not perform those
-actions. Each capability has one owner team. Each expertise implementation is a
-separate task whose one team identity is its provider team, with the functional
+actions. Each capability has one owner team and zero or more expertise tasks.
+Each expertise task has one provider-team identity, with the same functional
 owner recorded as acceptance metadata and acceptance owner.
-Completion also requires explicit cross-team contracts, team-owned tests and
-review fixes, one shared-state writer, root aggregation, and green exact-head
-delivery gates.
+Completion also requires zero or more separate expertise tasks per capability,
+each with one provider identity and the same functional acceptance owner;
+explicit cross-team contracts; team-owned tests and review fixes; one shared-
+state writer; root aggregation; and green exact-head delivery gates. Ordinary
+multi-team dispatch also requires executable enforcement of the complete
+canonical admission contract. Normal retries preserve the frozen contract and
+acceptance evidence; contract or acceptance changes create a new generation
+whose authorized records all receive fresh attempts.
