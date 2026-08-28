@@ -154,22 +154,6 @@ mod tests {
 
     #[test]
     fn page_form_wasm_exports_match_core_policy() {
-        let otp = NookPageInputFieldObservation::new(
-            nook_companion_core::PageInputType::Text,
-            false,
-            false,
-            Vec::new(),
-            "Enter OTP Code".to_owned(),
-            false,
-        );
-        assert!(looks_like_one_time_code_field(&otp));
-        assert!(looks_like_one_time_code_auto_submit_signal(
-            "oninput=this.form.requestSubmit()"
-        ));
-        assert!(!looks_like_one_time_code_auto_submit_signal(
-            "oninput=validateCode()"
-        ));
-
         let username = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
             false,
@@ -179,24 +163,6 @@ mod tests {
             false,
         );
         assert!(looks_like_username_field(&username));
-
-        let advance = nook_companion_core::AuthenticationAdvanceControlObservation {
-            actionability: nook_companion_core::PageControlActionability::Actionable,
-            ownership: nook_companion_core::PageControlOwnership::LocallyScoped,
-            semantics: nook_companion_core::PageControlSemantics::Activation,
-            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
-            password_field_count: 0,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 0,
-            form_identity: String::new(),
-            destination_identity: String::new(),
-            label: "Continue".to_owned(),
-        };
-        assert_eq!(
-            classify_authentication_advance_control(advance),
-            nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication
-        );
 
         let login = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {

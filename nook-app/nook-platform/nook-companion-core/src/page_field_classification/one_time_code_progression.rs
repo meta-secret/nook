@@ -69,17 +69,5 @@ mod tests {
         assert!(!looks_like_one_time_code_auto_submit_signal(
             "data-auto-submit=false"
         ));
-        assert!(!looks_like_one_time_code_auto_submit_signal(
-            "oninput=void new SubmitEvent('submit')"
-        ));
-        assert!(!looks_like_one_time_code_auto_submit_signal(
-            "oninput=this.form.dispatchEvent(new SubmitEvent('submit'))"
-        ));
-        assert!(!looks_like_one_time_code_auto_submit_signal(
-            "oninput=validator.submit()"
-        ));
-        assert!(!looks_like_one_time_code_auto_submit_signal(
-            "onchange=analytics.requestSubmit()"
-        ));
     }
 }

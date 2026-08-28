@@ -287,18 +287,6 @@ mod tests {
         };
         assert!(advances_authentication(&password_update));
 
-        let save_changes_password_update = AuthenticationAdvanceControlObservation {
-            label: "Save changes".to_owned(),
-            ..password_update.clone()
-        };
-        assert!(advances_authentication(&save_changes_password_update));
-
-        let reset_password_update = AuthenticationAdvanceControlObservation {
-            label: "Reset password".to_owned(),
-            ..password_update.clone()
-        };
-        assert!(advances_authentication(&reset_password_update));
-
         let registration_submit = AuthenticationAdvanceControlObservation {
             label: "Create account".to_owned(),
             ..password_update

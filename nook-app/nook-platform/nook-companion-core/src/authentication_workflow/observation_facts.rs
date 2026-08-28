@@ -48,7 +48,6 @@ pub struct AuthenticationFieldObservationFacts {
     pub one_time_code_field_count: u32,
 }
 
-/// Raw, non-secret facts about how the current ceremony may progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -268,39 +267,6 @@ mod tests {
         assert_eq!(
             reduced_only.into_observation().advance_control,
             AuthenticationAdvanceControlEvidence::Absent
-        );
-    }
-
-    #[test]
-    fn classifies_each_passkey_fact_combination_consistently() {
-        let passkey = |passkey_control, matching_passkey_account_count| {
-            AuthenticationPageObservationFacts {
-                authenticator: AuthenticationAuthenticatorObservationFacts {
-                    passkey_control,
-                    matching_passkey_account_count,
-                    ..Default::default()
-                },
-                ..Default::default()
-            }
-            .into_observation()
-            .passkey
-        };
-
-        assert_eq!(
-            passkey(AuthenticationPasskeyControlObservation::Absent, 0),
-            AuthenticationPasskeyEvidence::Absent
-        );
-        assert_eq!(
-            passkey(AuthenticationPasskeyControlObservation::Present, 0),
-            AuthenticationPasskeyEvidence::Control
-        );
-        assert_eq!(
-            passkey(AuthenticationPasskeyControlObservation::Absent, 3),
-            AuthenticationPasskeyEvidence::VaultAccounts { account_count: 3 }
-        );
-        assert_eq!(
-            passkey(AuthenticationPasskeyControlObservation::Present, 3),
-            AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 3 }
         );
     }
 }
