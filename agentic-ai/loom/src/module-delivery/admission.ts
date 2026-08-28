@@ -1,16 +1,20 @@
-import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
+import {
+  createAcceptedModuleDeliveryEvidenceRegistry,
+  expectedModuleDeliveryLineageMap,
+  moduleDeliveryResourcesConflict,
+  trustedModuleDeliveryPlanSnapshot,
+} from './authority.ts';
 import {
   ModuleDeliveryBaselineKind,
   ModuleDeliveryTaskKind,
 } from './domain.ts';
-import type { ModuleDeliveryAcceptedProviderEvidenceIdentity } from './evidence.ts';
-import { ModuleDeliveryValidationStatus } from './domain.ts';
-import { decodeAndValidateModuleDeliveryPlan } from './validation.ts';
-
+import { validateModuleDeliveryEvidenceSubmission } from './evidence.ts';
 import type {
-  AgentAttemptParent,
-  TaskResourcePatternPair,
-} from '../agent-workflow/domain.ts';
+  ModuleDeliveryAcceptedProviderEvidenceIdentity,
+  ModuleDeliveryEvidenceSubmissionValidation,
+  ModuleDeliveryEvidenceSubmissionVerification,
+} from './evidence.ts';
+import type { AgentAttemptParent } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
 import type {
   ModuleDeliveryNodeV2,
@@ -18,15 +22,17 @@ import type {
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
-import {
-  assertModuleDeliveryIntegratedWriterFrontierCapability,
-  collectAcceptedModuleDeliveryEvidence,
-} from './integration-provenance.ts';
+import { assertModuleDeliveryIntegratedWriterFrontierCapability } from './integration-provenance.ts';
 import type {
-  AcceptedModuleDeliveryEvidenceCollectionRequest,
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ModuleDeliveryIntegratedWriterFrontierCapability,
 } from './integration-provenance.ts';
+import type {
+  AcceptedModuleDeliveryEvidenceCollectionRequest,
+  AcceptedModuleDeliveryEvidenceInspection,
+  ExpectedLineageMapRequest,
+  ResourceConflictRequest,
+} from './authority.ts';
 
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 
@@ -183,10 +189,6 @@ export type ModuleDeliveryAuthorityPlanRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
-type ExpectedLineageMapRequest = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly entries: readonly ModuleDeliveryExpectedLineage[];
-};
 type IntegratedFrontiersRequest = {
   readonly plan: ValidatedModuleDeliveryPlan;
   readonly headCommit: string;
@@ -224,14 +226,6 @@ type StartingFrontierRequest = {
   readonly node: ModuleDeliveryNodeV2;
   readonly plan: ValidatedModuleDeliveryPlan;
 };
-type ResourceConflictRequest = {
-  readonly first: ModuleDeliveryResourceClaims;
-  readonly second: ModuleDeliveryResourceClaims;
-};
-type ClaimPair = {
-  readonly first: readonly string[];
-  readonly second: readonly string[];
-};
 type FrozenSelectionRequest = {
   readonly status: ModuleDeliveryAdmissionSelectionStatus;
   readonly admissions: readonly ModuleDeliveryAdmission[];
@@ -261,18 +255,20 @@ const leaseProvenance = new WeakMap<
 >();
 const consumedAdmissions = new WeakSet<ModuleDeliveryAdmission>();
 const disposedLeases = new WeakSet<ModuleDeliveryAttemptLease>();
+const acceptedEvidenceLeases = new WeakSet<ModuleDeliveryAttemptLease>();
+const acceptedEvidenceRegistry = createAcceptedModuleDeliveryEvidenceRegistry();
 
 const COMMIT = /^[0-9a-f]{40}$/u;
 
 export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
-  const acceptedPlan = trustedPlanSnapshot(request.acceptedPlan);
+  const acceptedPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
     entries: request.expectedLineage,
   };
-  const expectedLineage = expectedLineageMap(lineageRequest);
+  const expectedLineage = expectedModuleDeliveryLineageMap(lineageRequest);
   const value: ModuleDeliveryGenerationAuthority = { [AUTHORITY]: true };
   const authority = Object.freeze(value);
   const authorityState: AuthorityState = {
@@ -307,6 +303,76 @@ export function moduleDeliveryAuthorityPlan(
   return authorityStateForPlan(request).acceptedPlan;
 }
 
+export function assertAcceptedModuleDeliveryEvidence(
+  inspection: AcceptedModuleDeliveryEvidenceInspection,
+): void {
+  acceptedEvidenceRegistry.assert(inspection);
+}
+
+export function moduleDeliveryAcceptedEvidenceIdentity(
+  evidence: AcceptedModuleDeliveryEvidence,
+): ModuleDeliveryAcceptedProviderEvidenceIdentity {
+  return acceptedEvidenceRegistry.identity(evidence);
+}
+
+export function verifyModuleDeliveryEvidenceSubmission(
+  verification: ModuleDeliveryEvidenceSubmissionVerification,
+): AcceptedModuleDeliveryEvidence {
+  const planRequest: ModuleDeliveryAuthorityPlanRequest = {
+    authority: verification.authority,
+    acceptedPlan: verification.acceptedPlan,
+  };
+  const acceptedPlan = moduleDeliveryAuthorityPlan(planRequest);
+  const generationInspection: GenerationAuthorityInspection = {
+    authority: verification.authority,
+    generation: acceptedPlan.plan.generation,
+    planDigest: acceptedPlan.planDigest,
+  };
+  assertModuleDeliveryGenerationAuthority(generationInspection);
+  const leaseInspection: AttemptLeaseAuthorityInspection = {
+    authority: verification.authority,
+    lease: verification.lease,
+  };
+  assertModuleDeliveryAttemptLeaseAuthority(leaseInspection);
+  const stateInspection: AdmissionStateAuthorityInspection = {
+    authority: verification.authority,
+    state: verification.state,
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  if (acceptedEvidenceLeases.has(verification.lease))
+    throw new Error(
+      `Evidence metadata is invalid for ${verification.lease.taskId}.`,
+    );
+  const seen = new Set<string>();
+  const authorized = Object.freeze(
+    verification.authorizedProviderEvidence.map((evidence) => {
+      const inspection: AcceptedModuleDeliveryEvidenceInspection = {
+        authority: verification.authority,
+        evidence,
+      };
+      acceptedEvidenceRegistry.assert(inspection);
+      const identity = acceptedEvidenceRegistry.identity(evidence);
+      if (seen.has(identity.taskId))
+        throw new Error(`Duplicate accepted evidence for ${identity.taskId}.`);
+      seen.add(identity.taskId);
+      return identity;
+    }),
+  );
+  const validation: ModuleDeliveryEvidenceSubmissionValidation = {
+    verification,
+    acceptedPlan,
+    authorized,
+  };
+  const accepted = validateModuleDeliveryEvidenceSubmission(validation);
+  const registration: AcceptedModuleDeliveryEvidenceInspection = {
+    authority: verification.authority,
+    evidence: accepted,
+  };
+  acceptedEvidenceRegistry.register(registration);
+  acceptedEvidenceLeases.add(verification.lease);
+  return accepted;
+}
+
 export function createModuleDeliveryAdmissionState(
   request: CreateModuleDeliveryAdmissionStateRequest,
 ): ModuleDeliveryAdmissionState {
@@ -326,7 +392,7 @@ export function createModuleDeliveryAdmissionState(
     entries: request.acceptedEvidence,
     headCommit: request.headCommit,
   };
-  const evidence = collectAcceptedModuleDeliveryEvidence(evidenceRequest);
+  const evidence = acceptedEvidenceRegistry.collect(evidenceRequest);
   const stateValue: ModuleDeliveryAdmissionState = {
     generation: authority.acceptedPlan.plan.generation,
     planDigest: authority.acceptedPlan.planDigest,
@@ -407,7 +473,7 @@ export function selectModuleDeliveryAdmissions(
           first: resources,
           second: active.resources,
         };
-        return resourcesConflict(conflictRequest);
+        return moduleDeliveryResourcesConflict(conflictRequest);
       })
     ) {
       pendingTaskIds.push(taskId);
@@ -586,12 +652,12 @@ export function restartModuleDeliveryGeneration(
     throw new Error(
       'Generation restart requires a newer plan and terminal release evidence.',
     );
-  const nextPlan = trustedPlanSnapshot(request.acceptedPlan);
+  const nextPlan = trustedModuleDeliveryPlanSnapshot(request.acceptedPlan);
   const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan: nextPlan,
     entries: request.expectedLineage,
   };
-  const nextLineage = expectedLineageMap(lineageRequest);
+  const nextLineage = expectedModuleDeliveryLineageMap(lineageRequest);
   authority.inputPlan = request.acceptedPlan;
   authority.acceptedPlan = nextPlan;
   authority.expectedLineage = nextLineage;
@@ -652,47 +718,6 @@ function authorityStateForPlan(
       'Module delivery validated plan authority is invalid or superseded.',
     );
   return state;
-}
-
-function trustedPlanSnapshot(
-  candidate: ValidatedModuleDeliveryPlan,
-): ValidatedModuleDeliveryPlan {
-  const accepted = decodeAndValidateModuleDeliveryPlan(
-    JSON.stringify(candidate.plan),
-  );
-  if (
-    accepted.status !== ModuleDeliveryValidationStatus.Accepted ||
-    accepted.planDigest !== candidate.planDigest ||
-    JSON.stringify(accepted.topologicalOrder) !==
-      JSON.stringify(candidate.topologicalOrder) ||
-    JSON.stringify(accepted.waves) !== JSON.stringify(candidate.waves) ||
-    JSON.stringify(accepted.executionPrecedence) !==
-      JSON.stringify(candidate.executionPrecedence)
-  )
-    throw new Error('Validated module delivery plan metadata is inconsistent.');
-  return accepted;
-}
-
-function expectedLineageMap(
-  request: ExpectedLineageMapRequest,
-): ReadonlyMap<string, AgentAttemptParent> {
-  if (request.entries.length !== request.acceptedPlan.plan.nodes.length)
-    throw new Error('Expected lineage must bind every module delivery task.');
-  const result = new Map<string, AgentAttemptParent>();
-  for (const entry of request.entries) {
-    const nodeRequest: NodeLookupRequest = {
-      plan: request.acceptedPlan,
-      taskId: entry.taskId,
-    };
-    const node = nodeFor(nodeRequest);
-    if (
-      result.has(entry.taskId) ||
-      JSON.stringify(entry.parentLineage) !== JSON.stringify(node.parentLineage)
-    )
-      throw new Error(`Expected lineage is invalid for ${entry.taskId}.`);
-    result.set(entry.taskId, frozenParent(entry.parentLineage));
-  }
-  return result;
 }
 
 function integratedFrontiers(
@@ -945,35 +970,6 @@ function copyAdmission(
 
 function attemptKey(identity: AttemptIdentity): string {
   return `${identity.taskId}:${identity.attempt}`;
-}
-
-function resourcesConflict(request: ResourceConflictRequest): boolean {
-  const writes: ClaimPair = {
-    first: request.first.write,
-    second: request.second.write,
-  };
-  const writeRead: ClaimPair = {
-    first: request.first.write,
-    second: request.second.read,
-  };
-  const readWrite: ClaimPair = {
-    first: request.first.read,
-    second: request.second.write,
-  };
-  return (
-    claimsOverlap(writes) ||
-    claimsOverlap(writeRead) ||
-    claimsOverlap(readWrite)
-  );
-}
-
-function claimsOverlap(request: ClaimPair): boolean {
-  return request.first.some((left) =>
-    request.second.some((right) => {
-      const pair: TaskResourcePatternPair = { first: left, second: right };
-      return taskResourcePatternsOverlap(pair);
-    }),
-  );
 }
 
 function frozenSelection(

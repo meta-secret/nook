@@ -4,15 +4,18 @@ export {
   ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
+  assertAcceptedModuleDeliveryEvidence,
   assertModuleDeliveryAdmissionStateAuthority,
   assertModuleDeliveryAttemptLeaseAuthority,
   assertModuleDeliveryGenerationAuthority,
   createModuleDeliveryAdmissionState,
   createModuleDeliveryGenerationAuthority,
+  moduleDeliveryAcceptedEvidenceIdentity,
   recordModuleDeliveryAttemptDisposition,
   recordModuleDeliveryAttemptLeases,
   restartModuleDeliveryGeneration,
   selectModuleDeliveryAdmissions,
+  verifyModuleDeliveryEvidenceSubmission,
 } from './admission.ts';
 export type {
   AdmissionStateAuthorityInspection,
@@ -39,7 +42,6 @@ export {
   moduleDeliveryEvidenceArtifactDigest,
   moduleDeliveryEvidenceClaimIdentities,
   moduleDeliveryEvidenceSurfaceDigest,
-  verifyModuleDeliveryEvidenceSubmission,
 } from './evidence.ts';
 export type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
@@ -52,17 +54,15 @@ export {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryProviderSubmissionKind,
-  assertAcceptedModuleDeliveryEvidence,
   assertModuleDeliveryIntegratedWriterFrontierCapability,
-  moduleDeliveryAcceptedEvidenceIdentity,
 } from './integration-provenance.ts';
 export type {
   AcceptedModuleDeliveryEvidence,
-  AcceptedModuleDeliveryEvidenceInspection,
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ModuleDeliveryIntegratedWriterFrontierCapability,
   ModuleDeliveryReadOnlyEvidenceSubmission,
 } from './integration-provenance.ts';
+export type { AcceptedModuleDeliveryEvidenceInspection } from './authority.ts';
 export { cleanupModuleWorktree, prepareModuleWorktree } from './workspace.ts';
 export { verifyModuleCommitHandoff } from './handoff.ts';
 export {

@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+import * as evidenceAuthority from '../../src/module-delivery/authority.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
@@ -33,6 +34,7 @@ import {
 
 import type {
   AcceptedModuleDeliveryEvidence,
+  AcceptedModuleDeliveryEvidenceInspection,
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
@@ -475,6 +477,16 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
       sourceProvenanceDigest: 'f'.repeat(64),
       verifiedHeadCommit: active.fixture.baselineCommit,
     };
+    const isolatedRegistry =
+      evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
+    const isolatedRegistration: AcceptedModuleDeliveryEvidenceInspection = {
+      authority: active.authority,
+      evidence: forgedEvidence,
+    };
+    isolatedRegistry.register(isolatedRegistration);
+    expect('registerAcceptedModuleDeliveryEvidence' in evidenceAuthority).toBe(
+      false,
+    );
     const forgedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
@@ -657,12 +669,22 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       ...synthesisSubmissionRequest,
       candidate: exact,
     };
-    expect(verify(synthesisVerificationRequest).taskId).toBe(
-      active.synthesis.taskId,
-    );
+    const synthesisEvidence = verify(synthesisVerificationRequest);
+    expect(synthesisEvidence.taskId).toBe(active.synthesis.taskId);
     expect(() => verify(synthesisVerificationRequest)).toThrow(
       'metadata is invalid',
     );
+    const staleSynthesisStateRequest: CreateModuleDeliveryAdmissionStateRequest =
+      {
+        authority: active.authority,
+        acceptedPlan: active.accepted,
+        headCommit: 'f'.repeat(40),
+        integratedWriterFrontiers: [],
+        acceptedEvidence: [synthesisEvidence],
+      };
+    expect(() =>
+      createModuleDeliveryAdmissionState(staleSynthesisStateRequest),
+    ).toThrow('Accepted evidence is invalid');
   } finally {
     disposeGitFixture(active.fixture);
   }

@@ -1,27 +1,17 @@
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
-import {
-  assertModuleDeliveryAttemptLeaseAuthority,
-  assertModuleDeliveryAdmissionStateAuthority,
-  assertModuleDeliveryGenerationAuthority,
-  moduleDeliveryAuthorityPlan,
-} from './admission.ts';
 import { ModuleDeliveryTaskKind } from './domain.ts';
 import { runModuleDeliveryGit } from './git-command.ts';
 import {
   MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryProviderSubmissionKind,
-  assertAcceptedModuleDeliveryEvidence,
-  moduleDeliveryAcceptedEvidenceIdentity,
   moduleDeliveryEvidenceSha256,
-  registerAcceptedModuleDeliveryEvidence,
 } from './integration-provenance.ts';
 
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
 import type {
   ModuleDeliveryAttemptLease,
-  ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
@@ -32,8 +22,6 @@ import type {
 import type { GitCommandRequest } from './git-command.ts';
 import type {
   AcceptedModuleDeliveryEvidence,
-  AcceptedModuleDeliveryEvidenceInspection,
-  AcceptedModuleDeliveryEvidenceRegistration,
   ModuleDeliveryReadOnlyEvidenceSubmission,
 } from './integration-provenance.ts';
 
@@ -72,6 +60,7 @@ export type ModuleDeliveryAcceptedProviderEvidenceIdentity = Readonly<{
   verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess;
   claimIdentities: readonly ModuleDeliveryEvidenceClaimIdentity[];
   acceptanceRequirements: readonly string[];
+  acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 }>;
 
 export type ModuleDeliveryEvidenceSubmissionVerification = {
@@ -83,6 +72,12 @@ export type ModuleDeliveryEvidenceSubmissionVerification = {
   readonly lease: ModuleDeliveryAttemptLease;
   readonly authorizedProviderEvidence: readonly AcceptedModuleDeliveryEvidence[];
 };
+
+export type ModuleDeliveryEvidenceSubmissionValidation = Readonly<{
+  verification: ModuleDeliveryEvidenceSubmissionVerification;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+}>;
 
 type GitTreeEntry = Readonly<{ metadata: string; path: string }>;
 type EvidenceArtifactDigestContent = Readonly<{
@@ -127,10 +122,6 @@ type SynthesisInputsRequest = {
   readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
   readonly authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 };
-type AuthorizedIdentitiesRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly evidence: readonly AcceptedModuleDeliveryEvidence[];
-};
 type FreezeAcceptedEvidenceRequest = {
   readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
   readonly provenance: string;
@@ -141,7 +132,6 @@ type EvidenceNodeRequest = {
   readonly taskId: string;
 };
 
-const acceptedEvidenceLeases = new WeakSet<ModuleDeliveryAttemptLease>();
 const COMMIT = /^[0-9a-f]{40}$/u;
 const DIGEST = /^[0-9a-f]{64}$/u;
 
@@ -183,30 +173,11 @@ export function moduleDeliveryEvidenceArtifactDigest(
   return digest(content);
 }
 
-export function verifyModuleDeliveryEvidenceSubmission(
-  verification: ModuleDeliveryEvidenceSubmissionVerification,
+export function validateModuleDeliveryEvidenceSubmission(
+  request: ModuleDeliveryEvidenceSubmissionValidation,
 ): AcceptedModuleDeliveryEvidence {
-  const planRequest: ModuleDeliveryAuthorityPlanRequest = {
-    authority: verification.authority,
-    acceptedPlan: verification.acceptedPlan,
-  };
-  const acceptedPlan = moduleDeliveryAuthorityPlan(planRequest);
-  const generationInspection = {
-    authority: verification.authority,
-    generation: acceptedPlan.plan.generation,
-    planDigest: acceptedPlan.planDigest,
-  };
-  assertModuleDeliveryGenerationAuthority(generationInspection);
-  const leaseInspection = {
-    authority: verification.authority,
-    lease: verification.lease,
-  };
-  assertModuleDeliveryAttemptLeaseAuthority(leaseInspection);
-  const stateInspection = {
-    authority: verification.authority,
-    state: verification.state,
-  };
-  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  const verification = request.verification;
+  const acceptedPlan = request.acceptedPlan;
   const nodeRequest: EvidenceNodeRequest = {
     plan: acceptedPlan,
     taskId: verification.lease.taskId,
@@ -218,11 +189,7 @@ export function verifyModuleDeliveryEvidenceSubmission(
     node,
   };
   assertSubmissionMetadata(metadataRequest);
-  const identitiesRequest: AuthorizedIdentitiesRequest = {
-    authority: verification.authority,
-    evidence: verification.authorizedProviderEvidence,
-  };
-  const authorized = authorizedIdentities(identitiesRequest);
+  const authorized = request.authorized;
   if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
     if (
       JSON.stringify(authorized) !==
@@ -264,14 +231,7 @@ export function verifyModuleDeliveryEvidenceSubmission(
     provenance: sourceProvenanceDigest(verification.submission),
     verificationHeadCommit: verification.state.headCommit,
   };
-  const accepted = freezeAcceptedEvidence(freezeRequest);
-  const registration: AcceptedModuleDeliveryEvidenceRegistration = {
-    authority: verification.authority,
-    evidence: accepted,
-  };
-  registerAcceptedModuleDeliveryEvidence(registration);
-  acceptedEvidenceLeases.add(verification.lease);
-  return accepted;
+  return freezeAcceptedEvidence(freezeRequest);
 }
 
 function assertSubmissionMetadata(request: SubmissionMetadataRequest): void {
@@ -279,7 +239,6 @@ function assertSubmissionMetadata(request: SubmissionMetadataRequest): void {
   const lease = request.verification.lease;
   const node = request.node;
   if (
-    acceptedEvidenceLeases.has(lease) ||
     node.kind === ModuleDeliveryTaskKind.Write ||
     submission.kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence ||
     submission.schemaVersion !== MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION ||
@@ -364,26 +323,6 @@ function assertSynthesisInputs(request: SynthesisInputsRequest): void {
         `Evidence synthesis producer is invalid for ${node.taskId}.`,
       );
   }
-}
-
-function authorizedIdentities(
-  request: AuthorizedIdentitiesRequest,
-): readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] {
-  const seen = new Set<string>();
-  return Object.freeze(
-    request.evidence.map((entry) => {
-      const inspection: AcceptedModuleDeliveryEvidenceInspection = {
-        authority: request.authority,
-        evidence: entry,
-      };
-      assertAcceptedModuleDeliveryEvidence(inspection);
-      const identity = moduleDeliveryAcceptedEvidenceIdentity(entry);
-      if (seen.has(identity.taskId))
-        throw new Error(`Duplicate accepted evidence for ${identity.taskId}.`);
-      seen.add(identity.taskId);
-      return identity;
-    }),
-  );
 }
 
 function sourceProvenanceDigest(
