@@ -202,7 +202,7 @@ test('rejects every non-TypeScript executable source or test extension', async (
   }
 });
 
-test('derives the package root before nested scripts path segments', () => {
+test('derives the package root from the canonical outer skill boundary', () => {
   const expected = {
     packageRoot: ROOT,
     scriptsRoot: SCRIPTS,
@@ -211,6 +211,7 @@ test('derives the package root before nested scripts path segments', () => {
   for (const trackedPath of [
     `${SCRIPTS}/src/scripts/helper.ts`,
     `${SCRIPTS}/tests/scripts/helper.test.ts`,
+    `${SCRIPTS}/src/dynamic-skills/parser/scripts/helper.ts`,
   ]) {
     expect(executableSkillPackageFromPath(trackedPath)).toMatchObject(expected);
   }

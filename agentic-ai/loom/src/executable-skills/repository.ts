@@ -18,7 +18,7 @@ const SKILL_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const OWNER_ROOT =
   '\\.cortex/(?:gizmo|shared|teams/(?:ai|dev-core|security|sre|web-dev))/dynamic-skills';
 const EXECUTABLE_PACKAGE_PATH = new RegExp(
-  '^(\\.cortex/(?:[^/]+/)*dynamic-skills/([^/]+))(?:/SKILL\\.md|/scripts(?:/|$))',
+  '^(\\.cortex/(?:[^/]+|teams/[^/]+)/dynamic-skills/([^/]+))(?:/SKILL\\.md|/scripts(?:/|$))',
   'u',
 );
 const DECLARED_OWNER_PATH = new RegExp(`^${OWNER_ROOT}/`, 'u');
