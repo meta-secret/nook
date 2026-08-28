@@ -4,15 +4,13 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   CI_AGENT_DIR: agentic-ai/ci-agent
-  SKILL_APPLICATION_DIRS: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts
+
+includes:
+  executable-skill-host:
+    taskfile: executable-skill-host.yml
+    flatten: true
 
 tasks:
-  skills:install:
-    desc: Install every executable skill package with its frozen lockfile.
-    silent: true
-    cmds:
-      - set -euo pipefail; bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/repository-cli.ts" "{{.REPO_ROOT}}"; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
-
   skills:format:
     desc: Format every executable skill package.
     deps: [skills:install]
@@ -24,13 +22,6 @@ tasks:
     deps: [skills:install]
     cmds:
       - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
-
-  skills:tools-list:
-    desc: List executable skill actions through strict YAML.
-    silent: true
-    deps: [skills:install]
-    cmds:
-      - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --default toolsList
 
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.

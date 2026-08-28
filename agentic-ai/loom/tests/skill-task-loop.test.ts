@@ -12,7 +12,12 @@ import { join } from 'node:path';
 import { expect, test } from 'bun:test';
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const TASKFILE_PATH = join(REPOSITORY_ROOT, '.task', 'agentic-ai.yml');
+const AGENTIC_TASKFILE_PATH = join(REPOSITORY_ROOT, '.task', 'agentic-ai.yml');
+const HOST_TASKFILE_PATH = join(
+  REPOSITORY_ROOT,
+  '.task',
+  'executable-skill-host.yml',
+);
 const CREATE_TREE_OPTIONS = { recursive: true } as const;
 const REMOVE_TREE_OPTIONS = { recursive: true, force: true } as const;
 
@@ -60,11 +65,12 @@ test('skills package loops stop on the first failing package', async () => {
       '#!/usr/bin/env bash\nset -euo pipefail\nif [[ "$*" == *"repository-cli.ts"* ]]; then exit 0; fi\nif [[ "$PWD" == "$FAIL_PACKAGE" ]]; then exit 23; fi\nprintf reached >"$SECOND_MARKER"\n',
     );
     await chmod(bunPath, 0o755);
-    const taskfile = await readFile(TASKFILE_PATH, 'utf8');
-    for (const [taskName, nextTaskName] of [
-      ['skills:install', 'skills:format'],
-      ['skills:format', 'skills:verify'],
-      ['skills:verify', 'skills:tools-list'],
+    const agenticTaskfile = await readFile(AGENTIC_TASKFILE_PATH, 'utf8');
+    const hostTaskfile = await readFile(HOST_TASKFILE_PATH, 'utf8');
+    for (const [taskName, nextTaskName, taskfile] of [
+      ['skills:install', 'skills:tools-list', hostTaskfile],
+      ['skills:format', 'skills:verify', agenticTaskfile],
+      ['skills:verify', 'loom:install', agenticTaskfile],
     ] as const) {
       const taskCommandRequest: TaskCommandRequest = {
         nextTaskName,

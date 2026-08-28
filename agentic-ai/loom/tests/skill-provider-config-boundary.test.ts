@@ -531,13 +531,12 @@ test('only the semantic adapter and exact discovery task reach applications', as
   expect(productionPaths).toContain('agentic-ai/loom/src/cli-invocation.ts');
   expect(productionPaths).toContain('agentic-ai/loom/src/loom-failure.ts');
   const configPaths = allPaths.filter(isRunnableConfiguration);
-  const actionPaths = allPaths;
   const symlinkPaths = new Set(
     tracked.filter((file) => file.mode === '120000').map((file) => file.path),
   );
   const configPathSet = new Set(configPaths);
   const actionSources = new Map<string, string>();
-  for (const path of actionPaths) {
+  for (const path of allPaths) {
     const source =
       !symlinkPaths.has(path) &&
       (actionSourceRequiresContent(path) ||
@@ -553,6 +552,7 @@ test('only the semantic adapter and exact discovery task reach applications', as
     symlinkPaths,
   };
   const reachableActionPaths = actionRuntimePaths(actionGraph);
+  expect(hasOnlyCanonicalHostTaskEdge(actionSources)).toBe(true);
   const scriptGraph: ConfigurationScriptGraph = {
     executablePaths: new Set(
       tracked.filter((file) => file.mode === '100755').map((file) => file.path),
