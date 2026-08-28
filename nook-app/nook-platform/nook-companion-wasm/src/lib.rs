@@ -661,6 +661,31 @@ mod tests {
     }
 
     #[test]
+    fn workflow_wasm_export_rejects_forged_reduced_advance_control() {
+        let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
+            observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
+                fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                    current_password_field_count: 1,
+                    ..Default::default()
+                },
+                ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
+                    advance_control:
+                        nook_companion_core::AuthenticationAdvanceControlEvidence::Present,
+                    ..Default::default()
+                },
+                ..Default::default()
+            }],
+        };
+
+        assert_eq!(
+            companion_authentication_workflow_match_kind(
+                classify_companion_authentication_workflow(input)
+            ),
+            CompanionAuthenticationWorkflowMatchKind::NoMatch
+        );
+    }
+
+    #[test]
     fn workflow_wasm_export_preserves_saved_login_capability() {
         let snapshot = nook_companion_core::AuthenticationWorkflowSnapshot {
             kind: nook_companion_core::AuthenticationWorkflowKind::Login,

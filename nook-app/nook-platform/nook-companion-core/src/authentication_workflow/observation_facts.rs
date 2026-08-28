@@ -26,6 +26,9 @@ pub struct AuthenticationFieldObservationFacts {
 pub struct AuthenticationCeremonyObservationFacts {
     pub one_time_code_progression: AuthenticationOneTimeCodeProgressionEvidence,
     pub manual_checkpoint: AuthenticationManualCheckpoint,
+    /// Legacy reduced evidence is retained for wire compatibility but is not
+    /// trusted by workflow classification. Control ownership and semantics
+    /// must be established by the detailed control classifier.
     pub advance_control: AuthenticationAdvanceControlEvidence,
 }
 
@@ -133,7 +136,10 @@ impl AuthenticationPageObservationFacts {
             one_time_code_progression: self.ceremony.one_time_code_progression,
             manual_checkpoint: self.ceremony.manual_checkpoint,
             enrollment_evidence: self.authenticator.enrollment_evidence(),
-            advance_control: self.ceremony.advance_control,
+            // A reduced facts envelope cannot establish that a control belongs
+            // to an authentication ceremony. Do not let callers forge
+            // continuation evidence by setting `advanceControl` directly.
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
             passkey: self.authenticator.passkey_evidence(),
         }
     }
@@ -229,11 +235,38 @@ mod tests {
         );
         assert_eq!(
             observation.advance_control,
-            AuthenticationAdvanceControlEvidence::Present
+            AuthenticationAdvanceControlEvidence::Absent
         );
         assert_eq!(
             observation.passkey,
             AuthenticationPasskeyEvidence::ControlAndVaultAccounts { account_count: 2 }
+        );
+    }
+
+    #[test]
+    fn ignores_forged_reduced_advance_control_for_password_login() {
+        let facts = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                current_password_field_count: 1,
+                ..Default::default()
+            },
+            ceremony: AuthenticationCeremonyObservationFacts {
+                advance_control: AuthenticationAdvanceControlEvidence::Present,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+
+        assert_eq!(
+            facts.into_observation().advance_control,
+            AuthenticationAdvanceControlEvidence::Absent
+        );
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
         );
     }
 
