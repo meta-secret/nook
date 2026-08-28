@@ -26,12 +26,22 @@ export type AcceptedModuleDeliveryEvidenceInspection = {
   readonly evidence: AcceptedModuleDeliveryEvidence;
 };
 
+export type AcceptedModuleDeliveryEvidenceRegistration =
+  AcceptedModuleDeliveryEvidenceInspection & {
+    readonly integratedTaskIds: readonly string[];
+  };
+
+export type ModuleDeliveryIntegratedWrite = Readonly<{
+  taskId: string;
+  claims: readonly string[];
+}>;
+
 export type AcceptedModuleDeliveryEvidenceCollectionRequest = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   acceptedPlan: ValidatedModuleDeliveryPlan;
   entries: readonly AcceptedModuleDeliveryEvidence[];
   headCommit: string;
-  integratedWriteClaims: readonly string[];
+  integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
 }>;
 
 export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
@@ -40,7 +50,7 @@ export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
 }>;
 
 export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
-  register: (request: AcceptedModuleDeliveryEvidenceInspection) => void;
+  register: (request: AcceptedModuleDeliveryEvidenceRegistration) => void;
   assert: (request: AcceptedModuleDeliveryEvidenceInspection) => void;
   identity: (
     evidence: AcceptedModuleDeliveryEvidence,
@@ -53,7 +63,7 @@ export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
 type EvidenceFreshnessRequest = Readonly<{
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity;
   headCommit: string;
-  integratedWriteClaims: readonly string[];
+  integratedWrites: readonly ModuleDeliveryIntegratedWrite[];
 }>;
 
 export type ExpectedLineageMapRequest = {
@@ -156,25 +166,6 @@ export function freezeProviderEvidenceIdentity(
   return Object.freeze(copy);
 }
 
-function evidenceFreshAtHead(request: EvidenceFreshnessRequest): boolean {
-  const claims: ResourceClaimPair = {
-    first: request.identity.claimIdentities.map(({ claim }) => claim),
-    second: request.integratedWriteClaims,
-  };
-  return (
-    (request.identity.verifiedHeadCommit === request.headCommit ||
-      (request.integratedWriteClaims.length > 0 && !claimsOverlap(claims))) &&
-    request.identity.acceptedProviderEvidence.every((identity) => {
-      const nestedRequest: EvidenceFreshnessRequest = {
-        identity,
-        headCommit: request.headCommit,
-        integratedWriteClaims: request.integratedWriteClaims,
-      };
-      return evidenceFreshAtHead(nestedRequest);
-    })
-  );
-}
-
 export function freezeModuleDeliveryAdmissionSelection(
   request: FrozenAdmissionSelectionRequest,
 ): ModuleDeliveryAdmissionSelection {
@@ -192,6 +183,30 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
     AcceptedModuleDeliveryEvidence,
     ModuleDeliveryGenerationAuthority
   >();
+  const closures = new Map<string, readonly string[]>();
+  const evidenceFreshAtHead = (request: EvidenceFreshnessRequest): boolean => {
+    const closure = closures.get(JSON.stringify(request.identity));
+    if (!closure) return false;
+    const laterWrites = request.integratedWrites.filter(
+      ({ taskId }) => !closure.includes(taskId),
+    );
+    const claims: ResourceClaimPair = {
+      first: request.identity.claimIdentities.map(({ claim }) => claim),
+      second: laterWrites.flatMap(({ claims }) => claims),
+    };
+    return (
+      (request.identity.verifiedHeadCommit === request.headCommit ||
+        (laterWrites.length > 0 && !claimsOverlap(claims))) &&
+      request.identity.acceptedProviderEvidence.every((identity) => {
+        const nestedRequest: EvidenceFreshnessRequest = {
+          identity,
+          headCommit: request.headCommit,
+          integratedWrites: request.integratedWrites,
+        };
+        return evidenceFreshAtHead(nestedRequest);
+      })
+    );
+  };
   const assert = (request: AcceptedModuleDeliveryEvidenceInspection): void => {
     if (authorities.get(request.evidence) !== request.authority)
       throw new Error(
@@ -225,13 +240,17 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
     return freezeProviderEvidenceIdentity(acceptedIdentity);
   };
   const register = (
-    request: AcceptedModuleDeliveryEvidenceInspection,
+    request: AcceptedModuleDeliveryEvidenceRegistration,
   ): void => {
     if (authorities.has(request.evidence))
       throw new Error(
         'Accepted module delivery evidence is already registered.',
       );
     authorities.set(request.evidence, request.authority);
+    closures.set(
+      JSON.stringify(identity(request.evidence)),
+      Object.freeze([...request.integratedTaskIds]),
+    );
   };
   const collect = (
     request: AcceptedModuleDeliveryEvidenceCollectionRequest,
@@ -247,7 +266,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
       const freshnessRequest: EvidenceFreshnessRequest = {
         identity: acceptedIdentity,
         headCommit: request.headCommit,
-        integratedWriteClaims: request.integratedWriteClaims,
+        integratedWrites: request.integratedWrites,
       };
       if (
         acceptedIdentity.generation !== request.acceptedPlan.plan.generation ||

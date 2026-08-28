@@ -31,6 +31,7 @@ import type {
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
   AcceptedModuleDeliveryEvidenceInspection,
+  AcceptedModuleDeliveryEvidenceRegistration,
   ExpectedLineageMapRequest,
   ResourceConflictRequest,
 } from './authority.ts';
@@ -363,9 +364,12 @@ export function verifyModuleDeliveryEvidenceSubmission(
     authorized,
   };
   const accepted = validateModuleDeliveryEvidenceSubmission(validation);
-  const registration: AcceptedModuleDeliveryEvidenceInspection = {
+  const integratedTaskIds =
+    verification.state.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
+  const registration: AcceptedModuleDeliveryEvidenceRegistration = {
     authority: verification.authority,
     evidence: accepted,
+    integratedTaskIds,
   };
   acceptedEvidenceRegistry.register(registration);
   acceptedEvidenceLeases.add(verification.lease);
@@ -392,18 +396,16 @@ export function createModuleDeliveryAdmissionState(
     throw new Error(
       'Module delivery admission head lacks integration authority.',
     );
-  const integratedTaskIds = new Set(
-    frontiers.flatMap(({ integratedTaskIds }) => integratedTaskIds),
-  );
-  const integratedWriteClaims = authority.acceptedPlan.plan.nodes
+  const integratedTaskIds = new Set(frontiers[0]?.integratedTaskIds ?? []);
+  const integratedWrites = authority.acceptedPlan.plan.nodes
     .filter(({ taskId }) => integratedTaskIds.has(taskId))
-    .flatMap(({ resources }) => resources.write);
+    .map(({ taskId, resources }) => ({ taskId, claims: resources.write }));
   const evidenceRequest: AcceptedModuleDeliveryEvidenceCollectionRequest = {
     authority: request.authority,
     acceptedPlan: authority.acceptedPlan,
     entries: request.acceptedEvidence,
     headCommit: request.headCommit,
-    integratedWriteClaims,
+    integratedWrites,
   };
   const evidence = acceptedEvidenceRegistry.collect(evidenceRequest);
   const stateValue: ModuleDeliveryAdmissionState = {

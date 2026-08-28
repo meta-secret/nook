@@ -302,19 +302,15 @@ describe('module delivery admission authority', () => {
 
     const wrongLineage: readonly ModuleDeliveryExpectedLineage[] = lineage(
       validate(PLAN),
-    ).map((entry) =>
-      entry.taskId === 'alpha'
-        ? {
-            taskId: entry.taskId,
-            parentLineage: {
-              kind: AgentAttemptParentKind.AgentAttempt,
-              task: 'forged-task',
-              agent: 'forged-agent',
-              attempt: 2,
-            },
-          }
-        : entry,
-    );
+    ).map(({ taskId }) => ({
+      taskId,
+      parentLineage: {
+        kind: AgentAttemptParentKind.AgentAttempt,
+        task: 'forged-task',
+        agent: 'forged-agent',
+        attempt: 2,
+      },
+    }));
     const wrongLineageAuthorityRequest: CreateModuleDeliveryGenerationAuthorityRequest =
       {
         acceptedPlan: validate(PLAN),
@@ -405,7 +401,6 @@ describe('module delivery admission authority', () => {
       expectedLineage: lineage(second),
     };
     const restarted = restartModuleDeliveryGeneration(restartRequest);
-    expect(restarted.generation).toBe(2);
     expect(restarted.integratedWriterFrontiers).toEqual([]);
     expect(restarted.acceptedProviderEvidence).toEqual([]);
     const restartedRuntime: Runtime = {

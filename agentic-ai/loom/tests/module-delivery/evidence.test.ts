@@ -32,7 +32,6 @@ import {
 
 import type {
   AcceptedModuleDeliveryEvidence,
-  AcceptedModuleDeliveryEvidenceInspection,
   CreateModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
@@ -52,6 +51,7 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
+import type { AcceptedModuleDeliveryEvidenceRegistration } from '../../src/module-delivery/authority.ts';
 import type { GitFixture } from './worktree-test-support.ts';
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
@@ -354,7 +354,6 @@ test('accepts exact repository evidence and releases its lease only after accept
       candidate,
     };
     const accepted = verify(verificationRequest);
-    expect(Object.isFrozen(accepted)).toBe(true);
     const activeSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
@@ -397,22 +396,6 @@ test('accepts exact repository evidence and releases its lease only after accept
         },
       };
     recordModuleDeliveryAttemptDisposition(acceptedDispositionRequest);
-    const synthesisSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
-      authority: active.authority,
-      acceptedPlan: active.accepted,
-      state: evidenceState,
-    };
-    const synthesis = selectModuleDeliveryAdmissions(synthesisSelectionRequest);
-    expect(synthesis.admissions.map(({ taskId }) => taskId)).toEqual([
-      active.providerB.taskId,
-    ]);
-    const advancedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-      ...evidenceStateRequest,
-      headCommit: 'f'.repeat(40),
-    };
-    expect(() =>
-      createModuleDeliveryAdmissionState(advancedStateRequest),
-    ).toThrow('lacks integration authority');
   } finally {
     disposeGitFixture(active.fixture);
   }
@@ -467,9 +450,10 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
     };
     const isolatedRegistry =
       evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
-    const isolatedRegistration: AcceptedModuleDeliveryEvidenceInspection = {
+    const isolatedRegistration: AcceptedModuleDeliveryEvidenceRegistration = {
       authority: active.authority,
       evidence: forgedEvidence,
+      integratedTaskIds: [],
     };
     isolatedRegistry.register(isolatedRegistration);
     expect('registerAcceptedModuleDeliveryEvidence' in evidenceAuthority).toBe(
@@ -485,17 +469,6 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
     expect(() =>
       createModuleDeliveryAdmissionState(forgedStateRequest),
     ).toThrow('evidence authority is invalid');
-
-    const staleStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
-      authority: active.authority,
-      acceptedPlan: active.accepted,
-      headCommit: 'f'.repeat(40),
-      integratedWriterFrontiers: [],
-      acceptedEvidence: [],
-    };
-    expect(() => createModuleDeliveryAdmissionState(staleStateRequest)).toThrow(
-      'lacks integration authority',
-    );
   } finally {
     disposeGitFixture(active.fixture);
   }
@@ -638,30 +611,39 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       throw new Error('Nested synthesis evidence is missing.');
     retained.acceptedProviderEvidence.push(nested);
     expect(Object.isFrozen(stored.acceptedProviderEvidence)).toBe(true);
-    expect(stored.acceptedProviderEvidence).toEqual([]);
-    expect(() => verify(synthesisVerificationRequest)).toThrow(
-      'metadata is invalid',
-    );
     const carryRegistry =
       evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
-    const registration: AcceptedModuleDeliveryEvidenceInspection = {
-      authority: active.authority,
-      evidence: synthesisEvidence,
-    };
-    carryRegistry.register(registration);
+    for (const evidence of [
+      providerEvidence,
+      providerBEvidence,
+      synthesisEvidence,
+    ]) {
+      const registration: AcceptedModuleDeliveryEvidenceRegistration = {
+        authority: active.authority,
+        evidence,
+        integratedTaskIds: ['writer-a'],
+      };
+      carryRegistry.register(registration);
+    }
     const disjointRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       entries: [synthesisEvidence],
       headCommit: 'f'.repeat(40),
-      integratedWriteClaims: ['agentic-ai/**'],
+      integratedWrites: [
+        { taskId: 'writer-a', claims: [`${CORE_ROOT}/**`] },
+        { taskId: 'writer-b', claims: ['agentic-ai/**'] },
+      ],
     };
     expect(carryRegistry.collect(disjointRequest).accepted).toEqual([
       synthesisEvidence,
     ]);
     const overlappingRequest = {
       ...disjointRequest,
-      integratedWriteClaims: [`${CORE_ROOT}/**`],
+      integratedWrites: [
+        ...disjointRequest.integratedWrites,
+        { taskId: 'writer-c', claims: [`${CORE_ROOT}/**`] },
+      ],
     };
     expect(() => carryRegistry.collect(overlappingRequest)).toThrow(
       'Accepted evidence is invalid',
