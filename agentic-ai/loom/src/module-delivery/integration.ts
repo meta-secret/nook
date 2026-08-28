@@ -28,7 +28,7 @@ import {
 
 import type { GitCommandRequest } from './git-command.ts';
 import type {
-  AcceptedModuleDeliveryPlan,
+  ValidatedModuleDeliveryPlan,
   ModuleDeliveryNode,
   WriteModuleDeliveryNode,
 } from './domain.ts';
@@ -52,11 +52,17 @@ import type {
 } from './workspace.ts';
 
 const INTEGRATION_TASK_ID = 'module-delivery-integration';
+export const MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE =
+  'Module delivery integration is inactive until trusted admission and evidence authority are available.';
+
+function rejectInactiveModuleDeliveryIntegration(): void {
+  throw new Error(MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE);
+}
 
 export type PrepareModuleIntegrationRequest = {
   readonly repositoryRoot: string;
   readonly workspaceRoot: string;
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
 
 export type ModuleDeliveryHandoffSubmission = {
@@ -85,7 +91,7 @@ export type ModuleIntegrationCleanupHandle = {
 };
 
 export type IntegrateVerifiedModuleDeliveryWaveRequest = {
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleIntegrationState;
   readonly waveIndex: number;
   readonly handoffs: readonly ModuleDeliveryHandoffSubmission[];
@@ -106,7 +112,7 @@ type ModuleGitInvocation = {
 };
 
 type AcceptedPlanInspection = {
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state?: ModuleIntegrationState;
 };
 
@@ -117,7 +123,7 @@ type ExpectedHandoff = {
 };
 
 type HandoffCollectionRequest = {
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleIntegrationState;
   readonly wave: readonly string[];
   readonly handoffs: readonly ModuleDeliveryHandoffSubmission[];
@@ -134,7 +140,7 @@ type WaveArrayPair = {
 };
 
 type NodeLookup = {
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly taskId: string;
 };
 
@@ -145,7 +151,7 @@ type ExpectedBaselineRequest = {
 
 type ExpectedHandoffVerification = {
   readonly expected: ExpectedHandoff;
-  readonly acceptedPlan: AcceptedModuleDeliveryPlan;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
 };
 
 type WaveApplication = {
@@ -570,6 +576,7 @@ function applyAndValidateWave(application: ValidatedWaveApplication): string {
 export function prepareModuleIntegration(
   request: PrepareModuleIntegrationRequest,
 ): ModuleIntegrationState {
+  rejectInactiveModuleDeliveryIntegration();
   const inspection: AcceptedPlanInspection = {
     acceptedPlan: request.acceptedPlan,
   };
@@ -667,6 +674,7 @@ export function prepareModuleIntegration(
 export function integrateVerifiedModuleDeliveryWave(
   request: IntegrateVerifiedModuleDeliveryWaveRequest,
 ): ModuleIntegrationState {
+  rejectInactiveModuleDeliveryIntegration();
   const inspection: AcceptedPlanInspection = {
     acceptedPlan: request.acceptedPlan,
     state: request.state,
