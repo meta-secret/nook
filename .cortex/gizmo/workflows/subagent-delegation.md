@@ -139,13 +139,17 @@ dispatched.
 5. Assign exactly one team identity to every task record.
 6. Freeze the initial known graph before dispatch.
 7. Derive deterministic execution constraints.
-   - A writer that overlaps a read-only provider's evidence surface runs before
-     that evidence provider.
+   - Every writer whose write claims overlap a read-only provider's evidence
+     surface is a predecessor of that evidence provider, regardless of their
+     existing declared order.
    - Otherwise-unordered conflicting tasks are serialized in stable execution
      order instead of making the plan invalid.
 8. Run deterministic topology and cycle validation over declared and derived
    constraints.
    - A cycle fails closed.
+   - An existing evidence-provider-before-writer dependency conflicts with the
+     required writer-before-provider constraint and is rejected before
+     dispatch.
    - Report the blocked dependency to Gizmo instead of waiting.
 9. Freeze resource claims, acceptance evidence, stable task order, and the
    parent-owned join.
@@ -229,14 +233,17 @@ the same admission batch is still active.
 
 ### Evidence-safe execution ordering
 
-The task record names every resource claim used to produce read-only evidence.
-Those claims are its evidence surface.
+For a read-only evidence provider, the evidence surface is the exact non-empty
+set of its read claims whose content contributes to its evidence. An
+overlapping writer is any task with a write claim that overlaps any claim in
+that surface.
 
-Before dispatch, the deterministic validator derives a write-before-evidence
-constraint for every otherwise-unordered writer whose write claim overlaps a
-read-only provider's evidence surface. The evidence provider starts only from a
-frontier containing those integrated writers. Its consumers start only after
-the typed evidence handoff is verified and accepted.
+Before dispatch, the deterministic validator derives a
+writer-before-evidence-provider constraint for every overlapping writer. This
+precedence is mandatory even when declared provider dependencies already order
+the tasks. The evidence provider starts only from a frontier containing every
+such integrated writer. Its consumers start only after the typed evidence
+handoff is verified and accepted.
 
 For other otherwise-unordered overlapping claims, the validator derives a
 stable serialization constraint. The later task starts from a frontier
@@ -245,11 +252,20 @@ does not reject an otherwise valid plan.
 
 #### Validation outcome
 
-The combined declared and derived execution graph must remain acyclic. If
-write-before-evidence ordering creates a cycle, the plan fails closed and Gizmo
-must split the evidence surface or repair the provider design. Known hazards
-cannot leave an accepted consumer stale, so ordinary execution never rolls
-back or invalidates an already accepted consumer.
+The combined declared and derived execution graph must remain acyclic. If the
+declared graph requires an evidence provider, or any of its consumers, to
+precede an overlapping writer, the mandatory writer-before-provider edge
+creates a cycle. The plan is invalid and must be rejected before any task is
+dispatched. Gizmo must split the evidence surface, remove the overlap, or
+repair the provider dependencies.
+
+Ordinary execution has no implicit evidence invalidation or selective
+revalidation exception. A plan may permit evidence-before-writer ordering only
+through a separately specified full-generation revalidation protocol that
+prevents old evidence and every result derived from it from being accepted in
+the replacement generation. This workflow defines no such protocol, so it
+fails closed. Harness scheduling, cancellation, retries, and lifecycle state
+remain harness-owned.
 
 ### Immutable generation restart
 
@@ -569,9 +585,11 @@ Before integration, verify:
 - every lease release triggered readiness and admission recomputation;
 - selected frontiers were snapshotted before attempts were created;
 - conflict-excluded ready tasks remained pending for recomputation;
-- unordered conflicts were serialized and known writers preceded affected
-  evidence;
+- otherwise-unordered non-evidence conflicts were serialized and every writer
+  overlapping an evidence surface preceded its read-only provider;
 - evidence-hazard cycles failed closed before dispatch;
+- no declared evidence-provider-before-writer dependency bypassed the
+  mandatory writer-before-provider constraint;
 - late mutations cancelled or rejected every old-generation attempt, migrated
   no result or private state, and retried every reached task in a validated new
   generation;

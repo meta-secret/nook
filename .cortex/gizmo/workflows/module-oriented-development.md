@@ -55,12 +55,14 @@ worker attempt only after its exact starting frontier exists.
 The validator augments declared provider edges with deterministic execution
 constraints before dispatch.
 
-- An otherwise-unordered writer that overlaps a read-only evidence surface is
-  ordered before that evidence provider.
+- Every writer that overlaps a read-only evidence surface is ordered before
+  that evidence provider, regardless of their existing declared order.
 - Other otherwise-unordered conflicting nodes are serialized in stable
   execution order instead of rejected.
-- A cycle in the combined graph fails closed and reports the blocked dependency
-  to Gizmo.
+- An existing provider dependency that requires evidence before an overlapping
+  writer conflicts with the mandatory writer-before-provider constraint. The
+  resulting cycle fails closed before dispatch and reports the blocked
+  dependency to Gizmo.
 
 Every attempt leases its resource claims. A consumer lease also includes the
 evidence-surface claims it relies on. Worker termination does not release the
@@ -148,12 +150,16 @@ read-only evidence. Its typed handoff records a content identity for every
 evidence-surface claim and binds the result to one immutable plan generation,
 team, task, attempt, exact source commit, and evidence artifact digest.
 
-Every known overlapping writer is a derived predecessor of the evidence
-provider. Evidence therefore runs only after those writes are integrated, and
-its consumers run only after the handoff is verified and accepted. If the
-derived constraint creates a cycle, validation fails closed. Known hazards are
-prevented before dispatch; an already accepted consumer is never rolled back or
-invalidated during ordinary execution.
+Every overlapping writer is a mandatory derived predecessor of the evidence
+provider, even when the declared graph already puts that writer downstream of
+the provider or one of its consumers. Evidence therefore runs only after those
+writes are integrated, and its consumers run only after the handoff is verified
+and accepted. If an existing provider path requires evidence before the writer,
+the combined graph is cyclic and validation rejects the plan before dispatch.
+The plan must remove the overlap or repair the dependencies; ordinary execution
+does not accept stale consumers and then selectively revalidate them. The
+active harness retains scheduling, cancellation, retry, and lifecycle
+authority.
 
 For example, `nook-core` must be accepted and integrated before `nook-wasm`
 starts. The web consumer then starts from the integrated frontier containing

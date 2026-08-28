@@ -13,14 +13,17 @@ Gizmo writes the team assignments before implementation starts.
 
 1. Recursively discover every necessary bounded task record and provider edge.
 2. Assign each task to exactly one semantic team identity.
-3. Name a second team when that team's expertise is required to change files.
+3. When another team's expertise is required to change files, create a separate
+   expertise task whose only team identity is the provider team.
 4. Keep shared integration and delivery actions as Gizmo tasks.
-5. Freeze the initial known graph before dispatch.
-6. Record the exact claims used by each read-only evidence surface.
-7. Validate deterministic topology and fail closed on cycles.
-8. Report the blocked dependency to Gizmo when a cycle exists.
-9. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
-10. Apply [subagent delegation](subagent-delegation.md) for operational worker
+5. Record the functional-owner team as acceptance metadata and acceptance owner
+   on the expertise task.
+6. Freeze the initial known graph before dispatch.
+7. Record the exact claims used by each read-only evidence surface.
+8. Validate deterministic topology and fail closed on cycles.
+9. Report the blocked dependency to Gizmo when a cycle exists.
+10. Apply the root [team worker contract](../../AGENTS.md#team-worker-contract).
+11. Apply [subagent delegation](subagent-delegation.md) for operational worker
    rules and integration.
 
 Worker termination does not release claims. Gizmo releases a lease only after
@@ -53,11 +56,15 @@ These are entry points, not bulk context manifests.
 
 This workflow adds team-specific context to the universal worker contract:
 
-- one functional-owner team identity;
-- an optional expertise-provider identity;
+- exactly one task team identity;
 - that team's entry points and task-relevant authorities;
 - team-owned review and validation findings; and
-- the consumer contract when expertise crosses a team boundary.
+- for an expertise task, the provider-team identity plus the functional owner,
+  frozen consumer contract, and acceptance evidence as read-only metadata.
+
+An expertise worker loads only the provider team's entry points and graph. It
+does not load the functional owner's graph. The frozen consumer contract is an
+input, not authority to change capability semantics.
 
 When implementation changes a security boundary, the contract also names the
 security invariant and security acceptance evidence. Security review is not a
@@ -106,13 +113,21 @@ functional owner may apply specifically linked read-only policy to its own
 implementation.
 
 1. Keep the requesting team as functional owner.
-2. Name the provider team and the required engineering expertise.
-3. Freeze exact code and test paths for the provider.
-4. Prohibit consumer Cortex, capability semantics, shared files, and lifecycle
+2. Create a separate expertise implementation task.
+3. Assign exactly one task team identity: the provider team.
+4. Record the requesting team as acceptance metadata and acceptance owner.
+5. Freeze the functional contract and exact code and test paths for the
+   provider.
+6. Give the worker only the provider team's context and the frozen contract as
+   read-only task metadata.
+7. Prohibit consumer Cortex, capability semantics, shared files, and lifecycle
    state.
-5. Require provider-owned implementation, tests, review fixes, and validation
+8. Require provider-owned implementation, tests, review fixes, and validation
    fixes inside the bounded scope.
-6. Return the result to the functional owner for semantic acceptance.
+9. Require the provider to preserve the functional contract and return the
+   result to the functional owner for semantic acceptance.
+10. Integrate through Gizmo only after the functional owner accepts the
+    handoff.
 
 An expertise contract is an explicit task-scoped handoff. It is not general
 permission to edit another team's code.
@@ -151,7 +166,9 @@ blocking team verdict or a required blocking security verdict.
 
 Completion requires one exact team identity per team task.
 Each ready selected task has one worker attempt. Each capability has one owner
-team and at most one expertise provider for each set of delegated files.
+team. Each expertise implementation is a separate task whose one team identity
+is its provider team, with the functional owner recorded as acceptance metadata
+and acceptance owner.
 Completion also requires explicit cross-team contracts, team-owned tests and
 review fixes, one shared-state writer, root aggregation, and green exact-head
 delivery gates.

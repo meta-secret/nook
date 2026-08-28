@@ -153,13 +153,16 @@ files.
 Gizmo is the single delivery owner. Gizmo recursively discovers bounded tasks
 and creates one task per required unit before that unit starts.
 
-- Each task has one team that owns the requested behavior.
-- That team controls capability semantics, Cortex authority, and
-  acceptance.
-- A second team may implement part of the task when its engineering expertise
-  is required.
-- The expertise contract names the provider team, allowed files, forbidden
-  files, accepted inputs, tests, and evidence.
+- Each capability has one functional-owner team that controls capability
+  semantics, Cortex authority, and acceptance.
+- Each task has exactly one team identity.
+- When another team's engineering expertise is required, Gizmo creates a
+  separate expertise implementation task. Its only team identity is the
+  expertise-provider team.
+- The expertise task records the functional-owner team as acceptance metadata,
+  not as a second task identity.
+- The expertise contract names the frozen functional contract, acceptance
+  owner, allowed files, forbidden files, accepted inputs, tests, and evidence.
 - Each team agent receives only its team contract and task-relevant authority.
 - A team agent stops at a foreign-team write boundary unless Gizmo
   assigns an explicit expertise contract.
@@ -186,9 +189,12 @@ Security review does not transfer implementation ownership.
   - Implements Cortex, Loom, agent skills, routing, and agent automation.
 - **Gizmo**
   - Assigns each implementation task to its normal team owner.
-  - Creates an expertise contract when another team must change named files.
-  - Names the provider team, allowed files, forbidden files, tests, and
-    acceptance evidence.
+  - Creates a separate provider-team task when another team must change named
+    files.
+  - Records the functional owner, frozen contract, allowed files, forbidden
+    files, tests, and acceptance evidence on that expertise task.
+  - Returns the provider's handoff to the functional owner for acceptance
+    before integration.
 
 Gizmo may run team subagents one after another when their changes cannot safely
 overlap. Claims remain leased after worker termination until Gizmo records a
@@ -201,6 +207,9 @@ recomputation. Gizmo remains outside team implementation tasks.
 - An expertise provider may edit named consumer-team code and tests. It must not
   edit the consumer team's Cortex, redefine capability semantics, or expand its
   own scope.
+- An expertise worker loads only the provider team's entry points. It receives
+  the frozen functional contract as read-only task metadata and does not load
+  the functional owner's team graph.
 - Team agents own implementation, tests, team Cortex, review fixes, and
   validation fixes for their assigned task.
 - **Feature ownership boundary:** agents mutate only their owned feature.

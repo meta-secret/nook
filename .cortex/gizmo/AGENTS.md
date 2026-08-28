@@ -21,7 +21,11 @@ Gizmo never gives its own graph to a team subagent.
 - Interpret the mission and publish its public-safe plan.
 - Recursively discover every necessary bounded task and provider dependency as
   task records.
-- Classify each task by functional owner and optional expertise provider.
+- Classify each capability by functional owner.
+- When another team must implement named files, create a separate expertise
+  task whose only team identity is the expertise-provider team.
+- Record the functional owner as the expertise task's acceptance owner and
+  immutable contract metadata.
 - Freeze the initial known graph, resource claims, dependencies, and acceptance
   evidence before dispatch.
 - Choose exactly one team identity for each task.
@@ -65,7 +69,8 @@ universal requirements. Use
 rules.
 
 Gizmo adds delivery-specific decisions. It selects the functional owner,
-freezes the team task, integrates accepted handoffs, and controls shared
+freezes each team task, routes expertise handoffs to the recorded functional
+owner for acceptance, integrates accepted handoffs, and controls shared
 lifecycle state.
 
 Direct providers form edge-local readiness barriers.

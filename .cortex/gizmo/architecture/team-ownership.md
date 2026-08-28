@@ -22,15 +22,21 @@ Every capability has one functional owner.
 - File location is evidence of normal ownership. It does not prevent explicit
   expertise delegation.
 
-A task may also have one expertise provider.
+A capability may also require one expertise provider.
 
-- The expertise provider changes the named files after Gizmo records the
+- Gizmo creates a separate delegated expertise task.
+- The task's exactly one team identity is the expertise-provider team.
+- The task records the functional-owner team as acceptance metadata and
+  acceptance owner. Functional ownership is not a second task identity.
+- The provider changes the named files after Gizmo freezes the functional
   contract.
-- Its task scope names allowed code and test files.
+- Its task scope names the frozen contract and allowed code and test files.
 - It owns implementation quality, focused tests, review fixes, and validation
   fixes inside that scope.
 - It does not own consumer-team Cortex, capability semantics, shared files, or
   delivery lifecycle state.
+- It returns its semantic handoff to the functional owner for acceptance before
+  Gizmo integrates it.
 
 Expertise delegation is task-scoped. It does not permanently transfer a file,
 module, or capability to the provider team.
@@ -183,10 +189,12 @@ Gizmo assigns the human request before implementation starts.
 3. Assign coordination, integration, and lifecycle capabilities to Gizmo.
 4. Assign each implementation task to AI, development core, security, SRE, or
    web development.
-5. Identify implementation expertise required from another team.
+5. When another team's implementation expertise is required, create a separate
+   task with that provider team as its only team identity.
 6. Identify every cross-team provider and consumer contract.
-7. Freeze the initial known graph, contracts, resource claims, forbidden scope,
-   tests, evidence surfaces, and acceptance evidence.
+7. Freeze the initial known graph, contracts, functional-owner acceptance
+   metadata, resource claims, forbidden scope, tests, evidence surfaces, and
+   acceptance evidence.
 8. Assign exactly one team identity to every reached task.
 9. Apply the canonical delegation workflow.
 11. Snapshot exact starting frontiers for selected tasks.
@@ -231,16 +239,23 @@ Expertise delegation applies when the functional contract is already owned but
 another team has the implementation discipline needed to realize it safely.
 
 1. Keep one functional owner for the capability.
-2. Name one expertise provider for the files that require its expertise.
-3. Freeze the accepted input contract and observable output.
-4. Declare exact code and test paths the provider may change.
-5. Declare consumer Cortex, capability semantics, shared files, and lifecycle
+2. Create a separate expertise implementation task.
+3. Give that task exactly one team identity: the expertise-provider team.
+4. Record the functional-owner team as acceptance metadata and acceptance
+   owner, not as another task identity.
+5. Freeze the accepted input contract and observable output.
+6. Declare exact code and test paths the provider may change.
+7. Declare consumer Cortex, capability semantics, shared files, and lifecycle
    state forbidden.
-6. Let the expertise provider implement, test, and repair review or validation
+8. Give the worker only the provider team's `AGENTS.md`, knowledge graph, and
+   task-relevant authorities. Supply the frozen consumer contract as read-only
+   task metadata; do not load the consumer team's graph.
+9. Let the expertise provider implement, test, and repair review or validation
    findings inside that scope.
-7. Return a semantic handoff to the functional owner.
-8. Let the functional owner verify capability behavior before the parent-owned
-   integration join.
+10. Return a semantic handoff to the functional owner. The provider cannot
+    redefine the functional contract.
+11. Let the functional owner accept or reject capability behavior before Gizmo
+    performs the parent-owned integration join.
 
 This contract makes the delegated files part of the provider's owned task
 scope. It does not grant general access to the consumer team's code.
@@ -271,10 +286,17 @@ The final integration must prove:
 
 - every changed path has one responsible team;
 - every capability has one functional owner;
-- every task delegated for cross-team expertise has one provider team;
+- every expertise implementation is a separate task with exactly one team
+  identity equal to its provider team;
+- every expertise task names its functional owner as acceptance metadata and
+  acceptance owner;
 - every changed security boundary has named security acceptance evidence;
 - no expertise provider changed consumer Cortex, capability semantics, shared
   files, or undeclared code;
+- every expertise worker loaded only its provider-team graph plus the frozen
+  read-only consumer contract;
+- every expertise handoff was accepted by the functional owner before Gizmo
+  integration;
 - cross-team contracts were frozen before consumer integration;
 - each team supplied its own tests and review fixes;
 - shared files were serialized;
