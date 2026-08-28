@@ -11,6 +11,7 @@ import {
   CortexArticleFindingCode,
   SKILL_FINDING_CODES,
   SKILL_PROVIDER_RESULT_BYTE_LIMIT,
+  SKILL_TOOLS_LIST_INVOKE,
 } from '../src/skill-action-registry.ts';
 import {
   SkillCommandIssue,
@@ -188,7 +189,7 @@ describe('executable skill YAML command protocol', () => {
     expect(response.errors?.at(0)?.issue).toBe(
       SkillCommandIssue.InvalidRequest,
     );
-    expect(response.recover?.toolsListRequest).toBe('task skills:tools-list');
+    expect(response.recover?.toolsListRequest).toBe(SKILL_TOOLS_LIST_INVOKE);
     expect(response.recover?.hint).toContain('List skill actions');
   });
   test('reports exact operation and canonical structural-key paths', () => {
@@ -236,7 +237,7 @@ describe('executable skill YAML command protocol', () => {
       'skillToolsList:\n  list: {}\ncortexArticleStructure:\n  audit: {}\n',
     ]) {
       const response = parseCliResponse(dispatchSkillYamlText(yaml).yaml);
-      expect(response.recover?.toolsListRequest).toBe('task skills:tools-list');
+      expect(response.recover?.toolsListRequest).toBe(SKILL_TOOLS_LIST_INVOKE);
     }
   });
   test('reports codec-only and migration field paths', () => {

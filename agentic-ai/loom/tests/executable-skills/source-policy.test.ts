@@ -22,8 +22,7 @@ describe('executable skill source policy', () => {
       "export type { Node } from 'unist';",
       "import { audit } from './audit.ts';",
       'const values = [1, 2];',
-      'Bun.write(Bun.stdout, JSON.stringify(audit(values[0])));',
-      "Bun.write(Bun.stderr, 'audited failure');",
+      'audit(values[0]);',
     ].join('\n');
     const request: AnalyzeFixtureRequest = {
       source,
@@ -108,9 +107,7 @@ describe('executable skill source policy', () => {
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = { source };
-      expect(() => analyzeFixture(request)).toThrow(
-        'Bun APIs outside narrow standard I/O',
-      );
+      expect(() => analyzeFixture(request)).toThrow('forbid ambient Bun I/O');
     }
   });
 
@@ -275,7 +272,11 @@ describe('executable skill source policy', () => {
       'Function',
       'Object',
       'console',
+      'crypto',
+      'Date',
       'fetch',
+      'Math',
+      'performance',
       'Worker',
     ]) {
       const request: AnalyzeFixtureRequest = {
@@ -477,6 +478,11 @@ describe('executable skill source policy', () => {
       "http.get('http://example.com');",
       "ffi.dlopen('/tmp/unsafe.so', {});",
       'console.takeHeapSnapshot();',
+      'Bun.write(Bun.stdout, value);',
+      'Date.now();',
+      'Math.random();',
+      'performance.now();',
+      'crypto.randomUUID();',
     ];
     for (const source of sources) {
       const request: AnalyzeFixtureRequest = {

@@ -291,7 +291,13 @@ function configurationScriptReferences(
 }
 
 function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
-  if (inspection.source.includes('{{')) return false;
+  if (
+    inspection.source.includes('{{') &&
+    !/(?:cli\.ts|skill-action-registry\.ts|cortex-article-structure)/u.test(
+      inspection.specifier,
+    )
+  )
+    return false;
   const escapedSpecifier = inspection.specifier.replace(
     /[.*+?^${}()|[\]\\]/gu,
     '\\$&',
@@ -803,6 +809,10 @@ test('follows scripts launched from every runnable configuration surface', () =>
       `tasks:\n  audit:\n    cmds: [bun ${LOOM_ARTICLE_ADAPTER}]`,
     ],
     [
+      'Taskfile.yml',
+      'vars:\n  host2: bun .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts\ntasks:\n  audit:\n    cmds: ["{{.host2}} --default toolsList"]',
+    ],
+    [
       '.github/workflows/audit.yml',
       'jobs:\n  audit:\n    steps:\n      - run: bun scripts/facade.ts',
     ],
@@ -837,7 +847,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
       symlinkPaths: new Set<string>(),
     };
     expect(() => configurationScriptPaths(graph), path).toThrow(
-      /Unauthorized application edge|runtime boundary/u,
+      /Unauthorized application edge|runtime boundary|Runnable script is untracked/u,
     );
   }
   const sources = new Map<string, string>([

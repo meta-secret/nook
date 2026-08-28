@@ -52,6 +52,7 @@ enum ForbiddenAmbientGlobal {
   AsyncFunction = 'AsyncFunction',
   BroadcastChannel = 'BroadcastChannel',
   Buffer = 'Buffer',
+  Date = 'Date',
   Eval = 'eval',
   Fetch = 'fetch',
   Function = 'Function',
@@ -59,7 +60,9 @@ enum ForbiddenAmbientGlobal {
   Global = 'global',
   GlobalThis = 'globalThis',
   Loader = 'Loader',
+  Math = 'Math',
   Module = 'module',
+  Performance = 'performance',
   PostMessage = 'postMessage',
   Process = 'process',
   Reflect = 'Reflect',
@@ -454,13 +457,8 @@ function assertNoForbiddenCapability(
   ) {
     throw new Error('Executable skill forbids reflective Object APIs.');
   }
-  if (
-    isAmbientRootPropertyAccess(bunRootRequest) &&
-    !ALLOWED_BUN_ROOT_MEMBERS.has(node.name.text)
-  ) {
-    throw new Error(
-      'Executable skill forbids Bun APIs outside narrow standard I/O.',
-    );
+  if (isAmbientRootPropertyAccess(bunRootRequest)) {
+    throw new Error('Executable skill applications forbid ambient Bun I/O.');
   }
   if (
     isAmbientRootPropertyAccess(globalThisRootRequest) &&
