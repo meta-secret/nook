@@ -1,5 +1,19 @@
 use super::*;
 
+const TRUSTED_DOCKER_PATHS: [&str; 3] = [
+    "/usr/local/bin/docker",
+    "/usr/bin/docker",
+    "/opt/homebrew/bin/docker",
+];
+const TRUSTED_DOCKER_SELECTOR: &str =
+    "if [ -x /usr/local/bin/docker ]; then docker_cli=/usr/local/bin/docker
+elif [ -x /usr/bin/docker ]; then docker_cli=/usr/bin/docker
+elif [ -x /opt/homebrew/bin/docker ]; then docker_cli=/opt/homebrew/bin/docker
+else
+echo \"trusted Docker CLI is unavailable\" >&2
+exit 127
+fi";
+
 fn docker_script_fixture(
     root: &std::path::Path,
     relative: &str,
@@ -8,13 +22,11 @@ fn docker_script_fixture(
 ) -> anyhow::Result<std::path::PathBuf> {
     let fake = fake_docker.to_string_lossy();
     let mut source = read(root, relative);
-    for candidate in [
-        "/usr/local/bin/docker",
-        "/usr/bin/docker",
-        "/opt/homebrew/bin/docker",
-    ] {
+    for candidate in TRUSTED_DOCKER_PATHS {
+        anyhow::ensure!(source.matches(candidate).count() == 2);
         source = source.replace(candidate, &fake);
     }
+    anyhow::ensure!(source.matches(fake.as_ref()).count() == 6);
     let fixture = directory.join("wrapper.sh");
     fs::write(&fixture, source)?;
     Ok(fixture)
@@ -351,24 +363,32 @@ fn scheduled_nightly_live_sync_is_retired() -> anyhow::Result<()> {
 #[test]
 fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
     let root = repository_root();
-    for path in [
-        ".github/scripts/verify-wasm-gha-cache.sh",
-        ".github/scripts/with-healthy-buildkit.sh",
-        ".github/scripts/with-remote-buildkit.sh",
-        "infra/tasks/bake-cache.yml",
+    for (path, invocation_count) in [
+        (".github/scripts/verify-wasm-gha-cache.sh", 1),
+        (".github/scripts/with-healthy-buildkit.sh", 7),
+        (".github/scripts/with-remote-buildkit.sh", 3),
+        ("infra/tasks/bake-cache.yml", 13),
     ] {
         let source = read(&root, path);
-        for required in [
-            "/usr/local/bin/docker",
-            "/usr/bin/docker",
-            "/opt/homebrew/bin/docker",
-            "\"$docker_cli\"",
-        ] {
-            assert!(source.contains(required), "{path} missing {required}");
-        }
+        let normalized = source.lines().map(str::trim).collect::<Vec<_>>().join("\n");
+        assert_eq!(normalized.matches(TRUSTED_DOCKER_SELECTOR).count(), 1);
+        let assignments: Vec<_> = source
+            .lines()
+            .filter_map(|line| line.split_once("docker_cli=").map(|entry| entry.1.trim()))
+            .collect();
+        assert_eq!(assignments, TRUSTED_DOCKER_PATHS, "{path} selector drift");
+        assert_eq!(source.matches("\"$docker_cli\"").count(), invocation_count);
         for forbidden in ["${DOCKER", "docker_bin", "PATH=", "command -v docker"] {
             assert!(!source.contains(forbidden), "{path} permits {forbidden}");
         }
+        assert!(!source.lines().any(|line| {
+            let command = line.trim_start();
+            !command.starts_with('#')
+                && !command.contains("echo ")
+                && command
+                    .split_whitespace()
+                    .any(|word| word.trim_matches(['\'', '"', ';', '&', '|', '(', ')']) == "docker")
+        }));
     }
     let pr = read(&root, ".github/workflows/pr.yml");
     assert!(
