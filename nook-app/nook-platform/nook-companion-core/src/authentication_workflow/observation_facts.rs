@@ -104,8 +104,11 @@ impl AuthenticationCeremonyObservationFacts {
             <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
     }
 
-    fn derived_one_time_code_progression(&self) -> AuthenticationOneTimeCodeProgressionEvidence {
-        if !self.is_bounded() {
+    fn derived_one_time_code_progression(
+        &self,
+        has_trusted_authentication_context: bool,
+    ) -> AuthenticationOneTimeCodeProgressionEvidence {
+        if !self.is_bounded() || !has_trusted_authentication_context {
             return AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
         }
         if looks_like_one_time_code_auto_submit_signal(&self.one_time_code_handler_signal) {
@@ -218,16 +221,20 @@ impl AuthenticationPageObservationFacts {
 
     #[must_use]
     pub fn into_observation(self) -> AuthenticationPageObservation {
+        let advance_control = self.detailed_advance_control.evidence(self.fields);
         AuthenticationPageObservation {
             username_field_count: self.fields.username_field_count,
             current_password_field_count: self.fields.current_password_field_count,
             new_password_field_count: self.fields.new_password_field_count,
             generic_password_field_count: self.fields.generic_password_field_count,
             one_time_code_field_count: self.fields.one_time_code_field_count,
-            one_time_code_progression: self.ceremony.derived_one_time_code_progression(),
+            one_time_code_progression: self.ceremony.derived_one_time_code_progression(matches!(
+                advance_control,
+                AuthenticationAdvanceControlEvidence::Present
+            )),
             manual_checkpoint: self.ceremony.manual_checkpoint,
             enrollment_evidence: self.authenticator.enrollment_evidence(),
-            advance_control: self.detailed_advance_control.evidence(self.fields),
+            advance_control,
             passkey: self.authenticator.passkey_evidence(),
         }
     }
@@ -525,17 +532,9 @@ mod tests {
             AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
         );
 
-        let trusted = AuthenticationPageObservationFacts {
-            fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
-                ..Default::default()
-            },
-            ceremony: AuthenticationCeremonyObservationFacts {
-                one_time_code_handler_signal: "oninput=this.form.requestSubmit()".to_owned(),
-                ..Default::default()
-            },
-            ..Default::default()
-        };
+        let mut trusted = detailed_one_time_code_control("auth", "", "Verify code");
+        trusted.ceremony.one_time_code_handler_signal =
+            "oninput=this.form.requestSubmit()".to_owned();
         assert_eq!(
             trusted.into_observation().one_time_code_progression,
             AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
@@ -890,12 +889,25 @@ mod tests {
             );
         }
 
-        let mut auto_submit = neutral;
-        auto_submit.ceremony.one_time_code_handler_signal =
+        let mut neutral_auto_submit = neutral;
+        neutral_auto_submit.ceremony.one_time_code_handler_signal =
             "oninput=this.form.requestSubmit()".to_owned();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
-                observations: vec![auto_submit],
+                observations: vec![neutral_auto_submit],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        let mut authentication_auto_submit =
+            detailed_one_time_code_control("auth", "", "Verify code");
+        authentication_auto_submit
+            .ceremony
+            .one_time_code_handler_signal = "oninput=this.form.requestSubmit()".to_owned();
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![authentication_auto_submit],
             }
             .classify()
             .snapshot()?
@@ -903,6 +915,30 @@ mod tests {
             crate::authentication_workflow::AuthenticationWorkflowKind::TotpChallenge
         );
         Ok(())
+    }
+
+    #[test]
+    fn rejects_auto_submitted_transaction_one_time_code() {
+        let mut transaction =
+            detailed_one_time_code_control("transaction-confirmation", "/transfer", "Confirm");
+        transaction.ceremony.one_time_code_handler_signal = "oninput=this.form.submit()".to_owned();
+
+        let observation = transaction.clone().into_observation();
+        assert_eq!(
+            observation.one_time_code_progression,
+            AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired
+        );
+        assert_eq!(
+            observation.advance_control,
+            AuthenticationAdvanceControlEvidence::Absent
+        );
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![transaction],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
     }
 
     #[test]
