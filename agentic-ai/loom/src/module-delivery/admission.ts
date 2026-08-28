@@ -14,6 +14,20 @@ import {
   ModuleDeliveryTaskKind,
 } from './domain.ts';
 import { validateModuleDeliveryEvidenceSubmission } from './evidence.ts';
+import {
+  assertModuleDeliveryCanonicalEvidenceTransition,
+  assertModuleDeliveryIntegratedWriterFrontierCapability,
+} from './integration.ts';
+import {
+  admissionStateAuthority,
+  assertAdmissionStateCurrent,
+  commitFinalAdmissionState,
+  createModuleDeliveryAdmissionStateStore,
+  createAdmissionState,
+  prepareFinalAdmissionState,
+  registerAdmissionState,
+  rollbackFinalAdmissionState,
+} from './admission-state.ts';
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceSubmissionValidation,
@@ -26,12 +40,18 @@ import type {
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
-import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
-import { assertModuleDeliveryIntegratedWriterFrontierCapability } from './integration-provenance.ts';
 import type {
-  AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
-  ModuleDeliveryIntegratedWriterFrontierCapability,
+  AcceptedModuleDeliveryEvidence,
+  AdmissionStateAuthorityInspection,
+  AttemptLeaseAuthorityInspection,
+  GenerationAuthorityInspection,
+  ModuleDeliveryAuthorityPlanRequest,
+  ModuleDeliveryAuthorityRepositoryInspection,
+  ModuleDeliveryDispositionOutcome,
+  RecordModuleDeliveryAttemptDispositionRequest,
 } from './integration-provenance.ts';
+import type { ModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
+import type { ModuleDeliveryCanonicalEvidenceTransition } from './integration-provenance.ts';
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
   AcceptedModuleDeliveryEvidenceRegistry,
@@ -44,6 +64,13 @@ import type {
 } from './authority.ts';
 
 const AUTHORITY = Symbol('module-delivery-generation-authority');
+const admissionStateStoreAuthorities = {
+  assertCanonicalTransition: assertModuleDeliveryCanonicalEvidenceTransition,
+  assertWriterFrontier: assertModuleDeliveryIntegratedWriterFrontierCapability,
+};
+const admissionStateStore = createModuleDeliveryAdmissionStateStore(
+  admissionStateStoreAuthorities,
+);
 export enum ModuleDeliveryAdmissionSelectionStatus {
   Selected = 'selected',
   Blocked = 'blocked',
@@ -77,6 +104,21 @@ export type CreateModuleDeliveryAdmissionStateRequest = {
   readonly integratedWriterFrontiers: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
   readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
 };
+export type PrepareFinalModuleDeliveryAdmissionStateRequest =
+  CreateModuleDeliveryAdmissionStateRequest & {
+    readonly previousState: ModuleDeliveryAdmissionState;
+    readonly canonicalTransition: ModuleDeliveryCanonicalEvidenceTransition;
+  };
+export type CommitFinalModuleDeliveryAdmissionStateRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  previousState: ModuleDeliveryAdmissionState;
+  state: ModuleDeliveryAdmissionState;
+}>;
+export type RollbackFinalModuleDeliveryAdmissionStateRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  finalizedState: ModuleDeliveryAdmissionState;
+  previousState: ModuleDeliveryAdmissionState;
+}>;
 export type RestartModuleDeliveryGenerationRequest = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly previousState: ModuleDeliveryAdmissionState;
@@ -131,29 +173,6 @@ export type ModuleDeliveryLeaseRecording = {
   readonly state: ModuleDeliveryAdmissionState;
   readonly leases: readonly ModuleDeliveryAttemptLease[];
 };
-export type ModuleDeliveryDispositionOutcome = {
-  readonly kind: ModuleDeliveryAttemptDispositionKind;
-  readonly conclusion: ModuleDeliveryGenerationFenceKind;
-};
-export type RecordModuleDeliveryAttemptDispositionRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly state: ModuleDeliveryAdmissionState;
-  readonly lease: ModuleDeliveryAttemptLease;
-  readonly outcome: ModuleDeliveryDispositionOutcome;
-};
-export type GenerationAuthorityInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly generation: number;
-  readonly planDigest: string;
-};
-export type AdmissionStateAuthorityInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly state: ModuleDeliveryAdmissionState;
-};
-export type AttemptLeaseAuthorityInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly lease: ModuleDeliveryAttemptLease;
-};
 type AuthorityState = {
   repositoryRoot: string;
   inputPlan: ValidatedModuleDeliveryPlan;
@@ -165,22 +184,9 @@ type AuthorityState = {
   dispositions: ModuleDeliveryAttemptDisposition[];
   evidenceRegistry: AcceptedModuleDeliveryEvidenceRegistry;
 };
-type StateProvenance = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
-};
 type CapabilityProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
-};
-export type ModuleDeliveryAuthorityPlanRequest = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-};
-type IntegratedFrontiersRequest = {
-  readonly plan: ValidatedModuleDeliveryPlan;
-  readonly headCommit: string;
-  readonly entries: readonly ModuleDeliveryIntegratedWriterFrontierCapability[];
 };
 type NodeLookupRequest = {
   readonly plan: ValidatedModuleDeliveryPlan;
@@ -214,14 +220,6 @@ type StartingFrontierRequest = {
 const authorityStates = new WeakMap<
   ModuleDeliveryGenerationAuthority,
   AuthorityState
->();
-const stateProvenance = new WeakMap<
-  ModuleDeliveryAdmissionState,
-  StateProvenance
->();
-const currentStates = new WeakMap<
-  ModuleDeliveryGenerationAuthority,
-  ModuleDeliveryAdmissionState
 >();
 const admissionProvenance = new WeakMap<
   ModuleDeliveryAdmission,
@@ -293,6 +291,21 @@ export function moduleDeliveryAuthorityPlan(
   return trustedModuleDeliveryPlanSnapshot(
     authorityStateForPlan(request).acceptedPlan,
   );
+}
+
+export function assertModuleDeliveryAuthorityRepository(
+  inspection: ModuleDeliveryAuthorityRepositoryInspection,
+): void {
+  const authority = requiredAuthority(inspection.authority);
+  const authentication: AuthenticateModuleDeliverySourceCommitRequest = {
+    repositoryRoot: inspection.repositoryRoot,
+    sourceCommit: authority.acceptedPlan.plan.sourceCommit,
+  };
+  if (
+    authenticateModuleDeliverySourceCommit(authentication) !==
+    authority.repositoryRoot
+  )
+    throw new Error('Module delivery repository authority is invalid.');
 }
 
 export function assertAcceptedModuleDeliveryEvidence(
@@ -374,66 +387,43 @@ export function verifyModuleDeliveryEvidenceSubmission(
 export function createModuleDeliveryAdmissionState(
   request: CreateModuleDeliveryAdmissionStateRequest,
 ): ModuleDeliveryAdmissionState {
-  const planRequest: ModuleDeliveryAuthorityPlanRequest = request;
-  const authority = authorityStateForPlan(planRequest);
-  if (!COMMIT.test(request.headCommit))
-    throw new Error('Module delivery admission head must be an exact commit.');
-  const frontierRequest: IntegratedFrontiersRequest = {
-    plan: authority.acceptedPlan,
-    headCommit: request.headCommit,
-    entries: request.integratedWriterFrontiers,
-  };
-  const frontiers = integratedFrontiers(frontierRequest);
-  if (
-    request.headCommit !== authority.acceptedPlan.plan.sourceCommit &&
-    frontiers.length === 0
-  )
-    throw new Error(
-      'Module delivery admission head lacks integration authority.',
-    );
-  const integratedTaskIds = new Set(frontiers[0]?.integratedTaskIds ?? []);
-  const integratedWrites = authority.acceptedPlan.plan.nodes
-    .filter(({ taskId }) => integratedTaskIds.has(taskId))
-    .map(({ taskId, resources }) => ({ taskId, claims: resources.write }));
-  const evidenceRequest: AcceptedModuleDeliveryEvidenceCollectionRequest = {
-    authority: request.authority,
+  const authority = authorityStateForPlan(request);
+  const materialization = {
+    store: admissionStateStore,
+    request,
     acceptedPlan: authority.acceptedPlan,
-    entries: request.acceptedEvidence,
-    headCommit: request.headCommit,
-    integratedWrites,
+    evidenceRegistry: authority.evidenceRegistry,
+    evidenceHeadCommit: request.headCommit,
   };
-  const evidence = authority.evidenceRegistry.collect(evidenceRequest);
-  const previousState = currentStates.get(request.authority);
-  if (previousState) {
-    const previousProvenance = stateProvenance.get(previousState);
-    const previousIntegratedTaskIds =
-      previousState.integratedWriterFrontiers[0]?.integratedTaskIds ?? [];
-    if (
-      !previousProvenance ||
-      previousIntegratedTaskIds.some(
-        (taskId) => !integratedTaskIds.has(taskId),
-      ) ||
-      previousProvenance.acceptedEvidence.some(
-        (entry) => !evidence.accepted.includes(entry),
-      )
-    )
-      throw new Error('Module delivery admission state cannot discard proof.');
-  }
-  const stateValue: ModuleDeliveryAdmissionState = {
-    generation: authority.acceptedPlan.plan.generation,
-    planDigest: authority.acceptedPlan.planDigest,
-    headCommit: request.headCommit,
-    integratedWriterFrontiers: frontiers,
-    acceptedProviderEvidence: evidence.identities,
+  return createAdmissionState(materialization);
+}
+
+export function prepareFinalModuleDeliveryAdmissionState(
+  request: PrepareFinalModuleDeliveryAdmissionStateRequest,
+): ModuleDeliveryAdmissionState {
+  const authority = authorityStateForPlan(request);
+  const materialization = {
+    store: admissionStateStore,
+    request,
+    acceptedPlan: authority.acceptedPlan,
+    evidenceRegistry: authority.evidenceRegistry,
+    evidenceHeadCommit: request.previousState.headCommit,
   };
-  const state = Object.freeze(stateValue);
-  const provenance: StateProvenance = {
-    authority: request.authority,
-    acceptedEvidence: evidence.accepted,
-  };
-  stateProvenance.set(state, provenance);
-  currentStates.set(request.authority, state);
-  return state;
+  return prepareFinalAdmissionState(materialization);
+}
+
+export function commitFinalModuleDeliveryAdmissionState(
+  request: CommitFinalModuleDeliveryAdmissionStateRequest,
+): void {
+  const commitRequest = { ...request, store: admissionStateStore };
+  commitFinalAdmissionState(commitRequest);
+}
+
+export function rollbackFinalModuleDeliveryAdmissionState(
+  request: RollbackFinalModuleDeliveryAdmissionStateRequest,
+): void {
+  const rollbackRequest = { ...request, store: admissionStateStore };
+  rollbackFinalAdmissionState(rollbackRequest);
 }
 
 export function restartModuleDeliveryGeneration(
@@ -492,8 +482,10 @@ export function restartModuleDeliveryGeneration(
     acceptedProviderEvidence: identities,
   };
   const state = Object.freeze(stateValue);
-  const provenance: StateProvenance = {
+  const stateRegistration = {
+    store: admissionStateStore,
     authority: request.authority,
+    state,
     acceptedEvidence: evidence,
   };
   const evidenceRegistry = createAcceptedModuleDeliveryEvidenceRegistry();
@@ -505,8 +497,7 @@ export function restartModuleDeliveryGeneration(
   authority.attemptsByTask = attemptsByTask;
   authority.dispositions = [];
   authority.evidenceRegistry = evidenceRegistry;
-  stateProvenance.set(state, provenance);
-  currentStates.set(request.authority, state);
+  registerAdmissionState(stateRegistration);
   return state;
 }
 
@@ -514,18 +505,18 @@ export function assertModuleDeliveryAdmissionStateAuthority(
   inspection: AdmissionStateAuthorityInspection,
 ): void {
   const authority = authorityStates.get(inspection.authority);
-  const provenance = stateProvenance.get(inspection.state);
-  if (
-    !authority ||
-    !provenance ||
-    provenance.authority !== inspection.authority ||
-    currentStates.get(inspection.authority) !== inspection.state ||
-    inspection.state.generation !== authority.acceptedPlan.plan.generation ||
-    inspection.state.planDigest !== authority.acceptedPlan.planDigest
-  )
+  if (!authority)
     throw new Error(
       'Module delivery admission state authority is invalid or stale.',
     );
+  const currentInspection = {
+    store: admissionStateStore,
+    authority: inspection.authority,
+    state: inspection.state,
+    generation: authority.acceptedPlan.plan.generation,
+    planDigest: authority.acceptedPlan.planDigest,
+  };
+  assertAdmissionStateCurrent(currentInspection);
 }
 
 export function selectModuleDeliveryAdmissions(
@@ -768,10 +759,8 @@ function authorityForAcceptedEvidence(
 function authorityForState(
   state: ModuleDeliveryAdmissionState,
 ): AuthorityState {
-  const provenance = stateProvenance.get(state);
-  if (!provenance)
-    throw new Error('Module delivery admission state authority is invalid.');
-  return requiredAuthority(provenance.authority);
+  const request = { store: admissionStateStore, state };
+  return requiredAuthority(admissionStateAuthority(request));
 }
 
 function expectedParent(request: AuthorityTaskRequest): AgentAttemptParent {
@@ -799,43 +788,6 @@ function authorityStateForPlan(
       'Module delivery validated plan authority is invalid or superseded.',
     );
   return state;
-}
-
-function integratedFrontiers(
-  request: IntegratedFrontiersRequest,
-): readonly ModuleDeliveryIntegratedWriterFrontierCapability[] {
-  const seen = new Set<string>();
-  const integratedTaskIds = request.entries[0]?.integratedTaskIds ?? [];
-  const result = request.entries.map((entry) => {
-    const nodeRequest: NodeLookupRequest = {
-      plan: request.plan,
-      taskId: entry.taskId,
-    };
-    const node = nodeFor(nodeRequest);
-    if (
-      seen.has(entry.taskId) ||
-      node.kind !== ModuleDeliveryTaskKind.Write ||
-      !COMMIT.test(entry.headCommit) ||
-      entry.headCommit !== request.headCommit
-    )
-      throw new Error(
-        `Integrated writer frontier is invalid for ${entry.taskId}.`,
-      );
-    seen.add(entry.taskId);
-    const inspection: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
-      {
-        capability: entry,
-        taskId: entry.taskId,
-        attempt: entry.attempt,
-        generation: request.plan.plan.generation,
-        planDigest: request.plan.planDigest,
-        headCommit: request.headCommit,
-        integratedTaskIds,
-      };
-    assertModuleDeliveryIntegratedWriterFrontierCapability(inspection);
-    return entry;
-  });
-  return Object.freeze(result);
 }
 
 function taskPending(request: AuthorityTaskRequest): boolean {
