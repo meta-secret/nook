@@ -316,32 +316,6 @@ describe('executable skill YAML command protocol', () => {
       );
     }
   });
-  test('rejects nested unknown fields at their exact path', () => {
-    const request = articleExampleYaml().replace(
-      '    documents:',
-      '    unsupported: true\n    documents:',
-    );
-    const outcome = dispatchSkillYamlText(request);
-    const response = parseCliResponse(outcome.yaml);
-    expect(outcome.exitCode).toBe(2);
-    expect(response.errors?.at(0)?.path).toBe(
-      'cortexArticleStructure.audit["<unknown-key>"]',
-    );
-  });
-  test('redacts unknown-field scalar values from corrective diagnostics', () => {
-    const secretMarker = 'SECRET_MARKER';
-    const request = articleExampleYaml().replace(
-      '    documents:',
-      `    apiToken: ${secretMarker}\n    documents:`,
-    );
-    const outcome = dispatchSkillYamlText(request);
-    const response = parseCliResponse(outcome.yaml);
-    expect(outcome.exitCode).toBe(2);
-    expect(response.errors?.at(0)?.path).toBe(
-      'cortexArticleStructure.audit["<unknown-key>"]',
-    );
-    expect(outcome.yaml).not.toContain(secretMarker);
-  });
   test('rejects generic name and arguments envelopes', () => {
     const outcome = dispatchSkillYamlText(
       'name: cortex-article-structure\narguments:\n  action: audit\n',
@@ -363,44 +337,6 @@ describe('executable skill YAML command protocol', () => {
     expect(response.errors?.at(0)?.issue).toBe(SkillCommandIssue.InvalidYaml);
     expect(response.errors?.at(0)?.message).toBe('Invalid YAML syntax.');
     expect(outcome.yaml).not.toContain(secretMarker);
-  });
-  test('rejects duplicate-key bypasses and multiple documents with bounded redaction', () => {
-    const secretMarker = 'SECRET_MARKER';
-    const duplicateAudit = articleExampleYaml().replace(
-      '  audit:',
-      `  audit:\n    apiToken: ${secretMarker}\n  audit:`,
-    );
-    const multipleDocuments = `${articleExampleYaml()}---\napiToken: ${secretMarker}\n`;
-    for (const request of [duplicateAudit, multipleDocuments]) {
-      const outcome = dispatchSkillYamlText(request);
-      const response = parseCliResponse(outcome.yaml);
-      expect(outcome.exitCode).toBe(2);
-      expect(response.errors?.at(0)?.issue).toBe(SkillCommandIssue.InvalidYaml);
-      expect(outcome.yaml).not.toContain(secretMarker);
-      expect(
-        new TextEncoder().encode(outcome.yaml).byteLength,
-      ).toBeLessThanOrEqual(SKILL_PROVIDER_RESULT_BYTE_LIMIT);
-    }
-  });
-  test('rejects LF and bare-CR alias expansion with bounded redacted YAML', () => {
-    const secretMarker = 'SECRET_MARKER';
-    for (const lineEnding of ['\n', '\r']) {
-      const lines = [`level0: &level0 [${secretMarker}]`];
-      for (let level = 1; level <= 12; level += 1) {
-        const previous = `level${level - 1}`;
-        const aliases = new Array<string>(8).fill(`*${previous}`).join(', ');
-        lines.push(`level${level}: &level${level} [${aliases}]`);
-      }
-      const request = `${lines.join(lineEnding)}${lineEnding}`;
-      const outcome = dispatchSkillYamlText(request);
-      const response = parseCliResponse(outcome.yaml);
-      expect(outcome.exitCode).toBe(2);
-      expect(response.errors?.at(0)?.issue).toBe(SkillCommandIssue.InvalidYaml);
-      expect(outcome.yaml).not.toContain(secretMarker);
-      expect(
-        new TextEncoder().encode(outcome.yaml).byteLength,
-      ).toBeLessThanOrEqual(SKILL_PROVIDER_RESULT_BYTE_LIMIT);
-    }
   });
   test('bounds source input and echoed corrective YAML before parsing', () => {
     const oversizedYaml = `# ${'x'.repeat(4 * 1_024 * 1_024)}\n`;

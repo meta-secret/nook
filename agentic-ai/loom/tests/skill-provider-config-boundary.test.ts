@@ -15,6 +15,7 @@ import {
   executableSkillPackageFromPath,
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
+import { expandStaticTaskVariables } from './taskfile-script-expansion.ts';
 
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -56,10 +57,6 @@ type ActionLoaderFixture = {
 type RequiredLaunchInspection = {
   readonly source: string;
   readonly specifier: string;
-};
-
-type TaskVariableDocument = {
-  readonly vars?: Readonly<Record<string, string | { readonly sh?: string }>>;
 };
 
 type ApplicationConsumerEdge = {
@@ -158,11 +155,9 @@ function configurationScriptPaths(
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
-    const referenceSource =
-      /(^|\/)Taskfile\.ya?ml$/u.test(importer) &&
-      hasLocallyDefinedStaticTaskReference(source)
-        ? expandStaticTaskVariables(source)
-        : source;
+    const referenceSource = /(^|\/)Taskfile\.ya?ml$/u.test(importer)
+      ? expandStaticTaskVariables(source)
+      : source;
     const referenceInspection: ConfigurationReferenceInspection = {
       importer,
       source: referenceSource,
@@ -298,40 +293,6 @@ function configurationScriptReferences(
     if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
   }
   return [...references];
-}
-
-function expandStaticTaskVariables(source: string): string {
-  const document = Bun.YAML.parse(source) as TaskVariableDocument;
-  if (!document.vars) return source;
-  const variables = Object.entries(document.vars).filter(
-    (entry): entry is [string, string] => typeof entry[1] === 'string',
-  );
-  let expanded = source;
-  for (const _ of variables) {
-    for (const [name, value] of variables) {
-      expanded = expanded.replaceAll(`{{.${name}}}`, value);
-    }
-  }
-  for (const [name] of variables) {
-    if (expanded.includes(`{{.${name}}}`)) {
-      throw new Error(`Task variable cycle: ${name}`);
-    }
-  }
-  return expanded;
-}
-
-function hasLocallyDefinedStaticTaskReference(source: string): boolean {
-  const references = source.matchAll(
-    /\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
-  );
-  for (const match of references) {
-    const name = match[1];
-    if (typeof name !== 'string') continue;
-    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-    const definition = new RegExp(`^\\s+${escapedName}:\\s+[^\\s#].*$`, 'mu');
-    if (definition.test(source)) return true;
-  }
-  return false;
 }
 
 function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
@@ -855,6 +816,11 @@ test('follows scripts launched from every runnable configuration surface', () =>
       'Taskfile.yml',
       'vars:\n  host_dir: .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src\n  host2: "{{.host_dir}}/cli.ts"\ntasks:\n  audit:\n    cmds: ["bun {{.host2}} --default toolsList"]',
     ],
+    ...[
+      'vars: {dir: scripts}\ntasks:\n  audit:\n    vars: {host: "{{ .dir }}/facade.ts"}\n    cmds: ["bun {{ .host }}"]',
+      'vars: {host: {sh: echo bun scripts/facade.ts}}\ntasks:\n  audit:\n    cmds: ["{{.host}}"]',
+      'vars: {host: "{{.other}}", other: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["bun {{.host}}"]',
+    ].map((source) => ['Taskfile.yml', source] as const),
     [
       '.github/workflows/audit.yml',
       'jobs:\n  audit:\n    steps:\n      - run: bun scripts/facade.ts',
@@ -890,7 +856,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
       symlinkPaths: new Set<string>(),
     };
     expect(() => configurationScriptPaths(graph), path).toThrow(
-      /Unauthorized application edge|runtime boundary|Runnable script is untracked/u,
+      /Unauthorized application edge|runtime boundary|Runnable script is untracked|Task launch variable/u,
     );
   }
   const sources = new Map<string, string>([
