@@ -394,6 +394,35 @@ function acceptedPilotPlan(
   return validation;
 }
 
+function acceptedEvidenceLastPlan(
+  input: SourceCommitInput,
+): ValidatedModuleDeliveryPlan {
+  const pilot = acceptedPilotPlan(input);
+  const writer = pilot.plan.nodes.find(
+    ({ taskId }) => taskId === 'core-provider',
+  );
+  if (!writer) throw new Error('Missing evidence-last writer.');
+  const auditRequest: EvidenceNodeRequest = {
+    taskId: 'runtime-evidence',
+    dependency: writer.taskId,
+  };
+  const audit = evidenceNode(auditRequest);
+  const edgeRequest: PilotEdgeInput = {
+    providerTaskId: writer.taskId,
+    consumerTaskId: audit.taskId,
+    capability: 'CanonicalEvidence',
+  };
+  const plan: ModuleDeliveryPlan = {
+    ...pilot.plan,
+    nodes: [writer, audit],
+    edgeContracts: [pilotEdge(edgeRequest)],
+  };
+  const validation = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
+  if (validation.status !== ModuleDeliveryValidationStatus.Accepted)
+    throw new Error(JSON.stringify(validation.issues));
+  return validation;
+}
+
 function prepareWriter(request: WriterRequest): ModuleWorktreeHandle {
   const preparation: PrepareModuleWorktreeRequest = {
     repositoryRoot: request.fixture.sourceRoot,
@@ -535,6 +564,88 @@ function planNode(input: PlanNodeInput): ModuleDeliveryWriteNodeV2 {
 }
 
 describe('core to WASM to web module delivery pilot', () => {
+  test('finalizes evidence accepted after the complete writer closure', () => {
+    const fixture = createGitFixture();
+    fixtures.push(fixture);
+    const sourceInput: SourceCommitInput = {
+      sourceCommit: fixture.baselineCommit,
+    };
+    const acceptedPlan = acceptedEvidenceLastPlan(sourceInput);
+    const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
+      acceptedPlan,
+      repositoryRoot: fixture.sourceRoot,
+      expectedLineage: acceptedPlan.plan.nodes.map(
+        ({ taskId, parentLineage }) => ({ taskId, parentLineage }),
+      ),
+    };
+    const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
+    const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority,
+      acceptedPlan,
+      headCommit: acceptedPlan.plan.sourceCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    };
+    const admissionState = createModuleDeliveryAdmissionState(stateRequest);
+    const preparation: PrepareModuleIntegrationRequest = {
+      authority,
+      repositoryRoot: fixture.sourceRoot,
+      workspaceRoot: fixture.workspaceRoot,
+      acceptedPlan,
+      admissionState,
+    };
+    const state = prepareModuleIntegration(preparation);
+    integrationCleanups.push(state.cleanupHandle);
+    const nodeInput: PlanNodeInput = {
+      plan: acceptedPlan,
+      taskId: 'core-provider',
+    };
+    const writer = planNode(nodeInput);
+    const writerRequest: WriterRequest = {
+      fixture,
+      acceptedPlan,
+      node: writer,
+      baselineCommit: state.headCommit,
+    };
+    const workspace = prepareWriter(writerRequest);
+    const commitRequest: WriterCommitRequest = {
+      workspace,
+      outputPath: CORE_OUTPUT,
+      contents: CORE_CONTENT,
+      message: 'evidence-last writer',
+    };
+    commitWriter(commitRequest);
+    const integrationRequest: IntegrateRequest = {
+      authority,
+      acceptedPlan,
+      state,
+      workspace,
+      node: writer,
+    };
+    const writerState = integrateWriter(integrationRequest);
+    const audit = acceptedPlan.plan.nodes.find(
+      ({ taskId }) => taskId === 'runtime-evidence',
+    );
+    if (!audit || audit.kind !== ModuleDeliveryTaskKind.ReadOnly)
+      throw new Error('Missing evidence-last audit.');
+    const evidenceRequest: IntegrateEvidenceRequest = {
+      authority,
+      acceptedPlan,
+      state: writerState,
+      node: audit,
+    };
+    const evidenceState = integrateEvidence(evidenceRequest);
+    expect(evidenceState.acceptedEvidence).toHaveLength(1);
+    const finalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority,
+      acceptedPlan,
+      state: evidenceState,
+    };
+    const finalized = finalizeModuleDeliveryIntegration(finalization);
+    expect(finalized.phase).toBe(ModuleIntegrationPhase.Finalized);
+    expect(finalized.admissionState.headCommit).toBe(finalized.headCommit);
+  });
+
   test('hands each integrated commit to the next registered layer', () => {
     const activeFixture = createGitFixture();
     fixtures.push(activeFixture);

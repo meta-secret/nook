@@ -38,7 +38,6 @@ import {
   worktreeFileWriter,
   worktreeGit,
 } from './worktree-test-support.ts';
-
 import type {
   ValidatedModuleDeliveryPlan,
   CleanupModuleWorktreeRequest,
@@ -463,6 +462,7 @@ function independentWriter(
 describe('module delivery wave integration', () => {
   test('integrates a complete wave in accepted topology order without touching source', () => {
     expect('mintIntegratedWriterFrontier' in integrationSource).toBe(false);
+    expect('canonicalEvidenceTransition' in integrationSource).toBe(false);
     const fixture = createTrackedFixture();
     const alphaClaim = `${CORE_ROOT}/alpha/**`;
     const betaClaim = `${CORE_ROOT}/beta/**`;

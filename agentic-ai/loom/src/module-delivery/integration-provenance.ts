@@ -4,7 +4,10 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
-import { assertPreparedModuleWorktreeIdentity } from './workspace.ts';
+import {
+  assertPreparedModuleWorktreeIdentity,
+  cleanupModuleWorktree,
+} from './workspace.ts';
 import {
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryGenerationFenceKind,
@@ -23,8 +26,14 @@ import type {
   ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
-import type { ValidatedModuleDeliveryPlan } from './domain.ts';
-import type { ModuleWorktreeHandle } from './workspace.ts';
+import type {
+  ModuleDeliveryNode,
+  ValidatedModuleDeliveryPlan,
+} from './domain.ts';
+import type {
+  CleanupModuleWorktreeRequest,
+  ModuleWorktreeHandle,
+} from './workspace.ts';
 
 export const MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 1;
 
@@ -94,6 +103,31 @@ export type ModuleDeliveryAuthorityRepositoryInspection = Readonly<{
   authority: ModuleDeliveryGenerationAuthority;
   repositoryRoot: string;
 }>;
+export type AcceptedPlanStateInspection = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
+}>;
+export type ModuleIntegrationNodeLookup = Readonly<{
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  taskId: string;
+}>;
+export type ModuleDeliveryCanonicalEvidenceTransition = Readonly<{
+  previousHeadCommit: string;
+  canonicalHeadCommit: string;
+  integratedTaskIds: readonly string[];
+}>;
+export type AssertModuleDeliveryCanonicalEvidenceTransitionRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  transition: ModuleDeliveryCanonicalEvidenceTransition;
+  previousHeadCommit: string;
+  canonicalHeadCommit: string;
+  integratedTaskIds: readonly string[];
+}>;
+export type CanonicalEvidenceTransitionProvenance = Omit<
+  AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
+  'transition'
+>;
 export type ModuleDeliveryDispositionOutcome = Readonly<{
   kind: ModuleDeliveryAttemptDispositionKind;
   conclusion: ModuleDeliveryGenerationFenceKind;
@@ -903,4 +937,64 @@ export function moduleIntegrationCompletedWaveCount(
     completed += 1;
   }
   return completed;
+}
+
+export function assertModuleIntegrationAcceptedPlanState(
+  inspection: AcceptedPlanStateInspection,
+): void {
+  const validation = inspection.acceptedPlan;
+  if (
+    inspection.state.planDigest !== validation.planDigest ||
+    inspection.state.generation !== validation.plan.generation ||
+    inspection.state.sourceCommit !== validation.plan.sourceCommit ||
+    JSON.stringify(inspection.state.topologicalOrder) !==
+      JSON.stringify(validation.topologicalOrder) ||
+    JSON.stringify(inspection.state.waves) !== JSON.stringify(validation.waves)
+  )
+    throw new Error(
+      'Module integration state does not match the accepted plan.',
+    );
+}
+
+export function moduleIntegrationNodeByTaskId(
+  lookup: ModuleIntegrationNodeLookup,
+): ModuleDeliveryNode {
+  const node = lookup.acceptedPlan.plan.nodes.find(
+    (candidate) => candidate.taskId === lookup.taskId,
+  );
+  if (!node) throw new Error(`Accepted plan is missing task ${lookup.taskId}.`);
+  return node;
+}
+
+export function cleanupRegisteredModuleIntegration(
+  request: CleanupModuleIntegrationRequest,
+): CleanupModuleIntegrationResult {
+  const session = integrationSession(request.cleanupHandle);
+  if (session.cleaned) return { removed: false };
+  const deleteInvocation: GitCommandRequest = {
+    cwd: session.workspace.sourceRepositoryRoot,
+    args: ['update-ref', '-d', session.integrationRef, session.currentHead],
+  };
+  runModuleDeliveryGit(deleteInvocation);
+  const cleanupRequest: CleanupModuleWorktreeRequest = {
+    workspace: session.workspace,
+  };
+  try {
+    cleanupModuleWorktree(cleanupRequest);
+  } catch {
+    const restoreInvocation: GitCommandRequest = {
+      cwd: session.workspace.sourceRepositoryRoot,
+      args: [
+        'update-ref',
+        '--create-reflog',
+        session.integrationRef,
+        session.currentHead,
+        '0'.repeat(40),
+      ],
+    };
+    runModuleDeliveryGit(restoreInvocation);
+    throw new Error('Module integration cleanup failed and restored its ref.');
+  }
+  session.cleaned = true;
+  return { removed: true };
 }

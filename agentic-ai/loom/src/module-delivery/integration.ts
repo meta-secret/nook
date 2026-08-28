@@ -6,17 +6,19 @@ import {
 } from './handoff.ts';
 import {
   assertSourceSnapshot,
+  assertModuleIntegrationAcceptedPlanState,
   assertFreshModuleIntegrationState,
   assertCurrentModuleIntegrationAdmission,
   assertModuleIntegrationHandoffRepository,
   assertModuleIntegrationLeaseFrontier,
   assertModuleIntegrationProviderPrecedence,
   captureSourceSnapshot,
+  cleanupRegisteredModuleIntegration,
   createIntegrationSession,
   integrationProvenance,
-  integrationSession,
   moduleIntegrationRef,
   moduleIntegrationCompletedWaveCount,
+  moduleIntegrationNodeByTaskId,
   immutableModuleIntegrationState,
   ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryProviderSubmissionKind,
@@ -27,22 +29,30 @@ import {
   updateModuleIntegrationRef,
 } from './integration-provenance.ts';
 import { applyModuleWaveTree } from './tree-integration.ts';
+import { validatedCanonicalWriterClosure } from './integration-finalization.ts';
+import type { CanonicalModuleFinalizationInspection } from './integration-finalization.ts';
 import {
   assertModuleDeliveryAttemptLeaseAuthority,
   assertModuleDeliveryAdmissionStateAuthority,
   assertModuleDeliveryAuthorityRepository,
   assertModuleDeliveryGenerationAuthority,
+  commitFinalModuleDeliveryAdmissionState,
   createModuleDeliveryAdmissionState,
   moduleDeliveryAcceptedEvidenceIdentity,
   moduleDeliveryAuthorityPlan,
+  prepareFinalModuleDeliveryAdmissionState,
+  rollbackFinalModuleDeliveryAdmissionState,
   verifyModuleDeliveryEvidenceSubmission,
 } from './admission.ts';
 import { EXACT_GIT_COMMIT } from './workspace-paths.ts';
 import type { ModuleDeliveryEvidenceSubmissionVerification } from './evidence.ts';
 import type {
+  CommitFinalModuleDeliveryAdmissionStateRequest,
   CreateModuleDeliveryAdmissionStateRequest,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryGenerationAuthority,
+  PrepareFinalModuleDeliveryAdmissionStateRequest,
+  RollbackFinalModuleDeliveryAdmissionStateRequest,
 } from './admission.ts';
 import type {
   CleanupModuleIntegrationRequest,
@@ -55,6 +65,9 @@ import type {
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
   PrepareModuleIntegrationRequest,
+  ModuleDeliveryCanonicalEvidenceTransition,
+  AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
+  CanonicalEvidenceTransitionProvenance,
 } from './integration-provenance.ts';
 import {
   assertPreparedModuleWorktreeIdentity,
@@ -89,6 +102,8 @@ import type {
   ModuleIntegrationLeaseFrontierInspection,
   ModuleIntegrationProviderPrecedenceInspection,
   ModuleIntegrationCompletedWaveCountRequest,
+  AcceptedPlanStateInspection,
+  ModuleIntegrationNodeLookup,
   RecordIntegratedLeaseAcceptanceRequest,
   SourceSnapshotExpectation,
   UpdateModuleIntegrationRefRequest,
@@ -112,21 +127,10 @@ type ModuleGitInvocation = {
   readonly allowFailure?: boolean;
 };
 
-type AcceptedPlanStateInspection = {
-  readonly authority: ModuleDeliveryGenerationAuthority;
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly state: ModuleIntegrationState;
-};
-
 type ExpectedHandoff = {
   readonly node: WriteModuleDeliveryNode;
   readonly baselineCommit: string;
   readonly submission: ModuleDeliveryHandoffSubmission;
-};
-
-type NodeLookup = {
-  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly taskId: string;
 };
 
 type ExpectedHandoffVerification = {
@@ -202,6 +206,10 @@ const WRITER_FRONTIER_PROVENANCE = new WeakMap<
   ModuleDeliveryIntegratedWriterFrontierCapability,
   IntegratedWriterFrontierProvenance
 >();
+const CANONICAL_EVIDENCE_TRANSITIONS = new WeakMap<
+  ModuleDeliveryCanonicalEvidenceTransition,
+  CanonicalEvidenceTransitionProvenance
+>();
 const STATE_WRITER_FRONTIERS = new WeakMap<
   ModuleIntegrationState,
   readonly ModuleDeliveryIntegratedWriterFrontierCapability[]
@@ -246,6 +254,39 @@ export function assertModuleDeliveryIntegratedWriterFrontierCapability(
     throw new Error('Integrated writer frontier capability is invalid.');
 }
 
+export function assertModuleDeliveryCanonicalEvidenceTransition(
+  request: AssertModuleDeliveryCanonicalEvidenceTransitionRequest,
+): void {
+  const provenance = CANONICAL_EVIDENCE_TRANSITIONS.get(request.transition);
+  if (
+    !provenance ||
+    provenance.authority !== request.authority ||
+    provenance.previousHeadCommit !== request.previousHeadCommit ||
+    provenance.canonicalHeadCommit !== request.canonicalHeadCommit ||
+    JSON.stringify(provenance.integratedTaskIds) !==
+      JSON.stringify(request.integratedTaskIds)
+  )
+    throw new Error('Canonical evidence transition is invalid.');
+}
+
+function canonicalEvidenceTransition(
+  request: CanonicalEvidenceTransitionProvenance,
+): ModuleDeliveryCanonicalEvidenceTransition {
+  const integratedTaskIds = Object.freeze([...request.integratedTaskIds]);
+  const transitionValue: ModuleDeliveryCanonicalEvidenceTransition = {
+    previousHeadCommit: request.previousHeadCommit,
+    canonicalHeadCommit: request.canonicalHeadCommit,
+    integratedTaskIds,
+  };
+  const transition = Object.freeze(transitionValue);
+  const provenance: CanonicalEvidenceTransitionProvenance = {
+    ...request,
+    integratedTaskIds,
+  };
+  CANONICAL_EVIDENCE_TRANSITIONS.set(transition, Object.freeze(provenance));
+  return transition;
+}
+
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
   if ('allowFailure' in invocation) {
     return {
@@ -259,36 +300,6 @@ function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
 
 function gitInvocation(invocation: ModuleGitInvocation): string {
   return gitText(runModuleDeliveryGit(gitRequest(invocation)));
-}
-
-function assertAcceptedPlanState(
-  inspection: AcceptedPlanStateInspection,
-): void {
-  const metadataInspection: ModuleDeliveryAuthorityPlanRequest = {
-    authority: inspection.authority,
-    acceptedPlan: inspection.acceptedPlan,
-  };
-  const validation = moduleDeliveryAuthorityPlan(metadataInspection);
-  if (
-    inspection.state.planDigest !== validation.planDigest ||
-    inspection.state.generation !== validation.plan.generation ||
-    inspection.state.sourceCommit !== validation.plan.sourceCommit ||
-    JSON.stringify(inspection.state.topologicalOrder) !==
-      JSON.stringify(validation.topologicalOrder) ||
-    JSON.stringify(inspection.state.waves) !== JSON.stringify(validation.waves)
-  ) {
-    throw new Error(
-      'Module integration state does not match the accepted plan.',
-    );
-  }
-}
-
-function nodeByTaskId(lookup: NodeLookup): ModuleDeliveryNode {
-  const node = lookup.acceptedPlan.plan.nodes.find(
-    (candidate) => candidate.taskId === lookup.taskId,
-  );
-  if (!node) throw new Error(`Accepted plan is missing task ${lookup.taskId}.`);
-  return node;
 }
 
 function verifyExpectedHandoff(
@@ -606,7 +617,8 @@ export function integrateVerifiedModuleDeliveryTask(
     acceptedPlan: request.acceptedPlan,
     state: request.state,
   };
-  assertAcceptedPlanState(inspection);
+  moduleDeliveryAuthorityPlan(inspection);
+  assertModuleIntegrationAcceptedPlanState(inspection);
   const authorityInspection: GenerationAuthorityInspection = {
     authority: request.authority,
     generation: request.acceptedPlan.plan.generation,
@@ -653,8 +665,11 @@ export function integrateVerifiedModuleDeliveryTask(
     request.submission.kind === ModuleDeliveryProviderSubmissionKind.Write
       ? request.submission.handoff.taskId
       : request.submission.taskId;
-  const lookup: NodeLookup = { acceptedPlan: request.acceptedPlan, taskId };
-  const node = nodeByTaskId(lookup);
+  const lookup: ModuleIntegrationNodeLookup = {
+    acceptedPlan: request.acceptedPlan,
+    taskId,
+  };
+  const node = moduleIntegrationNodeByTaskId(lookup);
   if (
     request.state.integratedTaskIds.includes(taskId) ||
     request.state.acceptedEvidence.some((entry) => entry.taskId === taskId)
@@ -836,7 +851,8 @@ export function finalizeModuleDeliveryIntegration(
     acceptedPlan: request.acceptedPlan,
     state: request.state,
   };
-  assertAcceptedPlanState(inspection);
+  moduleDeliveryAuthorityPlan(inspection);
+  assertModuleIntegrationAcceptedPlanState(inspection);
   const authorityInspection: GenerationAuthorityInspection = {
     authority: request.authority,
     generation: request.acceptedPlan.plan.generation,
@@ -887,32 +903,24 @@ export function finalizeModuleDeliveryIntegration(
     handoffs,
   };
   const canonicalHead = applyModuleWaveTree(application);
-  const refUpdate: UpdateModuleIntegrationRefRequest = {
-    provenance,
-    nextCommit: canonicalHead,
-    rollback: false,
+  const sourceExpectation: SourceSnapshotExpectation = {
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    expected: provenance.sourceSnapshot,
   };
-  updateModuleIntegrationRef(refUpdate);
-  try {
-    const sourceExpectation: SourceSnapshotExpectation = {
-      repositoryRoot: request.state.workspace.sourceRepositoryRoot,
-      expected: provenance.sourceSnapshot,
-    };
-    assertSourceSnapshot(sourceExpectation);
-    const workspaceExpectation: SourceSnapshotExpectation = {
-      repositoryRoot: request.state.workspace.worktreePath,
-      expected: provenance.workspaceSnapshot,
-    };
-    assertSourceSnapshot(workspaceExpectation);
-  } catch {
-    const rollback: UpdateModuleIntegrationRefRequest = {
-      provenance,
-      nextCommit: canonicalHead,
-      rollback: true,
-    };
-    updateModuleIntegrationRef(rollback);
-    throw new Error('Final module join failed and was fully rolled back.');
-  }
+  assertSourceSnapshot(sourceExpectation);
+  const workspaceExpectation: SourceSnapshotExpectation = {
+    repositoryRoot: request.state.workspace.worktreePath,
+    expected: provenance.workspaceSnapshot,
+  };
+  assertSourceSnapshot(workspaceExpectation);
+  const canonicalInspection: CanonicalModuleFinalizationInspection = {
+    repositoryRoot: request.state.workspace.sourceRepositoryRoot,
+    previousHeadCommit: request.state.headCommit,
+    canonicalHeadCommit: canonicalHead,
+    acceptedPlan: request.acceptedPlan,
+    integratedTaskIds: request.state.integratedTaskIds,
+  };
+  const writerTaskIds = validatedCanonicalWriterClosure(canonicalInspection);
   const finalizedState: ModuleIntegrationState = {
     ...request.state,
     phase: ModuleIntegrationPhase.Finalized,
@@ -924,14 +932,23 @@ export function finalizeModuleDeliveryIntegration(
     state: finalizedState,
   };
   const capabilities = refreshedWriterFrontiers(frontierRequest);
-  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+  const transitionRequest: CanonicalEvidenceTransitionProvenance = {
+    authority: request.authority,
+    previousHeadCommit: request.state.headCommit,
+    canonicalHeadCommit: canonicalHead,
+    integratedTaskIds: writerTaskIds,
+  };
+  const canonicalTransition = canonicalEvidenceTransition(transitionRequest);
+  const stateRequest: PrepareFinalModuleDeliveryAdmissionStateRequest = {
     authority: request.authority,
     acceptedPlan: request.acceptedPlan,
     headCommit: canonicalHead,
     integratedWriterFrontiers: capabilities,
     acceptedEvidence: finalizedState.acceptedEvidence,
+    previousState: request.state.admissionState,
+    canonicalTransition,
   };
-  const admissionState = createModuleDeliveryAdmissionState(stateRequest);
+  const admissionState = prepareFinalModuleDeliveryAdmissionState(stateRequest);
   const nextState: ModuleIntegrationState = {
     ...finalizedState,
     admissionState,
@@ -942,38 +959,40 @@ export function finalizeModuleDeliveryIntegration(
     provenance,
     writerFrontiers: capabilities,
   };
-  return advancedIntegrationState(advance);
+  const refUpdate: UpdateModuleIntegrationRefRequest = {
+    provenance,
+    nextCommit: canonicalHead,
+    rollback: false,
+  };
+  updateModuleIntegrationRef(refUpdate);
+  try {
+    const commitRequest: CommitFinalModuleDeliveryAdmissionStateRequest = {
+      authority: request.authority,
+      previousState: request.state.admissionState,
+      state: admissionState,
+    };
+    commitFinalModuleDeliveryAdmissionState(commitRequest);
+    return advancedIntegrationState(advance);
+  } catch {
+    const admissionRollback: RollbackFinalModuleDeliveryAdmissionStateRequest =
+      {
+        authority: request.authority,
+        finalizedState: admissionState,
+        previousState: request.state.admissionState,
+      };
+    rollbackFinalModuleDeliveryAdmissionState(admissionRollback);
+    const refRollback: UpdateModuleIntegrationRefRequest = {
+      provenance,
+      nextCommit: canonicalHead,
+      rollback: true,
+    };
+    updateModuleIntegrationRef(refRollback);
+    throw new Error('Final module join failed and was fully rolled back.');
+  }
 }
 
 export function cleanupModuleIntegration(
   request: CleanupModuleIntegrationRequest,
 ): CleanupModuleIntegrationResult {
-  const session = integrationSession(request.cleanupHandle);
-  if (session.cleaned) return { removed: false };
-  const deleteInvocation: ModuleGitInvocation = {
-    cwd: session.workspace.sourceRepositoryRoot,
-    args: ['update-ref', '-d', session.integrationRef, session.currentHead],
-  };
-  runModuleDeliveryGit(gitRequest(deleteInvocation));
-  const cleanupRequest: CleanupModuleWorktreeRequest = {
-    workspace: session.workspace,
-  };
-  try {
-    cleanupModuleWorktree(cleanupRequest);
-  } catch {
-    const restoreInvocation: ModuleGitInvocation = {
-      cwd: session.workspace.sourceRepositoryRoot,
-      args: [
-        'update-ref',
-        '--create-reflog',
-        session.integrationRef,
-        session.currentHead,
-        ZERO_COMMIT,
-      ],
-    };
-    runModuleDeliveryGit(gitRequest(restoreInvocation));
-    throw new Error('Module integration cleanup failed and restored its ref.');
-  }
-  session.cleaned = true;
-  return { removed: true };
+  return cleanupRegisteredModuleIntegration(request);
 }
