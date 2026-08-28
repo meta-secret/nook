@@ -47,7 +47,7 @@ type CliResponse = {
 function parseResponse(yaml: string): CliResponse {
   return Bun.YAML.parse(yaml) as CliResponse;
 }
-describe('dormant executable skill YAML host', () => {
+describe('provider-neutral executable skill YAML host', () => {
   test('discovers exactly its closed tools-list action', async () => {
     const request: RunSkillCliRequest = { argv: [] };
     const outcome = await runSkillCli(request);

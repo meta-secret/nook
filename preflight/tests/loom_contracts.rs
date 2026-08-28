@@ -120,12 +120,21 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
             && skills_install.contains("bun install --frozen-lockfile"),
         "executable applications must install every pinned project"
     );
-    let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
+    let skills_verify = task_body(&taskfile, "skills:verify", "skills:tools-list");
     assert!(
         skills_verify.contains("deps: [skills:install]")
             && skills_verify.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
             && skills_verify.contains("bun run verify"),
         "skills:verify must run every complete application project gate"
+    );
+    let tools_list = task_body(&taskfile, "skills:tools-list", "loom:install");
+    assert!(
+        tools_list.contains("deps: [skills:install]")
+            && tools_list.contains("silent: true")
+            && tools_list.contains("executable-skill-host/scripts/src/cli.ts\"")
+            && tools_list.contains("--default toolsList")
+            && !taskfile.contains("skills:run:"),
+        "skills:tools-list must be the sole exact public YAML-host entrypoint"
     );
 
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");

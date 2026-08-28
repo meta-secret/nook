@@ -15,8 +15,7 @@ import {
   type UntrustedSkillYamlNode,
 } from './skill-yaml-codec.ts';
 import { unknownSkillCommandPath } from './skill-command-path.ts';
-export const SKILL_TOOLS_LIST_INVOKE =
-  'Unavailable until repository invocation is authorized.';
+export const SKILL_TOOLS_LIST_INVOKE = 'task skills:tools-list';
 const TOOLS_LIST_EXAMPLE = `skillToolsList:
   list: {}
 `;

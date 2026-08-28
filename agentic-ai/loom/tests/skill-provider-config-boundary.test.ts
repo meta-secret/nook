@@ -16,9 +16,13 @@ import {
   readTrackedRepositoryFiles,
 } from '../src/executable-skills/repository.ts';
 import {
-  expandStaticTaskVariables,
-  isTaskConfigurationPath,
-} from './taskfile-script-expansion.ts';
+  CANONICAL_TASKFILE,
+  hasCanonicalToolsListTask,
+  HOST_CLI,
+  HOST_CLI_TEMPLATE,
+  HOST_ROOT,
+  HOST_TOOLS_LIST_SOURCE_PATHS,
+} from './skill-host-task-boundary.ts';
 
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -65,6 +69,7 @@ type RequiredLaunchInspection = {
 type ApplicationConsumerEdge = {
   readonly dependency: string;
   readonly importer: string;
+  readonly source: string;
 };
 
 type RepositoryPackageDocument = {
@@ -96,10 +101,14 @@ const ACTION_SOURCE_SUFFIXES = [
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 
+function isTaskConfiguration(path: string): boolean {
+  return /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u.test(path);
+}
+
 function isRunnableConfiguration(path: string): boolean {
   return (
     /(^|\/)package\.json$/u.test(path) ||
-    isTaskConfigurationPath(path) ||
+    isTaskConfiguration(path) ||
     /(^|\/)\.env\.[^/]+$/u.test(path) ||
     /(^|\/)vite\.config\.(?:[cm]?ts|[cm]?js)$/u.test(path) ||
     /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
@@ -158,10 +167,10 @@ function configurationScriptPaths(
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
-    const taskExpansionRequest = { importer, source, sources: graph.sources };
-    const referenceSource = isTaskConfigurationPath(importer)
-      ? expandStaticTaskVariables(taskExpansionRequest)
-      : source;
+    const referenceSource =
+      importer === CANONICAL_TASKFILE
+        ? source.replaceAll(HOST_CLI_TEMPLATE, HOST_CLI)
+        : source;
     const referenceInspection: ConfigurationReferenceInspection = {
       importer,
       source: referenceSource,
@@ -212,7 +221,11 @@ function configurationScriptPaths(
         CONFIGURATION_SCRIPT_EXTENSION.test(dependency) ||
         isExtensionlessExecutable
       ) {
-        const edge: ApplicationConsumerEdge = { dependency, importer };
+        const edge: ApplicationConsumerEdge = {
+          dependency,
+          importer,
+          source,
+        };
         const applicationEdge = isApplicationDependency(dependency);
         if (applicationEdge && !isAuthorizedApplicationEdge(edge)) {
           throw new Error(`Unauthorized application edge: ${importer}`);
@@ -254,10 +267,23 @@ function configurationScriptPaths(
 }
 
 function isApplicationDependency(path: string): boolean {
-  return path === LOOM_ARTICLE_ADAPTER || path.startsWith(`${PROVIDER_ROOT}/`);
+  return (
+    path === LOOM_ARTICLE_ADAPTER ||
+    path.startsWith(`${PROVIDER_ROOT}/`) ||
+    path.startsWith(HOST_ROOT)
+  );
 }
 
 function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
+  if (edge.dependency.startsWith(HOST_ROOT)) {
+    return (
+      (edge.importer.startsWith(HOST_ROOT) &&
+        edge.dependency.startsWith(HOST_ROOT)) ||
+      (edge.importer === CANONICAL_TASKFILE &&
+        edge.dependency === HOST_CLI &&
+        hasCanonicalToolsListTask(edge.source))
+    );
+  }
   if (edge.dependency === LOOM_ARTICLE_ADAPTER) {
     return edge.importer === CORTEX_AUDIT;
   }
@@ -301,12 +327,7 @@ function configurationScriptReferences(
 
 function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
   if (inspection.specifier.includes('/node_modules/.bin/')) return false;
-  if (
-    inspection.source.includes('{{') &&
-    !inspection.specifier.replace(/^\.\//u, '').startsWith('.cortex/')
-  ) {
-    return false;
-  }
+  if (inspection.source.includes('{{')) return false;
   const escapedSpecifier = inspection.specifier.replace(
     /[.*+?^${}()|[\]\\]/gu,
     '\\$&',
@@ -499,7 +520,7 @@ function resolveActionDependency(
   return false;
 }
 
-test('only the Loom semantic adapter reaches the provider', async () => {
+test('only the semantic adapter and exact discovery task reach applications', async () => {
   const tracked = readTrackedRepositoryFiles(REPOSITORY_ROOT);
   const allPaths = tracked.map((file) => file.path);
   const productionPaths = allPaths
@@ -541,6 +562,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
     symlinkPaths,
   };
   const reachableScriptPaths = configurationScriptPaths(scriptGraph);
+  expect(
+    reachableScriptPaths.filter((path) => path.startsWith(HOST_ROOT)),
+  ).toEqual(HOST_TOOLS_LIST_SOURCE_PATHS);
   expect(await pathsContainingProviderRoot(productionPaths)).toEqual([
     LOOM_ARTICLE_ADAPTER,
   ]);
@@ -550,7 +574,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
       ...reachableActionPaths,
       ...reachableScriptPaths,
     ]),
-  ).toEqual([PROVIDER_PACKAGE, LOOM_ARTICLE_ADAPTER].sort());
+  ).toEqual(
+    [PROVIDER_PACKAGE, CANONICAL_TASKFILE, LOOM_ARTICLE_ADAPTER].sort(),
+  );
 
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
@@ -564,10 +590,9 @@ test('runnable configuration inventory includes Taskfiles and actions', () => {
     (file) => file.path,
   );
   const runnablePaths = allPaths.filter(isRunnableConfiguration);
-  const expected = allPaths.filter(isTaskConfigurationPath).sort();
-  const discovered = runnablePaths.filter(isTaskConfigurationPath).sort();
+  const expected = allPaths.filter(isTaskConfiguration).sort();
+  const discovered = runnablePaths.filter(isTaskConfiguration).sort();
   expect(discovered).toEqual(expected);
-  expect(discovered.some((path) => path.includes('/'))).toBe(true);
   const expectedActions = allPaths
     .filter((path) => path.startsWith('.github/actions/'))
     .filter(isActionManifest)
@@ -810,6 +835,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
   for (const [path, source] of [
     ['package.json', '{"scripts":{"audit":"bun scripts/facade.ts"}}'],
     ['package.json', `{"scripts":{"audit":"bun ${LOOM_ARTICLE_ADAPTER}"}}`],
+    ['package.json', `{"scripts":{"audit":"bun ${HOST_CLI}"}}`],
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
       'Taskfile.yml',
@@ -817,25 +843,8 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ],
     [
       'Taskfile.yml',
-      'vars:\n  host_dir: .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src\n  host2: "{{.host_dir}}/cli.ts"\ntasks:\n  audit:\n    cmds: ["bun {{.host2}} --default toolsList"]',
+      `tasks:\n  audit:\n    cmds: [bun ${HOST_ROOT}skill-action-registry.ts]`,
     ],
-    ...[
-      'vars: {dir: scripts}\ntasks:\n  audit:\n    vars: {host: "{{ .dir }}/facade.ts"}\n    cmds: ["bun {{ .host }}"]',
-      'vars: {host: {sh: echo bun scripts/facade.ts}}\ntasks:\n  audit:\n    cmds: ["{{.host}}"]',
-      'vars: {host: "{{.other}}", other: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["bun {{.host}}"]',
-      'tasks:\n  audit:\n    cmds: ["{{.CONFIG}} --default toolsList"]',
-      'tasks:\n  audit:\n    cmds: ["bun scripts/{{.CONFIG}}.ts"]',
-      'tasks:\n  audit:\n    cmds: ["bun {{.host | quote}}"]',
-      'tasks:\n  audit:\n    cmds: ["HOST={{.host}} $HOST"]',
-      'tasks:\n  audit:\n    cmds: ["env HOST={{.host}} bun $HOST"]',
-      'tasks:\n  audit:\n    cmds: ["env -i HOST={{.host}} bun ${HOST}"]',
-      'tasks:\n  audit:\n    cmds: ["bun run scripts/${HOST}.ts"]',
-      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts & $HOST"]',
-      'tasks:\n  audit:\n    cmds: ["bun --cwd={{.dir}} cli.ts"]',
-      'tasks:\n  audit:\n    cmds: ["bun --cwd {{.dir}} cli.ts"]',
-      'env: {HOST: "{{.host}}"}\ntasks:\n  audit:\n    cmds: ["$HOST"]',
-    ].map((source) => ['Taskfile.yml', source] as const),
-    ['.task/audit.yml', 'tasks:\n  audit:\n    cmds: ["bun {{.host2}}"]'],
     [
       '.github/workflows/audit.yml',
       'jobs:\n  audit:\n    steps:\n      - run: bun scripts/facade.ts',
@@ -863,6 +872,8 @@ test('follows scripts launched from every runnable configuration surface', () =>
       [`${PROVIDER_ROOT}/src/audit.ts`, 'export const audit = true;'],
       [LOOM_ARTICLE_ADAPTER, `import '../../../${PROVIDER_APPLICATION}';`],
       [PROVIDER_APPLICATION, 'export const application = true;'],
+      [HOST_CLI, 'export const main = true;'],
+      [`${HOST_ROOT}skill-action-registry.ts`, 'export const registry = true;'],
     ]);
     const graph: ConfigurationScriptGraph = {
       executablePaths: new Set<string>(),

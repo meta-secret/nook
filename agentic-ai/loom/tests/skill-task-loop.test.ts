@@ -64,7 +64,7 @@ test('skills package loops stop on the first failing package', async () => {
     for (const [taskName, nextTaskName] of [
       ['skills:install', 'skills:format'],
       ['skills:format', 'skills:verify'],
-      ['skills:verify', 'loom:install'],
+      ['skills:verify', 'skills:tools-list'],
     ] as const) {
       const taskCommandRequest: TaskCommandRequest = {
         nextTaskName,

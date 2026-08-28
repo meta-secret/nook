@@ -333,9 +333,9 @@ skill mirrors.
 Deterministic implementations of those semantics are ordinary Bun and
 TypeScript projects co-located under the owning skill's `scripts/` directory.
 They are code, not skill-card mirrors. Use `task skills:install` and
-`task skills:verify` for both pinned projects. The strict-YAML host is dormant:
-no supported repository invocation exists until its exact Task reachability is
-added separately.
+`task skills:verify` for both pinned projects. Use the exact
+`task skills:tools-list` entrypoint to discover the strict-YAML host's closed
+provider-neutral catalog; provider action invocation remains a follow-up.
 `task loom:verify` additionally applies the repository AST capability and
 exact-consumer boundary. Loom remains the only supported production consumer.
 

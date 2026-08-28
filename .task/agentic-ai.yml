@@ -25,6 +25,13 @@ tasks:
     cmds:
       - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
 
+  skills:tools-list:
+    desc: List executable skill actions through strict YAML.
+    silent: true
+    deps: [skills:install]
+    cmds:
+      - bun "{{.REPO_ROOT}}/.cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts" --default toolsList
+
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.
     dir: agentic-ai/loom

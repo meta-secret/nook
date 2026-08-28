@@ -14,9 +14,9 @@ shape and weaken validation.
 ## Pattern and scope
 
 The scripts project owns strict YAML transport and a closed, code-reviewed
-catalog. This dormant slice lists only its own tools-list action. A separate
-reachability and provider-integration change must add a statically imported
-skill action before authorizing exact Task entrypoints.
+catalog. This slice publicly exposes only its own tools-list action through the
+exact `task skills:tools-list` entrypoint. Provider action integration and
+provider invocation remain separate changes.
 
 The host has no model, scheduling, network, repository-write, process-spawn,
 dynamic import, manifest activation, or lifecycle authority. A Task install may
@@ -37,5 +37,6 @@ recovery request. Request scalars and unknown keys are never echoed.
 
 Keep generic transport here and action schema, example, decode, execution, and
 verification in the owning skill. Provider integration must be static and
-one-way from host to provider. Validate the dormant package with
-`task skills:verify` and `task loom:verify`; do not invoke its CLI directly.
+one-way from host to provider. Discover the catalog with
+`task skills:tools-list`; validate both executable projects with
+`task skills:verify` and the repository boundary with `task loom:verify`.
