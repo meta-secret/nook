@@ -526,6 +526,33 @@ mod tests {
     }
 
     #[test]
+    fn oauth_form_post_response_metadata_does_not_veto_primary_login() {
+        let primary_login = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Strong,
+            password_field_count: 1,
+            new_password_field_count: 0,
+            one_time_code_field_count: 0,
+            semantic_submit_control_count: 1,
+            source_origin: "https://example.test".to_owned(),
+            form_identity: String::new(),
+            destination_identity: "/oauth2/authorize?response_mode=form_post&next=/dashboard"
+                .to_owned(),
+            label: "Sign in".to_owned(),
+        };
+        assert!(advances_authentication(&primary_login));
+        assert!(!advances_authentication(
+            &AuthenticationAdvanceControlObservation {
+                destination_identity: "/oauth2/authorize?response_mode=form_post&next=/payment"
+                    .to_owned(),
+                ..primary_login
+            }
+        ));
+    }
+
+    #[test]
     fn cancellation_and_destructive_labels_veto_password_update_exemptions() {
         let password_update = AuthenticationAdvanceControlObservation {
             authentication_username: AuthenticationUsernameEvidence::Absent,
