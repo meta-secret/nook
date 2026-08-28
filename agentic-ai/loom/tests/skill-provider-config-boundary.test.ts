@@ -95,9 +95,9 @@ function isRunnableConfiguration(path: string): boolean {
     /(^|\/)Taskfile\.ya?ml$/u.test(path) ||
     /(^|\/)\.env\.[^/]+$/u.test(path) ||
     /(^|\/)vite\.config\.(?:[cm]?ts|[cm]?js)$/u.test(path) ||
-    /^\.task\/.*\.ya?ml$/u.test(path) ||
+    /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
     /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path) ||
-    /^\.github\/actions\/(?:.*\/)?action\.ya?ml$/u.test(path)
+    /^\.github\/actions\/(?:[^/]+\/)*action\.ya?ml$/u.test(path)
   );
 }
 
@@ -568,9 +568,11 @@ test('classifies every runnable configuration category at root and nested bounda
     'nested/vite.config.mjs',
     '.task/root.yml',
     '.task/nested/task.yaml',
+    '.task/evil\n.yml',
     '.github/workflows/policy.yml',
     '.github/actions/action.yml',
     '.github/actions/nested/action.yaml',
+    '.github/actions/evil\n/action.yml',
   ];
   const candidates = [
     ...expected,
@@ -579,6 +581,9 @@ test('classifies every runnable configuration category at root and nested bounda
     '.github/actions/action.yml/child',
     '.github/actions/nested/not-action.yml',
     'nested/.task/task.yml',
+    '.task/evil\n.yml/child',
+    '.github/actions/evil\n/not-action.yml',
+    '.github/actions/evil\n/action.yml/child',
     'nested/vite.config.css',
   ];
   expect(candidates.filter(isRunnableConfiguration)).toEqual(expected);
