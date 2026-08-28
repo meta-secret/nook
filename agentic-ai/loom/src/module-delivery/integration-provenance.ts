@@ -4,27 +4,43 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import { gitText, runModuleDeliveryGit } from './git-command.ts';
 import { pathExists } from './workspace-paths.ts';
+import { assertPreparedModuleWorktreeIdentity } from './workspace.ts';
+import {
+  ModuleDeliveryAttemptDispositionKind,
+  ModuleDeliveryGenerationFenceKind,
+  recordModuleDeliveryAttemptDisposition,
+} from './admission.ts';
 
 import type { GitCommandRequest } from './git-command.ts';
+import type {
+  ModuleDeliveryAdmissionState,
+  ModuleDeliveryAttemptLease,
+  ModuleDeliveryDispositionOutcome,
+  ModuleDeliveryGenerationAuthority,
+  RecordModuleDeliveryAttemptDispositionRequest,
+} from './admission.ts';
 import type {
   ModuleDeliveryAcceptedProviderEvidenceIdentity,
   ModuleDeliveryEvidenceClaimIdentity,
 } from './evidence.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
-import type {
-  ModuleIntegrationCleanupHandle,
-  ModuleIntegrationState,
-} from './integration.ts';
+import type { ValidatedModuleDeliveryPlan } from './domain.ts';
 import type { ModuleWorktreeHandle } from './workspace.ts';
 
 export const MODULE_DELIVERY_EVIDENCE_HANDOFF_VERSION = 1;
 
 export enum ModuleDeliveryProviderSubmissionKind {
+  Write = 'write',
   ReadOnlyEvidence = 'read-only-evidence',
 }
 
 export enum ModuleDeliveryEvidenceVerdict {
   TerminalSuccess = 'terminal-success',
+}
+
+export enum ModuleIntegrationPhase {
+  AcceptingProviders = 'accepting-providers',
+  Finalized = 'finalized',
 }
 
 export type ModuleDeliveryReadOnlyEvidenceSubmission = Readonly<{
@@ -51,10 +67,86 @@ export type AcceptedModuleDeliveryEvidence =
   ModuleDeliveryReadOnlyEvidenceSubmission &
     Readonly<{ sourceProvenanceDigest: string; verifiedHeadCommit: string }>;
 
-type StringSequencePair = Readonly<{
-  first: readonly string[];
-  second: readonly string[];
+export type PrepareModuleIntegrationRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  repositoryRoot: string;
+  workspaceRoot: string;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  admissionState: ModuleDeliveryAdmissionState;
 }>;
+
+export type ModuleDeliveryHandoffSubmission = Readonly<{
+  taskId: string;
+  attempt: number;
+  planDigest: string;
+  baselineCommit: string;
+  commit: string;
+  workspace: ModuleWorktreeHandle;
+}>;
+
+export type ModuleDeliveryWriteProviderSubmission = Readonly<{
+  kind: ModuleDeliveryProviderSubmissionKind.Write;
+  generation: number;
+  acceptedByTeam: TeamKey;
+  verdict: ModuleDeliveryEvidenceVerdict;
+  handoff: ModuleDeliveryHandoffSubmission;
+}>;
+
+export type ModuleDeliveryProviderSubmission =
+  | ModuleDeliveryWriteProviderSubmission
+  | ModuleDeliveryReadOnlyEvidenceSubmission;
+
+export type AcceptedModuleDeliveryWrite = Readonly<{
+  taskId: string;
+  attempt: number;
+  generation: number;
+  planDigest: string;
+  startingFrontier: string;
+  integrationCommit: string;
+  acceptedByTeam: TeamKey;
+  handoff: ModuleDeliveryHandoffSubmission;
+}>;
+
+export type ModuleIntegrationCleanupHandle = Readonly<{
+  sessionId: string;
+}>;
+
+export type ModuleIntegrationState = Readonly<{
+  phase: ModuleIntegrationPhase;
+  generation: number;
+  planDigest: string;
+  sourceCommit: string;
+  topologicalOrder: readonly string[];
+  waves: readonly (readonly string[])[];
+  completedWaveCount: number;
+  integratedTaskIds: readonly string[];
+  acceptedWrites: readonly AcceptedModuleDeliveryWrite[];
+  acceptedEvidence: readonly AcceptedModuleDeliveryEvidence[];
+  headCommit: string;
+  admissionState: ModuleDeliveryAdmissionState;
+  workspace: ModuleWorktreeHandle;
+  cleanupHandle: ModuleIntegrationCleanupHandle;
+}>;
+
+export type IntegrateVerifiedModuleDeliveryTaskRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  lease: ModuleDeliveryAttemptLease;
+  state: ModuleIntegrationState;
+  submission: ModuleDeliveryProviderSubmission;
+}>;
+
+export type FinalizeModuleDeliveryIntegrationRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
+}>;
+
+export type CleanupModuleIntegrationRequest = Readonly<{
+  cleanupHandle: ModuleIntegrationCleanupHandle;
+}>;
+
+export type CleanupModuleIntegrationResult = Readonly<{ removed: boolean }>;
 
 export function moduleDeliveryEvidenceSha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
@@ -79,6 +171,7 @@ export type ModuleIntegrationSession = {
 };
 
 export type ModuleIntegrationProvenance = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
   readonly planDigest: string;
   readonly sourceCommit: string;
   readonly completedWaveCount: number;
@@ -102,36 +195,12 @@ export type IntegrationSessionRegistration = {
 };
 
 export type IntegrationStateRegistration = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleIntegrationState;
   readonly sourceSnapshot: SourceRepositorySnapshot;
   readonly workspaceSnapshot: SourceRepositorySnapshot;
   readonly session: ModuleIntegrationSession;
 };
-
-const INTEGRATED_WRITER_FRONTIER_CAPABILITY = Symbol(
-  'module-delivery-integrated-writer-frontier-capability',
-);
-
-export type ModuleDeliveryIntegratedWriterFrontierCapability = Readonly<{
-  [INTEGRATED_WRITER_FRONTIER_CAPABILITY]: true;
-  taskId: string;
-  attempt: number;
-  generation: number;
-  planDigest: string;
-  headCommit: string;
-  integratedTaskIds: readonly string[];
-}>;
-
-export type AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest =
-  Readonly<{
-    capability: ModuleDeliveryIntegratedWriterFrontierCapability;
-    taskId: string;
-    attempt: number;
-    generation: number;
-    planDigest: string;
-    headCommit: string;
-    integratedTaskIds: readonly string[];
-  }>;
 
 type ModuleGitInvocation = {
   readonly cwd: string;
@@ -170,6 +239,24 @@ type RepositorySnapshotRequest = {
   readonly repositoryRoot: string;
   readonly includeContent: boolean;
 };
+export type ModuleIntegrationRefRequest = Readonly<{
+  workspace: ModuleWorktreeHandle;
+  planDigest: string;
+}>;
+export type UpdateModuleIntegrationRefRequest = Readonly<{
+  provenance: ModuleIntegrationProvenance;
+  nextCommit: string;
+  rollback: boolean;
+}>;
+export type FreshModuleIntegrationStateInspection = Readonly<{
+  state: ModuleIntegrationState;
+  provenance: ModuleIntegrationProvenance;
+}>;
+export type RecordIntegratedLeaseAcceptanceRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  state: ModuleDeliveryAdmissionState;
+  lease: ModuleDeliveryAttemptLease;
+}>;
 
 const BIGINT_STATS_OPTIONS = { bigint: true } as const;
 
@@ -182,11 +269,7 @@ const SESSIONS = new WeakMap<
   ModuleIntegrationSession
 >();
 const RETIRED_STATES = new WeakSet<ModuleIntegrationState>();
-const INTEGRATED_WRITER_FRONTIER_CAPABILITIES = new WeakMap<
-  ModuleDeliveryIntegratedWriterFrontierCapability,
-  ModuleIntegrationState
->();
-
+const INTEGRATION_TASK_ID = 'module-delivery-integration';
 function gitRequest(invocation: ModuleGitInvocation): GitCommandRequest {
   if ('allowFailure' in invocation) {
     return {
@@ -475,6 +558,7 @@ export function registerIntegrationState(
   registration: IntegrationStateRegistration,
 ): void {
   const provenanceValue: ModuleIntegrationProvenance = {
+    authority: registration.authority,
     planDigest: registration.state.planDigest,
     sourceCommit: registration.state.sourceCommit,
     completedWaveCount: registration.state.completedWaveCount,
@@ -500,47 +584,166 @@ export function integrationProvenance(
   return provenance;
 }
 
-function sameStrings(pair: StringSequencePair): boolean {
-  if (pair.first.length !== pair.second.length) return false;
-  for (let index = 0; index < pair.first.length; index += 1) {
-    if (pair.first[index] !== pair.second[index]) return false;
-  }
-  return true;
-}
-
-export function assertModuleDeliveryIntegratedWriterFrontierCapability(
-  request: AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
-): void {
-  const capability = request.capability;
-  const state = INTEGRATED_WRITER_FRONTIER_CAPABILITIES.get(capability);
-  if (!state)
-    throw new Error('Integrated writer frontier capability is invalid.');
-  const provenance = integrationProvenance(state);
-  const taskIds: StringSequencePair = {
-    first: capability.integratedTaskIds,
-    second: request.integratedTaskIds,
-  };
-  const stateTaskIds: StringSequencePair = {
-    first: capability.integratedTaskIds,
-    second: state.integratedTaskIds,
-  };
-  if (
-    capability[INTEGRATED_WRITER_FRONTIER_CAPABILITY] !== true ||
-    capability.taskId !== request.taskId ||
-    capability.attempt !== request.attempt ||
-    capability.generation !== request.generation ||
-    capability.planDigest !== request.planDigest ||
-    capability.headCommit !== request.headCommit ||
-    !sameStrings(taskIds) ||
-    !sameStrings(stateTaskIds) ||
-    provenance.planDigest !== capability.planDigest ||
-    provenance.headCommit !== capability.headCommit ||
-    state.planDigest !== capability.planDigest ||
-    state.headCommit !== capability.headCommit
-  )
-    throw new Error('Integrated writer frontier capability is invalid.');
-}
-
 export function retireIntegrationState(state: ModuleIntegrationState): void {
   RETIRED_STATES.add(state);
+}
+
+function frozenAcceptedWrite(
+  entry: AcceptedModuleDeliveryWrite,
+): AcceptedModuleDeliveryWrite {
+  const handoffValue: ModuleDeliveryHandoffSubmission = { ...entry.handoff };
+  const handoff = Object.freeze(handoffValue);
+  const value: AcceptedModuleDeliveryWrite = { ...entry, handoff };
+  return Object.freeze(value);
+}
+
+export function immutableModuleIntegrationState(
+  state: ModuleIntegrationState,
+): ModuleIntegrationState {
+  const workspaceValue: ModuleWorktreeHandle = { ...state.workspace };
+  const workspace = Object.isFrozen(state.workspace)
+    ? state.workspace
+    : Object.freeze(workspaceValue);
+  const value: ModuleIntegrationState = {
+    ...state,
+    topologicalOrder: Object.freeze([...state.topologicalOrder]),
+    waves: Object.freeze(state.waves.map((wave) => Object.freeze([...wave]))),
+    integratedTaskIds: Object.freeze([...state.integratedTaskIds]),
+    acceptedWrites: Object.freeze(
+      state.acceptedWrites.map(frozenAcceptedWrite),
+    ),
+    acceptedEvidence: Object.freeze([...state.acceptedEvidence]),
+    workspace,
+  };
+  return Object.freeze(value);
+}
+
+export function moduleIntegrationRef(
+  request: ModuleIntegrationRefRequest,
+): string {
+  return `refs/nook/module-delivery/${request.planDigest}/${request.workspace.worktreeId}`;
+}
+
+export function updateModuleIntegrationRef(
+  request: UpdateModuleIntegrationRefRequest,
+): void {
+  const args = request.rollback
+    ? [
+        'update-ref',
+        request.provenance.session.integrationRef,
+        request.provenance.headCommit,
+        request.nextCommit,
+      ]
+    : [
+        'update-ref',
+        '--create-reflog',
+        request.provenance.session.integrationRef,
+        request.nextCommit,
+        request.provenance.headCommit,
+      ];
+  const invocation: GitCommandRequest = {
+    cwd: request.provenance.workspace.sourceRepositoryRoot,
+    args,
+  };
+  runModuleDeliveryGit(invocation);
+}
+
+export function assertFreshModuleIntegrationState(
+  request: FreshModuleIntegrationStateInspection,
+): void {
+  const { state, provenance } = request;
+  if (
+    provenance.planDigest !== state.planDigest ||
+    provenance.sourceCommit !== state.sourceCommit ||
+    provenance.completedWaveCount !== state.completedWaveCount ||
+    provenance.headCommit !== state.headCommit ||
+    provenance.workspace !== state.workspace
+  )
+    throw new Error(
+      'Module integration state violates its private provenance.',
+    );
+  if (
+    state.phase !== ModuleIntegrationPhase.AcceptingProviders &&
+    state.phase !== ModuleIntegrationPhase.Finalized
+  )
+    throw new Error('Module integration state has an invalid phase.');
+  if (
+    !Number.isSafeInteger(state.completedWaveCount) ||
+    state.completedWaveCount < 0 ||
+    state.completedWaveCount > state.waves.length
+  )
+    throw new Error('Module integration state has an invalid wave frontier.');
+  if (new Set(state.integratedTaskIds).size !== state.integratedTaskIds.length)
+    throw new Error(
+      'Module integration state has an inconsistent task frontier.',
+    );
+  assertPreparedModuleWorktreeIdentity(state.workspace);
+  if (
+    state.workspace.planDigest !== state.planDigest ||
+    state.workspace.baselineCommit !== state.sourceCommit ||
+    state.workspace.taskId !== INTEGRATION_TASK_ID ||
+    state.workspace.attempt !== 1
+  )
+    throw new Error('Module integration workspace metadata is inconsistent.');
+  const headInvocation: GitCommandRequest = {
+    cwd: state.workspace.worktreePath,
+    args: ['rev-parse', '--verify', 'HEAD^{commit}'],
+  };
+  const head = gitText(runModuleDeliveryGit(headInvocation));
+  if (head !== state.sourceCommit)
+    throw new Error(
+      'Module integration worktree was changed without authority.',
+    );
+  if (
+    provenance.session.cleaned ||
+    provenance.session.cleanupHandle !== state.cleanupHandle ||
+    provenance.session.workspace !== state.workspace ||
+    provenance.session.currentHead !== state.headCommit
+  )
+    throw new Error('Module integration session is stale or already cleaned.');
+  const refInvocation: GitCommandRequest = {
+    cwd: state.workspace.sourceRepositoryRoot,
+    args: [
+      'rev-parse',
+      '--verify',
+      `${provenance.session.integrationRef}^{commit}`,
+    ],
+  };
+  const ref = gitText(runModuleDeliveryGit(refInvocation));
+  if (ref !== state.headCommit)
+    throw new Error('Module integration state is stale.');
+  const branchInvocation: GitCommandRequest = {
+    cwd: state.workspace.worktreePath,
+    args: ['symbolic-ref', '--quiet', 'HEAD'],
+    allowFailure: true,
+  };
+  const branch = runModuleDeliveryGit(branchInvocation);
+  if (branch.exitCode === 0)
+    throw new Error('Module integration workspace must keep detached HEAD.');
+  const sourceExpectation: SourceSnapshotExpectation = {
+    repositoryRoot: state.workspace.sourceRepositoryRoot,
+    expected: provenance.sourceSnapshot,
+  };
+  assertSourceSnapshot(sourceExpectation);
+  const workspaceExpectation: SourceSnapshotExpectation = {
+    repositoryRoot: state.workspace.worktreePath,
+    expected: provenance.workspaceSnapshot,
+  };
+  assertSourceSnapshot(workspaceExpectation);
+}
+
+export function recordIntegratedLeaseAcceptance(
+  accepted: RecordIntegratedLeaseAcceptanceRequest,
+): void {
+  const outcome: ModuleDeliveryDispositionOutcome = {
+    kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+    conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+  };
+  const request: RecordModuleDeliveryAttemptDispositionRequest = {
+    authority: accepted.authority,
+    state: accepted.state,
+    lease: accepted.lease,
+    outcome,
+  };
+  recordModuleDeliveryAttemptDisposition(request);
 }

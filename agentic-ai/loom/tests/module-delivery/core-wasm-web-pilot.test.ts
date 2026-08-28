@@ -1,25 +1,34 @@
 import { afterEach, describe, expect, test } from 'bun:test';
+import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryJoinKind,
-  MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
+  ModuleDeliveryProviderSubmissionKind,
+  ModuleDeliveryEvidenceVerdict,
+  ModuleDeliveryEvidenceInputSchema,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
+  TeamKey,
   cleanupModuleIntegration,
   cleanupModuleWorktree,
+  createModuleDeliveryAdmissionState,
+  createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
-  integrateVerifiedModuleDeliveryWave,
+  integrateVerifiedModuleDeliveryTask,
   prepareModuleIntegration,
   prepareModuleWorktree,
+  recordModuleDeliveryAttemptLeases,
+  selectModuleDeliveryAdmissions,
   verifyModuleCommitHandoff,
 } from '../../src/module-delivery/index.ts';
 import {
   createGitFixture,
   disposeGitFixture,
   fixtureGit,
+  evidenceSubmission,
   worktreeFileWriter,
   worktreeGit,
 } from './worktree-test-support.ts';
@@ -28,20 +37,31 @@ import type {
   ValidatedModuleDeliveryPlan,
   CleanupModuleIntegrationRequest,
   CleanupModuleWorktreeRequest,
-  IntegrateVerifiedModuleDeliveryWaveRequest,
+  CreateModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryGenerationAuthorityRequest,
+  IntegrateVerifiedModuleDeliveryTaskRequest,
   ModuleDeliveryBaseline,
   ModuleDeliveryEdgeContract,
+  ModuleDeliveryEvidenceSynthesisNodeV2,
   ModuleDeliveryHandoffSubmission,
+  ModuleDeliveryWriteProviderSubmission,
+  ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryPlan,
+  ModuleDeliveryGenerationAuthority,
   ModuleIntegrationCleanupHandle,
   ModuleIntegrationState,
   ModuleWorktreeHandle,
   PrepareModuleIntegrationRequest,
   PrepareModuleWorktreeRequest,
+  RecordModuleDeliveryAttemptLeasesRequest,
+  SelectModuleDeliveryAdmissionsRequest,
   VerifyModuleCommitHandoffRequest,
-  WriteModuleDeliveryNode,
+  ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
-import type { GitFixture } from './worktree-test-support.ts';
+import type {
+  EvidenceFixtureInput,
+  GitFixture,
+} from './worktree-test-support.ts';
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 const WASM_MODULE_ROOT = 'nook-app/nook-platform/nook-wasm';
@@ -72,11 +92,21 @@ type PilotEdgeInput = {
   readonly consumerTaskId: string;
   readonly capability: string;
 };
+type EvidenceNodeRequest = Readonly<{
+  taskId: string;
+  dependency: string;
+}>;
+type IntegrateEvidenceRequest = Readonly<{
+  authority: ModuleDeliveryGenerationAuthority;
+  acceptedPlan: ValidatedModuleDeliveryPlan;
+  state: ModuleIntegrationState;
+  node: ModuleDeliveryReadOnlyNodeV2 | ModuleDeliveryEvidenceSynthesisNodeV2;
+}>;
 
 type WriterRequest = {
   readonly fixture: GitFixture;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly node: WriteModuleDeliveryNode;
+  readonly node: ModuleDeliveryWriteNodeV2;
   readonly baselineCommit: string;
 };
 
@@ -88,11 +118,11 @@ type WriterCommitRequest = {
 };
 
 type IntegrateRequest = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleIntegrationState;
-  readonly waveIndex: number;
   readonly workspace: ModuleWorktreeHandle;
-  readonly node: WriteModuleDeliveryNode;
+  readonly node: ModuleDeliveryWriteNodeV2;
 };
 
 type SourceProof = {
@@ -161,17 +191,28 @@ function nodeBaseline(input: PilotNodeInput): ModuleDeliveryBaseline {
       };
 }
 
-function pilotNode(input: PilotNodeInput): WriteModuleDeliveryNode {
+function pilotNode(input: PilotNodeInput): ModuleDeliveryWriteNodeV2 {
   return {
     kind: ModuleDeliveryTaskKind.Write,
     taskId: input.taskId,
+    team:
+      input.expert === 'web_expert'
+        ? TeamKey.WebDevelopment
+        : TeamKey.DevelopmentCore,
+    functionalOwner: TeamKey.Ai,
+    acceptanceOwner: TeamKey.Ai,
+    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
     expert: input.expert,
     moduleRoot: input.moduleRoot,
     consumerOutcome: `${input.taskId} publishes its layer contract.`,
     baseline: nodeBaseline(input),
     agentDepthLimit: 1,
     dependencies: input.dependencies,
-    resources: { read: input.readClaims, write: [input.writeClaim] },
+    resources: {
+      read: input.readClaims,
+      write: [input.writeClaim],
+      evidenceSurface: [],
+    },
     parentOwnedExclusions: PARENT_RESOURCES,
     acceptance: {
       commands: [`task ${input.taskId}:test`],
@@ -180,6 +221,62 @@ function pilotNode(input: PilotNodeInput): WriteModuleDeliveryNode {
     workspace: {
       kind: ModuleDeliveryWorkspaceKind.IsolatedWorktree,
       expectedCommitHandoff: true,
+    },
+  };
+}
+
+function evidenceNode(
+  request: EvidenceNodeRequest,
+): ModuleDeliveryReadOnlyNodeV2 {
+  const { taskId, dependency } = request;
+  return {
+    kind: ModuleDeliveryTaskKind.ReadOnly,
+    taskId,
+    team: TeamKey.DevelopmentCore,
+    functionalOwner: TeamKey.Ai,
+    acceptanceOwner: TeamKey.Ai,
+    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
+    expert: 'core_expert',
+    moduleRoot: CORE_ROOT,
+    consumerOutcome: 'Runtime evidence is accepted.',
+    baseline: {
+      kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+      providerTaskIds: [dependency],
+    },
+    agentDepthLimit: 1,
+    dependencies: [dependency],
+    resources: { read: [CORE_ROOT], write: [], evidenceSurface: [CORE_ROOT] },
+    parentOwnedExclusions: PARENT_RESOURCES,
+    acceptance: {
+      commands: ['task runtime:evidence'],
+      evidence: [`${taskId} completed`],
+    },
+  };
+}
+
+function synthesisNode(
+  provider: ModuleDeliveryReadOnlyNodeV2,
+): ModuleDeliveryEvidenceSynthesisNodeV2 {
+  return {
+    ...provider,
+    kind: ModuleDeliveryTaskKind.EvidenceSynthesis,
+    taskId: 'evidence-synthesis',
+    dependencies: [provider.taskId],
+    baseline: {
+      kind: ModuleDeliveryBaselineKind.IntegratedDependencies,
+      providerTaskIds: [provider.taskId],
+    },
+    resources: { read: [], write: [], evidenceSurface: [] },
+    evidenceInput: {
+      schema: ModuleDeliveryEvidenceInputSchema.AcceptedProviderEvidenceV1,
+      expectedProducers: [
+        {
+          taskId: provider.taskId,
+          team: provider.team,
+          functionalOwner: provider.functionalOwner,
+          acceptanceOwner: provider.acceptanceOwner,
+        },
+      ],
     },
   };
 }
@@ -224,7 +321,7 @@ function acceptedPilotPlan(
     expert: 'web_expert',
     moduleRoot: WEB_ROOT,
     sourceCommit: input.sourceCommit,
-    dependencies: ['wasm-adapter'],
+    dependencies: ['wasm-adapter', 'evidence-synthesis'],
     readClaims: [`${CORE_ROOT}/**`, `${WASM_ROOT}/**`, `${WEB_ROOT}/**`],
     writeClaim: WEB_OUTPUT,
   };
@@ -238,8 +335,30 @@ function acceptedPilotPlan(
     consumerTaskId: 'web-consumer',
     capability: 'WasmAdapter',
   };
+  const auditRequest: EvidenceNodeRequest = {
+    taskId: 'runtime-evidence',
+    dependency: 'wasm-adapter',
+  };
+  const audit = evidenceNode(auditRequest);
+  const synthesis = synthesisNode(audit);
+  const auditSynthesisEdge: PilotEdgeInput = {
+    providerTaskId: audit.taskId,
+    consumerTaskId: synthesis.taskId,
+    capability: 'Evidence',
+  };
+  const synthesisWebEdge: PilotEdgeInput = {
+    providerTaskId: synthesis.taskId,
+    consumerTaskId: 'web-consumer',
+    capability: 'AcceptedEvidence',
+  };
+  const wasmAuditEdge: PilotEdgeInput = {
+    providerTaskId: 'wasm-adapter',
+    consumerTaskId: audit.taskId,
+    capability: 'RuntimeSurface',
+  };
   const plan: ModuleDeliveryPlan = {
-    version: 1,
+    version: 2,
+    generation: 1,
     sourceCommit: input.sourceCommit,
     maxConcurrency: 1,
     maxAgentDepth: 1,
@@ -250,8 +369,20 @@ function acceptedPilotPlan(
       owner: 'delivery-owner',
       validationCommands: ['task module-delivery:pilot'],
     },
-    nodes: [pilotNode(webInput), pilotNode(coreInput), pilotNode(wasmInput)],
-    edgeContracts: [pilotEdge(wasmWebEdge), pilotEdge(coreWasmEdge)],
+    nodes: [
+      pilotNode(webInput),
+      synthesis,
+      audit,
+      pilotNode(coreInput),
+      pilotNode(wasmInput),
+    ],
+    edgeContracts: [
+      pilotEdge(auditSynthesisEdge),
+      pilotEdge(synthesisWebEdge),
+      pilotEdge(wasmWebEdge),
+      pilotEdge(wasmAuditEdge),
+      pilotEdge(coreWasmEdge),
+    ],
   };
   const validation = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (validation.status !== ModuleDeliveryValidationStatus.Accepted) {
@@ -290,7 +421,7 @@ function integrateWriter(request: IntegrateRequest): ModuleIntegrationState {
     allowedWriteClaims: request.node.resources.write,
   };
   const verified = verifyModuleCommitHandoff(handoffRequest);
-  const submission: ModuleDeliveryHandoffSubmission = {
+  const handoff: ModuleDeliveryHandoffSubmission = {
     taskId: request.node.taskId,
     attempt: verified.attempt,
     planDigest: verified.planDigest,
@@ -298,13 +429,73 @@ function integrateWriter(request: IntegrateRequest): ModuleIntegrationState {
     commit: verified.commit,
     workspace: request.workspace,
   };
-  const integrationRequest: IntegrateVerifiedModuleDeliveryWaveRequest = {
-    acceptedPlan: request.acceptedPlan,
-    state: request.state,
-    waveIndex: request.waveIndex,
-    handoffs: [submission],
+  const submission: ModuleDeliveryWriteProviderSubmission = {
+    kind: ModuleDeliveryProviderSubmissionKind.Write,
+    generation: request.acceptedPlan.plan.generation,
+    acceptedByTeam: request.node.acceptanceOwner,
+    verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+    handoff,
   };
-  return integrateVerifiedModuleDeliveryWave(integrationRequest);
+  const admissionState = request.state.admissionState;
+  const selectRequest: SelectModuleDeliveryAdmissionsRequest = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    state: admissionState,
+  };
+  const selection = selectModuleDeliveryAdmissions(selectRequest);
+  const admission = selection.admissions.find(
+    (candidate) => candidate.taskId === request.node.taskId,
+  );
+  if (!admission) throw new Error('Pilot provider is not ready.');
+  const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+    authority: request.authority,
+    state: admissionState,
+    admissions: [admission],
+  };
+  const recording = recordModuleDeliveryAttemptLeases(leaseRequest);
+  const lease = recording.leases[0];
+  if (!lease) throw new Error('Pilot lease was not recorded.');
+  const integrationRequest: IntegrateVerifiedModuleDeliveryTaskRequest = {
+    authority: request.authority,
+    acceptedPlan: request.acceptedPlan,
+    lease,
+    state: request.state,
+    submission,
+  };
+  return integrateVerifiedModuleDeliveryTask(integrationRequest);
+}
+
+function integrateEvidence(
+  request: IntegrateEvidenceRequest,
+): ModuleIntegrationState {
+  const { authority, acceptedPlan, state, node } = request;
+  const selectionRequest: SelectModuleDeliveryAdmissionsRequest = {
+    authority,
+    acceptedPlan,
+    state: state.admissionState,
+  };
+  const selection = selectModuleDeliveryAdmissions(selectionRequest);
+  const admission = selection.admissions.find(
+    ({ taskId }) => taskId === node.taskId,
+  );
+  if (!admission) throw new Error('Evidence provider is not ready.');
+  const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+    authority,
+    state: state.admissionState,
+    admissions: [admission],
+  };
+  const recording = recordModuleDeliveryAttemptLeases(leaseRequest);
+  const lease = recording.leases[0];
+  if (!lease) throw new Error('Evidence lease was not recorded.');
+  const evidenceInput: EvidenceFixtureInput = { state, node, lease };
+  const integrationRequest: IntegrateVerifiedModuleDeliveryTaskRequest = {
+    authority,
+    acceptedPlan,
+    state,
+    lease,
+    submission: evidenceSubmission(evidenceInput),
+  };
+  return integrateVerifiedModuleDeliveryTask(integrationRequest);
 }
 
 function sourceProof(input: FixtureInput): SourceProof {
@@ -330,7 +521,7 @@ function nonIntegrationRefs(input: FixtureInput): string {
   ]);
 }
 
-function planNode(input: PlanNodeInput): WriteModuleDeliveryNode {
+function planNode(input: PlanNodeInput): ModuleDeliveryWriteNodeV2 {
   const node = input.plan.plan.nodes.find(
     (candidate) => candidate.taskId === input.taskId,
   );
@@ -340,17 +531,7 @@ function planNode(input: PlanNodeInput): WriteModuleDeliveryNode {
   return node;
 }
 
-test('module delivery wave integration is gated before state inspection', () => {
-  const incompleteRequest = {};
-  const request = Object.freeze(
-    incompleteRequest,
-  ) as IntegrateVerifiedModuleDeliveryWaveRequest;
-  expect(() => integrateVerifiedModuleDeliveryWave(request)).toThrow(
-    MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
-  );
-});
-
-describe.skip('core to WASM to web pilot pending admission', () => {
+describe('core to WASM to web module delivery pilot', () => {
   test('hands each integrated commit to the next registered layer', () => {
     const activeFixture = createGitFixture();
     fixtures.push(activeFixture);
@@ -363,18 +544,40 @@ describe.skip('core to WASM to web pilot pending admission', () => {
     expect(acceptedPlan.topologicalOrder).toEqual([
       'core-provider',
       'wasm-adapter',
+      'runtime-evidence',
+      'evidence-synthesis',
       'web-consumer',
     ]);
     expect(acceptedPlan.waves).toEqual([
       ['core-provider'],
       ['wasm-adapter'],
+      ['runtime-evidence'],
+      ['evidence-synthesis'],
       ['web-consumer'],
     ]);
 
+    const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
+      acceptedPlan,
+      repositoryRoot: activeFixture.sourceRoot,
+      expectedLineage: acceptedPlan.plan.nodes.map(
+        ({ taskId, parentLineage }) => ({ taskId, parentLineage }),
+      ),
+    };
+    const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
+    const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority,
+      acceptedPlan,
+      headCommit: acceptedPlan.plan.sourceCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [],
+    };
+    const admissionState = createModuleDeliveryAdmissionState(stateRequest);
     const preparation: PrepareModuleIntegrationRequest = {
+      authority,
       repositoryRoot: activeFixture.sourceRoot,
       workspaceRoot: activeFixture.workspaceRoot,
       acceptedPlan,
+      admissionState,
     };
     const initialState = prepareModuleIntegration(preparation);
     integrationCleanups.push(initialState.cleanupHandle);
@@ -399,9 +602,9 @@ describe.skip('core to WASM to web pilot pending admission', () => {
     };
     commitWriter(coreCommit);
     const coreIntegration: IntegrateRequest = {
+      authority,
       acceptedPlan,
       state: initialState,
-      waveIndex: 0,
       workspace: coreWorkspace,
       node: coreNode,
     };
@@ -430,13 +633,43 @@ describe.skip('core to WASM to web pilot pending admission', () => {
     };
     commitWriter(wasmCommit);
     const wasmIntegration: IntegrateRequest = {
+      authority,
       acceptedPlan,
       state: coreState,
-      waveIndex: 1,
       workspace: wasmWorkspace,
       node: wasmNode,
     };
     const wasmState = integrateWriter(wasmIntegration);
+
+    const audit = acceptedPlan.plan.nodes.find(
+      ({ taskId }) => taskId === 'runtime-evidence',
+    );
+    if (!audit || audit.kind !== ModuleDeliveryTaskKind.ReadOnly)
+      throw new Error('Missing runtime evidence node.');
+    const evidenceIntegration: IntegrateEvidenceRequest = {
+      authority,
+      acceptedPlan,
+      state: wasmState,
+      node: audit,
+    };
+    const evidenceState = integrateEvidence(evidenceIntegration);
+    const synthesis = acceptedPlan.plan.nodes.find(
+      ({ taskId }) => taskId === 'evidence-synthesis',
+    );
+    if (
+      !synthesis ||
+      synthesis.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis
+    )
+      throw new Error('Missing evidence synthesis node.');
+    const synthesisIntegration: IntegrateEvidenceRequest = {
+      authority,
+      acceptedPlan,
+      state: evidenceState,
+      node: synthesis,
+    };
+    const synthesisState = integrateEvidence(synthesisIntegration);
+    expect(synthesisState.headCommit).toBe(wasmState.headCommit);
+    expect(synthesisState.acceptedEvidence).toHaveLength(2);
 
     const webNodeInput: PlanNodeInput = {
       plan: acceptedPlan,
@@ -447,11 +680,11 @@ describe.skip('core to WASM to web pilot pending admission', () => {
       fixture: activeFixture,
       acceptedPlan,
       node: webNode,
-      baselineCommit: wasmState.headCommit,
+      baselineCommit: synthesisState.headCommit,
     };
     const webWorkspace = prepareWriter(webPreparation);
     const webGit = worktreeGit(webWorkspace);
-    expect(webGit(['rev-parse', 'HEAD'])).toBe(wasmState.headCommit);
+    expect(webGit(['rev-parse', 'HEAD'])).toBe(synthesisState.headCommit);
     expect(webGit(['show', `HEAD:${CORE_OUTPUT}`])).toBe(CORE_CONTENT.trim());
     expect(webGit(['show', `HEAD:${WASM_OUTPUT}`])).toBe(WASM_CONTENT.trim());
     const webCommit: WriterCommitRequest = {
@@ -462,9 +695,9 @@ describe.skip('core to WASM to web pilot pending admission', () => {
     };
     commitWriter(webCommit);
     const webIntegration: IntegrateRequest = {
+      authority,
       acceptedPlan,
-      state: wasmState,
-      waveIndex: 2,
+      state: synthesisState,
       workspace: webWorkspace,
       node: webNode,
     };

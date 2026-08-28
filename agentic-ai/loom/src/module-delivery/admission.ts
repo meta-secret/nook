@@ -27,11 +27,11 @@ import type {
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
 import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
-import { assertModuleDeliveryIntegratedWriterFrontierCapability } from './integration-provenance.ts';
+import { assertModuleDeliveryIntegratedWriterFrontierCapability } from './integration.ts';
 import type {
   AssertModuleDeliveryIntegratedWriterFrontierCapabilityRequest,
   ModuleDeliveryIntegratedWriterFrontierCapability,
-} from './integration-provenance.ts';
+} from './integration.ts';
 import type {
   AcceptedModuleDeliveryEvidenceCollectionRequest,
   AcceptedModuleDeliveryEvidenceRegistry,

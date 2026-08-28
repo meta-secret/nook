@@ -1,8 +1,6 @@
 import { describe, expect, test } from 'bun:test';
-import { readdirSync } from 'node:fs';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
-  MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryCompatibilityStatus,
@@ -14,18 +12,10 @@ import {
   ModuleDeliveryWorkspaceKind,
   decodeAndValidateModuleDeliveryPlan,
   decodeCompatibleModuleDeliveryPlan,
-  integrateVerifiedModuleDeliveryWave,
-  prepareModuleIntegration,
 } from '../../src/module-delivery/index.ts';
 import { uncoveredEvidenceClaims } from '../../src/module-delivery/resource-claim-containment.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
-import {
-  createGitFixture,
-  disposeGitFixture,
-  fixtureGit,
-} from './worktree-test-support.ts';
 import type {
-  IntegrateVerifiedModuleDeliveryWaveRequest,
   LegacyModuleDeliveryPlan,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryNodeV2,
@@ -33,7 +23,6 @@ import type {
   ModuleDeliveryPlanValidation,
   ModuleDeliveryReadOnlyNodeV2,
   ModuleDeliveryWriteNodeV2,
-  PrepareModuleIntegrationRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 
@@ -414,57 +403,5 @@ describe('validation-only runtime boundary', () => {
     expect(issueCodes(validate(value))).toContain(
       ModuleDeliveryIssueCode.ParentLineageMismatch,
     );
-  });
-
-  test('gates integration before repository or request mutation', () => {
-    const fixture = createGitFixture();
-    const git = fixtureGit(fixture);
-    try {
-      const auditFixture: ReadNodeFixture = {
-        taskId: 'guard-audit',
-        dependencies: [],
-        evidenceSurface: [`${CORE_ROOT}/src/**`],
-      };
-      const decodedAudit = readNode(auditFixture);
-      const audit: ModuleDeliveryReadOnlyNodeV2 = {
-        ...decodedAudit,
-        baseline: {
-          kind: ModuleDeliveryBaselineKind.SourceCommit,
-          sourceCommit: fixture.baselineCommit,
-        },
-      };
-      const planFixture: PlanFixture = {
-        sourceCommit: fixture.baselineCommit,
-        nodes: [audit],
-        edgeContracts: [],
-      };
-      const planValue = plan(planFixture);
-      const preparation: PrepareModuleIntegrationRequest = {
-        repositoryRoot: fixture.sourceRoot,
-        workspaceRoot: fixture.workspaceRoot,
-        acceptedPlan: validated(planValue),
-      };
-      const beforeWorktrees = git(['worktree', 'list', '--porcelain']);
-      const beforeRefs = git(['for-each-ref', 'refs/nook/module-delivery']);
-      const beforeWorkspace = readdirSync(fixture.workspaceRoot);
-      expect(() => prepareModuleIntegration(preparation)).toThrow(
-        MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
-      );
-      expect(git(['worktree', 'list', '--porcelain'])).toBe(beforeWorktrees);
-      expect(git(['for-each-ref', 'refs/nook/module-delivery'])).toBe(
-        beforeRefs,
-      );
-      expect(readdirSync(fixture.workspaceRoot)).toEqual(beforeWorkspace);
-
-      const incompleteWave = {};
-      const waveRequest = Object.freeze(
-        incompleteWave,
-      ) as IntegrateVerifiedModuleDeliveryWaveRequest;
-      expect(() => integrateVerifiedModuleDeliveryWave(waveRequest)).toThrow(
-        MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
-      );
-    } finally {
-      disposeGitFixture(fixture);
-    }
   });
 });

@@ -1,26 +1,39 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { chmodSync, existsSync, renameSync, symlinkSync } from 'node:fs';
 import { join } from 'node:path';
 
+import * as gitCommand from '../../src/module-delivery/git-command.ts';
+import * as integrationSource from '../../src/module-delivery/integration.ts';
+import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryJoinKind,
-  MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
+  ModuleDeliveryProviderSubmissionKind,
+  ModuleDeliveryEvidenceVerdict,
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
+  TeamKey,
   cleanupModuleIntegration,
   cleanupModuleWorktree,
+  createModuleDeliveryAdmissionState,
+  createModuleDeliveryGenerationAuthority,
   decodeAndValidateModuleDeliveryPlan,
-  integrateVerifiedModuleDeliveryWave,
+  finalizeModuleDeliveryIntegration,
+  integrateVerifiedModuleDeliveryTask,
   prepareModuleIntegration,
   prepareModuleWorktree,
+  recordModuleDeliveryAttemptLeases,
+  restartModuleDeliveryGeneration,
+  selectModuleDeliveryAdmissions,
 } from '../../src/module-delivery/index.ts';
 import {
   createGitFixture,
   disposeGitFixture,
+  evidenceSubmission,
   fixtureGit,
+  invalidEvidenceCases,
   writeFixtureFile,
   worktreeFileWriter,
   worktreeGit,
@@ -30,25 +43,37 @@ import type {
   ValidatedModuleDeliveryPlan,
   CleanupModuleWorktreeRequest,
   CleanupModuleIntegrationRequest,
-  IntegrateVerifiedModuleDeliveryWaveRequest,
+  CreateModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryGenerationAuthorityRequest,
+  FinalizeModuleDeliveryIntegrationRequest,
+  IntegrateVerifiedModuleDeliveryTaskRequest,
   ModuleDeliveryBaseline,
   ModuleDeliveryEdgeContract,
   ModuleDeliveryHandoffSubmission,
-  ModuleDeliveryNode,
-  LegacyModuleDeliveryPlan,
+  ModuleDeliveryAttemptLease,
+  ModuleDeliveryGenerationAuthority,
+  ModuleDeliveryLeaseRecording,
+  ModuleDeliveryReadOnlyEvidenceSubmission,
+  ModuleDeliveryWriteProviderSubmission,
+  ModuleDeliveryNodeV2,
+  ModuleDeliveryPlan,
   ModuleIntegrationState,
   ModuleWorktreeHandle,
   PrepareModuleIntegrationRequest,
   PrepareModuleWorktreeRequest,
-  ReadOnlyModuleDeliveryNode,
-  WriteModuleDeliveryNode,
+  RecordModuleDeliveryAttemptLeasesRequest,
+  RestartModuleDeliveryGenerationRequest,
+  SelectModuleDeliveryAdmissionsRequest,
+  ModuleDeliveryReadOnlyNodeV2,
+  ModuleDeliveryWriteNodeV2,
 } from '../../src/module-delivery/index.ts';
-import type { GitFixture } from './worktree-test-support.ts';
+import type {
+  EvidenceFixtureInput,
+  GitFixture,
+} from './worktree-test-support.ts';
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
-const PARENT_RESOURCES: readonly string[] = [
-  ...REQUIRED_PARENT_OWNED_RESOURCES,
-];
+const PARENT_RESOURCES: readonly string[] = REQUIRED_PARENT_OWNED_RESOURCES;
 
 type WriteNodeInput = {
   readonly taskId: string;
@@ -57,50 +82,35 @@ type WriteNodeInput = {
   readonly writeClaims: readonly string[];
   readonly readClaims: readonly string[];
 };
-
 type ReadOnlyNodeInput = {
   readonly taskId: string;
   readonly sourceCommit: string;
 };
-
 type PlanInput = {
   readonly sourceCommit: string;
-  readonly nodes: readonly ModuleDeliveryNode[];
+  readonly nodes: readonly ModuleDeliveryNodeV2[];
   readonly edges: readonly ModuleDeliveryEdgeContract[];
 };
-
-type SkippedLegacyIntegrationPlanFixture = Omit<
-  LegacyModuleDeliveryPlan,
-  'nodes'
-> & {
-  readonly nodes: readonly ModuleDeliveryNode[];
-};
-
 type EdgeInput = {
   readonly providerTaskId: string;
   readonly consumerTaskId: string;
 };
-
 type WriterPreparation = {
   readonly fixture: GitFixture;
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
-  readonly node: WriteModuleDeliveryNode;
+  readonly node: ModuleDeliveryWriteNodeV2;
   readonly baselineCommit: string;
-  readonly attempt?: number;
 };
-
 type WriterCommit = {
   readonly workspace: ModuleWorktreeHandle;
   readonly relativePath: string;
   readonly contents: string;
 };
-
 type WaveIntegration = {
   readonly acceptedPlan: ValidatedModuleDeliveryPlan;
   readonly state: ModuleIntegrationState;
   readonly handoffs: readonly ModuleDeliveryHandoffSubmission[];
 };
-
 type IndependentWriterInput = {
   readonly taskId: string;
   readonly sourceCommit: string;
@@ -122,6 +132,10 @@ type FixtureLifecycle =
 let fixtureLifecycle: FixtureLifecycle = { kind: FixtureLifecycleKind.Empty };
 const fixtures: GitFixture[] = [];
 const workspaces: ModuleWorktreeHandle[] = [];
+const authorities = new WeakMap<
+  ModuleIntegrationState,
+  ModuleDeliveryGenerationAuthority
+>();
 
 afterEach(() => {
   for (const workspace of workspaces.splice(0).reverse()) {
@@ -129,7 +143,7 @@ afterEach(() => {
     try {
       cleanupModuleWorktree(request);
     } catch {
-      // A rejection case may intentionally leave an invalid worktree.
+      continue;
     }
   }
   for (const trackedFixture of fixtures.splice(0).reverse()) {
@@ -149,9 +163,8 @@ function createTrackedFixture(): GitFixture {
 }
 
 function currentFixture(): GitFixture {
-  if (fixtureLifecycle.kind === FixtureLifecycleKind.Empty) {
+  if (fixtureLifecycle.kind === FixtureLifecycleKind.Empty)
     throw new Error('Fixture lifecycle is empty.');
-  }
   return fixtureLifecycle.fixture;
 }
 
@@ -167,17 +180,25 @@ function baseline(input: WriteNodeInput): ModuleDeliveryBaseline {
       };
 }
 
-function writeNode(input: WriteNodeInput): WriteModuleDeliveryNode {
+function writeNode(input: WriteNodeInput): ModuleDeliveryWriteNodeV2 {
   return {
     kind: ModuleDeliveryTaskKind.Write,
     taskId: input.taskId,
+    team: TeamKey.DevelopmentCore,
+    functionalOwner: TeamKey.Ai,
+    acceptanceOwner: TeamKey.Ai,
+    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
     expert: 'core_expert',
     moduleRoot: CORE_ROOT,
     consumerOutcome: `${input.taskId} publishes a tested capability.`,
     baseline: baseline(input),
     agentDepthLimit: 2,
     dependencies: input.dependencies,
-    resources: { read: input.readClaims, write: input.writeClaims },
+    resources: {
+      read: input.readClaims,
+      write: input.writeClaims,
+      evidenceSurface: [],
+    },
     parentOwnedExclusions: PARENT_RESOURCES,
     acceptance: {
       commands: [`task ${input.taskId}:test`],
@@ -190,10 +211,14 @@ function writeNode(input: WriteNodeInput): WriteModuleDeliveryNode {
   };
 }
 
-function readOnlyNode(input: ReadOnlyNodeInput): ReadOnlyModuleDeliveryNode {
+function readOnlyNode(input: ReadOnlyNodeInput): ModuleDeliveryReadOnlyNodeV2 {
   return {
     kind: ModuleDeliveryTaskKind.ReadOnly,
     taskId: input.taskId,
+    team: TeamKey.DevelopmentCore,
+    functionalOwner: TeamKey.Ai,
+    acceptanceOwner: TeamKey.Ai,
+    parentLineage: { kind: AgentAttemptParentKind.WorkflowRoot },
     expert: 'core_expert',
     moduleRoot: CORE_ROOT,
     consumerOutcome: `${input.taskId} reports evidence.`,
@@ -203,7 +228,11 @@ function readOnlyNode(input: ReadOnlyNodeInput): ReadOnlyModuleDeliveryNode {
     },
     agentDepthLimit: 2,
     dependencies: [],
-    resources: { read: [`${CORE_ROOT}/**`], write: [] },
+    resources: {
+      read: [`${CORE_ROOT}/**`],
+      write: [],
+      evidenceSurface: [`${CORE_ROOT}/**`],
+    },
     parentOwnedExclusions: PARENT_RESOURCES,
     acceptance: {
       commands: [`task ${input.taskId}:audit`],
@@ -227,8 +256,9 @@ function edge(input: EdgeInput): ModuleDeliveryEdgeContract {
 }
 
 function acceptedPlan(input: PlanInput): ValidatedModuleDeliveryPlan {
-  const plan: SkippedLegacyIntegrationPlanFixture = {
-    version: 1,
+  const plan: ModuleDeliveryPlan = {
+    version: 2,
+    generation: 1,
     sourceCommit: input.sourceCommit,
     maxConcurrency: 3,
     maxAgentDepth: 3,
@@ -249,16 +279,50 @@ function acceptedPlan(input: PlanInput): ValidatedModuleDeliveryPlan {
   return validation;
 }
 
+function readOnlyPlan(fixture: GitFixture) {
+  const readInput: ReadOnlyNodeInput = {
+    taskId: 'core-audit',
+    sourceCommit: fixture.baselineCommit,
+  };
+  const audit = readOnlyNode(readInput);
+  const planInput: PlanInput = {
+    sourceCommit: fixture.baselineCommit,
+    nodes: [audit],
+    edges: [],
+  };
+  return { accepted: acceptedPlan(planInput), audit };
+}
+
 function preparedIntegration(
   accepted: ValidatedModuleDeliveryPlan,
 ): ModuleIntegrationState {
   const fixture = currentFixture();
+  const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
+    acceptedPlan: accepted,
+    repositoryRoot: fixture.sourceRoot,
+    expectedLineage: accepted.plan.nodes.map(({ taskId, parentLineage }) => ({
+      taskId,
+      parentLineage,
+    })),
+  };
+  const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
+  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+    authority,
+    acceptedPlan: accepted,
+    headCommit: accepted.plan.sourceCommit,
+    integratedWriterFrontiers: [],
+    acceptedEvidence: [],
+  };
+  const admissionState = createModuleDeliveryAdmissionState(stateRequest);
   const request: PrepareModuleIntegrationRequest = {
+    authority,
     repositoryRoot: fixture.sourceRoot,
     workspaceRoot: fixture.workspaceRoot,
     acceptedPlan: accepted,
+    admissionState,
   };
   const state = prepareModuleIntegration(request);
+  authorities.set(state, authority);
   workspaces.push(state.workspace);
   return state;
 }
@@ -269,7 +333,7 @@ function preparedWriter(preparation: WriterPreparation): ModuleWorktreeHandle {
     workspaceRoot: preparation.fixture.workspaceRoot,
     planDigest: preparation.acceptedPlan.planDigest,
     taskId: preparation.node.taskId,
-    attempt: preparation.attempt ?? 1,
+    attempt: 1,
     baselineCommit: preparation.baselineCommit,
   };
   const workspace = prepareModuleWorktree(request);
@@ -293,19 +357,125 @@ function commitWriter(commit: WriterCommit): ModuleDeliveryHandoffSubmission {
   };
 }
 
-function integrateWave(integration: WaveIntegration): ModuleIntegrationState {
-  const request: IntegrateVerifiedModuleDeliveryWaveRequest = {
+type LeaseLookup = {
+  readonly recording: ModuleDeliveryLeaseRecording;
+  readonly taskId: string;
+};
+
+function authorityFor(
+  state: ModuleIntegrationState,
+): ModuleDeliveryGenerationAuthority {
+  const authority = authorities.get(state);
+  if (!authority) throw new Error('Fixture integration authority is missing.');
+  return authority;
+}
+
+function leaseFor(input: LeaseLookup): ModuleDeliveryAttemptLease {
+  const lease = input.recording.leases.find(
+    (candidate) => candidate.taskId === input.taskId,
+  );
+  if (!lease) throw new Error(`Fixture lease ${input.taskId} is missing.`);
+  return lease;
+}
+
+function recordingFor(
+  integration: WaveIntegration,
+): ModuleDeliveryLeaseRecording {
+  const authority = authorityFor(integration.state);
+  const admissionState = integration.state.admissionState;
+  const selectRequest: SelectModuleDeliveryAdmissionsRequest = {
+    authority,
     acceptedPlan: integration.acceptedPlan,
-    state: integration.state,
-    waveIndex: integration.state.completedWaveCount,
-    handoffs: integration.handoffs,
+    state: admissionState,
   };
-  return integrateVerifiedModuleDeliveryWave(request);
+  const selection = selectModuleDeliveryAdmissions(selectRequest);
+  const requested = new Set(integration.handoffs.map(({ taskId }) => taskId));
+  const admissions =
+    integration.handoffs.length === 0
+      ? selection.admissions
+      : selection.admissions.filter(({ taskId }) => requested.has(taskId));
+  if (admissions.length === 0)
+    throw new Error('Fixture providers are not authoritatively ready.');
+  const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+    authority,
+    state: admissionState,
+    admissions,
+  };
+  return recordModuleDeliveryAttemptLeases(leaseRequest);
+}
+
+function integrateRequest(
+  request: IntegrateVerifiedModuleDeliveryTaskRequest,
+): ModuleIntegrationState {
+  const state = integrateVerifiedModuleDeliveryTask(request);
+  authorities.set(state, request.authority);
+  return state;
+}
+
+function integrateRequestWithEvidenceTreeListingCount(
+  request: IntegrateVerifiedModuleDeliveryTaskRequest,
+) {
+  const gitSpy = spyOn(gitCommand, 'runModuleDeliveryGit');
+  try {
+    const state = integrateRequest(request);
+    let listingCount = 0;
+    for (const invocation of gitSpy.mock.calls) {
+      const gitRequest = invocation[0];
+      if (
+        gitRequest.args[0] === 'ls-tree' &&
+        gitRequest.args.includes('--full-tree')
+      ) {
+        listingCount += 1;
+      }
+    }
+    return { state, listingCount };
+  } finally {
+    gitSpy.mockRestore();
+  }
+}
+
+function integrateWave(integration: WaveIntegration): ModuleIntegrationState {
+  const recording = recordingFor(integration);
+  let state = integration.state;
+  for (const lease of recording.leases) {
+    const node = integration.acceptedPlan.plan.nodes.find(
+      ({ taskId }) => taskId === lease.taskId,
+    );
+    if (!node) throw new Error(`Missing fixture task ${lease.taskId}.`);
+    const handoff = integration.handoffs.find(
+      ({ taskId }) => taskId === lease.taskId,
+    );
+    let submission:
+      | ModuleDeliveryReadOnlyEvidenceSubmission
+      | ModuleDeliveryWriteProviderSubmission;
+    if (node.kind === ModuleDeliveryTaskKind.Write) {
+      if (!handoff) throw new Error('Write integration requires a handoff.');
+      submission = {
+        kind: ModuleDeliveryProviderSubmissionKind.Write,
+        generation: integration.acceptedPlan.plan.generation,
+        acceptedByTeam: node.acceptanceOwner,
+        verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
+        handoff,
+      };
+    } else {
+      const evidenceInput: EvidenceFixtureInput = { state, node, lease };
+      submission = evidenceSubmission(evidenceInput);
+    }
+    const request: IntegrateVerifiedModuleDeliveryTaskRequest = {
+      authority: authorityFor(state),
+      acceptedPlan: integration.acceptedPlan,
+      lease,
+      state,
+      submission,
+    };
+    state = integrateRequest(request);
+  }
+  return state;
 }
 
 function independentWriter(
   input: IndependentWriterInput,
-): WriteModuleDeliveryNode {
+): ModuleDeliveryWriteNodeV2 {
   const writeInput: WriteNodeInput = {
     taskId: input.taskId,
     sourceCommit: input.sourceCommit,
@@ -316,18 +486,9 @@ function independentWriter(
   return writeNode(writeInput);
 }
 
-test('module delivery preparation is gated before request inspection', () => {
-  const incompleteRequest = {};
-  const request = Object.freeze(
-    incompleteRequest,
-  ) as PrepareModuleIntegrationRequest;
-  expect(() => prepareModuleIntegration(request)).toThrow(
-    MODULE_DELIVERY_INTEGRATION_INACTIVE_MESSAGE,
-  );
-});
-
-describe.skip('module delivery wave integration pending admission', () => {
+describe('module delivery wave integration', () => {
   test('integrates a complete wave in accepted topology order without touching source', () => {
+    expect('mintIntegratedWriterFrontier' in integrationSource).toBe(false);
     const fixture = createTrackedFixture();
     const alphaClaim = `${CORE_ROOT}/alpha/**`;
     const betaClaim = `${CORE_ROOT}/beta/**`;
@@ -402,6 +563,19 @@ describe.skip('module delivery wave integration pending admission', () => {
     ]);
     expect(advanced.headCommit).not.toBe(state.headCommit);
     expect(repeated.headCommit).toBe(advanced.headCommit);
+    const firstFinalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority: authorityFor(advanced),
+      acceptedPlan: accepted,
+      state: advanced,
+    };
+    const repeatedFinalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority: authorityFor(repeated),
+      acceptedPlan: accepted,
+      state: repeated,
+    };
+    expect(
+      finalizeModuleDeliveryIntegration(firstFinalization).headCommit,
+    ).toBe(finalizeModuleDeliveryIntegration(repeatedFinalization).headCommit);
     expect(
       sourceGit(['show', `${advanced.headCommit}:${alphaCommit.relativePath}`]),
     ).toBe('alpha');
@@ -411,39 +585,71 @@ describe.skip('module delivery wave integration pending admission', () => {
     expect(sourceGit(['rev-parse', 'HEAD'])).toBe(sourceHead);
     expect(sourceGit(['status', '--porcelain=v1'])).toBe('');
 
-    expect(() => integrateWave(integration)).toThrow('stale');
+    expect(() => integrateWave(integration)).toThrow('invalid or stale');
   });
 
-  test('advances a read-only wave without creating a commit', () => {
+  test('authenticates typed evidence and rejects stale tuples after supersession', () => {
     const fixture = createTrackedFixture();
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted, audit } = readOnlyPlan(fixture);
     const state = preparedIntegration(accepted);
     const integration: WaveIntegration = {
       acceptedPlan: accepted,
       state,
       handoffs: [],
     };
-    const advanced = integrateWave(integration);
+    const recording = recordingFor(integration);
+    const leaseLookup: LeaseLookup = { recording, taskId: audit.taskId };
+    const lease = leaseFor(leaseLookup);
+    const evidenceInput: EvidenceFixtureInput = { state, node: audit, lease };
+    const valid = evidenceSubmission(evidenceInput);
+    for (const [submission, error] of invalidEvidenceCases(valid)) {
+      const invalidRequest: IntegrateVerifiedModuleDeliveryTaskRequest = {
+        authority: authorityFor(state),
+        acceptedPlan: accepted,
+        lease,
+        state,
+        submission,
+      };
+      expect(() => integrateVerifiedModuleDeliveryTask(invalidRequest)).toThrow(
+        error,
+      );
+    }
+    const request: IntegrateVerifiedModuleDeliveryTaskRequest = {
+      authority: authorityFor(state),
+      acceptedPlan: accepted,
+      lease,
+      state,
+      submission: valid,
+    };
+    const verifiedIntegration =
+      integrateRequestWithEvidenceTreeListingCount(request);
+    const advanced = verifiedIntegration.state;
+    expect(verifiedIntegration.listingCount).toBe(2);
     expect(advanced.completedWaveCount).toBe(1);
     expect(advanced.headCommit).toBe(state.headCommit);
-    expect(advanced.integratedTaskIds).toEqual(['core-audit']);
-    expect(() => integrateWave(integration)).toThrow('stale');
+    expect(advanced.integratedTaskIds).toEqual([]);
+    const nextPlan: ModuleDeliveryPlan = { ...accepted.plan, generation: 2 };
+    const next = decodeAndValidateModuleDeliveryPlan(JSON.stringify(nextPlan));
+    if (next.status !== ModuleDeliveryValidationStatus.Accepted)
+      throw new Error('Superseding evidence plan is invalid.');
+    const restart: RestartModuleDeliveryGenerationRequest = {
+      authority: authorityFor(advanced),
+      previousState: advanced.admissionState,
+      acceptedPlan: next,
+      expectedLineage: next.plan.nodes.map(({ taskId, parentLineage }) => ({
+        taskId,
+        parentLineage,
+      })),
+    };
+    restartModuleDeliveryGeneration(restart);
+    expect(() => integrateVerifiedModuleDeliveryTask(request)).toThrow(
+      'superseded',
+    );
   });
 
   test('binds a dependent writer to the exact integrated frontier', () => {
     const fixture = createTrackedFixture();
     const providerClaim = `${CORE_ROOT}/provider/**`;
-    const consumerClaim = `${CORE_ROOT}/consumer/**`;
     const providerInput: IndependentWriterInput = {
       taskId: 'core-provider',
       sourceCommit: fixture.baselineCommit,
@@ -455,7 +661,7 @@ describe.skip('module delivery wave integration pending admission', () => {
       sourceCommit: fixture.baselineCommit,
       dependencies: ['core-provider'],
       readClaims: [providerClaim],
-      writeClaims: [consumerClaim],
+      writeClaims: [providerClaim],
     };
     const consumer = writeNode(consumerInput);
     const edgeInput: EdgeInput = {
@@ -498,7 +704,7 @@ describe.skip('module delivery wave integration pending admission', () => {
     const consumerWorkspace = preparedWriter(consumerPreparation);
     const consumerCommit: WriterCommit = {
       workspace: consumerWorkspace,
-      relativePath: `${CORE_ROOT}/consumer/value.ts`,
+      relativePath: `${CORE_ROOT}/provider/consumer.ts`,
       contents: 'consumer\n',
     };
     const consumerHandoff = commitWriter(consumerCommit);
@@ -536,23 +742,9 @@ describe.skip('module delivery wave integration pending admission', () => {
       state,
       handoffs: [],
     };
-    expect(() => integrateWave(missing)).toThrow('exactly equal');
+    expect(() => integrateWave(missing)).toThrow('requires a handoff');
     expect(worktreeGit(state.workspace)(['rev-parse', 'HEAD'])).toBe(
       state.headCommit,
-    );
-
-    const tamperedState: ModuleIntegrationState = {
-      ...state,
-      completedWaveCount: 1,
-      integratedTaskIds: [],
-    };
-    const tamperedIntegration: WaveIntegration = {
-      acceptedPlan: accepted,
-      state: tamperedState,
-      handoffs: [],
-    };
-    expect(() => integrateWave(tamperedIntegration)).toThrow(
-      'private provenance',
     );
 
     const preparation: WriterPreparation = {
@@ -572,9 +764,10 @@ describe.skip('module delivery wave integration pending admission', () => {
       ...valid,
       commit: fixture.baselineCommit,
     };
+    const forgedState = preparedIntegration(accepted);
     const forgedIntegration: WaveIntegration = {
       acceptedPlan: accepted,
-      state,
+      state: forgedState,
       handoffs: [forged],
     };
     expect(() => integrateWave(forgedIntegration)).toThrow('Raw handoff');
@@ -657,17 +850,7 @@ describe.skip('module delivery wave integration pending admission', () => {
 
   test('rejects source byte, ref, and config drift after preparation', () => {
     const fixture = createTrackedFixture();
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     const state = preparedIntegration(accepted);
     const sourceWrite = {
       fixture,
@@ -690,17 +873,7 @@ describe.skip('module delivery wave integration pending admission', () => {
 
   test('rejects drift in a custom ref outside the private integration namespace', () => {
     const fixture = createTrackedFixture();
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     const state = preparedIntegration(accepted);
     fixtureGit(fixture)([
       'update-ref',
@@ -727,17 +900,7 @@ describe.skip('module delivery wave integration pending admission', () => {
       'refs/custom/module-pointer',
       'refs/heads/symbolic-a',
     ]);
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     const state = preparedIntegration(accepted);
     sourceGit([
       'symbolic-ref',
@@ -759,17 +922,7 @@ describe.skip('module delivery wave integration pending admission', () => {
 
   test('rejects source mode drift at a metadata-only checkpoint', () => {
     const fixture = createTrackedFixture();
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     const state = preparedIntegration(accepted);
     chmodSync(join(fixture.sourceRoot, 'module/seed.txt'), 0o755);
     const integration: WaveIntegration = {
@@ -788,33 +941,13 @@ describe.skip('module delivery wave integration pending admission', () => {
     const realModulePath = join(fixture.sourceRoot, 'module-real');
     renameSync(modulePath, realModulePath);
     symlinkSync('module-real', modulePath);
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     expect(() => preparedIntegration(accepted)).toThrow('symlink ancestor');
   });
 
   test('rejects an unauthorized integration-worktree commit', () => {
     const fixture = createTrackedFixture();
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     const state = preparedIntegration(accepted);
     const sourceGit = fixtureGit(fixture);
     expect(
@@ -836,17 +969,7 @@ describe.skip('module delivery wave integration pending admission', () => {
 
   test('cleans the latest session through the original stable handle exactly once', () => {
     const fixture = createTrackedFixture();
-    const readInput: ReadOnlyNodeInput = {
-      taskId: 'core-audit',
-      sourceCommit: fixture.baselineCommit,
-    };
-    const audit = readOnlyNode(readInput);
-    const planInput: PlanInput = {
-      sourceCommit: fixture.baselineCommit,
-      nodes: [audit],
-      edges: [],
-    };
-    const accepted = acceptedPlan(planInput);
+    const { accepted } = readOnlyPlan(fixture);
     const original = preparedIntegration(accepted);
     const integration: WaveIntegration = {
       acceptedPlan: accepted,
