@@ -1,4 +1,3 @@
-/* eslint-disable max-params, loom/no-raw-object-arguments */
 import { describe, expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
@@ -23,6 +22,8 @@ import {
 } from '../../src/module-delivery/index.ts';
 
 import type {
+  CreateModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryEdgeContract,
@@ -30,6 +31,10 @@ import type {
   ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV2,
   ModuleDeliveryWriteNodeV2,
+  RecordModuleDeliveryAttemptDispositionRequest,
+  RecordModuleDeliveryAttemptLeasesRequest,
+  RestartModuleDeliveryGenerationRequest,
+  SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
 
@@ -43,11 +48,23 @@ type Runtime = {
   readonly state: ModuleDeliveryAdmissionState;
 };
 
-function writeNode(
-  taskId: string,
-  dependencies: readonly string[],
-  path: string,
-): ModuleDeliveryWriteNodeV2 {
+type WriteNodeRequest = {
+  readonly taskId: string;
+  readonly dependencies: readonly string[];
+  readonly path: string;
+};
+
+type RuntimeCreationRequest = {
+  readonly plan: ValidatedModuleDeliveryPlan;
+};
+
+type LeaseRequest = {
+  readonly runtime: Runtime;
+  readonly taskId: string;
+};
+
+function writeNode(request: WriteNodeRequest): ModuleDeliveryWriteNodeV2 {
+  const { taskId, dependencies, path } = request;
   return {
     kind: ModuleDeliveryTaskKind.Write,
     taskId,
@@ -87,9 +104,24 @@ function writeNode(
   };
 }
 
-const alpha = writeNode('alpha', [], 'alpha');
-const beta = writeNode('beta', [], 'beta');
-const consumer = writeNode('consumer', ['alpha'], 'consumer');
+const alphaRequest: WriteNodeRequest = {
+  taskId: 'alpha',
+  dependencies: [],
+  path: 'alpha',
+};
+const betaRequest: WriteNodeRequest = {
+  taskId: 'beta',
+  dependencies: [],
+  path: 'beta',
+};
+const consumerRequest: WriteNodeRequest = {
+  taskId: 'consumer',
+  dependencies: ['alpha'],
+  path: 'consumer',
+};
+const alpha = writeNode(alphaRequest);
+const beta = writeNode(betaRequest);
+const consumer = writeNode(consumerRequest);
 const edge: ModuleDeliveryEdgeContract = {
   providerTaskId: 'alpha',
   consumerTaskId: 'consumer',
@@ -134,39 +166,50 @@ function lineage(
   }));
 }
 
-function runtime(plan = validate(PLAN)): Runtime {
-  const authority = createModuleDeliveryGenerationAuthority({
+function runtime(request: RuntimeCreationRequest): Runtime {
+  const { plan } = request;
+  const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
     acceptedPlan: plan,
     expectedLineage: lineage(plan),
-  });
-  const state = createModuleDeliveryAdmissionState({
+  };
+  const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
+  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority,
     acceptedPlan: plan,
     headCommit: SOURCE,
     integratedWriterFrontiers: [],
     acceptedEvidence: [],
-  });
+  };
+  const state = createModuleDeliveryAdmissionState(stateRequest);
   return { accepted: plan, authority, state };
 }
 
+function defaultRuntime(): Runtime {
+  const request: RuntimeCreationRequest = { plan: validate(PLAN) };
+  return runtime(request);
+}
+
 function select(active: Runtime) {
-  return selectModuleDeliveryAdmissions({
+  const request: SelectModuleDeliveryAdmissionsRequest = {
     authority: active.authority,
     acceptedPlan: active.accepted,
     state: active.state,
-  });
+  };
+  return selectModuleDeliveryAdmissions(request);
 }
 
-function lease(active: Runtime, taskId = 'alpha'): ModuleDeliveryAttemptLease {
+function lease(request: LeaseRequest): ModuleDeliveryAttemptLease {
+  const { runtime: active, taskId } = request;
   const admission = select(active).admissions.find(
     (entry) => entry.taskId === taskId,
   );
   if (!admission) throw new Error(`Admission ${taskId} is missing.`);
-  const recording = recordModuleDeliveryAttemptLeases({
+  const recordingRequest: RecordModuleDeliveryAttemptLeasesRequest = {
     authority: active.authority,
     state: active.state,
     admissions: [admission],
-  });
+  };
+  const recording = recordModuleDeliveryAttemptLeases(recordingRequest);
   const leased = recording.leases[0];
   if (!leased) throw new Error(`Lease ${taskId} is missing.`);
   return leased;
@@ -174,7 +217,7 @@ function lease(active: Runtime, taskId = 'alpha'): ModuleDeliveryAttemptLease {
 
 describe('module delivery admission authority', () => {
   test('selects the deterministic maximal safe set and requires exact integrated frontiers', () => {
-    const active = runtime();
+    const active = defaultRuntime();
     const first = select(active);
     expect(first.status).toBe(ModuleDeliveryAdmissionSelectionStatus.Selected);
     expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
@@ -196,51 +239,58 @@ describe('module delivery admission authority', () => {
       ({ taskId }) => taskId === 'alpha',
     );
     if (!alphaAdmission) throw new Error('Alpha admission is missing.');
-    const alphaLease = recordModuleDeliveryAttemptLeases({
+    const alphaLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
       authority: active.authority,
       state: active.state,
       admissions: [alphaAdmission],
-    }).leases[0];
+    };
+    const alphaLease =
+      recordModuleDeliveryAttemptLeases(alphaLeaseRequest).leases[0];
     if (!alphaLease) throw new Error('Alpha lease is missing.');
 
-    const advancedState = createModuleDeliveryAdmissionState({
+    const advancedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       headCommit: INTEGRATED,
       integratedWriterFrontiers: [{ taskId: 'alpha', headCommit: INTEGRATED }],
       acceptedEvidence: [],
-    });
+    };
+    const advancedState =
+      createModuleDeliveryAdmissionState(advancedStateRequest);
     expect(() => select(active)).toThrow('stale');
-    recordModuleDeliveryAttemptDisposition({
-      authority: active.authority,
-      state: advancedState,
-      lease: alphaLease,
-      outcome: {
-        kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-        conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-      },
-    });
-    const advanced = select({ ...active, state: advancedState });
+    const acceptedDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
+        authority: active.authority,
+        state: advancedState,
+        lease: alphaLease,
+        outcome: {
+          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+        },
+      };
+    recordModuleDeliveryAttemptDisposition(acceptedDispositionRequest);
+    const advancedRuntime: Runtime = { ...active, state: advancedState };
+    const advanced = select(advancedRuntime);
     expect(
       advanced.admissions.find(({ taskId }) => taskId === 'consumer')
         ?.startingFrontier,
     ).toBe(INTEGRATED);
+    const mismatchedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      headCommit: 'f'.repeat(40),
+      integratedWriterFrontiers: [{ taskId: 'alpha', headCommit: INTEGRATED }],
+      acceptedEvidence: [],
+    };
     expect(() =>
-      createModuleDeliveryAdmissionState({
-        authority: active.authority,
-        acceptedPlan: active.accepted,
-        headCommit: 'f'.repeat(40),
-        integratedWriterFrontiers: [
-          { taskId: 'alpha', headCommit: INTEGRATED },
-        ],
-        acceptedEvidence: [],
-      }),
+      createModuleDeliveryAdmissionState(mismatchedStateRequest),
     ).toThrow('exact integrated writer frontier');
   });
 
   test('snapshots validated metadata and rejects forged plans and lineage', () => {
     const accepted = validate(PLAN);
-    const active = runtime(accepted);
+    const activeRuntimeRequest: RuntimeCreationRequest = { plan: accepted };
+    const active = runtime(activeRuntimeRequest);
     const sourceNode = accepted.plan.nodes.find(
       ({ taskId }) => taskId === 'alpha',
     );
@@ -255,11 +305,13 @@ describe('module delivery admission authority', () => {
       ...validate(PLAN),
       topologicalOrder: ['consumer', 'alpha', 'beta'],
     };
-    expect(() =>
-      createModuleDeliveryGenerationAuthority({
+    const forgedAuthorityRequest: CreateModuleDeliveryGenerationAuthorityRequest =
+      {
         acceptedPlan: forged,
         expectedLineage: lineage(forged),
-      }),
+      };
+    expect(() =>
+      createModuleDeliveryGenerationAuthority(forgedAuthorityRequest),
     ).toThrow('metadata is inconsistent');
 
     const wrongLineage: readonly ModuleDeliveryExpectedLineage[] = lineage(
@@ -277,47 +329,56 @@ describe('module delivery admission authority', () => {
           }
         : entry,
     );
-    expect(() =>
-      createModuleDeliveryGenerationAuthority({
+    const wrongLineageAuthorityRequest: CreateModuleDeliveryGenerationAuthorityRequest =
+      {
         acceptedPlan: validate(PLAN),
         expectedLineage: wrongLineage,
-      }),
+      };
+    expect(() =>
+      createModuleDeliveryGenerationAuthority(wrongLineageAuthorityRequest),
     ).toThrow('Expected lineage is invalid');
   });
 
   test('rejects forged states, admissions, leases, attempts, and duplicates', () => {
-    const active = runtime();
+    const active = defaultRuntime();
     const admission = select(active).admissions[0];
     if (!admission) throw new Error('Admission is missing.');
     const forgedState: ModuleDeliveryAdmissionState = { ...active.state };
+    const forgedSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      state: forgedState,
+    };
     expect(() =>
-      selectModuleDeliveryAdmissions({
-        authority: active.authority,
-        acceptedPlan: active.accepted,
-        state: forgedState,
-      }),
+      selectModuleDeliveryAdmissions(forgedSelectionRequest),
     ).toThrow('authority is invalid');
+    const duplicateLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+      authority: active.authority,
+      state: active.state,
+      admissions: [admission, admission],
+    };
     expect(() =>
-      recordModuleDeliveryAttemptLeases({
-        authority: active.authority,
-        state: active.state,
-        admissions: [admission, admission],
-      }),
+      recordModuleDeliveryAttemptLeases(duplicateLeaseRequest),
     ).toThrow('capability is invalid');
     const forgedAdmission = { ...admission, taskId: 'beta', attempt: 4 };
-    expect(() =>
-      recordModuleDeliveryAttemptLeases({
-        authority: active.authority,
-        state: active.state,
-        admissions: [forgedAdmission],
-      }),
-    ).toThrow('capability is invalid');
+    const forgedLeaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
+      authority: active.authority,
+      state: active.state,
+      admissions: [forgedAdmission],
+    };
+    expect(() => recordModuleDeliveryAttemptLeases(forgedLeaseRequest)).toThrow(
+      'capability is invalid',
+    );
   });
 
   test('retains lease history through disposition and restarts without stale generation state', () => {
-    const active = runtime();
-    const firstLease = lease(active);
-    const dispositionState = recordModuleDeliveryAttemptDisposition({
+    const active = defaultRuntime();
+    const firstLeaseRequest: LeaseRequest = {
+      runtime: active,
+      taskId: 'alpha',
+    };
+    const firstLease = lease(firstLeaseRequest);
+    const dispositionRequest: RecordModuleDeliveryAttemptDispositionRequest = {
       authority: active.authority,
       state: active.state,
       lease: firstLease,
@@ -325,32 +386,44 @@ describe('module delivery admission authority', () => {
         kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
         conclusion: ModuleDeliveryGenerationFenceKind.Cancelled,
       },
-    });
-    const retry = select({
+    };
+    const dispositionState =
+      recordModuleDeliveryAttemptDisposition(dispositionRequest);
+    const retryRuntime: Runtime = {
       ...active,
       state: dispositionState,
-    }).admissions.find(({ taskId }) => taskId === 'alpha');
+    };
+    const retry = select(retryRuntime).admissions.find(
+      ({ taskId }) => taskId === 'alpha',
+    );
     expect(retry?.attempt).toBe(2);
-    expect(() =>
-      recordModuleDeliveryAttemptDisposition({
+    const forgedLease: ModuleDeliveryAttemptLease = {
+      ...firstLease,
+      attempt: 2,
+    };
+    const forgedDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
         authority: active.authority,
         state: active.state,
-        lease: { ...firstLease, attempt: 2 },
+        lease: forgedLease,
         outcome: {
           kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
           conclusion: ModuleDeliveryGenerationFenceKind.Rejected,
         },
-      }),
+      };
+    expect(() =>
+      recordModuleDeliveryAttemptDisposition(forgedDispositionRequest),
     ).toThrow('lease authority is invalid');
 
     const secondPlan: ModuleDeliveryPlanV2 = { ...PLAN, generation: 2 };
     const second = validate(secondPlan);
-    const restarted = restartModuleDeliveryGeneration({
+    const restartRequest: RestartModuleDeliveryGenerationRequest = {
       authority: active.authority,
       previousState: dispositionState,
       acceptedPlan: second,
       expectedLineage: lineage(second),
-    });
+    };
+    const restarted = restartModuleDeliveryGeneration(restartRequest);
     expect(restarted.generation).toBe(2);
     expect(restarted.integratedWriterFrontiers).toEqual([]);
     expect(restarted.acceptedProviderEvidence).toEqual([]);

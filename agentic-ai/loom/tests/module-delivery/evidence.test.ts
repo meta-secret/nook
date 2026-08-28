@@ -1,4 +1,3 @@
-/* eslint-disable max-params, loom/no-raw-object-arguments */
 import { expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
@@ -34,17 +33,25 @@ import {
 
 import type {
   AcceptedModuleDeliveryEvidence,
+  CreateModuleDeliveryAdmissionStateRequest,
+  CreateModuleDeliveryGenerationAuthorityRequest,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryAttemptLease,
   ModuleDeliveryEdgeContract,
+  ModuleDeliveryEvidenceArtifactDigestRequest,
+  ModuleDeliveryEvidenceDigestRequest,
   ModuleDeliveryEvidenceSynthesisNodeV2,
+  ModuleDeliveryEvidenceSubmissionVerification,
   ModuleDeliveryGenerationAuthority,
   ModuleDeliveryPlanV2,
   ModuleDeliveryReadOnlyEvidenceSubmission,
   ModuleDeliveryReadOnlyNodeV2,
+  RecordModuleDeliveryAttemptDispositionRequest,
+  RecordModuleDeliveryAttemptLeasesRequest,
+  SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
-import type { GitFixture } from './worktree-test-support.ts';
+import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 
@@ -57,10 +64,35 @@ type Runtime = {
   readonly synthesis: ModuleDeliveryEvidenceSynthesisNodeV2;
 };
 
-function edge(
-  providerTaskId: string,
-  consumerTaskId: string,
-): ModuleDeliveryEdgeContract {
+type EvidenceEdgeRequest = {
+  readonly providerTaskId: string;
+  readonly consumerTaskId: string;
+};
+
+type AdmittedLeaseRequest = {
+  readonly runtime: Runtime;
+  readonly taskId: string;
+};
+
+type EvidenceSubmissionRequest = {
+  readonly runtime: Runtime;
+  readonly lease: ModuleDeliveryAttemptLease;
+  readonly acceptedProviderEvidence: readonly AcceptedModuleDeliveryEvidence[];
+};
+
+type EvidenceVerificationRequest = EvidenceSubmissionRequest & {
+  readonly candidate: ModuleDeliveryReadOnlyEvidenceSubmission;
+};
+
+type ExpectedEvidenceIdentity = {
+  readonly taskId: string;
+  readonly attempt: number;
+  readonly planDigest: string;
+  readonly verdict: ModuleDeliveryEvidenceVerdict;
+};
+
+function edge(request: EvidenceEdgeRequest): ModuleDeliveryEdgeContract {
+  const { providerTaskId, consumerTaskId } = request;
   return {
     providerTaskId,
     consumerTaskId,
@@ -137,6 +169,10 @@ function runtime(): Runtime {
       ],
     },
   };
+  const edgeRequest: EvidenceEdgeRequest = {
+    providerTaskId: provider.taskId,
+    consumerTaskId: synthesis.taskId,
+  };
   const plan: ModuleDeliveryPlanV2 = {
     version: 2,
     generation: 1,
@@ -151,55 +187,58 @@ function runtime(): Runtime {
       validationCommands: ['task loom:verify'],
     },
     nodes: [synthesis, provider],
-    edgeContracts: [edge(provider.taskId, synthesis.taskId)],
+    edgeContracts: [edge(edgeRequest)],
   };
   const result = decodeAndValidateModuleDeliveryPlan(JSON.stringify(plan));
   if (result.status !== ModuleDeliveryValidationStatus.Accepted)
     throw new Error(JSON.stringify(result.issues));
-  const authority = createModuleDeliveryGenerationAuthority({
+  const authorityRequest: CreateModuleDeliveryGenerationAuthorityRequest = {
     acceptedPlan: result,
     expectedLineage: result.plan.nodes.map((node) => ({
       taskId: node.taskId,
       parentLineage: node.parentLineage,
     })),
-  });
-  const state = createModuleDeliveryAdmissionState({
+  };
+  const authority = createModuleDeliveryGenerationAuthority(authorityRequest);
+  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority,
     acceptedPlan: result,
     headCommit: fixture.baselineCommit,
     integratedWriterFrontiers: [],
     acceptedEvidence: [],
-  });
+  };
+  const state = createModuleDeliveryAdmissionState(stateRequest);
   return { fixture, accepted: result, authority, state, provider, synthesis };
 }
 
 function admittedLease(
-  runtime: Runtime,
-  taskId: string,
+  request: AdmittedLeaseRequest,
 ): ModuleDeliveryAttemptLease {
-  const selection = selectModuleDeliveryAdmissions({
+  const { runtime, taskId } = request;
+  const selectionRequest: SelectModuleDeliveryAdmissionsRequest = {
     authority: runtime.authority,
     acceptedPlan: runtime.accepted,
     state: runtime.state,
-  });
+  };
+  const selection = selectModuleDeliveryAdmissions(selectionRequest);
   const admission = selection.admissions.find(
     (entry) => entry.taskId === taskId,
   );
   if (!admission) throw new Error(`Admission ${taskId} is missing.`);
-  const lease = recordModuleDeliveryAttemptLeases({
+  const leaseRequest: RecordModuleDeliveryAttemptLeasesRequest = {
     authority: runtime.authority,
     state: runtime.state,
     admissions: [admission],
-  }).leases[0];
+  };
+  const lease = recordModuleDeliveryAttemptLeases(leaseRequest).leases[0];
   if (!lease) throw new Error(`Lease ${taskId} is missing.`);
   return lease;
 }
 
 function submission(
-  runtime: Runtime,
-  lease: ModuleDeliveryAttemptLease,
-  acceptedProviderEvidence: readonly AcceptedModuleDeliveryEvidence[] = [],
+  request: EvidenceSubmissionRequest,
 ): ModuleDeliveryReadOnlyEvidenceSubmission {
+  const { runtime, lease, acceptedProviderEvidence } = request;
   const node = runtime.accepted.plan.nodes.find(
     ({ taskId }) => taskId === lease.taskId,
   );
@@ -208,22 +247,26 @@ function submission(
   const identities = acceptedProviderEvidence.map(
     moduleDeliveryAcceptedEvidenceIdentity,
   );
+  const claimRequest: ModuleDeliveryEvidenceDigestRequest = {
+    repositoryRoot: runtime.fixture.sourceRoot,
+    sourceCommit: lease.startingFrontier,
+    evidenceSurface: node.resources.evidenceSurface,
+  };
   const claimIdentities =
     node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis
       ? []
-      : moduleDeliveryEvidenceClaimIdentities({
-          repositoryRoot: runtime.fixture.sourceRoot,
-          sourceCommit: lease.startingFrontier,
-          evidenceSurface: node.resources.evidenceSurface,
-        });
+      : moduleDeliveryEvidenceClaimIdentities(claimRequest);
   const artifactIdentity = `evidence/${node.taskId}.json`;
   const evidence = [`${node.taskId} reviewed.`];
-  const artifactDigest = moduleDeliveryEvidenceArtifactDigest({
+  const artifactDigestRequest: ModuleDeliveryEvidenceArtifactDigestRequest = {
     artifactIdentity,
     evidence,
     acceptanceRequirements: lease.acceptanceRequirements,
     acceptedProviderEvidence: identities,
-  });
+  };
+  const artifactDigest = moduleDeliveryEvidenceArtifactDigest(
+    artifactDigestRequest,
+  );
   return {
     kind: ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence,
     schemaVersion: 1,
@@ -246,12 +289,10 @@ function submission(
 }
 
 function verify(
-  runtime: Runtime,
-  lease: ModuleDeliveryAttemptLease,
-  candidate: ModuleDeliveryReadOnlyEvidenceSubmission,
-  acceptedProviderEvidence: readonly AcceptedModuleDeliveryEvidence[] = [],
+  request: EvidenceVerificationRequest,
 ): AcceptedModuleDeliveryEvidence {
-  return verifyModuleDeliveryEvidenceSubmission({
+  const { runtime, lease, candidate, acceptedProviderEvidence } = request;
+  const verification: ModuleDeliveryEvidenceSubmissionVerification = {
     authority: runtime.authority,
     acceptedPlan: runtime.accepted,
     repositoryRoot: runtime.fixture.sourceRoot,
@@ -259,30 +300,49 @@ function verify(
     submission: candidate,
     lease,
     authorizedProviderEvidence: acceptedProviderEvidence,
-  });
+  };
+  return verifyModuleDeliveryEvidenceSubmission(verification);
 }
 
 test('accepts exact repository evidence and releases its lease only after accepted disposition', () => {
   const active = runtime();
   try {
-    const lease = admittedLease(active, active.provider.taskId);
-    const accepted = verify(active, lease, submission(active, lease));
+    const leaseRequest: AdmittedLeaseRequest = {
+      runtime: active,
+      taskId: active.provider.taskId,
+    };
+    const lease = admittedLease(leaseRequest);
+    const submissionRequest: EvidenceSubmissionRequest = {
+      runtime: active,
+      lease,
+      acceptedProviderEvidence: [],
+    };
+    const candidate = submission(submissionRequest);
+    const verificationRequest: EvidenceVerificationRequest = {
+      ...submissionRequest,
+      candidate,
+    };
+    const accepted = verify(verificationRequest);
     expect(Object.isFrozen(accepted)).toBe(true);
-    expect(moduleDeliveryAcceptedEvidenceIdentity(accepted)).toMatchObject({
+    const expectedIdentity: ExpectedEvidenceIdentity = {
       taskId: active.provider.taskId,
       attempt: 1,
       planDigest: active.accepted.planDigest,
       verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
-    });
+    };
+    expect(moduleDeliveryAcceptedEvidenceIdentity(accepted)).toMatchObject(
+      expectedIdentity,
+    );
+    const activeSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      state: active.state,
+    };
     expect(
-      selectModuleDeliveryAdmissions({
-        authority: active.authority,
-        acceptedPlan: active.accepted,
-        state: active.state,
-      }).admissions,
+      selectModuleDeliveryAdmissions(activeSelectionRequest).admissions,
     ).toEqual([]);
-    expect(() =>
-      recordModuleDeliveryAttemptDisposition({
+    const prematureDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
         authority: active.authority,
         state: active.state,
         lease,
@@ -290,30 +350,37 @@ test('accepts exact repository evidence and releases its lease only after accept
           kind: ModuleDeliveryAttemptDispositionKind.Accepted,
           conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
         },
-      }),
+      };
+    expect(() =>
+      recordModuleDeliveryAttemptDisposition(prematureDispositionRequest),
     ).toThrow('lease capability');
 
-    const evidenceState = createModuleDeliveryAdmissionState({
+    const evidenceStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       headCommit: active.fixture.baselineCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [accepted],
-    });
-    recordModuleDeliveryAttemptDisposition({
-      authority: active.authority,
-      state: evidenceState,
-      lease,
-      outcome: {
-        kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-        conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-      },
-    });
-    const synthesis = selectModuleDeliveryAdmissions({
+    };
+    const evidenceState =
+      createModuleDeliveryAdmissionState(evidenceStateRequest);
+    const acceptedDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
+        authority: active.authority,
+        state: evidenceState,
+        lease,
+        outcome: {
+          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+        },
+      };
+    recordModuleDeliveryAttemptDisposition(acceptedDispositionRequest);
+    const synthesisSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       state: evidenceState,
-    });
+    };
+    const synthesis = selectModuleDeliveryAdmissions(synthesisSelectionRequest);
     expect(synthesis.admissions.map(({ taskId }) => taskId)).toEqual([
       active.synthesis.taskId,
     ]);
@@ -325,8 +392,17 @@ test('accepts exact repository evidence and releases its lease only after accept
 test('rejects forged metadata, evidence capabilities, and authority-owned stale frontier', () => {
   const active = runtime();
   try {
-    const lease = admittedLease(active, active.provider.taskId);
-    const exact = submission(active, lease);
+    const leaseRequest: AdmittedLeaseRequest = {
+      runtime: active,
+      taskId: active.provider.taskId,
+    };
+    const lease = admittedLease(leaseRequest);
+    const submissionRequest: EvidenceSubmissionRequest = {
+      runtime: active,
+      lease,
+      acceptedProviderEvidence: [],
+    };
+    const exact = submission(submissionRequest);
     const mutations: readonly ModuleDeliveryReadOnlyEvidenceSubmission[] = [
       { ...exact, taskId: 'forged-task' },
       { ...exact, attempt: 2 },
@@ -347,42 +423,59 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
         })),
       },
     ];
-    for (const candidate of mutations)
-      expect(() => verify(active, lease, candidate)).toThrow();
+    for (const candidate of mutations) {
+      const mutationVerificationRequest: EvidenceVerificationRequest = {
+        ...submissionRequest,
+        candidate,
+      };
+      expect(() => verify(mutationVerificationRequest)).toThrow();
+    }
 
     const forgedEvidence: AcceptedModuleDeliveryEvidence = {
       ...exact,
       sourceProvenanceDigest: 'f'.repeat(64),
     };
+    const forgedStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      headCommit: active.fixture.baselineCommit,
+      integratedWriterFrontiers: [],
+      acceptedEvidence: [forgedEvidence],
+    };
     expect(() =>
-      createModuleDeliveryAdmissionState({
-        authority: active.authority,
-        acceptedPlan: active.accepted,
-        headCommit: active.fixture.baselineCommit,
-        integratedWriterFrontiers: [],
-        acceptedEvidence: [forgedEvidence],
-      }),
+      createModuleDeliveryAdmissionState(forgedStateRequest),
     ).toThrow('evidence authority is invalid');
 
-    writeFixtureFile({
+    const fileWrite: FixtureFileWrite = {
       fixture: active.fixture,
       relativePath: `${CORE_ROOT}/changed.rs`,
       contents: 'changed\n',
-    });
+    };
+    writeFixtureFile(fileWrite);
     const git = fixtureGit(active.fixture);
     git(['add', '--all']);
     git(['commit', '--quiet', '-m', 'change evidence surface']);
     const advancedCommit = git(['rev-parse', 'HEAD']);
-    const staleState = createModuleDeliveryAdmissionState({
+    const staleStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       headCommit: advancedCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
-    });
+    };
+    const staleState = createModuleDeliveryAdmissionState(staleStateRequest);
     const staleRuntime: Runtime = { ...active, state: staleState };
-    expect(() => verify(staleRuntime, lease, exact)).toThrow('stale');
-    expect(() => verify(active, lease, exact)).toThrow(
+    const staleVerificationRequest: EvidenceVerificationRequest = {
+      ...submissionRequest,
+      runtime: staleRuntime,
+      candidate: exact,
+    };
+    expect(() => verify(staleVerificationRequest)).toThrow('stale');
+    const invalidAuthorityVerificationRequest: EvidenceVerificationRequest = {
+      ...submissionRequest,
+      candidate: exact,
+    };
+    expect(() => verify(invalidAuthorityVerificationRequest)).toThrow(
       'authority is invalid or stale',
     );
   } finally {
@@ -393,48 +486,78 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
 test('synthesis requires exact nonempty accepted provider evidence identities', () => {
   const active = runtime();
   try {
+    const activeSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      state: active.state,
+    };
     expect(
-      selectModuleDeliveryAdmissions({
-        authority: active.authority,
-        acceptedPlan: active.accepted,
-        state: active.state,
-      }).admissions.map(({ taskId }) => taskId),
+      selectModuleDeliveryAdmissions(activeSelectionRequest).admissions.map(
+        ({ taskId }) => taskId,
+      ),
     ).toEqual([active.provider.taskId]);
-    const providerLease = admittedLease(active, active.provider.taskId);
-    const providerEvidence = verify(
-      active,
-      providerLease,
-      submission(active, providerLease),
-    );
-    const evidenceState = createModuleDeliveryAdmissionState({
+    const providerLeaseRequest: AdmittedLeaseRequest = {
+      runtime: active,
+      taskId: active.provider.taskId,
+    };
+    const providerLease = admittedLease(providerLeaseRequest);
+    const providerSubmissionRequest: EvidenceSubmissionRequest = {
+      runtime: active,
+      lease: providerLease,
+      acceptedProviderEvidence: [],
+    };
+    const providerCandidate = submission(providerSubmissionRequest);
+    const providerVerificationRequest: EvidenceVerificationRequest = {
+      ...providerSubmissionRequest,
+      candidate: providerCandidate,
+    };
+    const providerEvidence = verify(providerVerificationRequest);
+    const evidenceStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
       headCommit: active.fixture.baselineCommit,
       integratedWriterFrontiers: [],
       acceptedEvidence: [providerEvidence],
-    });
-    recordModuleDeliveryAttemptDisposition({
-      authority: active.authority,
-      state: evidenceState,
-      lease: providerLease,
-      outcome: {
-        kind: ModuleDeliveryAttemptDispositionKind.Accepted,
-        conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
-      },
-    });
+    };
+    const evidenceState =
+      createModuleDeliveryAdmissionState(evidenceStateRequest);
+    const providerDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
+      {
+        authority: active.authority,
+        state: evidenceState,
+        lease: providerLease,
+        outcome: {
+          kind: ModuleDeliveryAttemptDispositionKind.Accepted,
+          conclusion: ModuleDeliveryGenerationFenceKind.Accepted,
+        },
+      };
+    recordModuleDeliveryAttemptDisposition(providerDispositionRequest);
     const synthesisRuntime: Runtime = { ...active, state: evidenceState };
-    const synthesisLease = admittedLease(
-      synthesisRuntime,
+    const synthesisLeaseRequest: AdmittedLeaseRequest = {
+      runtime: synthesisRuntime,
+      taskId: active.synthesis.taskId,
+    };
+    const synthesisLease = admittedLease(synthesisLeaseRequest);
+    const synthesisSubmissionRequest: EvidenceSubmissionRequest = {
+      runtime: synthesisRuntime,
+      lease: synthesisLease,
+      acceptedProviderEvidence: [providerEvidence],
+    };
+    const exact = submission(synthesisSubmissionRequest);
+    const synthesisVerificationRequest: EvidenceVerificationRequest = {
+      ...synthesisSubmissionRequest,
+      candidate: exact,
+    };
+    expect(verify(synthesisVerificationRequest).taskId).toBe(
       active.synthesis.taskId,
     );
-    const exact = submission(synthesisRuntime, synthesisLease, [
-      providerEvidence,
-    ]);
-    expect(
-      verify(synthesisRuntime, synthesisLease, exact, [providerEvidence])
-        .taskId,
-    ).toBe(active.synthesis.taskId);
-    expect(() => verify(synthesisRuntime, synthesisLease, exact, [])).toThrow(
+    const missingInputsVerificationRequest: EvidenceVerificationRequest = {
+      runtime: synthesisRuntime,
+      lease: synthesisLease,
+      candidate: exact,
+      acceptedProviderEvidence: [],
+    };
+    expect(() => verify(missingInputsVerificationRequest)).toThrow(
       'synthesis inputs',
     );
     const forgedIdentity = exact.acceptedProviderEvidence.map((identity) => ({
@@ -442,9 +565,11 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
       sourceProvenanceDigest: 'f'.repeat(64),
     }));
     const forged = { ...exact, acceptedProviderEvidence: forgedIdentity };
-    expect(() =>
-      verify(synthesisRuntime, synthesisLease, forged, [providerEvidence]),
-    ).toThrow('synthesis inputs');
+    const forgedVerificationRequest: EvidenceVerificationRequest = {
+      ...synthesisSubmissionRequest,
+      candidate: forged,
+    };
+    expect(() => verify(forgedVerificationRequest)).toThrow('synthesis inputs');
   } finally {
     disposeGitFixture(active.fixture);
   }

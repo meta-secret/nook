@@ -25,6 +25,7 @@ export type {
   ModuleDeliveryAdmissionState,
   ModuleDeliveryAttemptDisposition,
   ModuleDeliveryAttemptLease,
+  ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryDispositionOutcome,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,

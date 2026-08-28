@@ -1,4 +1,3 @@
-/* eslint-disable max-params, loom/no-raw-object-arguments */
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
 import {
   ModuleDeliveryBaselineKind,
@@ -22,7 +21,10 @@ import type {
   ModuleDeliveryResourceClaims,
   ValidatedModuleDeliveryPlan,
 } from './domain.ts';
-import type { AcceptedModuleDeliveryEvidence } from './integration-provenance.ts';
+import type {
+  AcceptedModuleDeliveryEvidence,
+  AcceptedModuleDeliveryEvidenceInspection,
+} from './integration-provenance.ts';
 
 const AUTHORITY = Symbol('module-delivery-generation-authority');
 
@@ -180,6 +182,73 @@ type CapabilityProvenance = {
   readonly authority: ModuleDeliveryGenerationAuthority;
   readonly state: ModuleDeliveryAdmissionState;
 };
+export type ModuleDeliveryAuthorityPlanRequest = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
+};
+type ExpectedLineageMapRequest = {
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
+  readonly entries: readonly ModuleDeliveryExpectedLineage[];
+};
+type IntegratedFrontiersRequest = {
+  readonly plan: ValidatedModuleDeliveryPlan;
+  readonly headCommit: string;
+  readonly entries: readonly ModuleDeliveryIntegratedWriterFrontier[];
+};
+type AcceptedEvidenceRequest = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
+  readonly plan: ValidatedModuleDeliveryPlan;
+  readonly entries: readonly AcceptedModuleDeliveryEvidence[];
+};
+type AcceptedEvidenceResult = {
+  readonly accepted: readonly AcceptedModuleDeliveryEvidence[];
+  readonly identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+};
+type NodeLookupRequest = {
+  readonly plan: ValidatedModuleDeliveryPlan;
+  readonly taskId: string;
+};
+type AuthorityTaskRequest = {
+  readonly authority: AuthorityState;
+  readonly taskId: string;
+};
+type TaskReadyRequest = {
+  readonly authority: AuthorityState;
+  readonly state: ModuleDeliveryAdmissionState;
+  readonly node: ModuleDeliveryNodeV2;
+};
+type SynthesisReadyRequest = {
+  readonly state: ModuleDeliveryAdmissionState;
+  readonly node: ModuleDeliveryNodeV2;
+};
+type DispositionValidationRequest = {
+  readonly authority: AuthorityState;
+  readonly state: ModuleDeliveryAdmissionState;
+  readonly lease: ModuleDeliveryAttemptLease;
+  readonly outcome: ModuleDeliveryDispositionOutcome;
+};
+type FrozenResourcesRequest = {
+  readonly node: ModuleDeliveryNodeV2;
+  readonly plan: ValidatedModuleDeliveryPlan;
+};
+type StartingFrontierRequest = {
+  readonly state: ModuleDeliveryAdmissionState;
+  readonly node: ModuleDeliveryNodeV2;
+};
+type ResourceConflictRequest = {
+  readonly first: ModuleDeliveryResourceClaims;
+  readonly second: ModuleDeliveryResourceClaims;
+};
+type ClaimPair = {
+  readonly first: readonly string[];
+  readonly second: readonly string[];
+};
+type FrozenSelectionRequest = {
+  readonly status: ModuleDeliveryAdmissionSelectionStatus;
+  readonly admissions: readonly ModuleDeliveryAdmission[];
+  readonly pendingTaskIds: readonly string[];
+  readonly blockedTaskIds: readonly string[];
+};
 
 const authorityStates = new WeakMap<
   ModuleDeliveryGenerationAuthority,
@@ -206,13 +275,14 @@ export function createModuleDeliveryGenerationAuthority(
   request: CreateModuleDeliveryGenerationAuthorityRequest,
 ): ModuleDeliveryGenerationAuthority {
   const acceptedPlan = trustedPlanSnapshot(request.acceptedPlan);
-  const expectedLineage = expectedLineageMap(
+  const lineageRequest: ExpectedLineageMapRequest = {
     acceptedPlan,
-    request.expectedLineage,
-  );
+    entries: request.expectedLineage,
+  };
+  const expectedLineage = expectedLineageMap(lineageRequest);
   const value: ModuleDeliveryGenerationAuthority = { [AUTHORITY]: true };
   const authority = Object.freeze(value);
-  authorityStates.set(authority, {
+  const authorityState: AuthorityState = {
     inputPlan: request.acceptedPlan,
     acceptedPlan,
     expectedLineage,
@@ -220,7 +290,8 @@ export function createModuleDeliveryGenerationAuthority(
     activeLeases: new Map(),
     leaseHistory: new Map(),
     dispositions: [],
-  });
+  };
+  authorityStates.set(authority, authorityState);
   return authority;
 }
 
@@ -239,42 +310,43 @@ export function assertModuleDeliveryGenerationAuthority(
 }
 
 export function moduleDeliveryAuthorityPlan(
-  authority: ModuleDeliveryGenerationAuthority,
-  acceptedPlan: ValidatedModuleDeliveryPlan,
+  request: ModuleDeliveryAuthorityPlanRequest,
 ): ValidatedModuleDeliveryPlan {
-  return authorityStateForPlan(authority, acceptedPlan).acceptedPlan;
+  return authorityStateForPlan(request).acceptedPlan;
 }
 
 export function createModuleDeliveryAdmissionState(
   request: CreateModuleDeliveryAdmissionStateRequest,
 ): ModuleDeliveryAdmissionState {
-  const authority = authorityStateForPlan(
-    request.authority,
-    request.acceptedPlan,
-  );
+  const planRequest: ModuleDeliveryAuthorityPlanRequest = request;
+  const authority = authorityStateForPlan(planRequest);
   if (!COMMIT.test(request.headCommit))
     throw new Error('Module delivery admission head must be an exact commit.');
-  const frontiers = integratedFrontiers(
-    authority.acceptedPlan,
-    request.headCommit,
-    request.integratedWriterFrontiers,
-  );
-  const evidence = acceptedEvidenceIdentities(
-    request.authority,
-    authority.acceptedPlan,
-    request.acceptedEvidence,
-  );
-  const state = Object.freeze({
+  const frontierRequest: IntegratedFrontiersRequest = {
+    plan: authority.acceptedPlan,
+    headCommit: request.headCommit,
+    entries: request.integratedWriterFrontiers,
+  };
+  const frontiers = integratedFrontiers(frontierRequest);
+  const evidenceRequest: AcceptedEvidenceRequest = {
+    authority: request.authority,
+    plan: authority.acceptedPlan,
+    entries: request.acceptedEvidence,
+  };
+  const evidence = acceptedEvidenceIdentities(evidenceRequest);
+  const stateValue: ModuleDeliveryAdmissionState = {
     generation: authority.acceptedPlan.plan.generation,
     planDigest: authority.acceptedPlan.planDigest,
     headCommit: request.headCommit,
     integratedWriterFrontiers: frontiers,
     acceptedProviderEvidence: evidence.identities,
-  });
-  stateProvenance.set(state, {
+  };
+  const state = Object.freeze(stateValue);
+  const provenance: StateProvenance = {
     authority: request.authority,
     acceptedEvidence: evidence.accepted,
-  });
+  };
+  stateProvenance.set(state, provenance);
   authority.currentState = state;
   return state;
 }
@@ -300,65 +372,87 @@ export function assertModuleDeliveryAdmissionStateAuthority(
 export function selectModuleDeliveryAdmissions(
   request: SelectModuleDeliveryAdmissionsRequest,
 ): ModuleDeliveryAdmissionSelection {
-  const authority = authorityStateForPlan(
-    request.authority,
-    request.acceptedPlan,
-  );
+  const planRequest: ModuleDeliveryAuthorityPlanRequest = request;
+  const authority = authorityStateForPlan(planRequest);
   assertModuleDeliveryAdmissionStateAuthority(request);
   const blockedTaskIds = terminallyBlockedTaskIds(authority);
-  if (blockedTaskIds.length > 0)
-    return frozenSelection(
-      ModuleDeliveryAdmissionSelectionStatus.Blocked,
-      [],
-      [],
+  if (blockedTaskIds.length > 0) {
+    const selectionRequest: FrozenSelectionRequest = {
+      status: ModuleDeliveryAdmissionSelectionStatus.Blocked,
+      admissions: [],
+      pendingTaskIds: [],
       blockedTaskIds,
-    );
+    };
+    return frozenSelection(selectionRequest);
+  }
   const available =
     authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
   const admissions: ModuleDeliveryAdmission[] = [];
   const pendingTaskIds: string[] = [];
   for (const taskId of authority.acceptedPlan.topologicalOrder) {
-    const node = nodeFor(authority.acceptedPlan, taskId);
-    if (
-      !taskPending(authority, taskId) ||
-      !taskReady(authority, request.state, node)
-    )
-      continue;
-    const resources = frozenResources(node, authority.acceptedPlan);
+    const nodeRequest: NodeLookupRequest = {
+      plan: authority.acceptedPlan,
+      taskId,
+    };
+    const node = nodeFor(nodeRequest);
+    const taskRequest: AuthorityTaskRequest = { authority, taskId };
+    const readyRequest: TaskReadyRequest = {
+      authority,
+      state: request.state,
+      node,
+    };
+    if (!taskPending(taskRequest) || !taskReady(readyRequest)) continue;
+    const resourcesRequest: FrozenResourcesRequest = {
+      node,
+      plan: authority.acceptedPlan,
+    };
+    const resources = frozenResources(resourcesRequest);
     if (
       admissions.length >= Math.max(available, 0) ||
-      [...authority.activeLeases.values(), ...admissions].some((active) =>
-        resourcesConflict(resources, active.resources),
-      )
+      [...authority.activeLeases.values(), ...admissions].some((active) => {
+        const conflictRequest: ResourceConflictRequest = {
+          first: resources,
+          second: active.resources,
+        };
+        return resourcesConflict(conflictRequest);
+      })
     ) {
       pendingTaskIds.push(taskId);
       continue;
     }
-    const admission = Object.freeze({
+    const attemptRequest: AuthorityTaskRequest = { authority, taskId };
+    const frontierRequest: StartingFrontierRequest = {
+      state: request.state,
+      node,
+    };
+    const admissionValue: ModuleDeliveryAdmission = {
       taskId,
-      attempt: nextAttempt(authority, taskId),
+      attempt: nextAttempt(attemptRequest),
       generation: request.state.generation,
       planDigest: request.state.planDigest,
-      startingFrontier: startingFrontier(request.state, node),
+      startingFrontier: startingFrontier(frontierRequest),
       resources,
       team: node.team,
       functionalOwner: node.functionalOwner,
       acceptanceOwner: node.acceptanceOwner,
       parentLineage: frozenParent(authority.expectedLineage.get(taskId)),
       acceptanceRequirements: Object.freeze([...node.acceptance.evidence]),
-    });
-    admissionProvenance.set(admission, {
+    };
+    const admission = Object.freeze(admissionValue);
+    const provenance: CapabilityProvenance = {
       authority: request.authority,
       state: request.state,
-    });
+    };
+    admissionProvenance.set(admission, provenance);
     admissions.push(admission);
   }
-  return frozenSelection(
-    ModuleDeliveryAdmissionSelectionStatus.Selected,
+  const selectionRequest: FrozenSelectionRequest = {
+    status: ModuleDeliveryAdmissionSelectionStatus.Selected,
     admissions,
     pendingTaskIds,
-    [],
-  );
+    blockedTaskIds: [],
+  };
+  return frozenSelection(selectionRequest);
 }
 
 export function recordModuleDeliveryAttemptLeases(
@@ -397,13 +491,18 @@ export function recordModuleDeliveryAttemptLeases(
     const lease = Object.freeze(copyAdmission(admission));
     authority.activeLeases.set(attemptKey(lease), lease);
     authority.leaseHistory.set(attemptKey(lease), lease);
-    leaseProvenance.set(lease, {
+    const provenance: CapabilityProvenance = {
       authority: request.authority,
       state: request.state,
-    });
+    };
+    leaseProvenance.set(lease, provenance);
     return lease;
   });
-  return Object.freeze({ state: request.state, leases: Object.freeze(leases) });
+  const recording: ModuleDeliveryLeaseRecording = {
+    state: request.state,
+    leases: Object.freeze(leases),
+  };
+  return Object.freeze(recording);
 }
 
 export function assertModuleDeliveryAttemptLeaseAuthority(
@@ -429,33 +528,39 @@ export function recordModuleDeliveryAttemptDisposition(
   assertModuleDeliveryAttemptLeaseAuthority(request);
   const authority = requiredAuthority(request.authority);
   const key = attemptKey(request.lease);
+  const dispositionRequest: DispositionValidationRequest = {
+    authority,
+    state: request.state,
+    lease: request.lease,
+    outcome: request.outcome,
+  };
   if (
     disposedLeases.has(request.lease) ||
     authority.activeLeases.get(key) !== request.lease ||
-    !validDisposition(authority, request.state, request.lease, request.outcome)
+    !validDisposition(dispositionRequest)
   )
     throw new Error('Module delivery lease capability is invalid.');
   disposedLeases.add(request.lease);
   authority.activeLeases.delete(key);
-  authority.dispositions.push(
-    Object.freeze({
-      taskId: request.lease.taskId,
-      attempt: request.lease.attempt,
-      generation: request.lease.generation,
-      planDigest: request.lease.planDigest,
-      ...request.outcome,
-    }),
-  );
+  const dispositionValue: ModuleDeliveryAttemptDisposition = {
+    taskId: request.lease.taskId,
+    attempt: request.lease.attempt,
+    generation: request.lease.generation,
+    planDigest: request.lease.planDigest,
+    ...request.outcome,
+  };
+  authority.dispositions.push(Object.freeze(dispositionValue));
   return request.state;
 }
 
 export function restartModuleDeliveryGeneration(
   request: RestartModuleDeliveryGenerationRequest,
 ): ModuleDeliveryAdmissionState {
-  assertModuleDeliveryAdmissionStateAuthority({
+  const stateInspection: AdmissionStateAuthorityInspection = {
     authority: request.authority,
     state: request.previousState,
-  });
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
   const authority = requiredAuthority(request.authority);
   if (
     request.acceptedPlan.plan.generation <=
@@ -473,21 +578,23 @@ export function restartModuleDeliveryGeneration(
     );
   authority.inputPlan = request.acceptedPlan;
   authority.acceptedPlan = trustedPlanSnapshot(request.acceptedPlan);
-  authority.expectedLineage = expectedLineageMap(
-    authority.acceptedPlan,
-    request.expectedLineage,
-  );
+  const lineageRequest: ExpectedLineageMapRequest = {
+    acceptedPlan: authority.acceptedPlan,
+    entries: request.expectedLineage,
+  };
+  authority.expectedLineage = expectedLineageMap(lineageRequest);
   authority.activeLeases = new Map();
   authority.leaseHistory = new Map();
   authority.dispositions = [];
   authority.currentState = undefined;
-  return createModuleDeliveryAdmissionState({
+  const stateRequest: CreateModuleDeliveryAdmissionStateRequest = {
     authority: request.authority,
     acceptedPlan: request.acceptedPlan,
     headCommit: request.acceptedPlan.plan.sourceCommit,
     integratedWriterFrontiers: [],
     acceptedEvidence: [],
-  });
+  };
+  return createModuleDeliveryAdmissionState(stateRequest);
 }
 
 function requiredAuthority(
@@ -500,11 +607,10 @@ function requiredAuthority(
 }
 
 function authorityStateForPlan(
-  authority: ModuleDeliveryGenerationAuthority,
-  acceptedPlan: ValidatedModuleDeliveryPlan,
+  request: ModuleDeliveryAuthorityPlanRequest,
 ): AuthorityState {
-  const state = requiredAuthority(authority);
-  if (state.inputPlan !== acceptedPlan)
+  const state = requiredAuthority(request.authority);
+  if (state.inputPlan !== request.acceptedPlan)
     throw new Error(
       'Module delivery validated plan authority is invalid or superseded.',
     );
@@ -531,14 +637,17 @@ function trustedPlanSnapshot(
 }
 
 function expectedLineageMap(
-  acceptedPlan: ValidatedModuleDeliveryPlan,
-  entries: readonly ModuleDeliveryExpectedLineage[],
+  request: ExpectedLineageMapRequest,
 ): ReadonlyMap<string, AgentAttemptParent> {
-  if (entries.length !== acceptedPlan.plan.nodes.length)
+  if (request.entries.length !== request.acceptedPlan.plan.nodes.length)
     throw new Error('Expected lineage must bind every module delivery task.');
   const result = new Map<string, AgentAttemptParent>();
-  for (const entry of entries) {
-    const node = nodeFor(acceptedPlan, entry.taskId);
+  for (const entry of request.entries) {
+    const nodeRequest: NodeLookupRequest = {
+      plan: request.acceptedPlan,
+      taskId: entry.taskId,
+    };
+    const node = nodeFor(nodeRequest);
     if (
       result.has(entry.taskId) ||
       JSON.stringify(entry.parentLineage) !== JSON.stringify(node.parentLineage)
@@ -550,13 +659,15 @@ function expectedLineageMap(
 }
 
 function integratedFrontiers(
-  plan: ValidatedModuleDeliveryPlan,
-  headCommit: string,
-  entries: readonly ModuleDeliveryIntegratedWriterFrontier[],
+  request: IntegratedFrontiersRequest,
 ): readonly ModuleDeliveryIntegratedWriterFrontier[] {
   const seen = new Set<string>();
-  const result = entries.map((entry) => {
-    const node = nodeFor(plan, entry.taskId);
+  const result = request.entries.map((entry) => {
+    const nodeRequest: NodeLookupRequest = {
+      plan: request.plan,
+      taskId: entry.taskId,
+    };
+    const node = nodeFor(nodeRequest);
     if (
       seen.has(entry.taskId) ||
       node.kind !== ModuleDeliveryTaskKind.Write ||
@@ -566,11 +677,12 @@ function integratedFrontiers(
         `Integrated writer frontier is invalid for ${entry.taskId}.`,
       );
     seen.add(entry.taskId);
-    return Object.freeze({ ...entry });
+    const frontier: ModuleDeliveryIntegratedWriterFrontier = { ...entry };
+    return Object.freeze(frontier);
   });
   if (
     result.length > 0 &&
-    !result.some(({ headCommit: commit }) => commit === headCommit)
+    !result.some(({ headCommit }) => headCommit === request.headCommit)
   )
     throw new Error(
       'Admission head is not an exact integrated writer frontier.',
@@ -579,20 +691,19 @@ function integratedFrontiers(
 }
 
 function acceptedEvidenceIdentities(
-  authority: ModuleDeliveryGenerationAuthority,
-  plan: ValidatedModuleDeliveryPlan,
-  entries: readonly AcceptedModuleDeliveryEvidence[],
-): {
-  accepted: readonly AcceptedModuleDeliveryEvidence[];
-  identities: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
-} {
+  request: AcceptedEvidenceRequest,
+): AcceptedEvidenceResult {
   const seen = new Set<string>();
-  const accepted = entries.map((entry) => {
-    assertAcceptedModuleDeliveryEvidence({ authority, evidence: entry });
+  const accepted = request.entries.map((entry) => {
+    const inspection: AcceptedModuleDeliveryEvidenceInspection = {
+      authority: request.authority,
+      evidence: entry,
+    };
+    assertAcceptedModuleDeliveryEvidence(inspection);
     const identity = moduleDeliveryAcceptedEvidenceIdentity(entry);
     if (
-      identity.generation !== plan.plan.generation ||
-      identity.planDigest !== plan.planDigest ||
+      identity.generation !== request.plan.plan.generation ||
+      identity.planDigest !== request.plan.planDigest ||
       seen.has(identity.taskId)
     )
       throw new Error(`Accepted evidence is invalid for ${identity.taskId}.`);
@@ -607,67 +718,67 @@ function acceptedEvidenceIdentities(
   };
 }
 
-function nodeFor(
-  plan: ValidatedModuleDeliveryPlan,
-  taskId: string,
-): ModuleDeliveryNodeV2 {
-  const node = plan.plan.nodes.find((candidate) => candidate.taskId === taskId);
-  if (!node) throw new Error(`Validated plan is missing task ${taskId}.`);
+function nodeFor(request: NodeLookupRequest): ModuleDeliveryNodeV2 {
+  const node = request.plan.plan.nodes.find(
+    (candidate) => candidate.taskId === request.taskId,
+  );
+  if (!node)
+    throw new Error(`Validated plan is missing task ${request.taskId}.`);
   return node;
 }
 
-function taskPending(authority: AuthorityState, taskId: string): boolean {
+function taskPending(request: AuthorityTaskRequest): boolean {
   return (
-    ![...authority.activeLeases.values()].some(
-      (lease) => lease.taskId === taskId,
+    ![...request.authority.activeLeases.values()].some(
+      (lease) => lease.taskId === request.taskId,
     ) &&
-    !authority.dispositions.some(
+    !request.authority.dispositions.some(
       (entry) =>
-        entry.taskId === taskId &&
+        entry.taskId === request.taskId &&
         entry.kind === ModuleDeliveryAttemptDispositionKind.Accepted,
     ) &&
-    authority.dispositions.filter((entry) => entry.taskId === taskId).length <
-      authority.acceptedPlan.plan.maxAttempts
+    request.authority.dispositions.filter(
+      (entry) => entry.taskId === request.taskId,
+    ).length < request.authority.acceptedPlan.plan.maxAttempts
   );
 }
 
-function taskReady(
-  authority: AuthorityState,
-  state: ModuleDeliveryAdmissionState,
-  node: ModuleDeliveryNodeV2,
-): boolean {
+function taskReady(request: TaskReadyRequest): boolean {
+  const synthesisRequest: SynthesisReadyRequest = {
+    state: request.state,
+    node: request.node,
+  };
   return (
-    authority.acceptedPlan.executionPrecedence
-      .filter((edge) => edge.successorTaskId === node.taskId)
+    request.authority.acceptedPlan.executionPrecedence
+      .filter((edge) => edge.successorTaskId === request.node.taskId)
       .every((edge) => {
-        const predecessor = nodeFor(
-          authority.acceptedPlan,
-          edge.predecessorTaskId,
-        );
+        const nodeRequest: NodeLookupRequest = {
+          plan: request.authority.acceptedPlan,
+          taskId: edge.predecessorTaskId,
+        };
+        const predecessor = nodeFor(nodeRequest);
         if (
           edge.requiresIntegratedWriterFrontier ||
           predecessor.kind === ModuleDeliveryTaskKind.Write
         )
-          return state.integratedWriterFrontiers.some(
+          return request.state.integratedWriterFrontiers.some(
             ({ taskId }) => taskId === predecessor.taskId,
           );
-        return state.acceptedProviderEvidence.some(
+        return request.state.acceptedProviderEvidence.some(
           ({ taskId }) => taskId === predecessor.taskId,
         );
-      }) && synthesisInputsReady(state, node)
+      }) && synthesisInputsReady(synthesisRequest)
   );
 }
 
-function synthesisInputsReady(
-  state: ModuleDeliveryAdmissionState,
-  node: ModuleDeliveryNodeV2,
-): boolean {
-  if (node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis) return true;
-  const expected = node.evidenceInput.expectedProducers;
+function synthesisInputsReady(request: SynthesisReadyRequest): boolean {
+  if (request.node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis)
+    return true;
+  const expected = request.node.evidenceInput.expectedProducers;
   return (
     expected.length > 0 &&
     expected.every((producer) =>
-      state.acceptedProviderEvidence.some(
+      request.state.acceptedProviderEvidence.some(
         (identity) =>
           identity.taskId === producer.taskId &&
           identity.producerTeam === producer.team &&
@@ -709,65 +820,68 @@ function terminallyBlockedTaskIds(
   );
 }
 
-function validDisposition(
-  authority: AuthorityState,
-  state: ModuleDeliveryAdmissionState,
-  lease: ModuleDeliveryAttemptLease,
-  outcome: ModuleDeliveryDispositionOutcome,
-): boolean {
-  if (outcome.kind === ModuleDeliveryAttemptDispositionKind.Accepted) {
-    if (outcome.conclusion !== ModuleDeliveryGenerationFenceKind.Accepted)
+function validDisposition(request: DispositionValidationRequest): boolean {
+  if (request.outcome.kind === ModuleDeliveryAttemptDispositionKind.Accepted) {
+    if (
+      request.outcome.conclusion !== ModuleDeliveryGenerationFenceKind.Accepted
+    )
       return false;
-    const node = nodeFor(authority.acceptedPlan, lease.taskId);
+    const nodeRequest: NodeLookupRequest = {
+      plan: request.authority.acceptedPlan,
+      taskId: request.lease.taskId,
+    };
+    const node = nodeFor(nodeRequest);
     return node.kind === ModuleDeliveryTaskKind.Write
-      ? state.integratedWriterFrontiers.some(
-          ({ taskId }) => taskId === lease.taskId,
+      ? request.state.integratedWriterFrontiers.some(
+          ({ taskId }) => taskId === request.lease.taskId,
         )
-      : state.acceptedProviderEvidence.some(
+      : request.state.acceptedProviderEvidence.some(
           ({ taskId, attempt }) =>
-            taskId === lease.taskId && attempt === lease.attempt,
+            taskId === request.lease.taskId &&
+            attempt === request.lease.attempt,
         );
   }
   return (
-    outcome.kind === ModuleDeliveryAttemptDispositionKind.FinalUnusable &&
-    (outcome.conclusion === ModuleDeliveryGenerationFenceKind.Cancelled ||
-      outcome.conclusion === ModuleDeliveryGenerationFenceKind.Failed ||
-      outcome.conclusion === ModuleDeliveryGenerationFenceKind.Rejected)
+    request.outcome.kind ===
+      ModuleDeliveryAttemptDispositionKind.FinalUnusable &&
+    (request.outcome.conclusion ===
+      ModuleDeliveryGenerationFenceKind.Cancelled ||
+      request.outcome.conclusion === ModuleDeliveryGenerationFenceKind.Failed ||
+      request.outcome.conclusion === ModuleDeliveryGenerationFenceKind.Rejected)
   );
 }
 
 function frozenResources(
-  node: ModuleDeliveryNodeV2,
-  plan: ValidatedModuleDeliveryPlan,
+  request: FrozenResourcesRequest,
 ): ModuleDeliveryResourceClaims {
-  const evidenceReads = node.dependencies.flatMap((taskId) => {
-    const provider = nodeFor(plan, taskId);
+  const evidenceReads = request.node.dependencies.flatMap((taskId) => {
+    const nodeRequest: NodeLookupRequest = { plan: request.plan, taskId };
+    const provider = nodeFor(nodeRequest);
     return provider.kind === ModuleDeliveryTaskKind.ReadOnly
       ? provider.resources.evidenceSurface
       : [];
   });
-  return Object.freeze({
+  const resources: ModuleDeliveryResourceClaims = {
     read: Object.freeze([
-      ...new Set([...node.resources.read, ...evidenceReads]),
+      ...new Set([...request.node.resources.read, ...evidenceReads]),
     ]),
-    write: Object.freeze([...node.resources.write]),
-    evidenceSurface: Object.freeze([...node.resources.evidenceSurface]),
-  });
+    write: Object.freeze([...request.node.resources.write]),
+    evidenceSurface: Object.freeze([...request.node.resources.evidenceSurface]),
+  };
+  return Object.freeze(resources);
 }
 
-function startingFrontier(
-  state: ModuleDeliveryAdmissionState,
-  node: ModuleDeliveryNodeV2,
-): string {
-  return node.baseline.kind === ModuleDeliveryBaselineKind.SourceCommit &&
-    node.dependencies.length === 0
-    ? node.baseline.sourceCommit
-    : state.headCommit;
+function startingFrontier(request: StartingFrontierRequest): string {
+  return request.node.baseline.kind ===
+    ModuleDeliveryBaselineKind.SourceCommit &&
+    request.node.dependencies.length === 0
+    ? request.node.baseline.sourceCommit
+    : request.state.headCommit;
 }
 
-function nextAttempt(authority: AuthorityState, taskId: string): number {
-  const attempts = [...authority.leaseHistory.values()]
-    .filter((lease) => lease.taskId === taskId)
+function nextAttempt(request: AuthorityTaskRequest): number {
+  const attempts = [...request.authority.leaseHistory.values()]
+    .filter((lease) => lease.taskId === request.taskId)
     .map(({ attempt }) => attempt);
   return attempts.length === 0 ? 1 : Math.max(...attempts) + 1;
 }
@@ -776,19 +890,21 @@ function frozenParent(
   parent: AgentAttemptParent | undefined,
 ): AgentAttemptParent {
   if (!parent) throw new Error('Expected lineage is missing.');
-  return Object.freeze({ ...parent });
+  const copy: AgentAttemptParent = { ...parent };
+  return Object.freeze(copy);
 }
 
 function copyAdmission(
   admission: ModuleDeliveryAdmission,
 ): ModuleDeliveryAttemptLease {
+  const resources: ModuleDeliveryResourceClaims = {
+    read: Object.freeze([...admission.resources.read]),
+    write: Object.freeze([...admission.resources.write]),
+    evidenceSurface: Object.freeze([...admission.resources.evidenceSurface]),
+  };
   return {
     ...admission,
-    resources: Object.freeze({
-      read: Object.freeze([...admission.resources.read]),
-      write: Object.freeze([...admission.resources.write]),
-      evidenceSurface: Object.freeze([...admission.resources.evidenceSurface]),
-    }),
+    resources: Object.freeze(resources),
     parentLineage: frozenParent(admission.parentLineage),
     acceptanceRequirements: Object.freeze([
       ...admission.acceptanceRequirements,
@@ -800,23 +916,29 @@ function attemptKey(identity: AttemptIdentity): string {
   return `${identity.taskId}:${identity.attempt}`;
 }
 
-function resourcesConflict(
-  first: ModuleDeliveryResourceClaims,
-  second: ModuleDeliveryResourceClaims,
-): boolean {
+function resourcesConflict(request: ResourceConflictRequest): boolean {
+  const writes: ClaimPair = {
+    first: request.first.write,
+    second: request.second.write,
+  };
+  const writeRead: ClaimPair = {
+    first: request.first.write,
+    second: request.second.read,
+  };
+  const readWrite: ClaimPair = {
+    first: request.first.read,
+    second: request.second.write,
+  };
   return (
-    claimsOverlap(first.write, second.write) ||
-    claimsOverlap(first.write, second.read) ||
-    claimsOverlap(first.read, second.write)
+    claimsOverlap(writes) ||
+    claimsOverlap(writeRead) ||
+    claimsOverlap(readWrite)
   );
 }
 
-function claimsOverlap(
-  first: readonly string[],
-  second: readonly string[],
-): boolean {
-  return first.some((left) =>
-    second.some((right) => {
+function claimsOverlap(request: ClaimPair): boolean {
+  return request.first.some((left) =>
+    request.second.some((right) => {
       const pair: TaskResourcePatternPair = { first: left, second: right };
       return taskResourcePatternsOverlap(pair);
     }),
@@ -824,15 +946,13 @@ function claimsOverlap(
 }
 
 function frozenSelection(
-  status: ModuleDeliveryAdmissionSelectionStatus,
-  admissions: readonly ModuleDeliveryAdmission[],
-  pendingTaskIds: readonly string[],
-  blockedTaskIds: readonly string[],
+  request: FrozenSelectionRequest,
 ): ModuleDeliveryAdmissionSelection {
-  return Object.freeze({
-    status,
-    admissions: Object.freeze([...admissions]),
-    pendingTaskIds: Object.freeze([...pendingTaskIds]),
-    blockedTaskIds: Object.freeze([...blockedTaskIds]),
-  });
+  const selection: ModuleDeliveryAdmissionSelection = {
+    status: request.status,
+    admissions: Object.freeze([...request.admissions]),
+    pendingTaskIds: Object.freeze([...request.pendingTaskIds]),
+    blockedTaskIds: Object.freeze([...request.blockedTaskIds]),
+  };
+  return Object.freeze(selection);
 }

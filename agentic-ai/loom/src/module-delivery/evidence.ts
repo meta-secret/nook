@@ -1,4 +1,3 @@
-/* eslint-disable max-params, loom/no-raw-object-arguments */
 import { taskResourcePatternsOverlap } from '../agent-workflow/domain.ts';
 import {
   assertModuleDeliveryAttemptLeaseAuthority,
@@ -19,6 +18,7 @@ import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import type { TeamKey } from '../team-agents/catalog.ts';
 import type {
   ModuleDeliveryAttemptLease,
+  ModuleDeliveryAuthorityPlanRequest,
   ModuleDeliveryAdmissionState,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
@@ -100,6 +100,40 @@ type EvidenceSourceProvenanceContent = Readonly<{
   acceptanceRequirements: readonly string[];
   acceptedProviderEvidence: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
 }>;
+type EvidenceSynthesisNode = Extract<
+  ModuleDeliveryNodeV2,
+  { kind: ModuleDeliveryTaskKind.EvidenceSynthesis }
+>;
+type TreeDigestRequest = {
+  readonly entries: readonly GitTreeEntry[];
+  readonly claims: readonly string[];
+};
+type SubmissionMetadataRequest = {
+  readonly verification: ModuleDeliveryEvidenceSubmissionVerification;
+  readonly acceptedPlan: ValidatedModuleDeliveryPlan;
+  readonly node: ModuleDeliveryNodeV2;
+};
+type RepositoryEvidenceRequest = {
+  readonly verification: ModuleDeliveryEvidenceSubmissionVerification;
+  readonly node: ModuleDeliveryNodeV2;
+};
+type SynthesisInputsRequest = {
+  readonly node: EvidenceSynthesisNode;
+  readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
+  readonly authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[];
+};
+type AuthorizedIdentitiesRequest = {
+  readonly authority: ModuleDeliveryGenerationAuthority;
+  readonly evidence: readonly AcceptedModuleDeliveryEvidence[];
+};
+type FreezeAcceptedEvidenceRequest = {
+  readonly submission: ModuleDeliveryReadOnlyEvidenceSubmission;
+  readonly provenance: string;
+};
+type EvidenceNodeRequest = {
+  readonly plan: ValidatedModuleDeliveryPlan;
+  readonly taskId: string;
+};
 
 const acceptedEvidenceAuthorities = new WeakMap<
   AcceptedModuleDeliveryEvidence,
@@ -111,7 +145,11 @@ const DIGEST = /^[0-9a-f]{64}$/u;
 export function moduleDeliveryEvidenceSurfaceDigest(
   request: ModuleDeliveryEvidenceDigestRequest,
 ): string {
-  return treeDigest(gitTreeEntries(request), request.evidenceSurface);
+  const digestRequest: TreeDigestRequest = {
+    entries: gitTreeEntries(request),
+    claims: request.evidenceSurface,
+  };
+  return treeDigest(digestRequest);
 }
 
 export function moduleDeliveryEvidenceClaimIdentities(
@@ -119,53 +157,79 @@ export function moduleDeliveryEvidenceClaimIdentities(
 ): readonly ModuleDeliveryEvidenceClaimIdentity[] {
   const entries = gitTreeEntries(request);
   return Object.freeze(
-    request.evidenceSurface.map((claim) =>
-      Object.freeze({ claim, contentDigest: treeDigest(entries, [claim]) }),
-    ),
+    request.evidenceSurface.map((claim) => {
+      const digestRequest: TreeDigestRequest = { entries, claims: [claim] };
+      const identity: ModuleDeliveryEvidenceClaimIdentity = {
+        claim,
+        contentDigest: treeDigest(digestRequest),
+      };
+      return Object.freeze(identity);
+    }),
   );
 }
 
 export function moduleDeliveryEvidenceArtifactDigest(
   request: ModuleDeliveryEvidenceArtifactDigestRequest,
 ): string {
-  return digest({
+  const content: EvidenceArtifactDigestContent = {
     artifactIdentity: request.artifactIdentity,
     evidence: request.evidence,
     acceptanceRequirements: request.acceptanceRequirements,
     acceptedProviderEvidence: request.acceptedProviderEvidence,
-  });
+  };
+  return digest(content);
 }
 
 export function verifyModuleDeliveryEvidenceSubmission(
   verification: ModuleDeliveryEvidenceSubmissionVerification,
 ): AcceptedModuleDeliveryEvidence {
-  const acceptedPlan = moduleDeliveryAuthorityPlan(
-    verification.authority,
-    verification.acceptedPlan,
-  );
-  assertModuleDeliveryGenerationAuthority({
+  const planRequest: ModuleDeliveryAuthorityPlanRequest = {
+    authority: verification.authority,
+    acceptedPlan: verification.acceptedPlan,
+  };
+  const acceptedPlan = moduleDeliveryAuthorityPlan(planRequest);
+  const generationInspection = {
     authority: verification.authority,
     generation: acceptedPlan.plan.generation,
     planDigest: acceptedPlan.planDigest,
-  });
-  assertModuleDeliveryAttemptLeaseAuthority({
+  };
+  assertModuleDeliveryGenerationAuthority(generationInspection);
+  const leaseInspection = {
     authority: verification.authority,
     lease: verification.lease,
-  });
-  assertModuleDeliveryAdmissionStateAuthority({
+  };
+  assertModuleDeliveryAttemptLeaseAuthority(leaseInspection);
+  const stateInspection = {
     authority: verification.authority,
     state: verification.state,
-  });
-  const node = nodeFor(acceptedPlan, verification.lease.taskId);
-  assertSubmissionMetadata(verification, acceptedPlan, node);
-  const authorized = authorizedIdentities(
-    verification.authority,
-    verification.authorizedProviderEvidence,
-  );
+  };
+  assertModuleDeliveryAdmissionStateAuthority(stateInspection);
+  const nodeRequest: EvidenceNodeRequest = {
+    plan: acceptedPlan,
+    taskId: verification.lease.taskId,
+  };
+  const node = nodeFor(nodeRequest);
+  const metadataRequest: SubmissionMetadataRequest = {
+    verification,
+    acceptedPlan,
+    node,
+  };
+  assertSubmissionMetadata(metadataRequest);
+  const identitiesRequest: AuthorizedIdentitiesRequest = {
+    authority: verification.authority,
+    evidence: verification.authorizedProviderEvidence,
+  };
+  const authorized = authorizedIdentities(identitiesRequest);
   if (node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
-    assertSynthesisInputs(node, verification.submission, authorized);
+    const synthesisRequest: SynthesisInputsRequest = {
+      node,
+      submission: verification.submission,
+      authorized,
+    };
+    assertSynthesisInputs(synthesisRequest);
   } else {
-    assertRepositoryEvidence(verification, node);
+    const repositoryRequest: RepositoryEvidenceRequest = { verification, node };
+    assertRepositoryEvidence(repositoryRequest);
     if (
       authorized.length > 0 ||
       verification.submission.acceptedProviderEvidence.length > 0
@@ -185,10 +249,11 @@ export function verifyModuleDeliveryEvidenceSubmission(
     verification.submission.artifactDigest
   )
     throw new Error(`Evidence artifact digest is invalid for ${node.taskId}.`);
-  const accepted = freezeAcceptedEvidence(
-    verification.submission,
-    sourceProvenanceDigest(verification.submission),
-  );
+  const freezeRequest: FreezeAcceptedEvidenceRequest = {
+    submission: verification.submission,
+    provenance: sourceProvenanceDigest(verification.submission),
+  };
+  const accepted = freezeAcceptedEvidence(freezeRequest);
   acceptedEvidenceAuthorities.set(accepted, verification.authority);
   return accepted;
 }
@@ -208,7 +273,7 @@ export function moduleDeliveryAcceptedEvidenceIdentity(
 ): ModuleDeliveryAcceptedProviderEvidenceIdentity {
   if (!acceptedEvidenceAuthorities.has(evidence))
     throw new Error('Accepted module delivery evidence is forged.');
-  return Object.freeze({
+  const identity: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
     schemaVersion: evidence.schemaVersion,
     generation: evidence.generation,
     planDigest: evidence.planDigest,
@@ -224,16 +289,14 @@ export function moduleDeliveryAcceptedEvidenceIdentity(
     verdict: evidence.verdict,
     claimIdentities: frozenClaims(evidence.claimIdentities),
     acceptanceRequirements: Object.freeze([...evidence.acceptanceRequirements]),
-  });
+  };
+  return Object.freeze(identity);
 }
 
-function assertSubmissionMetadata(
-  verification: ModuleDeliveryEvidenceSubmissionVerification,
-  acceptedPlan: ValidatedModuleDeliveryPlan,
-  node: ModuleDeliveryNodeV2,
-): void {
-  const submission = verification.submission;
-  const lease = verification.lease;
+function assertSubmissionMetadata(request: SubmissionMetadataRequest): void {
+  const submission = request.verification.submission;
+  const lease = request.verification.lease;
+  const node = request.node;
   if (
     node.kind === ModuleDeliveryTaskKind.Write ||
     submission.kind !== ModuleDeliveryProviderSubmissionKind.ReadOnlyEvidence ||
@@ -242,9 +305,9 @@ function assertSubmissionMetadata(
     submission.taskId !== lease.taskId ||
     submission.attempt !== lease.attempt ||
     submission.generation !== lease.generation ||
-    submission.generation !== acceptedPlan.plan.generation ||
+    submission.generation !== request.acceptedPlan.plan.generation ||
     submission.planDigest !== lease.planDigest ||
-    submission.planDigest !== acceptedPlan.planDigest ||
+    submission.planDigest !== request.acceptedPlan.planDigest ||
     submission.sourceCommit !== lease.startingFrontier ||
     submission.producerTeam !== lease.team ||
     submission.functionalOwner !== lease.functionalOwner ||
@@ -265,10 +328,9 @@ function assertSubmissionMetadata(
     throw new Error(`Evidence metadata is invalid for ${node.taskId}.`);
 }
 
-function assertRepositoryEvidence(
-  verification: ModuleDeliveryEvidenceSubmissionVerification,
-  node: ModuleDeliveryNodeV2,
-): void {
+function assertRepositoryEvidence(request: RepositoryEvidenceRequest): void {
+  const verification = request.verification;
+  const node = request.node;
   if (!COMMIT.test(verification.state.headCommit))
     throw new Error('Current evidence frontier must be an exact commit.');
   const sourceRequest: ModuleDeliveryEvidenceDigestRequest = {
@@ -290,14 +352,10 @@ function assertRepositoryEvidence(
     throw new Error(`Repository evidence is stale for ${node.taskId}.`);
 }
 
-function assertSynthesisInputs(
-  node: Extract<
-    ModuleDeliveryNodeV2,
-    { kind: ModuleDeliveryTaskKind.EvidenceSynthesis }
-  >,
-  submission: ModuleDeliveryReadOnlyEvidenceSubmission,
-  authorized: readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[],
-): void {
+function assertSynthesisInputs(request: SynthesisInputsRequest): void {
+  const node = request.node;
+  const submission = request.submission;
+  const authorized = request.authorized;
   if (
     node.evidenceInput.expectedProducers.length === 0 ||
     submission.claimIdentities.length !== 0 ||
@@ -327,13 +385,16 @@ function assertSynthesisInputs(
 }
 
 function authorizedIdentities(
-  authority: ModuleDeliveryGenerationAuthority,
-  evidence: readonly AcceptedModuleDeliveryEvidence[],
+  request: AuthorizedIdentitiesRequest,
 ): readonly ModuleDeliveryAcceptedProviderEvidenceIdentity[] {
   const seen = new Set<string>();
   return Object.freeze(
-    evidence.map((entry) => {
-      assertAcceptedModuleDeliveryEvidence({ authority, evidence: entry });
+    request.evidence.map((entry) => {
+      const inspection: AcceptedModuleDeliveryEvidenceInspection = {
+        authority: request.authority,
+        evidence: entry,
+      };
+      assertAcceptedModuleDeliveryEvidence(inspection);
       const identity = moduleDeliveryAcceptedEvidenceIdentity(entry);
       if (seen.has(identity.taskId))
         throw new Error(`Duplicate accepted evidence for ${identity.taskId}.`);
@@ -346,7 +407,7 @@ function authorizedIdentities(
 function sourceProvenanceDigest(
   submission: ModuleDeliveryReadOnlyEvidenceSubmission,
 ): string {
-  return digest({
+  const content: EvidenceSourceProvenanceContent = {
     sourceCommit: submission.sourceCommit,
     generation: submission.generation,
     planDigest: submission.planDigest,
@@ -359,39 +420,47 @@ function sourceProvenanceDigest(
     claimIdentities: submission.claimIdentities,
     acceptanceRequirements: submission.acceptanceRequirements,
     acceptedProviderEvidence: submission.acceptedProviderEvidence,
-  });
+  };
+  return digest(content);
 }
 
 function freezeAcceptedEvidence(
-  submission: ModuleDeliveryReadOnlyEvidenceSubmission,
-  provenance: string,
+  request: FreezeAcceptedEvidenceRequest,
 ): AcceptedModuleDeliveryEvidence {
-  return Object.freeze({
+  const submission = request.submission;
+  const accepted: AcceptedModuleDeliveryEvidence = {
     ...submission,
     acceptanceRequirements: Object.freeze([
       ...submission.acceptanceRequirements,
     ]),
     claimIdentities: frozenClaims(submission.claimIdentities),
     acceptedProviderEvidence: Object.freeze(
-      submission.acceptedProviderEvidence.map((identity) =>
-        Object.freeze({
+      submission.acceptedProviderEvidence.map((identity) => {
+        const copy: ModuleDeliveryAcceptedProviderEvidenceIdentity = {
           ...identity,
           claimIdentities: frozenClaims(identity.claimIdentities),
           acceptanceRequirements: Object.freeze([
             ...identity.acceptanceRequirements,
           ]),
-        }),
-      ),
+        };
+        return Object.freeze(copy);
+      }),
     ),
     evidence: Object.freeze([...submission.evidence]),
-    sourceProvenanceDigest: provenance,
-  });
+    sourceProvenanceDigest: request.provenance,
+  };
+  return Object.freeze(accepted);
 }
 
 function frozenClaims(
   claims: readonly ModuleDeliveryEvidenceClaimIdentity[],
 ): readonly ModuleDeliveryEvidenceClaimIdentity[] {
-  return Object.freeze(claims.map((claim) => Object.freeze({ ...claim })));
+  return Object.freeze(
+    claims.map((claim) => {
+      const copy: ModuleDeliveryEvidenceClaimIdentity = { ...claim };
+      return Object.freeze(copy);
+    }),
+  );
 }
 
 function gitTreeEntries(
@@ -412,20 +481,18 @@ function gitTreeEntries(
     .map((record) => {
       const separator = record.indexOf('\t');
       if (separator < 1) throw new Error('Evidence tree entry is malformed.');
-      return Object.freeze({
+      const entry: GitTreeEntry = {
         metadata: record.slice(0, separator),
         path: record.slice(separator + 1),
-      });
+      };
+      return Object.freeze(entry);
     });
 }
 
-function treeDigest(
-  entries: readonly GitTreeEntry[],
-  claims: readonly string[],
-): string {
-  const matching = entries
+function treeDigest(request: TreeDigestRequest): string {
+  const matching = request.entries
     .filter((entry) =>
-      claims.some((claim) => {
+      request.claims.some((claim) => {
         const pair: TaskResourcePatternPair = {
           first: claim,
           second: entry.path,
@@ -440,12 +507,12 @@ function treeDigest(
   );
 }
 
-function nodeFor(
-  plan: ValidatedModuleDeliveryPlan,
-  taskId: string,
-): ModuleDeliveryNodeV2 {
-  const node = plan.plan.nodes.find((candidate) => candidate.taskId === taskId);
-  if (!node) throw new Error(`Validated plan is missing task ${taskId}.`);
+function nodeFor(request: EvidenceNodeRequest): ModuleDeliveryNodeV2 {
+  const node = request.plan.plan.nodes.find(
+    (candidate) => candidate.taskId === request.taskId,
+  );
+  if (!node)
+    throw new Error(`Validated plan is missing task ${request.taskId}.`);
   return node;
 }
 
