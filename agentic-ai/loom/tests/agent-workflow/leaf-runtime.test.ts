@@ -39,7 +39,7 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
       },
     ],
     invalidExecutableSkillPackages: [],
-    missingFromIndex: ['unindexed.md'],
+    missingFromIndex: ['.cortex/teams/ai/dynamic-skills/unindexed/SKILL.md'],
     orphanIndexRows: [],
     prohibitedHarnessSkillPaths: ['.agents/skills/forbidden/SKILL.md'],
     densityFindings: [],
@@ -54,6 +54,10 @@ test('returns mechanical inconsistencies as typed completed evidence', () => {
   for (const finding of output.findings) {
     expect(finding.evidence.length).toBeGreaterThan(0);
   }
+  expect(output.findings.at(1)?.affectedPaths).toEqual([
+    '.cortex/teams/ai/dynamic-skills/index.md',
+    '.cortex/teams/ai/dynamic-skills/unindexed/SKILL.md',
+  ]);
   expect(output.summary).toContain('found 3 inconsistencies');
 });
 

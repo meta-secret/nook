@@ -212,9 +212,7 @@ export async function runCortexAuditFromDirectory(
   );
 
   const missingFromIndex = indexIsAdmitted
-    ? skillFiles
-        .filter((filePath) => !indexed.has(filePath))
-        .map(skillDiagnosticName)
+    ? skillFiles.filter((filePath) => !indexed.has(filePath))
     : [];
   const orphanIndexRows = indexIsAdmitted
     ? [...indexed]

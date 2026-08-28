@@ -331,11 +331,15 @@ function assertContainedModuleSpecifier(
   }
 }
 
+const EXECUTABLE_SKILL_SOURCE_PATH =
+  /^(\.cortex\/(?:gizmo|shared|teams\/(?:ai|dev-core|security|sre|web-dev))\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\/(src|tests)\/.+\.ts$/u;
+
+export function isExecutableSkillApplicationSourcePath(path: string): boolean {
+  return EXECUTABLE_SKILL_SOURCE_PATH.exec(path)?.at(2) === 'src';
+}
+
 function executableSkillRoot(relativePath: string): string | false {
-  const match =
-    /^(\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\/(?:src|tests)\/.+\.ts$/u.exec(
-      relativePath,
-    );
+  const match = EXECUTABLE_SKILL_SOURCE_PATH.exec(relativePath);
   return match?.at(1) ?? false;
 }
 

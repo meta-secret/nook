@@ -2,6 +2,8 @@ import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
 import {
+  type ConfigurationReferenceInspection,
+  type ConfigurationScriptGraph,
   type ExecutableProviderReferenceInspection,
   executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
@@ -51,21 +53,9 @@ type ActionLoaderFixture = {
   readonly source: string;
 };
 
-type ConfigurationScriptGraph = {
-  readonly executablePaths: ReadonlySet<string>;
-  readonly roots: readonly string[];
-  readonly sources: ReadonlyMap<string, string>;
-  readonly symlinkPaths: ReadonlySet<string>;
-};
-
 type RequiredLaunchInspection = {
   readonly source: string;
   readonly specifier: string;
-};
-
-type ConfigurationReferenceInspection = {
-  readonly importer: string;
-  readonly source: string;
 };
 
 type ApplicationConsumerEdge = {

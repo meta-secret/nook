@@ -212,10 +212,7 @@ export function mechanicalCortexAuditOutput(
       evidence: [
         `.cortex/teams/ai/dynamic-skills/index.md does not list ${skill}.`,
       ],
-      affectedPaths: [
-        '.cortex/teams/ai/dynamic-skills/index.md',
-        `.cortex/shared/dynamic-skills/${skill}`,
-      ],
+      affectedPaths: ['.cortex/teams/ai/dynamic-skills/index.md', skill],
     };
     findings.push(finding);
   }

@@ -211,6 +211,7 @@ describe('executable skill source policy', () => {
       '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/../run.ts',
       '.cortex\\teams\\ai\\dynamic-skills\\cortex-article-structure\\scripts\\fixture\\src\\run.ts',
       '/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/run.ts',
+      '.cortex/teams/a1/dynamic-skills/cortex-article-structure/scripts/src/run.ts',
       'agentic-ai/loom/src/run.ts',
     ];
     for (const relativePath of noncanonicalPaths) {

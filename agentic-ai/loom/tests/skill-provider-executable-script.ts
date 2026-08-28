@@ -23,6 +23,18 @@ export type ExecutableProviderReferenceInspection = {
   readonly source: string;
 };
 
+export type ConfigurationScriptGraph = {
+  readonly executablePaths: ReadonlySet<string>;
+  readonly roots: readonly string[];
+  readonly sources: ReadonlyMap<string, string>;
+  readonly symlinkPaths: ReadonlySet<string>;
+};
+
+export type ConfigurationReferenceInspection = {
+  readonly importer: string;
+  readonly source: string;
+};
+
 export enum ShellExecutablePolicy {
   Reject = 'reject',
   TrackedConfiguration = 'tracked-configuration',
