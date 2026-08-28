@@ -172,6 +172,7 @@ function resourceClaimContainsClaim(
     };
     return basenamePatternContains(basenameRequest);
   }
+  if (request.coveredClaim.endsWith('/**')) return false;
   const coveringSlash = request.coveringClaim.lastIndexOf('/');
   const coveredSlash = request.coveredClaim.lastIndexOf('/');
   if (

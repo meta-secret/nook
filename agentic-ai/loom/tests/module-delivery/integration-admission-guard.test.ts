@@ -17,6 +17,7 @@ import {
   integrateVerifiedModuleDeliveryWave,
   prepareModuleIntegration,
 } from '../../src/module-delivery/index.ts';
+import { uncoveredEvidenceClaims } from '../../src/module-delivery/resource-claim-containment.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
 import {
   createGitFixture,
@@ -224,6 +225,41 @@ function legacyPlan(): LegacyModuleDeliveryPlan {
 }
 
 describe('validation-only runtime boundary', () => {
+  test('keeps direct glob evidence containment single-segment', () => {
+    const recursiveRoot = {
+      read: [`${CORE_ROOT}/*`],
+      evidenceSurface: [`${CORE_ROOT}/**`],
+    };
+    const recursiveSubdirectory = {
+      read: [`${CORE_ROOT}/src/*`],
+      evidenceSurface: [`${CORE_ROOT}/src/**`],
+    };
+    const extensionAgainstSubtree = {
+      read: [`${CORE_ROOT}/*.rs`],
+      evidenceSurface: [`${CORE_ROOT}/**`],
+    };
+    expect(uncoveredEvidenceClaims(recursiveRoot)).toEqual(
+      recursiveRoot.evidenceSurface,
+    );
+    expect(uncoveredEvidenceClaims(recursiveSubdirectory)).toEqual(
+      recursiveSubdirectory.evidenceSurface,
+    );
+    expect(uncoveredEvidenceClaims(extensionAgainstSubtree)).toEqual(
+      extensionAgainstSubtree.evidenceSurface,
+    );
+
+    const narrowerDirectGlob = {
+      read: [`${CORE_ROOT}/src/*`],
+      evidenceSurface: [`${CORE_ROOT}/src/*.rs`],
+    };
+    const narrowerExactPath = {
+      read: [`${CORE_ROOT}/src/*.rs`],
+      evidenceSurface: [`${CORE_ROOT}/src/lib.rs`],
+    };
+    expect(uncoveredEvidenceClaims(narrowerDirectGlob)).toEqual([]);
+    expect(uncoveredEvidenceClaims(narrowerExactPath)).toEqual([]);
+  });
+
   test('keeps compatibility decode separate from canonical validation', () => {
     const serialized = JSON.stringify(legacyPlan());
     const compatibility = decodeCompatibleModuleDeliveryPlan(serialized);
