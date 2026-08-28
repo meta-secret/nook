@@ -236,13 +236,6 @@ export type ModuleDeliveryNode =
 export type ModuleDeliveryPlanInput =
   LegacyModuleDeliveryPlan | ModuleDeliveryPlanV2;
 
-export type LegacyCompatibleModuleDeliveryPlan = Omit<
-  LegacyModuleDeliveryPlan,
-  'nodes'
-> & {
-  readonly nodes: readonly ModuleDeliveryNode[];
-};
-
 export type ModuleDeliveryPlan = ModuleDeliveryPlanInput;
 
 export enum ModuleDeliveryIssueCode {

@@ -35,7 +35,7 @@ import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryHandoffSubmission,
   ModuleDeliveryNode,
-  LegacyCompatibleModuleDeliveryPlan,
+  LegacyModuleDeliveryPlan,
   ModuleIntegrationState,
   ModuleWorktreeHandle,
   PrepareModuleIntegrationRequest,
@@ -67,6 +67,13 @@ type PlanInput = {
   readonly sourceCommit: string;
   readonly nodes: readonly ModuleDeliveryNode[];
   readonly edges: readonly ModuleDeliveryEdgeContract[];
+};
+
+type SkippedLegacyIntegrationPlanFixture = Omit<
+  LegacyModuleDeliveryPlan,
+  'nodes'
+> & {
+  readonly nodes: readonly ModuleDeliveryNode[];
 };
 
 type EdgeInput = {
@@ -220,7 +227,7 @@ function edge(input: EdgeInput): ModuleDeliveryEdgeContract {
 }
 
 function acceptedPlan(input: PlanInput): ValidatedModuleDeliveryPlan {
-  const plan: LegacyCompatibleModuleDeliveryPlan = {
+  const plan: SkippedLegacyIntegrationPlanFixture = {
     version: 1,
     sourceCommit: input.sourceCommit,
     maxConcurrency: 3,
