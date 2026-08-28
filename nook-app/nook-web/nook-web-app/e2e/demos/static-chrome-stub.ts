@@ -7,6 +7,7 @@ import {
   AuthenticationWorkflowKind,
   AuthenticationWorkflowStage,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+import type { AuthenticationApprovalRequirement } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
 import type {
   WebsiteLoginSaveActionResponse,
   WebsiteLoginSaveOfferResponse,
@@ -31,6 +32,8 @@ export const demoSufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Sufficient
 export const demoInsufficientAuthenticationOutcome =
   AuthenticationOutcomeVerdict.Insufficient
+const demoExplicitUserApproval =
+  'explicit-user-approval' satisfies AuthenticationApprovalRequirement
 export const demoDomainEnumArgs = {
   generatePasswordMessageType:
     GeneratePasswordRequestType.NookWebsiteGeneratePassword,
@@ -38,6 +41,7 @@ export const demoDomainEnumArgs = {
   sufficientAuthenticationOutcome: demoSufficientAuthenticationOutcome,
   insufficientAuthenticationOutcome: demoInsufficientAuthenticationOutcome,
   authenticationWorkflow: {
+    explicitUserApproval: demoExplicitUserApproval,
     loginKind: AuthenticationWorkflowKind.Login,
     signupKind: AuthenticationWorkflowKind.Signup,
     totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge,
@@ -61,7 +65,7 @@ export const demoDomainEnumArgs = {
     pendingUnavailable: 'unavailable',
     completed: 'completed',
   } satisfies DemoLoginSaveResponses,
-}
+} as const
 
 export type ChromeMessage = { message: string }
 
@@ -72,6 +76,7 @@ export type DemoChromeStubArgs = {
   insufficientAuthenticationOutcome: AuthenticationOutcomeVerdict
   generatePasswordMessageType: GeneratePasswordRequestType
   authenticationWorkflow: {
+    explicitUserApproval: typeof demoExplicitUserApproval
     loginKind: AuthenticationWorkflowKind.Login
     signupKind: AuthenticationWorkflowKind.Signup
     totpChallengeKind: AuthenticationWorkflowKind.TotpChallenge
@@ -219,7 +224,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.createPasskeyAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -338,7 +343,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.generatePasswordAction,
               currentStep: 2,
               totalSteps: 5,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -362,7 +367,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
               action: authenticationWorkflow.continueAction,
               currentStep: 1,
               totalSteps: 3,
-              requiresHumanApproval: false,
+              approvalRequirement: authenticationWorkflow.explicitUserApproval,
               observationIndex: 0,
             },
           }
@@ -450,7 +455,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             action: authenticationWorkflow.continueAction,
             currentStep: 1,
             totalSteps: 3,
-            requiresHumanApproval: false,
+            approvalRequirement: authenticationWorkflow.explicitUserApproval,
             observationIndex: 0,
           },
         }
