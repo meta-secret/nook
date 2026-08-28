@@ -33,20 +33,6 @@ export type LoginVaultIdentityContext =
       readonly currentIdentity: LoginVaultLinkedIdentity
     }
 
-/**
- * Keeps device-key recovery initiation reachable when local app metadata is
- * incomplete. Rust remains responsible for authorizing the attempted unlock.
- */
-export function loginVaultIdentityContextAllowsDeviceKeyAttempt(
-  context: LoginVaultIdentityContext,
-): boolean {
-  return (
-    context.kind ===
-      NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent ||
-    context.kind === NookSelectedVaultIdentityContextKind.LinkedWithCurrent
-  )
-}
-
 function readLinkedIdentity(
   identity: NookIdentitySnapshot,
 ): LoginVaultLinkedIdentity {

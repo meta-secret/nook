@@ -4,11 +4,7 @@ import {
   type NookIdentitySnapshot,
   type NookVaultManager,
 } from '$app-wasm'
-import {
-  loginVaultIdentityContextAllowsDeviceKeyAttempt,
-  loadLoginVaultIdentityContext,
-  LoginVaultIdentityContextKind,
-} from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
+import { loadLoginVaultIdentityContext } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
 
 function linkedIdentity(
   identityId: string,
@@ -62,28 +58,6 @@ function managerWithContext({
 }
 
 describe('login vault identity context', () => {
-  test('keeps device-key recovery initiation available for a linked identity mismatch', () => {
-    expect(
-      loginVaultIdentityContextAllowsDeviceKeyAttempt({
-        kind: NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent,
-        identities: [{ identityId: 'identity-peer', label: 'Peer identity' }],
-      }),
-    ).toBe(true)
-  })
-
-  test('does not initiate device keys before context loads or without a linked identity', () => {
-    expect(
-      loginVaultIdentityContextAllowsDeviceKeyAttempt({
-        kind: LoginVaultIdentityContextKind.Loading,
-      }),
-    ).toBe(false)
-    expect(
-      loginVaultIdentityContextAllowsDeviceKeyAttempt({
-        kind: NookSelectedVaultIdentityContextKind.Empty,
-      }),
-    ).toBe(false)
-  })
-
   test('loads the Rust-selected identities for the requested vault', async () => {
     const { manager, selectedVaultRequest } = managerWithContext({
       kind: NookSelectedVaultIdentityContextKind.LinkedWithCurrent,

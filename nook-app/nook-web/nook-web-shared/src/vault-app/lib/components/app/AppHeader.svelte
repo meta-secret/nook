@@ -3,6 +3,7 @@
   import {
     ArrowLeft,
     BookOpen,
+    EllipsisVertical,
     KeyRound,
     Lock,
     Moon,
@@ -52,6 +53,40 @@
     onOpenDevicesAccess: () => void
   } = $props()
 
+  const workspaceHeaderActionsVisible = $derived(
+    vault.isAuthenticated &&
+      !vault.helpOpen &&
+      !legalPageOpen &&
+      !logsPage &&
+      !extensionConnectRoute,
+  )
+  let mobileToolsOpen = $state(false)
+  let mobileToolsRoot = $state<HTMLDivElement>()
+  let mobileToolsTrigger = $state<HTMLButtonElement>()
+
+  function closeMobileTools(restoreFocus = false): void {
+    mobileToolsOpen = false
+    if (restoreFocus) mobileToolsTrigger?.focus()
+  }
+
+  function handleMobileToolsDocumentClick(event: MouseEvent): void {
+    if (!mobileToolsRoot?.contains(event.target as Node)) closeMobileTools()
+  }
+
+  function handleMobileToolsDocumentKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') closeMobileTools(true)
+  }
+
+  $effect(() => {
+    if (!mobileToolsOpen) return
+    document.addEventListener('click', handleMobileToolsDocumentClick)
+    document.addEventListener('keydown', handleMobileToolsDocumentKeydown)
+    return () => {
+      document.removeEventListener('click', handleMobileToolsDocumentClick)
+      document.removeEventListener('keydown', handleMobileToolsDocumentKeydown)
+    }
+  })
+
   function navigateToSiblingApp(event: MouseEvent) {
     event.preventDefault()
     vault.lockVault()
@@ -77,7 +112,7 @@
     </div>
 
     <div class="flex shrink-0 items-center gap-2">
-      {#if vault.isAuthenticated && !vault.helpOpen && !legalPageOpen && !logsPage && !extensionConnectRoute}
+      {#if workspaceHeaderActionsVisible}
         <Button
           type="button"
           variant="outline"
@@ -97,7 +132,7 @@
           type="button"
           variant="outline"
           size="sm"
-          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+          class="hidden h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:inline-flex sm:bg-background [&_svg]:size-4"
           data-testid="header-lock-vault-btn"
           title={vault.t(I18N_KEYS.SessionLockDesc)}
           disabled={vault.isVerifying || vault.isInitializing}
@@ -109,19 +144,89 @@
           >
         </Button>
         <div
-          class="mx-0.5 h-6 w-px shrink-0 bg-border/60"
+          class="mx-0.5 hidden h-6 w-px shrink-0 bg-border/60 sm:block"
           aria-hidden="true"
         ></div>
+
+        <div bind:this={mobileToolsRoot} class="relative sm:hidden">
+          <button
+            bind:this={mobileToolsTrigger}
+            type="button"
+            class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-hidden"
+            data-testid="header-mobile-tools-btn"
+            aria-label={vault.t(I18N_KEYS.SettingsTitle)}
+            aria-haspopup="true"
+            aria-expanded={mobileToolsOpen}
+            aria-controls="header-mobile-tools"
+            onclick={() => {
+              mobileToolsOpen = !mobileToolsOpen
+            }}
+          >
+            <EllipsisVertical class="size-4" />
+          </button>
+
+          {#if mobileToolsOpen}
+            <div
+              id="header-mobile-tools"
+              role="group"
+              aria-label={vault.t(I18N_KEYS.SettingsTitle)}
+              data-testid="header-mobile-tools"
+              class="absolute right-0 top-full z-50 mt-1.5 w-56 space-y-1 rounded-lg border border-border/60 bg-popover p-1.5 shadow-md"
+            >
+              <div
+                class="flex min-h-11 items-center justify-between gap-3 rounded-md px-2.5 py-1.5 text-sm text-muted-foreground"
+              >
+                <span>{vault.t(I18N_KEYS.SettingsSelectLanguage)}</span>
+                <HeaderLanguageSelect {vault} />
+              </div>
+              <button
+                type="button"
+                class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                data-testid="header-mobile-theme-toggle-btn"
+                onclick={() => {
+                  closeMobileTools()
+                  onToggleColorMode()
+                }}
+              >
+                {#if colorMode === ColorMode.Dark}
+                  <Sun class="size-4 shrink-0" />
+                  <span>{vault.t(I18N_KEYS.AppSwitchLight)}</span>
+                {:else}
+                  <Moon class="size-4 shrink-0" />
+                  <span>{vault.t(I18N_KEYS.AppSwitchDark)}</span>
+                {/if}
+              </button>
+              <button
+                type="button"
+                class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                data-testid="header-mobile-help-open-btn"
+                onclick={() => {
+                  closeMobileTools()
+                  vault.openHelp()
+                }}
+              >
+                <BookOpen class="size-4 shrink-0" />
+                <span>{vault.t(I18N_KEYS.AppHelp)}</span>
+              </button>
+              <button
+                type="button"
+                class="flex min-h-11 w-full items-center gap-2.5 rounded-md px-3 py-2 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:pointer-events-none disabled:opacity-50"
+                data-testid="header-mobile-lock-vault-btn"
+                disabled={vault.isVerifying || vault.isInitializing}
+                onclick={() => {
+                  closeMobileTools()
+                  vault.lockVault()
+                }}
+              >
+                <Lock class="size-4 shrink-0" />
+                <span>{vault.t(I18N_KEYS.CommonLockVault)}</span>
+              </button>
+            </div>
+          {/if}
+        </div>
       {/if}
 
-      <div
-        class={vault.isAuthenticated &&
-        !vault.helpOpen &&
-        !legalPageOpen &&
-        !logsPage
-          ? 'hidden sm:block'
-          : 'block'}
-      >
+      <div class={workspaceHeaderActionsVisible ? 'hidden sm:block' : 'block'}>
         <HeaderLanguageSelect {vault} />
       </div>
 
@@ -138,10 +243,7 @@
 
       <button
         type="button"
-        class="size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {vault.isAuthenticated &&
-        !vault.helpOpen &&
-        !legalPageOpen &&
-        !logsPage
+        class="size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {workspaceHeaderActionsVisible
           ? 'hidden sm:inline-flex'
           : 'inline-flex'}"
         aria-label={colorMode === ColorMode.Dark

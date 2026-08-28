@@ -31,7 +31,6 @@
     type PasswordUnlockCapability,
   } from './login-unlock-state'
   import {
-    loginVaultIdentityContextAllowsDeviceKeyAttempt,
     loadLoginVaultIdentityContext,
     LoginVaultIdentityContextKind,
     type LoginVaultIdentityContext as LoginVaultIdentityContextState,
@@ -140,24 +139,12 @@
   })
 
   const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
-    identityContext.kind === LoginVaultIdentityContextKind.Loading
-      ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
-      : loginVaultIdentityContextAllowsDeviceKeyAttempt(identityContext) &&
-          vault.loginDeviceKeysCapable
-        ? { kind: DeviceKeysUnlockCapabilityKind.Available }
-        : {
-            kind: DeviceKeysUnlockCapabilityKind.Unavailable,
-            reason:
-              identityContext.kind === LoginVaultIdentityContextKind.Failed
-                ? vault.t(I18N_KEYS.LoginIdentityContextFailed)
-                : identityContext.kind ===
-                    NookSelectedVaultIdentityContextKind.Empty
-                  ? vault.t(I18N_KEYS.LoginIdentityContextEmpty)
-                  : identityContext.kind ===
-                      NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent
-                    ? vault.t(I18N_KEYS.LoginIdentityContextMismatch)
-                    : vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
-          },
+    vault.loginDeviceKeysCapable
+      ? { kind: DeviceKeysUnlockCapabilityKind.Available }
+      : {
+          kind: DeviceKeysUnlockCapabilityKind.Unavailable,
+          reason: vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
+        },
   )
 </script>
 

@@ -107,18 +107,49 @@ test.describe('persistent workspace routing', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.setViewportSize({ width: 320, height: 844 })
 
     const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
-    await expect(headerDevicesAccess).toBeVisible()
-    await expect(headerDevicesAccess).toBeInViewport()
-    await expect(page.getByTestId('header-lock-vault-btn')).toBeInViewport()
-    await expect(page.getByTestId('header-language-select')).toBeHidden()
-    await expect(page.getByTestId('theme-toggle-btn')).toBeHidden()
-    await expect(page.getByTestId('help-open-btn')).toBeHidden()
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth),
-    ).toBeLessThanOrEqual(320)
+    const mobileToolsButton = page.getByTestId('header-mobile-tools-btn')
+
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 })
+
+      await expect(headerDevicesAccess).toBeVisible()
+      await expect(headerDevicesAccess).toBeInViewport()
+      await expect(page.getByTestId('header-lock-vault-btn')).toBeHidden()
+      await expect(page.getByTestId('header-language-select')).toBeHidden()
+      await expect(page.getByTestId('theme-toggle-btn')).toBeHidden()
+      await expect(page.getByTestId('help-open-btn')).toBeHidden()
+      await expect(mobileToolsButton).toBeVisible()
+      await mobileToolsButton.click()
+
+      const mobileTools = page.getByTestId('header-mobile-tools')
+      await expect(mobileTools).toBeVisible()
+      await expect(
+        mobileTools.getByTestId('header-language-select'),
+      ).toBeVisible()
+      await expect(
+        mobileTools.getByTestId('header-mobile-theme-toggle-btn'),
+      ).toBeVisible()
+      await expect(
+        mobileTools.getByTestId('header-mobile-help-open-btn'),
+      ).toBeVisible()
+      await expect(
+        mobileTools.getByTestId('header-mobile-lock-vault-btn'),
+      ).toBeVisible()
+      expect(
+        await page.evaluate(() => document.documentElement.scrollWidth),
+      ).toBeLessThanOrEqual(width)
+
+      await page.keyboard.press('Escape')
+      await expect(mobileTools).toBeHidden()
+      await expect(mobileToolsButton).toBeFocused()
+    }
+
+    await mobileToolsButton.click()
+    await page.getByTestId('header-mobile-help-open-btn').click()
+    await expect(page.getByTestId('help-page')).toBeVisible()
+    await page.getByTestId('help-header-close').click()
 
     await headerDevicesAccess.click()
     await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
