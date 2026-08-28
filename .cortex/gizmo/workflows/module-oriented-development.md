@@ -23,13 +23,17 @@ It is not the agent parent-lineage tree.
 Each node declares:
 
 - a stable task ID;
+- whether it is read-only or write-capable;
 - exactly one team identity;
 - an explicit functional owner;
 - one registered expert;
 - the consumer outcome;
 - provider dependencies;
 - read and write resource claims;
-- a non-empty read-only evidence surface covered by its read claims;
+- an evidence surface:
+  - a read-only node declares the exact non-empty subset of its read claims used
+    to produce evidence; and
+  - a write-capable node declares an empty evidence surface;
 - the starting-frontier rule;
 - the isolated workspace policy for write-capable work;
 - the expected commit handoff;
@@ -52,6 +56,32 @@ that owner accepts the expertise-provider team's result before Gizmo
 integration. The registered expert selects bounded module knowledge and never
 substitutes for either field. A ready selected node receives one worker attempt
 only after its exact starting frontier exists.
+
+### Executable enforcement gate
+
+This document defines the target semantic policy. Documentation alone does not
+make the installed runtime validator capable of enforcing that policy.
+
+Before using this multi-team module-delivery path, verify that the installed
+typed validator schema and focused tests encode and enforce all of these
+requirements:
+
+- required team identity on every node;
+- a non-empty, read-covered evidence surface only for read-only nodes and an
+  empty evidence surface for write-capable nodes;
+- immutable plan-generation identity on tasks, handoffs, and accepted evidence;
+- derived writer-before-evidence and conflict-serialization constraints;
+- deterministic candidate, conflict, capacity, lease, and exact-frontier
+  computation; and
+- Gizmo validation, admission authorization, and frontier freezing before
+  harness attempt creation.
+
+If the installed validator cannot encode and enforce any required field or
+invariant, fail closed before dispatch. Do not execute this path. A validation
+result from an incompatible schema proves only that narrower schema and cannot
+authorize this path. Report the missing typed-runtime dependency to Gizmo and
+wait for a compatible typed runtime. Markdown policy or manual review cannot
+substitute for executable enforcement.
 
 ### Execution graph and admission
 
@@ -109,7 +139,9 @@ contract:
 
 - one stable semantic expert role;
 - the task's mandatory and separate team identity;
-- a read-only evidence surface;
+- for a read-only expert task, a non-empty evidence surface covered by its read
+  claims;
+- for a write-capable implementation task, an empty evidence surface;
 - task-selected authority anchors and skills; and
 - expected module evidence fields.
 
@@ -226,17 +258,20 @@ Before implementation, verify the canonical
 [delegation validation](subagent-delegation.md#validation) and
 these module-specific requirements:
 
+- the executable enforcement gate above passed before dispatch;
 - every node has one team identity, one explicit functional owner, and a
   separate registered expert;
 - every expertise result is accepted by its functional owner before Gizmo
   integration;
 - every changed boundary has a reviewed external API and provider-owned tests;
 - every task has exact frontier, scope, isolation, and frozen lineage rules;
-- every read-only task has a read-covered evidence surface and typed handoff;
+- every read-only task has a non-empty read-covered evidence surface and typed
+  handoff;
+- every write-capable task has an empty evidence surface;
 - every successor receives its complete write-predecessor closure; and
 - only the delivery owner performs the final all-task join.
 
-Run:
+Only after the executable enforcement gate passes, run:
 
 ```bash
 task loom:module-delivery:validate PLAN=path/to/plan.json
@@ -244,6 +279,11 @@ task loom:module-experts:validate
 task loom:verify
 task loom:cortex-audit
 ```
+
+`task loom:module-delivery:validate` proves compliance only when the installed
+validator schema encodes and enforces the complete gate above. A result from an
+incompatible schema proves only that narrower schema and cannot authorize this
+path.
 
 ## Non-goals
 

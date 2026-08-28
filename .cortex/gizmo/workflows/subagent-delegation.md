@@ -93,10 +93,11 @@ Every subagent task must declare:
 - any separate semantic role or expert required by the task;
 - its exact baseline;
 - its purpose;
-- its allowed files or evidence surface;
+- its allowed files;
 - its read and write resource claims;
-- the exact resource claims that form any read-only evidence surface;
 - whether it is read-only;
+- its evidence surface: the exact non-empty subset of read claims used by a
+  read-only task, or an empty set for a write-capable task;
 - its dependencies;
 - its hierarchy depth bound;
 - its expected result shape;
@@ -609,6 +610,7 @@ Before integration, verify:
 - every task record declares read and write resource claims;
 - every read-only task record declares a non-empty evidence surface covered by
   its read claims;
+- every write-capable task record declares an empty evidence surface;
 - every task records its correct frozen parent lineage and authority bound;
 - no active leased worker attempt created another worker attempt;
 - every missing dependency returned to Gizmo instead of being self-dispatched;
