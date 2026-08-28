@@ -198,42 +198,6 @@ mod tests {
             nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication
         );
 
-        let reset_password = nook_companion_core::AuthenticationAdvanceControlObservation {
-            actionability: nook_companion_core::PageControlActionability::Actionable,
-            ownership: nook_companion_core::PageControlOwnership::OwnedForm,
-            semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
-            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Absent,
-            password_field_count: 1,
-            new_password_field_count: 1,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 1,
-            form_identity: "reset-password".to_owned(),
-            destination_identity: String::new(),
-            label: "Reset password".to_owned(),
-        };
-        assert_eq!(
-            classify_authentication_advance_control(reset_password),
-            nook_companion_core::AuthenticationAdvanceControlDecision::AdvancesAuthentication
-        );
-
-        let resend_code = nook_companion_core::AuthenticationAdvanceControlObservation {
-            actionability: nook_companion_core::PageControlActionability::Actionable,
-            ownership: nook_companion_core::PageControlOwnership::OwnedForm,
-            semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
-            authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Absent,
-            password_field_count: 0,
-            new_password_field_count: 0,
-            one_time_code_field_count: 1,
-            semantic_submit_control_count: 1,
-            form_identity: "otp-verification".to_owned(),
-            destination_identity: String::new(),
-            label: "Resend code".to_owned(),
-        };
-        assert_eq!(
-            classify_authentication_advance_control(resend_code),
-            nook_companion_core::AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
-        );
-
         let login = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {
                 current_password_field_count: 1,

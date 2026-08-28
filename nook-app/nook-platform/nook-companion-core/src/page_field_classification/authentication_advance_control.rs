@@ -9,7 +9,7 @@ use super::control_identity::{
 };
 use super::form_identity::{
     control_destination_indicates_non_authentication_route,
-    form_identity_indicates_destructive_action,
+    control_destination_indicates_registration_route, form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
 };
 use super::{
@@ -176,7 +176,10 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if control_destination_indicates_non_authentication_route(&self.destination_identity) {
+        if control_destination_indicates_non_authentication_route(&self.destination_identity)
+            && (self.new_password_field_count == 0
+                || !control_destination_indicates_registration_route(&self.destination_identity))
+        {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
@@ -389,15 +392,6 @@ mod tests {
         };
         assert!(!advances_authentication(&registration_route_submit));
 
-        let localized_registration_destination = AuthenticationAdvanceControlObservation {
-            destination_identity: "/auth?mode=register".to_owned(),
-            label: "Continuar".to_owned(),
-            ..localized_identity_submit.clone()
-        };
-        assert!(!advances_authentication(
-            &localized_registration_destination
-        ));
-
         let localized_recovery_destination = AuthenticationAdvanceControlObservation {
             destination_identity: "/password/recover".to_owned(),
             label: "Continuar".to_owned(),
@@ -440,6 +434,22 @@ mod tests {
             };
         assert!(advances_authentication(
             &explicit_login_activation_beside_disabled_submit
+        ));
+    }
+
+    #[test]
+    fn registration_destination_requires_new_password_evidence() {
+        let login = AuthenticationAdvanceControlObservation {
+            destination_identity: "/auth?mode=register".to_owned(),
+            label: "Continuar".to_owned(),
+            ..localized_identity_submit()
+        };
+        assert!(!advances_authentication(&login));
+        assert!(advances_authentication(
+            &AuthenticationAdvanceControlObservation {
+                new_password_field_count: 1,
+                ..login
+            }
         ));
     }
 

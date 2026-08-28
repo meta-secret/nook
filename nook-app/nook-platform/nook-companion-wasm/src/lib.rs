@@ -682,6 +682,41 @@ mod tests {
             ),
             CompanionAuthenticationWorkflowMatchKind::NoMatch
         );
+
+        let legitimate_submit = nook_companion_core::AuthenticationPageObservationFactsBatch {
+            observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
+                fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                    username_field_count: 1,
+                    current_password_field_count: 1,
+                    ..Default::default()
+                },
+                detailed_advance_control:
+                    nook_companion_core::AuthenticationDetailedAdvanceControlObservation::Observed(
+                        nook_companion_core::AuthenticationAdvanceControlObservation {
+                            actionability:
+                                nook_companion_core::PageControlActionability::Actionable,
+                            ownership: nook_companion_core::PageControlOwnership::OwnedForm,
+                            semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
+                            authentication_username:
+                                nook_companion_core::AuthenticationUsernameEvidence::Strong,
+                            password_field_count: 1,
+                            new_password_field_count: 0,
+                            one_time_code_field_count: 0,
+                            semantic_submit_control_count: 1,
+                            form_identity: String::new(),
+                            destination_identity: String::new(),
+                            label: "Continue".to_owned(),
+                        },
+                    ),
+                ..Default::default()
+            }],
+        };
+        assert!(matches!(
+            classify_companion_authentication_workflow(legitimate_submit),
+            nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.action
+                    == nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook
+        ));
     }
 }
 

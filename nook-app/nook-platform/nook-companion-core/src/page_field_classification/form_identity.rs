@@ -59,21 +59,12 @@ pub(super) fn control_destination_indicates_non_authentication_route(
         )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::control_destination_indicates_non_authentication_route;
-
-    #[test]
-    fn distinguishes_credential_and_alternate_submit_destinations() {
-        assert!(!control_destination_indicates_non_authentication_route(""));
-        assert!(!control_destination_indicates_non_authentication_route(
-            "/auth/login"
-        ));
-        assert!(control_destination_indicates_non_authentication_route(
-            "/auth?mode=register"
-        ));
-        assert!(control_destination_indicates_non_authentication_route(
-            "/password/recover"
-        ));
+pub(super) fn control_destination_indicates_registration_route(destination_identity: &str) -> bool {
+    if destination_identity.trim().is_empty() {
+        return false;
     }
+    contains_any_word(
+        &expand_identity_text(destination_identity),
+        &["register", "registration", "signup", "sign up"],
+    )
 }

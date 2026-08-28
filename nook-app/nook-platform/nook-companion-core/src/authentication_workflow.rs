@@ -13,8 +13,9 @@ pub use candidate_selection::AuthenticationFormObservationPriority;
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyObservationFacts,
-    AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
-    AuthenticationPageObservationFactsBatch, AuthenticationPasskeyControlObservation,
+    AuthenticationDetailedAdvanceControlObservation, AuthenticationFieldObservationFacts,
+    AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
+    AuthenticationPasskeyControlObservation,
 };
 pub use observation_validation::{
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
@@ -185,6 +186,7 @@ impl AuthenticationPageObservation {
         matches!(
             self.passkey,
             AuthenticationPasskeyEvidence::Control
+                | AuthenticationPasskeyEvidence::VaultAccounts { .. }
                 | AuthenticationPasskeyEvidence::ControlAndVaultAccounts { .. }
         )
     }
@@ -922,15 +924,31 @@ mod tests {
     }
 
     #[test]
-    fn login_with_matching_passkeys_proposes_use() -> anyhow::Result<()> {
+    fn vault_accounts_advance_login_and_signup_to_use_passkey() -> anyhow::Result<()> {
         let login = AuthenticationPageObservation {
             current_password_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
             passkey: AuthenticationPasskeyEvidence::VaultAccounts { account_count: 2 },
             ..observation()
         };
-        let snapshot = classify_authentication_workflow(login).snapshot()?;
-        assert_eq!(snapshot.kind, AuthenticationWorkflowKind::Login);
-        assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
+        let signup = AuthenticationPageObservation {
+            new_password_field_count: 1,
+            advance_control: AuthenticationAdvanceControlEvidence::Absent,
+            passkey: AuthenticationPasskeyEvidence::VaultAccounts { account_count: 1 },
+            ..observation()
+        };
+        for (observation, kind) in [
+            (login, AuthenticationWorkflowKind::Login),
+            (signup, AuthenticationWorkflowKind::Signup),
+        ] {
+            let snapshot = classify_authentication_workflow(observation).snapshot()?;
+            assert_eq!(snapshot.kind, kind);
+            assert_eq!(snapshot.action, AuthenticationWorkflowAction::UsePasskey);
+            assert_eq!(
+                snapshot.approval_requirement,
+                AuthenticationApprovalRequirement::ExplicitUserApproval
+            );
+        }
         Ok(())
     }
 
