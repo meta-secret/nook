@@ -103,6 +103,29 @@ test.describe('persistent workspace routing', () => {
     await expect(page).toHaveURL(/\/devices-access$/)
   })
 
+  test('keeps authenticated access available without overflowing a narrow header', async ({
+    page,
+  }) => {
+    await connectLocalVault(page)
+    await page.setViewportSize({ width: 320, height: 844 })
+
+    const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
+    await expect(headerDevicesAccess).toBeVisible()
+    await expect(headerDevicesAccess).toBeInViewport()
+    await expect(page.getByTestId('header-lock-vault-btn')).toBeInViewport()
+    await expect(page.getByTestId('header-language-select')).toBeHidden()
+    await expect(page.getByTestId('theme-toggle-btn')).toBeHidden()
+    await expect(page.getByTestId('help-open-btn')).toBeHidden()
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(320)
+
+    await headerDevicesAccess.click()
+    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+  })
+
   test('applies a direct workspace route after authentication', async ({
     page,
   }) => {

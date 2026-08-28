@@ -180,6 +180,22 @@ test.describe('login unlock flow (local-first)', () => {
     await expect(page.getByTestId('devices-access-back')).toBeFocused()
     await page.getByTestId('devices-access-back').click()
     await expect(reviewIdentities).toBeFocused()
+    await page.keyboard.press('Tab')
+    const focusAfterTab = await page.evaluate(
+      () => document.activeElement?.getAttribute('data-testid') ?? '',
+    )
+    expect(focusAfterTab).not.toBe('login-review-identities')
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+        ),
+    )
+    expect(
+      await page.evaluate(
+        () => document.activeElement?.getAttribute('data-testid') ?? '',
+      ),
+    ).toBe(focusAfterTab)
 
     await unlockVaultOnLogin(page, {
       entryLabel: 'Recovery',

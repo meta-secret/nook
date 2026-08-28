@@ -122,7 +122,16 @@
         ></div>
       {/if}
 
-      <HeaderLanguageSelect {vault} />
+      <div
+        class={vault.isAuthenticated &&
+        !vault.helpOpen &&
+        !legalPageOpen &&
+        !logsPage
+          ? 'hidden sm:block'
+          : 'block'}
+      >
+        <HeaderLanguageSelect {vault} />
+      </div>
 
       {#if IS_SENTINEL_APP}
         <a
@@ -137,7 +146,12 @@
 
       <button
         type="button"
-        class="inline-flex size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70"
+        class="size-10 items-center justify-center rounded-lg border border-border/40 bg-background/60 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70 {vault.isAuthenticated &&
+        !vault.helpOpen &&
+        !legalPageOpen &&
+        !logsPage
+          ? 'hidden sm:inline-flex'
+          : 'inline-flex'}"
         aria-label={colorMode === ColorMode.Dark
           ? vault.t(I18N_KEYS.AppSwitchLight)
           : vault.t(I18N_KEYS.AppSwitchDark)}
@@ -209,7 +223,9 @@
           type="button"
           variant="outline"
           size="sm"
-          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4"
+          class="h-10 rounded-lg border-border/40 bg-background/60 px-3.5 text-sm text-muted-foreground sm:bg-background [&_svg]:size-4 {vault.isAuthenticated
+            ? 'hidden sm:inline-flex'
+            : ''}"
           data-testid="help-open-btn"
           onclick={() => vault.openHelp()}
         >

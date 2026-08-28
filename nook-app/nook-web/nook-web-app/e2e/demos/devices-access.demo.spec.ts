@@ -11,6 +11,27 @@ import {
 
 const BEAT_MS = 650
 
+test('keeps access reachable in the compact authenticated header', async ({
+  page,
+}) => {
+  await connectLocalVault(page)
+  await page.setViewportSize({ width: 320, height: 844 })
+
+  const headerDevicesAccess = page.getByTestId('header-devices-access-btn')
+  await expect(headerDevicesAccess).toBeVisible()
+  await expect(headerDevicesAccess).toBeInViewport()
+  await expect(page.getByTestId('header-lock-vault-btn')).toBeInViewport()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(
+    320,
+  )
+  await page.waitForTimeout(BEAT_MS)
+
+  await headerDevicesAccess.click()
+  await expect(page.getByTestId('devices-access-dashboard')).toBeVisible({
+    timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+  })
+})
+
 test('walk the access chain from passkey to app to vaults', async ({
   page,
 }) => {

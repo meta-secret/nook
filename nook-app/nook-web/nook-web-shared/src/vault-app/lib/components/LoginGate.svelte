@@ -219,14 +219,25 @@
       ?.focus()
   }
 
-  async function restoreIdentityContextFocus(): Promise<void> {
-    // The unlock step reloads its typed identity projection after it remounts.
-    // Keep restoring focus while that quiet context replaces its loading view.
+  async function focusIdentityContextWhenAvailable(): Promise<void> {
+    let reloadObserved = false
     for (let frame = 0; frame < 30; frame += 1) {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       )
-      focusHostButton('login-review-identities')
+      if (
+        document.querySelector('[data-testid="login-vault-identity-loading"]')
+      ) {
+        reloadObserved = true
+        continue
+      }
+      const remountedButton = document.querySelector<HTMLButtonElement>(
+        '[data-testid="login-review-identities"]',
+      )
+      if (remountedButton && (reloadObserved || frame === 29)) {
+        remountedButton.focus()
+        return
+      }
     }
   }
 
@@ -268,7 +279,7 @@
           : 'login-devices-access'
     focusHostButton(testId)
     if (devicesAccessTrigger === DevicesAccessTriggerKind.IdentityContext) {
-      await restoreIdentityContextFocus()
+      await focusIdentityContextWhenAvailable()
     }
   }
 
