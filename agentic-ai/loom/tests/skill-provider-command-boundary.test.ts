@@ -151,6 +151,11 @@ test('rejects every protected runtime construction and masked launch', () => {
     `eval 'bun ${PROTECTED}'`,
     `eval -- 'bun ${PROTECTED}'`,
     `builtin eval 'bun ${PROTECTED}'`,
+    `env MODE=x nohup sudo -n time -p bun ${PROTECTED}`,
+    `nohup env MODE=x xargs -0 bun ${PROTECTED}`,
+    `env MODE=x command eval -- 'bun ${PROTECTED}'`,
+    `builtin alias audit='bun ${PROTECTED}'; audit`,
+    `command alias audit='bun ${PROTECTED}'; audit`,
     `time MODE=x bun ${PROTECTED}`,
     `alias audit='bun ${PROTECTED}'; audit`,
     `nohup bun ${PROTECTED}`,
@@ -168,6 +173,12 @@ test('rejects every protected runtime construction and masked launch', () => {
   ];
   for (const source of fixtures)
     expect(() => inspectProtected(source), source).toThrow();
+  for (const source of [
+    'alias first=second; alias second=first; first',
+    `${'command '.repeat(33)}bun scripts/catalog.ts`,
+    `${'env '.repeat(32)}bun scripts/catalog.ts`,
+  ])
+    expect(() => inspectShell(source), source).toThrow();
 });
 
 test('propagates only caller-bound wrapper arguments through positional delegation', () => {
@@ -213,7 +224,14 @@ test('accepts dynamic inert data after a static non-protected executable', () =>
     `printf '%s' 'eval bun ${PROTECTED}'`,
     'time bun scripts/catalog.ts',
     "alias audit='bun scripts/catalog.ts'; audit",
+    `alias audit='bun ${PROTECTED}'; builtin unalias audit; audit`,
+    `builtin alias -p; alias audit='bun ${PROTECTED}'; builtin unalias -a; audit`,
+    `${'command '.repeat(32)}bun scripts/catalog.ts`,
+    `${'env '.repeat(31)}bun scripts/catalog.ts`,
     'echo $((1 << 2))',
+    `true;# audit(){ bun ${PROTECTED}; }\necho safe`,
+    `true;# cat <<END! $(bun ${PROTECTED})\necho safe`,
+    'value=prefix; echo "${value#pre}" word#literal',
     `cat <<\\EOF\nbun ${PROTECTED}\nEOF`,
     `cat <<'END!'\nbun ${PROTECTED}\nEND!`,
     `cat <<E"OF-MARK"\nbun ${PROTECTED}\nEOF-MARK`,

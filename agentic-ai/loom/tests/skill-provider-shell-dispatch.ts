@@ -26,13 +26,21 @@ const SUDO_BOOLEAN = new Set('-n -E -H -S -k -K -v --'.split(' '));
 const SUDO_VALUE = new Set('-u -g -h -p -C -T'.split(' '));
 const XARGS_BOOLEAN = new Set('-0 --null -r --no-run-if-empty --'.split(' '));
 const XARGS_VALUE = new Set('-I -n -P -s -a -E'.split(' '));
+const MAX_DISPATCH_DEPTH = 32;
+
+export function isDispatchWrapper(command: string): boolean {
+  return WRAPPERS.has(command);
+}
 
 export function resolveDispatchCommand(
   request: DispatchRequest,
 ): DispatchResult | false {
   let command = request.command;
   let index = request.index;
+  let depth = 0;
   while (WRAPPERS.has(command.value)) {
+    if ((depth += 1) > MAX_DISPATCH_DEPTH)
+      throw new Error('Shell dispatch depth exceeds its bound.');
     const wrapper = command.value;
     if (wrapper === 'builtin') {
       const option = resolveAt([request, index]);

@@ -1,3 +1,5 @@
+import { isShellCommentStart } from './skill-provider-shell-tokenizer.ts';
+
 export type ShellStructureInspection = {
   readonly functions: Map<string, string>;
   readonly source: string;
@@ -97,11 +99,7 @@ function heredocLine(source: string): HeredocLine {
       index += 1;
       continue;
     }
-    if (
-      character === '#' &&
-      (index === 0 || /\s/u.test(source[index - 1] ?? ''))
-    )
-      break;
+    if (isShellCommentStart([source, index])) break;
     if (
       source.slice(index, index + 2) !== '<<' ||
       source[index - 1] === '<' ||
@@ -198,10 +196,7 @@ function extractFunctions(inspection: ShellStructureInspection): string {
       index += 1;
       continue;
     }
-    if (
-      character === '#' &&
-      (index === 0 || /\s/u.test(inspection.source[index - 1] ?? ''))
-    ) {
+    if (isShellCommentStart([inspection.source, index])) {
       index = inspection.source.indexOf('\n', index);
       if (index < 0) break;
       continue;
@@ -241,10 +236,7 @@ function findClosing(request: ClosingRequest): number {
       else if (character === quote) quote = '';
       continue;
     }
-    if (
-      character === '#' &&
-      (index === 0 || /\s/u.test(request.source[index - 1] ?? ''))
-    ) {
+    if (isShellCommentStart([request.source, index])) {
       index = request.source.indexOf('\n', index);
       if (index < 0) break;
       continue;

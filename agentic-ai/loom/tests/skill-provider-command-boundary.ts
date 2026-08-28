@@ -5,8 +5,14 @@ import {
   type ShellStructureInspection,
 } from './skill-provider-shell-structure.ts';
 import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
+import {
+  aliasInvocationSource,
+  applyAliasMutation,
+  type AliasRequest,
+} from './skill-provider-shell-alias.ts';
 import { workflowCommandSources } from './skill-provider-workflow-commands.ts';
 import {
+  isDispatchWrapper,
   resolveDispatchCommand,
   type DispatchRequest,
 } from './skill-provider-shell-dispatch.ts';
@@ -52,6 +58,7 @@ export type {
 
 const MAX_SHELL_COMMANDS = 4_096;
 const MAX_SHELL_DEPTH = 8;
+const MAX_COMMAND_NORMALIZATIONS = 32;
 const PROTECTED_SKILL_PATH =
   /(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[^/]+\/scripts)\//u;
 const PROTECTED_SKILL_FRAGMENTS = [
@@ -400,43 +407,18 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
     environment: request.state.environment,
   };
   command = resolveWord(wordRequest);
-  if (command.value === 'alias') {
-    for (const word of words.slice(index + 1)) {
-      const aliasRequest: WordEnvironmentRequest = {
-        environment: request.state.environment,
-        word,
-      };
-      const alias = resolveWord(aliasRequest);
-      const match = /^([A-Za-z_]\w*)=([\s\S]*)$/u.exec(alias.value);
-      if (!match || alias.dynamic)
-        throw new Error('Dynamic shell alias definition is forbidden.');
-      request.state.aliases.set(match[1] ?? '', match[2] ?? '');
-    }
-    return;
-  }
-  if (command.value === 'unalias') {
-    for (const word of words.slice(index + 1)) {
-      const aliasRequest: WordEnvironmentRequest = {
-        environment: request.state.environment,
-        word,
-      };
-      const alias = resolveWord(aliasRequest);
-      if (alias.dynamic) throw new Error('Dynamic shell unalias is forbidden.');
-      request.state.aliases.delete(alias.value);
-    }
-    return;
-  }
-  const aliasBody = request.state.aliases.get(command.value) ?? false;
-  if (aliasBody !== false) {
-    const source = [
-      aliasBody,
-      ...words.slice(index + 1).map((word) => word.source),
-    ]
-      .filter(Boolean)
-      .join(' ');
+  const aliasRequest: AliasRequest = {
+    command,
+    index,
+    state: request.state,
+    words,
+  };
+  if (applyAliasMutation(aliasRequest)) return;
+  const aliasSource = aliasInvocationSource(aliasRequest);
+  if (aliasSource !== false) {
     const nestedRequest: ShellCommandRequest = {
       depth: request.depth + 1,
-      source,
+      source: aliasSource,
       state: request.state,
     };
     analyzeCommandSource(nestedRequest);
@@ -537,44 +519,63 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
     ['$@', '${@}'].includes(words[index]?.value ?? '')
   )
     throw new Error('Unbound shell positional delegation is forbidden.');
-  const dispatchRequest: DispatchRequest = {
-    command,
-    environment: request.state.environment,
-    index,
-    words,
-  };
-  const dispatch = resolveDispatchCommand(dispatchRequest);
-  if (dispatch === false) return;
-  ({ command, index } = dispatch);
-  if (command.value === 'eval') {
-    analyzeEval([request, words, index]);
-    return;
-  }
-  if (command.value === 'env') {
-    const envRequest: EnvPrefixRequest = {
-      words,
-      start: index,
-      environment: request.state.environment,
-    };
-    index = consumeEnvPrefix(envRequest);
-    if (index === words.length) return;
-    wordRequest = {
-      word: words[index] as ShellWord,
-      environment: request.state.environment,
-    };
-    command = resolveWord(wordRequest);
-    if (command.dynamic) {
-      const argumentsRequest: WordsEnvironmentRequest = {
-        words: words.slice(index + 1),
+  let normalized = false;
+  for (let step = 0; step < MAX_COMMAND_NORMALIZATIONS; step += 1) {
+    if (isDispatchWrapper(command.value)) {
+      const dispatchRequest: DispatchRequest = {
+        command,
+        environment: request.state.environment,
+        index,
+        words,
+      };
+      const dispatch = resolveDispatchCommand(dispatchRequest);
+      if (dispatch === false) return;
+      ({ command, index } = dispatch);
+      continue;
+    }
+    if (command.value === 'env') {
+      const envRequest: EnvPrefixRequest = {
+        words,
+        start: index,
         environment: request.state.environment,
       };
-      if (argumentsContainProtectedPath(argumentsRequest))
-        throw new Error(
-          'Dynamic protected-skill command construction is forbidden.',
-        );
-      throw new Error('Unknown dynamic executable is forbidden.');
+      index = consumeEnvPrefix(envRequest);
+      if (index === words.length) return;
+      wordRequest = {
+        word: words[index] as ShellWord,
+        environment: request.state.environment,
+      };
+      command = resolveWord(wordRequest);
+      if (command.dynamic) {
+        const argumentsRequest: WordsEnvironmentRequest = {
+          words: words.slice(index + 1),
+          environment: request.state.environment,
+        };
+        if (argumentsContainProtectedPath(argumentsRequest))
+          throw new Error(
+            'Dynamic protected-skill command construction is forbidden.',
+          );
+        throw new Error('Unknown dynamic executable is forbidden.');
+      }
+      index += 1;
+      continue;
     }
-    index += 1;
+    normalized = true;
+    break;
+  }
+  if (!normalized)
+    throw new Error('Shell command normalization exceeds its bound.');
+  if (
+    ['alias', 'eval', 'unalias'].includes(command.value) ||
+    request.state.aliases.has(command.value)
+  ) {
+    const normalizedRequest: RuntimeCommandRequest = {
+      ...request,
+      depth: request.depth + 1,
+      words: [command, ...words.slice(index)],
+    };
+    analyzeCommand(normalizedRequest);
+    return;
   }
   const commandRequest: RuntimeCommandRequest = {
     ...request,
