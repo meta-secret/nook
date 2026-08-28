@@ -91,6 +91,9 @@ const NODE_VALUE_OPTIONS = new Set(
 );
 const TASK_BOOLEAN_OPTIONS = new Set('--list --silent --verbose'.split(' '));
 const TASK_VALUE_OPTIONS = new Set('--dir --taskfile -d -t'.split(' '));
+const ENV_BOOLEAN_OPTIONS = new Set('-i --ignore-environment'.split(' '));
+const ENV_VALUE_OPTIONS = new Set('-u --unset'.split(' '));
+const ENV_ATTACHED_VALUE = /^--unset=[^=]+$/u;
 
 export function runnableCommandSources(
   inspection: RunnableCommandInspection,
@@ -684,6 +687,7 @@ function wordHasProtectedMarkers(word: ShellWord): boolean {
 
 function consumeEnvPrefix(request: EnvPrefixRequest): number {
   let index = request.start;
+  let options = true;
   while (index < request.words.length) {
     let wordRequest: WordEnvironmentRequest = {
       word: request.words[index] as ShellWord,
@@ -692,11 +696,16 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
     const word = resolveWord(wordRequest);
     if (word.dynamic)
       throw new Error('Dynamic env command construction is forbidden.');
-    if (word.value === '-i' || word.value === '--ignore-environment') {
+    if (options && word.value === '--') {
+      options = false;
       index += 1;
       continue;
     }
-    if (word.value === '-u' || word.value === '--unset') {
+    if (options && ENV_BOOLEAN_OPTIONS.has(word.value)) {
+      index += 1;
+      continue;
+    }
+    if (options && ENV_VALUE_OPTIONS.has(word.value)) {
       if (!request.words[index + 1])
         throw new Error('Missing env option value.');
       wordRequest = {
@@ -709,10 +718,12 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
       index += 2;
       continue;
     }
-    if (word.value.startsWith('--unset=')) {
+    if (options && ENV_ATTACHED_VALUE.test(word.value)) {
       index += 1;
       continue;
     }
+    if (options && word.value.startsWith('-'))
+      throw new Error(`Unsupported env option: ${word.value}`);
     const assignmentRequest: WordEnvironmentRequest = {
       word,
       environment: request.environment,

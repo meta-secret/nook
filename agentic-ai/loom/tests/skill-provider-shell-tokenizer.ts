@@ -6,15 +6,12 @@ import {
 
 const MAX_TOKENS = 4_096;
 
-export function isShellCommentStart([source, index]: readonly [
+export function isShellCommentStart([source, index, wordActive]: readonly [
   string,
   number,
+  boolean,
 ]): boolean {
-  const previous = source[index - 1] ?? '';
-  return (
-    source[index] === '#' &&
-    (index === 0 || /\s/u.test(previous) || ';&|()'.includes(previous))
-  );
+  return source[index] === '#' && !wordActive;
 }
 
 export function tokenizeShell(source: string): readonly ShellToken[] {
@@ -108,7 +105,7 @@ export function tokenizeShell(source: string): readonly ShellToken[] {
       raw += character;
       continue;
     }
-    if (isShellCommentStart([source, index])) {
+    if (isShellCommentStart([source, index, raw.length > 0])) {
       while (index + 1 < source.length && source[index + 1] !== '\n')
         index += 1;
       continue;

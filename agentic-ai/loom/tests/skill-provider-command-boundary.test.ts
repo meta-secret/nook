@@ -4,6 +4,7 @@ import {
   runnableCommandSources,
   type ShellCommandInspection,
 } from './skill-provider-command-boundary.ts';
+import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
 
 const PROTECTED =
   '.cortex/teams/ai/dynamic-skills/example-skill/scripts/src/cli.ts';
@@ -127,6 +128,7 @@ test('rejects every protected runtime construction and masked launch', () => {
     `node --check ${PROTECTED}`,
     `sh -eu ${PROTECTED}`,
     `env -i MODE=test bun ${PROTECTED}`,
+    `env -i -u HOME MODE=test bun ${PROTECTED}`,
     `bash -c 'bun ${PROTECTED}'`,
     `a=${PROTECTED}; b=$a; bun "$b"`,
     `a=$PWD/${PROTECTED}; bun "$a"`,
@@ -179,6 +181,21 @@ test('rejects every protected runtime construction and masked launch', () => {
     `${'env '.repeat(32)}bun scripts/catalog.ts`,
   ])
     expect(() => inspectShell(source), source).toThrow();
+  for (const source of [
+    `env -S 'bun ${PROTECTED}'`,
+    `env --split-string='bun ${PROTECTED}'`,
+    `env -C . bun ${PROTECTED}`,
+    `env -C. bun ${PROTECTED}`,
+    `env --chdir=. bun ${PROTECTED}`,
+    `env --argv0 bun bun ${PROTECTED}`,
+    `env --default-signal bun ${PROTECTED}`,
+    `env --ignore-signal=INT bun ${PROTECTED}`,
+    `env --block-signal=INT bun ${PROTECTED}`,
+    `env --list-signal-handling bun ${PROTECTED}`,
+  ])
+    expect(() => inspectShell(source), source).toThrow(
+      'Unsupported env option',
+    );
 });
 
 test('propagates only caller-bound wrapper arguments through positional delegation', () => {
@@ -232,6 +249,9 @@ test('accepts dynamic inert data after a static non-protected executable', () =>
     `true;# audit(){ bun ${PROTECTED}; }\necho safe`,
     `true;# cat <<END! $(bun ${PROTECTED})\necho safe`,
     'value=prefix; echo "${value#pre}" word#literal',
+    'env -i -u HOME MODE=test bun scripts/catalog.ts',
+    'env --ignore-environment --unset=HOME MODE=test bun scripts/catalog.ts',
+    'env -- MODE=test bun scripts/catalog.ts',
     `cat <<\\EOF\nbun ${PROTECTED}\nEOF`,
     `cat <<'END!'\nbun ${PROTECTED}\nEND!`,
     `cat <<E"OF-MARK"\nbun ${PROTECTED}\nEOF-MARK`,
@@ -246,6 +266,19 @@ test('accepts dynamic inert data after a static non-protected executable', () =>
   expect(inspectShell(safe[0] ?? '').launches[0]?.specifier).toBe(
     'scripts/catalog.ts',
   );
+});
+
+test('distinguishes real comments from escaped operator hash literals', () => {
+  for (const operator of [';', '&', '|', '(', ')']) {
+    const tokens = tokenizeShell(`echo \\${operator}#literal`).map((token) =>
+      typeof token === 'string' ? token : token.value,
+    );
+    expect(tokens).toEqual(['echo', `${operator}#literal`]);
+  }
+  for (const operator of [';', '&&', '||'])
+    expect(() =>
+      inspectShell(`true${operator}# audit(){ bun ${PROTECTED}; }\necho safe`),
+    ).not.toThrow();
 });
 
 test('enforces UTF-8 source and token bounds before classification', () => {
