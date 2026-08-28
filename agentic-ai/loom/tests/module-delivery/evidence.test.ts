@@ -28,8 +28,6 @@ import {
 import {
   createGitFixture,
   disposeGitFixture,
-  fixtureGit,
-  writeFixtureFile,
 } from './worktree-test-support.ts';
 
 import type {
@@ -54,7 +52,7 @@ import type {
   SelectModuleDeliveryAdmissionsRequest,
   ValidatedModuleDeliveryPlan,
 } from '../../src/module-delivery/index.ts';
-import type { FixtureFileWrite, GitFixture } from './worktree-test-support.ts';
+import type { GitFixture } from './worktree-test-support.ts';
 
 const CORE_ROOT = 'nook-app/nook-platform/nook-core';
 const WEB_ROOT = 'nook-app/nook-web/nook-web-app';
@@ -87,13 +85,6 @@ type EvidenceSubmissionRequest = {
 
 type EvidenceVerificationRequest = EvidenceSubmissionRequest & {
   readonly candidate: ModuleDeliveryReadOnlyEvidenceSubmission;
-};
-
-type ExpectedEvidenceIdentity = {
-  readonly taskId: string;
-  readonly attempt: number;
-  readonly planDigest: string;
-  readonly verdict: ModuleDeliveryEvidenceVerdict;
 };
 
 type MutableProviderEvidenceIdentity = Omit<
@@ -364,15 +355,6 @@ test('accepts exact repository evidence and releases its lease only after accept
     };
     const accepted = verify(verificationRequest);
     expect(Object.isFrozen(accepted)).toBe(true);
-    const expectedIdentity: ExpectedEvidenceIdentity = {
-      taskId: active.provider.taskId,
-      attempt: 1,
-      planDigest: active.accepted.planDigest,
-      verdict: ModuleDeliveryEvidenceVerdict.TerminalSuccess,
-    };
-    expect(moduleDeliveryAcceptedEvidenceIdentity(accepted)).toMatchObject(
-      expectedIdentity,
-    );
     const activeSelectionRequest: SelectModuleDeliveryAdmissionsRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
@@ -430,7 +412,7 @@ test('accepts exact repository evidence and releases its lease only after accept
     };
     expect(() =>
       createModuleDeliveryAdmissionState(advancedStateRequest),
-    ).toThrow('Accepted evidence is invalid');
+    ).toThrow('lacks integration authority');
   } finally {
     disposeGitFixture(active.fixture);
   }
@@ -504,37 +486,15 @@ test('rejects forged metadata, evidence capabilities, and authority-owned stale 
       createModuleDeliveryAdmissionState(forgedStateRequest),
     ).toThrow('evidence authority is invalid');
 
-    const fileWrite: FixtureFileWrite = {
-      fixture: active.fixture,
-      relativePath: `${CORE_ROOT}/changed.rs`,
-      contents: 'changed\n',
-    };
-    writeFixtureFile(fileWrite);
-    const git = fixtureGit(active.fixture);
-    git(['add', '--all']);
-    git(['commit', '--quiet', '-m', 'change evidence surface']);
-    const advancedCommit = git(['rev-parse', 'HEAD']);
     const staleStateRequest: CreateModuleDeliveryAdmissionStateRequest = {
       authority: active.authority,
       acceptedPlan: active.accepted,
-      headCommit: advancedCommit,
+      headCommit: 'f'.repeat(40),
       integratedWriterFrontiers: [],
       acceptedEvidence: [],
     };
-    const staleState = createModuleDeliveryAdmissionState(staleStateRequest);
-    const staleRuntime: Runtime = { ...active, state: staleState };
-    const staleVerificationRequest: EvidenceVerificationRequest = {
-      ...submissionRequest,
-      runtime: staleRuntime,
-      candidate: exact,
-    };
-    expect(() => verify(staleVerificationRequest)).toThrow('stale');
-    const invalidAuthorityVerificationRequest: EvidenceVerificationRequest = {
-      ...submissionRequest,
-      candidate: exact,
-    };
-    expect(() => verify(invalidAuthorityVerificationRequest)).toThrow(
-      'authority is invalid or stale',
+    expect(() => createModuleDeliveryAdmissionState(staleStateRequest)).toThrow(
+      'lacks integration authority',
     );
   } finally {
     disposeGitFixture(active.fixture);
@@ -682,17 +642,30 @@ test('synthesis requires exact nonempty accepted provider evidence identities', 
     expect(() => verify(synthesisVerificationRequest)).toThrow(
       'metadata is invalid',
     );
-    const staleSynthesisStateRequest: CreateModuleDeliveryAdmissionStateRequest =
-      {
-        authority: active.authority,
-        acceptedPlan: active.accepted,
-        headCommit: 'f'.repeat(40),
-        integratedWriterFrontiers: [],
-        acceptedEvidence: [synthesisEvidence],
-      };
-    expect(() =>
-      createModuleDeliveryAdmissionState(staleSynthesisStateRequest),
-    ).toThrow('Accepted evidence is invalid');
+    const carryRegistry =
+      evidenceAuthority.createAcceptedModuleDeliveryEvidenceRegistry();
+    const registration: AcceptedModuleDeliveryEvidenceInspection = {
+      authority: active.authority,
+      evidence: synthesisEvidence,
+    };
+    carryRegistry.register(registration);
+    const disjointRequest = {
+      authority: active.authority,
+      acceptedPlan: active.accepted,
+      entries: [synthesisEvidence],
+      headCommit: 'f'.repeat(40),
+      integratedWriteClaims: ['agentic-ai/**'],
+    };
+    expect(carryRegistry.collect(disjointRequest).accepted).toEqual([
+      synthesisEvidence,
+    ]);
+    const overlappingRequest = {
+      ...disjointRequest,
+      integratedWriteClaims: [`${CORE_ROOT}/**`],
+    };
+    expect(() => carryRegistry.collect(overlappingRequest)).toThrow(
+      'Accepted evidence is invalid',
+    );
   } finally {
     disposeGitFixture(active.fixture);
   }

@@ -7,6 +7,7 @@ import type {
   TaskResourcePatternPair,
 } from '../agent-workflow/domain.ts';
 import type {
+  ModuleDeliveryAdmissionSelection,
   ModuleDeliveryExpectedLineage,
   ModuleDeliveryGenerationAuthority,
 } from './admission.ts';
@@ -30,6 +31,7 @@ export type AcceptedModuleDeliveryEvidenceCollectionRequest = Readonly<{
   acceptedPlan: ValidatedModuleDeliveryPlan;
   entries: readonly AcceptedModuleDeliveryEvidence[];
   headCommit: string;
+  integratedWriteClaims: readonly string[];
 }>;
 
 export type AcceptedModuleDeliveryEvidenceCollection = Readonly<{
@@ -51,6 +53,7 @@ export type AcceptedModuleDeliveryEvidenceRegistry = Readonly<{
 type EvidenceFreshnessRequest = Readonly<{
   identity: ModuleDeliveryAcceptedProviderEvidenceIdentity;
   headCommit: string;
+  integratedWriteClaims: readonly string[];
 }>;
 
 export type ExpectedLineageMapRequest = {
@@ -67,6 +70,9 @@ type ResourceClaimPair = {
   readonly first: readonly string[];
   readonly second: readonly string[];
 };
+
+export type FrozenAdmissionSelectionRequest =
+  Readonly<ModuleDeliveryAdmissionSelection>;
 
 export function trustedModuleDeliveryPlanSnapshot(
   candidate: ValidatedModuleDeliveryPlan,
@@ -151,17 +157,34 @@ export function freezeProviderEvidenceIdentity(
 }
 
 function evidenceFreshAtHead(request: EvidenceFreshnessRequest): boolean {
+  const claims: ResourceClaimPair = {
+    first: request.identity.claimIdentities.map(({ claim }) => claim),
+    second: request.integratedWriteClaims,
+  };
   return (
-    (request.identity.claimIdentities.length === 0 ||
-      request.identity.verifiedHeadCommit === request.headCommit) &&
+    (request.identity.verifiedHeadCommit === request.headCommit ||
+      (request.integratedWriteClaims.length > 0 && !claimsOverlap(claims))) &&
     request.identity.acceptedProviderEvidence.every((identity) => {
       const nestedRequest: EvidenceFreshnessRequest = {
         identity,
         headCommit: request.headCommit,
+        integratedWriteClaims: request.integratedWriteClaims,
       };
       return evidenceFreshAtHead(nestedRequest);
     })
   );
+}
+
+export function freezeModuleDeliveryAdmissionSelection(
+  request: FrozenAdmissionSelectionRequest,
+): ModuleDeliveryAdmissionSelection {
+  const selection: ModuleDeliveryAdmissionSelection = {
+    ...request,
+    admissions: Object.freeze([...request.admissions]),
+    pendingTaskIds: Object.freeze([...request.pendingTaskIds]),
+    blockedTaskIds: Object.freeze([...request.blockedTaskIds]),
+  };
+  return Object.freeze(selection);
 }
 
 export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDeliveryEvidenceRegistry {
@@ -224,6 +247,7 @@ export function createAcceptedModuleDeliveryEvidenceRegistry(): AcceptedModuleDe
       const freshnessRequest: EvidenceFreshnessRequest = {
         identity: acceptedIdentity,
         headCommit: request.headCommit,
+        integratedWriteClaims: request.integratedWriteClaims,
       };
       if (
         acceptedIdentity.generation !== request.acceptedPlan.plan.generation ||

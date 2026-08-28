@@ -1,6 +1,7 @@
 import {
   createAcceptedModuleDeliveryEvidenceRegistry,
   expectedModuleDeliveryLineageMap,
+  freezeModuleDeliveryAdmissionSelection,
   moduleDeliveryResourcesConflict,
   trustedModuleDeliveryPlanSnapshot,
 } from './authority.ts';
@@ -173,6 +174,7 @@ type AuthorityState = {
   expectedLineage: ReadonlyMap<string, AgentAttemptParent>;
   activeLeases: Map<string, ModuleDeliveryAttemptLease>;
   leaseHistory: Map<string, ModuleDeliveryAttemptLease>;
+  attemptsByTask: Map<string, number>;
   dispositions: ModuleDeliveryAttemptDisposition[];
 };
 
@@ -222,17 +224,11 @@ type FrozenResourcesRequest = {
   readonly plan: ValidatedModuleDeliveryPlan;
 };
 type StartingFrontierRequest = {
+  readonly authority: AuthorityState;
   readonly state: ModuleDeliveryAdmissionState;
   readonly node: ModuleDeliveryNodeV2;
   readonly plan: ValidatedModuleDeliveryPlan;
 };
-type FrozenSelectionRequest = {
-  readonly status: ModuleDeliveryAdmissionSelectionStatus;
-  readonly admissions: readonly ModuleDeliveryAdmission[];
-  readonly pendingTaskIds: readonly string[];
-  readonly blockedTaskIds: readonly string[];
-};
-
 const authorityStates = new WeakMap<
   ModuleDeliveryGenerationAuthority,
   AuthorityState
@@ -277,6 +273,7 @@ export function createModuleDeliveryGenerationAuthority(
     expectedLineage,
     activeLeases: new Map(),
     leaseHistory: new Map(),
+    attemptsByTask: new Map(),
     dispositions: [],
   };
   authorityStates.set(authority, authorityState);
@@ -300,7 +297,9 @@ export function assertModuleDeliveryGenerationAuthority(
 export function moduleDeliveryAuthorityPlan(
   request: ModuleDeliveryAuthorityPlanRequest,
 ): ValidatedModuleDeliveryPlan {
-  return authorityStateForPlan(request).acceptedPlan;
+  return trustedModuleDeliveryPlanSnapshot(
+    authorityStateForPlan(request).acceptedPlan,
+  );
 }
 
 export function assertAcceptedModuleDeliveryEvidence(
@@ -386,11 +385,25 @@ export function createModuleDeliveryAdmissionState(
     entries: request.integratedWriterFrontiers,
   };
   const frontiers = integratedFrontiers(frontierRequest);
+  if (
+    request.headCommit !== authority.acceptedPlan.plan.sourceCommit &&
+    frontiers.length === 0
+  )
+    throw new Error(
+      'Module delivery admission head lacks integration authority.',
+    );
+  const integratedTaskIds = new Set(
+    frontiers.flatMap(({ integratedTaskIds }) => integratedTaskIds),
+  );
+  const integratedWriteClaims = authority.acceptedPlan.plan.nodes
+    .filter(({ taskId }) => integratedTaskIds.has(taskId))
+    .flatMap(({ resources }) => resources.write);
   const evidenceRequest: AcceptedModuleDeliveryEvidenceCollectionRequest = {
     authority: request.authority,
     acceptedPlan: authority.acceptedPlan,
     entries: request.acceptedEvidence,
     headCommit: request.headCommit,
+    integratedWriteClaims,
   };
   const evidence = acceptedEvidenceRegistry.collect(evidenceRequest);
   const stateValue: ModuleDeliveryAdmissionState = {
@@ -436,13 +449,13 @@ export function selectModuleDeliveryAdmissions(
   assertModuleDeliveryAdmissionStateAuthority(request);
   const blockedTaskIds = terminallyBlockedTaskIds(authority);
   if (blockedTaskIds.length > 0) {
-    const selectionRequest: FrozenSelectionRequest = {
+    const selectionRequest = {
       status: ModuleDeliveryAdmissionSelectionStatus.Blocked,
       admissions: [],
       pendingTaskIds: [],
       blockedTaskIds,
     };
-    return frozenSelection(selectionRequest);
+    return freezeModuleDeliveryAdmissionSelection(selectionRequest);
   }
   const available =
     authority.acceptedPlan.plan.maxConcurrency - authority.activeLeases.size;
@@ -481,6 +494,7 @@ export function selectModuleDeliveryAdmissions(
     }
     const attemptRequest: AuthorityTaskRequest = { authority, taskId };
     const frontierRequest: StartingFrontierRequest = {
+      authority,
       state: request.state,
       node,
       plan: authority.acceptedPlan,
@@ -522,13 +536,13 @@ export function selectModuleDeliveryAdmissions(
     admissionProvenance.set(admission, provenance);
     admissions.push(admission);
   }
-  const selectionRequest: FrozenSelectionRequest = {
+  const selectionRequest = {
     status: ModuleDeliveryAdmissionSelectionStatus.Selected,
     admissions,
     pendingTaskIds,
     blockedTaskIds: [],
   };
-  return frozenSelection(selectionRequest);
+  return freezeModuleDeliveryAdmissionSelection(selectionRequest);
 }
 
 export function recordModuleDeliveryAttemptLeases(
@@ -567,6 +581,7 @@ export function recordModuleDeliveryAttemptLeases(
     const lease = Object.freeze(copyAdmission(admission));
     authority.activeLeases.set(attemptKey(lease), lease);
     authority.leaseHistory.set(attemptKey(lease), lease);
+    authority.attemptsByTask.set(lease.taskId, lease.attempt);
     const provenance: CapabilityProvenance = {
       authority: request.authority,
       state: request.state,
@@ -923,6 +938,10 @@ function frozenResources(
 }
 
 function startingFrontier(request: StartingFrontierRequest): string {
+  const previous = [...request.authority.leaseHistory.values()].find(
+    ({ taskId }) => taskId === request.node.taskId,
+  );
+  if (previous) return previous.startingFrontier;
   const requiresIntegrated = request.plan.executionPrecedence.some(
     (edge) =>
       edge.successorTaskId === request.node.taskId &&
@@ -936,10 +955,7 @@ function startingFrontier(request: StartingFrontierRequest): string {
 }
 
 function nextAttempt(request: AuthorityTaskRequest): number {
-  const attempts = [...request.authority.leaseHistory.values()]
-    .filter((lease) => lease.taskId === request.taskId)
-    .map(({ attempt }) => attempt);
-  return attempts.length === 0 ? 1 : Math.max(...attempts) + 1;
+  return (request.authority.attemptsByTask.get(request.taskId) ?? 0) + 1;
 }
 
 function frozenParent(parent: AgentAttemptParent): AgentAttemptParent {
@@ -970,16 +986,4 @@ function copyAdmission(
 
 function attemptKey(identity: AttemptIdentity): string {
   return `${identity.taskId}:${identity.attempt}`;
-}
-
-function frozenSelection(
-  request: FrozenSelectionRequest,
-): ModuleDeliveryAdmissionSelection {
-  const selection: ModuleDeliveryAdmissionSelection = {
-    status: request.status,
-    admissions: Object.freeze([...request.admissions]),
-    pendingTaskIds: Object.freeze([...request.pendingTaskIds]),
-    blockedTaskIds: Object.freeze([...request.blockedTaskIds]),
-  };
-  return Object.freeze(selection);
 }

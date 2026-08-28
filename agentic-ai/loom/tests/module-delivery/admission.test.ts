@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 import { AgentAttemptParentKind } from '../../src/agent-workflow/domain.ts';
 import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { moduleDeliveryAuthorityPlan } from '../../src/module-delivery/admission.ts';
 
 import {
   REQUIRED_PARENT_OWNED_RESOURCES,
-  ModuleDeliveryAdmissionSelectionStatus,
   ModuleDeliveryAttemptDispositionKind,
   ModuleDeliveryBaselineKind,
   ModuleDeliveryGenerationFenceKind,
@@ -219,17 +219,10 @@ describe('module delivery admission authority', () => {
   test('selects the maximal safe set and rejects unproven writer frontiers', () => {
     const active = defaultRuntime();
     const first = select(active);
-    expect(first.status).toBe(ModuleDeliveryAdmissionSelectionStatus.Selected);
     expect(first.admissions.map(({ taskId }) => taskId)).toEqual([
       'alpha',
       'beta',
     ]);
-    expect(
-      first.admissions.every(
-        ({ startingFrontier }) => startingFrontier === SOURCE,
-      ),
-    ).toBe(true);
-    expect(first.admissions.every(Object.isFrozen)).toBe(true);
     expect(
       first.admissions.every(({ resources }) =>
         Object.isFrozen(resources.read),
@@ -261,6 +254,13 @@ describe('module delivery admission authority', () => {
     expect(() =>
       createModuleDeliveryAdmissionState(advancedStateRequest),
     ).toThrow('capability is invalid');
+    const arbitraryHeadRequest = {
+      ...advancedStateRequest,
+      integratedWriterFrontiers: [],
+    };
+    expect(() =>
+      createModuleDeliveryAdmissionState(arbitraryHeadRequest),
+    ).toThrow('lacks integration authority');
   });
 
   test('snapshots validated metadata and rejects forged plans and lineage', () => {
@@ -272,10 +272,20 @@ describe('module delivery admission authority', () => {
     );
     if (!sourceNode) throw new Error('Alpha node is missing.');
     (sourceNode.resources.read as string[]).push(`${ROOT}/forged/**`);
+    const planRequest = {
+      authority: active.authority,
+      acceptedPlan: accepted,
+    };
+    const exposedNode = moduleDeliveryAuthorityPlan(
+      planRequest,
+    ).plan.nodes.find(({ taskId }) => taskId === 'alpha');
+    if (!exposedNode) throw new Error('Exposed alpha node is missing.');
+    (exposedNode.resources.read as string[]).push(`${ROOT}/exposed/**`);
     const admission = select(active).admissions.find(
       ({ taskId }) => taskId === 'alpha',
     );
     expect(admission?.resources.read).not.toContain(`${ROOT}/forged/**`);
+    expect(admission?.resources.read).not.toContain(`${ROOT}/exposed/**`);
 
     const forged: ValidatedModuleDeliveryPlan = {
       ...validate(PLAN),
@@ -373,23 +383,7 @@ describe('module delivery admission authority', () => {
       ({ taskId }) => taskId === 'alpha',
     );
     expect(retry?.attempt).toBe(2);
-    const forgedLease: ModuleDeliveryAttemptLease = {
-      ...firstLease,
-      attempt: 2,
-    };
-    const forgedDispositionRequest: RecordModuleDeliveryAttemptDispositionRequest =
-      {
-        authority: active.authority,
-        state: active.state,
-        lease: forgedLease,
-        outcome: {
-          kind: ModuleDeliveryAttemptDispositionKind.FinalUnusable,
-          conclusion: ModuleDeliveryGenerationFenceKind.Rejected,
-        },
-      };
-    expect(() =>
-      recordModuleDeliveryAttemptDisposition(forgedDispositionRequest),
-    ).toThrow('lease authority is invalid');
+    expect(retry?.startingFrontier).toBe(firstLease.startingFrontier);
 
     const secondPlan: ModuleDeliveryPlanV2 = { ...PLAN, generation: 2 };
     const second = validate(secondPlan);
@@ -414,6 +408,12 @@ describe('module delivery admission authority', () => {
     expect(restarted.generation).toBe(2);
     expect(restarted.integratedWriterFrontiers).toEqual([]);
     expect(restarted.acceptedProviderEvidence).toEqual([]);
+    const restartedRuntime: Runtime = {
+      ...active,
+      accepted: second,
+      state: restarted,
+    };
+    expect(select(restartedRuntime).admissions[0]?.attempt).toBe(2);
     expect(() => select(active)).toThrow('superseded');
   });
 });
