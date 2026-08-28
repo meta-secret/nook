@@ -44,6 +44,7 @@ import {
   finalizeDelegationRun,
 } from './delegation-aggregation.ts';
 import type { FinalizeDelegationRunInput } from './delegation-aggregation.ts';
+import { renderDelegationPlanTree } from './delegation-plan-tree.ts';
 
 const HELP = `Loom delegated agent journal
 
@@ -169,6 +170,7 @@ async function start(commandLine: DelegationStartCommandLine): Promise<number> {
   };
   const rootAdmission = await admitDelegationAttempt(admissionInput);
   const response: DelegationStartResponse = { receipt, rootAdmission };
+  process.stderr.write(renderDelegationPlanTree(plan));
   console.log(JSON.stringify(response));
   return 0;
 }
