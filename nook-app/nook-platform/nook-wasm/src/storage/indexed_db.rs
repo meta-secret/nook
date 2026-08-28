@@ -460,7 +460,7 @@ pub(crate) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
     idb_delete_keys(&[key]).await
 }
 
-async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
+pub(crate) async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(&["vault"], rexie::TransactionMode::ReadWrite)

@@ -19,7 +19,7 @@ pub fn authentication_page_observations_are_valid(
                 observation.new_password_field_count,
                 observation.generic_password_field_count,
                 observation.one_time_code_field_count,
-                observation.matching_passkey_account_count,
+                observation.matching_passkey_account_count(),
             ]
             .into_iter()
             .all(|count| count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
@@ -30,8 +30,8 @@ pub fn authentication_page_observations_are_valid(
 mod tests {
     use super::*;
     use crate::{
-        AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshotError,
-        classify_authentication_workflow_candidates,
+        AuthenticationPageObservations, AuthenticationWorkflowMatch,
+        AuthenticationWorkflowSnapshotError,
     };
 
     #[test]
@@ -67,7 +67,10 @@ mod tests {
             current_password_field_count: 1,
             ..Default::default()
         }];
-        let rejected = classify_authentication_workflow_candidates(&excessive_field_count);
+        let rejected = AuthenticationPageObservations {
+            observations: excessive_field_count.to_vec(),
+        }
+        .classify();
         assert_eq!(rejected, AuthenticationWorkflowMatch::Rejected);
         assert_eq!(
             rejected.snapshot(),
@@ -83,7 +86,10 @@ mod tests {
             MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1
         ];
         assert_eq!(
-            classify_authentication_workflow_candidates(&excessive_pages),
+            AuthenticationPageObservations {
+                observations: excessive_pages,
+            }
+            .classify(),
             AuthenticationWorkflowMatch::Rejected
         );
     }

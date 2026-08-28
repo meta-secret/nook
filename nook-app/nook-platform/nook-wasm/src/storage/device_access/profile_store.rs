@@ -319,7 +319,7 @@ mod browser_tests {
             TARGET_KEY,
             Some(SOURCE_KEY),
             StringUpdateGuard::Unconditional,
-            move |raw| legacy_profile_belongs_to_owner(raw, &Some(owner)),
+            move |raw| legacy_profile_belongs_to_owner(raw, Some(&owner)),
             |current| {
                 assert!(current.is_none());
                 serde_json::to_string(&DeviceAccessProfile::default()).map_err(|error| {

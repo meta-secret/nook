@@ -8,10 +8,10 @@ use crate::NookError;
 
 const DEFAULT_IDENTITY_LABEL: &str = "Personal";
 
-fn local_identity_label(label: &str) -> Result<String, JsError> {
+fn local_identity_label(label: &str) -> Result<String, &'static str> {
     let label = label.trim();
     if label.is_empty() {
-        return Err(JsError::new("Identity label cannot be empty."));
+        return Err("Identity label cannot be empty.");
     }
     Ok(label.to_owned())
 }
@@ -40,7 +40,7 @@ impl NookVaultManager {
     /// written until its browser-protection ceremony succeeds.
     #[wasm_bindgen]
     pub async fn begin_local_identity_creation(&mut self, label: &str) -> Result<(), JsError> {
-        let label = local_identity_label(label)?;
+        let label = local_identity_label(label).map_err(JsError::new)?;
         ensure_no_pending_vault_creation().await?;
         if crate::storage::identity_record::selected_legacy_signer_requires_authorization().await? {
             if self.device.identity_private_key.is_empty() {
@@ -112,7 +112,8 @@ mod tests {
     #[test]
     fn cancelled_creation_leaves_no_pending_identity() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.device.pending_local_identity_label = Some(local_identity_label("Work")?);
+        manager.device.pending_local_identity_label =
+            Some(local_identity_label("Work").map_err(JsError::new)?);
         assert!(manager.local_identity_creation_pending());
 
         manager.cancel_local_identity_creation();

@@ -4,7 +4,19 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+mod authentication_advance_control;
+mod control_identity;
+mod form_identity;
+mod one_time_code_progression;
+
+pub use authentication_advance_control::{
+    AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
+    PageControlActionability, PageControlOwnership, PageControlSemantics,
+};
+pub use one_time_code_progression::looks_like_one_time_code_auto_submit_signal;
+
 use serde::{Deserialize, Serialize};
+use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Portable HTML input type bucket for auth classification.
@@ -228,6 +240,116 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
     contains_any_word(&identity, LOGIN_ADVANCE_WORDS) || contains_any_word(&identity, &["submit"])
 }
 
+/// True when a semantic submit explicitly describes a non-authentication action.
+#[must_use]
+pub fn looks_like_non_authentication_submit_control_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    contains_any_word(
+        &identity,
+        &[
+            "save",
+            "update",
+            "subscribe",
+            "search",
+            "publish",
+            "post",
+            "delete",
+            "remove",
+            "deactivate",
+            "close account",
+            "erase",
+            "destroy",
+            "cancel",
+            "back",
+            "help",
+            "learn more",
+        ],
+    )
+}
+
+/// True when a semantic submit explicitly updates a password credential.
+#[must_use]
+pub fn looks_like_password_update_submit_control_label(label: &str) -> bool {
+    let identity = expand_identity_text(label);
+    matches!(
+        identity.as_str(),
+        "save" | "save changes" | "update" | "change"
+    ) || (contains_any_word(&identity, &["password"])
+        && contains_any_word(&identity, &["save", "update", "change", "set", "reset"]))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationUsernameEvidence {
+    Absent,
+    Generic,
+    StandardsBasedEmail,
+    Strong,
+    Explicit,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthenticationUsernameEvidenceBatch {
+    pub evidence: Vec<AuthenticationUsernameEvidence>,
+}
+
+/// Classify the strength of browser-observed username evidence.
+#[must_use]
+pub fn authentication_username_evidence(
+    field: &PageInputFieldObservation,
+) -> AuthenticationUsernameEvidence {
+    if !looks_like_username_field(field) {
+        return AuthenticationUsernameEvidence::Absent;
+    }
+    if has_autocomplete_token(&field.autocomplete_tokens, "username") {
+        return AuthenticationUsernameEvidence::Explicit;
+    }
+    let identity = expand_identity_text(&field.identity_text);
+    if has_autocomplete_token(&field.autocomplete_tokens, "email") {
+        return if username_negative(&identity) {
+            AuthenticationUsernameEvidence::Generic
+        } else if field.login_context {
+            AuthenticationUsernameEvidence::Strong
+        } else {
+            AuthenticationUsernameEvidence::StandardsBasedEmail
+        };
+    }
+    if contains_any_word(
+        &identity,
+        &[
+            "loginfmt",
+            "login fmt",
+            "login email",
+            "login e mail",
+            "login e-mail",
+        ],
+    ) {
+        return AuthenticationUsernameEvidence::Strong;
+    }
+    AuthenticationUsernameEvidence::Generic
+}
+
+/// Select the strongest username evidence without duplicating its ordering in hosts.
+#[must_use]
+pub fn strongest_authentication_username_evidence(
+    evidence: &[AuthenticationUsernameEvidence],
+) -> AuthenticationUsernameEvidence {
+    if evidence.contains(&AuthenticationUsernameEvidence::Explicit) {
+        AuthenticationUsernameEvidence::Explicit
+    } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
+        AuthenticationUsernameEvidence::Strong
+    } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {
+        AuthenticationUsernameEvidence::StandardsBasedEmail
+    } else if evidence.contains(&AuthenticationUsernameEvidence::Generic) {
+        AuthenticationUsernameEvidence::Generic
+    } else {
+        AuthenticationUsernameEvidence::Absent
+    }
+}
+
 fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
     tokens
         .iter()
@@ -319,7 +441,7 @@ fn one_time_code_negative(identity: &str) -> bool {
     )
 }
 
-fn contains_any_word(haystack: &str, needles: &[&str]) -> bool {
+pub(super) fn contains_any_word(haystack: &str, needles: &[&str]) -> bool {
     needles
         .iter()
         .any(|needle| contains_word_phrase(haystack, needle))
@@ -446,6 +568,64 @@ mod tests {
             &[],
             false,
         )));
+        assert_eq!(
+            authentication_username_evidence(&field(PageInputType::Text, "loginfmt", &[], false,)),
+            AuthenticationUsernameEvidence::Strong
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Email,
+                "login_email",
+                &[],
+                false,
+            )),
+            AuthenticationUsernameEvidence::Strong
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Email,
+                "email",
+                &["username"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::Explicit
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Email,
+                "email",
+                &["email"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::StandardsBasedEmail
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Email,
+                "address",
+                &["email"],
+                true,
+            )),
+            AuthenticationUsernameEvidence::Strong
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Email,
+                "newsletter-email",
+                &["email"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::Generic
+        );
+        assert_eq!(
+            strongest_authentication_username_evidence(&[
+                AuthenticationUsernameEvidence::Generic,
+                AuthenticationUsernameEvidence::StandardsBasedEmail,
+                AuthenticationUsernameEvidence::Strong,
+                AuthenticationUsernameEvidence::Explicit,
+            ]),
+            AuthenticationUsernameEvidence::Explicit
+        );
     }
 
     #[test]
@@ -469,5 +649,45 @@ mod tests {
         assert!(looks_like_login_advance_control_label("Submit"));
         assert!(!looks_like_login_advance_control_label("Learn more"));
         assert!(!looks_like_login_advance_control_label("Subscribe"));
+    }
+
+    #[test]
+    fn non_authentication_submit_labels_reject_profile_and_content_actions() {
+        assert!(looks_like_non_authentication_submit_control_label("Save"));
+        assert!(looks_like_non_authentication_submit_control_label(
+            "Update profile"
+        ));
+        assert!(looks_like_non_authentication_submit_control_label(
+            "Subscribe"
+        ));
+        assert!(looks_like_non_authentication_submit_control_label(
+            "Delete account"
+        ));
+        assert!(looks_like_non_authentication_submit_control_label(
+            "Deactivate my account"
+        ));
+        assert!(!looks_like_non_authentication_submit_control_label(
+            "Siguiente"
+        ));
+        assert!(!looks_like_non_authentication_submit_control_label(
+            "Sign in"
+        ));
+        assert!(looks_like_password_update_submit_control_label(
+            "Update password"
+        ));
+        assert!(looks_like_password_update_submit_control_label(
+            "Save password"
+        ));
+        assert!(looks_like_password_update_submit_control_label("Save"));
+        assert!(looks_like_password_update_submit_control_label(
+            "Save changes"
+        ));
+        assert!(looks_like_password_update_submit_control_label("Update"));
+        assert!(!looks_like_password_update_submit_control_label(
+            "Update profile"
+        ));
+        assert!(!looks_like_password_update_submit_control_label(
+            "Delete password"
+        ));
     }
 }
