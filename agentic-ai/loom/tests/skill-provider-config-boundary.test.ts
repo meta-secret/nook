@@ -64,12 +64,14 @@ type ActionLoaderFixture = {
 };
 
 type ConfigurationReference = {
+  readonly dockerOverride: ShellLaunchArgument | false;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly required: boolean;
   readonly specifier: string;
 };
 
 type PendingConfiguration = {
+  readonly dockerOverride: ShellLaunchArgument | false;
   readonly importer: string;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };
@@ -151,6 +153,7 @@ function configurationScriptPaths(
   graph: ConfigurationScriptGraph,
 ): readonly string[] {
   const pending: PendingConfiguration[] = graph.roots.map((importer) => ({
+    dockerOverride: false,
     importer,
     positionalArguments: false,
   }));
@@ -175,6 +178,7 @@ function configurationScriptPaths(
       source,
     };
     const configurationRequest: ConfigurationReferenceRequest = {
+      dockerOverride: next.dockerOverride,
       inspection: referenceInspection,
       positionalArguments: next.positionalArguments,
     };
@@ -261,6 +265,7 @@ function configurationScriptPaths(
         }
         scripts.add(dependency);
         const pendingConfiguration: PendingConfiguration = {
+          dockerOverride: reference.dockerOverride,
           importer: dependency,
           positionalArguments: reference.positionalArguments,
         };
@@ -297,6 +302,7 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
 }
 
 type ConfigurationReferenceRequest = {
+  readonly dockerOverride: ShellLaunchArgument | false;
   readonly inspection: ConfigurationReferenceInspection;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };
@@ -313,13 +319,16 @@ function configurationScriptReferences(
     const launches = runnableCommandSources(commandInspection).flatMap(
       (source): readonly ShellScriptLaunch[] => {
         const shellInspection = {
+          dockerOverride: request.dockerOverride,
           positionalArguments: request.positionalArguments,
           source,
+          sourcePath: inspection.importer,
         };
         return analyzeShellCommands(shellInspection).launches;
       },
     );
     return launches.map((launch) => ({
+      dockerOverride: launch.dockerOverride,
       positionalArguments: launch.positionalArguments,
       required: true,
       specifier: launch.specifier,
@@ -330,12 +339,14 @@ function configurationScriptReferences(
     importSource,
   ).map((imported) => ({
     positionalArguments: false,
+    dockerOverride: false,
     required: false,
     specifier: imported.path,
   }));
   const launches = staticTypeScriptScriptLaunches(inspection.source).map(
     (specifier): ConfigurationReference => ({
       positionalArguments: false,
+      dockerOverride: false,
       required: true,
       specifier,
     }),

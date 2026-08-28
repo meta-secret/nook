@@ -19,6 +19,7 @@ import {
 import {
   assertBoundedSource,
   assignmentWord,
+  consumeAssignments,
   resolveWord,
   staticWord,
 } from './skill-provider-shell-environment.ts';
@@ -94,6 +95,12 @@ const TASK_VALUE_OPTIONS = new Set('--dir --taskfile -d -t'.split(' '));
 const ENV_BOOLEAN_OPTIONS = new Set('-i --ignore-environment'.split(' '));
 const ENV_VALUE_OPTIONS = new Set('-u --unset'.split(' '));
 const ENV_ATTACHED_VALUE = /^--unset=[^=]+$/u;
+const AUDITED_DOCKER_DEFAULT_PATHS = new Set([
+  '.github/scripts/verify-wasm-gha-cache.sh',
+  '.github/scripts/with-healthy-buildkit.sh',
+  '.github/scripts/with-remote-buildkit.sh',
+  'infra/tasks/bake-cache.yml',
+]);
 
 export function runnableCommandSources(
   inspection: RunnableCommandInspection,
@@ -128,6 +135,14 @@ export function analyzeShellCommands(
   inspection: ShellCommandInspection,
 ): ShellCommandAnalysis {
   assertBoundedSource(inspection.source);
+  const environment: ShellEnvironment = new Map();
+  if (inspection.dockerOverride !== false) {
+    const override = {
+      ...inspection.dockerOverride,
+      source: inspection.dockerOverride.value,
+    };
+    environment.set('DOCKER', override);
+  }
   const positionalArguments = inspection.positionalArguments
     ? inspection.positionalArguments.map((argument) => ({
         ...argument,
@@ -136,12 +151,15 @@ export function analyzeShellCommands(
     : false;
   const state: ShellParseState = {
     aliases: new Map(),
+    auditedDockerDefault:
+      inspection.sourcePath !== false &&
+      AUDITED_DOCKER_DEFAULT_PATHS.has(inspection.sourcePath),
     casePattern: false,
     commandCount: 0,
     cwd: '',
     cwdProtected: false,
     cwdUnknown: false,
-    environment: new Map(),
+    environment,
     functions: new Map(),
     launches: [],
     positionalArguments,
@@ -361,7 +379,12 @@ function analyzeCommand(request: RuntimeCommandRequest): void {
   for (const word of words)
     for (const source of shellSubstitutionBodies(word.source))
       analyzeSubstitution([request, source]);
-  let index = consumeAssignments([words, 0, request.state.environment]);
+  let index = consumeAssignments([
+    words,
+    0,
+    request.state.environment,
+    request.state.auditedDockerDefault,
+  ]);
   if (index === words.length) return;
   let wordRequest: WordEnvironmentRequest = {
     word: words[index] as ShellWord,
@@ -638,24 +661,6 @@ function analyzeSubstitution([request, source]: readonly [
   request.state.commandCount = nestedState.commandCount;
 }
 
-function consumeAssignments([words, start, environment]: readonly [
-  readonly ShellWord[],
-  number,
-  ShellEnvironment,
-]): number {
-  let index = start;
-  for (; index < words.length; index += 1) {
-    const assignmentRequest: WordEnvironmentRequest = {
-      word: words[index] as ShellWord,
-      environment,
-    };
-    const assignment = assignmentWord(assignmentRequest);
-    if (assignment === false) break;
-    environment.set(assignment.name, assignment.value);
-  }
-  return index;
-}
-
 function argumentsContainProtectedPath(
   request: WordsEnvironmentRequest,
 ): boolean {
@@ -724,7 +729,8 @@ function consumeEnvPrefix(request: EnvPrefixRequest): number {
     }
     if (options && word.value.startsWith('-'))
       throw new Error(`Unsupported env option: ${word.value}`);
-    const assignmentRequest: WordEnvironmentRequest = {
+    const assignmentRequest = {
+      auditedDockerDefault: false,
       word,
       environment: request.environment,
     };
@@ -957,6 +963,7 @@ function addLaunch(request: LaunchRequest): void {
     value: word.value,
   }));
   const scriptLaunch: ShellScriptLaunch = {
+    dockerOverride: request.state.environment.get('DOCKER') ?? false,
     specifier: value,
     positionalArguments,
   };

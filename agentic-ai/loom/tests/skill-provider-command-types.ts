@@ -4,8 +4,10 @@ export type RunnableCommandInspection = {
 };
 
 export type ShellCommandInspection = {
+  readonly dockerOverride: ShellLaunchArgument | false;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly source: string;
+  readonly sourcePath: string | false;
 };
 
 export type ShellLaunchArgument = {
@@ -14,6 +16,7 @@ export type ShellLaunchArgument = {
 };
 
 export type ShellScriptLaunch = {
+  readonly dockerOverride: ShellLaunchArgument | false;
   readonly positionalArguments: readonly ShellLaunchArgument[];
   readonly specifier: string;
 };
@@ -81,6 +84,7 @@ export type EnvPrefixRequest = WordsEnvironmentRequest & {
 };
 
 export type ShellParseState = {
+  readonly auditedDockerDefault: boolean;
   readonly aliases: Map<string, string>;
   casePattern: boolean;
   commandCount: number;

@@ -11,8 +11,10 @@ const PROTECTED =
 
 function inspectShell(source: string) {
   const inspection: ShellCommandInspection = {
+    dockerOverride: false,
     positionalArguments: false,
     source,
+    sourcePath: false,
   };
   return analyzeShellCommands(inspection);
 }
@@ -34,8 +36,10 @@ function inspectProtected(source: string) {
 function inspectDelegation([caller, wrapper]: readonly [string, string]) {
   const launch = inspectShell(caller).launches[0];
   const inspection: ShellCommandInspection = {
+    dockerOverride: launch?.dockerOverride ?? false,
     positionalArguments: launch?.positionalArguments ?? false,
     source: wrapper,
+    sourcePath: false,
   };
   return analyzeShellCommands(inspection);
 }
@@ -269,16 +273,54 @@ test('accepts dynamic inert data after a static non-protected executable', () =>
 });
 
 test('admits only the audited finite Docker injection default', () => {
+  const audited = ([source, sourcePath]: readonly [string, string]) => {
+    const inspection: ShellCommandInspection = {
+      dockerOverride: false,
+      positionalArguments: false,
+      source,
+      sourcePath,
+    };
+    return analyzeShellCommands(inspection);
+  };
   expect(
-    inspectShell('docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version')
-      .launches,
+    audited([
+      'docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version',
+      '.github/scripts/with-healthy-buildkit.sh',
+    ]).launches,
   ).toEqual([]);
   for (const source of [
+    'docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version',
     'docker_bin="${RUNTIME:-docker}"; "$docker_bin" buildx version',
     'docker_bin="${DOCKER:-podman}"; "$docker_bin" buildx version',
     'runner="${DOCKER:-docker}"; "$runner" buildx version',
   ])
     expect(() => inspectShell(source), source).toThrow();
+  expect(
+    audited([
+      `DOCKER=${PROTECTED}; docker_bin="\${DOCKER:-docker}"; "$docker_bin"`,
+      '.github/scripts/with-healthy-buildkit.sh',
+    ]).launches[0]?.specifier,
+  ).toBe(PROTECTED);
+  expect(() =>
+    audited([
+      'docker_bin="${DOCKER:-docker}"; "$docker_bin" buildx version',
+      '.github/scripts/other.sh',
+    ]),
+  ).toThrow();
+  for (const caller of [
+    `DOCKER=${PROTECTED}; bash .github/scripts/with-healthy-buildkit.sh`,
+    `env DOCKER=${PROTECTED} bash .github/scripts/with-healthy-buildkit.sh`,
+  ]) {
+    const launch = inspectShell(caller).launches[0];
+    const childInspection: ShellCommandInspection = {
+      dockerOverride: launch?.dockerOverride ?? false,
+      positionalArguments: launch?.positionalArguments ?? false,
+      source: 'docker_bin="${DOCKER:-docker}"; "$docker_bin"',
+      sourcePath: '.github/scripts/with-healthy-buildkit.sh',
+    };
+    const child = analyzeShellCommands(childInspection);
+    expect(child.launches[0]?.specifier, caller).toBe(PROTECTED);
+  }
 });
 
 test('distinguishes real comments from escaped operator hash literals', () => {

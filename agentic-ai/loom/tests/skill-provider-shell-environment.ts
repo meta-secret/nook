@@ -1,5 +1,6 @@
 import { posix } from 'node:path';
 import type {
+  ShellEnvironment,
   ShellWord,
   WordEnvironmentRequest,
 } from './skill-provider-command-types.ts';
@@ -15,15 +16,23 @@ const REPOSITORY_ROOT_ASSIGNMENT =
 const SCRIPT_DIRECTORY_ASSIGNMENT =
   /^\$\(cd "\$\(dirname "\$\{BASH_SOURCE\[0\]\}"\)(?:\/\.\.\/\.\.)?" && pwd\)$/u;
 const encoder = new TextEncoder();
+type AssignmentWordRequest = WordEnvironmentRequest & {
+  readonly auditedDockerDefault: boolean;
+};
 
 export function assignmentWord(
-  request: WordEnvironmentRequest,
+  request: AssignmentWordRequest,
 ): { readonly name: string; readonly value: ShellWord } | false {
   const match = request.word.value.match(SHELL_ASSIGNMENT);
   if (!match) return false;
   const name = match[1] ?? '';
   const rawValue = match[2] ?? '';
-  if (name === 'docker_bin' && rawValue === AUDITED_DOCKER_DEFAULT)
+  if (
+    request.auditedDockerDefault &&
+    name === 'docker_bin' &&
+    rawValue === AUDITED_DOCKER_DEFAULT &&
+    !request.environment.has('DOCKER')
+  )
     return { name, value: staticWord('docker') };
   if (
     REPOSITORY_ROOT_ASSIGNMENT.test(rawValue) ||
@@ -66,6 +75,31 @@ export function assignmentWord(
   return directory
     ? { name, value: staticWord(posix.normalize(directory)) }
     : { name, value };
+}
+
+export function consumeAssignments([
+  words,
+  start,
+  environment,
+  auditedDockerDefault = false,
+]: readonly [
+  readonly ShellWord[],
+  number,
+  ShellEnvironment,
+  boolean?,
+]): number {
+  let index = start;
+  for (; index < words.length; index += 1) {
+    const request = {
+      auditedDockerDefault,
+      word: words[index] as ShellWord,
+      environment,
+    };
+    const assignment = assignmentWord(request);
+    if (assignment === false) break;
+    environment.set(assignment.name, assignment.value);
+  }
+  return index;
 }
 
 export function resolveWord(request: WordEnvironmentRequest): ShellWord {
