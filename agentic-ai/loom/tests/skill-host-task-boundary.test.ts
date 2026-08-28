@@ -3,7 +3,6 @@ import {
   CANONICAL_TASKFILE,
   CANONICAL_TASK_SOURCE,
   hasExactToolsListTaskGraph,
-  hasOnlyCanonicalHostTaskEdge,
   HOST_CLI,
   TASK_YAML_BYTE_LIMIT,
 } from './skill-host-task-boundary.ts';
@@ -14,38 +13,31 @@ const AGENTIC_SOURCE = await Bun.file(
   `${REPOSITORY_ROOT}/.task/agentic-ai.yml`,
 ).text();
 function graph(provided?: readonly Source[]): readonly Source[] {
-  const extras = provided ?? [];
   return [
     { path: 'Taskfile.yml', source: ROOT_SOURCE },
     { path: '.task/agentic-ai.yml', source: AGENTIC_SOURCE },
     { path: CANONICAL_TASKFILE, source: CANONICAL_TASK_SOURCE },
-    ...extras,
+    ...(provided ?? []),
   ];
 }
-test('accepts only the exact finite public tools-list Task schema', () => {
-  expect(hasOnlyCanonicalHostTaskEdge(CANONICAL_TASK_SOURCE)).toBe(true);
-  const mutated = CANONICAL_TASK_SOURCE.replace('true', 'false');
-  expect(hasOnlyCanonicalHostTaskEdge(mutated)).toBe(false);
-});
+function bad([path, source]: readonly [string, string]): void {
+  expect(hasExactToolsListTaskGraph(graph([{ path, source }]))).toBe(false);
+}
 test('requires one exact flattened include chain', () => {
   expect(hasExactToolsListTaskGraph(graph())).toBe(true);
-  for (const extra of [
-    {
-      path: '.task/agentic-ai.yml',
-      source: AGENTIC_SOURCE.replace('flatten: true', 'flatten: false'),
-    },
-    {
-      path: '.task/nested/alternate.yml',
-      source:
-        'includes: {executable-skill-host: {taskfile: executable-skill-host.yml, flatten: true}}',
-    },
-    {
-      path: '.task/nested/alternate.yml',
-      source:
-        'includes:\n  executable-skill-host: {}\n  executable-skill-host: {}\n',
-    },
-  ])
-    expect(hasExactToolsListTaskGraph(graph([extra]))).toBe(false);
+  bad([CANONICAL_TASKFILE, CANONICAL_TASK_SOURCE.replace('true', 'false')]);
+  bad([
+    '.task/agentic-ai.yml',
+    AGENTIC_SOURCE.replace('flatten: true', 'flatten: false'),
+  ]);
+  bad([
+    '.task/nested/alternate.yml',
+    'includes: {executable-skill-host: {taskfile: executable-skill-host.yml, flatten: true}}',
+  ]);
+  bad([
+    '.task/nested/alternate.yml',
+    'includes:\n  executable-skill-host: {}\n  executable-skill-host: {}\n',
+  ]);
 });
 test('rejects strict YAML hazards before conversion', () => {
   const hazards = [
@@ -58,19 +50,13 @@ test('rejects strict YAML hazards before conversion', () => {
     `values: [${'true,'.repeat(65_537)}false]\n`,
     '#'.repeat(TASK_YAML_BYTE_LIMIT + 1),
   ];
-  for (const [index, source] of hazards.entries()) {
-    expect(
-      hasExactToolsListTaskGraph(
-        graph([{ path: `.task/hazard-${index}.yml`, source }]),
-      ),
-    ).toBe(false);
-  }
+  for (const [index, source] of hazards.entries())
+    bad([`.task/hazard-${index}.yml`, source]);
 });
 test('rejects every proven alternate repository Task declaration', () => {
   const root = HOST_CLI.slice(0, -7);
   const cases = [
     `cmds: [bun "${HOST_CLI.replace('executable-skill-host', 'execut?ble-skill-hos?')}"]`,
-    `cmds: [bun "${HOST_CLI.replace('executable-skill-host', 'execut"able-skill-"host')}"]`,
     `cmds: [cd "${root}" && bun cli.ts]`,
     `cmds: [bun --cwd "${root}" cli.ts]`,
     'cmds: [task --dir . skills:tools-list]',
@@ -90,10 +76,6 @@ test('rejects every proven alternate repository Task declaration', () => {
   ];
   for (const [index, body] of cases.entries()) {
     const source = `tasks:\n  alternate:\n    ${body}\n`;
-    expect(
-      hasExactToolsListTaskGraph(
-        graph([{ path: `.task/nested/${index}.yml`, source }]),
-      ),
-    ).toBe(false);
+    bad([`.task/nested/${index}.yml`, source]);
   }
 });

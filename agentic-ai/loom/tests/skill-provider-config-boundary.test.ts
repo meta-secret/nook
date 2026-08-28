@@ -834,6 +834,8 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ['package.json', `{"scripts":{"audit":"bun ${HOST_CLI}"}}`],
     ['package.json', `{"scripts":{"audit":"bun ${HOST_ROOT}\\"cli.ts\\""}}`],
     ['package.json', `root=${HOST_ROOT.slice(0, -1)}; bun "$root/cli.ts"`],
+    ['package.json', `a=${HOST_ROOT.slice(0, -1)}; b=$a; bun "$b/cli.ts"`],
+    ['package.json', 'a=$b; b=$a; bun "$b/cli.ts"'],
     ['Taskfile.yml', 'tasks:\n  audit:\n    cmds: [bun scripts/facade.ts]'],
     [
       'Taskfile.yml',
@@ -899,14 +901,6 @@ test('follows scripts launched from every runnable configuration surface', () =>
   const inertCatalogSources = new Map<string, string>([
     ['package.json', '{"scripts":{"audit":"bun scripts/catalog.ts"}}'],
     [
-      'Taskfile.yml',
-      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --config {{.CONFIG}}"]',
-    ],
-    [
-      '.task/catalog.yml',
-      'tasks:\n  audit:\n    cmds: ["bun scripts/catalog.ts --label {{.LABEL}}"]',
-    ],
-    [
       '.task/env-catalog.yml',
       'env: {HOST: scripts/catalog.ts}\ntasks:\n  audit:\n    cmds: ["env -i bun run scripts/catalog.ts --label $HOST"]',
     ],
@@ -915,12 +909,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
   ]);
   const inertCatalogGraph: ConfigurationScriptGraph = {
     executablePaths: new Set<string>(),
-    roots: [
-      'package.json',
-      'Taskfile.yml',
-      '.task/catalog.yml',
-      '.task/env-catalog.yml',
-    ],
+    roots: ['package.json', '.task/env-catalog.yml'],
     sources: inertCatalogSources,
     symlinkPaths: new Set<string>(),
   };

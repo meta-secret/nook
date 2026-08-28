@@ -268,6 +268,7 @@ describe('executable skill source policy', () => {
       'Bun',
       'alert',
       'Buffer',
+      'confirm',
       'process',
       'eval',
       'Function',
@@ -278,6 +279,7 @@ describe('executable skill source policy', () => {
       'fetch',
       'Math',
       'performance',
+      'prompt',
       'reportError',
       'Worker',
     ]) {

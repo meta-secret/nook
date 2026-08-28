@@ -36,11 +36,13 @@ const PROCESS_USES = [
 const FORBIDDEN_HOST_GLOBALS = new Set([
   'alert',
   'Bun',
+  'confirm',
   'Date',
   'Math',
   'console',
   'crypto',
   'performance',
+  'prompt',
   'reportError',
 ]);
 type SkillSourceRequest = {
@@ -302,6 +304,7 @@ test('rejects dangerous capabilities from every host layer', async () => {
     [HOST_CLI, 'Date.now(); Math.random();'],
     [HOST_CLI, 'performance.now(); crypto.randomUUID();'],
     [HOST_CLI, 'const secret = "secret"; alert(secret);'],
+    [HOST_CLI, 'const secret = "secret"; confirm(secret); prompt(secret);'],
     [HOST_CLI, 'const secret = new Error("secret"); reportError(secret);'],
     [
       HOST_CLI,

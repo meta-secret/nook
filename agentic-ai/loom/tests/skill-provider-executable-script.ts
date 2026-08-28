@@ -49,18 +49,37 @@ const SHELL_REPOSITORY_SCRIPT_EXECUTION =
   /(?:^|[\n;&|])\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)(?:(?:exec|command)\s+)?(?:bun|node|bash|sh|source|\.)\s+(?!-)[^\n;&|]+/gmu;
 type BoundaryTranspilerOptions = { readonly loader: 'tsx' };
 type ShellExpansionMatch = string[];
+const MAX_SHELL_EXPANSION_SIZE = 65_536;
+const MAX_SHELL_EXPANSION_STEPS = 16;
+const STATIC_SHELL_ASSIGNMENT = /\b([A-Za-z_]\w*)=((?!\$\()[^\s;&|]+)/gmu;
 const boundaryTranspilerOptions: BoundaryTranspilerOptions = { loader: 'tsx' };
 const BOUNDARY_TRANSPILER = new Bun.Transpiler(boundaryTranspilerOptions);
 
 export function expandStaticShellVariables(source: string): string {
   const values = new Map<string, string>();
-  for (const match of source.matchAll(/\b([A-Za-z_]\w*)=([^\s;&|]+)/gmu))
+  for (const match of source.matchAll(STATIC_SHELL_ASSIGNMENT))
     values.set(match[1] ?? '', match[2] ?? '');
-  return source.replace(
-    /\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/gmu,
-    (...match: ShellExpansionMatch) =>
-      values.get(match[1] || match[2] || '') ?? match[0] ?? '',
-  );
+  const checked = (expanded: string): string => {
+    const launch = expanded.match(
+      /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/u,
+    );
+    if (values.has(launch?.[1] || launch?.[2] || ''))
+      throw new Error('Task launch variable is unresolved.');
+    return expanded;
+  };
+  const substitute = (input: string): string =>
+    input.replace(
+      /\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/gmu,
+      (...match: ShellExpansionMatch) =>
+        values.get(match[1] || match[2] || '') ?? match[0] ?? '',
+    );
+  for (let step = 0; step < MAX_SHELL_EXPANSION_STEPS; step += 1) {
+    const expanded = substitute(source);
+    if (expanded.length > MAX_SHELL_EXPANSION_SIZE) return checked(source);
+    if (expanded === source) return checked(expanded);
+    source = expanded;
+  }
+  return checked(source);
 }
 
 export function executableScriptViolatesBoundary(
