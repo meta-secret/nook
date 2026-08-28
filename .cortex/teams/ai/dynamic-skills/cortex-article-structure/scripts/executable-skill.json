@@ -5,7 +5,7 @@
   "requestKind": "cortex-article-structure-audit-v1",
   "resultKind": "cortex-article-structure-findings-v1",
   "policyPaths": [
-    ".cortex/teams/ai/dynamic-skills/cortex-article-structure.md"
+    ".cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md"
   ],
   "limits": {
     "requestBytes": 4194304,

@@ -1,3 +1,8 @@
+---
+name: cortex-article-structure
+description: Keep Cortex articles semantically structured and mechanically auditable.
+---
+
 # Cortex Structured Articles
 
 Every Cortex article exposes the semantic shape of its content instead of
@@ -139,8 +144,8 @@ Do not add an empty block merely because the label exists in this standard.
 ## Mechanical enforcement
 
 Loom parses the Markdown syntax tree and adapts repository documents into the
-semantic request. The deterministic application under
-`agentic-ai/skills/cortex-article-structure` validates that request, audits it,
+semantic request. The co-located application under `scripts/` validates that
+request, audits it,
 independently verifies the findings, and enforces request and result bounds.
 This Cortex card remains the sole semantic authority.
 

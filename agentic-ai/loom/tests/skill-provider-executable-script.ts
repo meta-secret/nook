@@ -23,6 +23,18 @@ export type ExecutableProviderReferenceInspection = {
   readonly source: string;
 };
 
+export type ConfigurationScriptGraph = {
+  readonly executablePaths: ReadonlySet<string>;
+  readonly roots: readonly string[];
+  readonly sources: ReadonlyMap<string, string>;
+  readonly symlinkPaths: ReadonlySet<string>;
+};
+
+export type ConfigurationReferenceInspection = {
+  readonly importer: string;
+  readonly source: string;
+};
+
 export enum ShellExecutablePolicy {
   Reject = 'reject',
   TrackedConfiguration = 'tracked-configuration',
@@ -32,7 +44,7 @@ const TYPESCRIPT_JAVASCRIPT_SOURCE = /\.(?:[cm]?[jt]sx?)$/u;
 const TYPESCRIPT_SOURCE = /\.(?:cts|mts|ts|tsx)$/u;
 const SHELL_SOURCE = /\.sh$/u;
 const SHELL_PROVIDER_EXECUTION =
-  /(?:\b(?:bun|node|bash|sh|source)\s+|(?:^|[\n;&|])\s*\.\s+)["']?(?:\.\/|\.\.\/|\/)?[^\s"']*agentic-ai\/skills\//gmu;
+  /(?:\b(?:bun|node|bash|sh|source)\s+|(?:^|[\n;&|])\s*\.\s+)["']?(?:\.\/|\.\.\/|\/)?[^\s"']*(?:\.agents\/skills|\.cortex\/(?:gizmo|shared|teams\/[^/]+)\/dynamic-skills\/[a-z0-9]+(?:-[a-z0-9]+)*\/scripts)\//gmu;
 const SHELL_REPOSITORY_SCRIPT_EXECUTION =
   /(?:^|[\n;&|])\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)(?:(?:exec|command)\s+)?(?:bun|node|bash|sh|source|\.)\s+(?!-)[^\n;&|]+/gmu;
 type BoundaryTranspilerOptions = { readonly loader: 'tsx' };

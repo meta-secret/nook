@@ -12,8 +12,9 @@ type EraseNodeRequest = {
 };
 
 const APPLICATION_IMPORT =
-  '../../../skills/cortex-article-structure/src/application.ts';
-const DOMAIN_IMPORT = '../../../skills/cortex-article-structure/src/domain.ts';
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/application.ts';
+const DOMAIN_IMPORT =
+  '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
 const LOCAL_TYPE_IMPORT = './cortex-document-structure.ts';
 const FORBIDDEN_ADAPTER_GLOBALS = new Set([
   'Bun',
@@ -66,7 +67,8 @@ export function cortexArticleAdapterViolatesBoundary(
   visit(sourceFile);
   if (invalid) return true;
   const analysisRequest = {
-    relativePath: 'agentic-ai/skills/cortex-article-adapter/src/adapter.ts',
+    relativePath:
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/adapter.ts',
     source: retained.join(''),
   };
   try {

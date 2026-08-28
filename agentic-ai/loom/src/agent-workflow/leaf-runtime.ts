@@ -194,6 +194,17 @@ export function mechanicalCortexAuditOutput(
     };
     findings.push(finding);
   }
+  for (const packageFinding of report.invalidExecutableSkillPackages) {
+    const summary = `${packageFinding.path}: ${packageFinding.issue}`;
+    const finding: WorkflowFinding = {
+      severity: WorkflowFindingSeverity.Error,
+      title: 'Invalid executable-skill package',
+      summary,
+      evidence: [summary],
+      affectedPaths: [packageFinding.path],
+    };
+    findings.push(finding);
+  }
   for (const skill of report.missingFromIndex) {
     const finding: WorkflowFinding = {
       severity: WorkflowFindingSeverity.Error,
@@ -202,10 +213,7 @@ export function mechanicalCortexAuditOutput(
       evidence: [
         `.cortex/teams/ai/dynamic-skills/index.md does not list ${skill}.`,
       ],
-      affectedPaths: [
-        '.cortex/teams/ai/dynamic-skills/index.md',
-        `.cortex/shared/dynamic-skills/${skill}`,
-      ],
+      affectedPaths: ['.cortex/teams/ai/dynamic-skills/index.md', skill],
     };
     findings.push(finding);
   }

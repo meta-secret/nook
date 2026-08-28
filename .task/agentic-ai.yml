@@ -4,27 +4,26 @@ vars:
   REPO_ROOT:
     sh: 'if [ -n "${REPO_ROOT:-}" ]; then printf "%s" "$REPO_ROOT"; else git rev-parse --show-toplevel; fi'
   CI_AGENT_DIR: agentic-ai/ci-agent
+  SKILL_APPLICATION_DIRS: .cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts
 
 tasks:
   skills:install:
-    desc: Install executable application dependencies with a frozen lockfile.
-    dir: agentic-ai/skills
+    desc: Install every executable skill package with its frozen lockfile.
+    silent: true
     cmds:
-      - bun install --frozen-lockfile
+      - set -euo pipefail; bun "{{.REPO_ROOT}}/agentic-ai/loom/src/executable-skills/repository-cli.ts" "{{.REPO_ROOT}}"; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun install --frozen-lockfile 1>&2); done
 
   skills:format:
-    desc: Format executable application TypeScript and manifests.
-    dir: agentic-ai/skills
+    desc: Format every executable skill package.
     deps: [skills:install]
     cmds:
-      - bun run format
+      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run format); done
 
   skills:verify:
-    desc: Format-check, lint, typecheck, and test executable applications.
-    dir: agentic-ai/skills
+    desc: Verify every executable skill package.
     deps: [skills:install]
     cmds:
-      - bun run verify
+      - set -euo pipefail; for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do (cd "{{.REPO_ROOT}}/$skill_dir" && bun run verify); done
 
   loom:install:
     desc: Install Loom Bun dependencies with a frozen lockfile.

@@ -2,6 +2,8 @@ import { join, posix } from 'node:path';
 import { expect, test } from 'bun:test';
 import { violatesSkillProviderBoundary } from './skill-provider-boundary.test.ts';
 import {
+  type ConfigurationReferenceInspection,
+  type ConfigurationScriptGraph,
   type ExecutableProviderReferenceInspection,
   executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
@@ -9,10 +11,10 @@ import {
 } from './skill-provider-executable-script.ts';
 import type { SkillProviderSourceInspection } from './skill-provider-type-context.ts';
 import { cortexArticleAdapterViolatesBoundary } from './cortex-article-adapter-boundary.ts';
-
-type TrackedPathsRequest = {
-  readonly pathspecs: readonly string[];
-};
+import {
+  executableSkillPackageFromPath,
+  readTrackedRepositoryFiles,
+} from '../src/executable-skills/repository.ts';
 
 type ActionRuntimeGraph = {
   readonly roots: readonly string[];
@@ -51,21 +53,9 @@ type ActionLoaderFixture = {
   readonly source: string;
 };
 
-type ConfigurationScriptGraph = {
-  readonly executablePaths: ReadonlySet<string>;
-  readonly roots: readonly string[];
-  readonly sources: ReadonlyMap<string, string>;
-  readonly symlinkPaths: ReadonlySet<string>;
-};
-
 type RequiredLaunchInspection = {
   readonly source: string;
   readonly specifier: string;
-};
-
-type ConfigurationReferenceInspection = {
-  readonly importer: string;
-  readonly source: string;
 };
 
 type ApplicationConsumerEdge = {
@@ -81,39 +71,14 @@ type RepositoryPackageDocument = {
 };
 
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
-const PROVIDER_ROOT = 'agentic-ai/skills/cortex-article-structure';
+const PROVIDER_ROOT =
+  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts';
 const PROVIDER_APPLICATION = `${PROVIDER_ROOT}/src/application.ts`;
 const PROVIDER_DOMAIN = `${PROVIDER_ROOT}/src/domain.ts`;
+const PROVIDER_PACKAGE = `${PROVIDER_ROOT}/package.json`;
 const CORTEX_AUDIT = 'agentic-ai/loom/src/commands/cortex-audit.ts';
 const LOOM_ARTICLE_ADAPTER =
   'agentic-ai/loom/src/lib/cortex-article-structure.ts';
-const RUNNABLE_CONFIG_PATHS = [
-  ':(glob)**/package.json',
-  ':(glob)**/Taskfile.yml',
-  ':(glob)**/Taskfile.yaml',
-  ':(glob)**/.env.*',
-  ':(glob)**/vite.config.ts',
-  ':(glob)**/vite.config.mts',
-  ':(glob)**/vite.config.js',
-  ':(glob)**/vite.config.mjs',
-  ':(glob).task/**/*.yml',
-  ':(glob).task/**/*.yaml',
-  ':(glob).github/workflows/*.yml',
-  ':(glob).github/workflows/*.yaml',
-  ':(glob).github/actions/**/action.yml',
-  ':(glob).github/actions/**/action.yaml',
-] as const;
-const PRODUCTION_LOOM_PATHS = [
-  ':(glob)agentic-ai/loom/src/**/*.ts',
-  ':(glob)agentic-ai/loom/src/**/*.tsx',
-  ':(glob)agentic-ai/loom/src/**/*.mts',
-  ':(glob)agentic-ai/loom/src/**/*.cts',
-  ':(glob)agentic-ai/loom/src/**/*.js',
-  ':(glob)agentic-ai/loom/src/**/*.jsx',
-  ':(glob)agentic-ai/loom/src/**/*.mjs',
-  ':(glob)agentic-ai/loom/src/**/*.cjs',
-] as const;
-const PRODUCTION_LOOM_ROOT_PATHS = ['agentic-ai/loom/src'] as const;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?)$/u;
 const CONFIGURATION_SCRIPT_EXTENSION = /\.(?:[cm]?tsx?|[cm]?jsx?|sh)$/u;
 const CONFIGURATION_SCRIPT_REFERENCE =
@@ -127,66 +92,16 @@ const ACTION_SOURCE_SUFFIXES = [
 const actionTranspilerOptions: ActionTranspilerOptions = { loader: 'tsx' };
 const ACTION_IMPORT_SCANNER = new Bun.Transpiler(actionTranspilerOptions);
 
-function trackedPaths(request: TrackedPathsRequest): readonly string[] {
-  const command = ['git', 'ls-files', '--', ...request.pathspecs];
-  const spawnOptions = {
-    cmd: command,
-    cwd: REPOSITORY_ROOT,
-    stderr: 'pipe' as const,
-    stdout: 'pipe' as const,
-  };
-  const result = Bun.spawnSync(spawnOptions);
-  if (result.exitCode !== 0) {
-    throw new Error(`Unable to enumerate tracked paths: ${result.stderr}`);
-  }
-  return result.stdout
-    .toString()
-    .split('\n')
-    .filter((path) => path.length > 0);
-}
-
-function trackedSymlinkPaths(): ReadonlySet<string> {
-  const spawnOptions = {
-    cmd: ['git', 'ls-files', '--stage', '-z'],
-    cwd: REPOSITORY_ROOT,
-    stderr: 'pipe' as const,
-    stdout: 'pipe' as const,
-  };
-  const result = Bun.spawnSync(spawnOptions);
-  if (result.exitCode !== 0) {
-    throw new Error(`Unable to enumerate tracked modes: ${result.stderr}`);
-  }
-  const symlinkPaths = new Set<string>();
-  for (const entry of result.stdout.toString().split('\0').filter(Boolean)) {
-    const separator = entry.indexOf('\t');
-    if (separator < 0) throw new Error('Tracked mode record has no path');
-    if (entry.startsWith('120000 ')) {
-      symlinkPaths.add(entry.slice(separator + 1));
-    }
-  }
-  return symlinkPaths;
-}
-
-function trackedExecutablePaths(): ReadonlySet<string> {
-  const spawnOptions = {
-    cmd: ['git', 'ls-files', '--stage', '-z'],
-    cwd: REPOSITORY_ROOT,
-    stderr: 'pipe' as const,
-    stdout: 'pipe' as const,
-  };
-  const result = Bun.spawnSync(spawnOptions);
-  if (result.exitCode !== 0) {
-    throw new Error(`Unable to enumerate tracked modes: ${result.stderr}`);
-  }
-  const executablePaths = new Set<string>();
-  for (const entry of result.stdout.toString().split('\0').filter(Boolean)) {
-    const separator = entry.indexOf('\t');
-    if (separator < 0) throw new Error('Tracked mode record has no path');
-    if (entry.startsWith('100755 ')) {
-      executablePaths.add(entry.slice(separator + 1));
-    }
-  }
-  return executablePaths;
+function isRunnableConfiguration(path: string): boolean {
+  return (
+    /(^|\/)package\.json$/u.test(path) ||
+    /(^|\/)Taskfile\.ya?ml$/u.test(path) ||
+    /(^|\/)\.env\.[^/]+$/u.test(path) ||
+    /(^|\/)vite\.config\.(?:[cm]?ts|[cm]?js)$/u.test(path) ||
+    /^\.task\/(?:[^/]+\/)*[^/]+\.ya?ml$/u.test(path) ||
+    /^\.github\/workflows\/[^/]+\.ya?ml$/u.test(path) ||
+    /^\.github\/actions\/(?:[^/]+\/)*action\.ya?ml$/u.test(path)
+  );
 }
 
 async function pathsContainingProviderRoot(
@@ -246,12 +161,18 @@ function configurationScriptPaths(
     for (const specifier of configurationScriptReferences(
       referenceInspection,
     )) {
+      const skillPackage = executableSkillPackageFromPath(importer);
+      const scriptsIndex = importer.indexOf('/scripts/');
+      const packageRoot =
+        skillPackage !== false
+          ? skillPackage.packageRoot
+          : scriptsIndex < 0
+            ? importer
+            : importer.slice(0, scriptsIndex);
       const candidates: readonly string[] = [
         posix.normalize(specifier.replace(/^\.\//u, '')),
         posix.normalize(posix.join(posix.dirname(importer), specifier)),
-        posix.normalize(
-          posix.join(importer.split('/scripts/')[0] ?? '', specifier),
-        ),
+        posix.normalize(posix.join(packageRoot, specifier)),
         posix.normalize(
           posix.join(
             posix.dirname(importer),
@@ -564,27 +485,20 @@ function resolveActionDependency(
 }
 
 test('only the Loom semantic adapter reaches the provider', async () => {
-  const productionRequest: TrackedPathsRequest = {
-    pathspecs: PRODUCTION_LOOM_PATHS,
-  };
-  const configRequest: TrackedPathsRequest = {
-    pathspecs: RUNNABLE_CONFIG_PATHS,
-  };
-  const productionRootRequest: TrackedPathsRequest = {
-    pathspecs: PRODUCTION_LOOM_ROOT_PATHS,
-  };
-  const actionPathsRequest: TrackedPathsRequest = { pathspecs: [] };
-  const productionPaths = [...trackedPaths(productionRequest)].sort();
-  const expectedProductionPaths = trackedPaths(productionRootRequest)
+  const tracked = readTrackedRepositoryFiles(REPOSITORY_ROOT);
+  const allPaths = tracked.map((file) => file.path);
+  const productionPaths = allPaths
+    .filter((path) => path.startsWith('agentic-ai/loom/src/'))
     .filter((path) => EXECUTABLE_SOURCE_EXTENSION.test(path))
     .sort();
-  expect(productionPaths).toEqual(expectedProductionPaths);
   expect(productionPaths).toContain('agentic-ai/loom/src/cli.ts');
   expect(productionPaths).toContain('agentic-ai/loom/src/cli-invocation.ts');
   expect(productionPaths).toContain('agentic-ai/loom/src/loom-failure.ts');
-  const configPaths = trackedPaths(configRequest);
-  const actionPaths = trackedPaths(actionPathsRequest);
-  const symlinkPaths = trackedSymlinkPaths();
+  const configPaths = allPaths.filter(isRunnableConfiguration);
+  const actionPaths = allPaths;
+  const symlinkPaths = new Set(
+    tracked.filter((file) => file.mode === '120000').map((file) => file.path),
+  );
   const configPathSet = new Set(configPaths);
   const actionSources = new Map<string, string>();
   for (const path of actionPaths) {
@@ -604,8 +518,10 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   };
   const reachableActionPaths = actionRuntimePaths(actionGraph);
   const scriptGraph: ConfigurationScriptGraph = {
-    executablePaths: trackedExecutablePaths(),
-    roots: configPaths,
+    executablePaths: new Set(
+      tracked.filter((file) => file.mode === '100755').map((file) => file.path),
+    ),
+    roots: configPaths.filter((path) => path !== PROVIDER_PACKAGE),
     sources: actionSources,
     symlinkPaths,
   };
@@ -619,7 +535,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
       ...reachableActionPaths,
       ...reachableScriptPaths,
     ]),
-  ).toEqual([LOOM_ARTICLE_ADAPTER]);
+  ).toEqual([PROVIDER_PACKAGE, LOOM_ARTICLE_ADAPTER].sort());
 
   const activeAudit = await Bun.file(
     join(REPOSITORY_ROOT, 'agentic-ai/loom/src/commands/cortex-audit.ts'),
@@ -630,26 +546,55 @@ test('only the Loom semantic adapter reaches the provider', async () => {
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile\.ya?ml$/u;
-  const allPathsRequest: TrackedPathsRequest = { pathspecs: [] };
-  const runnableConfigRequest: TrackedPathsRequest = {
-    pathspecs: RUNNABLE_CONFIG_PATHS,
-  };
-  const expected = trackedPaths(allPathsRequest)
-    .filter((path) => taskfilePattern.test(path))
-    .sort();
-  const discovered = trackedPaths(runnableConfigRequest)
+  const allPaths = readTrackedRepositoryFiles(REPOSITORY_ROOT).map(
+    (file) => file.path,
+  );
+  const runnablePaths = allPaths.filter(isRunnableConfiguration);
+  const expected = allPaths.filter((path) => taskfilePattern.test(path)).sort();
+  const discovered = runnablePaths
     .filter((path) => taskfilePattern.test(path))
     .sort();
   expect(discovered).toEqual(expected);
   expect(discovered.some((path) => path.includes('/'))).toBe(true);
-  const expectedActions = trackedPaths(allPathsRequest)
+  const expectedActions = allPaths
     .filter((path) => path.startsWith('.github/actions/'))
     .filter(isActionManifest)
     .sort();
-  const discoveredActions = trackedPaths(runnableConfigRequest)
-    .filter(isActionManifest)
-    .sort();
+  const discoveredActions = runnablePaths.filter(isActionManifest).sort();
   expect(discoveredActions).toEqual(expectedActions);
+});
+
+test('classifies every runnable configuration category at root and nested boundaries', () => {
+  const expected = [
+    'package.json',
+    'nested/package.json',
+    'Taskfile.yml',
+    'nested/Taskfile.yaml',
+    '.env.test',
+    'nested/.env.local',
+    'vite.config.ts',
+    'nested/vite.config.mjs',
+    '.task/root.yml',
+    '.task/nested/task.yaml',
+    '.task/evil\n.yml',
+    '.github/workflows/policy.yml',
+    '.github/actions/action.yml',
+    '.github/actions/nested/action.yaml',
+    '.github/actions/evil\n/action.yml',
+  ];
+  const candidates = [
+    ...expected,
+    'package.json.backup',
+    '.github/workflows/nested/policy.yml',
+    '.github/actions/action.yml/child',
+    '.github/actions/nested/not-action.yml',
+    'nested/.task/task.yml',
+    '.task/evil\n.yml/child',
+    '.github/actions/evil\n/not-action.yml',
+    '.github/actions/evil\n/action.yml/child',
+    'nested/vite.config.css',
+  ];
+  expect(candidates.filter(isRunnableConfiguration)).toEqual(expected);
 });
 
 test('follows JavaScript action entrypoints and nested local actions', () => {
@@ -667,7 +612,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
     ['.github/actions/nested/pre.js', 'prepare();'],
     ['.github/actions/nested/post.js', 'cleanup();'],
     [
-      'agentic-ai/skills/cortex-article-structure/src/audit.ts',
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts',
       'export const audit = true;',
     ],
   ]);
@@ -689,7 +634,7 @@ test('follows JavaScript action entrypoints and nested local actions', () => {
   const providerSources = new Map(sources);
   providerSources.set(
     '.github/actions/nested/neutral.js',
-    "export { audit } from '../../../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
+    "export { audit } from '../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
   );
   const providerGraph: ActionRuntimeGraph = {
     roots: ['.github/actions/root/action.yml'],
@@ -879,7 +824,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
       ['scripts/facade.ts', "import './nested.ts';"],
       [
         'scripts/nested.ts',
-        "import '../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
+        "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
       ],
       [`${PROVIDER_ROOT}/src/audit.ts`, 'export const audit = true;'],
       [LOOM_ARTICLE_ADAPTER, `import '../../../${PROVIDER_APPLICATION}';`],
@@ -952,7 +897,7 @@ test('checks external and extensionless configuration scripts as executable sour
   for (const externalSource of [
     'eval(source);',
     'await import(modulePath);',
-    "import '../agentic-ai/skills/cortex-article-structure/src/audit.ts';",
+    "import '../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/audit.ts';",
   ]) {
     const sources = new Map<string, string>([
       ['package.json', '{"scripts":{"audit":"bun scripts/external.ts"}}'],

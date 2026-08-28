@@ -18,6 +18,10 @@ type CortexArticleExecutableSkillDefinition = {
   readonly schemaVersion: number;
 };
 
+type ExecutableSkillPackage = {
+  readonly scripts: Readonly<Record<string, string>>;
+};
+
 test('keeps the application manifest aligned with the semantic contract', async () => {
   const definitionText = await Bun.file(
     `${import.meta.dir}/../executable-skill.json`,
@@ -32,7 +36,7 @@ test('keeps the application manifest aligned with the semantic contract', async 
     requestKind: CortexArticleContractKind.Request,
     resultKind: CortexArticleContractKind.Result,
     policyPaths: [
-      '.cortex/teams/ai/dynamic-skills/cortex-article-structure.md',
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/SKILL.md',
     ],
     limits: {
       requestBytes: CORTEX_ARTICLE_REQUEST_BYTE_LIMIT,
@@ -40,4 +44,23 @@ test('keeps the application manifest aligned with the semantic contract', async 
     },
   };
   expect(definition).toEqual(expectedDefinition);
+});
+
+test('keeps the independent package commands development-only', async () => {
+  const packageText = await Bun.file(
+    `${import.meta.dir}/../package.json`,
+  ).text();
+  const packageDocument = JSON.parse(packageText) as ExecutableSkillPackage;
+  const expectedScripts: Readonly<Record<string, string>> = {
+    check: 'tsc --noEmit',
+    lint: 'eslint .',
+    format:
+      'prettier --write "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+    'format:check':
+      'prettier --check "src/**/*.ts" "tests/**/*.ts" executable-skill.json "*.{json,md}" eslint.config.js .prettierrc',
+    test: 'bun test tests',
+    verify:
+      'bun run format:check && bun run lint && bun run check && bun test tests',
+  };
+  expect(packageDocument.scripts).toEqual(expectedScripts);
 });

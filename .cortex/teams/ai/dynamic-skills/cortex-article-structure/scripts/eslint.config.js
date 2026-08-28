@@ -1,9 +1,9 @@
 import tseslint from 'typescript-eslint';
-import { noRawObjectArguments } from '../../tooling/eslint-rules/no-raw-object-arguments.js';
+import { noRawObjectArguments } from '../../../../../../tooling/eslint-rules/no-raw-object-arguments.js';
 
 export default tseslint.config({
   ignores: ['node_modules/**'],
-  files: ['*.ts', '*/src/**/*.ts', '*/tests/**/*.ts'],
+  files: ['src/**/*.ts', 'tests/**/*.ts'],
   plugins: {
     '@typescript-eslint': tseslint.plugin,
     nook: {

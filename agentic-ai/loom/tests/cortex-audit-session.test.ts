@@ -1,8 +1,15 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { expect, test } from 'bun:test';
 import {
+  listCortexMarkdownFiles,
   listPersistentCortexMarkdownFiles,
   runCortexAuditFromDirectory,
 } from '../src/commands/cortex-audit.ts';
@@ -35,6 +42,99 @@ test('excludes temporary session memory from persistent Cortex documents', () =>
   }
 });
 
+test('excludes only canonical executable package scripts from Cortex Markdown', () => {
+  const cortexRoot = mkdtempSync(path.join(tmpdir(), 'cortex-scripts-scope-'));
+  try {
+    const skillRoot = path.join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'article-audit',
+    );
+    const unrelatedScripts = path.join(cortexRoot, 'teams', 'ai', 'scripts');
+    const unknownSkillRoot = path.join(
+      cortexRoot,
+      'teams',
+      'unknown',
+      'dynamic-skills',
+      'hidden',
+    );
+    const directoryOptions = { recursive: true } as const;
+    mkdirSync(path.join(skillRoot, 'scripts', 'src'), directoryOptions);
+    mkdirSync(path.join(skillRoot, 'scripts', 'tests'), directoryOptions);
+    mkdirSync(
+      path.join(skillRoot, 'scripts', 'node_modules', '.bin'),
+      directoryOptions,
+    );
+    mkdirSync(unrelatedScripts, directoryOptions);
+    mkdirSync(path.join(unknownSkillRoot, 'scripts'), directoryOptions);
+    writeFileSync(
+      path.join(skillRoot, 'SKILL.md'),
+      '---\nname: article-audit\ndescription: Audit articles.\n---\n\n# Article Audit\n',
+    );
+    for (const name of [
+      '.gitignore',
+      '.prettierrc',
+      'bun.lock',
+      'eslint.config.js',
+      'executable-skill.json',
+      'package.json',
+      'tsconfig.json',
+    ]) {
+      writeFileSync(path.join(skillRoot, 'scripts', name), '{}\n');
+    }
+    writeFileSync(path.join(skillRoot, 'scripts', 'README.md'), '# Code\n');
+    writeFileSync(
+      path.join(skillRoot, 'scripts', 'node_modules', 'tool'),
+      '#!/bin/sh\n',
+    );
+    symlinkSync(
+      '../tool',
+      path.join(skillRoot, 'scripts', 'node_modules', '.bin', 'tool'),
+    );
+    writeFileSync(path.join(unrelatedScripts, 'policy.md'), '# Policy\n');
+    writeFileSync(path.join(unknownSkillRoot, 'SKILL.md'), '# Hidden\n');
+    writeFileSync(
+      path.join(unknownSkillRoot, 'scripts', 'README.md'),
+      '# Must remain audited\n',
+    );
+
+    const relativeFiles = listCortexMarkdownFiles(cortexRoot).map((filePath) =>
+      path.relative(cortexRoot, filePath),
+    );
+    expect(relativeFiles).toContain(
+      path.join('teams', 'ai', 'scripts', 'policy.md'),
+    );
+    expect(relativeFiles).toContain(
+      path.join('teams', 'ai', 'dynamic-skills', 'article-audit', 'SKILL.md'),
+    );
+    expect(relativeFiles).not.toContain(
+      path.join(
+        'teams',
+        'ai',
+        'dynamic-skills',
+        'article-audit',
+        'scripts',
+        'README.md',
+      ),
+    );
+    expect(relativeFiles).toContain(
+      path.join(
+        'teams',
+        'unknown',
+        'dynamic-skills',
+        'hidden',
+        'scripts',
+        'README.md',
+      ),
+    );
+  } finally {
+    const removeOptions = { recursive: true, force: true } as const;
+    rmSync(cortexRoot, removeOptions);
+  }
+});
+
 test('fails the integrated Cortex audit for authored HTML', async () => {
   const repoRoot = mkdtempSync(path.join(tmpdir(), 'cortex-html-audit-'));
   try {
@@ -42,6 +142,14 @@ test('fails the integrated Cortex audit for authored HTML', async () => {
     const skillsRoot = path.join(cortexRoot, 'dynamic-skills');
     const directoryOptions = { recursive: true } as const;
     mkdirSync(skillsRoot, directoryOptions);
+    const frontmatterSkillRoot = path.join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'html-frontmatter',
+    );
+    mkdirSync(frontmatterSkillRoot, directoryOptions);
     writeFileSync(
       path.join(cortexRoot, 'AGENTS.md'),
       `Text before the title with a [broken link](missing.md).
@@ -72,6 +180,10 @@ Fourth paragraph.
       '# Knowledge Graph\n',
     );
     writeFileSync(path.join(skillsRoot, 'index.md'), '# Skills\n');
+    writeFileSync(
+      path.join(frontmatterSkillRoot, 'SKILL.md'),
+      '---\nname: html-frontmatter\ndescription: <span>forbidden</span>\n---\n\n# HTML Frontmatter\n',
+    );
     const request = { includeDensityLint: true };
     const auditArgs = { request, startDirectory: repoRoot };
     const report = await runCortexAuditFromDirectory(auditArgs);
@@ -83,6 +195,14 @@ Fourth paragraph.
     expect(agentFindings[0]?.code).toBe(
       CortexStructureFindingCode.ProhibitedHtml,
     );
+    const expectedFrontmatterFinding = {
+      code: CortexStructureFindingCode.ProhibitedHtml,
+      file: '.cortex/teams/ai/dynamic-skills/html-frontmatter/SKILL.md',
+      line: 3,
+      message:
+        'Authored HTML is prohibited in Cortex Markdown. Use Markdown syntax, escaped text, or inline or block code.',
+    };
+    expect(report.structureFindings).toContainEqual(expectedFrontmatterFinding);
     expect(
       report.articleStructureFindings.some(
         (finding) => finding.file === '.cortex/AGENTS.md',
@@ -255,6 +375,7 @@ ${gizmoIndexRows}
     const report = await runCortexAuditFromDirectory(auditArgs);
     const expectedReport: CortexAuditReport = {
       brokenLinks: [],
+      invalidExecutableSkillPackages: [],
       missingFromIndex: [],
       orphanIndexRows: [],
       prohibitedHarnessSkillPaths: [],

@@ -72,6 +72,17 @@ describe('skill scaffold', () => {
     );
   });
 
+  test('inserts an executable skill by its canonical SKILL path', () => {
+    const insertArgs = {
+      cardHref: 'article-audit/SKILL.md',
+      indexContent: '# Registry\n\n## Skill catalog\n\n## How to add one\n',
+    };
+
+    expect(insertSkillCatalogEntry(insertArgs)).toContain(
+      '- **[article-audit/SKILL.md](article-audit/SKILL.md)**',
+    );
+  });
+
   test('routes Gizmo-owned skills outside the teams directory', () => {
     const directoryArgs: SkillOwnerDynamicSkillsDirectoryArgs = {
       cortexRoot: '/repo/.cortex',
@@ -158,6 +169,52 @@ describe('skill scaffold', () => {
 
       const findArgs = { cortexRoot, slug: 'threat-review' };
       expect(findExistingSkillCard(findArgs)).toBe(securityCard);
+    } finally {
+      const removeOptions = { recursive: true, force: true } as const;
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('rejects a duplicate executable skill directory', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-executable-skill-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    const skillRoot = join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'article-audit',
+    );
+
+    try {
+      const directoryOptions = { recursive: true } as const;
+      await mkdir(skillRoot, directoryOptions);
+      const skillPath = join(skillRoot, 'SKILL.md');
+      await writeFile(skillPath, '# Article Audit\n', 'utf8');
+
+      const findArgs = { cortexRoot, slug: 'article-audit' };
+      expect(findExistingSkillCard(findArgs)).toBe(skillRoot);
+    } finally {
+      const removeOptions = { recursive: true, force: true } as const;
+      await rm(fixtureRoot, removeOptions);
+    }
+  });
+
+  test('rejects an existing malformed skill directory without SKILL.md', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'loom-malformed-skill-'));
+    const cortexRoot = join(fixtureRoot, '.cortex');
+    const skillRoot = join(
+      cortexRoot,
+      'teams',
+      'ai',
+      'dynamic-skills',
+      'article-audit',
+    );
+    try {
+      const directoryOptions = { recursive: true } as const;
+      await mkdir(skillRoot, directoryOptions);
+      const findArgs = { cortexRoot, slug: 'article-audit' };
+      expect(findExistingSkillCard(findArgs)).toBe(skillRoot);
     } finally {
       const removeOptions = { recursive: true, force: true } as const;
       await rm(fixtureRoot, removeOptions);

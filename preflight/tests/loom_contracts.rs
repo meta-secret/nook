@@ -115,15 +115,17 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
 
     let skills_install = task_body(&taskfile, "skills:install", "skills:format");
     assert!(
-        skills_install.contains("dir: agentic-ai/skills")
+        skills_install.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
+            && skills_install.contains("{{.REPO_ROOT}}/$skill_dir")
             && skills_install.contains("bun install --frozen-lockfile"),
-        "executable applications must install their pinned project"
+        "executable applications must install every pinned project"
     );
     let skills_verify = task_body(&taskfile, "skills:verify", "loom:install");
     assert!(
         skills_verify.contains("deps: [skills:install]")
+            && skills_verify.contains("for skill_dir in {{.SKILL_APPLICATION_DIRS}}; do")
             && skills_verify.contains("bun run verify"),
-        "skills:verify must run the complete application project gate"
+        "skills:verify must run every complete application project gate"
     );
 
     let loom_install = task_body(&taskfile, "loom:install", "loom:format");
@@ -156,32 +158,45 @@ fn loom_verify_enforces_loom_typescript_eslint_rules() {
         "the formatter contract must be a detached, install-free preflight task"
     );
 
-    let skills_manifest = read(&root, "agentic-ai/skills/package.json");
+    let skills_manifest = read(
+        &root,
+        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/package.json",
+    );
     assert!(
         skills_manifest.contains("\"verify\":") && !skills_manifest.contains("\"dependencies\"")
     );
-    let skills_eslint = read(&root, "agentic-ai/skills/eslint.config.js");
+    let skills_eslint = read(
+        &root,
+        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/eslint.config.js",
+    );
     assert!(
-        skills_eslint.contains("files: ['*.ts', '*/src/**/*.ts', '*/tests/**/*.ts']")
+        skills_eslint.contains("files: ['src/**/*.ts', 'tests/**/*.ts']")
             && skills_eslint.contains("'max-params': ['error', { max: 1 }]")
             && skills_eslint.contains("'nook/no-raw-object-arguments': 'error'")
             && skills_eslint.contains("unknown:"),
         "executable applications must retain repository TypeScript rules"
     );
-    let skills_typescript = read(&root, "agentic-ai/skills/tsconfig.json");
-    assert!(
-        skills_typescript
-            .contains("\"include\": [\"*.ts\", \"*/src/**/*.ts\", \"*/tests/**/*.ts\"]")
+    let skills_typescript = read(
+        &root,
+        ".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/tsconfig.json",
     );
+    assert!(skills_typescript.contains("\"include\": [\"src/**/*.ts\", \"tests/**/*.ts\"]"));
     let source_gate = read(
         &root,
         "agentic-ai/loom/tests/skill-application-source-boundary.test.ts",
     );
     assert!(
         source_gate.contains("analyzeExecutableSkillSource")
-            && source_gate.contains("agentic-ai/skills")
-            && source_gate.contains("git', 'ls-files'"),
+            && source_gate
+                .contains(".cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts")
+            && source_gate.contains("readTrackedRepositoryFiles"),
         "loom:verify must AST-audit every tracked executable application source"
+    );
+    let tracked_inventory = read(&root, "agentic-ai/loom/src/executable-skills/repository.ts");
+    assert!(
+        tracked_inventory.contains("['ls-files', '--stage', '-z']")
+            && tracked_inventory.contains("readTrackedRepositoryFiles"),
+        "executable application gates must share the NUL-safe staged inventory"
     );
 }
 
@@ -201,8 +216,8 @@ fn loom_workflow_audits_every_cortex_change() {
     assert!(
         workflow.contains("      - .agents/skills/**")
             && workflow.contains(".agents/skills/* |")
-            && workflow.contains("      - agentic-ai/skills/**")
-            && workflow.contains("agentic-ai/skills/* |"),
+            && workflow.contains("      - .cortex/**/dynamic-skills/*/scripts/**")
+            && workflow.contains(".cortex/*/dynamic-skills/*/scripts/* |"),
         "repository policy must trigger for prohibited mirrors and canonical applications"
     );
     assert!(

@@ -15,6 +15,7 @@ research_files=()
 hive_console_files=()
 loom_files=()
 skill_application_files=()
+skill_application_roots=()
 shared_tooling_files=()
 while IFS= read -r -d '' path; do
   if [[ ! -f "$repo_root/$path" || -L "$repo_root/$path" ]]; then
@@ -45,8 +46,14 @@ while IFS= read -r -d '' path; do
     agentic-ai/loom/*)
       loom_files+=("${path#agentic-ai/loom/}")
       ;;
-    agentic-ai/skills/*)
-      skill_application_files+=("${path#agentic-ai/skills/}")
+    .cortex/gizmo/dynamic-skills/*/scripts/* | .cortex/shared/dynamic-skills/*/scripts/* | .cortex/teams/*/dynamic-skills/*/scripts/*)
+      if [[ ! "$path" =~ ^(\.cortex/(gizmo|shared|teams/[^/]+)/dynamic-skills/[^/]+/scripts)/(.+)$ ]]; then
+        echo "format: invalid executable-skill path: $path" >&2
+        exit 1
+      fi
+      skill_root="${BASH_REMATCH[1]}"
+      skill_application_roots+=("$skill_root")
+      skill_application_files+=("${BASH_REMATCH[3]}")
       ;;
     tooling/eslint-rules/no-raw-object-arguments.js)
       shared_tooling_files+=("$path")
@@ -103,7 +110,11 @@ if [[ "${#loom_files[@]}" -gt 0 ]]; then
   format_changed_files "$default_config" "$repo_root/agentic-ai/loom" "${loom_files[@]}"
 fi
 if [[ "${#skill_application_files[@]}" -gt 0 ]]; then
-  format_changed_files "$repo_root/agentic-ai/skills/.prettierrc" "$repo_root/agentic-ai/skills" "${skill_application_files[@]}"
+  for index in "${!skill_application_files[@]}"; do
+    skill_root="${skill_application_roots[$index]}"
+    skill_path="${skill_application_files[$index]}"
+    format_changed_files "$repo_root/$skill_root/.prettierrc" "$repo_root/$skill_root" "$skill_path"
+  done
 fi
 if [[ "${#shared_tooling_files[@]}" -gt 0 ]]; then
   format_changed_files "$default_config" "$repo_root" "${shared_tooling_files[@]}"

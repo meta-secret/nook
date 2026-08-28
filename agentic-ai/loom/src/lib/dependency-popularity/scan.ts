@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { inspectExecutableSkillDependencies } from '../../executable-skills/repository.ts';
 import { LoomFailureCode, loomFailureDetail } from '../../loom-failure.ts';
 import {
   UntrustedYamlPropertyPresence,
@@ -16,10 +17,7 @@ export type ManifestDependencies = {
   readonly rustCrates: readonly string[];
 };
 
-const REPOSITORY_NPM_MANIFESTS = [
-  'agentic-ai/loom/package.json',
-  'agentic-ai/skills/package.json',
-] as const;
+const REPOSITORY_NPM_MANIFESTS = ['agentic-ai/loom/package.json'] as const;
 
 export function scanRepositoryManifests(
   repoRoot: string,
@@ -34,6 +32,15 @@ export function scanRepositoryManifests(
 
 export function scanRepositoryNpmPackages(repoRoot: string): readonly string[] {
   const names = new Set<string>();
+  const inspection = inspectExecutableSkillDependencies(repoRoot);
+  if (inspection.findings.length > 0) {
+    const failureArgs: LoomFailureDetailArgs = {
+      code: LoomFailureCode.ValidationFailed,
+      text: `Executable-skill package audit failed: ${JSON.stringify(inspection.findings)}`,
+    };
+    loomFailureDetail(failureArgs);
+  }
+  for (const name of inspection.npmPackages) names.add(name);
   for (const manifestPath of REPOSITORY_NPM_MANIFESTS) {
     for (const name of readNpmPackages(path.join(repoRoot, manifestPath))) {
       names.add(name);

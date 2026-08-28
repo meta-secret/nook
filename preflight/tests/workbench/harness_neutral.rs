@@ -54,7 +54,7 @@ fn read(path: &str) -> String {
         .unwrap_or_else(|error| panic!("failed to read {path}: {error}"))
 }
 
-fn files_under(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
+fn files_under(path: &Path, excluded_roots: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
     let root_metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
@@ -90,7 +90,9 @@ fn files_under(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
                 entry.path().display()
             );
             if file_type.is_dir() {
-                pending.push(entry.path());
+                if !excluded_roots.contains(&entry.path()) {
+                    pending.push(entry.path());
+                }
             } else if file_type.is_file() {
                 files.push(entry.path());
             }
@@ -98,6 +100,84 @@ fn files_under(path: &Path) -> anyhow::Result<Vec<PathBuf>> {
     }
     files.sort();
     Ok(files)
+}
+
+fn validated_executable_scripts(root: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let mut dependency_roots = Vec::new();
+    for owner in [
+        ".cortex/gizmo/dynamic-skills",
+        ".cortex/shared/dynamic-skills",
+        ".cortex/teams/ai/dynamic-skills",
+        ".cortex/teams/dev-core/dynamic-skills",
+        ".cortex/teams/security/dynamic-skills",
+        ".cortex/teams/sre/dynamic-skills",
+        ".cortex/teams/web-dev/dynamic-skills",
+    ] {
+        let owner_root = root.join(owner);
+        for entry in fs::read_dir(owner_root)? {
+            let skill_root = entry?.path();
+            let Some(slug) = skill_root.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            let scripts_root = skill_root.join("scripts");
+            if !is_kebab_slug(slug)
+                || !is_regular_file(&skill_root.join("SKILL.md"))
+                || !is_canonical_scripts_root(&scripts_root)
+            {
+                continue;
+            }
+            let dependency_root = scripts_root.join("node_modules");
+            match fs::symlink_metadata(&dependency_root) {
+                Ok(dependency_metadata) => {
+                    anyhow::ensure!(
+                        dependency_metadata.is_dir()
+                            && !dependency_metadata.file_type().is_symlink(),
+                        "executable-skill dependency root is unsafe: {}",
+                        dependency_root.display()
+                    );
+                    dependency_roots.push(dependency_root);
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+    }
+    Ok(dependency_roots)
+}
+
+fn is_kebab_slug(value: &str) -> bool {
+    !value.is_empty()
+        && value.split('-').all(|part| {
+            !part.is_empty()
+                && part
+                    .chars()
+                    .all(|character| character.is_ascii_lowercase() || character.is_ascii_digit())
+        })
+}
+
+fn is_regular_file(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+}
+
+fn is_regular_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+}
+
+fn is_canonical_scripts_root(path: &Path) -> bool {
+    [
+        ".gitignore",
+        ".prettierrc",
+        "bun.lock",
+        "eslint.config.js",
+        "executable-skill.json",
+        "package.json",
+        "tsconfig.json",
+    ]
+    .iter()
+    .all(|name| is_regular_file(&path.join(name)))
+        && ["src", "tests"]
+            .iter()
+            .all(|name| is_regular_directory(&path.join(name)))
 }
 
 fn line_prescribes_native_model_override(line: &str) -> bool {
@@ -221,9 +301,15 @@ fn gizmo_dispatches_complete_harness_neutral_team_contracts() {
 #[test]
 fn repository_agent_authority_is_harness_neutral() -> anyhow::Result<()> {
     let root = repository_root();
+    let executable_scripts = validated_executable_scripts(&root)?;
     let mut authority_files = vec![root.join("AGENTS.md")];
     for authority_root in [".cortex", ".github/prompts"] {
-        authority_files.extend(files_under(&root.join(authority_root))?);
+        let exclusions = if authority_root == ".cortex" {
+            executable_scripts.as_slice()
+        } else {
+            &[]
+        };
+        authority_files.extend(files_under(&root.join(authority_root), exclusions)?);
     }
     let mut findings = Vec::new();
     for path in authority_files {
@@ -277,7 +363,7 @@ fn harness_neutral_authority_detector_allows_harness_owned_explanation() {
 #[test]
 fn codex_agent_profiles_are_removed() -> anyhow::Result<()> {
     let profiles_root = repository_root().join(".codex").join("agents");
-    let toml_files = files_under(&profiles_root)?
+    let toml_files = files_under(&profiles_root, &[])?
         .into_iter()
         .filter(|path| {
             path.extension()
@@ -304,7 +390,7 @@ fn recursive_scan_rejects_toml_profile_file_symlink() -> anyhow::Result<()> {
     let profile_symlink = profiles_root.join("vendor-profile.toml");
     symlink(&profile_target, &profile_symlink)?;
 
-    let error = files_under(&profiles_root)
+    let error = files_under(&profiles_root, &[])
         .err()
         .context("TOML profile symlink must fail the recursive scan")?;
     assert!(
@@ -330,7 +416,7 @@ fn recursive_scan_rejects_directory_symlink() -> anyhow::Result<()> {
     let directory_symlink = authority_root.join("linked-authority");
     symlink(&target_directory, &directory_symlink)?;
 
-    let error = files_under(&authority_root)
+    let error = files_under(&authority_root, &[])
         .err()
         .context("directory symlink must fail the recursive scan")?;
     assert!(
@@ -339,4 +425,51 @@ fn recursive_scan_rejects_directory_symlink() -> anyhow::Result<()> {
         "unexpected directory symlink error: {error:#}"
     );
     Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn recursive_scan_excludes_only_validated_skill_dependencies() -> anyhow::Result<()> {
+    let fixture = TemporaryDirectory::create("skill-script-exclusion")?;
+    let cortex_root = fixture.path.join(".cortex");
+    let scripts_root = cortex_root.join("teams/ai/dynamic-skills/example/scripts");
+    let dependency_root = scripts_root.join("node_modules");
+    let unrelated_scripts = cortex_root.join("teams/ai/scripts");
+    fs::create_dir_all(&dependency_root)?;
+    fs::create_dir_all(&unrelated_scripts)?;
+    let target = fixture.path.join("target");
+    fs::write(&target, "forbidden authority")?;
+    symlink(&target, dependency_root.join("installed-bin"))?;
+    let authored_symlink = scripts_root.join("unsafe");
+    symlink(&target, &authored_symlink)?;
+
+    let exclusions = std::slice::from_ref(&dependency_root);
+    let error = files_under(&cortex_root, exclusions)
+        .err()
+        .context("authored executable scripts symlink must remain visible")?;
+    assert!(
+        error
+            .to_string()
+            .contains("dynamic-skills/example/scripts/unsafe"),
+        "unexpected authored-script scan error: {error:#}"
+    );
+    fs::remove_file(authored_symlink)?;
+    symlink(&target, unrelated_scripts.join("unsafe"))?;
+    let error = files_under(&cortex_root, exclusions)
+        .err()
+        .context("unrelated Cortex scripts symlink must remain visible")?;
+    assert!(
+        error.to_string().contains("teams/ai/scripts/unsafe"),
+        "unexpected excluded-root scan error: {error:#}"
+    );
+    Ok(())
+}
+
+#[test]
+fn sealed_authority_scan_uses_no_external_runtime() {
+    let source = include_str!("harness_neutral.rs");
+    let process_launch = ["Command", "::new"].concat();
+    let repository_cli = ["repository", "-cli.ts"].concat();
+    assert!(!source.contains(&process_launch));
+    assert!(!source.contains(&repository_cli));
 }

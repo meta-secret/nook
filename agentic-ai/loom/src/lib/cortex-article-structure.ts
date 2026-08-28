@@ -3,7 +3,7 @@ import type { Nodes, RootContent } from 'mdast';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { unified } from 'unified';
-import { executeCortexArticleStructureApplication } from '../../../skills/cortex-article-structure/src/application.ts';
+import { executeCortexArticleStructureApplication } from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/application.ts';
 import {
   CortexArticleContractKind,
   CortexArticleSemanticKind,
@@ -12,13 +12,13 @@ import {
   type CortexArticleDocument,
   type CortexArticleFinding,
   type CortexArticleSemanticBlock,
-} from '../../../skills/cortex-article-structure/src/domain.ts';
+} from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
 import type { CortexDocumentSource } from './cortex-document-structure.ts';
 
 export {
   CortexArticleFindingCode,
   type CortexArticleFinding,
-} from '../../../skills/cortex-article-structure/src/domain.ts';
+} from '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';
 
 export type AuditCortexArticleStructureArgs = {
   readonly documents: readonly CortexDocumentSource[];
@@ -64,10 +64,13 @@ export function auditCortexArticleStructure(
 function semanticDocument(
   request: SemanticDocumentRequest,
 ): CortexArticleDocument {
-  const root = unified()
-    .use(remarkParse)
-    .use(remarkGfm)
-    .parse(request.document.content);
+  const content = request.document.relativePath.endsWith('/SKILL.md')
+    ? request.document.content.replace(
+        /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/u,
+        (frontmatter) => frontmatter.replace(/[^\r\n]/gu, ' '),
+      )
+    : request.document.content;
+  const root = unified().use(remarkParse).use(remarkGfm).parse(content);
   const blocks = root.children.map((node) => {
     const blockRequest: SemanticBlockRequest = { node };
     return semanticBlock(blockRequest);

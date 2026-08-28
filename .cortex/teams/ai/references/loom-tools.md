@@ -95,9 +95,9 @@ task loom:run CONFIG=<request.yaml>
 
 ## Executable skill applications
 
-Semantic skill cards remain team-owned Markdown under `.cortex`. Deterministic
-implementations may live as ordinary Bun and TypeScript projects under
-`agentic-ai/skills`; those projects are not harness skill mirrors. Loom consumes
+Semantic skill cards remain team-owned Markdown under `.cortex`. A deterministic
+implementation is an ordinary Bun and TypeScript project in its owning
+`<skill>/scripts/` directory; it is not a harness skill mirror. Loom consumes
 the Cortex article application through a narrow in-process adapter. The
 application validates its request, audits it, independently verifies its
 result, and enforces contract bounds without command, network, write, agent, or

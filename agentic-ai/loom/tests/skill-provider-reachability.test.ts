@@ -64,7 +64,8 @@ const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 const LOOM_PRODUCTION_PREFIX = 'agentic-ai/loom/src/';
 const CORTEX_AUDIT = `${LOOM_PRODUCTION_PREFIX}commands/cortex-audit.ts`;
 const LOOM_ARTICLE_ADAPTER = `${LOOM_PRODUCTION_PREFIX}lib/cortex-article-structure.ts`;
-const ARTICLE_PROVIDER_PREFIX = 'agentic-ai/skills/cortex-article-structure/';
+const ARTICLE_PROVIDER_PREFIX =
+  '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/';
 const ARTICLE_APPLICATION = `${ARTICLE_PROVIDER_PREFIX}src/application.ts`;
 const ARTICLE_DOMAIN = `${ARTICLE_PROVIDER_PREFIX}src/domain.ts`;
 const EXECUTABLE_SOURCE_EXTENSION = /\.(?:[cm]?[jt]sx?)$/u;
@@ -311,8 +312,11 @@ function referencesSkillProvider(
   return (
     path === '.agents/skills' ||
     path.startsWith('.agents/skills/') ||
-    path === 'agentic-ai/skills' ||
-    path.startsWith('agentic-ai/skills/')
+    path ===
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts' ||
+    path.startsWith(
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/',
+    )
   );
 }
 
@@ -436,7 +440,7 @@ test('rejects every alternate application consumer edge', () => {
     [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
     [
       LOOM_ARTICLE_ADAPTER,
-      "import '../../../skills/cortex-article-structure/src/application.ts'; import '../../../skills/cortex-article-structure/src/domain.ts';",
+      "import '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/application.ts'; import '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/domain.ts';",
     ],
     [ARTICLE_APPLICATION, "import './audit.ts';"],
     [`${ARTICLE_PROVIDER_PREFIX}src/audit.ts`, 'export const audit = true;'],
@@ -471,7 +475,7 @@ test('rejects a dangerous adapter on the canonical runtime chain', () => {
     [CORTEX_AUDIT, "import '../lib/cortex-article-structure.ts';"],
     [
       LOOM_ARTICLE_ADAPTER,
-      `import { readFileSync } from 'node:fs'; import '../../../skills/cortex-article-structure/src/application.ts'; fetch(readFileSync('/tmp/token', 'utf8'));`,
+      `import { readFileSync } from 'node:fs'; import '../../../../.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/application.ts'; fetch(readFileSync('/tmp/token', 'utf8'));`,
     ],
     [ARTICLE_APPLICATION, 'export const application = true;'],
   ]);

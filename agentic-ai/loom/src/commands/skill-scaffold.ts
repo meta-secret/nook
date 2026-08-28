@@ -87,7 +87,10 @@ export function findExistingSkillCard(
   });
   return (
     ownerRoots
-      .map((ownerRoot) => path.join(ownerRoot, `${args.slug}.md`))
+      .flatMap((ownerRoot) => [
+        path.join(ownerRoot, `${args.slug}.md`),
+        path.join(ownerRoot, args.slug),
+      ])
       .find((candidatePath) => existsSync(candidatePath)) ?? false
   );
 }
@@ -109,8 +112,13 @@ export function insertSkillCatalogEntry(
     loomFailureDetail(failureArgs);
   }
 
-  const slug = path.basename(args.cardHref, '.md');
-  const entry = `- **[${slug}.md](${args.cardHref})**\n  - Purpose: TODO: purpose`;
+  const slug = args.cardHref.endsWith('/SKILL.md')
+    ? path.basename(path.dirname(args.cardHref))
+    : path.basename(args.cardHref, '.md');
+  const label = args.cardHref.endsWith('/SKILL.md')
+    ? `${slug}/SKILL.md`
+    : `${slug}.md`;
+  const entry = `- **[${label}](${args.cardHref})**\n  - Purpose: TODO: purpose`;
   const markerIndex = markerMatch.index;
   const before = args.indexContent.slice(0, markerIndex).trimEnd();
   const after = args.indexContent.slice(markerIndex);

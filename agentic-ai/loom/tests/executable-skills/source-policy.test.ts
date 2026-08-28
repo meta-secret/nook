@@ -8,7 +8,8 @@ type AnalyzeFixtureRequest = {
 function analyzeFixture(request: AnalyzeFixtureRequest): readonly string[] {
   const analysisRequest = {
     ...request,
-    relativePath: 'agentic-ai/skills/fixture/src/runner.ts',
+    relativePath:
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/runner.ts',
   };
   return analyzeExecutableSkillSource(analysisRequest).moduleSpecifiers;
 }
@@ -206,10 +207,11 @@ describe('executable skill source policy', () => {
 
   test('rejects noncanonical source paths and invalid TypeScript syntax', () => {
     const noncanonicalPaths = [
-      'agentic-ai/skills/fixture/src/run.tsx',
-      'agentic-ai/skills/fixture/src/../run.ts',
-      'agentic-ai\\skills\\fixture\\src\\run.ts',
-      '/agentic-ai/skills/fixture/src/run.ts',
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/run.tsx',
+      '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/../run.ts',
+      '.cortex\\teams\\ai\\dynamic-skills\\cortex-article-structure\\scripts\\fixture\\src\\run.ts',
+      '/.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/fixture/src/run.ts',
+      '.cortex/teams/a1/dynamic-skills/cortex-article-structure/scripts/src/run.ts',
       'agentic-ai/loom/src/run.ts',
     ];
     for (const relativePath of noncanonicalPaths) {
@@ -223,7 +225,8 @@ describe('executable skill source policy', () => {
     }
 
     const invalidSyntaxRequest = {
-      relativePath: 'agentic-ai/skills/fixture/src/run.ts',
+      relativePath:
+        '.cortex/teams/ai/dynamic-skills/cortex-article-structure/scripts/src/fixture/run.ts',
       source: "const view = <div>{fetch('https://example.com')}</div>;",
     };
     expect(() => analyzeExecutableSkillSource(invalidSyntaxRequest)).toThrow(
