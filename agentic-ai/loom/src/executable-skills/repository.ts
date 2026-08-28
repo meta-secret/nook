@@ -166,28 +166,21 @@ export function inspectExecutableSkillDependencies(
     repoRoot,
     tracked,
   };
-  const findings = auditExecutableSkillPackageFiles(request);
-  if (findings.length > 0) return { findings, npmPackages: [] };
-  const names = new Set<string>();
-  for (const skillPackage of executableSkillPackages(tracked)) {
-    const document = JSON.parse(
-      readFileSync(
-        path.join(repoRoot, skillPackage.scriptsRoot, 'package.json'),
-        'utf8',
-      ),
-    ) as { readonly devDependencies: Readonly<Record<string, string>> };
-    for (const name of Object.keys(document.devDependencies)) {
-      if (!name.startsWith('@types/')) names.add(name);
-    }
-  }
-  return { findings, npmPackages: [...names].sort() };
+  return inspectExecutableSkillPackageFiles(request);
 }
 
 export function auditExecutableSkillPackageFiles(
   request: AuditExecutableSkillPackageFilesRequest,
 ): readonly ExecutableSkillPackageFinding[] {
+  return inspectExecutableSkillPackageFiles(request).findings;
+}
+
+function inspectExecutableSkillPackageFiles(
+  request: AuditExecutableSkillPackageFilesRequest,
+): ExecutableSkillDependencyInspection {
   const { repoRoot, tracked } = request;
   const collector: FindingCollector = { findings: [], bytes: 0 };
+  const npmPackages = new Set<string>();
   for (const file of tracked) {
     if (
       ANY_OWNER_PACKAGE.test(file.path) &&
@@ -216,22 +209,27 @@ export function auditExecutableSkillPackageFiles(
     }
     const packageRequest: AuditPackageRequest = {
       collector,
+      npmPackages,
       repoRoot,
       skillPackage,
       tracked,
     };
     auditPackage(packageRequest);
   }
-  return collector.findings;
+  return {
+    findings: collector.findings,
+    npmPackages: collector.findings.length === 0 ? [...npmPackages].sort() : [],
+  };
 }
 
 type AuditPackageRequest = AuditExecutableSkillPackageFilesRequest & {
   readonly collector: FindingCollector;
+  readonly npmPackages: Set<string>;
   readonly skillPackage: ExecutableSkillPackage;
 };
 
 function auditPackage(request: AuditPackageRequest): void {
-  const { collector, repoRoot, skillPackage, tracked } = request;
+  const { collector, npmPackages, repoRoot, skillPackage, tracked } = request;
   const packageFiles = tracked.filter(
     (file) =>
       file.path === skillPackage.skillPath ||
@@ -312,6 +310,7 @@ function auditPackage(request: AuditPackageRequest): void {
   if (documentsAreSafe) {
     const documentsRequest: AuditDocumentsRequest = {
       collector,
+      npmPackages,
       repoRoot,
       skillPackage,
     };
@@ -321,12 +320,13 @@ function auditPackage(request: AuditPackageRequest): void {
 
 type AuditDocumentsRequest = {
   readonly collector: FindingCollector;
+  readonly npmPackages: Set<string>;
   readonly repoRoot: string;
   readonly skillPackage: ExecutableSkillPackage;
 };
 
 function auditDocuments(request: AuditDocumentsRequest): void {
-  const { collector, repoRoot, skillPackage } = request;
+  const { collector, npmPackages, repoRoot, skillPackage } = request;
   const skill = readFileSync(
     path.join(repoRoot, skillPackage.skillPath),
     'utf8',
@@ -382,6 +382,12 @@ function auditDocuments(request: AuditDocumentsRequest): void {
   const manifest = parseJson(manifestRequest);
   const lock = parseJson(lockRequest);
   if (packageDocument === false || manifest === false || lock === false) return;
+  const dependencies = property(packageDocument)('devDependencies');
+  if (isRecord(dependencies)) {
+    for (const name of Object.keys(dependencies)) {
+      if (!name.startsWith('@types/')) npmPackages.add(name);
+    }
+  }
   const packageAudit: AuditPackageDocumentRequest = {
     collector,
     document: packageDocument,

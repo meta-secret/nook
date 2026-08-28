@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, spyOn, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -32,10 +32,16 @@ const thresholds = {
 describe('scanRepositoryNpmPackages', () => {
   test('reads Loom and validated executable-application dependencies', () => {
     const repositoryRoot = path.join(import.meta.dir, '../../..');
+    const parse = spyOn(JSON, 'parse');
     const names = scanRepositoryNpmPackages(repositoryRoot);
     expect(names).toContain('diff');
     expect(names).toContain('typescript');
     expect(names.some((name) => name.startsWith('@types/'))).toBe(false);
+    const packageSnapshots = parse.mock.calls.filter(([source]) =>
+      String(source).includes('@nook/cortex-article-structure-skill'),
+    );
+    expect(packageSnapshots).toHaveLength(1);
+    parse.mockRestore();
   });
 
   test('fails package audit before reading an unsafe manifest', () => {
@@ -52,9 +58,15 @@ describe('scanRepositoryNpmPackages', () => {
     const addOptions = { cmd: ['git', 'add', '--', '.cortex'], cwd: root };
     Bun.spawnSync(initOptions);
     Bun.spawnSync(addOptions);
-    expect(() => scanRepositoryNpmPackages(root)).toThrow(
-      'Executable-skill package audit failed',
-    );
+    let detail = '';
+    try {
+      scanRepositoryNpmPackages(root);
+    } catch (error) {
+      detail = error instanceof Error ? error.message : '';
+    }
+    expect(detail).toContain('Executable-skill package audit failed');
+    expect(Buffer.byteLength(detail)).toBeLessThanOrEqual(35_000);
+    expect(detail).not.toContain('/dev/null');
   });
 });
 
