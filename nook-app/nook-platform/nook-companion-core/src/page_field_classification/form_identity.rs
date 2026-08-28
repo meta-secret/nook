@@ -44,6 +44,7 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             "send money",
             "financial transaction",
             "authorize transaction",
+            "transaction authorization",
         ],
     );
     let locks_account_or_session = contains_any_word(&identity, &["lock", "freeze"])
@@ -184,6 +185,7 @@ mod tests {
             "Send money",
             "Financial transaction",
             "Authorize transaction",
+            "Transaction authorization",
             "/auth/logoff",
             "Log off",
             "signoff",

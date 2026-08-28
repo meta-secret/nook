@@ -620,6 +620,7 @@ mod tests {
             "Send money",
             "Financial transaction",
             "Authorize transaction",
+            "Transaction authorization",
         ] {
             for observed in [
                 detailed_one_time_code_control(identity, "", "Continue"),
