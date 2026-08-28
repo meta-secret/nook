@@ -1,24 +1,8 @@
 use super::wasm_bindgen;
 
 #[wasm_bindgen(typescript_custom_section)]
-const AUTHENTICATION_PAGE_OBSERVATION_TYPESCRIPT: &str = r"
-export interface AuthenticationPageObservation {
-    usernameFieldCount: number;
-    currentPasswordFieldCount: number;
-    newPasswordFieldCount: number;
-    genericPasswordFieldCount: number;
-    oneTimeCodeFieldCount: number;
-    oneTimeCodeProgression: 'advance-control-required' | 'auto-submit-observed';
-    manualCheckpoint: 'absent' | 'present';
-    enrollmentEvidence: 'absent' | 'authenticator-setup' | 'backup-codes' | 'authenticator-setup-and-backup-codes';
-    advanceControl: 'absent' | 'present';
-    passkey:
-        | { kind: 'absent' }
-        | { kind: 'control' }
-        | { kind: 'vault-accounts'; accountCount: number }
-        | { kind: 'control-and-vault-accounts'; accountCount: number };
-}
-";
+const AUTHENTICATION_PAGE_OBSERVATION_TYPESCRIPT: &str =
+    nook_companion_core::AUTHENTICATION_WORKFLOW_COMPATIBILITY_TYPESCRIPT;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -36,42 +20,19 @@ pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObserv
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new_from_js(
-        #[wasm_bindgen(unchecked_param_type = "AuthenticationPageObservation")]
-        observation: wasm_bindgen::JsValue,
-    ) -> Result<Self, wasm_bindgen::JsError> {
-        let observation = decode_authentication_page_observation(observation)?;
-        Ok(Self::from_core_observation(observation))
+    pub fn new(
+        observation: nook_companion_core::AuthenticationPageObservationCompatibility,
+    ) -> Self {
+        Self::from_core_observation(observation.into_observation())
     }
 
     /// Construct page evidence from a detailed, policy-checked control observation.
-    #[wasm_bindgen(js_name = from_detailed_control_observation)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn from_detailed_control_observation_from_js(
-        #[wasm_bindgen(unchecked_param_type = "AuthenticationPageObservation")]
-        observation: wasm_bindgen::JsValue,
+    pub fn from_detailed_control_observation(
+        observation: nook_companion_core::AuthenticationPageObservationCompatibility,
         control: nook_companion_core::AuthenticationAdvanceControlObservation,
-    ) -> Result<Self, wasm_bindgen::JsError> {
-        let observation = decode_authentication_page_observation(observation)?;
-        Ok(Self::from_core_observation_with_detailed_control(
-            observation,
-            control,
-        ))
-    }
-}
-
-fn decode_authentication_page_observation(
-    observation: wasm_bindgen::JsValue,
-) -> Result<nook_core::AuthenticationPageObservation, wasm_bindgen::JsError> {
-    serde_wasm_bindgen::from_value(observation)
-        .map_err(|_| wasm_bindgen::JsError::new("authentication page observation is malformed"))
-}
-
-impl NookAuthenticationPageObservation {
-    #[cfg(test)]
-    #[allow(clippy::needless_pass_by_value)]
-    pub(crate) fn new(observation: nook_core::AuthenticationPageObservation) -> Self {
-        Self::from_core_observation(observation)
+    ) -> Self {
+        Self::from_core_observation_with_detailed_control(observation.into_observation(), control)
     }
 }
 

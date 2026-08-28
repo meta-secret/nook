@@ -359,13 +359,14 @@ mod tests {
         assert!(looks_like_username_field(&username));
         assert!(looks_like_login_advance_control_label("signin"));
 
-        let login =
-            NookAuthenticationPageObservation::new(nook_core::AuthenticationPageObservation {
+        let login = NookAuthenticationPageObservation::from_core_observation(
+            nook_core::AuthenticationPageObservation {
                 username_field_count: 1,
                 current_password_field_count: 1,
                 advance_control: nook_core::AuthenticationAdvanceControlEvidence::Present,
                 ..Default::default()
-            });
+            },
+        );
         assert_eq!(authentication_form_observation_priority(&login), 4);
         let mut observations = NookAuthenticationPageObservations::new();
         observations.add(&login);
