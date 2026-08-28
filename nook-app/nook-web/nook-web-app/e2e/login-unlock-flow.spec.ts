@@ -185,12 +185,13 @@ test.describe('login unlock flow (local-first)', () => {
       () => document.activeElement?.getAttribute('data-testid') ?? '',
     )
     expect(focusAfterTab).not.toBe('login-review-identities')
-    await page.evaluate(
-      () =>
-        new Promise<void>((resolve) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
-        ),
-    )
+    await page.evaluate(async () => {
+      for (let frame = 0; frame < 35; frame += 1) {
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        )
+      }
+    })
     expect(
       await page.evaluate(
         () => document.activeElement?.getAttribute('data-testid') ?? '',

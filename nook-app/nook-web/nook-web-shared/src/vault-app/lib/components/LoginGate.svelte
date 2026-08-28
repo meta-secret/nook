@@ -220,21 +220,28 @@
   }
 
   async function focusIdentityContextWhenAvailable(): Promise<void> {
-    let reloadObserved = false
     for (let frame = 0; frame < 30; frame += 1) {
       await new Promise<void>((resolve) =>
         requestAnimationFrame(() => resolve()),
       )
+
+      const activeElement = document.activeElement
+      if (
+        activeElement !== document.body &&
+        activeElement !== document.documentElement
+      ) {
+        return
+      }
+
       if (
         document.querySelector('[data-testid="login-vault-identity-loading"]')
       ) {
-        reloadObserved = true
         continue
       }
       const remountedButton = document.querySelector<HTMLButtonElement>(
         '[data-testid="login-review-identities"]',
       )
-      if (remountedButton && (reloadObserved || frame === 29)) {
+      if (remountedButton) {
         remountedButton.focus()
         return
       }
