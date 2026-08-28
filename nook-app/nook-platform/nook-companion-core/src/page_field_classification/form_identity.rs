@@ -36,10 +36,21 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
             "place order",
             "confirm order",
             "cart",
+            "transfer",
+            "wire",
+            "withdraw",
+            "withdrawal",
+            "deposit",
+            "send money",
+            "financial transaction",
+            "authorize transaction",
         ],
     );
+    let locks_account_or_session = contains_any_word(&identity, &["lock", "freeze"])
+        && contains_any_word(&identity, &["account", "session"]);
     changes_account_detail
         || transaction_action
+        || locks_account_or_session
         || contains_any_word(
             &identity,
             &[
@@ -53,6 +64,10 @@ pub(super) fn form_identity_indicates_destructive_action(form_identity: &str) ->
                 "log out",
                 "signout",
                 "sign out",
+                "logoff",
+                "log off",
+                "signoff",
+                "sign off",
                 "revoke",
                 "suspend",
                 "close account",
@@ -150,7 +165,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn unconditional_vetoes_cover_account_detail_and_transaction_actions() {
+    fn unconditional_vetoes_cover_account_detail_transaction_and_termination_actions() {
         for identity in [
             "/auth/change-email",
             "Update username",
@@ -161,6 +176,20 @@ mod tests {
             "/checkout/confirm",
             "Purchase",
             "Place order",
+            "Transfer funds",
+            "Wire funds",
+            "Withdraw",
+            "Withdrawal",
+            "Deposit",
+            "Send money",
+            "Financial transaction",
+            "Authorize transaction",
+            "/auth/logoff",
+            "Log off",
+            "signoff",
+            "Sign off",
+            "Lock account",
+            "Freeze session",
         ] {
             assert!(form_identity_indicates_destructive_action(identity));
         }
@@ -171,6 +200,10 @@ mod tests {
             "/account/details/update-credentials",
             "Sign in",
             "signin",
+            "login",
+            "log in",
+            "lock password field",
+            "freeze animation",
         ] {
             assert!(!form_identity_indicates_destructive_action(identity));
         }

@@ -271,6 +271,35 @@ impl AuthenticationPageObservationFactsBatch {
 mod tests {
     use super::*;
 
+    fn detailed_one_time_code_control(
+        form_identity: &str,
+        destination_identity: &str,
+        label: &str,
+    ) -> AuthenticationPageObservationFacts {
+        AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1,
+                ..Default::default()
+            },
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+                AuthenticationAdvanceControlObservation {
+                    actionability: crate::PageControlActionability::Actionable,
+                    ownership: crate::PageControlOwnership::OwnedForm,
+                    semantics: crate::PageControlSemantics::SemanticSubmit,
+                    authentication_username: crate::AuthenticationUsernameEvidence::Absent,
+                    password_field_count: 0,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 1,
+                    semantic_submit_control_count: 1,
+                    form_identity: form_identity.to_owned(),
+                    destination_identity: destination_identity.to_owned(),
+                    label: label.to_owned(),
+                },
+            ),
+            ..Default::default()
+        }
+    }
+
     #[test]
     fn rejects_semantic_evidence_outside_rust_vocabulary() {
         let input = serde_json::json!({
@@ -548,5 +577,120 @@ mod tests {
             .classify(),
             AuthenticationWorkflowMatch::Rejected
         );
+    }
+
+    #[test]
+    fn session_termination_controls_never_advance_authentication() {
+        let control = |form_identity: &str, destination_identity: &str, label: &str| {
+            AuthenticationAdvanceControlObservation {
+                actionability: crate::PageControlActionability::Actionable,
+                ownership: crate::PageControlOwnership::OwnedForm,
+                semantics: crate::PageControlSemantics::SemanticSubmit,
+                authentication_username: crate::AuthenticationUsernameEvidence::Absent,
+                password_field_count: 1,
+                new_password_field_count: 0,
+                one_time_code_field_count: 0,
+                semantic_submit_control_count: 1,
+                form_identity: form_identity.to_owned(),
+                destination_identity: destination_identity.to_owned(),
+                label: label.to_owned(),
+            }
+        };
+        for observed in [
+            control("/auth/logoff", "", "Log off"),
+            control("signoff", "", "Continue"),
+            control("", "/auth/logoff", "Continue"),
+            control("auth", "", "Sign off"),
+        ] {
+            assert_eq!(
+                observed.classify(),
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+            );
+        }
+    }
+
+    #[test]
+    fn financial_one_time_code_controls_cannot_outrank_a_real_login() -> anyhow::Result<()> {
+        for identity in [
+            "Transfer funds",
+            "Wire funds",
+            "Withdraw",
+            "Withdrawal",
+            "Deposit",
+            "Send money",
+            "Financial transaction",
+            "Authorize transaction",
+        ] {
+            for observed in [
+                detailed_one_time_code_control(identity, "", "Continue"),
+                detailed_one_time_code_control("", identity, "Continue"),
+                detailed_one_time_code_control("", "", identity),
+            ] {
+                assert_eq!(
+                    observed.into_observation().advance_control,
+                    AuthenticationAdvanceControlEvidence::Absent
+                );
+            }
+        }
+
+        let authentication_code = detailed_one_time_code_control("auth", "", "Verify code");
+        assert_eq!(
+            authentication_code
+                .clone()
+                .into_observation()
+                .advance_control,
+            AuthenticationAdvanceControlEvidence::Present
+        );
+        let code_snapshot = AuthenticationPageObservationFactsBatch {
+            observations: vec![authentication_code],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(
+            code_snapshot.kind,
+            crate::authentication_workflow::AuthenticationWorkflowKind::TotpChallenge
+        );
+
+        let login = AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                username_field_count: 1,
+                generic_password_field_count: 1,
+                ..Default::default()
+            },
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::Observed(
+                AuthenticationAdvanceControlObservation {
+                    actionability: crate::PageControlActionability::Actionable,
+                    ownership: crate::PageControlOwnership::OwnedForm,
+                    semantics: crate::PageControlSemantics::SemanticSubmit,
+                    authentication_username: crate::AuthenticationUsernameEvidence::Strong,
+                    password_field_count: 1,
+                    new_password_field_count: 0,
+                    one_time_code_field_count: 0,
+                    semantic_submit_control_count: 1,
+                    form_identity: "login".to_owned(),
+                    destination_identity: String::new(),
+                    label: "Sign in".to_owned(),
+                },
+            ),
+            ..Default::default()
+        };
+        let snapshot = AuthenticationPageObservationFactsBatch {
+            observations: vec![
+                detailed_one_time_code_control("", "", "Transfer funds"),
+                login,
+            ],
+        }
+        .classify()
+        .snapshot()?;
+        assert_eq!(
+            snapshot.kind,
+            crate::authentication_workflow::AuthenticationWorkflowKind::Login
+        );
+        assert_eq!(
+            snapshot.action,
+            crate::authentication_workflow::AuthenticationWorkflowAction::ContinueWithNook
+        );
+        assert_eq!(snapshot.observation_index, 1);
+        Ok(())
     }
 }
