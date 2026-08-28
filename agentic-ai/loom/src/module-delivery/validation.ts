@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   isValidTaskResourceClaim,
   taskResourcePatternsOverlap,
@@ -6,7 +5,8 @@ import {
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { MODULE_EXPERT_CATALOG } from '../module-experts/catalog.ts';
 import type { ModuleExpertProfile } from '../module-experts/catalog.ts';
-import { decodeModuleDeliveryPlan } from './codec.ts';
+import { TeamKey } from '../team-agents/catalog.ts';
+import { decodeModuleDeliveryPlan, moduleDeliveryPlanDigest } from './codec.ts';
 import {
   MAX_MODULE_DELIVERY_AGENT_DEPTH,
   MAX_MODULE_DELIVERY_ATTEMPTS,
@@ -21,23 +21,26 @@ import {
 import type {
   ModuleDeliveryEdgeContract,
   ModuleDeliveryIssue,
-  ModuleDeliveryNode,
-  ModuleDeliveryPlan,
+  ModuleDeliveryNodeV2,
+  ModuleDeliveryPlanV2,
   ModuleDeliveryPlanValidation,
+  ModuleDeliveryExecutionPrecedence,
 } from './domain.ts';
+import * as claimContainment from './resource-claim-containment.ts';
 
 type ValidationState = {
-  readonly plan: ModuleDeliveryPlan;
+  readonly plan: ModuleDeliveryPlanV2;
   readonly issues: ModuleDeliveryIssue[];
-  readonly nodesById: Map<string, ModuleDeliveryNode>;
+  readonly nodesById: Map<string, ModuleDeliveryNodeV2>;
 };
 
 type DependencyReachability = ReadonlyMap<string, ReadonlySet<string>>;
+type ExecutionDependencies = ReadonlyMap<string, ReadonlySet<string>>;
 
 type NodeValidationRequest = {
   readonly state: ValidationState;
   readonly path: string;
-  readonly node: ModuleDeliveryNode;
+  readonly node: ModuleDeliveryNodeV2;
 };
 
 type IssueRequest = {
@@ -56,7 +59,7 @@ type UniqueListRequest = {
 type ModuleScopeRequest = {
   readonly state: ValidationState;
   readonly path: string;
-  readonly node: ModuleDeliveryNode;
+  readonly node: ModuleDeliveryNodeV2;
   readonly profile: ModuleExpertProfile;
 };
 
@@ -70,8 +73,8 @@ type ProfileProtectedWriteRequest = ModuleScopeRequest & {
 };
 
 type NodePair = {
-  readonly first: ModuleDeliveryNode;
-  readonly second: ModuleDeliveryNode;
+  readonly first: ModuleDeliveryNodeV2;
+  readonly second: ModuleDeliveryNodeV2;
 };
 
 type ResourceConflictRequest = NodePair & {
@@ -84,8 +87,8 @@ type ClaimPair = {
 };
 
 type ReachabilityRequest = {
-  readonly state: ValidationState;
   readonly order: readonly string[];
+  readonly dependencies: ExecutionDependencies;
 };
 
 type ConcurrentClaimsRequest = {
@@ -114,16 +117,7 @@ type ModuleDeliveryTopology = {
   readonly order: readonly string[];
   readonly waves: readonly (readonly string[])[];
   readonly reachability: DependencyReachability;
-};
-
-type DigestNodeLookup = {
-  readonly plan: ModuleDeliveryPlan;
-  readonly taskId: string;
-};
-
-type DigestContractLookup = {
-  readonly plan: ModuleDeliveryPlan;
-  readonly key: string;
+  readonly executionPrecedence: readonly ModuleDeliveryExecutionPrecedence[];
 };
 
 export function decodeAndValidateModuleDeliveryPlan(
@@ -136,10 +130,10 @@ export function decodeAndValidateModuleDeliveryPlan(
 }
 
 function validateDecodedModuleDeliveryPlan(
-  plan: ModuleDeliveryPlan,
+  plan: ModuleDeliveryPlanV2,
 ): ModuleDeliveryPlanValidation {
   const issues: ModuleDeliveryIssue[] = [];
-  const nodesById = new Map<string, ModuleDeliveryNode>();
+  const nodesById = new Map<string, ModuleDeliveryNodeV2>();
   const state: ValidationState = { plan, issues, nodesById };
   validateLimits(state);
   validateCommit(state);
@@ -149,18 +143,14 @@ function validateDecodedModuleDeliveryPlan(
   validateEdgeContracts(state);
   const topology = buildTopology(state);
   if (!topology) return rejected(state);
-  const concurrentRequest: ConcurrentClaimsRequest = {
-    state,
-    reachability: topology.reachability,
-  };
-  validateConcurrentClaims(concurrentRequest);
   if (issues.length > 0) return rejected(state);
   return {
     status: ModuleDeliveryValidationStatus.Accepted,
     plan,
-    planDigest: digestPlan(plan),
+    planDigest: moduleDeliveryPlanDigest(plan),
     topologicalOrder: topology.order,
     waves: topology.waves,
+    executionPrecedence: topology.executionPrecedence,
   };
 }
 
@@ -273,6 +263,7 @@ function validateNodes(state: ValidationState): void {
       validateModuleScope(scopeRequest);
     }
     const nodeRequest: NodeValidationRequest = { state, path, node };
+    validateOwnership(nodeRequest);
     validateNodeLists(nodeRequest);
     validateDependencies(nodeRequest);
     validateTaskKind(nodeRequest);
@@ -283,7 +274,41 @@ function validateNodes(state: ValidationState): void {
   }
 }
 
+function validateOwnership(request: NodeValidationRequest): void {
+  if (request.node.acceptanceOwner !== request.node.functionalOwner) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.AcceptanceOwnershipMismatch,
+      path: `${request.path}.acceptanceOwner`,
+      message: 'Acceptance owner must be the recorded functional owner.',
+    };
+    issue(issueRequest);
+  }
+  if (
+    request.node.team !== request.node.functionalOwner &&
+    request.node.acceptanceOwner === request.node.team
+  ) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.AcceptanceOwnershipMismatch,
+      path: `${request.path}.acceptanceOwner`,
+      message: 'An expertise-provider team cannot accept its own handoff.',
+    };
+    issue(issueRequest);
+  }
+}
+
 function validateModuleScope(request: ModuleScopeRequest): void {
+  const expectedTeam = expertTeam(request.profile);
+  if (request.node.team !== expectedTeam) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.TeamOwnershipMismatch,
+      path: `${request.path}.team`,
+      message: `${request.node.expert} requires team ${expectedTeam}.`,
+    };
+    issue(issueRequest);
+  }
   if (!request.profile.moduleRoots.includes(request.node.moduleRoot)) {
     const issueRequest: IssueRequest = {
       state: request.state,
@@ -313,6 +338,18 @@ function validateModuleScope(request: ModuleScopeRequest): void {
     };
     validateProfileProtectedWrite(protectedRequest);
   }
+}
+
+function expertTeam(profile: ModuleExpertProfile): TeamKey {
+  if (profile.canonicalContextPaths.includes('.cortex/teams/ai/AGENTS.md'))
+    return TeamKey.Ai;
+  if (profile.canonicalContextPaths.includes('.cortex/teams/web-dev/AGENTS.md'))
+    return TeamKey.WebDevelopment;
+  if (
+    profile.canonicalContextPaths.includes('.cortex/teams/dev-core/AGENTS.md')
+  )
+    return TeamKey.DevelopmentCore;
+  throw new Error(`Registered expert ${profile.name} has no canonical team.`);
 }
 
 function validateProfileProtectedWrite(
@@ -352,6 +389,10 @@ function validateNodeLists(request: NodeValidationRequest): void {
     [`${request.path}.resources.read`, request.node.resources.read],
     [`${request.path}.resources.write`, request.node.resources.write],
     [
+      `${request.path}.resources.evidenceSurface`,
+      request.node.resources.evidenceSurface,
+    ],
+    [
       `${request.path}.parentOwnedExclusions`,
       request.node.parentOwnedExclusions,
     ],
@@ -376,6 +417,17 @@ function validateNodeLists(request: NodeValidationRequest): void {
       values: request.node.baseline.providerTaskIds,
     };
     validateUnique(baselineRequest);
+  }
+  if (request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
+    const producerIds = request.node.evidenceInput.expectedProducers.map(
+      ({ taskId }) => taskId,
+    );
+    const producerRequest: UniqueListRequest = {
+      state: request.state,
+      path: `${request.path}.evidenceInput.expectedProducers`,
+      values: producerIds,
+    };
+    validateUnique(producerRequest);
   }
 }
 
@@ -403,12 +455,13 @@ function validateDependencies(request: NodeValidationRequest): void {
 
 function validateTaskKind(request: NodeValidationRequest): void {
   const writes = request.node.resources.write.length;
-  if (request.node.kind === ModuleDeliveryTaskKind.ReadOnly && writes !== 0) {
+  const evidenceClaims = request.node.resources.evidenceSurface;
+  if (request.node.kind !== ModuleDeliveryTaskKind.Write && writes !== 0) {
     const issueRequest: IssueRequest = {
       state: request.state,
       code: ModuleDeliveryIssueCode.InvalidField,
       path: `${request.path}.resources.write`,
-      message: 'Read-only tasks must have an empty write list.',
+      message: 'Non-writing tasks must have an empty write list.',
     };
     issue(issueRequest);
   }
@@ -420,6 +473,87 @@ function validateTaskKind(request: NodeValidationRequest): void {
       message: 'Write tasks must claim at least one write resource.',
     };
     issue(issueRequest);
+  }
+  const evidenceMismatch =
+    (request.node.kind === ModuleDeliveryTaskKind.ReadOnly &&
+      evidenceClaims.length === 0) ||
+    (request.node.kind === ModuleDeliveryTaskKind.Write &&
+      evidenceClaims.length !== 0);
+  if (evidenceMismatch) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.EvidenceSurfaceMismatch,
+      path: `${request.path}.resources.evidenceSurface`,
+      message:
+        request.node.kind === ModuleDeliveryTaskKind.ReadOnly
+          ? 'Read-only tasks require a non-empty evidence surface.'
+          : 'Write tasks must have an empty evidence surface.',
+    };
+    issue(issueRequest);
+  }
+  if (request.node.kind === ModuleDeliveryTaskKind.EvidenceSynthesis) {
+    validateEvidenceSynthesis(request);
+  }
+  for (const evidenceClaim of claimContainment.uncoveredEvidenceClaims(
+    request.node.resources,
+  )) {
+    const issueRequest: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.EvidenceSurfaceMismatch,
+      path: `${request.path}.resources.evidenceSurface`,
+      message: `Evidence claim ${evidenceClaim} must be covered by a declared repository read claim.`,
+    };
+    issue(issueRequest);
+  }
+}
+
+function validateEvidenceSynthesis(request: NodeValidationRequest): void {
+  if (
+    request.node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis ||
+    (request.node.resources.read.length === 0 &&
+      request.node.resources.write.length === 0 &&
+      request.node.resources.evidenceSurface.length === 0)
+  ) {
+    if (request.node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis) return;
+  } else {
+    const resourceIssue: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.EvidenceInputMismatch,
+      path: `${request.path}.resources`,
+      message: 'Evidence synthesis requires empty repository claims.',
+    };
+    issue(resourceIssue);
+  }
+  if (request.node.kind !== ModuleDeliveryTaskKind.EvidenceSynthesis) return;
+  const expectedIds = request.node.evidenceInput.expectedProducers
+    .map(({ taskId }) => taskId)
+    .sort();
+  const dependencyIds = [...request.node.dependencies].sort();
+  if (JSON.stringify(expectedIds) !== JSON.stringify(dependencyIds)) {
+    const dependencyIssue: IssueRequest = {
+      state: request.state,
+      code: ModuleDeliveryIssueCode.EvidenceInputMismatch,
+      path: `${request.path}.evidenceInput.expectedProducers`,
+      message: 'Expected evidence producers must exactly match dependencies.',
+    };
+    issue(dependencyIssue);
+  }
+  for (const expected of request.node.evidenceInput.expectedProducers) {
+    const producer = request.state.nodesById.get(expected.taskId);
+    if (
+      !producer ||
+      producer.team !== expected.team ||
+      producer.functionalOwner !== expected.functionalOwner ||
+      producer.acceptanceOwner !== expected.acceptanceOwner
+    ) {
+      const identityIssue: IssueRequest = {
+        state: request.state,
+        code: ModuleDeliveryIssueCode.EvidenceInputMismatch,
+        path: `${request.path}.evidenceInput.expectedProducers`,
+        message: `Expected producer ${expected.taskId} does not match its frozen task identity.`,
+      };
+      issue(identityIssue);
+    }
   }
 }
 
@@ -491,6 +625,12 @@ function validateClaims(request: NodeValidationRequest): void {
     path: `${request.path}.resources.write`,
     claims: request.node.resources.write,
   };
+  const evidenceRequest: ClaimListValidationRequest = {
+    state: request.state,
+    path: `${request.path}.resources.evidenceSurface`,
+    claims: request.node.resources.evidenceSurface,
+  };
+  validateClaimList(evidenceRequest);
   validateClaimList(readRequest);
   validateClaimList(writeRequest);
   for (const write of request.node.resources.write) {
@@ -630,29 +770,41 @@ function buildTopology(state: ValidationState): ModuleDeliveryTopology | false {
     )
   )
     return false;
-  const remaining = new Set(state.nodesById.keys());
+  const dependencies = buildExecutionDependencies(state);
+  const topologyRequest: ExecutionTopologyRequest = { state, dependencies };
+  serializeOrdinaryConflicts(topologyRequest);
+  return topologyForDependencies(topologyRequest);
+}
+
+type ExecutionTopologyRequest = {
+  readonly state: ValidationState;
+  readonly dependencies: Map<string, Set<string>>;
+};
+
+function topologyForDependencies(
+  request: ExecutionTopologyRequest,
+): ModuleDeliveryTopology | false {
+  const remaining = new Set(request.state.nodesById.keys());
   const completed = new Set<string>();
   const order: string[] = [];
   const waves: string[][] = [];
   while (remaining.size > 0) {
     const ready = [...remaining]
-      .filter(
-        (taskId) =>
-          state.nodesById
-            .get(taskId)
-            ?.dependencies.every((dependency) => completed.has(dependency)) ===
-          true,
+      .filter((taskId) =>
+        [...(request.dependencies.get(taskId) ?? [])].every((dependency) =>
+          completed.has(dependency),
+        ),
       )
       .sort();
     if (ready.length === 0) {
       const cycle = [...remaining].sort().join(', ');
-      const request: IssueRequest = {
-        state,
+      const issueRequest: IssueRequest = {
+        state: request.state,
         code: ModuleDeliveryIssueCode.DependencyCycle,
         path: '$.nodes',
         message: `Dependency cycle includes: ${cycle}.`,
       };
-      issue(request);
+      issue(issueRequest);
       return false;
     }
     waves.push(ready);
@@ -662,31 +814,65 @@ function buildTopology(state: ValidationState): ModuleDeliveryTopology | false {
       order.push(taskId);
     }
   }
-  const reachabilityRequest: ReachabilityRequest = { state, order };
-  return { order, waves, reachability: buildReachability(reachabilityRequest) };
+  const reachabilityRequest: ReachabilityRequest = {
+    order,
+    dependencies: request.dependencies,
+  };
+  return {
+    order,
+    waves,
+    reachability: buildReachability(reachabilityRequest),
+    executionPrecedence: executionPrecedence(request.dependencies),
+  };
 }
 
-function buildReachability(
-  request: ReachabilityRequest,
-): DependencyReachability {
-  const result = new Map<string, ReadonlySet<string>>();
-  for (const taskId of request.order) {
-    const node = request.state.nodesById.get(taskId);
-    const dependencies = new Set<string>();
-    if (node)
-      for (const dependency of node.dependencies) {
-        dependencies.add(dependency);
-        const ancestors = result.get(dependency);
-        if (ancestors)
-          for (const ancestor of ancestors) dependencies.add(ancestor);
-      }
-    result.set(taskId, dependencies);
+function executionPrecedence(
+  dependencies: ExecutionDependencies,
+): readonly ModuleDeliveryExecutionPrecedence[] {
+  const precedence: ModuleDeliveryExecutionPrecedence[] = [];
+  for (const successorTaskId of [...dependencies.keys()].sort()) {
+    for (const predecessorTaskId of [
+      ...(dependencies.get(successorTaskId) ?? []),
+    ].sort()) {
+      const edge: ModuleDeliveryExecutionPrecedence = {
+        predecessorTaskId,
+        successorTaskId,
+      };
+      precedence.push(edge);
+    }
   }
-  return result;
+  return precedence;
 }
 
-function validateConcurrentClaims(request: ConcurrentClaimsRequest): void {
-  const taskIds = request.state.plan.nodes.map((node) => node.taskId).sort();
+function buildExecutionDependencies(
+  state: ValidationState,
+): Map<string, Set<string>> {
+  const dependencies = new Map<string, Set<string>>();
+  for (const node of state.plan.nodes) {
+    dependencies.set(node.taskId, new Set(node.dependencies));
+  }
+  const writers = state.plan.nodes.filter(
+    (node) => node.kind === ModuleDeliveryTaskKind.Write,
+  );
+  const evidenceProviders = state.plan.nodes.filter(
+    (node) => node.kind === ModuleDeliveryTaskKind.ReadOnly,
+  );
+  for (const provider of evidenceProviders) {
+    for (const writer of writers) {
+      const overlap: ClaimPair = {
+        first: writer.resources.write,
+        second: provider.resources.evidenceSurface,
+      };
+      if (claimsOverlap(overlap)) {
+        dependencies.get(provider.taskId)?.add(writer.taskId);
+      }
+    }
+  }
+  return dependencies;
+}
+
+function serializeOrdinaryConflicts(request: ExecutionTopologyRequest): void {
+  const taskIds = [...request.state.nodesById.keys()].sort();
   for (let firstIndex = 0; firstIndex < taskIds.length; firstIndex += 1) {
     const firstId = taskIds[firstIndex];
     if (!firstId) continue;
@@ -701,22 +887,35 @@ function validateConcurrentClaims(request: ConcurrentClaimsRequest): void {
       if (!secondId) continue;
       const second = request.state.nodesById.get(secondId);
       if (!second) continue;
-      const conflictRequest: ResourceConflictRequest = {
+      const order = topologyForDependencies(request);
+      if (!order) return;
+      const pair: ResourceConflictRequest = {
         first,
         second,
-        reachability: request.reachability,
+        reachability: order.reachability,
       };
-      if (!nodesAreOrdered(conflictRequest) && nodesConflict(conflictRequest)) {
-        const issueRequest: IssueRequest = {
-          state: request.state,
-          code: ModuleDeliveryIssueCode.ResourceConflict,
-          path: '$.nodes',
-          message: `Concurrent tasks ${first.taskId} and ${second.taskId} have overlapping resource claims.`,
-        };
-        issue(issueRequest);
+      if (nodesConflict(pair) && !nodesAreOrdered(pair)) {
+        request.dependencies.get(second.taskId)?.add(first.taskId);
       }
     }
   }
+}
+
+function buildReachability(
+  request: ReachabilityRequest,
+): DependencyReachability {
+  const result = new Map<string, ReadonlySet<string>>();
+  for (const taskId of request.order) {
+    const dependencies = new Set<string>();
+    for (const dependency of request.dependencies.get(taskId) ?? []) {
+      dependencies.add(dependency);
+      const ancestors = result.get(dependency);
+      if (ancestors)
+        for (const ancestor of ancestors) dependencies.add(ancestor);
+    }
+    result.set(taskId, dependencies);
+  }
+  return result;
 }
 
 function nodesAreOrdered(request: ResourceConflictRequest): boolean {
@@ -770,92 +969,6 @@ function validateUnique(request: UniqueListRequest): void {
     };
     issue(issueRequest);
   }
-}
-
-function digestPlan(plan: ModuleDeliveryPlan): string {
-  const taskIds = plan.nodes.map((node) => node.taskId).sort();
-  const nodes = taskIds
-    .map((taskId) => {
-      const lookup: DigestNodeLookup = { plan, taskId };
-      return findDigestNode(lookup);
-    })
-    .map((node) => ({
-      ...node,
-      baseline:
-        node.baseline.kind === ModuleDeliveryBaselineKind.IntegratedDependencies
-          ? {
-              ...node.baseline,
-              providerTaskIds: [...node.baseline.providerTaskIds].sort(),
-            }
-          : node.baseline,
-      dependencies: [...node.dependencies].sort(),
-      resources: {
-        read: [...node.resources.read].sort(),
-        write: [...node.resources.write].sort(),
-      },
-      parentOwnedExclusions: [...node.parentOwnedExclusions].sort(),
-      acceptance: {
-        commands: node.acceptance.commands,
-        evidence: [...node.acceptance.evidence].sort(),
-      },
-    }));
-  const contractKeys = plan.edgeContracts
-    .map((contract) => {
-      const identity: EdgeIdentity = {
-        providerTaskId: contract.providerTaskId,
-        consumerTaskId: contract.consumerTaskId,
-      };
-      return edgeKey(identity);
-    })
-    .sort();
-  const edgeContracts = contractKeys
-    .map((key) => {
-      const lookup: DigestContractLookup = { plan, key };
-      return findDigestContract(lookup);
-    })
-    .map((contract) => ({
-      ...contract,
-      publicTypes: [...contract.publicTypes].sort(),
-      errors: [...contract.errors].sort(),
-      behaviorInvariants: [...contract.behaviorInvariants].sort(),
-      securityInvariants: [...contract.securityInvariants].sort(),
-      compatibilityExpectations: [...contract.compatibilityExpectations].sort(),
-      owningTests: [...contract.owningTests].sort(),
-    }));
-  const canonical = {
-    ...plan,
-    parentOwnedResources: [...plan.parentOwnedResources].sort(),
-    parentJoin: {
-      ...plan.parentJoin,
-      validationCommands: plan.parentJoin.validationCommands,
-    },
-    nodes,
-    edgeContracts,
-  };
-  return createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
-}
-
-function findDigestNode(lookup: DigestNodeLookup): ModuleDeliveryNode {
-  const node = lookup.plan.nodes.find(
-    (candidate) => candidate.taskId === lookup.taskId,
-  );
-  if (!node) throw new Error(`Validated task ${lookup.taskId} is missing.`);
-  return node;
-}
-
-function findDigestContract(
-  lookup: DigestContractLookup,
-): ModuleDeliveryEdgeContract {
-  const contract = lookup.plan.edgeContracts.find((candidate) => {
-    const identity: EdgeIdentity = {
-      providerTaskId: candidate.providerTaskId,
-      consumerTaskId: candidate.consumerTaskId,
-    };
-    return edgeKey(identity) === lookup.key;
-  });
-  if (!contract)
-    throw new Error(`Validated edge contract ${lookup.key} is missing.`);
-  return contract;
 }
 
 function issue(request: IssueRequest): void {
