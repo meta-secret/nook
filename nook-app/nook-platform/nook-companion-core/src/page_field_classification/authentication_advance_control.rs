@@ -17,6 +17,7 @@ use super::form_identity::{
     form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
     identity_indicates_explicit_authentication_route,
+    identity_names_external_authentication_provider,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
@@ -81,10 +82,6 @@ pub enum AuthenticationAdvanceControlDecision {
     DoesNotAdvanceAuthentication,
 }
 
-fn form_has_authentication_identity(form_identity: &str) -> bool {
-    identity_indicates_explicit_authentication_route(form_identity)
-}
-
 fn destination_has_disallowed_route_action(destination_identity: &str) -> bool {
     let identity = expand_identity_text(destination_identity);
     contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
@@ -136,7 +133,7 @@ fn has_positive_login_identity(
     matches!(
         observation.authentication_username,
         AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-    ) || form_has_authentication_identity(&observation.form_identity)
+    ) || identity_indicates_explicit_authentication_route(&observation.form_identity)
         || (owned_semantic_submit
             && matches!(
                 observation.authentication_username,
@@ -159,6 +156,7 @@ fn has_unconditional_veto_identity(
         )
         && observation.password_field_count > 0
         && looks_like_explicit_authentication_advance_control_label(&observation.label)
+        && !identity_names_external_authentication_provider(&observation.label)
         && control_destination_indicates_generic_oauth_authorization_route(
             &observation.destination_identity,
         );
@@ -192,7 +190,7 @@ fn has_semantic_submit_ceremony(
         )
         || standards_email_semantic_submit
         || (authentication_scope_owns_control
-            && form_has_authentication_identity(&observation.form_identity))
+            && identity_indicates_explicit_authentication_route(&observation.form_identity))
 }
 
 fn accepts_authentication_advance(
@@ -265,7 +263,7 @@ impl AuthenticationAdvanceControlObservation {
         if self.new_password_field_count == 0
             && self.one_time_code_field_count == 0
             && form_identity_indicates_non_authentication_account_management(&self.form_identity)
-            && !form_has_authentication_identity(&self.form_identity)
+            && !identity_indicates_explicit_authentication_route(&self.form_identity)
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }

@@ -680,6 +680,24 @@ mod tests {
                 "Continue with Apple",
             ),
             control(
+                crate::AuthenticationUsernameEvidence::Strong,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Google Sign in",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Explicit,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Apple Login",
+            ),
+            control(
+                crate::AuthenticationUsernameEvidence::Strong,
+                crate::PageControlOwnership::OwnedForm,
+                "/oauth2/authorize",
+                "Sign in Google",
+            ),
+            control(
                 crate::AuthenticationUsernameEvidence::Explicit,
                 crate::PageControlOwnership::OwnedForm,
                 "/oauth2/authorize",

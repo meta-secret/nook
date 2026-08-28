@@ -29,27 +29,30 @@ pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
     route == "/oauth2/authorize"
 }
 
+pub(super) fn identity_names_external_authentication_provider(identity: &str) -> bool {
+    contains_any_word(
+        &expand_identity_text(identity),
+        &[
+            "google",
+            "apple",
+            "microsoft",
+            "facebook",
+            "github",
+            "gitlab",
+            "linkedin",
+            "twitter",
+            "okta",
+        ],
+    )
+}
+
 pub(super) fn control_destination_indicates_alternate_provider(
     destination_identity: &str,
     allow_generic_oauth_authorization: bool,
 ) -> bool {
-    let identity = expand_identity_text(destination_identity);
     looks_like_alternate_authentication_route_control_label(destination_identity)
-        || contains_any_word(
-            &identity,
-            &[
-                "google",
-                "apple",
-                "microsoft",
-                "facebook",
-                "github",
-                "gitlab",
-                "linkedin",
-                "twitter",
-                "okta",
-            ],
-        )
-        || (contains_any_word(&identity, &["oauth"])
+        || identity_names_external_authentication_provider(destination_identity)
+        || (contains_any_word(&expand_identity_text(destination_identity), &["oauth"])
             && !(allow_generic_oauth_authorization
                 && control_destination_indicates_generic_oauth_authorization_route(
                     destination_identity,
