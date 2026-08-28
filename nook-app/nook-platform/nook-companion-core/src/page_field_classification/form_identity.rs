@@ -1,5 +1,8 @@
 use super::control_identity::looks_like_alternate_authentication_route_control_label;
-use super::{contains_any_word, expand_identity_text};
+use super::{
+    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
+    looks_like_password_update_submit_control_label,
+};
 
 pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -> bool {
     contains_any_word(
@@ -15,6 +18,40 @@ pub(super) fn identity_indicates_explicit_authentication_route(identity: &str) -
             "authentication",
         ],
     )
+}
+
+pub(super) fn identity_indicates_one_time_code_authentication_context(identity: &str) -> bool {
+    let identity = expand_identity_text(identity);
+    identity_indicates_explicit_authentication_route(&identity)
+        || contains_any_word(
+            &identity,
+            &[
+                "otp",
+                "totp",
+                "2 fa",
+                "2fa",
+                "mfa",
+                "two factor",
+                "one time code",
+                "auth code",
+                "authentication code",
+                "authenticator",
+            ],
+        )
+}
+
+pub(super) fn one_time_code_control_has_authentication_context(
+    authentication_username: AuthenticationUsernameEvidence,
+    form_identity: &str,
+    destination_identity: &str,
+    label: &str,
+) -> bool {
+    matches!(
+        authentication_username,
+        AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+    ) || [form_identity, destination_identity, label]
+        .into_iter()
+        .any(identity_indicates_one_time_code_authentication_context)
 }
 
 pub(super) fn control_destination_indicates_generic_oauth_authorization_route(
@@ -180,6 +217,26 @@ pub(super) fn control_destination_indicates_safe_post_login_route(
         .unwrap_or_default()
         .trim_end_matches('/');
     matches!(route, "/auth/post-login" | "/authentication/post-login")
+}
+
+pub(super) fn control_destination_has_disallowed_route_action(destination_identity: &str) -> bool {
+    let identity = expand_identity_text(destination_identity);
+    contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
+        || contains_any_word(&identity, &["billing", "subscribe", "search", "publish"])
+        || (contains_any_word(&identity, &["post"])
+            && !control_destination_indicates_safe_post_login_route(destination_identity))
+        || contains_any_word(&identity, &["learn more"])
+}
+
+pub(super) fn control_destination_indicates_password_update_route(
+    destination_identity: &str,
+) -> bool {
+    let identity = expand_identity_text(destination_identity);
+    (looks_like_password_update_submit_control_label(destination_identity)
+        || (contains_any_word(&identity, &["credential", "credentials"])
+            && contains_any_word(&identity, &["save", "update", "change", "set", "reset"])))
+        && !form_identity_indicates_destructive_action(destination_identity)
+        && !control_destination_has_disallowed_route_action(destination_identity)
 }
 
 pub(super) fn control_destination_indicates_registration_route(destination_identity: &str) -> bool {

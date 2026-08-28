@@ -276,8 +276,27 @@ mod tests {
         destination_identity: &str,
         label: &str,
     ) -> AuthenticationPageObservationFacts {
+        detailed_one_time_code_control_with_username(
+            form_identity,
+            destination_identity,
+            label,
+            crate::AuthenticationUsernameEvidence::Absent,
+        )
+    }
+
+    fn detailed_one_time_code_control_with_username(
+        form_identity: &str,
+        destination_identity: &str,
+        label: &str,
+        authentication_username: crate::AuthenticationUsernameEvidence,
+    ) -> AuthenticationPageObservationFacts {
+        let username_field_count = u32::from(!matches!(
+            authentication_username,
+            crate::AuthenticationUsernameEvidence::Absent
+        ));
         AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
+                username_field_count,
                 one_time_code_field_count: 1,
                 ..Default::default()
             },
@@ -286,7 +305,7 @@ mod tests {
                     actionability: crate::PageControlActionability::Actionable,
                     ownership: crate::PageControlOwnership::OwnedForm,
                     semantics: crate::PageControlSemantics::SemanticSubmit,
-                    authentication_username: crate::AuthenticationUsernameEvidence::Absent,
+                    authentication_username,
                     password_field_count: 0,
                     new_password_field_count: 0,
                     one_time_code_field_count: 1,
@@ -709,6 +728,76 @@ mod tests {
                 AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
             );
         }
+    }
+
+    #[test]
+    fn one_time_code_controls_require_affirmative_authentication_context() -> anyhow::Result<()> {
+        let neutral = detailed_one_time_code_control("verification", "/verify", "Confirm");
+        assert_eq!(
+            neutral.clone().into_observation().advance_control,
+            AuthenticationAdvanceControlEvidence::Absent
+        );
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![neutral.clone()],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::NoMatch
+        );
+
+        for contextual in [
+            detailed_one_time_code_control("auth", "", "Confirm"),
+            detailed_one_time_code_control("", "/mfa/challenge", "Siguiente"),
+            detailed_one_time_code_control("", "", "Verify TOTP"),
+            detailed_one_time_code_control_with_username(
+                "",
+                "",
+                "Siguiente",
+                crate::AuthenticationUsernameEvidence::Strong,
+            ),
+        ] {
+            assert_eq!(
+                contextual.clone().into_observation().advance_control,
+                AuthenticationAdvanceControlEvidence::Present
+            );
+            let classified = AuthenticationPageObservationFactsBatch {
+                observations: vec![contextual.clone()],
+            }
+            .classify();
+            let AuthenticationWorkflowMatch::Matched(snapshot) = classified else {
+                panic!("contextual one-time-code control was rejected: {contextual:?}");
+            };
+            assert_eq!(
+                snapshot.kind,
+                crate::authentication_workflow::AuthenticationWorkflowKind::TotpChallenge
+            );
+        }
+
+        for evidence in [
+            crate::AuthenticationUsernameEvidence::Generic,
+            crate::AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            assert_eq!(
+                detailed_one_time_code_control_with_username("", "", "Siguiente", evidence)
+                    .into_observation()
+                    .advance_control,
+                AuthenticationAdvanceControlEvidence::Absent
+            );
+        }
+
+        let mut auto_submit = neutral;
+        auto_submit.ceremony.one_time_code_handler_signal =
+            "oninput=this.form.requestSubmit()".to_owned();
+        assert_eq!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![auto_submit],
+            }
+            .classify()
+            .snapshot()?
+            .kind,
+            crate::authentication_workflow::AuthenticationWorkflowKind::TotpChallenge
+        );
+        Ok(())
     }
 
     #[test]

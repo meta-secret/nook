@@ -8,16 +8,19 @@ use super::control_identity::{
     looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
 };
 use super::form_identity::{
+    control_destination_has_disallowed_route_action,
     control_destination_indicates_alternate_provider,
     control_destination_indicates_generic_oauth_authorization_route,
     control_destination_indicates_non_authentication_route,
     control_destination_indicates_password_recovery_route,
+    control_destination_indicates_password_update_route,
     control_destination_indicates_registration_route,
     control_destination_indicates_safe_post_login_route,
     form_identity_indicates_destructive_action,
     form_identity_indicates_non_authentication_account_management,
     identity_indicates_explicit_authentication_route,
     identity_names_external_authentication_provider,
+    one_time_code_control_has_authentication_context,
 };
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
@@ -82,30 +85,12 @@ pub enum AuthenticationAdvanceControlDecision {
     DoesNotAdvanceAuthentication,
 }
 
-fn destination_has_disallowed_route_action(destination_identity: &str) -> bool {
-    let identity = expand_identity_text(destination_identity);
-    contains_any_word(&identity, &["cancel", "back", "help", "profile", "payment"])
-        || contains_any_word(&identity, &["billing", "subscribe", "search", "publish"])
-        || (contains_any_word(&identity, &["post"])
-            && !control_destination_indicates_safe_post_login_route(destination_identity))
-        || contains_any_word(&identity, &["learn more"])
-}
-
-fn destination_indicates_password_update_route(destination_identity: &str) -> bool {
-    let identity = expand_identity_text(destination_identity);
-    (looks_like_password_update_submit_control_label(destination_identity)
-        || (contains_any_word(&identity, &["credential", "credentials"])
-            && contains_any_word(&identity, &["save", "update", "change", "set", "reset"])))
-        && !form_identity_indicates_destructive_action(destination_identity)
-        && !destination_has_disallowed_route_action(destination_identity)
-}
-
 fn destination_has_disallowed_action_or_provider(
     destination_identity: &str,
     password_update_destination: bool,
     allow_generic_oauth_authorization: bool,
 ) -> bool {
-    destination_has_disallowed_route_action(destination_identity)
+    control_destination_has_disallowed_route_action(destination_identity)
         || (looks_like_non_authentication_submit_control_label(destination_identity)
             && !password_update_destination
             && !control_destination_indicates_safe_post_login_route(destination_identity))
@@ -213,6 +198,20 @@ fn accepts_authentication_advance(
     accepted_semantic_submit || accepted_scoped_activation || accepted_login_label
 }
 
+fn one_time_code_control_lacks_authentication_context(
+    observation: &AuthenticationAdvanceControlObservation,
+) -> bool {
+    observation.one_time_code_field_count > 0
+        && observation.password_field_count == 0
+        && observation.new_password_field_count == 0
+        && !one_time_code_control_has_authentication_context(
+            observation.authentication_username,
+            &observation.form_identity,
+            &observation.destination_identity,
+            &observation.label,
+        )
+}
+
 impl AuthenticationAdvanceControlObservation {
     /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
     #[must_use]
@@ -250,7 +249,7 @@ impl AuthenticationAdvanceControlObservation {
         let contextual_password_update = self.new_password_field_count > 0
             && looks_like_password_update_submit_control_label(&self.label);
         let password_update_destination = self.new_password_field_count > 0
-            && destination_indicates_password_update_route(&self.destination_identity);
+            && control_destination_indicates_password_update_route(&self.destination_identity);
         let credential_update_destination = self.new_password_field_count > 0
             && (control_destination_indicates_registration_route(&self.destination_identity)
                 || control_destination_indicates_password_recovery_route(
@@ -258,6 +257,9 @@ impl AuthenticationAdvanceControlObservation {
                 )
                 || password_update_destination);
         if has_unconditional_veto_identity(self, credential_update_destination) {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
+        if one_time_code_control_lacks_authentication_context(self) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if self.new_password_field_count == 0
@@ -566,7 +568,6 @@ mod tests {
         ] {
             assert!(!advances_authentication(&rejected));
         }
-
         for label in [
             "Create account",
             "Forgot password?",
@@ -582,7 +583,6 @@ mod tests {
                 }
             ));
         }
-
         let destructive_destination = AuthenticationAdvanceControlObservation {
             destination_identity: "/login/delete-account".to_owned(),
             ..password_only_submit
@@ -628,7 +628,6 @@ mod tests {
                 }
             ));
         }
-
         for (form_identity, destination_identity) in [
             ("/auth/account/delete", ""),
             ("account-settings", "/password/reset/delete-account"),
