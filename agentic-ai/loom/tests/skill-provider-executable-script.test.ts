@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   type ExecutableProviderReferenceInspection,
   type ExecutableScriptInspection,
+  expandStaticShellVariables,
   executableSourceReferencesProvider,
   executableScriptViolatesBoundary,
   ShellExecutablePolicy,
@@ -57,6 +58,19 @@ printf '.agents/skills/*/src/**/*.ts' > expected.txt`,
   };
   expect(executableSourceReferencesProvider(inertInspection)).toBe(false);
   expect(executableSourceReferencesProvider(executedInspection)).toBe(true);
+});
+
+test('bounds static shell expansion before UTF-8 allocation', () => {
+  const exact = `a=${'é'.repeat(16_382)}; bun $a`;
+  expect(
+    new TextEncoder().encode(expandStaticShellVariables(exact)).byteLength,
+  ).toBe(65_536);
+  for (const source of [
+    `a=${'é'.repeat(16_383)}; bun $a`,
+    `a=${'x'.repeat(20_000)}; bun $a$a$a$a`,
+    'a=prefix$(printf suffix); bun $a',
+  ])
+    expect(() => expandStaticShellVariables(source)).toThrow();
 });
 
 test('normalizes exact CommonJS entrypoint and export contracts', () => {

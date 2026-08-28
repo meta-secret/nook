@@ -49,37 +49,71 @@ const SHELL_REPOSITORY_SCRIPT_EXECUTION =
   /(?:^|[\n;&|])\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=[^\s]+\s+)*)(?:(?:exec|command)\s+)?(?:bun|node|bash|sh|source|\.)\s+(?!-)[^\n;&|]+/gmu;
 type BoundaryTranspilerOptions = { readonly loader: 'tsx' };
 type ShellExpansionMatch = string[];
+type ShellValues = ReadonlyMap<string, string | false>;
+type ShellSubstitutionRequest = readonly [string, ShellValues];
 const MAX_SHELL_EXPANSION_SIZE = 65_536;
 const MAX_SHELL_EXPANSION_STEPS = 16;
-const STATIC_SHELL_ASSIGNMENT = /\b([A-Za-z_]\w*)=((?!\$\()[^\s;&|]+)/gmu;
+const SHELL_VARIABLE = /\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/gmu;
+const STATIC_SHELL_ASSIGNMENT = /\b([A-Za-z_]\w*)=([^\s;&|]+)/gmu;
+const SHELL_UTF8_BUFFER = new Uint8Array(MAX_SHELL_EXPANSION_SIZE + 1);
+const SHELL_UTF8_ENCODER = new TextEncoder();
 const boundaryTranspilerOptions: BoundaryTranspilerOptions = { loader: 'tsx' };
 const BOUNDARY_TRANSPILER = new Bun.Transpiler(boundaryTranspilerOptions);
 
 export function expandStaticShellVariables(source: string): string {
-  const values = new Map<string, string>();
-  for (const match of source.matchAll(STATIC_SHELL_ASSIGNMENT))
-    values.set(match[1] ?? '', match[2] ?? '');
-  const checked = (expanded: string): string => {
-    const launch = expanded.match(
-      /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/u,
-    );
-    if (values.has(launch?.[1] || launch?.[2] || ''))
-      throw new Error('Task launch variable is unresolved.');
-    return expanded;
-  };
-  const substitute = (input: string): string =>
-    input.replace(
-      /\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/gmu,
-      (...match: ShellExpansionMatch) =>
-        values.get(match[1] || match[2] || '') ?? match[0] ?? '',
-    );
+  if (boundedUtf8ByteLength(source) > MAX_SHELL_EXPANSION_SIZE)
+    throw new Error('Oversized static shell source.');
+  const values = new Map<string, string | false>();
+  for (const match of source.matchAll(STATIC_SHELL_ASSIGNMENT)) {
+    const value = match[2] ?? '';
+    if (value.startsWith('$(') || /^\$\{[A-Za-z_]\w*[^}]/u.test(value))
+      continue;
+    values.set(match[1] ?? '', value.includes('$(') ? false : value);
+  }
   for (let step = 0; step < MAX_SHELL_EXPANSION_STEPS; step += 1) {
-    const expanded = substitute(source);
-    if (expanded.length > MAX_SHELL_EXPANSION_SIZE) return checked(source);
-    if (expanded === source) return checked(expanded);
+    const expanded = boundedShellSubstitution([source, values]);
+    if (expanded === source) break;
     source = expanded;
   }
-  return checked(source);
+  const launch = source.match(
+    /\b(?:bun|node|bash|sh)\s+(?:run\s+)?[^\s;&|]*\$(?:\{([A-Za-z_]\w*)\}|([A-Za-z_]\w*))/u,
+  );
+  if (values.has(launch?.[1] || launch?.[2] || ''))
+    throw new Error('Task launch variable is unresolved.');
+  return source;
+}
+
+function boundedShellSubstitution([
+  input,
+  values,
+]: ShellSubstitutionRequest): string {
+  let bytes = 0;
+  let end = 0;
+  for (const match of input.matchAll(SHELL_VARIABLE)) {
+    const index = match.index;
+    const value = values.get(match[1] || match[2] || '');
+    const replacement = typeof value === 'string' ? value : match[0];
+    bytes += boundedUtf8ByteLength(input.slice(end, index));
+    bytes += boundedUtf8ByteLength(replacement);
+    if (bytes > MAX_SHELL_EXPANSION_SIZE)
+      throw new Error('Oversized static shell expansion.');
+    end = index + match[0].length;
+  }
+  bytes += boundedUtf8ByteLength(input.slice(end));
+  if (bytes > MAX_SHELL_EXPANSION_SIZE)
+    throw new Error('Oversized static shell expansion.');
+  return input.replace(
+    SHELL_VARIABLE,
+    (...match: ShellExpansionMatch) =>
+      values.get(match[1] || match[2] || '') || match[0] || '',
+  );
+}
+
+function boundedUtf8ByteLength(value: string): number {
+  const result = SHELL_UTF8_ENCODER.encodeInto(value, SHELL_UTF8_BUFFER);
+  return result.read === value.length
+    ? result.written
+    : MAX_SHELL_EXPANSION_SIZE + 1;
 }
 
 export function executableScriptViolatesBoundary(
