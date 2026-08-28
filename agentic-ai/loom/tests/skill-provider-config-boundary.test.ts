@@ -31,11 +31,9 @@ type ActionRuntimeGraph = {
   readonly sources: ReadonlyMap<string, string>;
   readonly symlinkPaths: ReadonlySet<string>;
 };
-
 type GitHubActionStep = {
   readonly uses?: string;
 };
-
 type GitHubActionRuns = {
   readonly main?: string;
   readonly post?: string;
@@ -43,44 +41,36 @@ type GitHubActionRuns = {
   readonly steps?: readonly GitHubActionStep[];
   readonly using?: string;
 };
-
 type GitHubActionDocument = {
   readonly runs?: GitHubActionRuns;
 };
-
 type ActionDependencyResolution = {
   readonly importer: string;
   readonly sources: ReadonlyMap<string, string>;
   readonly specifier: string;
 };
-
 type ActionTranspilerOptions = {
   readonly loader: 'tsx';
 };
-
 type ActionLoaderFixture = {
   readonly path: string;
   readonly source: string;
 };
-
 type ConfigurationReference = {
   readonly dockerOverride: ShellLaunchArgument | false;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
   readonly required: boolean;
   readonly specifier: string;
 };
-
 type PendingConfiguration = {
   readonly dockerOverride: ShellLaunchArgument | false;
   readonly importer: string;
   readonly positionalArguments: readonly ShellLaunchArgument[] | false;
 };
-
 type ApplicationConsumerEdge = {
   readonly dependency: string;
   readonly importer: string;
 };
-
 type RepositoryPackageDocument = {
   readonly dependencies?: Readonly<Record<string, string>>;
   readonly devDependencies?: Readonly<Record<string, string>>;
@@ -163,7 +153,10 @@ function configurationScriptPaths(
     const next = pending.pop();
     if (!next) continue;
     const importer = next.importer;
-    const visitKey = `${importer}\0${JSON.stringify(next.positionalArguments)}`;
+    const override = next.dockerOverride;
+    const overrideKey =
+      override === false ? false : [override.dynamic, override.value];
+    const visitKey = `${importer}\0${JSON.stringify([next.positionalArguments, overrideKey])}`;
     if (visited.has(visitKey)) continue;
     visited.add(visitKey);
     const source = graph.sources.get(importer);
@@ -917,6 +910,27 @@ test('follows scripts launched from every runnable configuration surface', () =>
   expect(configurationScriptPaths(inertCatalogGraph)).toEqual([
     'scripts/catalog.ts',
   ]);
+  const child = '.github/scripts/with-healthy-buildkit.sh';
+  for (const [prefix, roots] of [
+    [`DOCKER=${PROVIDER_APPLICATION}; `, ['unsafe.sh', 'safe.sh']],
+    [`DOCKER=${PROVIDER_APPLICATION}; `, ['safe.sh', 'unsafe.sh']],
+    [`env DOCKER=${PROVIDER_APPLICATION} `, ['unsafe.sh', 'safe.sh']],
+    [`env DOCKER=${PROVIDER_APPLICATION} `, ['safe.sh', 'unsafe.sh']],
+  ] as const) {
+    const overrideSources = new Map<string, string>([
+      ['safe.sh', `bash ${child}`],
+      ['unsafe.sh', `${prefix}bash ${child}`],
+      [child, 'docker_bin="${DOCKER:-docker}"; "$docker_bin"'],
+      [PROVIDER_APPLICATION, 'export const application = true;'],
+    ]);
+    const overrideGraph: ConfigurationScriptGraph = {
+      executablePaths: new Set(),
+      roots,
+      sources: overrideSources,
+      symlinkPaths: new Set(),
+    };
+    expect(() => configurationScriptPaths(overrideGraph)).toThrow();
+  }
 });
 
 test('rejects a dangerous adapter from the canonical runnable graph', () => {
