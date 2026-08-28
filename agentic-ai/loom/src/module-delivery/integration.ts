@@ -74,7 +74,6 @@ import {
   cleanupModuleWorktree,
   prepareModuleWorktree,
 } from './workspace.ts';
-
 import type { GitCommandRequest } from './git-command.ts';
 import type {
   ModuleDeliveryNode,
@@ -902,7 +901,10 @@ export function finalizeModuleDeliveryIntegration(
     currentHead: request.state.sourceCommit,
     handoffs,
   };
-  const canonicalHead = applyModuleWaveTree(application);
+  const canonicalHead =
+    handoffs.length === 0
+      ? request.state.headCommit
+      : applyModuleWaveTree(application);
   const sourceExpectation: SourceSnapshotExpectation = {
     repositoryRoot: request.state.workspace.sourceRepositoryRoot,
     expected: provenance.sourceSnapshot,

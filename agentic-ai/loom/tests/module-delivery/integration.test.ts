@@ -14,6 +14,7 @@ import {
   ModuleDeliveryTaskKind,
   ModuleDeliveryValidationStatus,
   ModuleDeliveryWorkspaceKind,
+  ModuleIntegrationPhase,
   TeamKey,
   cleanupModuleIntegration,
   cleanupModuleWorktree,
@@ -389,27 +390,6 @@ function integrateRequest(
   authorities.set(state, request.authority);
   return state;
 }
-function integrateRequestWithEvidenceTreeListingCount(
-  request: IntegrateVerifiedModuleDeliveryTaskRequest,
-) {
-  const gitSpy = spyOn(gitCommand, 'runModuleDeliveryGit');
-  try {
-    const state = integrateRequest(request);
-    let listingCount = 0;
-    for (const invocation of gitSpy.mock.calls) {
-      const gitRequest = invocation[0];
-      if (
-        gitRequest.args[0] === 'ls-tree' &&
-        gitRequest.args.includes('--full-tree')
-      ) {
-        listingCount += 1;
-      }
-    }
-    return { state, listingCount };
-  } finally {
-    gitSpy.mockRestore();
-  }
-}
 function integrateWave(integration: WaveIntegration): ModuleIntegrationState {
   const recording = recordingFor(integration);
   let state = integration.state;
@@ -595,20 +575,24 @@ describe('module delivery wave integration', () => {
       state,
       submission: valid,
     };
-    const verifiedIntegration =
-      integrateRequestWithEvidenceTreeListingCount(request);
-    const advanced = verifiedIntegration.state;
-    expect(verifiedIntegration.listingCount).toBe(2);
-    expect(advanced.completedWaveCount).toBe(1);
-    expect(advanced.headCommit).toBe(state.headCommit);
-    expect(advanced.integratedTaskIds).toEqual([]);
+    const advanced = integrateRequest(request);
+    const authority = authorityFor(advanced);
+    const finalization: FinalizeModuleDeliveryIntegrationRequest = {
+      authority,
+      acceptedPlan: accepted,
+      state: advanced,
+    };
+    const finalized = finalizeModuleDeliveryIntegration(finalization);
+    expect(finalized.phase).toBe(ModuleIntegrationPhase.Finalized);
+    expect(finalized.headCommit).toBe(state.headCommit);
+    expect(finalized.acceptedEvidence).toEqual(advanced.acceptedEvidence);
     const nextPlan: ModuleDeliveryPlan = { ...accepted.plan, generation: 2 };
     const next = decodeAndValidateModuleDeliveryPlan(JSON.stringify(nextPlan));
     if (next.status !== ModuleDeliveryValidationStatus.Accepted)
       throw new Error('Superseding evidence plan is invalid.');
     const restart: RestartModuleDeliveryGenerationRequest = {
-      authority: authorityFor(advanced),
-      previousState: advanced.admissionState,
+      authority,
+      previousState: finalized.admissionState,
       acceptedPlan: next,
       expectedLineage: next.plan.nodes.map(({ taskId, parentLineage }) => ({
         taskId,
