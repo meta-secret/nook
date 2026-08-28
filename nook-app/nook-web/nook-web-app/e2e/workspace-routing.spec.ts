@@ -21,16 +21,14 @@ test.describe('persistent workspace routing', () => {
       })
     })
 
-    await page.getByTestId('vault-devices-access-tab').click()
-    await expect(page).toHaveURL(/\/devices-access$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
+    await expect(page.getByTestId('vault-devices-access-tab')).toHaveCount(0)
 
     await page.getByTestId('vault-admin-tab').click()
     await expect(page).toHaveURL(/\/admin$/)
     await expect(page.getByTestId('vault-admin-panel')).toBeVisible()
 
     expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
-      initialHistoryLength + 2,
+      initialHistoryLength + 1,
     )
 
     await page.getByTestId('vault-settings-tab').click()
@@ -42,13 +40,13 @@ test.describe('persistent workspace routing', () => {
     await expect(page.getByTestId('help-page')).toBeVisible()
 
     expect(await page.evaluate(() => history.length)).toBeGreaterThanOrEqual(
-      initialHistoryLength + 4,
+      initialHistoryLength + 3,
     )
     expect(
       await page.evaluate(
         () => (window as WorkspaceRoutingWindow).__nookWorkspaceRouteEventCount,
       ),
-    ).toBeGreaterThanOrEqual(4)
+    ).toBeGreaterThanOrEqual(3)
 
     await page.evaluate(
       () =>
@@ -77,15 +75,6 @@ test.describe('persistent workspace routing', () => {
     page,
   }) => {
     await connectLocalVault(page)
-    await page.getByTestId('vault-devices-access-tab').click()
-    await expect(page).toHaveURL(/\/devices-access$/)
-    await expect(page.getByTestId('devices-access-dashboard')).toBeVisible()
-
-    await page.getByTestId('header-lock-vault-btn').click()
-    await expect(
-      page.getByTestId('login-gate').getByTestId('devices-access-dashboard'),
-    ).toBeVisible({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
-    await expect(page).toHaveURL(/\/devices-access$/)
     await page.evaluate(() => {
       localStorage.setItem('nook_e2e_manual_passkey', 'true')
     })

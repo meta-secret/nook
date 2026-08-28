@@ -1338,6 +1338,19 @@ pub const LOGIN_GET_STARTED_PATHS_DESCRIPTION: &str = "login.get_started_paths_d
 pub const LOGIN_GET_STARTED_PATHS_TITLE: &str = "login.get_started_paths_title";
 pub const LOGIN_ICLOUD_SHARED_ENROLLMENT_HINT: &str = "login.icloud_shared_enrollment_hint";
 pub const LOGIN_ICLOUD_SHARED_ENROLLMENT_TOGGLE: &str = "login.icloud_shared_enrollment_toggle";
+pub const LOGIN_IDENTITY_CONTEXT_BACKUP_DIRECT: &str = "login.identity_context_backup_direct";
+pub const LOGIN_IDENTITY_CONTEXT_CURRENT: &str = "login.identity_context_current";
+pub const LOGIN_IDENTITY_CONTEXT_CURRENT_KEYS_UNAVAILABLE: &str =
+    "login.identity_context_current_keys_unavailable";
+pub const LOGIN_IDENTITY_CONTEXT_CURRENT_USES_KEYS: &str =
+    "login.identity_context_current_uses_keys";
+pub const LOGIN_IDENTITY_CONTEXT_EMPTY: &str = "login.identity_context_empty";
+pub const LOGIN_IDENTITY_CONTEXT_FAILED: &str = "login.identity_context_failed";
+pub const LOGIN_IDENTITY_CONTEXT_LINKED: &str = "login.identity_context_linked";
+pub const LOGIN_IDENTITY_CONTEXT_LOADING: &str = "login.identity_context_loading";
+pub const LOGIN_IDENTITY_CONTEXT_MISMATCH: &str = "login.identity_context_mismatch";
+pub const LOGIN_IDENTITY_CONTEXT_REVIEW: &str = "login.identity_context_review";
+pub const LOGIN_IDENTITY_CONTEXT_TITLE: &str = "login.identity_context_title";
 pub const LOGIN_IMPORT_EXISTING_ALTERNATIVE: &str = "login.import_existing_alternative";
 pub const LOGIN_JOIN_DEVICE: &str = "login.join_device";
 pub const LOGIN_JOIN_INSTRUCTIONS: &str = "login.join_instructions";

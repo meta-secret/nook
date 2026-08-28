@@ -37,12 +37,22 @@ test.describe('login unlock flow (local-first)', () => {
     })
     await expect(page.getByTestId('login-local-vault-detected')).toBeVisible()
     await expect(page.getByTestId('login-local-unlock-step')).toBeVisible()
+    const identityContext = page.getByTestId('login-vault-identity-context')
+    await expect(identityContext).toBeVisible()
+    await expect(
+      identityContext.getByTestId('login-vault-linked-identities'),
+    ).toBeVisible({ timeout: UI_TIMEOUT_MS })
+    await expect(identityContext).toContainText('Current browser')
+    await expect(identityContext).toContainText(
+      'A backup password opens this vault directly',
+    )
     await expect(page.getByTestId('login-unlock-method-keys')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-password')).toBeVisible()
     await expect(page.getByTestId('login-unlock-method-keys')).toHaveAttribute(
       'aria-checked',
       'true',
     )
+    await expect(page.getByTestId('login-unlock-method-keys')).toBeEnabled()
     await expect(page.getByTestId('login-password-input')).not.toBeVisible()
   })
 

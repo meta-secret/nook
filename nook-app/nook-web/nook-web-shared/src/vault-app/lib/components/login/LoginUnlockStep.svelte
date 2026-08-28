@@ -1,5 +1,8 @@
 <script lang="ts">
-  type VaultPasswordUnlock = { readonly entryId: string; readonly password: string }
+  type VaultPasswordUnlock = {
+    readonly entryId: string
+    readonly password: string
+  }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
@@ -9,6 +12,7 @@
   import { ShieldCheck } from '@lucide/svelte'
   import { Button } from '$lib/components/ui/button'
   import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
+  import LoginVaultIdentityContext from '$lib/components/login/LoginVaultIdentityContext.svelte'
   import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
   import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
@@ -16,6 +20,7 @@
   import type { VaultState } from '$lib/vault.svelte'
   import { isSentinelVault } from '$lib/vault/sentinel-unlock'
   import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
+  import { loadIdentityDirectoryAccessView } from '../devices-access/identity-directory-view'
   import {
     DeviceKeysUnlockCapabilityKind,
     LoginVaultEntryKind,
@@ -25,6 +30,11 @@
     type LoginVaultEntry,
     type PasswordUnlockCapability,
   } from './login-unlock-state'
+  import {
+    buildLoginVaultIdentityContext,
+    LoginVaultIdentityContextKind,
+    type LoginVaultIdentityContext as LoginVaultIdentityContextState,
+  } from './login-vault-identity-context'
 
   type PasswordEntrySummary = Pick<
     NookPasswordEntrySummary,
@@ -43,6 +53,7 @@
     onUnlock,
     onUnlockWithPassword,
     onSelectPasswordEntry,
+    onOpenDevicesAccess,
     onSwitchVault,
     onCreateAnotherVault,
     onImportFromSync,
@@ -56,10 +67,9 @@
     isInitializing: boolean
     isUnlocking?: boolean
     onUnlock: () => void | Promise<void>
-    onUnlockWithPassword: (
-      args: VaultPasswordUnlock,
-    ) => void | Promise<void>
+    onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>
     onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
+    onOpenDevicesAccess: () => void | Promise<void>
     onSwitchVault: () => void | Promise<void>
     onCreateAnotherVault: (label: string) => void | Promise<void>
     onImportFromSync: () => void
@@ -85,12 +95,64 @@
           unlock: onUnlockWithPassword,
         },
   )
+  let identityContext = $state<LoginVaultIdentityContextState>({
+    kind: LoginVaultIdentityContextKind.Loading,
+  })
+  let identityContextLoadGeneration = 0
+
+  $effect(() => {
+    if (!vault.hasManager) {
+      identityContext = { kind: LoginVaultIdentityContextKind.Loading }
+      return
+    }
+    if (vaultEntry.kind !== LoginVaultEntryKind.Available) {
+      identityContext = { kind: LoginVaultIdentityContextKind.Empty }
+      return
+    }
+
+    const storeId = vaultEntry.entry.storeId
+    const generation = ++identityContextLoadGeneration
+    identityContext = { kind: LoginVaultIdentityContextKind.Loading }
+    void loadIdentityDirectoryAccessView(vault.requireManager())
+      .then(({ directory }) => {
+        if (generation !== identityContextLoadGeneration) return
+        const identityContextRequest: Parameters<
+          typeof buildLoginVaultIdentityContext
+        >[0] = {
+          identities: directory.identities,
+          storeId,
+        }
+        identityContext = buildLoginVaultIdentityContext(identityContextRequest)
+      })
+      .catch(() => {
+        if (generation !== identityContextLoadGeneration) return
+        identityContext = { kind: LoginVaultIdentityContextKind.Failed }
+      })
+
+    return () => {
+      if (generation === identityContextLoadGeneration) {
+        identityContextLoadGeneration += 1
+      }
+    }
+  })
+
   const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
-    vault.loginDeviceKeysCapable
+    identityContext.kind === LoginVaultIdentityContextKind.LinkedWithCurrent &&
+      vault.loginDeviceKeysCapable
       ? { kind: DeviceKeysUnlockCapabilityKind.Unknown }
       : {
           kind: DeviceKeysUnlockCapabilityKind.Unavailable,
-          reason: vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
+          reason:
+            identityContext.kind === LoginVaultIdentityContextKind.Loading
+              ? vault.t(I18N_KEYS.LoginIdentityContextLoading)
+              : identityContext.kind === LoginVaultIdentityContextKind.Failed
+                ? vault.t(I18N_KEYS.LoginIdentityContextFailed)
+                : identityContext.kind === LoginVaultIdentityContextKind.Empty
+                  ? vault.t(I18N_KEYS.LoginIdentityContextEmpty)
+                  : identityContext.kind ===
+                      LoginVaultIdentityContextKind.LinkedWithoutCurrent
+                    ? vault.t(I18N_KEYS.LoginIdentityContextMismatch)
+                    : vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
         },
   )
 </script>
@@ -128,6 +190,13 @@
     {#if showSentinelCeremony}
       <SentinelCeremonyPanel {vault} {isVerifying} {isInitializing} />
     {:else}
+      <LoginVaultIdentityContext
+        {vault}
+        context={identityContext}
+        deviceKeysCapable={vault.loginDeviceKeysCapable}
+        onReviewIdentities={onOpenDevicesAccess}
+      />
+
       <section
         class="space-y-3 rounded-lg border border-border/60 bg-muted/10 p-4"
         data-testid="login-unlock-section"

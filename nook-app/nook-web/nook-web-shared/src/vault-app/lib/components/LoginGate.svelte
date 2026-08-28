@@ -258,7 +258,10 @@
     try {
       const readDevicesAccessNudgeStorageArgs: Parameters<
         typeof readDevicesAccessNudgeStorage
-      >[0] = { storage: localStorage, storageKey: devicesAccessNudgeStorageKey }
+      >[0] = {
+        storage: localStorage,
+        storageKey: devicesAccessNudgeStorageKey,
+      }
       devicesAccessNudgePreference = parseDevicesAccessNudgePreference(
         readDevicesAccessNudgeStorage(readDevicesAccessNudgeStorageArgs),
       )
@@ -695,6 +698,8 @@
               {isUnlocking}
               {onUnlock}
               {onUnlockWithPassword}
+              onOpenDevicesAccess={() =>
+                openDevicesAccess(DevicesAccessTriggerKind.Header)}
               {onSwitchVault}
               onCreateAnotherVault={onCreateDeviceVault}
               onImportFromSync={() => {

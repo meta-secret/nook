@@ -5,7 +5,7 @@
   }
 
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onDestroy, tick } from 'svelte'
+  import { onDestroy } from 'svelte'
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
@@ -22,10 +22,6 @@
   import SecretVault from '$lib/components/SecretVault.svelte'
   import VaultAdmin from '$lib/components/VaultAdmin.svelte'
   import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
-  import {
-    type DevicesAccessHostMount,
-    DevicesAccessHostMountKind,
-  } from '$lib/components/devices-access-dashboard-state'
   import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
   import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
   import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
@@ -80,9 +76,6 @@
     kind: SecretEditorModeKind.Closed,
   })
   let secretsEditorResetKey = $state(0)
-  let devicesAccessHost = $state<DevicesAccessHostMount>({
-    kind: DevicesAccessHostMountKind.Unmounted,
-  })
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
@@ -108,36 +101,12 @@
     onEditorOpenChange(false)
   }
 
-  function captureDevicesAccessHost(element: HTMLDivElement) {
-    devicesAccessHost = {
-      kind: DevicesAccessHostMountKind.Mounted,
-      element,
-    }
-    return {
-      destroy() {
-        devicesAccessHost = { kind: DevicesAccessHostMountKind.Unmounted }
-      },
-    }
-  }
-
-  async function closeDevicesAccess(): Promise<void> {
-    vault.closeSettings()
-    await tick()
-    if (devicesAccessHost.kind === DevicesAccessHostMountKind.Unmounted) return
-    devicesAccessHost.element
-      .querySelector<HTMLButtonElement>(
-        '[data-testid="vault-devices-access-tab"]',
-      )
-      ?.focus()
-  }
-
   onDestroy(() => {
     onEditorOpenChange(false)
   })
 </script>
 
 <div
-  use:captureDevicesAccessHost
   class:authenticated-shell-editor={secretsAddOpen}
   class="authenticated-shell flex w-full min-w-0 max-w-full flex-col overflow-hidden rounded-xl bg-card shadow-sm [touch-action:pan-y_pinch-zoom] sm:border sm:border-border/60"
   data-testid="authenticated-shell"
@@ -179,10 +148,7 @@
         />
       {/if}
       {#if vault.settingsOpen && vault.settingsSection === SettingsSection.DevicesAccess}
-        <DevicesAccessDashboard
-          {vault}
-          onBack={() => void closeDevicesAccess()}
-        />
+        <DevicesAccessDashboard {vault} onBack={() => vault.closeSettings()} />
       {:else if vault.settingsOpen && vault.settingsSection === SettingsSection.Admin}
         <VaultAdmin
           {vault}
@@ -360,14 +326,6 @@
       onSelectSecrets={() => {
         leaveSecretsEditor()
         vault.closeSettings()
-      }}
-      onSelectDevicesAccess={() => {
-        leaveSecretsEditor()
-        const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
-          section: SettingsSection.DevicesAccess,
-          accordion: SettingsAccordionSection.Devices,
-        }
-        vault.openSettings(settingsRequest)
       }}
       onSelectOnboard={() => {
         leaveSecretsEditor()
