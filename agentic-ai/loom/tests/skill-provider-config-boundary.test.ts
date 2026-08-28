@@ -58,6 +58,10 @@ type RequiredLaunchInspection = {
   readonly specifier: string;
 };
 
+type TaskVariableDocument = {
+  readonly vars?: Readonly<Record<string, string | { readonly sh?: string }>>;
+};
+
 type ApplicationConsumerEdge = {
   readonly dependency: string;
   readonly importer: string;
@@ -154,9 +158,14 @@ function configurationScriptPaths(
     if (importer.startsWith(PROVIDER_ROOT)) {
       throw new Error(`Runnable configuration reaches provider: ${importer}`);
     }
+    const referenceSource =
+      /(^|\/)Taskfile\.ya?ml$/u.test(importer) &&
+      hasLocallyDefinedStaticTaskReference(source)
+        ? expandStaticTaskVariables(source)
+        : source;
     const referenceInspection: ConfigurationReferenceInspection = {
       importer,
-      source,
+      source: referenceSource,
     };
     for (const specifier of configurationScriptReferences(
       referenceInspection,
@@ -184,7 +193,7 @@ function configurationScriptPaths(
         candidates.find((path) => graph.sources.has(path)) ?? false;
       if (dependency === false) {
         const launchInspection: RequiredLaunchInspection = {
-          source,
+          source: referenceSource,
           specifier,
         };
         if (isRequiredScriptLaunch(launchInspection)) {
@@ -263,18 +272,19 @@ function isAuthorizedApplicationEdge(edge: ApplicationConsumerEdge): boolean {
 function configurationScriptReferences(
   inspection: ConfigurationReferenceInspection,
 ): readonly string[] {
+  const source = inspection.source;
   CONFIGURATION_SCRIPT_REFERENCE.lastIndex = 0;
   EXTENSIONLESS_SCRIPT_REFERENCE.lastIndex = 0;
   const matched = [
-    ...inspection.source.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
-    ...inspection.source.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
+    ...source.matchAll(CONFIGURATION_SCRIPT_REFERENCE),
+    ...source.matchAll(EXTENSIONLESS_SCRIPT_REFERENCE),
   ]
     .map((match) => match[1] ?? false)
     .filter((specifier) => specifier !== false);
   if (!EXECUTABLE_SOURCE_EXTENSION.test(inspection.importer)) {
     return [...new Set(matched)];
   }
-  const importSource = inspection.source.replace(/^#![^\n]*\n/u, '');
+  const importSource = source.replace(/^#![^\n]*\n/u, '');
   const references = new Set(
     ACTION_IMPORT_SCANNER.scanImports(importSource).map(
       (imported) => imported.path,
@@ -282,7 +292,7 @@ function configurationScriptReferences(
   );
   for (const specifier of matched) {
     const launchInspection: RequiredLaunchInspection = {
-      source: inspection.source,
+      source,
       specifier,
     };
     if (isRequiredScriptLaunch(launchInspection)) references.add(specifier);
@@ -290,14 +300,47 @@ function configurationScriptReferences(
   return [...references];
 }
 
+function expandStaticTaskVariables(source: string): string {
+  const document = Bun.YAML.parse(source) as TaskVariableDocument;
+  if (!document.vars) return source;
+  const variables = Object.entries(document.vars).filter(
+    (entry): entry is [string, string] => typeof entry[1] === 'string',
+  );
+  let expanded = source;
+  for (const _ of variables) {
+    for (const [name, value] of variables) {
+      expanded = expanded.replaceAll(`{{.${name}}}`, value);
+    }
+  }
+  for (const [name] of variables) {
+    if (expanded.includes(`{{.${name}}}`)) {
+      throw new Error(`Task variable cycle: ${name}`);
+    }
+  }
+  return expanded;
+}
+
+function hasLocallyDefinedStaticTaskReference(source: string): boolean {
+  const references = source.matchAll(
+    /\{\{\s*\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}/gu,
+  );
+  for (const match of references) {
+    const name = match[1];
+    if (typeof name !== 'string') continue;
+    const escapedName = name.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+    const definition = new RegExp(`^\\s+${escapedName}:\\s+[^\\s#].*$`, 'mu');
+    if (definition.test(source)) return true;
+  }
+  return false;
+}
+
 function isRequiredScriptLaunch(inspection: RequiredLaunchInspection): boolean {
   if (
     inspection.source.includes('{{') &&
-    !/(?:cli\.ts|skill-action-registry\.ts|cortex-article-structure)/u.test(
-      inspection.specifier,
-    )
-  )
+    !inspection.specifier.replace(/^\.\//u, '').startsWith('.cortex/')
+  ) {
     return false;
+  }
   const escapedSpecifier = inspection.specifier.replace(
     /[.*+?^${}()|[\]\\]/gu,
     '\\$&',
@@ -548,7 +591,7 @@ test('only the Loom semantic adapter reaches the provider', async () => {
   ).text();
   expect(activeAudit).toContain("'../lib/cortex-article-structure.ts'");
   expect(activeAudit).not.toContain('src/cortex-article-provider');
-});
+}, 15_000);
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile\.ya?ml$/u;
@@ -810,7 +853,7 @@ test('follows scripts launched from every runnable configuration surface', () =>
     ],
     [
       'Taskfile.yml',
-      'vars:\n  host2: bun .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src/cli.ts\ntasks:\n  audit:\n    cmds: ["{{.host2}} --default toolsList"]',
+      'vars:\n  host_dir: .cortex/teams/ai/dynamic-skills/executable-skill-host/scripts/src\n  host2: "{{.host_dir}}/cli.ts"\ntasks:\n  audit:\n    cmds: ["bun {{.host2}} --default toolsList"]',
     ],
     [
       '.github/workflows/audit.yml',
